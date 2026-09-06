@@ -137,6 +137,34 @@ function providerWebhookUrl(apiBase, data, provider) {
   return `${String(apiBase || "").replace(/\/$/, "")}/providers/webhook/${encodeURIComponent(data.tenant_id)}/${encodeURIComponent(data.business_id)}/${encodeURIComponent(key)}`;
 }
 
+function messagingChannelForProvider(providerKey) {
+  const key = String(providerKey || "");
+  return key === "email_connector" ? "email" : key.endsWith("_messaging") ? key.slice(0, -10) : "";
+}
+
+function providerRecipientContext(providerKey, recipient) {
+  const key = String(providerKey || "");
+  if (["slack_messaging", "discord_messaging"].includes(key)) return { channel_id: recipient };
+  if (["instagram_messaging", "messenger_messaging"].includes(key)) return { recipient_id: recipient };
+  if (key === "line_messaging") return { to: recipient };
+  if (key === "viber_messaging") return { receiver: recipient };
+  if (key === "vk_messaging") return { peer_id: recipient };
+  if (key === "max_messaging") return { chat_id: recipient };
+  return {};
+}
+
+function approvalMessagePreview(row) {
+  const metadata = row?.metadata || {};
+  const resume = metadata.approval_resume_context || {};
+  const payload = resume.payload || {};
+  return {
+    providerKey: String(resume.provider_key || ""),
+    recipient: String(payload.recipient || payload.user_id || payload.channel_id || payload.recipient_id || payload.to || payload.receiver || payload.peer_id || payload.chat_id || ""),
+    text: String(payload.body || payload.text || payload.message || ""),
+    subject: String(payload.subject || "")
+  };
+}
+
 function isSuccessfulLiveEvidence(row) {
   return String(row?.mode || "").toLowerCase() === "live"
     && row?.accepted === true
@@ -152,6 +180,10 @@ function Workspace({ data, apiBase, businesses, onRestart, onRetryAccess, onSwit
   const apiKey = ownerSession.api_key || "";
   const baseApi = apiBase.replace(/\/$/, "");
   const workspaceUrl = `${baseApi}/business-workspace/providers`;
+  const actionExecuteUrl = `${baseApi}/actions/execute`;
+  const approvalsUrl = `${baseApi}/control-plane/approvals/open`;
+  const approvalResumeUrl = `${baseApi}/control-plane/provider-runtime/approval-resume`;
+  const customersUrl = `${baseApi}/business-workspace/customers`;
   const acquisitionUrl = `${baseApi}/business-workspace/acquisition-plan`;
   const authHeaders = useMemo(() => (apiKey ? { "X-API-Key": apiKey } : {}), [apiKey]);
   const selectedKeys = useMemo(() => new Set(integrations.map((item) => item.provider_key)), [integrations]);
@@ -165,6 +197,20 @@ function Workspace({ data, apiBase, businesses, onRestart, onRetryAccess, onSwit
   const [workspaceError, setWorkspaceError] = useState("");
   const [accessRecoveryBusy, setAccessRecoveryBusy] = useState(false);
   const [lastAction, setLastAction] = useState(null);
+  const [editingAccessKey, setEditingAccessKey] = useState("");
+  const [operations, setOperations] = useState({ approvals: [] });
+  const [operationProviderKey, setOperationProviderKey] = useState("");
+  const [operationRecipient, setOperationRecipient] = useState("");
+  const [operationSubject, setOperationSubject] = useState("");
+  const [operationText, setOperationText] = useState("");
+  const [operationBusy, setOperationBusy] = useState("");
+  const [operationError, setOperationError] = useState("");
+  const [operationResult, setOperationResult] = useState(null);
+  const [customers, setCustomers] = useState([]);
+  const [selectedCustomerId, setSelectedCustomerId] = useState("");
+  const [customerTimeline, setCustomerTimeline] = useState([]);
+  const [customerBusy, setCustomerBusy] = useState(false);
+  const [customerError, setCustomerError] = useState("");
 
   const refreshCatalog = async () => {
     if (!apiKey) return [];
@@ -178,6 +224,58 @@ function Workspace({ data, apiBase, businesses, onRestart, onRetryAccess, onSwit
         || "";
     });
     return rows;
+  };
+
+  const refreshOperations = async () => {
+    if (!apiKey) { setOperations({ approvals: [] }); return { approvals: [] }; }
+    const payload = await getJson(approvalsUrl, authHeaders);
+    const approvals = (Array.isArray(payload.records) ? payload.records : []).filter((row) => {
+      const action = String(row?.metadata?.action_name || "");
+      const businessId = String(row?.metadata?.approval_resume_context?.business_id || row?.metadata?.business_id || "");
+      return action.startsWith("provider.") && action.endsWith(".message_send") && businessId === String(data.business_id || "");
+    });
+    const next = { approvals }; setOperations(next); return next;
+  };
+
+  const refreshCustomers = async () => {
+    if (!apiKey) {
+      setCustomers([]);
+      setSelectedCustomerId("");
+      setCustomerTimeline([]);
+      return [];
+    }
+    setCustomerBusy(true);
+    setCustomerError("");
+    try {
+      const payload = await getJson(customersUrl, authHeaders);
+      const rows = Array.isArray(payload.customers) ? payload.customers : [];
+      setCustomers(rows);
+      setSelectedCustomerId((current) => current && rows.some((row) => row.customer_id === current) ? current : (rows[0]?.customer_id || ""));
+      return rows;
+    } catch {
+      setCustomerError("Не удалось загрузить клиентов. Внешние действия не выполнялись.");
+      return [];
+    } finally {
+      setCustomerBusy(false);
+    }
+  };
+
+  const loadCustomerTimeline = async (customerId) => {
+    if (!apiKey || !customerId) { setCustomerTimeline([]); return []; }
+    setCustomerBusy(true);
+    setCustomerError("");
+    try {
+      const payload = await getJson(`${customersUrl}?customer_id=${encodeURIComponent(customerId)}`, authHeaders);
+      const rows = Array.isArray(payload.timeline?.entries) ? payload.timeline.entries : [];
+      setCustomerTimeline(rows);
+      return rows;
+    } catch {
+      setCustomerTimeline([]);
+      setCustomerError("Не удалось открыть историю клиента.");
+      return [];
+    } finally {
+      setCustomerBusy(false);
+    }
   };
 
   const loadHistory = async (providerKey) => {
@@ -196,7 +294,11 @@ function Workspace({ data, apiBase, businesses, onRestart, onRetryAccess, onSwit
     let cancelled = false;
     setWorkspaceLoading(true);
     refreshCatalog()
-      .then((rows) => Promise.all(rows.filter((row) => selectedKeys.has(row.provider_key) && row.connected).map((row) => loadHistory(row.provider_key))))
+      .then(async (rows) => {
+        await Promise.all(rows.filter((row) => selectedKeys.has(row.provider_key) && row.connected).map((row) => loadHistory(row.provider_key)));
+        await refreshOperations();
+        await refreshCustomers();
+      })
       .catch(() => {
         if (!cancelled) setWorkspaceError("Не удалось открыть защищённый список подключений. Проверьте соединение и повторите попытку.");
       })
@@ -231,6 +333,77 @@ function Workspace({ data, apiBase, businesses, onRestart, onRetryAccess, onSwit
     ? (activeLiveEvidence ? "Обновляем данные…" : "Получаем данные…")
     : (activeLiveEvidence ? "Обновить данные" : "Получить первые данные");
 
+  const operationProviders = catalog.filter((row) => row.write_supported).map((row) => {
+    const required = Array.isArray(row.transport_binding?.live_required_secrets) ? row.transport_binding.live_required_secrets : [];
+    const bound = new Set(Array.isArray(row.bound_secret_fields) ? row.bound_secret_fields : []);
+    const missing = required.filter((name) => !bound.has(name));
+    const canRequest = Boolean(row.connected && row.write_supported && missing.length === 0);
+    return { ...row, can_request_write: canRequest, missing_live_credentials: missing, status: canRequest ? "ready_for_approval" : !row.connected ? "connect_provider_first" : missing.length ? "live_credentials_missing" : "write_not_ready" };
+  });
+  const readyOperationProviders = operationProviders.filter((row) => row.can_request_write);
+  const activeOperationProvider = readyOperationProviders.find((row) => row.provider_key === operationProviderKey) || readyOperationProviders[0] || null;
+  const pendingApprovals = Array.isArray(operations.approvals) ? operations.approvals : [];
+  const selectedCustomer = customers.find((row) => row.customer_id === selectedCustomerId) || customers[0] || null;
+  const providerKeyForChannel = (channel) => channel === "email" ? "email_connector" : `${channel}_messaging`;
+  const readyIdentityProvider = (identity) => readyOperationProviders.find((row) => row.provider_key === providerKeyForChannel(identity.channel));
+
+  useEffect(() => {
+    if (selectedCustomerId) void loadCustomerTimeline(selectedCustomerId);
+    else setCustomerTimeline([]);
+  }, [selectedCustomerId, apiKey]);
+
+  const prepareForCustomer = (identity) => {
+    const provider = readyIdentityProvider(identity);
+    if (!provider) {
+      setOperationError(`Канал ${identity.channel} пока не готов к отправке. Проверьте доступ выше.`);
+      return;
+    }
+    setOperationProviderKey(provider.provider_key);
+    setOperationRecipient(String(identity.external_subject || ""));
+    setOperationError("");
+  };
+
+  const runOperation = async (name, url, payload, headers = authHeaders) => {
+    setOperationBusy(name);
+    setOperationError("");
+    try {
+      const result = await postJson(url, payload, headers);
+      setOperationResult(result);
+      await refreshOperations();
+      return result;
+    } catch {
+      setOperationError("Действие не выполнено. BusinessAIOS ничего не отправил. Проверьте канал и повторите попытку.");
+      return null;
+    } finally { setOperationBusy(""); }
+  };
+
+  const prepareMessage = async () => {
+    if (!activeOperationProvider || !operationRecipient.trim() || !operationText.trim()) {
+      setOperationError("Выберите готовый канал, укажите получателя и текст сообщения.");
+      return;
+    }
+    const recipient = operationRecipient.trim();
+    const result = await runOperation("message_send", actionExecuteUrl, {
+      action_type: "send_message@v1",
+      payload: { business_id: data.business_id, user_id: recipient, text: operationText.trim(), channel: messagingChannelForProvider(activeOperationProvider.provider_key), kind: "owner_manual", ...providerRecipientContext(activeOperationProvider.provider_key, recipient), ...(operationSubject.trim() ? { subject: operationSubject.trim() } : {}) }
+    }, { ...authHeaders, "X-Idempotency-Key": crypto.randomUUID() });
+    if (result) {
+      setOperationText("");
+      setOperationSubject("");
+    }
+  };
+
+  const decideApproval = async (approvalId, approve) => {
+    setOperationBusy(`approval:${approvalId}`); setOperationError("");
+    try {
+      const rationale = approve ? "Владелец подтвердил действие в кабинете BusinessAIOS." : "Владелец отклонил действие в кабинете BusinessAIOS.";
+      const decision = await postJson(`${baseApi}/control-plane/approvals/${encodeURIComponent(approvalId)}/decide`, { outcome: approve ? "approve" : "reject", rationale }, authHeaders);
+      const execution = approve && decision?.status === "approved" ? await postJson(approvalResumeUrl, { approval_id: approvalId }, authHeaders) : null;
+      setOperationResult({ decision, execution }); await refreshOperations();
+    } catch { setOperationError("Не удалось обработать подтверждение. Внешнее действие не считается выполненным."); }
+    finally { setOperationBusy(""); }
+  };
+
   const runWorkspaceAction = async (name, payload, providerKey = activeProvider?.provider_key) => {
     if (!providerKey) return null;
     setWorkspaceBusy(name);
@@ -239,6 +412,7 @@ function Workspace({ data, apiBase, businesses, onRestart, onRetryAccess, onSwit
       const result = await postJson(workspaceUrl, { provider_key: providerKey, ...payload }, authHeaders);
       setLastAction({ name, providerKey, result });
       await refreshCatalog();
+      await refreshOperations().catch(() => null);
       if (name === "sync" || name === "probe") await loadHistory(providerKey);
       return result;
     } catch {
@@ -251,14 +425,29 @@ function Workspace({ data, apiBase, businesses, onRestart, onRetryAccess, onSwit
 
   const activateProvider = async () => {
     if (!activeProvider) return;
+    const cleanSecrets = Object.fromEntries(Object.entries(secrets).filter(([, value]) => String(value || "").trim()));
+    if (activeProvider.connected) {
+      if (!Object.keys(cleanSecrets).length) {
+        setWorkspaceError("Введите хотя бы один новый параметр доступа, который нужно добавить или заменить.");
+        return;
+      }
+      setWorkspaceBusy("update_access"); setWorkspaceError("");
+      try {
+        await postJson(workspaceUrl, { action: "update_access", provider_key: activeProvider.provider_key, secrets: cleanSecrets }, authHeaders);
+        setSecrets({}); setEditingAccessKey(""); await refreshCatalog(); await refreshOperations();
+      } catch { setWorkspaceError("Не удалось обновить доступ. Старые сохранённые данные не удалялись."); }
+      finally { setWorkspaceBusy(""); }
+      return;
+    }
     const requiredMissing = (activeProvider.secret_fields || []).some((field) => field.required && !String(secrets[field.secret_name] || "").trim());
     if (!externalRef.trim() || requiredMissing) {
       setWorkspaceError("Укажите аккаунт и заполните обязательные поля доступа.");
       return;
     }
-    const result = await runWorkspaceAction("activate", { action: "activate", external_ref: externalRef.trim(), secrets });
+    const result = await runWorkspaceAction("activate", { action: "activate", external_ref: externalRef.trim(), secrets: cleanSecrets });
     if (result) {
       setSecrets({});
+      setEditingAccessKey("");
       await loadHistory(activeProvider.provider_key).catch(() => []);
     }
   };
@@ -296,7 +485,7 @@ function Workspace({ data, apiBase, businesses, onRestart, onRetryAccess, onSwit
       <header className="topbar">
         <a className="brand" href="/"><span className="brand-mark">B</span><span className="brand-name">BusinessAIOS</span></a>
         <div className="topbar-actions">
-          <span className="safe-chip"><span className="safe-chip-full">Безопасный режим · чтение данных</span><span className="safe-chip-short">Режим чтения</span></span>
+          <span className="safe-chip"><span className="safe-chip-full">{readyOperationProviders.length ? "Действия · только после подтверждения" : "Безопасный режим · чтение данных"}</span><span className="safe-chip-short">{readyOperationProviders.length ? "С подтверждением" : "Режим чтения"}</span></span>
           {businesses.length > 1 ? <label className="business-switcher"><span>Бизнес</span><select aria-label="Выбор бизнеса" value={data.intake_id} onChange={(event) => onSwitchBusiness(event.target.value)}>{businesses.map((item) => <option value={item.intake_id} key={item.intake_id}>{item.name || "Бизнес"}</option>)}</select></label> : null}
           <button className="ghost small add-business-button" aria-label="Добавить бизнес" onClick={onRestart}><span className="add-business-full">Добавить бизнес</span><span className="add-business-short">Добавить</span></button>
         </div>
@@ -355,7 +544,7 @@ function Workspace({ data, apiBase, businesses, onRestart, onRetryAccess, onSwit
 
           <div className="connection-list">
             {providers.length ? providers.map((item) => (
-              <button type="button" className={`connection-row ${activeProvider?.provider_key === item.provider_key ? "selected" : ""}`} aria-current={activeProvider?.provider_key === item.provider_key ? "true" : undefined} onClick={() => { setActiveKey(item.provider_key); setExternalRef(""); setSecrets({}); }} key={item.provider_key} disabled={!item.customer_selectable}>
+              <button type="button" className={`connection-row ${activeProvider?.provider_key === item.provider_key ? "selected" : ""}`} aria-current={activeProvider?.provider_key === item.provider_key ? "true" : undefined} onClick={() => { setActiveKey(item.provider_key); setExternalRef(""); setSecrets({}); setEditingAccessKey(""); }} key={item.provider_key} disabled={!item.customer_selectable}>
                 <div className="provider-logo">{providerInitial(item.title)}</div>
                 <div className="connection-copy"><strong>{item.title}</strong><span>{liveEvidenceByProvider.has(item.provider_key) ? "Данные получены" : item.connected ? "Доступ сохранён · данные ещё не получены" : item.customer_selectable ? "Можно подключить" : "Пока не доступно"}</span></div>
                 <span className={`dot ${item.connected ? "green" : item.customer_selectable ? "orange" : "gray"}`} />
@@ -373,22 +562,24 @@ function Workspace({ data, apiBase, businesses, onRestart, onRetryAccess, onSwit
               <div className="step-content workspace-step-content">
                 <div className="section-heading"><h2>{activeProvider.title}</h2><p>{activeLiveEvidence ? "Первые данные из этого источника подтверждены. При необходимости обновите их или проверьте доступ." : activeProvider.connected ? "Доступ сохранён. Получите первые данные — это главное действие сейчас." : "Нужен только доступ для чтения. Изменения во внешней системе остаются выключены."}</p></div>
                 <div className="provider-truth-card"><strong>Что реально доступно</strong><span>{providerTruthCopy(activeProvider)}</span>{identityCopy.help ? <small>{identityCopy.help}</small> : null}</div>
-                {!activeProvider.connected ? (
+                {!activeProvider.connected || editingAccessKey === activeProvider.provider_key ? (
                   <div className="form-grid">
                     <label className="full">{identityCopy.label}<input value={externalRef} onChange={(event) => setExternalRef(event.target.value)} placeholder={identityCopy.placeholder} /><small className="input-help">Это идентификатор именно вашего кабинета или проекта — не внутренний ID BusinessAIOS.</small></label>
                     {webhookUrl ? <label className="full">Webhook URL<input className="readonly-value" type="text" readOnly value={webhookUrl} onFocus={(event) => event.target.select()} /><small className="input-help">Скопируйте этот адрес в настройки входящих событий провайдера. Адрес не содержит секретов.</small></label> : null}
                     {(activeProvider.secret_fields || []).map((field) => (
                       <label className={field.multiline ? "full" : ""} key={field.secret_name}><span className="field-label-row"><span>{credentialLabel(activeProvider, field)}</span>{!field.required ? <small>Необязательно</small> : null}</span>{field.multiline ? <textarea value={secrets[field.secret_name] || ""} onChange={(event) => setSecrets((previous) => ({ ...previous, [field.secret_name]: event.target.value }))} placeholder={field.placeholder || ""} /> : <input type={credentialInputType(field)} autoComplete="off" value={secrets[field.secret_name] || ""} onChange={(event) => setSecrets((previous) => ({ ...previous, [field.secret_name]: event.target.value }))} placeholder={field.placeholder || ""} />}{credentialInputType(field) === "text" ? <small className="input-help">Обычная настройка, не пароль. Значение передаётся только на защищённый сервер BusinessAIOS.</small> : null}</label>
                     ))}
-                    <button type="button" className="primary" disabled={Boolean(workspaceBusy)} onClick={activateProvider}>{workspaceBusy === "activate" ? "Сохраняем доступ…" : "Подключить для чтения"}</button>
+                    <button type="button" className="primary" disabled={Boolean(workspaceBusy)} onClick={activateProvider}>{workspaceBusy === "activate" || workspaceBusy === "update_access" ? "Сохраняем доступ…" : activeProvider.connected ? "Обновить доступ" : "Подключить для чтения"}</button>
+                    {activeProvider.connected ? <button type="button" className="ghost" disabled={Boolean(workspaceBusy)} onClick={() => { setEditingAccessKey(""); setExternalRef(""); setSecrets({}); }}>Отмена</button> : null}
                   </div>
                 ) : (
                   <div className="navigation-row workspace-actions">
                     <button type="button" className="ghost" disabled={Boolean(workspaceBusy)} onClick={probeProvider}>{workspaceBusy === "probe" ? "Проверяем…" : "Проверить доступ"}</button>
                     <button type="button" className="primary" disabled={Boolean(workspaceBusy)} onClick={syncProvider}>{syncActionLabel}</button>
+                    <button type="button" className="ghost" disabled={Boolean(workspaceBusy)} onClick={() => { setEditingAccessKey(activeProvider.provider_key); setExternalRef(activeProvider.external_ref || ""); setSecrets({}); }}>Изменить доступ</button>
                   </div>
                 )}
-                <small className="helper-text">BusinessAIOS сейчас может только читать. Сообщения, публикации, расходы и другие изменения выключены.</small>
+                <small className="helper-text">Чтение доступно сразу. Перед внешним действием BusinessAIOS сначала проверит его и попросит ваше подтверждение. Прямой отправки из браузера нет.</small>
                 {lastAction?.providerKey === activeProvider.provider_key ? <details className="technical-inline"><summary>Технические детали последней операции</summary><pre>{JSON.stringify(lastAction.result, null, 2)}</pre></details> : null}
               </div>
             </div>
@@ -405,6 +596,86 @@ function Workspace({ data, apiBase, businesses, onRestart, onRetryAccess, onSwit
             <div className="check-row"><span>3</span><strong>Сравнить факты со сценарием и выбрать действие</strong></div>
           </div>
         </article>
+      </section>
+
+      <section className="panel customers-panel" aria-labelledby="business-customers-title">
+        <div className="panel-title-row">
+          <div><p className="eyebrow">Клиенты</p><h2 id="business-customers-title">Клиенты и история контактов</h2></div>
+          <span className="privacy-badge">Из единого EventStore</span>
+        </div>
+        <p className="muted-text">Клиенты появляются здесь из подтверждённых входящих событий подключённых каналов. Отдельной CRM-копии BusinessAIOS не создаёт.</p>
+        {customerError ? <div className="error-box inline-error" role="alert">{customerError}</div> : null}
+        {customerBusy && !customers.length ? <div className="loading-box">Загружаем клиентов…</div> : null}
+        {customers.length ? (
+          <div className="customers-layout">
+            <div className="customer-list">
+              {customers.map((customer) => <button type="button" className={`customer-row ${selectedCustomer?.customer_id === customer.customer_id ? "selected" : ""}`} aria-current={selectedCustomer?.customer_id === customer.customer_id ? "true" : undefined} onClick={() => setSelectedCustomerId(customer.customer_id)} key={customer.customer_id}>
+                <strong>{customer.display_name || customer.identities?.[0]?.display_name || customer.identities?.[0]?.username || "Клиент"}</strong>
+                <span>{(customer.identities || []).map((identity) => identity.channel).join(" · ") || "Канал не указан"}</span>
+              </button>)}
+            </div>
+            <div className="customer-detail">
+              {selectedCustomer ? <>
+                <h3>{selectedCustomer.display_name || selectedCustomer.identities?.[0]?.display_name || "Клиент"}</h3>
+                <div className="customer-identities">
+                  {(selectedCustomer.identities || []).map((identity) => <article className="customer-identity" key={identity.identity_id}>
+                    <div><strong>{identity.channel}</strong><span>{identity.display_name || identity.username || identity.external_subject}</span></div>
+                    {readyIdentityProvider(identity) ? <button type="button" className="ghost small" onClick={() => prepareForCustomer(identity)}>Написать</button> : <small>Отправка по каналу пока не готова</small>}
+                  </article>)}
+                </div>
+                <h3>История</h3>
+                <div className="timeline-list">
+                  {customerTimeline.length ? customerTimeline.slice().reverse().map((entry) => <article className="timeline-row" key={entry.source_id}>
+                    <strong>{entry.title || entry.kind}</strong>
+                    <span>{entry.detail || entry.source_type}</span>
+                    <small>{entry.occurred_at_ms ? new Date(entry.occurred_at_ms).toLocaleString("ru-RU") : ""}{entry.amount_minor !== null && entry.amount_minor !== undefined ? ` · ${(Number(entry.amount_minor) / 100).toLocaleString("ru-RU")} ${entry.currency || ""}` : ""}</small>
+                  </article>) : <p className="empty-state">Для клиента пока нет дополнительных событий.</p>}
+                </div>
+              </> : null}
+            </div>
+          </div>
+        ) : <p className="empty-state">Клиенты появятся здесь после входящих событий из подключённых каналов.</p>}
+      </section>
+
+      <section className="panel operations-panel" aria-labelledby="business-operations-title">
+        <div className="panel-title-row">
+          <div><p className="eyebrow">Работа с бизнесом</p><h2 id="business-operations-title">Действия</h2></div>
+          <span className="privacy-badge">С подтверждением</span>
+        </div>
+        <p className="muted-text">BusinessAIOS не отправляет сообщение прямо из формы. Сначала он проверит действие и покажет его вам; только после вашего подтверждения сообщение может уйти во внешний канал.</p>
+        {operationError ? <div className="error-box inline-error" role="alert">{operationError}</div> : null}
+        <div className="provider-readiness" aria-label="Готовность каналов к действиям">
+          {operationProviders.length ? operationProviders.map((item) => <span className={`status-pill ${item.can_request_write ? "ready" : "preparing"}`} key={item.provider_key}>{item.title}: {item.can_request_write ? "можно подготовить действие" : !item.connected ? "сначала подключите" : item.status === "live_credentials_missing" ? "добавьте данные для отправки" : "отправка пока не готова"}</span>) : <span className="muted-text">Подключённых каналов с доказанным write-путём пока нет.</span>}
+        </div>
+        <div className="operations-layout">
+          <div className="operations-form">
+            <h3>Подготовить сообщение</h3>
+            {readyOperationProviders.length ? (
+              <>
+                <label>Канал<select aria-label="Канал для действия" value={activeOperationProvider?.provider_key || ""} onChange={(event) => setOperationProviderKey(event.target.value)}>{readyOperationProviders.map((item) => <option value={item.provider_key} key={item.provider_key}>{item.title}</option>)}</select></label>
+                <label>Получатель<input value={operationRecipient} onChange={(event) => setOperationRecipient(event.target.value)} placeholder="ID пользователя, чата, канала или email" /></label>
+                {activeOperationProvider?.provider_key === "email_connector" ? <label>Тема<input value={operationSubject} onChange={(event) => setOperationSubject(event.target.value)} placeholder="Тема письма" /></label> : null}
+                <label>Сообщение<textarea value={operationText} onChange={(event) => setOperationText(event.target.value)} placeholder="Что BusinessAIOS должен отправить после вашего подтверждения" /></label>
+                <button type="button" className="primary" disabled={Boolean(operationBusy)} onClick={prepareMessage}>{operationBusy === "message_send" ? "Готовим…" : "Подготовить к отправке"}</button>
+                <small className="helper-text">Нажатие этой кнопки само по себе ничего внешнему получателю не отправляет.</small>
+              </>
+            ) : <div className="recovery-box"><p>Сначала подключите канал выше. Кнопка отправки появится только когда BusinessAIOS видит подключение и реальный сетевой transport.</p></div>}
+          </div>
+          <div className="approval-list">
+            <h3>Ждут вашего подтверждения</h3>
+            {pendingApprovals.length ? pendingApprovals.map((approval) => {
+              const previewRow = approvalMessagePreview(approval);
+              const provider = operationProviders.find((item) => item.provider_key === previewRow.providerKey);
+              return <article className="approval-card" key={approval.approval_id}>
+                <div><strong>{provider?.title || previewRow.providerKey || "Сообщение"}</strong><small>Получатель: {previewRow.recipient || "—"}</small></div>
+                {previewRow.subject ? <p><strong>{previewRow.subject}</strong></p> : null}
+                <p>{previewRow.text || "Текст действия сохранён и ждёт вашего решения."}</p>
+                <div className="navigation-row"><button type="button" className="ghost" disabled={Boolean(operationBusy)} onClick={() => decideApproval(approval.approval_id, false)}>Отклонить</button><button type="button" className="primary" disabled={Boolean(operationBusy)} onClick={() => decideApproval(approval.approval_id, true)}>{operationBusy === `approval:${approval.approval_id}` ? "Выполняем…" : "Подтвердить и выполнить"}</button></div>
+              </article>;
+            }) : <p className="empty-state">Сейчас ничего не ждёт подтверждения.</p>}
+          </div>
+        </div>
+        {operationResult ? <details className="technical-inline"><summary>Результат последнего действия</summary><pre>{JSON.stringify(operationResult, null, 2)}</pre></details> : null}
       </section>
 
       <AcquisitionPlanner enabled={Boolean(apiKey)} onEvaluate={(payload) => postJson(acquisitionUrl, payload, authHeaders)} />

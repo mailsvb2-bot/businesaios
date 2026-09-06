@@ -1,6 +1,7 @@
 from __future__ import annotations
 
-from typing import Any, Mapping
+from collections.abc import Mapping
+from typing import Any
 
 from fastapi import APIRouter, HTTPException, Request, status
 
@@ -36,6 +37,13 @@ def register_business_workspace_provider_routes(*, router: APIRouter, auth_bundl
         payload, truth = handlers.list_provider_catalog(tenant_id=tenant_id, business_id=business_id), provider_truth_map()
         rows = [{**dict(raw), 'truth_status': 'not_implemented' if (row := truth.get(str(raw.get('provider_key') or '').strip())) is None else str(row.status), 'customer_selectable': bool(row and row.read_only_supported and str(row.status) in _READY), 'read_supported': bool(row and row.read_only_supported and str(row.status) in _READY), 'write_supported': bool(row and getattr(row, 'write_supported', False)), 'approval_required': bool(row and getattr(row, 'approval_required', False)), 'live_ready': bool(row and getattr(row, 'live_ready', False)), 'write_actions_enabled': False} for raw in list(payload.get('providers') or [])]
         return {**payload, 'providers': rows, 'write_actions_enabled': False, 'scope_source': 'authenticated_owner_session'}
+    @router.get('/business-workspace/customers', tags=['business-workspace'])
+    async def customer_workspace(request: Request, customer_id: str = '') -> dict[str, Any]:
+        _, tenant_id, business_id = _workspace_scope(request=request, auth_bundle=auth_bundle)
+        try:
+            return handlers.get_business_customers(tenant_id=tenant_id, business_id=business_id, customer_id=str(customer_id or '').strip())
+        except KeyError as exc:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail='customer_not_found') from exc
     @router.post('/business-workspace/providers', tags=['business-workspace'])
     async def provider_action(request: Request) -> dict[str, Any]:
         principal, tenant_id, business_id = _workspace_scope(request=request, auth_bundle=auth_bundle)
@@ -51,6 +59,14 @@ def register_business_workspace_provider_routes(*, router: APIRouter, auth_bundl
             if any(not str((secrets or {}).get(name) or '').strip() for name in tuple(truth.required_credentials)):
                 raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail='provider_required_credentials_missing')
             return handlers.activate_provider(payload={'tenant_id': tenant_id, 'business_id': business_id, 'provider_key': provider_key, 'ownership_key': f'owner:{principal.subject}:{provider_key}', 'requested_by': str(principal.actor_id or principal.subject), 'external_ref': external_ref, 'region': body.get('region'), 'metadata': dict(body.get('metadata') or {}) if isinstance(body.get('metadata'), Mapping) else {}, 'secrets': {str(k): str(v) for k, v in dict(secrets or {}).items()}})
+        if action == 'update_access':
+            secrets = body.get('secrets')
+            if secrets is not None and not isinstance(secrets, Mapping):
+                raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail='provider_secrets_invalid')
+            clean = {str(k): str(v).strip() for k, v in dict(secrets or {}).items() if str(v or '').strip()}
+            if not clean:
+                raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail='provider_secrets_required')
+            return handlers.rotate_provider(payload={'tenant_id': tenant_id, 'business_id': business_id, 'provider_key': provider_key, 'requested_by': str(principal.actor_id or principal.subject), 'secrets': clean})
         if action == 'read':
             operation, mode = str(body.get('operation') or '').strip(), str(body.get('mode') or 'live').strip() or 'live'
             if mode not in {'dry_run', 'live'} or (operation and operation not in tuple(truth.read_capabilities)):

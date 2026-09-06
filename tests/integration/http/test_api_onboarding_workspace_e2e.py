@@ -225,6 +225,26 @@ def test_real_api_onboarding_issues_owner_session_and_opens_workspace(tmp_path) 
             assert chosen["customer_selectable"] is True
             assert chosen["read_supported"] is True
             assert chosen["write_actions_enabled"] is False
+
+            status, approvals = _request(
+                port,
+                "/control-plane/approvals/open",
+                headers={**secure_headers, "X-API-Key": switched_owner["api_key"]},
+            )
+            assert status == 200, approvals
+            assert approvals["tenant_id"] == cta["tenant_id"]
+            assert approvals["records"] == []
+
+            status, customers = _request(
+                port,
+                "/business-workspace/customers",
+                headers={**secure_headers, "X-API-Key": switched_owner["api_key"]},
+            )
+            assert status == 200, customers
+            assert customers["tenant_id"] == cta["tenant_id"]
+            assert customers["business_id"] == cta["business_id"]
+            assert customers["customers"] == []
+            assert customers["count"] == 0
         finally:
             if process.poll() is None:
                 process.terminate()

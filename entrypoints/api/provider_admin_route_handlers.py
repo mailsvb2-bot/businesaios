@@ -1,10 +1,12 @@
 from __future__ import annotations
 
 from collections.abc import Mapping
-from dataclasses import dataclass
+from dataclasses import asdict, dataclass
 from typing import Any
 
 from application.business_autonomy.provider_admin_contract import ProviderCredentialSubmission
+from contracts.customer import CustomerNotFound
+from crm.customer_timeline import CustomerTimelineProjector
 from governance.approval_store import build_default_approval_store
 from runtime.business_autonomy.bootstrap import build_business_autonomy_guarded_service
 from runtime.business_autonomy.provider_payload_normalizers import ProviderPayloadNormalizers
@@ -68,52 +70,51 @@ class ProviderAdminRouteHandlers:
                         }
                         for field in item.secret_fields
                     ],
-                    "connected": bool(statuses.get(item.provider_key) and statuses[item.provider_key].connected), "onboarding_ready": bool(statuses.get(item.provider_key) and statuses[item.provider_key].onboarding_ready), "credential_state": "bound" if statuses.get(item.provider_key) and statuses[item.provider_key].secret_fields_bound else "missing", "health_probe": {} if statuses.get(item.provider_key) is None else dict(statuses[item.provider_key].metadata.get("health_probe") or {}), "runtime_plan": {} if statuses.get(item.provider_key) is None else dict(statuses[item.provider_key].metadata.get("runtime_plan") or {}), "write_actions_enabled": False,
+                    "connected": bool(statuses.get(item.provider_key) and statuses[item.provider_key].connected), "onboarding_ready": bool(statuses.get(item.provider_key) and statuses[item.provider_key].onboarding_ready), "credential_state": "bound" if statuses.get(item.provider_key) and statuses[item.provider_key].secret_fields_bound else "missing", "bound_secret_fields": [] if statuses.get(item.provider_key) is None else [field.field_key for field in item.secret_fields if any(str(name).endswith(f".{field.secret_name}") for name in statuses[item.provider_key].secret_fields_bound)], "external_ref": "" if statuses.get(item.provider_key) is None else str(statuses[item.provider_key].metadata.get("external_ref") or ""), "transport_binding": {} if statuses.get(item.provider_key) is None else dict(statuses[item.provider_key].metadata.get("transport_binding") or {}), "health_probe": {} if statuses.get(item.provider_key) is None else dict(statuses[item.provider_key].metadata.get("health_probe") or {}), "runtime_plan": {} if statuses.get(item.provider_key) is None else dict(statuses[item.provider_key].metadata.get("runtime_plan") or {}), "write_actions_enabled": False,
                     "last_updated_utc": None if statuses.get(item.provider_key) is None else statuses[item.provider_key].last_updated_utc, "actions": {"activate": "/control-plane/provider-admin/activate", "probe": "/control-plane/provider-runtime/live-probe", "read_sync": "/control-plane/provider-runtime/sync", "sync_history": "/control-plane/provider-runtime/sync-history"},
                 }
                 for item in providers
             ],
         }
+    def get_business_customers(self, *, tenant_id: str, business_id: str, customer_id: str = '') -> dict[str, Any]:
+        registry = getattr(self._service(business_id), 'customer_registry', None)
+        selected = str(customer_id or '').strip()
+        rows = [] if registry is None else [
+            {**asdict(customer), 'status': customer.status.value, 'identities': [
+                {**asdict(identity), 'status': identity.status.value}
+                for identity in registry.get_customer(tenant_id=tenant_id, business_id=business_id, customer_id=customer.customer_id).identities
+                if identity.status.value == 'active'
+            ]}
+            for customer in registry.list_customers(tenant_id=tenant_id, business_id=business_id)
+        ]
+        rows.sort(key=lambda row: (-int(row.get('updated_at_ms') or 0), str(row.get('customer_id') or '')))
+        result = {'tenant_id': tenant_id, 'business_id': business_id, 'customers': rows, 'count': len(rows)}
+        if not selected:
+            return result
+        if not any(str(row.get('customer_id') or '') == selected for row in rows):
+            raise KeyError('customer_not_found')
+        if self.customer_event_store is None:
+            return {**result, 'timeline': {'available': False, 'entries': []}}
+        try:
+            timeline = CustomerTimelineProjector(self.customer_event_store).get(tenant_id=tenant_id, business_id=business_id, customer_id=selected)
+        except CustomerNotFound as exc:
+            raise KeyError('customer_not_found') from exc
+        return {**result, 'timeline': {'available': True, 'entries': [asdict(item) for item in timeline.entries]}}
     def list_provider_secret_history(self, *, tenant_id: str, business_id: str, provider_key: str) -> dict[str, Any]:
         rows = self._service(business_id).list_provider_secret_history(tenant_id=tenant_id, business_id=business_id, provider_key=provider_key)
         return {'tenant_id': tenant_id, 'business_id': business_id, 'provider_key': provider_key, 'versions': list(rows)}
     def rollback_provider_secret(self, *, payload: Mapping[str, Any]) -> dict[str, Any]:
         data = dict(payload or {})
-        result = self._service(str(data.get('business_id') or '').strip()).rollback_provider_secret_version(
-            tenant_id=str(data.get('tenant_id') or '').strip(),
-            business_id=str(data.get('business_id') or '').strip(),
-            provider_key=str(data.get('provider_key') or '').strip(),
-            secret_name=str(data.get('secret_name') or '').strip(),
-            version=str(data.get('version') or '').strip(),
-            requested_by=str(data.get('requested_by') or 'admin_console').strip() or 'admin_console',
-        )
+        result = self._service(str(data.get('business_id') or '').strip()).rollback_provider_secret_version(tenant_id=str(data.get('tenant_id') or '').strip(), business_id=str(data.get('business_id') or '').strip(), provider_key=str(data.get('provider_key') or '').strip(), secret_name=str(data.get('secret_name') or '').strip(), version=str(data.get('version') or '').strip(), requested_by=str(data.get('requested_by') or 'admin_console').strip() or 'admin_console')
         status = result['status']
-        return {
-            'rollback': dict(result['rollback']),
-            'status': {
-                'tenant_id': status.tenant_id,
-                'business_id': status.business_id,
-                'provider_key': status.provider_key,
-                'connected': status.connected,
-                'last_updated_utc': status.last_updated_utc,
-                'metadata': dict(status.metadata),
-            },
-        }
+        return {'rollback': dict(result['rollback']), 'status': {'tenant_id': status.tenant_id, 'business_id': status.business_id, 'provider_key': status.provider_key, 'connected': status.connected, 'last_updated_utc': status.last_updated_utc, 'metadata': dict(status.metadata)}}
     def get_provider_runtime_routes(self, *, provider_key: str) -> dict[str, Any]:
         return self._service('default-business').describe_provider_runtime_routes(provider_key=provider_key)
     def probe_provider_live(self, *, tenant_id: str, business_id: str, provider_key: str, mode: str = 'dry_run') -> dict[str, Any]:
         return self._service(business_id).probe_provider_live(tenant_id=tenant_id, business_id=business_id, provider_key=provider_key, mode=mode)
     def paginate_provider_sync(self, *, payload: Mapping[str, Any]) -> dict[str, Any]:
         data = dict(payload or {})
-        return self._service(str(data.get('business_id') or '').strip()).paginate_provider_sync(
-            tenant_id=str(data.get('tenant_id') or '').strip(),
-            business_id=str(data.get('business_id') or '').strip(),
-            provider_key=str(data.get('provider_key') or '').strip(),
-            operation=str(data.get('operation') or '').strip(),
-            mode=str(data.get('mode') or 'dry_run').strip() or 'dry_run',
-            payload=dict(data.get('payload') or {}),
-            max_pages=int(data.get('max_pages', 3) or 3),
-        )
+        return self._service(str(data.get('business_id') or '').strip()).paginate_provider_sync(tenant_id=str(data.get('tenant_id') or '').strip(), business_id=str(data.get('business_id') or '').strip(), provider_key=str(data.get('provider_key') or '').strip(), operation=str(data.get('operation') or '').strip(), mode=str(data.get('mode') or 'dry_run').strip() or 'dry_run', payload=dict(data.get('payload') or {}), max_pages=int(data.get('max_pages', 3) or 3))
     def mark_provider_secret_compromised(self, *, payload: Mapping[str, Any]) -> dict[str, Any]:
         data = dict(payload or {})
         result = self._service(str(data.get('business_id') or '').strip()).mark_provider_secret_compromised(tenant_id=str(data.get('tenant_id') or '').strip(), business_id=str(data.get('business_id') or '').strip(), provider_key=str(data.get('provider_key') or '').strip(), secret_name=str(data.get('secret_name') or '').strip(), requested_by=str(data.get('requested_by') or 'admin_console').strip() or 'admin_console', reason=str(data.get('reason') or 'suspected_compromise').strip() or 'suspected_compromise')
@@ -130,32 +131,9 @@ class ProviderAdminRouteHandlers:
         return {'tenant_id': tenant_id, 'business_id': business_id, 'provider_key': provider_key, 'exports': list(rows)}
     def activate_provider(self, *, payload: Mapping[str, Any]) -> dict[str, Any]:
         data = dict(payload or {})
-        submission = ProviderCredentialSubmission(
-            tenant_id=str(data.get("tenant_id") or "").strip(),
-            business_id=str(data.get("business_id") or "").strip(),
-            provider_key=str(data.get("provider_key") or "").strip(),
-            ownership_key=str(data.get("ownership_key") or "").strip(),
-            requested_by=str(data.get("requested_by") or "admin_console").strip() or "admin_console",
-            external_ref=str(data.get("external_ref") or "").strip(),
-            region=None if data.get("region") in {None, ""} else str(data.get("region")),
-            metadata=dict(data.get("metadata") or {}),
-            secrets={str(k): str(v) for k, v in dict(data.get("secrets") or {}).items()},
-        )
+        submission = ProviderCredentialSubmission(tenant_id=str(data.get("tenant_id") or "").strip(), business_id=str(data.get("business_id") or "").strip(), provider_key=str(data.get("provider_key") or "").strip(), ownership_key=str(data.get("ownership_key") or "").strip(), requested_by=str(data.get("requested_by") or "admin_console").strip() or "admin_console", external_ref=str(data.get("external_ref") or "").strip(), region=None if data.get("region") in {None, ""} else str(data.get("region")), metadata=dict(data.get("metadata") or {}), secrets={str(k): str(v) for k, v in dict(data.get("secrets") or {}).items()})
         status = self._service(submission.business_id).activate_provider(submission)
-        return {
-            "tenant_id": status.tenant_id,
-            "business_id": status.business_id,
-            "provider_key": status.provider_key,
-            "connected": status.connected,
-            "connector_id": status.connector_id,
-            "channel_kind": status.channel_kind,
-            "secret_fields_bound": list(status.secret_fields_bound),
-            "persistent_surfaces": list(status.persistent_surfaces),
-            "governance_enabled": status.governance_enabled,
-            "onboarding_ready": status.onboarding_ready,
-            "last_updated_utc": status.last_updated_utc,
-            "metadata": dict(status.metadata),
-        }
+        return {"tenant_id": status.tenant_id, "business_id": status.business_id, "provider_key": status.provider_key, "connected": status.connected, "connector_id": status.connector_id, "channel_kind": status.channel_kind, "secret_fields_bound": list(status.secret_fields_bound), "persistent_surfaces": list(status.persistent_surfaces), "governance_enabled": status.governance_enabled, "onboarding_ready": status.onboarding_ready, "last_updated_utc": status.last_updated_utc, "metadata": dict(status.metadata)}
     def revoke_provider(self, *, tenant_id: str, business_id: str, provider_key: str, requested_by: str = 'admin_console') -> dict[str, Any]:
         status = self._service(business_id).revoke_provider(tenant_id=tenant_id, business_id=business_id, provider_key=provider_key, requested_by=requested_by)
         return {'tenant_id': status.tenant_id, 'business_id': status.business_id, 'provider_key': status.provider_key, 'connected': status.connected, 'onboarding_ready': status.onboarding_ready, 'last_updated_utc': status.last_updated_utc, 'metadata': dict(status.metadata)}

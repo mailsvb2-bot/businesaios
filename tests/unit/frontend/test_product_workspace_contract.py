@@ -15,13 +15,13 @@ def test_frontend_is_self_service_product_workspace_not_staging_console() -> Non
 
 def test_public_frontend_uses_truth_marketplace_and_protected_provider_workspace() -> None:
     app = _read("App.jsx")
-    assert all(token in app for token in ("/public-site/integrations", "/public-site/cta/start", "/business-workspace/providers", "/business-workspace/acquisition-plan", "не сохраняются в браузере"))
+    assert all(token in app for token in ("/public-site/integrations", "/public-site/cta/start", "/business-workspace/providers", "/actions/execute", "/business-workspace/customers", "/business-workspace/acquisition-plan", "не сохраняются в браузере"))
     assert all(token not in app for token in ("/web/provider-tokens", "/control-plane/provider-admin/activate", "providerSecrets"))
 
 
 def test_frontend_styles_cover_onboarding_integrations_autonomy_workspace_and_first_value() -> None:
     styles = _read("styles.css")
-    assert all(selector in styles for selector in (".onboarding-shell", ".stepper", ".integration-grid", ".autonomy-grid", ".workspace-grid", ".progress-card", ".first-value-panel", ".connection-steps"))
+    assert all(selector in styles for selector in (".onboarding-shell", ".stepper", ".integration-grid", ".autonomy-grid", ".workspace-grid", ".progress-card", ".first-value-panel", ".connection-steps", ".operations-panel", ".approval-card"))
 
 
 def test_owner_workspace_uses_plain_business_language_for_first_value() -> None:
@@ -192,3 +192,19 @@ def test_owner_account_can_list_add_and_switch_multiple_businesses_without_brows
     assert "setCreatingNewBusiness(true)" in app
     assert "localStorage" not in app and "sessionStorage" not in app
     assert all(selector in styles for selector in (".business-switcher", ".account-businesses", ".business-choice-grid", ".business-choice-card"))
+
+
+def test_owner_operational_cockpit_never_writes_directly_from_browser() -> None:
+    app = _read("App.jsx")
+    assert "/actions/execute" in app
+    assert "/control-plane/approvals/open" in app
+    assert "/control-plane/provider-runtime/approval-resume" in app
+    assert "/control-plane/provider-admin/rotate" not in app
+    assert "/business-workspace/customers" in app
+    assert "Подготовить к отправке" in app
+    assert "Подтвердить и выполнить" in app
+    assert "Нажатие этой кнопки само по себе ничего внешнему получателю не отправляет." in app
+    assert "direct_provider_write" not in app
+    assert "action_type: \"send_message@v1\"" in app
+    assert '"X-Idempotency-Key": crypto.randomUUID()' in app
+    assert "providerRecipientContext" in app and "messagingChannelForProvider" in app
