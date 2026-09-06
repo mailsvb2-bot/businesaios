@@ -132,7 +132,10 @@ def test_public_frontend_verifier_fetches_and_hashes_entry_assets() -> None:
     verifier = (ROOT / "scripts/server/verify_runtime_host_contract.sh").read_text(encoding="utf-8")
 
     for token in (
+        'curl -fsS "$PUBLIC_BASE_URL/release-manifest.json"',
         'curl -fsS "$PUBLIC_APP_BASE/release-manifest.json"',
+        "public API release manifest is not bound to EXPECTED_SHA",
+        "public API and frontend release manifests differ",
         "HTMLParser",
         "urlopen(url, timeout=10)",
         "public frontend index.html does not match release manifest",

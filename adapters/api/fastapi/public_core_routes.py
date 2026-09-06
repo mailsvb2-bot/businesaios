@@ -10,7 +10,50 @@ from entrypoints.api.health_models import HealthResponse
 from entrypoints.api.headless_models import ExecuteGoalRequest, ExecuteGoalResponse
 from entrypoints.api.request_context import RequestContext
 
+
+def _frontend_release_manifest_path():
+    from pathlib import Path
+
+    return Path(__file__).resolve().parents[3] / 'frontend' / 'dist' / 'release-manifest.json'
+
+
+def _read_frontend_release_manifest() -> dict[str, object]:
+    import json
+
+    from fastapi import HTTPException, status
+
+    try:
+        payload = json.loads(_frontend_release_manifest_path().read_text(encoding='utf-8'))
+    except (OSError, json.JSONDecodeError) as exc:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail='release_manifest_unavailable',
+        ) from exc
+    if not isinstance(payload, dict):
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail='release_manifest_invalid',
+        )
+    commit_sha = str(payload.get('commit_sha') or '').strip().lower()
+    files = payload.get('files')
+    if (
+        payload.get('schema_version') != 1
+        or len(commit_sha) != 40
+        or any(ch not in '0123456789abcdef' for ch in commit_sha)
+        or not isinstance(files, dict)
+        or 'index.html' not in files
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail='release_manifest_invalid',
+        )
+    return payload
+
 def register_public_core_routes(*, router, health_handler, handlers, headless_handlers, governance_handlers, business_memory_handlers, governance_advanced_handlers, enforce_public_security) -> None:
+    @router.get('/release-manifest.json', tags=['system'])
+    def release_manifest() -> dict[str, object]:
+        return _read_frontend_release_manifest()
+
     @router.get('/health', response_model=HealthResponse, tags=['system'])
     @router.get('/healthz', response_model=HealthResponse, tags=['system'])
     def health() -> HealthResponse:

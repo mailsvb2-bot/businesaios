@@ -46,3 +46,43 @@ def test_fastapi_app_factory_registers_security_and_health_routes() -> None:
     assert client.get('/readyz').status_code == 200
     schema = client.get('/openapi.json').json()
     assert 'securitySchemes' in schema.get('components', {})
+
+
+def _build_test_client() -> TestClient:
+    service = _AppService()
+    container = FastAPIDependencyContainer(
+        boot_result=_BootResultStub(decision_application=service),
+        authenticated_decision_command_binding=build_authenticated_command_binding(),
+    )
+    return TestClient(create_fastapi_app(application_service=service, dependency_container=container))
+
+
+def test_release_manifest_route_serves_exact_valid_manifest(monkeypatch, tmp_path) -> None:
+    import json
+
+    import adapters.api.fastapi.public_core_routes as public_core_routes
+
+    manifest = {
+        'schema_version': 1,
+        'commit_sha': 'a' * 40,
+        'files': {
+            'index.html': '1' * 64,
+            'assets/index.js': '2' * 64,
+        },
+    }
+    path = tmp_path / 'release-manifest.json'
+    path.write_text(json.dumps(manifest), encoding='utf-8')
+    monkeypatch.setattr(public_core_routes, '_frontend_release_manifest_path', lambda: path)
+
+    response = _build_test_client().get('/release-manifest.json')
+    assert response.status_code == 200
+    assert response.json() == manifest
+
+
+def test_release_manifest_route_fails_closed_when_manifest_is_missing(monkeypatch, tmp_path) -> None:
+    import adapters.api.fastapi.public_core_routes as public_core_routes
+
+    monkeypatch.setattr(public_core_routes, '_frontend_release_manifest_path', lambda: tmp_path / 'missing.json')
+    response = _build_test_client().get('/release-manifest.json')
+    assert response.status_code == 503
+    assert response.json() == {'detail': 'release_manifest_unavailable'}
