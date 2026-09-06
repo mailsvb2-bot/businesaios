@@ -72,7 +72,7 @@ def test_release_manifest_route_serves_exact_valid_manifest(monkeypatch, tmp_pat
     }
     path = tmp_path / 'release-manifest.json'
     path.write_text(json.dumps(manifest), encoding='utf-8')
-    monkeypatch.setattr(public_core_routes, '_frontend_release_manifest_path', lambda: path)
+    monkeypatch.setattr(public_core_routes, 'FRONTEND_RELEASE_MANIFEST', path)
 
     response = _build_test_client().get('/release-manifest.json')
     assert response.status_code == 200
@@ -82,7 +82,7 @@ def test_release_manifest_route_serves_exact_valid_manifest(monkeypatch, tmp_pat
 def test_release_manifest_route_fails_closed_when_manifest_is_missing(monkeypatch, tmp_path) -> None:
     import adapters.api.fastapi.public_core_routes as public_core_routes
 
-    monkeypatch.setattr(public_core_routes, '_frontend_release_manifest_path', lambda: tmp_path / 'missing.json')
+    monkeypatch.setattr(public_core_routes, 'FRONTEND_RELEASE_MANIFEST', tmp_path / 'missing.json')
     response = _build_test_client().get('/release-manifest.json')
     assert response.status_code == 503
     assert response.json() == {'detail': 'release_manifest_unavailable'}

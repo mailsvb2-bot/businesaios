@@ -1,6 +1,8 @@
 from __future__ import annotations
 
-from fastapi import Request
+from pathlib import Path
+
+from fastapi import HTTPException, Request, Response
 from entrypoints.api.action_models import ExecuteActionRequest, ExecuteActionResponse
 from entrypoints.api.baseline_models import PromoteBaselineRequest, PromoteBaselineResponse, SelectBaselineRequest, SelectBaselineResponse
 from entrypoints.api.business_memory_models import BusinessMemoryGetRequest, BusinessMemoryPatternsResponse, BusinessMemoryRecentRunsRequest, BusinessMemoryRecentRunsResponse, BusinessMemoryResponse, BusinessMemorySummaryRequest, BusinessMemorySummaryResponse
@@ -11,48 +13,15 @@ from entrypoints.api.headless_models import ExecuteGoalRequest, ExecuteGoalRespo
 from entrypoints.api.request_context import RequestContext
 
 
-def _frontend_release_manifest_path():
-    from pathlib import Path
 
-    return Path(__file__).resolve().parents[3] / 'frontend' / 'dist' / 'release-manifest.json'
-
-
-def _read_frontend_release_manifest() -> dict[str, object]:
-    import json
-
-    from fastapi import HTTPException, status
-
-    try:
-        payload = json.loads(_frontend_release_manifest_path().read_text(encoding='utf-8'))
-    except (OSError, json.JSONDecodeError) as exc:
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail='release_manifest_unavailable',
-        ) from exc
-    if not isinstance(payload, dict):
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail='release_manifest_invalid',
-        )
-    commit_sha = str(payload.get('commit_sha') or '').strip().lower()
-    files = payload.get('files')
-    if (
-        payload.get('schema_version') != 1
-        or len(commit_sha) != 40
-        or any(ch not in '0123456789abcdef' for ch in commit_sha)
-        or not isinstance(files, dict)
-        or 'index.html' not in files
-    ):
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail='release_manifest_invalid',
-        )
-    return payload
+FRONTEND_RELEASE_MANIFEST = Path(__file__).resolve().parents[3] / 'frontend' / 'dist' / 'release-manifest.json'
 
 def register_public_core_routes(*, router, health_handler, handlers, headless_handlers, governance_handlers, business_memory_handlers, governance_advanced_handlers, enforce_public_security) -> None:
     @router.get('/release-manifest.json', tags=['system'])
-    def release_manifest() -> dict[str, object]:
-        return _read_frontend_release_manifest()
+    def release_manifest() -> Response:
+        if not FRONTEND_RELEASE_MANIFEST.is_file():
+            raise HTTPException(503, 'release_manifest_unavailable')
+        return Response(FRONTEND_RELEASE_MANIFEST.read_bytes(), media_type='application/json', headers={'Cache-Control': 'no-store'})
 
     @router.get('/health', response_model=HealthResponse, tags=['system'])
     @router.get('/healthz', response_model=HealthResponse, tags=['system'])
@@ -90,22 +59,12 @@ def register_public_core_routes(*, router, health_handler, handlers, headless_ha
 
     @router.post('/goals/execute', response_model=ExecuteGoalResponse)
     def execute_goal(http_request: Request, request: ExecuteGoalRequest) -> ExecuteGoalResponse:
-        request_context = enforce_public_security(
-            route_path='/goals/execute',
-            request_context=RequestContext.from_http_request(http_request, metadata={'route': '/goals/execute'}),
-            body=request.model_dump(),
-            http_request=http_request,
-        )
+        enforce_public_security(route_path='/goals/execute', request_context=RequestContext.from_http_request(http_request, metadata={'route': '/goals/execute'}), body=request.model_dump(), http_request=http_request)
         return headless_handlers.execute_goal(request)
 
     @router.post('/baselines/promote', response_model=PromoteBaselineResponse)
     def promote_baseline(http_request: Request, request: PromoteBaselineRequest) -> PromoteBaselineResponse:
-        request_context = enforce_public_security(
-            route_path='/baselines/promote',
-            request_context=RequestContext.from_http_request(http_request, metadata={'route': '/baselines/promote'}),
-            body=request.model_dump(),
-            http_request=http_request,
-        )
+        enforce_public_security(route_path='/baselines/promote', request_context=RequestContext.from_http_request(http_request, metadata={'route': '/baselines/promote'}), body=request.model_dump(), http_request=http_request)
         return governance_handlers.promote_baseline(request)
 
     @router.post('/baselines/select', response_model=SelectBaselineResponse)
@@ -122,12 +81,7 @@ def register_public_core_routes(*, router, health_handler, handlers, headless_ha
 
     @router.post('/baselines/rollback', response_model=RollbackBaselineResponse)
     def rollback_baseline(http_request: Request, request: RollbackBaselineRequest) -> RollbackBaselineResponse:
-        request_context = enforce_public_security(
-            route_path='/baselines/rollback',
-            request_context=RequestContext.from_http_request(http_request, metadata={'route': '/baselines/rollback'}),
-            body=request.model_dump(),
-            http_request=http_request,
-        )
+        enforce_public_security(route_path='/baselines/rollback', request_context=RequestContext.from_http_request(http_request, metadata={'route': '/baselines/rollback'}), body=request.model_dump(), http_request=http_request)
         return governance_handlers.rollback_baseline(request)
 
     @router.post('/business-memory/get', response_model=BusinessMemoryResponse)
@@ -180,12 +134,7 @@ def register_public_core_routes(*, router, health_handler, handlers, headless_ha
 
     @router.post('/governance/promote-scenario', response_model=PromoteScenarioBaselineResponse)
     def promote_scenario_baseline(http_request: Request, request: PromoteScenarioBaselineRequest) -> PromoteScenarioBaselineResponse:
-        request_context = enforce_public_security(
-            route_path='/governance/promote-scenario',
-            request_context=RequestContext.from_http_request(http_request, metadata={'route': '/governance/promote-scenario'}),
-            body=request.model_dump(),
-            http_request=http_request,
-        )
+        enforce_public_security(route_path='/governance/promote-scenario', request_context=RequestContext.from_http_request(http_request, metadata={'route': '/governance/promote-scenario'}), body=request.model_dump(), http_request=http_request)
         return governance_advanced_handlers.promote_best_for_scenario(request)
 
     @router.post('/governance/rollback-timeline', response_model=RollbackTimelineResponse)
