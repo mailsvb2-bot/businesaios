@@ -195,17 +195,29 @@ def _validate_and_extract(zip_bytes: bytes, expected_sha: str, destination: Path
             raise _fail("artifact does not contain release-manifest.json")
         archive.extractall(destination)
 
+    _validate_release_tree(destination, expected_sha)
+
+
+def _validate_release_tree(destination: Path, expected_sha: str) -> None:
+    if not destination.is_dir() or destination.is_symlink():
+        raise _fail("release dist must be a real directory")
     manifest_path = destination / "release-manifest.json"
-    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    if not manifest_path.is_file() or manifest_path.is_symlink():
+        raise _fail("release manifest must be a real file")
+    try:
+        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    except (OSError, UnicodeError, json.JSONDecodeError) as exc:
+        raise _fail("release manifest is unreadable or invalid") from exc
     if manifest.get("schema_version") != 1 or manifest.get("commit_sha") != expected_sha:
         raise _fail("release manifest is not bound to the exact deployed SHA")
     files = manifest.get("files")
     if not isinstance(files, dict):
         raise _fail("release manifest files map is invalid")
+    paths = tuple(destination.rglob("*"))
+    if any(path.is_symlink() for path in paths):
+        raise _fail("release dist symlinks are not allowed")
     actual_files = {
-        path.relative_to(destination).as_posix()
-        for path in destination.rglob("*")
-        if path.is_file() and path != manifest_path
+        path.relative_to(destination).as_posix() for path in paths if path.is_file() and path != manifest_path
     }
     if set(files) != actual_files:
         raise _fail("artifact files do not exactly match release manifest")
@@ -224,7 +236,17 @@ def main() -> int:
     zip_exists = ARTIFACT_ZIP.exists()
     id_exists = ARTIFACT_ID.exists()
     if not zip_exists and not id_exists:
-        raise _fail("canonical production build requires a staged frontend-dist artifact and artifact id")
+        manifest_path = DIST / "release-manifest.json"
+        if not manifest_path.is_file() or manifest_path.is_symlink():
+            raise _fail("canonical production build requires a staged frontend-dist artifact and artifact id")
+        _assert_deploy_lock()
+        expected_sha = _expected_sha()
+        checkout_sha = _production_checkout_sha()
+        if checkout_sha != expected_sha:
+            raise _fail(f"production checkout SHA {checkout_sha} does not match EXPECTED_SHA {expected_sha}")
+        _validate_release_tree(DIST, expected_sha)
+        print(f"CI_FRONTEND_ARTIFACT_ALREADY_PUBLISHED sha={expected_sha}")
+        return 0
     if zip_exists != id_exists:
         raise _fail("staged artifact zip/id pair is incomplete")
     if ARTIFACT_ZIP.is_symlink() or ARTIFACT_ID.is_symlink():

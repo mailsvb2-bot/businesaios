@@ -111,6 +111,42 @@ def test_main_requires_staged_pair_in_canonical_production(
         importer.main()
 
 
+def test_main_allows_exact_already_published_bundle_without_staged_pair(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    root = tmp_path / "prod"
+    dist = root / "frontend" / "dist"
+    dist.mkdir(parents=True)
+    importer._validate_and_extract(_bundle(), SHA, dist)
+    monkeypatch.setattr(importer, "PRODUCTION_ROOT", root)
+    monkeypatch.setattr(importer, "DIST", dist)
+    monkeypatch.setattr(importer, "ARTIFACT_ZIP", tmp_path / "missing.zip")
+    monkeypatch.setattr(importer, "ARTIFACT_ID", tmp_path / "missing.id")
+    monkeypatch.setenv("EXPECTED_SHA", SHA)
+    monkeypatch.setattr(importer, "_assert_deploy_lock", lambda: None)
+    monkeypatch.setattr(importer, "_production_checkout_sha", lambda: SHA)
+    assert importer.main() == 0
+
+
+def test_main_rejects_tampered_already_published_bundle_without_staged_pair(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    root = tmp_path / "prod"
+    dist = root / "frontend" / "dist"
+    dist.mkdir(parents=True)
+    importer._validate_and_extract(_bundle(), SHA, dist)
+    (dist / "index.html").write_text("tampered", encoding="utf-8")
+    monkeypatch.setattr(importer, "PRODUCTION_ROOT", root)
+    monkeypatch.setattr(importer, "DIST", dist)
+    monkeypatch.setattr(importer, "ARTIFACT_ZIP", tmp_path / "missing.zip")
+    monkeypatch.setattr(importer, "ARTIFACT_ID", tmp_path / "missing.id")
+    monkeypatch.setenv("EXPECTED_SHA", SHA)
+    monkeypatch.setattr(importer, "_assert_deploy_lock", lambda: None)
+    monkeypatch.setattr(importer, "_production_checkout_sha", lambda: SHA)
+    with pytest.raises(RuntimeError, match="release manifest hash mismatch"):
+        importer.main()
+
+
 def test_main_allows_noop_outside_canonical_production(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
