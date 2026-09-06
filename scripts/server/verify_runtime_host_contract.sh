@@ -289,6 +289,20 @@ CURRENT_CHECK="public_api"
 step "public api health"
 api_check "$PUBLIC_BASE_URL/health"
 api_check "$PUBLIC_BASE_URL/readyz"
+curl -fsS "$PUBLIC_BASE_URL/release-manifest.json" >/tmp/businesaios-public-api-manifest.json
+EXPECTED_SHA="$EXPECTED_SHA" "$PYTHON_BIN" - <<'PY_API_MANIFEST'
+import json
+import os
+from pathlib import Path
+
+manifest = json.loads(Path("/tmp/businesaios-public-api-manifest.json").read_text(encoding="utf-8"))
+expected_sha = os.environ["EXPECTED_SHA"].strip().lower()
+if manifest.get("schema_version") != 1 or str(manifest.get("commit_sha") or "").strip().lower() != expected_sha:
+    raise SystemExit("public API release manifest is not bound to EXPECTED_SHA")
+files = manifest.get("files")
+if not isinstance(files, dict) or "index.html" not in files or not any(str(name).startswith("assets/") for name in files):
+    raise SystemExit("public API release manifest has invalid file coverage")
+PY_API_MANIFEST
 mark_pass "$CURRENT_CHECK"
 CURRENT_CHECK="public_status"
 step "public status health"
@@ -313,6 +327,9 @@ expected_sha = os.environ["EXPECTED_SHA"].strip().lower()
 html_bytes = Path("/tmp/businesaios-public-app.html").read_bytes()
 html = html_bytes.decode("utf-8", errors="replace")
 manifest = json.loads(Path("/tmp/businesaios-public-app-manifest.json").read_text(encoding="utf-8"))
+api_manifest = json.loads(Path("/tmp/businesaios-public-api-manifest.json").read_text(encoding="utf-8"))
+if manifest != api_manifest:
+    raise SystemExit("public API and frontend release manifests differ")
 if manifest.get("schema_version") != 1 or str(manifest.get("commit_sha") or "").strip().lower() != expected_sha:
     raise SystemExit("public frontend release manifest is not bound to EXPECTED_SHA")
 files = manifest.get("files")
