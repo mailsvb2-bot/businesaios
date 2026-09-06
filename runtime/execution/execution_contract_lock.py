@@ -227,6 +227,7 @@ def verify_execution_contract(
         execution_receipt=_build_execution_receipt(env=env, output=normalized_output),
         feedback=feedback,
         router_evidence=router_evidence or None,
+        now=datetime.fromisoformat(_decision_observed_at(env)),
     ).to_dict()
     verification = _safe_dict(result.get("verification"))
     verified = bool(result.get("verified"))
