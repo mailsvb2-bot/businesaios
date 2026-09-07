@@ -1,110 +1,208 @@
 name: Prune stale branches
 
 on:
+  pull_request:
+    types:
+      - closed
   push:
     branches:
-      - feat/owner-intelligence-cockpit
+      - main
+    paths:
+      - .github/branch-prune-request.tsv
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
-  materialize-clean-owner-app:
+  validate-merged-agent-head:
+    if: >-
+      github.event_name == 'pull_request' &&
+      github.event.pull_request.merged == true &&
+      github.event.pull_request.head.repo.full_name == github.repository &&
+      github.event.pull_request.base.ref == github.event.repository.default_branch &&
+      startsWith(github.event.pull_request.head.ref, 'agent/')
     runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+    env:
+      TRUSTED_BASE_SHA: ${{ github.event.pull_request.base.sha }}
     steps:
-      - name: Check out repair commit
+      - name: Check out trusted default-base revision without persisted credentials
         uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
         with:
-          ref: feat/owner-intelligence-cockpit
-          fetch-depth: 0
+          ref: ${{ github.event.pull_request.base.sha }}
+          persist-credentials: false
+          fetch-depth: 1
 
-      - name: Restore canonical App formatting and self-clean workflow
+      - name: Verify exact checkout
+        shell: bash
+        run: test "$(git rev-parse HEAD)" = "$TRUSTED_BASE_SHA"
+
+      - name: Run canonical doctor gate
+        shell: bash
+        run: python -m scripts.ci.cli --gate doctor
+
+  delete-merged-agent-head:
+    needs: validate-merged-agent-head
+    if: needs.validate-merged-agent-head.result == 'success'
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    env:
+      TARGET_BRANCH: ${{ github.event.pull_request.head.ref }}
+      EXPECTED_SHA: ${{ github.event.pull_request.head.sha }}
+    steps:
+      - name: Delete only the exact merged branch revision from isolated git state
+        env:
+          GH_TOKEN: ${{ github.token }}
         shell: bash
         run: |
           set -euo pipefail
-          base=b509fc2c3b6670104581579e7fe1f69c0b595ee8
-          git checkout "$base" -- frontend/src/App.jsx .github/workflows/prune-stale-branches.yml
-          cat > /tmp/App.clean.patch <<'PATCH'
-          diff --git a/frontend/src/App.jsx b/frontend/src/App.jsx
-          index e7f0e78..a55cf67 100644
-          --- a/frontend/src/App.jsx
-          +++ b/frontend/src/App.jsx
-          @@ -1,5 +1,6 @@
-           import { useCallback, useEffect, useMemo, useState } from "react";
-           import { AcquisitionPlanner } from "./AcquisitionPlanner.jsx";
-          +import { BusinessIntelligencePanel } from "./BusinessIntelligencePanel.jsx";
-           
-           const DEFAULT_API = import.meta.env.VITE_API_BASE || "https://api.businessaios.ru";
-           
-          @@ -208,6 +209,10 @@ function Workspace({ data, apiBase, businesses, onRestart, onRetryAccess, onSwit
-             const approvalResumeUrl = `${baseApi}/control-plane/provider-runtime/approval-resume`;
-             const customersUrl = `${baseApi}/business-workspace/customers`;
-             const acquisitionUrl = `${baseApi}/business-workspace/acquisition-plan`;
-          +  const analyticsUrl = `${baseApi}/analytics/dashboard/${encodeURIComponent(data.tenant_id)}?window_days=30`;
-          +  const memorySummaryUrl = `${baseApi}/business-memory/summary`;
-          +  const memoryRecentUrl = `${baseApi}/business-memory/recent-runs`;
-          +  const goalExecuteUrl = `${baseApi}/goals/execute`;
-             const authHeaders = useMemo(() => (apiKey ? { "X-API-Key": apiKey } : {}), [apiKey]);
-             const selectedKeys = useMemo(() => new Set(integrations.map((item) => item.provider_key)), [integrations]);
-             const [catalog, setCatalog] = useState([]);
-          @@ -503,6 +508,31 @@ function Workspace({ data, apiBase, businesses, onRestart, onRetryAccess, onSwit
-               requestAnimationFrame(() => document.getElementById("connections-panel")?.scrollIntoView({ behavior: "smooth", block: "start" }));
-             };
-           
-          +  const loadBusinessIntelligence = useCallback(async () => {
-          +    if (!apiKey) return { analytics: null, memory: null, recentRuns: [], errors: ["session"] };
-          +    const ownerScope = { tenant_id: data.tenant_id, business_id: data.business_id };
-          +    const [analytics, memory, recent] = await Promise.allSettled([
-          +      getJson(analyticsUrl, authHeaders),
-          +      postJson(memorySummaryUrl, ownerScope, authHeaders),
-          +      postJson(memoryRecentUrl, { ...ownerScope, limit: 5 }, authHeaders)
-          +    ]);
-          +    return {
-          +      analytics: analytics.status === "fulfilled" ? analytics.value?.payload || null : null,
-          +      memory: memory.status === "fulfilled" ? memory.value : null,
-          +      recentRuns: recent.status === "fulfilled" && Array.isArray(recent.value?.runs) ? recent.value.runs : [],
-          +      errors: [analytics, memory, recent].map((item, index) => item.status === "rejected" ? ["analytics", "memory", "recent_runs"][index] : null).filter(Boolean)
-          +    };
-          +  }, [apiKey, analyticsUrl, authHeaders, data.business_id, data.tenant_id, memoryRecentUrl, memorySummaryUrl]);
-          +
-          +  const runAdvisoryGoal = useCallback(async (goal) => {
-          +    if (!apiKey) throw new Error("owner_session_required");
-          +    return postJson(goalExecuteUrl, {
-          +      goal, business_id: data.business_id, tenant_id: data.tenant_id, max_steps: 1,
-          +      profile: { industry: profile.industry || "", city: profile.city || "", business_model: profile.business_model || "" },
-          +      meta: { source: "owner_workspace" }
-          +    }, { ...authHeaders, "X-Idempotency-Key": crypto.randomUUID() });
-          +  }, [apiKey, authHeaders, data.business_id, data.tenant_id, goalExecuteUrl, profile.business_model, profile.city, profile.industry]);
-          +
-             const retryProtectedAccess = async () => {
-               if (!data.intake_id || !onRetryAccess) return;
-               setAccessRecoveryBusy(true);
-          @@ -570,6 +600,14 @@ function Workspace({ data, apiBase, businesses, onRestart, onRetryAccess, onSwit
-                   <div className="truth-note">{liveEvidence ? "Результат подтверждён реальным чтением данных из подключённого источника." : "До первого чтения здесь нет финансовых обещаний или выдуманных выводов. Сначала факты — потом рекомендации."}</div>
-                 </section>
-           
-          +      <BusinessIntelligencePanel
-          +        key={data.business_id}
-          +        enabled={Boolean(apiKey)}
-          +        initialGoal={GOALS.find((goal) => goal.value === profile.goal)?.title || "Улучшить результаты бизнеса"}
-          +        onLoad={loadBusinessIntelligence}
-          +        onRunGoal={runAdvisoryGoal}
-          +      />
-          +
-                 <section className="panel capabilities-panel" aria-labelledby="business-capabilities-title">
-                   <div className="panel-title-row">
-                     <div><p className="eyebrow">Возможности</p><h2 id="business-capabilities-title">Что BusinessAIOS уже умеет для вашего бизнеса</h2></div>
-          PATCH
-          sed -i 's/^          //' /tmp/App.clean.patch
-          git apply --check /tmp/App.clean.patch
-          git apply /tmp/App.clean.patch
-          git diff --check
-          numstat="$(git diff --numstat "$base" -- frontend/src/App.jsx)"
-          test "$numstat" = $'38\t0\tfrontend/src/App.jsx'
-          grep -F 'meta: { source: "owner_workspace" }' frontend/src/App.jsx >/dev/null
-          ! grep -F 'autonomy_tier' frontend/src/App.jsx >/dev/null
-          git config user.name 'github-actions[bot]'
-          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git add frontend/src/App.jsx .github/workflows/prune-stale-branches.yml
-          git commit -m 'fix: keep owner intelligence app diff clean'
-          git push origin HEAD:feat/owner-intelligence-cockpit
+          branch="$TARGET_BRANCH"
+          expected_sha="$EXPECTED_SHA"
+          case "$branch" in
+            agent/*) ;;
+            *) echo "refusing to delete non-agent branch: $branch" >&2; exit 64 ;;
+          esac
+          if [ "${#expected_sha}" -ne 40 ] || [[ "$expected_sha" =~ [^0-9a-f] ]]; then
+            echo "merged head SHA is missing or malformed" >&2
+            exit 64
+          fi
+
+          repo_dir="$RUNNER_TEMP/branch-gc"
+          rm -rf "$repo_dir"
+          git init --quiet "$repo_dir"
+          cd "$repo_dir"
+          git remote add origin "https://github.com/${GITHUB_REPOSITORY}.git"
+          gh auth setup-git
+
+          ref="refs/heads/$branch"
+          if git push origin \
+            --force-with-lease="$ref:$expected_sha" \
+            ":$ref"; then
+            echo "deleted=$branch sha=$expected_sha"
+            exit 0
+          fi
+
+          current_sha="$(git ls-remote origin "$ref" | awk 'NR == 1 { print $1 }')"
+          if [ -z "$current_sha" ]; then
+            echo "already_absent=$branch"
+            exit 0
+          fi
+          if [ "$current_sha" != "$expected_sha" ]; then
+            echo "preserved_changed_ref=$branch expected=$expected_sha current=$current_sha"
+            exit 0
+          fi
+
+          echo "atomic deletion failed while $branch still points to merged SHA $expected_sha" >&2
+          exit 1
+
+  validate-snapshot-prune:
+    if: github.event_name == 'push'
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+    env:
+      TRUSTED_HEAD_SHA: ${{ github.sha }}
+    steps:
+      - name: Check out exact trusted main revision without persisted credentials
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+          fetch-depth: 1
+
+      - name: Verify exact checkout and request shape
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$TRUSTED_HEAD_SHA"
+          test -s .github/branch-prune-request.tsv
+          while IFS=$'\t' read -r branch expected_sha extra; do
+            [ -z "$branch" ] && continue
+            case "$branch" in \#*) continue ;; esac
+            [ -z "${extra:-}" ] || { echo "unexpected third column for $branch" >&2; exit 64; }
+            [ "$branch" != "main" ] || { echo "main must never appear in prune request" >&2; exit 64; }
+            [ "${#expected_sha}" -eq 40 ] && [[ ! "$expected_sha" =~ [^0-9a-f] ]] || {
+              echo "bad expected SHA for $branch" >&2
+              exit 64
+            }
+          done < .github/branch-prune-request.tsv
+
+      - name: Run canonical doctor gate
+        shell: bash
+        run: python -m scripts.ci.cli --gate doctor
+
+  delete-snapshot-branches:
+    needs: validate-snapshot-prune
+    if: needs.validate-snapshot-prune.result == 'success'
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+      pull-requests: read
+    steps:
+      - name: Check out exact prune request without persisted credentials
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+          fetch-depth: 1
+
+      - name: Delete only unchanged branches with no open pull request
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          default_branch="${{ github.event.repository.default_branch }}"
+          owner="${GITHUB_REPOSITORY%%/*}"
+
+          repo_dir="$RUNNER_TEMP/snapshot-branch-gc"
+          rm -rf "$repo_dir"
+          git init --quiet "$repo_dir"
+          cd "$repo_dir"
+          git remote add origin "https://github.com/${GITHUB_REPOSITORY}.git"
+          gh auth setup-git
+
+          deleted=0
+          preserved=0
+          while IFS=$'\t' read -r branch expected_sha extra; do
+            [ -z "$branch" ] && continue
+            case "$branch" in \#*) continue ;; esac
+            [ "$branch" != "$default_branch" ] || {
+              echo "refusing to delete default branch: $branch" >&2
+              exit 64
+            }
+
+            ref="refs/heads/$branch"
+            current_sha="$(git ls-remote origin "$ref" | awk 'NR == 1 { print $1 }')"
+            if [ -z "$current_sha" ]; then
+              echo "already_absent=$branch"
+              continue
+            fi
+            if [ "$current_sha" != "$expected_sha" ]; then
+              echo "preserved_changed_ref=$branch expected=$expected_sha current=$current_sha"
+              preserved=$((preserved + 1))
+              continue
+            fi
+
+            open_prs="$(gh api --paginate \
+              -H 'Accept: application/vnd.github+json' \
+              "repos/${GITHUB_REPOSITORY}/pulls?state=open&head=${owner}:${branch}&per_page=100" \
+              --jq 'length' | awk '{ total += $1 } END { print total + 0 }')"
+            if [ "$open_prs" -ne 0 ]; then
+              echo "preserved_open_pr_head=$branch count=$open_prs"
+              preserved=$((preserved + 1))
+              continue
+            fi
+
+            git push origin --force-with-lease="$ref:$expected_sha" ":$ref"
+            echo "deleted=$branch sha=$expected_sha"
+            deleted=$((deleted + 1))
+          done < "$GITHUB_WORKSPACE/.github/branch-prune-request.tsv"
+
+          echo "deleted_count=$deleted preserved_count=$preserved"
+          [ "$preserved" -eq 0 ] || {
+            echo "one or more branches changed or gained an open PR after the audited snapshot" >&2
+            exit 1
+          }
