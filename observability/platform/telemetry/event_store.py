@@ -1,15 +1,13 @@
 from __future__ import annotations
 
-from runtime.service_names import RuntimeServiceName
-
 import importlib
 import json
 import os
-from pathlib import Path
-sqlite3 = importlib.import_module("sqlite3")
-from typing import Any, Dict, Iterable, Iterator, Sequence
-
+from collections.abc import Iterable, Iterator, Sequence
 from datetime import datetime, timezone
+from pathlib import Path
+from threading import RLock
+from typing import Any
 
 from boot.bootstrap_config_surface import BootstrapConfigSurface
 from governance.persistence_codec import ensure_parent_dir
@@ -23,6 +21,7 @@ from observability.platform.telemetry.event_stream import (
 )
 from shared.types import ensure_jsonable, new_id
 
+sqlite3 = importlib.import_module("sqlite3")
 
 CANON_PLATFORM_TELEMETRY_EVENT_STORE = True
 
@@ -81,7 +80,7 @@ class JsonlEventStore:
         except Exception:
             return
 
-    def append(self, *, tenant_id: str, user_id: str | None, event_type: str, payload: Dict[str, Any]) -> None:
+    def append(self, *, tenant_id: str, user_id: str | None, event_type: str, payload: dict[str, Any]) -> None:
         tenant = str(tenant_id or '').strip()
         event_name = str(event_type or '').strip()
         if not tenant:
@@ -111,7 +110,7 @@ class JsonlEventStore:
         event_type: str | None = None,
         event_types: Sequence[str] | None = None,
         limit: int = 2000,
-    ) -> Iterable[Dict[str, Any]]:
+    ) -> Iterable[dict[str, Any]]:
         tenant = str(tenant_id)
         normalized_user = None if user_id is None else str(user_id)
         accepted_types = _normalized_event_types(event_type=event_type, event_types=event_types)
@@ -138,7 +137,7 @@ class JsonlEventStore:
         user_id: str | None = None,
         event_type: str | None = None,
         event_types: Sequence[str] | None = None,
-    ) -> Dict[str, Any] | None:
+    ) -> dict[str, Any] | None:
         xs = list(self.latest_events(tenant_id=tenant_id, user_id=user_id, event_type=event_type, event_types=event_types, limit=1))
         return xs[0] if xs else None
 
@@ -152,7 +151,7 @@ class JsonlEventStore:
         start_ms: int | None = None,
         end_ms: int | None = None,
         limit: int | None = None,
-    ) -> Iterable[Dict[str, Any]]:
+    ) -> Iterable[dict[str, Any]]:
         accepted_types = _normalized_event_types(event_type=event_type, event_types=event_types)
         tenant = str(tenant_id)
         normalized_user = None if user_id is None else str(user_id)
@@ -201,8 +200,6 @@ class JsonlEventStore:
         return out
 
 
-
-
 class SqliteEventStore:
     """Persistent sqlite-backed telemetry store.
 
@@ -214,7 +211,8 @@ class SqliteEventStore:
         default_path = _event_store_path(config_surface=config_surface)
         self._path = Path(path) if path is not None else default_path.with_suffix('.sqlite3')
         ensure_parent_dir(self._path)
-        self._conn = sqlite3.connect(str(self._path))
+        self._lock = RLock()
+        self._conn = sqlite3.connect(str(self._path), check_same_thread=False)
         self._conn.execute('PRAGMA journal_mode=WAL')
         self._conn.execute('PRAGMA synchronous=NORMAL')
         self._conn.execute(
@@ -237,11 +235,12 @@ class SqliteEventStore:
         return self._path
 
     def close(self) -> None:
-        conn = getattr(self, '_conn', None)
-        if conn is None:
-            return
-        self._conn = None
-        conn.close()
+        with self._lock:
+            conn = getattr(self, '_conn', None)
+            if conn is None:
+                return
+            self._conn = None
+            conn.close()
 
     def __enter__(self):
         return self
@@ -255,7 +254,7 @@ class SqliteEventStore:
         except Exception:
             return
 
-    def append(self, *, tenant_id: str, user_id: str | None, event_type: str, payload: Dict[str, Any]) -> None:
+    def append(self, *, tenant_id: str, user_id: str | None, event_type: str, payload: dict[str, Any]) -> None:
         tenant = str(tenant_id or '').strip()
         event_name = str(event_type or '').strip()
         if not tenant:
@@ -271,13 +270,14 @@ class SqliteEventStore:
             'payload': dict(ensure_jsonable(payload or {})),
             'ts_iso': ts_iso,
         }
-        self._conn.execute(
-            'INSERT INTO telemetry_events(event_id, tenant_id, user_id, event_type, payload_json, ts_iso, ts_ms) VALUES (?, ?, ?, ?, ?, ?, ?)',
-            (row['event_id'], row['tenant_id'], row['user_id'], row['event_type'], json.dumps(row['payload'], ensure_ascii=False, sort_keys=True), row['ts_iso'], _ts_iso_to_ms(ts_iso)),
-        )
-        self._conn.commit()
+        with self._lock:
+            self._conn.execute(
+                'INSERT INTO telemetry_events(event_id, tenant_id, user_id, event_type, payload_json, ts_iso, ts_ms) VALUES (?, ?, ?, ?, ?, ?, ?)',
+                (row['event_id'], row['tenant_id'], row['user_id'], row['event_type'], json.dumps(row['payload'], ensure_ascii=False, sort_keys=True), row['ts_iso'], _ts_iso_to_ms(ts_iso)),
+            )
+            self._conn.commit()
 
-    def latest_events(self, *, tenant_id: str, user_id: str | None = None, event_type: str | None = None, event_types: Sequence[str] | None = None, limit: int = 2000) -> Iterable[Dict[str, Any]]:
+    def latest_events(self, *, tenant_id: str, user_id: str | None = None, event_type: str | None = None, event_types: Sequence[str] | None = None, limit: int = 2000) -> Iterable[dict[str, Any]]:
         tenant = str(tenant_id)
         accepted_types = _normalized_event_types(event_type=event_type, event_types=event_types)
         clauses = ['tenant_id = ?']
@@ -291,7 +291,8 @@ class SqliteEventStore:
             params.extend(sorted(accepted_types))
         sql = 'SELECT event_id, tenant_id, user_id, event_type, payload_json, ts_iso FROM telemetry_events WHERE ' + ' AND '.join(clauses) + ' ORDER BY ts_ms DESC, rowid DESC LIMIT ?'
         params.append(max(0, int(limit)))
-        rows = self._conn.execute(sql, tuple(params)).fetchall()
+        with self._lock:
+            rows = self._conn.execute(sql, tuple(params)).fetchall()
         return [
             {
                 'event_id': event_id,
@@ -304,11 +305,11 @@ class SqliteEventStore:
             for event_id, tenant_value, user_value, event_name, payload_json, ts_iso in rows
         ]
 
-    def latest_event(self, *, tenant_id: str, user_id: str | None = None, event_type: str | None = None, event_types: Sequence[str] | None = None) -> Dict[str, Any] | None:
+    def latest_event(self, *, tenant_id: str, user_id: str | None = None, event_type: str | None = None, event_types: Sequence[str] | None = None) -> dict[str, Any] | None:
         xs = list(self.latest_events(tenant_id=tenant_id, user_id=user_id, event_type=event_type, event_types=event_types, limit=1))
         return xs[0] if xs else None
 
-    def iter_events(self, *, tenant_id: str, user_id: str | None = None, event_type: str | None = None, event_types: Sequence[str] | None = None, start_ms: int | None = None, end_ms: int | None = None, limit: int | None = None) -> Iterable[Dict[str, Any]]:
+    def iter_events(self, *, tenant_id: str, user_id: str | None = None, event_type: str | None = None, event_types: Sequence[str] | None = None, start_ms: int | None = None, end_ms: int | None = None, limit: int | None = None) -> Iterable[dict[str, Any]]:
         tenant = str(tenant_id)
         accepted_types = _normalized_event_types(event_type=event_type, event_types=event_types)
         clauses = ['tenant_id = ?']
@@ -330,7 +331,8 @@ class SqliteEventStore:
         if limit is not None:
             sql += ' LIMIT ?'
             params.append(max(0, int(limit)))
-        rows = self._conn.execute(sql, tuple(params)).fetchall()
+        with self._lock:
+            rows = self._conn.execute(sql, tuple(params)).fetchall()
         out: list[dict[str, Any]] = []
         for event_id, tenant_value, user_value, event_name, payload_json, ts_iso in rows:
             try:
