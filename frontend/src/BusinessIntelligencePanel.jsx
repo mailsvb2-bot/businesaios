@@ -43,15 +43,15 @@ function goalOutcome(result) {
   const step = Array.isArray(result?.steps) ? result.steps[0] : null;
   const status = String(step?.status || "").toLowerCase();
   if (status === "approval_required" || status === "operator_required") {
-    return { kind: "approval", title: "Нужно ваше подтверждение", text: "DecisionCore подготовил следующий шаг, но внешнее действие не выполняется без человеческого подтверждения." };
+    return { kind: "approval", title: "Нужно ваше подтверждение", text: "DecisionCore подготовил следующий шаг, но эта кнопка не выполняет внешнее действие." };
   }
   if (status === "blocked_by_policy") {
     return { kind: "blocked", title: "Остановлено правилами безопасности", text: "Система не выполнила действие, которое не прошло действующие ограничения." };
   }
   if (result?.completed) {
-    return { kind: "done", title: "Шаг разобран", text: "DecisionCore завершил этот шаг и сохранил результат в канонической памяти бизнеса." };
+    return { kind: "done", title: "Шаг разобран", text: "DecisionCore завершил разбор этого шага и сохранил результат в канонической памяти бизнеса." };
   }
-  return { kind: "neutral", title: "Результат получен", text: "DecisionCore вернул следующий шаг. Внешних действий без подтверждения не выполнялось." };
+  return { kind: "neutral", title: "Результат получен", text: "DecisionCore вернул следующий шаг. Эта кнопка не выполняет внешние действия." };
 }
 
 function PatternList({ title, items, empty }) {
@@ -147,9 +147,9 @@ export function BusinessIntelligencePanel({ enabled, initialGoal, onLoad, onRunG
       </div>
 
       <article className="intelligence-goal-card">
-        <div><p className="eyebrow">DecisionCore</p><h3>Дайте системе цель обычными словами</h3><p>BusinessAIOS разберёт один следующий шаг в supervised-режиме. Внешнее действие не выполняется без человеческого подтверждения.</p></div>
+        <div><p className="eyebrow">DecisionCore</p><h3>Дайте системе цель обычными словами</h3><p>BusinessAIOS разберёт один следующий шаг в режиме анализа и плана. Эта кнопка не выполняет внешние действия.</p></div>
         <label>Что вы хотите улучшить?<textarea value={goal} onChange={(event) => setGoal(event.target.value)} placeholder="Например: увеличить повторные продажи без роста рекламного бюджета" /></label>
-        <div className="navigation-row"><button type="button" className="primary" disabled={!enabled || goalBusy || !goal.trim()} onClick={runGoal}>{goalBusy ? "Разбираем цель…" : "Разобрать цель"}</button><small className="helper-text">Внешних действий без подтверждения не выполнялось.</small></div>
+        <div className="navigation-row"><button type="button" className="primary" disabled={!enabled || goalBusy || !goal.trim()} onClick={runGoal}>{goalBusy ? "Разбираем цель…" : "Разобрать цель"}</button><small className="helper-text">Эта кнопка не выполняет внешние действия.</small></div>
         {goalError ? <div className="error-box inline-error" role="alert">{goalError}</div> : null}
         {outcome ? <div className={`goal-outcome ${outcome.kind}`} role="status"><strong>{outcome.title}</strong><p>{outcome.text}</p>{goalResult?.steps?.[0]?.action ? <small>Следующий шаг: {humanText(goalResult.steps[0].action)}</small> : null}<details><summary>Техническое доказательство решения</summary><pre>{JSON.stringify(goalResult, null, 2)}</pre></details></div> : null}
       </article>
