@@ -27,9 +27,6 @@ class HeadlessRuntimeProvider:
     _lock: Lock = field(default_factory=Lock, init=False, repr=False)
 
     def get_runtime(self) -> HeadlessRuntimeLike:
-        runtime = self.runtime
-        if runtime is not None:
-            return runtime
         with self._lock:
             if self.runtime is None:
                 self.runtime = build_headless_runtime()
