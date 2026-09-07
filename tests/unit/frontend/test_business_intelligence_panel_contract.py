@@ -29,16 +29,18 @@ def test_intelligence_reads_canonical_owners_without_creating_second_brain() -> 
     assert all(token not in app + panel for token in ("localStorage", "sessionStorage", "indexedDB.open", "new EventStore", "new Scheduler"))
 
 
-def test_goal_surface_is_supervised_replay_protected_and_never_claims_unapproved_execution() -> None:
+def test_goal_surface_is_advisory_replay_protected_and_never_requests_external_execution() -> None:
     app = _read("App.jsx")
     panel = _read("BusinessIntelligencePanel.jsx")
     assert '"X-Idempotency-Key": crypto.randomUUID()' in app
     assert 'max_steps: 1' in app
+    assert 'meta: { source: "owner_workspace" }' in app
+    # Safety tier is server-owned; the browser must not be able to relax it.
     assert 'autonomy_tier' not in app
     assert "Ничего внешнему сервису не отправлено." in panel
-    assert "Внешних действий без подтверждения не выполнялось." in panel
+    assert "Эта кнопка не выполняет внешние действия." in panel
     assert "Остановлено правилами безопасности" in panel
-    assert "Внешнее действие не выполняется без человеческого подтверждения." in panel
+    assert "режиме анализа и плана" in panel
 
 
 def test_intelligence_failure_is_isolated_from_rest_of_owner_workspace() -> None:
