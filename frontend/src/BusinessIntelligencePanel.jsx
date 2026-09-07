@@ -147,7 +147,7 @@ export function BusinessIntelligencePanel({ enabled, initialGoal, onLoad, onRunG
       </div>
 
       <article className="intelligence-goal-card">
-        <div><p className="eyebrow">DecisionCore</p><h3>Дайте системе цель обычными словами</h3><p>BusinessAIOS разберёт один следующий шаг в supervised-режиме. Внешнее действие, которому нужно разрешение, остановится на подтверждении.</p></div>
+        <div><p className="eyebrow">DecisionCore</p><h3>Дайте системе цель обычными словами</h3><p>BusinessAIOS разберёт один следующий шаг в supervised-режиме. Внешнее действие не выполняется без человеческого подтверждения.</p></div>
         <label>Что вы хотите улучшить?<textarea value={goal} onChange={(event) => setGoal(event.target.value)} placeholder="Например: увеличить повторные продажи без роста рекламного бюджета" /></label>
         <div className="navigation-row"><button type="button" className="primary" disabled={!enabled || goalBusy || !goal.trim()} onClick={runGoal}>{goalBusy ? "Разбираем цель…" : "Разобрать цель"}</button><small className="helper-text">Внешних действий без подтверждения не выполнялось.</small></div>
         {goalError ? <div className="error-box inline-error" role="alert">{goalError}</div> : null}
