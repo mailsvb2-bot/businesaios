@@ -30,6 +30,12 @@ def _default_runtime_provider() -> HeadlessRuntimeProvider:
     return build_headless_runtime_provider(runtime=_bootstrap_headless_runtime())
 
 
+def _request_autonomy_tier(request: ExecuteGoalRequest) -> str:
+    """Keep the owner workspace analysis-only while preserving the public API default."""
+    if str(request.meta.get("source") or "") == "owner_workspace":
+        return "advisory"
+    return "supervised"
+
 
 def build_headless_route_handlers(*, runtime_provider: HeadlessRuntimeProvider | None = None) -> "HeadlessRouteHandlers":
     return HeadlessRouteHandlers(runtime_provider=runtime_provider or build_default_headless_runtime_provider())
@@ -59,6 +65,7 @@ class HeadlessRouteHandlers:
                     horizon=request.ceo.horizon,
                     risk_level=request.ceo.risk_level,
                 ),
+                autonomy_tier=_request_autonomy_tier(request),
             )
         )
         return ExecuteGoalResponse(
