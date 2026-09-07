@@ -90,7 +90,7 @@ def _production_checkout_sha() -> str:
         prefix = "gitdir: "
         if not marker.startswith(prefix):
             raise _fail("production checkout .git file is invalid")
-        git_dir = Path(marker[len(prefix):])
+        git_dir = Path(marker[len(prefix) :])
         if not git_dir.is_absolute():
             git_dir = (PRODUCTION_ROOT / git_dir).resolve()
     if not git_dir.is_dir():
@@ -195,13 +195,21 @@ def _validate_and_extract(zip_bytes: bytes, expected_sha: str, destination: Path
             raise _fail("artifact does not contain release-manifest.json")
         archive.extractall(destination)
 
+    _validate_release_tree(destination, expected_sha)
+
+
+def _validate_release_tree(destination: Path, expected_sha: str) -> None:
     manifest_path = destination / "release-manifest.json"
+    if destination.is_symlink() or not manifest_path.is_file():
+        raise _fail("release dist or manifest is invalid")
     manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
     if manifest.get("schema_version") != 1 or manifest.get("commit_sha") != expected_sha:
         raise _fail("release manifest is not bound to the exact deployed SHA")
     files = manifest.get("files")
     if not isinstance(files, dict):
         raise _fail("release manifest files map is invalid")
+    if any(path.is_symlink() for path in destination.rglob("*")):
+        raise _fail("release dist symlinks are not allowed")
     actual_files = {
         path.relative_to(destination).as_posix()
         for path in destination.rglob("*")
@@ -221,20 +229,22 @@ def main() -> int:
     if not production_checkout:
         return 0
 
-    zip_exists = ARTIFACT_ZIP.exists()
-    id_exists = ARTIFACT_ID.exists()
-    if not zip_exists and not id_exists:
-        raise _fail("canonical production build requires a staged frontend-dist artifact and artifact id")
-    if zip_exists != id_exists:
-        raise _fail("staged artifact zip/id pair is incomplete")
-    if ARTIFACT_ZIP.is_symlink() or ARTIFACT_ID.is_symlink():
-        raise _fail("staged artifact inputs must not be symlinks")
-
     _assert_deploy_lock()
     expected_sha = _expected_sha()
     checkout_sha = _production_checkout_sha()
     if checkout_sha != expected_sha:
         raise _fail(f"production checkout SHA {checkout_sha} does not match EXPECTED_SHA {expected_sha}")
+
+    zip_exists = ARTIFACT_ZIP.exists()
+    id_exists = ARTIFACT_ID.exists()
+    if not zip_exists and not id_exists:
+        _validate_release_tree(DIST, expected_sha)
+        print(f"CI_FRONTEND_ARTIFACT_ALREADY_PUBLISHED sha={expected_sha}")
+        return 0
+    if zip_exists != id_exists:
+        raise _fail("staged artifact zip/id pair is incomplete")
+    if ARTIFACT_ZIP.is_symlink() or ARTIFACT_ID.is_symlink():
+        raise _fail("staged artifact inputs must not be symlinks")
     artifact_id_text = ARTIFACT_ID.read_text(encoding="ascii").strip()
     if not artifact_id_text.isdecimal():
         raise _fail("artifact id must be decimal")
