@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from concurrent.futures import ThreadPoolExecutor
+
 from observability.platform.telemetry.event_store import JsonlEventStore, SqliteEventStore, build_default_event_store
 
 
@@ -16,14 +18,22 @@ def test_jsonl_event_store_skips_corrupted_lines_and_filters_time(tmp_path) -> N
     assert len(all_events) == 2
 
 
-
-
 def test_sqlite_event_store_latest_events_returns_most_recent_first(tmp_path) -> None:
     store = SqliteEventStore(tmp_path / 'events.sqlite3')
     store.append(tenant_id='tenant-a', user_id='u1', event_type='evt', payload={'n': 1})
     store.append(tenant_id='tenant-a', user_id='u1', event_type='evt', payload={'n': 2})
     latest = list(store.latest_events(tenant_id='tenant-a', user_id='u1', event_type='evt', limit=1))
     assert latest[0]['payload']['n'] == 2
+
+
+def test_sqlite_event_store_can_be_shared_across_request_threads(tmp_path) -> None:
+    store = SqliteEventStore(tmp_path / 'shared.sqlite3')
+    with ThreadPoolExecutor(max_workers=4) as pool:
+        list(pool.map(lambda number: store.append(tenant_id='tenant-a', user_id='u1', event_type='evt', payload={'n': number}), range(8)))
+    with ThreadPoolExecutor(max_workers=4) as pool:
+        snapshots = list(pool.map(lambda _: list(store.iter_events(tenant_id='tenant-a')), range(4)))
+    assert all(len(rows) == 8 for rows in snapshots)
+    assert sorted(row['payload']['n'] for row in snapshots[0]) == list(range(8))
 
 
 def test_build_default_event_store_prefers_sqlite_backend(tmp_path, monkeypatch) -> None:

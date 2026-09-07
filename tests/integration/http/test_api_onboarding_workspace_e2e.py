@@ -245,6 +245,32 @@ def test_real_api_onboarding_issues_owner_session_and_opens_workspace(tmp_path) 
             assert customers["business_id"] == cta["business_id"]
             assert customers["customers"] == []
             assert customers["count"] == 0
+
+            owner_headers = {**secure_headers, "X-API-Key": switched_owner["api_key"]}
+            status, analytics = _request(port, f"/analytics/dashboard/{cta['tenant_id']}?window_days=30", headers=owner_headers)
+            assert status == 200, analytics
+            assert analytics["payload"]["dashboard"]["tenant_id"] == cta["tenant_id"]
+            memory_scope = {"tenant_id": cta["tenant_id"], "business_id": cta["business_id"]}
+            status, memory = _request(port, "/business-memory/summary", method="POST", headers=owner_headers, payload=memory_scope)
+            assert status == 200, memory
+            assert memory["business_id"] == cta["business_id"]
+            status, recent = _request(port, "/business-memory/recent-runs", method="POST", headers=owner_headers, payload={**memory_scope, "limit": 5})
+            assert status == 200, recent
+            assert isinstance(recent["runs"], list)
+
+            goal_payload = {"goal": "Increase repeat sales safely", "business_id": cta["business_id"], "tenant_id": cta["tenant_id"], "max_steps": 1, "profile": {"industry": "services"}, "meta": {"source": "owner_workspace"}}
+            status, goal_without_key = _request(port, "/goals/execute", method="POST", headers=owner_headers, payload=goal_payload)
+            assert status == 403, goal_without_key
+            assert goal_without_key["detail"] == "api_replay_protection_required"
+            status, goal_result = _request(port, "/goals/execute", method="POST", headers={**owner_headers, "X-Idempotency-Key": "owner-e2e-goal-1"}, payload=goal_payload)
+            assert status == 200, goal_result
+            assert goal_result["tenant_id"] == cta["tenant_id"]
+            assert goal_result["business_id"] == cta["business_id"]
+            assert goal_result["goal"] == goal_payload["goal"]
+            assert len(goal_result["steps"]) <= 1
+            status, memory_after_goal = _request(port, "/business-memory/summary", method="POST", headers=owner_headers, payload=memory_scope)
+            assert status == 200, memory_after_goal
+            assert memory_after_goal["total_runs"] >= memory["total_runs"] + 1
         finally:
             if process.poll() is None:
                 process.terminate()

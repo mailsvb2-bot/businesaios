@@ -2,7 +2,8 @@ from __future__ import annotations
 CANON_HEADLESS_RUNTIME_PROVIDER_FINAL_OWNER = True
 
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
+from threading import Lock
 from typing import Protocol
 
 from execution.headless_boot import build_headless_runtime
@@ -23,13 +24,13 @@ class HeadlessRuntimeProvider:
     """Canonical API-side owner for headless runtime acquisition."""
 
     runtime: HeadlessRuntimeLike | None = None
+    _lock: Lock = field(default_factory=Lock, init=False, repr=False)
 
     def get_runtime(self) -> HeadlessRuntimeLike:
-        runtime = self.runtime
-        if runtime is None:
-            runtime = build_headless_runtime()
-            self.runtime = runtime
-        return runtime
+        with self._lock:
+            if self.runtime is None:
+                self.runtime = build_headless_runtime()
+            return self.runtime
 
     def contract_runtime(self) -> object:
         return self.get_runtime().contract

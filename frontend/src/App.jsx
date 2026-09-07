@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { AcquisitionPlanner } from "./AcquisitionPlanner.jsx";
+import { BusinessIntelligencePanel } from "./BusinessIntelligencePanel.jsx";
 
 const DEFAULT_API = import.meta.env.VITE_API_BASE || "https://api.businessaios.ru";
 
@@ -208,6 +209,10 @@ function Workspace({ data, apiBase, businesses, onRestart, onRetryAccess, onSwit
   const approvalResumeUrl = `${baseApi}/control-plane/provider-runtime/approval-resume`;
   const customersUrl = `${baseApi}/business-workspace/customers`;
   const acquisitionUrl = `${baseApi}/business-workspace/acquisition-plan`;
+  const analyticsUrl = `${baseApi}/analytics/dashboard/${encodeURIComponent(data.tenant_id)}?window_days=30`;
+  const memorySummaryUrl = `${baseApi}/business-memory/summary`;
+  const memoryRecentUrl = `${baseApi}/business-memory/recent-runs`;
+  const goalExecuteUrl = `${baseApi}/goals/execute`;
   const authHeaders = useMemo(() => (apiKey ? { "X-API-Key": apiKey } : {}), [apiKey]);
   const selectedKeys = useMemo(() => new Set(integrations.map((item) => item.provider_key)), [integrations]);
   const [catalog, setCatalog] = useState([]);
@@ -503,6 +508,31 @@ function Workspace({ data, apiBase, businesses, onRestart, onRetryAccess, onSwit
     requestAnimationFrame(() => document.getElementById("connections-panel")?.scrollIntoView({ behavior: "smooth", block: "start" }));
   };
 
+  const loadBusinessIntelligence = useCallback(async () => {
+    if (!apiKey) return { analytics: null, memory: null, recentRuns: [], errors: ["session"] };
+    const ownerScope = { tenant_id: data.tenant_id, business_id: data.business_id };
+    const [analytics, memory, recent] = await Promise.allSettled([
+      getJson(analyticsUrl, authHeaders),
+      postJson(memorySummaryUrl, ownerScope, authHeaders),
+      postJson(memoryRecentUrl, { ...ownerScope, limit: 5 }, authHeaders)
+    ]);
+    return {
+      analytics: analytics.status === "fulfilled" ? analytics.value?.payload || null : null,
+      memory: memory.status === "fulfilled" ? memory.value : null,
+      recentRuns: recent.status === "fulfilled" && Array.isArray(recent.value?.runs) ? recent.value.runs : [],
+      errors: [analytics, memory, recent].map((item, index) => item.status === "rejected" ? ["analytics", "memory", "recent_runs"][index] : null).filter(Boolean)
+    };
+  }, [apiKey, analyticsUrl, authHeaders, data.business_id, data.tenant_id, memoryRecentUrl, memorySummaryUrl]);
+
+  const runAdvisoryGoal = useCallback(async (goal) => {
+    if (!apiKey) throw new Error("owner_session_required");
+    return postJson(goalExecuteUrl, {
+      goal, business_id: data.business_id, tenant_id: data.tenant_id, max_steps: 1,
+      profile: { industry: profile.industry || "", city: profile.city || "", business_model: profile.business_model || "" },
+      meta: { source: "owner_workspace" }
+    }, { ...authHeaders, "X-Idempotency-Key": crypto.randomUUID() });
+  }, [apiKey, authHeaders, data.business_id, data.tenant_id, goalExecuteUrl, profile.business_model, profile.city, profile.industry]);
+
   const retryProtectedAccess = async () => {
     if (!data.intake_id || !onRetryAccess) return;
     setAccessRecoveryBusy(true);
@@ -569,6 +599,14 @@ function Workspace({ data, apiBase, businesses, onRestart, onRetryAccess, onSwit
         </div>
         <div className="truth-note">{liveEvidence ? "Результат подтверждён реальным чтением данных из подключённого источника." : "До первого чтения здесь нет финансовых обещаний или выдуманных выводов. Сначала факты — потом рекомендации."}</div>
       </section>
+
+      <BusinessIntelligencePanel
+        key={data.business_id}
+        enabled={Boolean(apiKey)}
+        initialGoal={GOALS.find((goal) => goal.value === profile.goal)?.title || "Улучшить результаты бизнеса"}
+        onLoad={loadBusinessIntelligence}
+        onRunGoal={runAdvisoryGoal}
+      />
 
       <section className="panel capabilities-panel" aria-labelledby="business-capabilities-title">
         <div className="panel-title-row">

@@ -19,16 +19,12 @@ from entrypoints.api.headless_models import (
 from entrypoints.api.headless_runtime_provider import HeadlessRuntimeProvider, build_default_headless_runtime_provider, build_headless_runtime_provider
 
 
-CANON_API_HEADLESS_ROUTE_HANDLERS_SINGLE_RUNTIME_PROVIDER = True
-
-
 def _bootstrap_headless_runtime() -> object:
     return globals()["build_headless_runtime"]()
 
 
 def _default_runtime_provider() -> HeadlessRuntimeProvider:
     return build_headless_runtime_provider(runtime=_bootstrap_headless_runtime())
-
 
 
 def build_headless_route_handlers(*, runtime_provider: HeadlessRuntimeProvider | None = None) -> "HeadlessRouteHandlers":
@@ -59,6 +55,7 @@ class HeadlessRouteHandlers:
                     horizon=request.ceo.horizon,
                     risk_level=request.ceo.risk_level,
                 ),
+                autonomy_tier="advisory" if request.meta.get("source") == "owner_workspace" else "supervised",
             )
         )
         return ExecuteGoalResponse(
