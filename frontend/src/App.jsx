@@ -136,13 +136,13 @@ function capabilitySurfaceLabel(surface) {
 }
 
 function capabilityUserState(item, catalog) {
+  if (!item?.connectable) return { label: "Готовится", className: "roadmap", provider: null };
   const providers = (item?.provider_keys || []).map((key) => catalog.find((row) => row.provider_key === key)).filter(Boolean);
   const provider = providers.find((row) => row.connected) || providers.find((row) => row.customer_selectable) || providers[0] || null;
   if (provider?.connected) return { label: "Подключено", className: "ready", provider };
   if (provider?.customer_selectable) return { label: "Можно подключить", className: "ready", provider };
-  if (item?.connectable && !providers.length) return { label: "Доступно в системе", className: "preparing", provider: null };
-  if (item?.connectable) return { label: "Часть функций готова", className: "preparing", provider };
-  return { label: "Готовится", className: "roadmap", provider };
+  if (!providers.length) return { label: "Доступно в системе", className: "preparing", provider: null };
+  return { label: "Часть функций готова", className: "preparing", provider };
 }
 
 function capabilityPlainCopy(item, state) {
@@ -320,7 +320,7 @@ function Workspace({ data, apiBase, businesses, onRestart, onRetryAccess, onSwit
     setWorkspaceLoading(true);
     refreshCatalog()
       .then(async (rows) => {
-        await Promise.all(rows.filter((row) => selectedKeys.has(row.provider_key) && row.connected).map((row) => loadHistory(row.provider_key)));
+        await Promise.all(rows.filter((row) => row.connected).map((row) => loadHistory(row.provider_key)));
         await refreshOperations();
         await refreshCustomers();
       })
@@ -337,7 +337,7 @@ function Workspace({ data, apiBase, businesses, onRestart, onRetryAccess, onSwit
     .filter((row) => row.connected || row.customer_selectable || selectedKeys.has(row.provider_key))
     .sort((left, right) => Number(Boolean(right.connected)) - Number(Boolean(left.connected)) || Number(selectedKeys.has(right.provider_key)) - Number(selectedKeys.has(left.provider_key)) || String(left.title || "").localeCompare(String(right.title || ""), "ru"));
   const capabilityRows = capabilities.map((item) => ({ ...item, userState: capabilityUserState(item, catalog) }));
-  const actionableCapabilities = capabilityRows.filter((item) => item.userState.provider?.connected || item.userState.provider?.customer_selectable);
+  const actionableCapabilities = capabilityRows.filter((item) => item.connectable && (item.userState.provider?.connected || item.userState.provider?.customer_selectable));
   const otherCapabilities = capabilityRows.filter((item) => !actionableCapabilities.includes(item));
   const activeProvider = providers.find((row) => row.provider_key === activeKey) || providers[0] || null;
   const liveEvidenceByProvider = useMemo(() => {
