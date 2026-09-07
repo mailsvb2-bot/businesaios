@@ -203,6 +203,8 @@ def test_owner_workspace_surfaces_canonical_capabilities_and_does_not_permanentl
     assert all(token in app for token in ("Что BusinessAIOS уже умеет для вашего бизнеса", "Можно подключить", "Открыть подключение", "Остальные возможности проекта", "не показывает кнопку действия, пока для неё нет честного пользовательского пути"))
     assert 'openCapabilityProvider' in app and 'id="connections-panel"' in app
     assert all(selector in styles for selector in (".capabilities-panel", ".capability-summary", ".capability-grid", ".capability-card", ".capability-roadmap"))
+    assert '.capabilities-panel .panel-title-row { flex-direction: column; }' in styles
+    assert '.capabilities-panel .privacy-badge { max-width: 100%; white-space: normal; }' in styles
 
 
 def test_owner_operational_cockpit_never_writes_directly_from_browser() -> None:
