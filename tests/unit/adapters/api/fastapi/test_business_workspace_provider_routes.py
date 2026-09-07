@@ -82,6 +82,25 @@ def test_customer_catalog_fails_closed_for_contract_only_read_plan(monkeypatch) 
     assert result['write_actions_enabled'] is False
 
 
+def test_workspace_exposes_canonical_capabilities_with_business_connection_state(monkeypatch) -> None:
+    handlers = _Handlers(({'provider_key': 'partial-provider', 'connected': True}, {'provider_key': 'hubspot', 'connected': False}))
+    router = APIRouter()
+    workspace.register_business_workspace_provider_routes(router=router, auth_bundle=object(), provider_admin_handlers=handlers)
+    _authenticate_as(monkeypatch, _principal())
+    monkeypatch.setattr(workspace, 'provider_truth_map', _truth_rows)
+    captured = {}
+
+    def capability_payloads(**kwargs):
+        captured.update(kwargs)
+        return [{'id': 'interaction.test', 'providers': [{'provider_key': 'partial-provider', 'connected': True}]}]
+
+    monkeypatch.setattr(workspace, 'list_integration_capability_payloads', capability_payloads)
+    result = asyncio.run(_route(router, 'GET')(object()))
+    assert captured == {'active_provider_keys': ('partial-provider',)}
+    assert result['capabilities'][0]['id'] == 'interaction.test'
+    assert result['capabilities_source'] == 'application.business_autonomy.integration_capability_catalog'
+
+
 def test_activation_ignores_browser_workspace_identity_and_ownership(monkeypatch) -> None:
     handlers = _Handlers()
     router = APIRouter()

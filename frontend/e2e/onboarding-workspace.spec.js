@@ -80,6 +80,12 @@ test(canonicalScenario.title, async ({ page }, testInfo) => {
   await expect(page.getByText("Только чтение")).toBeVisible();
   await expect(page.getByRole("button", { name: new RegExp(providerTitle) })).toBeVisible();
   await expect(page.getByRole("heading", { name: "Первый полезный результат" })).toBeVisible();
+  const roadmapCapability = workspace.capabilities.find((item) => item.id === "acquisition.whatsapp_reactivation");
+  expect(roadmapCapability?.connectable).toBe(false);
+  await page.locator("details.capability-roadmap").evaluate((node) => { node.open = true; });
+  const roadmapCard = page.locator("article.capability-card", { hasText: "WhatsApp-реактивация" });
+  await expect(roadmapCard).toBeVisible();
+  await expect(roadmapCard.getByRole("button")).toHaveCount(0);
   await expect(page.getByText("Не удалось открыть защищённый workspace интеграций.")).toHaveCount(0);
   expect(await hasNoHorizontalOverflow(page)).toBe(true);
   expect(await persistentBrowserStateContains(page, ownerKey)).toBe(false);
