@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { AcquisitionPlanner } from "./AcquisitionPlanner.jsx";
+import { BusinessIntelligencePanel } from "./BusinessIntelligencePanel.jsx";
 
 const DEFAULT_API = import.meta.env.VITE_API_BASE || "https://api.businessaios.ru";
 
@@ -103,12 +104,8 @@ const PROVIDER_CONNECTION_GUIDANCE = {
 function connectionIdentityCopy(provider) {
   const key = String(provider?.provider_key || "").toLowerCase();
   if (PROVIDER_CONNECTION_GUIDANCE[key]) return PROVIDER_CONNECTION_GUIDANCE[key];
-  if (key.includes("website") || key.includes("wordpress") || key.includes("webflow")) {
-    return { label: "Сайт или проект", placeholder: "Например, https://example.ru" };
-  }
-  if (key.includes("marketplace") || key.includes("ozon") || key.includes("wildberries")) {
-    return { label: "Кабинет или магазин", placeholder: "Например, ID кабинета продавца" };
-  }
+  if (key.includes("website") || key.includes("wordpress") || key.includes("webflow")) return { label: "Сайт или проект", placeholder: "Например, https://example.ru" };
+  if (key.includes("marketplace") || key.includes("ozon") || key.includes("wildberries")) return { label: "Кабинет или магазин", placeholder: "Например, ID кабинета продавца" };
   return { label: "Аккаунт или кабинет", placeholder: "Например, ID аккаунта или адрес кабинета" };
 }
 
@@ -189,9 +186,7 @@ function approvalMessagePreview(row) {
 }
 
 function isSuccessfulLiveEvidence(row) {
-  return String(row?.mode || "").toLowerCase() === "live"
-    && row?.accepted === true
-    && String(row?.status || "").toLowerCase() === "live_executed";
+  return String(row?.mode || "").toLowerCase() === "live" && row?.accepted === true && String(row?.status || "").toLowerCase() === "live_executed";
 }
 
 function Workspace({ data, apiBase, businesses, onRestart, onRetryAccess, onSwitchBusiness }) {
@@ -208,6 +203,10 @@ function Workspace({ data, apiBase, businesses, onRestart, onRetryAccess, onSwit
   const approvalResumeUrl = `${baseApi}/control-plane/provider-runtime/approval-resume`;
   const customersUrl = `${baseApi}/business-workspace/customers`;
   const acquisitionUrl = `${baseApi}/business-workspace/acquisition-plan`;
+  const analyticsUrl = `${baseApi}/analytics/dashboard/${encodeURIComponent(data.tenant_id)}?window_days=30`;
+  const memorySummaryUrl = `${baseApi}/business-memory/summary`;
+  const memoryRecentUrl = `${baseApi}/business-memory/recent-runs`;
+  const goalExecuteUrl = `${baseApi}/goals/execute`;
   const authHeaders = useMemo(() => (apiKey ? { "X-API-Key": apiKey } : {}), [apiKey]);
   const selectedKeys = useMemo(() => new Set(integrations.map((item) => item.provider_key)), [integrations]);
   const [catalog, setCatalog] = useState([]);
@@ -242,12 +241,7 @@ function Workspace({ data, apiBase, businesses, onRestart, onRetryAccess, onSwit
     const rows = Array.isArray(payload.providers) ? payload.providers : [];
     setCatalog(rows);
     setCapabilities(Array.isArray(payload.capabilities) ? payload.capabilities : []);
-    setActiveKey((current) => {
-      if (current && rows.some((row) => row.provider_key === current)) return current;
-      return rows.find((row) => selectedKeys.has(row.provider_key) && row.customer_selectable)?.provider_key
-        || rows.find((row) => row.customer_selectable)?.provider_key
-        || "";
-    });
+    setActiveKey((current) => current && rows.some((row) => row.provider_key === current) ? current : rows.find((row) => selectedKeys.has(row.provider_key) && row.customer_selectable)?.provider_key || rows.find((row) => row.customer_selectable)?.provider_key || "");
     return rows;
   };
 
@@ -263,44 +257,27 @@ function Workspace({ data, apiBase, businesses, onRestart, onRetryAccess, onSwit
   };
 
   const refreshCustomers = async () => {
-    if (!apiKey) {
-      setCustomers([]);
-      setSelectedCustomerId("");
-      setCustomerTimeline([]);
-      return [];
-    }
-    setCustomerBusy(true);
-    setCustomerError("");
+    if (!apiKey) { setCustomers([]); setSelectedCustomerId(""); setCustomerTimeline([]); return []; }
+    setCustomerBusy(true); setCustomerError("");
     try {
       const payload = await getJson(customersUrl, authHeaders);
       const rows = Array.isArray(payload.customers) ? payload.customers : [];
       setCustomers(rows);
       setSelectedCustomerId((current) => current && rows.some((row) => row.customer_id === current) ? current : (rows[0]?.customer_id || ""));
       return rows;
-    } catch {
-      setCustomerError("Не удалось загрузить клиентов. Внешние действия не выполнялись.");
-      return [];
-    } finally {
-      setCustomerBusy(false);
-    }
+    } catch { setCustomerError("Не удалось загрузить клиентов. Внешние действия не выполнялись."); return []; }
+    finally { setCustomerBusy(false); }
   };
 
   const loadCustomerTimeline = async (customerId) => {
     if (!apiKey || !customerId) { setCustomerTimeline([]); return []; }
-    setCustomerBusy(true);
-    setCustomerError("");
+    setCustomerBusy(true); setCustomerError("");
     try {
       const payload = await getJson(`${customersUrl}?customer_id=${encodeURIComponent(customerId)}`, authHeaders);
       const rows = Array.isArray(payload.timeline?.entries) ? payload.timeline.entries : [];
-      setCustomerTimeline(rows);
-      return rows;
-    } catch {
-      setCustomerTimeline([]);
-      setCustomerError("Не удалось открыть историю клиента.");
-      return [];
-    } finally {
-      setCustomerBusy(false);
-    }
+      setCustomerTimeline(rows); return rows;
+    } catch { setCustomerTimeline([]); setCustomerError("Не удалось открыть историю клиента."); return []; }
+    finally { setCustomerBusy(false); }
   };
 
   const loadHistory = async (providerKey) => {
@@ -312,41 +289,23 @@ function Workspace({ data, apiBase, businesses, onRestart, onRetryAccess, onSwit
   };
 
   useEffect(() => {
-    if (!apiKey) {
-      setWorkspaceLoading(false);
-      return;
-    }
+    if (!apiKey) { setWorkspaceLoading(false); return; }
     let cancelled = false;
     setWorkspaceLoading(true);
-    refreshCatalog()
-      .then(async (rows) => {
-        await Promise.all(rows.filter((row) => row.connected).map((row) => loadHistory(row.provider_key)));
-        await refreshOperations();
-        await refreshCustomers();
-      })
-      .catch(() => {
-        if (!cancelled) setWorkspaceError("Не удалось открыть защищённый список подключений. Проверьте соединение и повторите попытку.");
-      })
-      .finally(() => {
-        if (!cancelled) setWorkspaceLoading(false);
-      });
+    refreshCatalog().then(async (rows) => {
+      await Promise.all(rows.filter((row) => row.connected).map((row) => loadHistory(row.provider_key)));
+      await refreshOperations(); await refreshCustomers();
+    }).catch(() => { if (!cancelled) setWorkspaceError("Не удалось открыть защищённый список подключений. Проверьте соединение и повторите попытку."); })
+      .finally(() => { if (!cancelled) setWorkspaceLoading(false); });
     return () => { cancelled = true; };
   }, [apiKey]);
 
-  const providers = catalog
-    .filter((row) => row.connected || row.customer_selectable || selectedKeys.has(row.provider_key))
-    .sort((left, right) => Number(Boolean(right.connected)) - Number(Boolean(left.connected)) || Number(selectedKeys.has(right.provider_key)) - Number(selectedKeys.has(left.provider_key)) || String(left.title || "").localeCompare(String(right.title || ""), "ru"));
+  const providers = catalog.filter((row) => row.connected || row.customer_selectable || selectedKeys.has(row.provider_key)).sort((left, right) => Number(Boolean(right.connected)) - Number(Boolean(left.connected)) || Number(selectedKeys.has(right.provider_key)) - Number(selectedKeys.has(left.provider_key)) || String(left.title || "").localeCompare(String(right.title || ""), "ru"));
   const capabilityRows = capabilities.map((item) => ({ ...item, userState: capabilityUserState(item, catalog) }));
   const actionableCapabilities = capabilityRows.filter((item) => item.connectable && (item.userState.provider?.connected || item.userState.provider?.customer_selectable));
   const otherCapabilities = capabilityRows.filter((item) => !actionableCapabilities.includes(item));
   const activeProvider = providers.find((row) => row.provider_key === activeKey) || providers[0] || null;
-  const liveEvidenceByProvider = useMemo(() => {
-    const entries = Object.entries(historyByProvider).flatMap(([providerKey, rows]) => {
-      const evidence = (rows || []).find(isSuccessfulLiveEvidence);
-      return evidence ? [[providerKey, evidence]] : [];
-    });
-    return new Map(entries);
-  }, [historyByProvider]);
+  const liveEvidenceByProvider = useMemo(() => new Map(Object.entries(historyByProvider).flatMap(([providerKey, rows]) => { const evidence = (rows || []).find(isSuccessfulLiveEvidence); return evidence ? [[providerKey, evidence]] : []; })), [historyByProvider]);
   const liveEvidence = Array.from(liveEvidenceByProvider.values())[0] || null;
   const activeLiveEvidence = activeProvider ? liveEvidenceByProvider.get(activeProvider.provider_key) || null : null;
   const connected = providers.some((row) => row.connected);
@@ -357,9 +316,7 @@ function Workspace({ data, apiBase, businesses, onRestart, onRetryAccess, onSwit
   const resourceCount = liveEvidence?.parsed_response?.resource_count ?? liveEvidence?.transport_response?.resource_count;
   const identityCopy = connectionIdentityCopy(activeProvider);
   const webhookUrl = providerWebhookUrl(baseApi, data, activeProvider);
-  const syncActionLabel = workspaceBusy === "sync"
-    ? (activeLiveEvidence ? "Обновляем данные…" : "Получаем данные…")
-    : (activeLiveEvidence ? "Обновить данные" : "Получить первые данные");
+  const syncActionLabel = workspaceBusy === "sync" ? (activeLiveEvidence ? "Обновляем данные…" : "Получаем данные…") : (activeLiveEvidence ? "Обновить данные" : "Получить первые данные");
 
   const operationProviders = catalog.filter((row) => row.write_supported).map((row) => {
     const required = Array.isArray(row.transport_binding?.live_required_secrets) ? row.transport_binding.live_required_secrets : [];
@@ -375,50 +332,26 @@ function Workspace({ data, apiBase, businesses, onRestart, onRetryAccess, onSwit
   const providerKeyForChannel = (channel) => channel === "email" ? "email_connector" : `${channel}_messaging`;
   const readyIdentityProvider = (identity) => readyOperationProviders.find((row) => row.provider_key === providerKeyForChannel(identity.channel));
 
-  useEffect(() => {
-    if (selectedCustomerId) void loadCustomerTimeline(selectedCustomerId);
-    else setCustomerTimeline([]);
-  }, [selectedCustomerId, apiKey]);
+  useEffect(() => { if (selectedCustomerId) void loadCustomerTimeline(selectedCustomerId); else setCustomerTimeline([]); }, [selectedCustomerId, apiKey]);
 
   const prepareForCustomer = (identity) => {
     const provider = readyIdentityProvider(identity);
-    if (!provider) {
-      setOperationError(`Канал ${identity.channel} пока не готов к отправке. Проверьте доступ выше.`);
-      return;
-    }
-    setOperationProviderKey(provider.provider_key);
-    setOperationRecipient(String(identity.external_subject || ""));
-    setOperationError("");
+    if (!provider) { setOperationError(`Канал ${identity.channel} пока не готов к отправке. Проверьте доступ выше.`); return; }
+    setOperationProviderKey(provider.provider_key); setOperationRecipient(String(identity.external_subject || "")); setOperationError("");
   };
 
   const runOperation = async (name, url, payload, headers = authHeaders) => {
-    setOperationBusy(name);
-    setOperationError("");
-    try {
-      const result = await postJson(url, payload, headers);
-      setOperationResult(result);
-      await refreshOperations();
-      return result;
-    } catch {
-      setOperationError("Действие не выполнено. BusinessAIOS ничего не отправил. Проверьте канал и повторите попытку.");
-      return null;
-    } finally { setOperationBusy(""); }
+    setOperationBusy(name); setOperationError("");
+    try { const result = await postJson(url, payload, headers); setOperationResult(result); await refreshOperations(); return result; }
+    catch { setOperationError("Действие не выполнено. BusinessAIOS ничего не отправил. Проверьте канал и повторите попытку."); return null; }
+    finally { setOperationBusy(""); }
   };
 
   const prepareMessage = async () => {
-    if (!activeOperationProvider || !operationRecipient.trim() || !operationText.trim()) {
-      setOperationError("Выберите готовый канал, укажите получателя и текст сообщения.");
-      return;
-    }
+    if (!activeOperationProvider || !operationRecipient.trim() || !operationText.trim()) { setOperationError("Выберите готовый канал, укажите получателя и текст сообщения."); return; }
     const recipient = operationRecipient.trim();
-    const result = await runOperation("message_send", actionExecuteUrl, {
-      action_type: "send_message@v1",
-      payload: { business_id: data.business_id, user_id: recipient, text: operationText.trim(), channel: messagingChannelForProvider(activeOperationProvider.provider_key), kind: "owner_manual", ...providerRecipientContext(activeOperationProvider.provider_key, recipient), ...(operationSubject.trim() ? { subject: operationSubject.trim() } : {}) }
-    }, { ...authHeaders, "X-Idempotency-Key": crypto.randomUUID() });
-    if (result) {
-      setOperationText("");
-      setOperationSubject("");
-    }
+    const result = await runOperation("message_send", actionExecuteUrl, { action_type: "send_message@v1", payload: { business_id: data.business_id, user_id: recipient, text: operationText.trim(), channel: messagingChannelForProvider(activeOperationProvider.provider_key), kind: "owner_manual", ...providerRecipientContext(activeOperationProvider.provider_key, recipient), ...(operationSubject.trim() ? { subject: operationSubject.trim() } : {}) } }, { ...authHeaders, "X-Idempotency-Key": crypto.randomUUID() });
+    if (result) { setOperationText(""); setOperationSubject(""); }
   };
 
   const decideApproval = async (approvalId, approve) => {
@@ -434,87 +367,78 @@ function Workspace({ data, apiBase, businesses, onRestart, onRetryAccess, onSwit
 
   const runWorkspaceAction = async (name, payload, providerKey = activeProvider?.provider_key) => {
     if (!providerKey) return null;
-    setWorkspaceBusy(name);
-    setWorkspaceError("");
+    setWorkspaceBusy(name); setWorkspaceError("");
     try {
       const result = await postJson(workspaceUrl, { provider_key: providerKey, ...payload }, authHeaders);
-      setLastAction({ name, providerKey, result });
-      await refreshCatalog();
-      await refreshOperations().catch(() => null);
+      setLastAction({ name, providerKey, result }); await refreshCatalog(); await refreshOperations().catch(() => null);
       if (name === "sync" || name === "probe") await loadHistory(providerKey);
       return result;
-    } catch {
-      setWorkspaceError("Действие не выполнено. Проверьте подключение и повторите попытку.");
-      return null;
-    } finally {
-      setWorkspaceBusy("");
-    }
+    } catch { setWorkspaceError("Действие не выполнено. Проверьте подключение и повторите попытку."); return null; }
+    finally { setWorkspaceBusy(""); }
   };
 
   const activateProvider = async () => {
     if (!activeProvider) return;
     const cleanSecrets = Object.fromEntries(Object.entries(secrets).filter(([, value]) => String(value || "").trim()));
     if (activeProvider.connected) {
-      if (!Object.keys(cleanSecrets).length) {
-        setWorkspaceError("Введите хотя бы один новый параметр доступа, который нужно добавить или заменить.");
-        return;
-      }
+      if (!Object.keys(cleanSecrets).length) { setWorkspaceError("Введите хотя бы один новый параметр доступа, который нужно добавить или заменить."); return; }
       setWorkspaceBusy("update_access"); setWorkspaceError("");
-      try {
-        await postJson(workspaceUrl, { action: "update_access", provider_key: activeProvider.provider_key, secrets: cleanSecrets }, authHeaders);
-        setSecrets({}); setEditingAccessKey(""); await refreshCatalog(); await refreshOperations();
-      } catch { setWorkspaceError("Не удалось обновить доступ. Старые сохранённые данные не удалялись."); }
+      try { await postJson(workspaceUrl, { action: "update_access", provider_key: activeProvider.provider_key, secrets: cleanSecrets }, authHeaders); setSecrets({}); setEditingAccessKey(""); await refreshCatalog(); await refreshOperations(); }
+      catch { setWorkspaceError("Не удалось обновить доступ. Старые сохранённые данные не удалялись."); }
       finally { setWorkspaceBusy(""); }
       return;
     }
     const requiredMissing = (activeProvider.secret_fields || []).some((field) => field.required && !String(secrets[field.secret_name] || "").trim());
-    if (!externalRef.trim() || requiredMissing) {
-      setWorkspaceError("Укажите аккаунт и заполните обязательные поля доступа.");
-      return;
-    }
+    if (!externalRef.trim() || requiredMissing) { setWorkspaceError("Укажите аккаунт и заполните обязательные поля доступа."); return; }
     const result = await runWorkspaceAction("activate", { action: "activate", external_ref: externalRef.trim(), secrets: cleanSecrets });
-    if (result) {
-      setSecrets({});
-      setEditingAccessKey("");
-      await loadHistory(activeProvider.provider_key).catch(() => []);
-    }
+    if (result) { setSecrets({}); setEditingAccessKey(""); await loadHistory(activeProvider.provider_key).catch(() => []); }
   };
 
-  const probeProvider = async () => {
-    await runWorkspaceAction("probe", { action: "read", mode: "live" });
-  };
-
+  const probeProvider = async () => { await runWorkspaceAction("probe", { action: "read", mode: "live" }); };
   const syncProvider = async () => {
     if (!activeProvider) return;
     const operation = activeProvider.runtime_plan?.read_operations?.[0];
-    if (!operation) {
-      setWorkspaceError("Для этого источника пока нет доступной операции чтения. Сначала проверьте подключение.");
-      return;
-    }
+    if (!operation) { setWorkspaceError("Для этого источника пока нет доступной операции чтения. Сначала проверьте подключение."); return; }
     await runWorkspaceAction("sync", { action: "read", mode: "live", operation, payload: {} });
   };
 
   const openCapabilityProvider = (providerKey) => {
     if (!providerKey) return;
-    setActiveKey(providerKey);
-    setExternalRef("");
-    setSecrets({});
-    setEditingAccessKey("");
+    setActiveKey(providerKey); setExternalRef(""); setSecrets({}); setEditingAccessKey("");
     requestAnimationFrame(() => document.getElementById("connections-panel")?.scrollIntoView({ behavior: "smooth", block: "start" }));
   };
 
+  const loadBusinessIntelligence = useCallback(async () => {
+    if (!apiKey) return { analytics: null, memory: null, recentRuns: [], errors: ["session"] };
+    const ownerScope = { tenant_id: data.tenant_id, business_id: data.business_id };
+    const [analytics, memory, recent] = await Promise.allSettled([
+      getJson(analyticsUrl, authHeaders),
+      postJson(memorySummaryUrl, ownerScope, authHeaders),
+      postJson(memoryRecentUrl, { ...ownerScope, limit: 5 }, authHeaders)
+    ]);
+    return {
+      analytics: analytics.status === "fulfilled" ? analytics.value?.payload || null : null,
+      memory: memory.status === "fulfilled" ? memory.value : null,
+      recentRuns: recent.status === "fulfilled" && Array.isArray(recent.value?.runs) ? recent.value.runs : [],
+      errors: [analytics, memory, recent].map((item, index) => item.status === "rejected" ? ["analytics", "memory", "recent_runs"][index] : null).filter(Boolean)
+    };
+  }, [apiKey, analyticsUrl, authHeaders, data.business_id, data.tenant_id, memoryRecentUrl, memorySummaryUrl]);
+
+  const runSupervisedGoal = useCallback(async (goal) => {
+    if (!apiKey) throw new Error("owner_session_required");
+    return postJson(goalExecuteUrl, {
+      goal, business_id: data.business_id, tenant_id: data.tenant_id, max_steps: 1,
+      profile: { industry: profile.industry || "", city: profile.city || "", business_model: profile.business_model || "" },
+      meta: { source: "owner_workspace" }
+    }, { ...authHeaders, "X-Idempotency-Key": crypto.randomUUID() });
+  }, [apiKey, authHeaders, data.business_id, data.tenant_id, goalExecuteUrl, profile.business_model, profile.city, profile.industry]);
+
   const retryProtectedAccess = async () => {
     if (!data.intake_id || !onRetryAccess) return;
-    setAccessRecoveryBusy(true);
-    setWorkspaceError("");
-    try {
-      const restored = await onRetryAccess(data.intake_id);
-      if (!restored) setWorkspaceError("Защищённый вход больше недоступен. Если срок безопасной сессии истёк, создайте новый кабинет.");
-    } catch {
-      setWorkspaceError("Не удалось повторно открыть защищённый вход. Проверьте соединение и повторите попытку.");
-    } finally {
-      setAccessRecoveryBusy(false);
-    }
+    setAccessRecoveryBusy(true); setWorkspaceError("");
+    try { const restored = await onRetryAccess(data.intake_id); if (!restored) setWorkspaceError("Защищённый вход больше недоступен. Если срок безопасной сессии истёк, создайте новый кабинет."); }
+    catch { setWorkspaceError("Не удалось повторно открыть защищённый вход. Проверьте соединение и повторите попытку."); }
+    finally { setAccessRecoveryBusy(false); }
   };
 
   return (
@@ -529,16 +453,8 @@ function Workspace({ data, apiBase, businesses, onRestart, onRetryAccess, onSwit
       </header>
 
       <section className="workspace-hero">
-        <div>
-          <p className="eyebrow">Кабинет бизнеса</p>
-          <h1>{profile.name || "Ваш бизнес"}</h1>
-          <p className="lead">{liveEvidence ? "Первые реальные данные уже подтверждены. Ниже — результат и следующие безопасные действия." : "Сейчас задача одна: получить первый подтверждённый результат на ваших данных. Никаких отправок, изменений или расходов."}</p>
-        </div>
-        <div className="progress-card">
-          <div className="progress-head"><span>До рабочего результата</span><strong>{verifiedPercent}%</strong></div>
-          <div className="progress-track" role="progressbar" aria-label="Готовность подключения" aria-valuemin={0} aria-valuemax={100} aria-valuenow={verifiedPercent}><span style={{ width: `${verifiedPercent}%` }} /></div>
-          <small>{liveEvidence ? "Первый подтверждённый результат получен." : connected ? "Источник подключён. Осталось получить первые данные." : "Следующий шаг: подключить выбранный источник."}</small>
-        </div>
+        <div><p className="eyebrow">Кабинет бизнеса</p><h1>{profile.name || "Ваш бизнес"}</h1><p className="lead">{liveEvidence ? "Первые реальные данные уже подтверждены. Ниже — результат и следующие безопасные действия." : "Сейчас задача одна: получить первый подтверждённый результат на ваших данных. Никаких отправок, изменений или расходов."}</p></div>
+        <div className="progress-card"><div className="progress-head"><span>До рабочего результата</span><strong>{verifiedPercent}%</strong></div><div className="progress-track" role="progressbar" aria-label="Готовность подключения" aria-valuemin={0} aria-valuemax={100} aria-valuenow={verifiedPercent}><span style={{ width: `${verifiedPercent}%` }} /></div><small>{liveEvidence ? "Первый подтверждённый результат получен." : connected ? "Источник подключён. Осталось получить первые данные." : "Следующий шаг: подключить выбранный источник."}</small></div>
       </section>
 
       <section className="summary-grid">
@@ -548,220 +464,50 @@ function Workspace({ data, apiBase, businesses, onRestart, onRetryAccess, onSwit
       </section>
 
       <section className="panel first-value-panel" aria-live="polite">
-        <div className="panel-title-row">
-          <div><p className="eyebrow">{liveEvidence ? "Подтверждено на ваших данных" : connected ? "Один шаг до результата" : "Первый полезный результат"}</p><h2>{liveEvidence ? "Первые реальные данные получены" : preview.title || "Первый полезный результат"}</h2></div>
-          <span className={`result-badge ${liveEvidence ? "verified" : "pending"}`}>{liveEvidence ? "Данные получены" : connected ? "Готово к чтению" : "Нужно подключение"}</span>
-        </div>
+        <div className="panel-title-row"><div><p className="eyebrow">{liveEvidence ? "Подтверждено на ваших данных" : connected ? "Один шаг до результата" : "Первый полезный результат"}</p><h2>{liveEvidence ? "Первые реальные данные получены" : preview.title || "Первый полезный результат"}</h2></div><span className={`result-badge ${liveEvidence ? "verified" : "pending"}`}>{liveEvidence ? "Данные получены" : connected ? "Готово к чтению" : "Нужно подключение"}</span></div>
         <p className="muted-text">{liveEvidence ? `${evidenceProvider?.title || liveEvidence.provider_key || "Источник"}: BusinessAIOS подтвердил чтение реальных данных и теперь может опираться на факты.` : connected ? "Доступ к источнику сохранён. Реальные данные ещё не читались. Нажмите «Получить первые данные» — подтверждённый результат появится здесь." : preview.message}</p>
         <div className="check-list compact-check-list">
-          {liveEvidence ? (
-            <>
-              <div className="check-row"><span>✓</span><strong>Подключение работает</strong></div>
-              <div className="check-row"><span>✓</span><strong>Данные прочитаны в безопасном режиме</strong></div>
-              {resourceCount !== undefined ? <div className="check-row"><span>✓</span><strong>Получено объектов: {resourceCount}</strong></div> : null}
-            </>
-          ) : connected ? (
-            <>
-              <div className="check-row"><span>✓</span><strong>Доступ к источнику сохранён</strong></div>
-              <div className="check-row"><span>→</span><strong>Получить первые реальные данные</strong></div>
-            </>
-          ) : (preview.checks || []).map((item) => <div className="check-row" key={item}><span>→</span><strong>{item}</strong></div>)}
+          {liveEvidence ? <><div className="check-row"><span>✓</span><strong>Подключение работает</strong></div><div className="check-row"><span>✓</span><strong>Данные прочитаны в безопасном режиме</strong></div>{resourceCount !== undefined ? <div className="check-row"><span>✓</span><strong>Получено объектов: {resourceCount}</strong></div> : null}</> : connected ? <><div className="check-row"><span>✓</span><strong>Доступ к источнику сохранён</strong></div><div className="check-row"><span>→</span><strong>Получить первые реальные данные</strong></div></> : (preview.checks || []).map((item) => <div className="check-row" key={item}><span>→</span><strong>{item}</strong></div>)}
         </div>
         <div className="truth-note">{liveEvidence ? "Результат подтверждён реальным чтением данных из подключённого источника." : "До первого чтения здесь нет финансовых обещаний или выдуманных выводов. Сначала факты — потом рекомендации."}</div>
       </section>
 
+      <BusinessIntelligencePanel key={data.business_id} enabled={Boolean(apiKey)} initialGoal={GOALS.find((goal) => goal.value === profile.goal)?.title || "Улучшить результаты бизнеса"} onLoad={loadBusinessIntelligence} onRunGoal={runSupervisedGoal} />
+
       <section className="panel capabilities-panel" aria-labelledby="business-capabilities-title">
-        <div className="panel-title-row">
-          <div><p className="eyebrow">Возможности</p><h2 id="business-capabilities-title">Что BusinessAIOS уже умеет для вашего бизнеса</h2></div>
-          <span className="privacy-badge">По фактической готовности</span>
-        </div>
+        <div className="panel-title-row"><div><p className="eyebrow">Возможности</p><h2 id="business-capabilities-title">Что BusinessAIOS уже умеет для вашего бизнеса</h2></div><span className="privacy-badge">По фактической готовности</span></div>
         <p className="muted-text">Это не рекламный список. Статус каждой возможности приходит из единого реестра BusinessAIOS и текущего состояния подключений. Если путь уже доказан, отсюда можно сразу перейти к существующей настройке.</p>
-        <div className="capability-summary">
-          <article><strong>{actionableCapabilities.length}</strong><span>можно открыть или подключить</span></article>
-          <article><strong>{capabilityRows.filter((item) => item.userState.provider?.connected).length}</strong><span>уже подключено</span></article>
-          <article><strong>{otherCapabilities.length}</strong><span>системные или готовятся</span></article>
-        </div>
-        {actionableCapabilities.length ? <div className="capability-grid">{actionableCapabilities.map((item) => <article className="capability-card" key={item.id}>
-          <div className="capability-card-head"><div><small>{capabilitySurfaceLabel(item.surface)}</small><strong>{item.title}</strong></div><span className={`status-pill ${item.userState.className}`}>{item.userState.label}</span></div>
-          <p>{capabilityPlainCopy(item, item.userState)}</p>
-          <button type="button" className="ghost small" onClick={() => openCapabilityProvider(item.userState.provider.provider_key)}>{item.userState.provider.connected ? "Открыть подключение" : "Подключить"}</button>
-        </article>)}</div> : <p className="empty-state">Сейчас нет возможностей с готовым пользовательским путём подключения.</p>}
-        {otherCapabilities.length ? <details className="capability-roadmap"><summary><span>Остальные возможности проекта</span><strong>{otherCapabilities.length}</strong></summary><div className="capability-grid roadmap-grid">{otherCapabilities.map((item) => <article className="capability-card muted-capability" key={item.id}>
-          <div className="capability-card-head"><div><small>{capabilitySurfaceLabel(item.surface)}</small><strong>{item.title}</strong></div><span className={`status-pill ${item.userState.className}`}>{item.userState.label}</span></div>
-          <p>{capabilityPlainCopy(item, item.userState)}</p>
-          {item.userState.provider?.customer_selectable ? <button type="button" className="ghost small" onClick={() => openCapabilityProvider(item.userState.provider.provider_key)}>Открыть настройку</button> : <small className="helper-text">BusinessAIOS не показывает кнопку действия, пока для неё нет честного пользовательского пути.</small>}
-        </article>)}</div></details> : null}
+        <div className="capability-summary"><article><strong>{actionableCapabilities.length}</strong><span>можно открыть или подключить</span></article><article><strong>{capabilityRows.filter((item) => item.userState.provider?.connected).length}</strong><span>уже подключено</span></article><article><strong>{otherCapabilities.length}</strong><span>системные или готовятся</span></article></div>
+        {actionableCapabilities.length ? <div className="capability-grid">{actionableCapabilities.map((item) => <article className="capability-card" key={item.id}><div className="capability-card-head"><div><small>{capabilitySurfaceLabel(item.surface)}</small><strong>{item.title}</strong></div><span className={`status-pill ${item.userState.className}`}>{item.userState.label}</span></div><p>{capabilityPlainCopy(item, item.userState)}</p><button type="button" className="ghost small" onClick={() => openCapabilityProvider(item.userState.provider.provider_key)}>{item.userState.provider.connected ? "Открыть подключение" : "Подключить"}</button></article>)}</div> : <p className="empty-state">Сейчас нет возможностей с готовым пользовательским путём подключения.</p>}
+        {otherCapabilities.length ? <details className="capability-roadmap"><summary><span>Остальные возможности проекта</span><strong>{otherCapabilities.length}</strong></summary><div className="capability-grid roadmap-grid">{otherCapabilities.map((item) => <article className="capability-card muted-capability" key={item.id}><div className="capability-card-head"><div><small>{capabilitySurfaceLabel(item.surface)}</small><strong>{item.title}</strong></div><span className={`status-pill ${item.userState.className}`}>{item.userState.label}</span></div><p>{capabilityPlainCopy(item, item.userState)}</p>{item.userState.provider?.customer_selectable ? <button type="button" className="ghost small" onClick={() => openCapabilityProvider(item.userState.provider.provider_key)}>Открыть настройку</button> : <small className="helper-text">BusinessAIOS не показывает кнопку действия, пока для неё нет честного пользовательского пути.</small>}</article>)}</div></details> : null}
       </section>
 
       <section className="workspace-grid">
         <article className="panel primary-panel" id="connections-panel">
           <div className="panel-title-row"><div><p className="eyebrow">Шаг к результату</p><h2>Подключите источник данных</h2></div><span className="privacy-badge">Только чтение</span></div>
           <p className="muted-text">Выберите источник и дайте доступ для чтения. Секреты используются только для подключения и не сохраняются в браузере.</p>
-
           {!apiKey ? <div className="recovery-box" role="alert"><p><strong>Кабинет найден, но защищённый вход сейчас не восстановлен.</strong> Обычная перезагрузка сама по себе сессию не завершает. Повторите вход; если срок безопасной сессии истёк, создайте новый кабинет.</p><button type="button" className="ghost" disabled={accessRecoveryBusy} onClick={retryProtectedAccess}>{accessRecoveryBusy ? "Восстанавливаем вход…" : "Повторить защищённый вход"}</button></div> : null}
           {workspaceLoading ? <div className="loading-box">Восстанавливаем кабинет и проверяем подключения…</div> : null}
           {workspaceError ? <div className="error-box inline-error" role="alert">{workspaceError}</div> : null}
-
-          <div className="connection-list">
-            {providers.length ? providers.map((item) => (
-              <button type="button" className={`connection-row ${activeProvider?.provider_key === item.provider_key ? "selected" : ""}`} aria-current={activeProvider?.provider_key === item.provider_key ? "true" : undefined} onClick={() => { setActiveKey(item.provider_key); setExternalRef(""); setSecrets({}); setEditingAccessKey(""); }} key={item.provider_key} disabled={!item.customer_selectable}>
-                <div className="provider-logo">{providerInitial(item.title)}</div>
-                <div className="connection-copy"><strong>{item.title}</strong><span>{liveEvidenceByProvider.has(item.provider_key) ? "Данные получены" : item.connected ? "Доступ сохранён · данные ещё не получены" : item.customer_selectable ? "Можно подключить" : "Пока не доступно"}</span></div>
-                <span className={`dot ${item.connected ? "green" : item.customer_selectable ? "orange" : "gray"}`} />
-              </button>
-            )) : <p className="empty-state">Для выбранных источников пока нет готового подключения.</p>}
-          </div>
-
-          {activeProvider && apiKey ? (
-            <div className="connection-flow">
-              <div className="connection-steps" aria-label="Этапы подключения">
-                <span className="done">1. Источник выбран</span>
-                <span className={activeProvider.connected ? "done" : "active"}>2. Доступ</span>
-                <span className={activeLiveEvidence ? "done" : activeProvider.connected ? "active" : ""}>3. Первые данные</span>
-              </div>
-              <div className="step-content workspace-step-content">
-                <div className="section-heading"><h2>{activeProvider.title}</h2><p>{activeLiveEvidence ? "Первые данные из этого источника подтверждены. При необходимости обновите их или проверьте доступ." : activeProvider.connected ? "Доступ сохранён. Получите первые данные — это главное действие сейчас." : "Нужен только доступ для чтения. Изменения во внешней системе остаются выключены."}</p></div>
-                <div className="provider-truth-card"><strong>Что реально доступно</strong><span>{providerTruthCopy(activeProvider)}</span>{identityCopy.help ? <small>{identityCopy.help}</small> : null}</div>
-                {!activeProvider.connected || editingAccessKey === activeProvider.provider_key ? (
-                  <div className="form-grid">
-                    <label className="full">{identityCopy.label}<input value={externalRef} onChange={(event) => setExternalRef(event.target.value)} placeholder={identityCopy.placeholder} /><small className="input-help">Это идентификатор именно вашего кабинета или проекта — не внутренний ID BusinessAIOS.</small></label>
-                    {webhookUrl ? <label className="full">Webhook URL<input className="readonly-value" type="text" readOnly value={webhookUrl} onFocus={(event) => event.target.select()} /><small className="input-help">Скопируйте этот адрес в настройки входящих событий провайдера. Адрес не содержит секретов.</small></label> : null}
-                    {(activeProvider.secret_fields || []).map((field) => (
-                      <label className={field.multiline ? "full" : ""} key={field.secret_name}><span className="field-label-row"><span>{credentialLabel(activeProvider, field)}</span>{!field.required ? <small>Необязательно</small> : null}</span>{field.multiline ? <textarea value={secrets[field.secret_name] || ""} onChange={(event) => setSecrets((previous) => ({ ...previous, [field.secret_name]: event.target.value }))} placeholder={field.placeholder || ""} /> : <input type={credentialInputType(field)} autoComplete="off" value={secrets[field.secret_name] || ""} onChange={(event) => setSecrets((previous) => ({ ...previous, [field.secret_name]: event.target.value }))} placeholder={field.placeholder || ""} />}{credentialInputType(field) === "text" ? <small className="input-help">Обычная настройка, не пароль. Значение передаётся только на защищённый сервер BusinessAIOS.</small> : null}</label>
-                    ))}
-                    <button type="button" className="primary" disabled={Boolean(workspaceBusy)} onClick={activateProvider}>{workspaceBusy === "activate" || workspaceBusy === "update_access" ? "Сохраняем доступ…" : activeProvider.connected ? "Обновить доступ" : "Подключить для чтения"}</button>
-                    {activeProvider.connected ? <button type="button" className="ghost" disabled={Boolean(workspaceBusy)} onClick={() => { setEditingAccessKey(""); setExternalRef(""); setSecrets({}); }}>Отмена</button> : null}
-                  </div>
-                ) : (
-                  <div className="navigation-row workspace-actions">
-                    <button type="button" className="ghost" disabled={Boolean(workspaceBusy)} onClick={probeProvider}>{workspaceBusy === "probe" ? "Проверяем…" : "Проверить доступ"}</button>
-                    <button type="button" className="primary" disabled={Boolean(workspaceBusy)} onClick={syncProvider}>{syncActionLabel}</button>
-                    <button type="button" className="ghost" disabled={Boolean(workspaceBusy)} onClick={() => { setEditingAccessKey(activeProvider.provider_key); setExternalRef(activeProvider.external_ref || ""); setSecrets({}); }}>Изменить доступ</button>
-                  </div>
-                )}
-                <small className="helper-text">Чтение доступно сразу. Перед внешним действием BusinessAIOS сначала проверит его и попросит ваше подтверждение. Прямой отправки из браузера нет.</small>
-                {lastAction?.providerKey === activeProvider.provider_key ? <details className="technical-inline"><summary>Технические детали последней операции</summary><pre>{JSON.stringify(lastAction.result, null, 2)}</pre></details> : null}
-              </div>
-            </div>
-          ) : null}
+          <div className="connection-list">{providers.length ? providers.map((item) => <button type="button" className={`connection-row ${activeProvider?.provider_key === item.provider_key ? "selected" : ""}`} aria-current={activeProvider?.provider_key === item.provider_key ? "true" : undefined} onClick={() => { setActiveKey(item.provider_key); setExternalRef(""); setSecrets({}); setEditingAccessKey(""); }} key={item.provider_key} disabled={!item.customer_selectable}><div className="provider-logo">{providerInitial(item.title)}</div><div className="connection-copy"><strong>{item.title}</strong><span>{liveEvidenceByProvider.has(item.provider_key) ? "Данные получены" : item.connected ? "Доступ сохранён · данные ещё не получены" : item.customer_selectable ? "Можно подключить" : "Пока не доступно"}</span></div><span className={`dot ${item.connected ? "green" : item.customer_selectable ? "orange" : "gray"}`} /></button>) : <p className="empty-state">Для выбранных источников пока нет готового подключения.</p>}</div>
+          {activeProvider && apiKey ? <div className="connection-flow"><div className="connection-steps" aria-label="Этапы подключения"><span className="done">1. Источник выбран</span><span className={activeProvider.connected ? "done" : "active"}>2. Доступ</span><span className={activeLiveEvidence ? "done" : activeProvider.connected ? "active" : ""}>3. Первые данные</span></div><div className="step-content workspace-step-content"><div className="section-heading"><h2>{activeProvider.title}</h2><p>{activeLiveEvidence ? "Первые данные из этого источника подтверждены. При необходимости обновите их или проверьте доступ." : activeProvider.connected ? "Доступ сохранён. Получите первые данные — это главное действие сейчас." : "Нужен только доступ для чтения. Изменения во внешней системе остаются выключены."}</p></div><div className="provider-truth-card"><strong>Что реально доступно</strong><span>{providerTruthCopy(activeProvider)}</span>{identityCopy.help ? <small>{identityCopy.help}</small> : null}</div>{!activeProvider.connected || editingAccessKey === activeProvider.provider_key ? <div className="form-grid"><label className="full">{identityCopy.label}<input value={externalRef} onChange={(event) => setExternalRef(event.target.value)} placeholder={identityCopy.placeholder} /><small className="input-help">Это идентификатор именно вашего кабинета или проекта — не внутренний ID BusinessAIOS.</small></label>{webhookUrl ? <label className="full">Webhook URL<input className="readonly-value" type="text" readOnly value={webhookUrl} onFocus={(event) => event.target.select()} /><small className="input-help">Скопируйте этот адрес в настройки входящих событий провайдера. Адрес не содержит секретов.</small></label> : null}{(activeProvider.secret_fields || []).map((field) => <label className={field.multiline ? "full" : ""} key={field.secret_name}><span className="field-label-row"><span>{credentialLabel(activeProvider, field)}</span>{!field.required ? <small>Необязательно</small> : null}</span>{field.multiline ? <textarea value={secrets[field.secret_name] || ""} onChange={(event) => setSecrets((previous) => ({ ...previous, [field.secret_name]: event.target.value }))} placeholder={field.placeholder || ""} /> : <input type={credentialInputType(field)} autoComplete="off" value={secrets[field.secret_name] || ""} onChange={(event) => setSecrets((previous) => ({ ...previous, [field.secret_name]: event.target.value }))} placeholder={field.placeholder || ""} />}{credentialInputType(field) === "text" ? <small className="input-help">Обычная настройка, не пароль. Значение передаётся только на защищённый сервер BusinessAIOS.</small> : null}</label>)}<button type="button" className="primary" disabled={Boolean(workspaceBusy)} onClick={activateProvider}>{workspaceBusy === "activate" || workspaceBusy === "update_access" ? "Сохраняем доступ…" : activeProvider.connected ? "Обновить доступ" : "Подключить для чтения"}</button>{activeProvider.connected ? <button type="button" className="ghost" disabled={Boolean(workspaceBusy)} onClick={() => { setEditingAccessKey(""); setExternalRef(""); setSecrets({}); }}>Отмена</button> : null}</div> : <div className="navigation-row workspace-actions"><button type="button" className="ghost" disabled={Boolean(workspaceBusy)} onClick={probeProvider}>{workspaceBusy === "probe" ? "Проверяем…" : "Проверить доступ"}</button><button type="button" className="primary" disabled={Boolean(workspaceBusy)} onClick={syncProvider}>{syncActionLabel}</button><button type="button" className="ghost" disabled={Boolean(workspaceBusy)} onClick={() => { setEditingAccessKey(activeProvider.provider_key); setExternalRef(activeProvider.external_ref || ""); setSecrets({}); }}>Изменить доступ</button></div>}<small className="helper-text">Чтение доступно сразу. Перед внешним действием BusinessAIOS сначала проверит его и попросит ваше подтверждение. Прямой отправки из браузера нет.</small>{lastAction?.providerKey === activeProvider.provider_key ? <details className="technical-inline"><summary>Технические детали последней операции</summary><pre>{JSON.stringify(lastAction.result, null, 2)}</pre></details> : null}</div></div> : null}
         </article>
-
-        <article className="panel next-step-panel">
-          <p className="eyebrow">Что дальше</p>
-          <h2>{liveEvidence ? "Переходите от настройки к решениям" : connected ? "Получите факты одним действием" : "Сначала одно подключение"}</h2>
-          <p className="muted-text">{liveEvidence ? "Источник уже дал реальные данные. Теперь сценарный расчёт ниже можно сопоставлять с фактическими показателями бизнеса." : connected ? "Доступ уже есть. Не заполняйте ничего лишнего — получите первые данные и посмотрите подтверждённый результат выше." : "Не нужно настраивать всю систему. Достаточно подключить один выбранный источник и получить первый результат."}</p>
-          <div className="check-list">
-            <div className="check-row"><span>{connected ? "✓" : "1"}</span><strong>Подключить один источник</strong></div>
-            <div className="check-row"><span>{liveEvidence ? "✓" : "2"}</span><strong>Получить первые реальные данные</strong></div>
-            <div className="check-row"><span>3</span><strong>Сравнить факты со сценарием и выбрать действие</strong></div>
-          </div>
-        </article>
+        <article className="panel next-step-panel"><p className="eyebrow">Что дальше</p><h2>{liveEvidence ? "Переходите от настройки к решениям" : connected ? "Получите факты одним действием" : "Сначала одно подключение"}</h2><p className="muted-text">{liveEvidence ? "Источник уже дал реальные данные. Теперь сценарный расчёт ниже можно сопоставлять с фактическими показателями бизнеса." : connected ? "Доступ уже есть. Не заполняйте ничего лишнего — получите первые данные и посмотрите подтверждённый результат выше." : "Не нужно настраивать всю систему. Достаточно подключить один выбранный источник и получить первый результат."}</p><div className="check-list"><div className="check-row"><span>{connected ? "✓" : "1"}</span><strong>Подключить один источник</strong></div><div className="check-row"><span>{liveEvidence ? "✓" : "2"}</span><strong>Получить первые реальные данные</strong></div><div className="check-row"><span>3</span><strong>Сравнить факты со сценарием и выбрать действие</strong></div></div></article>
       </section>
 
-      <section className="panel customers-panel" aria-labelledby="business-customers-title">
-        <div className="panel-title-row">
-          <div><p className="eyebrow">Клиенты</p><h2 id="business-customers-title">Клиенты и история контактов</h2></div>
-          <span className="privacy-badge">Из единого EventStore</span>
-        </div>
-        <p className="muted-text">Клиенты появляются здесь из подтверждённых входящих событий подключённых каналов. Отдельной CRM-копии BusinessAIOS не создаёт.</p>
-        {customerError ? <div className="error-box inline-error" role="alert">{customerError}</div> : null}
-        {customerBusy && !customers.length ? <div className="loading-box">Загружаем клиентов…</div> : null}
-        {customers.length ? (
-          <div className="customers-layout">
-            <div className="customer-list">
-              {customers.map((customer) => <button type="button" className={`customer-row ${selectedCustomer?.customer_id === customer.customer_id ? "selected" : ""}`} aria-current={selectedCustomer?.customer_id === customer.customer_id ? "true" : undefined} onClick={() => setSelectedCustomerId(customer.customer_id)} key={customer.customer_id}>
-                <strong>{customer.display_name || customer.identities?.[0]?.display_name || customer.identities?.[0]?.username || "Клиент"}</strong>
-                <span>{(customer.identities || []).map((identity) => identity.channel).join(" · ") || "Канал не указан"}</span>
-              </button>)}
-            </div>
-            <div className="customer-detail">
-              {selectedCustomer ? <>
-                <h3>{selectedCustomer.display_name || selectedCustomer.identities?.[0]?.display_name || "Клиент"}</h3>
-                <div className="customer-identities">
-                  {(selectedCustomer.identities || []).map((identity) => <article className="customer-identity" key={identity.identity_id}>
-                    <div><strong>{identity.channel}</strong><span>{identity.display_name || identity.username || identity.external_subject}</span></div>
-                    {readyIdentityProvider(identity) ? <button type="button" className="ghost small" onClick={() => prepareForCustomer(identity)}>Написать</button> : <small>Отправка по каналу пока не готова</small>}
-                  </article>)}
-                </div>
-                <h3>История</h3>
-                <div className="timeline-list">
-                  {customerTimeline.length ? customerTimeline.slice().reverse().map((entry) => <article className="timeline-row" key={entry.source_id}>
-                    <strong>{entry.title || entry.kind}</strong>
-                    <span>{entry.detail || entry.source_type}</span>
-                    <small>{entry.occurred_at_ms ? new Date(entry.occurred_at_ms).toLocaleString("ru-RU") : ""}{entry.amount_minor !== null && entry.amount_minor !== undefined ? ` · ${(Number(entry.amount_minor) / 100).toLocaleString("ru-RU")} ${entry.currency || ""}` : ""}</small>
-                  </article>) : <p className="empty-state">Для клиента пока нет дополнительных событий.</p>}
-                </div>
-              </> : null}
-            </div>
-          </div>
-        ) : <p className="empty-state">Клиенты появятся здесь после входящих событий из подключённых каналов.</p>}
-      </section>
+      <section className="panel customers-panel" aria-labelledby="business-customers-title"><div className="panel-title-row"><div><p className="eyebrow">Клиенты</p><h2 id="business-customers-title">Клиенты и история контактов</h2></div><span className="privacy-badge">Из единого EventStore</span></div><p className="muted-text">Клиенты появляются здесь из подтверждённых входящих событий подключённых каналов. Отдельной CRM-копии BusinessAIOS не создаёт.</p>{customerError ? <div className="error-box inline-error" role="alert">{customerError}</div> : null}{customerBusy && !customers.length ? <div className="loading-box">Загружаем клиентов…</div> : null}{customers.length ? <div className="customers-layout"><div className="customer-list">{customers.map((customer) => <button type="button" className={`customer-row ${selectedCustomer?.customer_id === customer.customer_id ? "selected" : ""}`} aria-current={selectedCustomer?.customer_id === customer.customer_id ? "true" : undefined} onClick={() => setSelectedCustomerId(customer.customer_id)} key={customer.customer_id}><strong>{customer.display_name || customer.identities?.[0]?.display_name || customer.identities?.[0]?.username || "Клиент"}</strong><span>{(customer.identities || []).map((identity) => identity.channel).join(" · ") || "Канал не указан"}</span></button>)}</div><div className="customer-detail">{selectedCustomer ? <><h3>{selectedCustomer.display_name || selectedCustomer.identities?.[0]?.display_name || "Клиент"}</h3><div className="customer-identities">{(selectedCustomer.identities || []).map((identity) => <article className="customer-identity" key={identity.identity_id}><div><strong>{identity.channel}</strong><span>{identity.display_name || identity.username || identity.external_subject}</span></div>{readyIdentityProvider(identity) ? <button type="button" className="ghost small" onClick={() => prepareForCustomer(identity)}>Написать</button> : <small>Отправка по каналу пока не готова</small>}</article>)}</div><h3>История</h3><div className="timeline-list">{customerTimeline.length ? customerTimeline.slice().reverse().map((entry) => <article className="timeline-row" key={entry.source_id}><strong>{entry.title || entry.kind}</strong><span>{entry.detail || entry.source_type}</span><small>{entry.occurred_at_ms ? new Date(entry.occurred_at_ms).toLocaleString("ru-RU") : ""}{entry.amount_minor !== null && entry.amount_minor !== undefined ? ` · ${(Number(entry.amount_minor) / 100).toLocaleString("ru-RU")} ${entry.currency || ""}` : ""}</small></article>) : <p className="empty-state">Для клиента пока нет дополнительных событий.</p>}</div></> : null}</div></div> : <p className="empty-state">Клиенты появятся здесь после входящих событий из подключённых каналов.</p>}</section>
 
-      <section className="panel operations-panel" aria-labelledby="business-operations-title">
-        <div className="panel-title-row">
-          <div><p className="eyebrow">Работа с бизнесом</p><h2 id="business-operations-title">Действия</h2></div>
-          <span className="privacy-badge">С подтверждением</span>
-        </div>
-        <p className="muted-text">BusinessAIOS не отправляет сообщение прямо из формы. Сначала он проверит действие и покажет его вам; только после вашего подтверждения сообщение может уйти во внешний канал.</p>
-        {operationError ? <div className="error-box inline-error" role="alert">{operationError}</div> : null}
-        <div className="provider-readiness" aria-label="Готовность каналов к действиям">
-          {operationProviders.length ? operationProviders.map((item) => <span className={`status-pill ${item.can_request_write ? "ready" : "preparing"}`} key={item.provider_key}>{item.title}: {item.can_request_write ? "можно подготовить действие" : !item.connected ? "сначала подключите" : item.status === "live_credentials_missing" ? "добавьте данные для отправки" : "отправка пока не готова"}</span>) : <span className="muted-text">Подключённых каналов с доказанным write-путём пока нет.</span>}
-        </div>
-        <div className="operations-layout">
-          <div className="operations-form">
-            <h3>Подготовить сообщение</h3>
-            {readyOperationProviders.length ? (
-              <>
-                <label>Канал<select aria-label="Канал для действия" value={activeOperationProvider?.provider_key || ""} onChange={(event) => setOperationProviderKey(event.target.value)}>{readyOperationProviders.map((item) => <option value={item.provider_key} key={item.provider_key}>{item.title}</option>)}</select></label>
-                <label>Получатель<input value={operationRecipient} onChange={(event) => setOperationRecipient(event.target.value)} placeholder="ID пользователя, чата, канала или email" /></label>
-                {activeOperationProvider?.provider_key === "email_connector" ? <label>Тема<input value={operationSubject} onChange={(event) => setOperationSubject(event.target.value)} placeholder="Тема письма" /></label> : null}
-                <label>Сообщение<textarea value={operationText} onChange={(event) => setOperationText(event.target.value)} placeholder="Что BusinessAIOS должен отправить после вашего подтверждения" /></label>
-                <button type="button" className="primary" disabled={Boolean(operationBusy)} onClick={prepareMessage}>{operationBusy === "message_send" ? "Готовим…" : "Подготовить к отправке"}</button>
-                <small className="helper-text">Нажатие этой кнопки само по себе ничего внешнему получателю не отправляет.</small>
-              </>
-            ) : <div className="recovery-box"><p>Сначала подключите канал выше. Кнопка отправки появится только когда BusinessAIOS видит подключение и реальный сетевой transport.</p></div>}
-          </div>
-          <div className="approval-list">
-            <h3>Ждут вашего подтверждения</h3>
-            {pendingApprovals.length ? pendingApprovals.map((approval) => {
-              const previewRow = approvalMessagePreview(approval);
-              const provider = operationProviders.find((item) => item.provider_key === previewRow.providerKey);
-              return <article className="approval-card" key={approval.approval_id}>
-                <div><strong>{provider?.title || previewRow.providerKey || "Сообщение"}</strong><small>Получатель: {previewRow.recipient || "—"}</small></div>
-                {previewRow.subject ? <p><strong>{previewRow.subject}</strong></p> : null}
-                <p>{previewRow.text || "Текст действия сохранён и ждёт вашего решения."}</p>
-                <div className="navigation-row"><button type="button" className="ghost" disabled={Boolean(operationBusy)} onClick={() => decideApproval(approval.approval_id, false)}>Отклонить</button><button type="button" className="primary" disabled={Boolean(operationBusy)} onClick={() => decideApproval(approval.approval_id, true)}>{operationBusy === `approval:${approval.approval_id}` ? "Выполняем…" : "Подтвердить и выполнить"}</button></div>
-              </article>;
-            }) : <p className="empty-state">Сейчас ничего не ждёт подтверждения.</p>}
-          </div>
-        </div>
-        {operationResult ? <details className="technical-inline"><summary>Результат последнего действия</summary><pre>{JSON.stringify(operationResult, null, 2)}</pre></details> : null}
-      </section>
+      <section className="panel operations-panel" aria-labelledby="business-operations-title"><div className="panel-title-row"><div><p className="eyebrow">Работа с бизнесом</p><h2 id="business-operations-title">Действия</h2></div><span className="privacy-badge">С подтверждением</span></div><p className="muted-text">BusinessAIOS не отправляет сообщение прямо из формы. Сначала он проверит действие и покажет его вам; только после вашего подтверждения сообщение может уйти во внешний канал.</p>{operationError ? <div className="error-box inline-error" role="alert">{operationError}</div> : null}<div className="provider-readiness" aria-label="Готовность каналов к действиям">{operationProviders.length ? operationProviders.map((item) => <span className={`status-pill ${item.can_request_write ? "ready" : "preparing"}`} key={item.provider_key}>{item.title}: {item.can_request_write ? "можно подготовить действие" : !item.connected ? "сначала подключите" : item.status === "live_credentials_missing" ? "добавьте данные для отправки" : "отправка пока не готова"}</span>) : <span className="muted-text">Подключённых каналов с доказанным write-путём пока нет.</span>}</div><div className="operations-layout"><div className="operations-form"><h3>Подготовить сообщение</h3>{readyOperationProviders.length ? <><label>Канал<select aria-label="Канал для действия" value={activeOperationProvider?.provider_key || ""} onChange={(event) => setOperationProviderKey(event.target.value)}>{readyOperationProviders.map((item) => <option value={item.provider_key} key={item.provider_key}>{item.title}</option>)}</select></label><label>Получатель<input value={operationRecipient} onChange={(event) => setOperationRecipient(event.target.value)} placeholder="ID пользователя, чата, канала или email" /></label>{activeOperationProvider?.provider_key === "email_connector" ? <label>Тема<input value={operationSubject} onChange={(event) => setOperationSubject(event.target.value)} placeholder="Тема письма" /></label> : null}<label>Сообщение<textarea value={operationText} onChange={(event) => setOperationText(event.target.value)} placeholder="Что BusinessAIOS должен отправить после вашего подтверждения" /></label><button type="button" className="primary" disabled={Boolean(operationBusy)} onClick={prepareMessage}>{operationBusy === "message_send" ? "Готовим…" : "Подготовить к отправке"}</button><small className="helper-text">Нажатие этой кнопки само по себе ничего внешнему получателю не отправляет.</small></> : <div className="recovery-box"><p>Сначала подключите канал выше. Кнопка отправки появится только когда BusinessAIOS видит подключение и реальный сетевой transport.</p></div>}</div><div className="approval-list"><h3>Ждут вашего подтверждения</h3>{pendingApprovals.length ? pendingApprovals.map((approval) => { const previewRow = approvalMessagePreview(approval); const provider = operationProviders.find((item) => item.provider_key === previewRow.providerKey); return <article className="approval-card" key={approval.approval_id}><div><strong>{provider?.title || previewRow.providerKey || "Сообщение"}</strong><small>Получатель: {previewRow.recipient || "—"}</small></div>{previewRow.subject ? <p><strong>{previewRow.subject}</strong></p> : null}<p>{previewRow.text || "Текст действия сохранён и ждёт вашего решения."}</p><div className="navigation-row"><button type="button" className="ghost" disabled={Boolean(operationBusy)} onClick={() => decideApproval(approval.approval_id, false)}>Отклонить</button><button type="button" className="primary" disabled={Boolean(operationBusy)} onClick={() => decideApproval(approval.approval_id, true)}>{operationBusy === `approval:${approval.approval_id}` ? "Выполняем…" : "Подтвердить и выполнить"}</button></div></article>; }) : <p className="empty-state">Сейчас ничего не ждёт подтверждения.</p>}</div></div>{operationResult ? <details className="technical-inline"><summary>Результат последнего действия</summary><pre>{JSON.stringify(operationResult, null, 2)}</pre></details> : null}</section>
 
       <AcquisitionPlanner enabled={Boolean(apiKey)} onEvaluate={(payload) => postJson(acquisitionUrl, payload, authHeaders)} />
-
-      <section className="panel business-card">
-        <div><p className="eyebrow">Профиль</p><h2>{profile.name || "Бизнес"}</h2></div>
-        <div className="business-meta">{profile.industry ? <span>{profile.industry}</span> : null}{profile.city ? <span>{profile.city}</span> : null}{profile.website ? <a href={profile.website} target="_blank" rel="noreferrer">{profile.website}</a> : null}</div>
-      </section>
-
+      <section className="panel business-card"><div><p className="eyebrow">Профиль</p><h2>{profile.name || "Бизнес"}</h2></div><div className="business-meta">{profile.industry ? <span>{profile.industry}</span> : null}{profile.city ? <span>{profile.city}</span> : null}{profile.website ? <a href={profile.website} target="_blank" rel="noreferrer">{profile.website}</a> : null}</div></section>
       <details className="diagnostics"><summary>Техническая информация</summary><pre>{JSON.stringify({ intake_id: data.intake_id, tenant_id: data.tenant_id, business_id: data.business_id, status: data.onboarding_status, owner_session_expires_at: ownerSession.expires_at || null, live_sync_evidence: liveEvidence || null }, null, 2)}</pre></details>
     </main>
   );
 }
 
 function BusinessChooser({ businesses, onOpen, onAdd }) {
-  return (
-    <main className="onboarding-shell account-home">
-      <header className="topbar onboarding-topbar"><div className="brand"><span className="brand-mark">B</span><span className="brand-name">BusinessAIOS</span></div><button type="button" className="primary small add-business-button" aria-label="Добавить бизнес" onClick={onAdd}><span className="add-business-full">Добавить бизнес</span><span className="add-business-short">Добавить</span></button></header>
-      <section className="account-businesses panel">
-        <div className="section-heading"><p className="eyebrow">Ваш аккаунт</p><h1>Мои бизнесы</h1><p>Выберите бизнес. Данные, интеграции и действия каждого бизнеса остаются в его отдельном защищённом контуре.</p></div>
-        <div className="business-choice-grid">
-          {businesses.map((item) => <button type="button" className="business-choice-card" aria-label={`Открыть бизнес ${item.name || "Бизнес"}`} onClick={() => onOpen(item.intake_id)} key={item.intake_id}><strong>{item.name || "Бизнес"}</strong><span>{[item.industry, item.city].filter(Boolean).join(" · ") || "Открыть кабинет"}</span><small>Открыть →</small></button>)}
-        </div>
-      </section>
-    </main>
-  );
+  return <main className="onboarding-shell account-home"><header className="topbar onboarding-topbar"><div className="brand"><span className="brand-mark">B</span><span className="brand-name">BusinessAIOS</span></div><button type="button" className="primary small add-business-button" aria-label="Добавить бизнес" onClick={onAdd}><span className="add-business-full">Добавить бизнес</span><span className="add-business-short">Добавить</span></button></header><section className="account-businesses panel"><div className="section-heading"><p className="eyebrow">Ваш аккаунт</p><h1>Мои бизнесы</h1><p>Выберите бизнес. Данные, интеграции и действия каждого бизнеса остаются в его отдельном защищённом контуре.</p></div><div className="business-choice-grid">{businesses.map((item) => <button type="button" className="business-choice-card" aria-label={`Открыть бизнес ${item.name || "Бизнес"}`} onClick={() => onOpen(item.intake_id)} key={item.intake_id}><strong>{item.name || "Бизнес"}</strong><span>{[item.industry, item.city].filter(Boolean).join(" · ") || "Открыть кабинет"}</span><small>Открыть →</small></button>)}</div></section></main>;
 }
 
 export function App() {
@@ -781,177 +527,35 @@ export function App() {
   const [creatingNewBusiness, setCreatingNewBusiness] = useState(false);
   const [form, setForm] = useState(() => ({ ...INITIAL_FORM }));
 
-  const endpoints = useMemo(() => {
-    const base = apiBase.replace(/\/$/, "");
-    return { integrations: `${base}/public-site/integrations`, ctaStart: `${base}/public-site/cta/start`, ctaStatus: (id) => `${base}/public-site/cta/${encodeURIComponent(id)}`, ownerBusinesses: `${base}/public-site/owner/businesses` };
-  }, [apiBase]);
+  const endpoints = useMemo(() => { const base = apiBase.replace(/\/$/, ""); return { integrations: `${base}/public-site/integrations`, ctaStart: `${base}/public-site/cta/start`, ctaStatus: (id) => `${base}/public-site/cta/${encodeURIComponent(id)}`, ownerBusinesses: `${base}/public-site/owner/businesses` }; }, [apiBase]);
 
   const openSavedWorkspace = useCallback(async (intakeId) => {
     const payload = await getJson(endpoints.ctaStatus(intakeId));
     if (!payload?.ok) throw new Error("workspace_not_found");
-    setResult(payload);
-    setOwnerBusinesses(Array.isArray(payload.owner_businesses) ? payload.owner_businesses : []);
-    setOwnerAccountChecked(true);
-    setCreatingNewBusiness(false);
-    setError("");
-    return payload;
+    setResult(payload); setOwnerBusinesses(Array.isArray(payload.owner_businesses) ? payload.owner_businesses : []); setOwnerAccountChecked(true); setCreatingNewBusiness(false); setError(""); return payload;
   }, [endpoints]);
+  const restoreWorkspaceAccess = useCallback(async (intakeId) => Boolean((await openSavedWorkspace(intakeId))?.owner_session?.api_key), [openSavedWorkspace]);
+  const loadOwnerBusinesses = useCallback(async () => { try { const payload = await getJson(endpoints.ownerBusinesses); const rows = Array.isArray(payload.businesses) ? payload.businesses : []; setOwnerBusinesses(rows); return rows; } catch { setOwnerBusinesses([]); return []; } finally { setOwnerAccountChecked(true); } }, [endpoints.ownerBusinesses]);
+  const switchBusiness = useCallback(async (intakeId) => { if (!intakeId) return; setLoading(true); setError(""); try { await openSavedWorkspace(intakeId); window.history.replaceState(null, "", `?intake_id=${encodeURIComponent(intakeId)}`); } catch { setError("Не удалось открыть выбранный бизнес. Проверьте соединение и повторите попытку."); } finally { setLoading(false); } }, [openSavedWorkspace]);
+  const loadMarketplace = useCallback(async () => { setMarketLoading(true); setMarketError(""); try { const payload = await getJson(endpoints.integrations); setMarketplace(Array.isArray(payload.items) ? payload.items : []); } catch { setMarketplace([]); setMarketError("Не удалось загрузить список интеграций. Проверьте соединение и повторите попытку."); } finally { setMarketLoading(false); } }, [endpoints.integrations]);
 
-  const restoreWorkspaceAccess = useCallback(async (intakeId) => {
-    const payload = await openSavedWorkspace(intakeId);
-    return Boolean(payload?.owner_session?.api_key);
-  }, [openSavedWorkspace]);
-
-  const loadOwnerBusinesses = useCallback(async () => {
-    try {
-      const payload = await getJson(endpoints.ownerBusinesses);
-      const rows = Array.isArray(payload.businesses) ? payload.businesses : [];
-      setOwnerBusinesses(rows);
-      return rows;
-    } catch {
-      setOwnerBusinesses([]);
-      return [];
-    } finally {
-      setOwnerAccountChecked(true);
-    }
-  }, [endpoints.ownerBusinesses]);
-
-  const switchBusiness = useCallback(async (intakeId) => {
-    if (!intakeId) return;
-    setLoading(true);
-    setError("");
-    try {
-      await openSavedWorkspace(intakeId);
-      window.history.replaceState(null, "", `?intake_id=${encodeURIComponent(intakeId)}`);
-    } catch {
-      setError("Не удалось открыть выбранный бизнес. Проверьте соединение и повторите попытку.");
-    } finally {
-      setLoading(false);
-    }
-  }, [openSavedWorkspace]);
-
-  const loadMarketplace = useCallback(async () => {
-    setMarketLoading(true);
-    setMarketError("");
-    try {
-      const payload = await getJson(endpoints.integrations);
-      setMarketplace(Array.isArray(payload.items) ? payload.items : []);
-    } catch {
-      setMarketplace([]);
-      setMarketError("Не удалось загрузить список интеграций. Проверьте соединение и повторите попытку.");
-    } finally {
-      setMarketLoading(false);
-    }
-  }, [endpoints.integrations]);
-
-  useEffect(() => {
-    void loadMarketplace();
-  }, [loadMarketplace]);
-
-  useEffect(() => {
-    const intakeId = initialIntakeId();
-    if (!intakeId) {
-      void loadOwnerBusinesses();
-      return;
-    }
-    let cancelled = false;
-    setLoading(true);
-    openSavedWorkspace(intakeId)
-      .catch(() => { if (!cancelled) setError("Не удалось открыть сохранённый кабинет бизнеса."); })
-      .finally(() => { if (!cancelled) setLoading(false); });
-    return () => { cancelled = true; };
-  }, [loadOwnerBusinesses, openSavedWorkspace]);
+  useEffect(() => { void loadMarketplace(); }, [loadMarketplace]);
+  useEffect(() => { const intakeId = initialIntakeId(); if (!intakeId) { void loadOwnerBusinesses(); return; } let cancelled = false; setLoading(true); openSavedWorkspace(intakeId).catch(() => { if (!cancelled) setError("Не удалось открыть сохранённый кабинет бизнеса."); }).finally(() => { if (!cancelled) setLoading(false); }); return () => { cancelled = true; }; }, [loadOwnerBusinesses, openSavedWorkspace]);
 
   const savedIntakeId = initialIntakeId();
-  const retrySavedWorkspace = async () => {
-    if (!savedIntakeId) return;
-    setLoading(true);
-    setError("");
-    try {
-      await openSavedWorkspace(savedIntakeId);
-    } catch {
-      setError("Не удалось открыть сохранённый кабинет бизнеса. Проверьте соединение и повторите попытку.");
-    } finally {
-      setLoading(false);
-    }
-  };
-
+  const retrySavedWorkspace = async () => { if (!savedIntakeId) return; setLoading(true); setError(""); try { await openSavedWorkspace(savedIntakeId); } catch { setError("Не удалось открыть сохранённый кабинет бизнеса. Проверьте соединение и повторите попытку."); } finally { setLoading(false); } };
   const emailValid = isValidEmail(form.email);
   const updateForm = (key) => (event) => setForm((prev) => ({ ...prev, [key]: event.target.value }));
-  const toggleProvider = (item) => {
-    if (!item.selectable) return;
-    setSelectedProviders((prev) => prev.includes(item.provider_key) ? prev.filter((key) => key !== item.provider_key) : [...prev, item.provider_key]);
-  };
-  const canContinue = () => {
-    if (step === 0) return Boolean(form.business_name.trim() && emailValid);
-    if (step === 1) return Boolean(form.goal);
-    if (step === 2) return selectedProviders.length > 0;
-    return Boolean(form.autonomy_mode);
-  };
-
-  const finishOnboarding = async () => {
-    setLoading(true);
-    setError("");
-    try {
-      const payload = await postJson(endpoints.ctaStart, { ...form, selected_providers: selectedProviders, intent: form.goal, source: "businessaios_product_onboarding", requested_surface: "business_workspace" });
-      setResult(payload);
-      setOwnerBusinesses(Array.isArray(payload.owner_businesses) ? payload.owner_businesses : []);
-      setOwnerAccountChecked(true);
-      setCreatingNewBusiness(false);
-      if (payload.intake_id) window.history.replaceState(null, "", `?intake_id=${encodeURIComponent(payload.intake_id)}`);
-    } catch {
-      setError("Не удалось создать кабинет. Проверьте соединение и повторите попытку.");
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const restart = () => {
-    window.history.replaceState(null, "", window.location.pathname);
-    setCreatingNewBusiness(true);
-    setResult(null);
-    setStep(0);
-    setSelectedProviders([]);
-    setForm({ ...INITIAL_FORM });
-    setError("");
-  };
+  const toggleProvider = (item) => { if (!item.selectable) return; setSelectedProviders((prev) => prev.includes(item.provider_key) ? prev.filter((key) => key !== item.provider_key) : [...prev, item.provider_key]); };
+  const canContinue = () => { if (step === 0) return Boolean(form.business_name.trim() && emailValid); if (step === 1) return Boolean(form.goal); if (step === 2) return selectedProviders.length > 0; return Boolean(form.autonomy_mode); };
+  const finishOnboarding = async () => { setLoading(true); setError(""); try { const payload = await postJson(endpoints.ctaStart, { ...form, selected_providers: selectedProviders, intent: form.goal, source: "businessaios_product_onboarding", requested_surface: "business_workspace" }); setResult(payload); setOwnerBusinesses(Array.isArray(payload.owner_businesses) ? payload.owner_businesses : []); setOwnerAccountChecked(true); setCreatingNewBusiness(false); if (payload.intake_id) window.history.replaceState(null, "", `?intake_id=${encodeURIComponent(payload.intake_id)}`); } catch { setError("Не удалось создать кабинет. Проверьте соединение и повторите попытку."); } finally { setLoading(false); } };
+  const restart = () => { window.history.replaceState(null, "", window.location.pathname); setCreatingNewBusiness(true); setResult(null); setStep(0); setSelectedProviders([]); setForm({ ...INITIAL_FORM }); setError(""); };
 
   if (result) return <Workspace data={result} apiBase={apiBase} businesses={ownerBusinesses} onRestart={restart} onRetryAccess={restoreWorkspaceAccess} onSwitchBusiness={switchBusiness} />;
   if (!creatingNewBusiness && !initialIntakeId() && !ownerAccountChecked) return <main className="onboarding-shell"><div className="account-loading" role="status">Открываем ваши бизнесы…</div></main>;
   if (!creatingNewBusiness && ownerBusinesses.length) return <BusinessChooser businesses={ownerBusinesses} onOpen={switchBusiness} onAdd={restart} />;
 
-  return (
-    <main className="onboarding-shell">
-      <header className="topbar onboarding-topbar"><div className="brand"><span className="brand-mark">B</span><span className="brand-name">BusinessAIOS</span></div><span className="topbar-note">Настройка бизнеса</span></header>
-      <section className="onboarding-layout">
-        <aside className="intro-column">
-          <p className="eyebrow">Управление бизнесом с ИИ</p><h1>Подключите бизнес.<br />Остальное система разберёт сама.</h1>
-          <p className="lead">Сначала только чтение и анализ. Никаких расходов, сообщений клиентам или публикаций без вашего разрешения.</p>
-          <div className="trust-list">
-            <div><span>✓</span><p><strong>Безопасный старт</strong><small>Ничего не отправляем и не меняем без вашего разрешения.</small></p></div>
-            <div><span>✓</span><p><strong>Честные статусы</strong><small>Доступные сейчас отделены от интеграций, которые ещё готовятся.</small></p></div>
-            <div><span>✓</span><p><strong>Первый результат на ваших данных</strong><small>Без выдуманных финансовых обещаний.</small></p></div>
-          </div>
-        </aside>
-
-        <section className="onboarding-card">
-          <div className="stepper">{STEP_LABELS.map((label, index) => <div className={`step ${index === step ? "active" : ""} ${index < step ? "done" : ""}`} aria-current={index === step ? "step" : undefined} key={label}><span>{index < step ? "✓" : index + 1}</span><small>{label}</small></div>)}</div>
-
-          {step === 0 ? <div className="step-content"><div className="section-heading"><p className="eyebrow">Шаг 1</p><h2>Расскажите о бизнесе</h2><p>Этого достаточно, чтобы создать отдельный защищённый кабинет.</p></div><div className="form-grid"><label className="full">Название бизнеса<input value={form.business_name} onChange={updateForm("business_name")} placeholder="Например, Студия Линия" autoFocus /></label><label>Email владельца<input value={form.email} onChange={updateForm("email")} placeholder="you@company.ru" type="email" aria-invalid={Boolean(form.email.trim()) && !emailValid} aria-describedby={form.email.trim() && !emailValid ? "owner-email-error" : undefined} />{form.email.trim() && !emailValid ? <small className="field-error" id="owner-email-error">Введите email в формате name@company.ru</small> : null}</label><label>Сайт или страница<input value={form.website} onChange={updateForm("website")} placeholder="https://..." /></label><label>Сфера<input value={form.industry} onChange={updateForm("industry")} placeholder="Услуги, магазин, образование..." /></label><label>Город<input value={form.city} onChange={updateForm("city")} placeholder="Москва" /></label><label className="full">Модель бизнеса<select value={form.business_model} onChange={updateForm("business_model")}><option value="services">Услуги</option><option value="commerce">Товары / интернет-магазин</option><option value="marketplace">Маркетплейсы</option><option value="b2b">B2B</option><option value="mixed">Смешанная</option></select></label></div></div> : null}
-
-          {step === 1 ? <div className="step-content"><div className="section-heading"><p className="eyebrow">Шаг 2</p><h2>Что важнее прямо сейчас?</h2><p>BusinessAIOS начнёт анализ с выбранной бизнес-задачи.</p></div><div className="choice-grid">{GOALS.map((goal) => <button type="button" className={`choice-card ${form.goal === goal.value ? "selected" : ""}`} aria-pressed={form.goal === goal.value} onClick={() => setForm((prev) => ({ ...prev, goal: goal.value }))} key={goal.value}><span className="radio-dot" /><strong>{goal.title}</strong><small>{goal.text}</small></button>)}</div></div> : null}
-
-          {step === 2 ? <div className="step-content integrations-step"><div className="section-heading"><p className="eyebrow">Шаг 3</p><h2>Где уже живут данные бизнеса?</h2><p>Выберите хотя бы один источник. Подключение начнётся в режиме только чтения.</p></div>{marketLoading ? <div className="loading-box">Загружаем доступные интеграции…</div> : null}{marketError && !marketLoading ? <div className="recovery-box" role="alert"><p>{marketError}</p><button type="button" className="ghost" onClick={loadMarketplace}>Повторить загрузку</button></div> : null}{!marketLoading && !marketError ? <><div className="integration-section-head"><strong>Можно подключить сейчас</strong><span>{availableMarketplace.length}</span></div>{availableMarketplace.length ? <div className="integration-grid">{availableMarketplace.map((item) => <IntegrationCard item={item} selected={selectedProviders.includes(item.provider_key)} onToggle={toggleProvider} key={item.provider_key} />)}</div> : <p className="empty-state">Сейчас нет источников, готовых к подключению. Ниже можно посмотреть, что уже готовится.</p>}<p className="selection-count" aria-live="polite">Выбрано: <strong>{selectedProviders.length}</strong></p>{roadmapMarketplace.length ? <details className="roadmap-integrations"><summary><span>Что ещё готовится</span><strong>{roadmapMarketplace.length}</strong></summary><p>Эти интеграции уже есть в каталоге, но пока не доступны для подключения. Статус каждой берём напрямую из BusinessAIOS.</p><div className="integration-grid roadmap-grid">{roadmapMarketplace.map((item) => <IntegrationCard item={item} selected={false} onToggle={toggleProvider} key={item.provider_key} />)}</div></details> : null}</> : null}</div> : null}
-
-          {step === 3 ? <div className="step-content"><div className="section-heading"><p className="eyebrow">Шаг 4</p><h2>Сколько свободы дать системе?</h2><p>На старте система всё равно ничего не отправит и не изменит без проверки.</p></div><div className="autonomy-grid">{AUTONOMY.map((mode) => <button type="button" className={`autonomy-card ${form.autonomy_mode === mode.value ? "selected" : ""}`} aria-pressed={form.autonomy_mode === mode.value} onClick={() => setForm((prev) => ({ ...prev, autonomy_mode: mode.value }))} key={mode.value}><span className="mode-badge">{mode.badge}</span><strong>{mode.title}</strong><small>{mode.text}</small></button>)}</div><div className="launch-preview"><span>✓</span><div><strong>После создания кабинета</strong><p>Вы подключите один источник, получите первые реальные данные и сразу увидите подтверждённый результат.</p></div></div></div> : null}
-
-          {error && savedIntakeId ? <div className="recovery-box" role="alert"><p>{error}</p><button type="button" className="ghost" disabled={loading} onClick={retrySavedWorkspace}>{loading ? "Открываем кабинет…" : "Повторить открытие кабинета"}</button></div> : error ? <div className="error-box" role="alert">{error}</div> : null}
-          <div className="navigation-row"><button type="button" className="ghost" disabled={step === 0 || loading} onClick={() => setStep((value) => Math.max(0, value - 1))}>Назад</button>{step < STEP_LABELS.length - 1 ? <button type="button" className="primary" disabled={!canContinue() || loading} onClick={() => setStep((value) => Math.min(STEP_LABELS.length - 1, value + 1))}>Продолжить →</button> : <button type="button" className="primary launch" disabled={!canContinue() || loading} onClick={finishOnboarding}>{loading ? "Создаём кабинет…" : "Создать мой BusinessAIOS →"}</button>}</div>
-        </section>
-      </section>
-      <footer className="product-footer">BusinessAIOS · безопасная автоматизация бизнеса · изменения и отправки только после проверки</footer>
-    </main>
-  );
+  return <main className="onboarding-shell"><header className="topbar onboarding-topbar"><div className="brand"><span className="brand-mark">B</span><span className="brand-name">BusinessAIOS</span></div><span className="topbar-note">Настройка бизнеса</span></header><section className="onboarding-layout"><aside className="intro-column"><p className="eyebrow">Управление бизнесом с ИИ</p><h1>Подключите бизнес.<br />Остальное система разберёт сама.</h1><p className="lead">Сначала только чтение и анализ. Никаких расходов, сообщений клиентам или публикаций без вашего разрешения.</p><div className="trust-list"><div><span>✓</span><p><strong>Безопасный старт</strong><small>Ничего не отправляем и не меняем без вашего разрешения.</small></p></div><div><span>✓</span><p><strong>Честные статусы</strong><small>Доступные сейчас отделены от интеграций, которые ещё готовятся.</small></p></div><div><span>✓</span><p><strong>Первый результат на ваших данных</strong><small>Без выдуманных финансовых обещаний.</small></p></div></div></aside><section className="onboarding-card"><div className="stepper">{STEP_LABELS.map((label, index) => <div className={`step ${index === step ? "active" : ""} ${index < step ? "done" : ""}`} aria-current={index === step ? "step" : undefined} key={label}><span>{index < step ? "✓" : index + 1}</span><small>{label}</small></div>)}</div>{step === 0 ? <div className="step-content"><div className="section-heading"><p className="eyebrow">Шаг 1</p><h2>Расскажите о бизнесе</h2><p>Этого достаточно, чтобы создать отдельный защищённый кабинет.</p></div><div className="form-grid"><label className="full">Название бизнеса<input value={form.business_name} onChange={updateForm("business_name")} placeholder="Например, Студия Линия" autoFocus /></label><label>Email владельца<input value={form.email} onChange={updateForm("email")} placeholder="you@company.ru" type="email" aria-invalid={Boolean(form.email.trim()) && !emailValid} aria-describedby={form.email.trim() && !emailValid ? "owner-email-error" : undefined} />{form.email.trim() && !emailValid ? <small className="field-error" id="owner-email-error">Введите email в формате name@company.ru</small> : null}</label><label>Сайт или страница<input value={form.website} onChange={updateForm("website")} placeholder="https://..." /></label><label>Сфера<input value={form.industry} onChange={updateForm("industry")} placeholder="Услуги, магазин, образование..." /></label><label>Город<input value={form.city} onChange={updateForm("city")} placeholder="Москва" /></label><label className="full">Модель бизнеса<select value={form.business_model} onChange={updateForm("business_model")}><option value="services">Услуги</option><option value="commerce">Товары / интернет-магазин</option><option value="marketplace">Маркетплейсы</option><option value="b2b">B2B</option><option value="mixed">Смешанная</option></select></label></div></div> : null}{step === 1 ? <div className="step-content"><div className="section-heading"><p className="eyebrow">Шаг 2</p><h2>Что важнее прямо сейчас?</h2><p>BusinessAIOS начнёт анализ с выбранной бизнес-задачи.</p></div><div className="choice-grid">{GOALS.map((goal) => <button type="button" className={`choice-card ${form.goal === goal.value ? "selected" : ""}`} aria-pressed={form.goal === goal.value} onClick={() => setForm((prev) => ({ ...prev, goal: goal.value }))} key={goal.value}><span className="radio-dot" /><strong>{goal.title}</strong><small>{goal.text}</small></button>)}</div></div> : null}{step === 2 ? <div className="step-content integrations-step"><div className="section-heading"><p className="eyebrow">Шаг 3</p><h2>Где уже живут данные бизнеса?</h2><p>Выберите хотя бы один источник. Подключение начнётся в режиме только чтения.</p></div>{marketLoading ? <div className="loading-box">Загружаем доступные интеграции…</div> : null}{marketError && !marketLoading ? <div className="recovery-box" role="alert"><p>{marketError}</p><button type="button" className="ghost" onClick={loadMarketplace}>Повторить загрузку</button></div> : null}{!marketLoading && !marketError ? <><div className="integration-section-head"><strong>Можно подключить сейчас</strong><span>{availableMarketplace.length}</span></div>{availableMarketplace.length ? <div className="integration-grid">{availableMarketplace.map((item) => <IntegrationCard item={item} selected={selectedProviders.includes(item.provider_key)} onToggle={toggleProvider} key={item.provider_key} />)}</div> : <p className="empty-state">Сейчас нет источников, готовых к подключению. Ниже можно посмотреть, что уже готовится.</p>}<p className="selection-count" aria-live="polite">Выбрано: <strong>{selectedProviders.length}</strong></p>{roadmapMarketplace.length ? <details className="roadmap-integrations"><summary><span>Что ещё готовится</span><strong>{roadmapMarketplace.length}</strong></summary><p>Эти интеграции уже есть в каталоге, но пока не доступны для подключения. Статус каждой берём напрямую из BusinessAIOS.</p><div className="integration-grid roadmap-grid">{roadmapMarketplace.map((item) => <IntegrationCard item={item} selected={false} onToggle={toggleProvider} key={item.provider_key} />)}</div></details> : null}</> : null}</div> : null}{step === 3 ? <div className="step-content"><div className="section-heading"><p className="eyebrow">Шаг 4</p><h2>Сколько свободы дать системе?</h2><p>На старте система всё равно ничего не отправит и не изменит без проверки.</p></div><div className="autonomy-grid">{AUTONOMY.map((mode) => <button type="button" className={`autonomy-card ${form.autonomy_mode === mode.value ? "selected" : ""}`} aria-pressed={form.autonomy_mode === mode.value} onClick={() => setForm((prev) => ({ ...prev, autonomy_mode: mode.value }))} key={mode.value}><span className="mode-badge">{mode.badge}</span><strong>{mode.title}</strong><small>{mode.text}</small></button>)}</div><div className="launch-preview"><span>✓</span><div><strong>После создания кабинета</strong><p>Вы подключите один источник, получите первые реальные данные и сразу увидите подтверждённый результат.</p></div></div></div> : null}{error && savedIntakeId ? <div className="recovery-box" role="alert"><p>{error}</p><button type="button" className="ghost" disabled={loading} onClick={retrySavedWorkspace}>{loading ? "Открываем кабинет…" : "Повторить открытие кабинета"}</button></div> : error ? <div className="error-box" role="alert">{error}</div> : null}<div className="navigation-row"><button type="button" className="ghost" disabled={step === 0 || loading} onClick={() => setStep((value) => Math.max(0, value - 1))}>Назад</button>{step < STEP_LABELS.length - 1 ? <button type="button" className="primary" disabled={!canContinue() || loading} onClick={() => setStep((value) => Math.min(STEP_LABELS.length - 1, value + 1))}>Продолжить →</button> : <button type="button" className="primary launch" disabled={!canContinue() || loading} onClick={finishOnboarding}>{loading ? "Создаём кабинет…" : "Создать мой BusinessAIOS →"}</button>}</div></section></section><footer className="product-footer">BusinessAIOS · безопасная автоматизация бизнеса · изменения и отправки только после проверки</footer></main>;
 }
 
 export { getJson, postJson, isSuccessfulLiveEvidence };
