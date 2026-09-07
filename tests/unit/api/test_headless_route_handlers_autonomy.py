@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 import pytest
 
 from entrypoints.api.headless_models import ExecuteGoalRequest
@@ -7,9 +5,7 @@ from entrypoints.api.headless_route_handlers import HeadlessRouteHandlers
 
 
 class _CapturedRequest(RuntimeError):
-    def __init__(self, request):
-        super().__init__("captured_goal_execution_request")
-        self.request = request
+    pass
 
 
 class _ContractRuntime:
@@ -22,34 +18,19 @@ class _RuntimeProvider:
         return _ContractRuntime()
 
 
-def _capture_request(*, meta: dict) -> object:
-    handlers = HeadlessRouteHandlers(runtime_provider=_RuntimeProvider())
+def _capture_request(meta: dict) -> object:
+    request = ExecuteGoalRequest(goal="Plan safely", business_id="business-1", tenant_id="tenant-1", meta=meta)
     with pytest.raises(_CapturedRequest) as captured:
-        handlers.execute_goal(
-            ExecuteGoalRequest(
-                goal="Plan safely",
-                business_id="business-1",
-                tenant_id="tenant-1",
-                meta=meta,
-            )
-        )
-    return captured.value.request
+        HeadlessRouteHandlers(runtime_provider=_RuntimeProvider()).execute_goal(request)
+    return captured.value.args[0]
 
 
 def test_owner_workspace_goal_is_forced_to_advisory_at_server_boundary():
-    request = _capture_request(meta={"source": "owner_workspace"})
-
+    request = _capture_request({"source": "owner_workspace"})
     assert request.autonomy_tier == "advisory"
     assert request.meta == {"source": "owner_workspace"}
 
 
-def test_general_execute_goal_preserves_supervised_semantics():
-    request = _capture_request(meta={"source": "api_client"})
-
-    assert request.autonomy_tier == "supervised"
-
-
-def test_missing_source_preserves_supervised_semantics():
-    request = _capture_request(meta={})
-
-    assert request.autonomy_tier == "supervised"
+@pytest.mark.parametrize("meta", [{"source": "api_client"}, {}])
+def test_general_execute_goal_preserves_supervised_semantics(meta):
+    assert _capture_request(meta).autonomy_tier == "supervised"
