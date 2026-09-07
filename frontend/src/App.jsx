@@ -131,6 +131,29 @@ function providerTruthCopy(provider) {
   return "Подключение ещё готовится.";
 }
 
+function capabilitySurfaceLabel(surface) {
+  return surface === "acquisition" ? "Привлечение и возврат клиентов" : surface === "interaction" ? "Общение и работа с клиентами" : "Системная возможность";
+}
+
+function capabilityUserState(item, catalog) {
+  const providers = (item?.provider_keys || []).map((key) => catalog.find((row) => row.provider_key === key)).filter(Boolean);
+  const provider = providers.find((row) => row.connected) || providers.find((row) => row.customer_selectable) || providers[0] || null;
+  if (provider?.connected) return { label: "Подключено", className: "ready", provider };
+  if (provider?.customer_selectable) return { label: "Можно подключить", className: "ready", provider };
+  if (item?.connectable && !providers.length) return { label: "Доступно в системе", className: "preparing", provider: null };
+  if (item?.connectable) return { label: "Часть функций готова", className: "preparing", provider };
+  return { label: "Готовится", className: "roadmap", provider };
+}
+
+function capabilityPlainCopy(item, state) {
+  const available = [];
+  if (item?.read_supported && (!state.provider || state.provider.read_supported)) available.push("читать данные");
+  if (item?.verify_supported) available.push("проверять входящие события");
+  if (item?.write_supported && state.provider?.write_supported) available.push("готовить внешнее действие с вашим подтверждением");
+  if (available.length) return `${state.provider && !state.provider.connected ? "После подключения" : "Сейчас"} можно: ${available.join(", ")}.`;
+  return item?.connectable ? "Базовый контур уже есть, но отдельный пользовательский шаг ещё не открыт." : "Пользовательский путь пока не открыт — функция остаётся в плане доработки.";
+}
+
 function providerWebhookUrl(apiBase, data, provider) {
   const key = String(provider?.provider_key || "").toLowerCase();
   if (!PROVIDER_CONNECTION_GUIDANCE[key] || !data?.tenant_id || !data?.business_id) return "";
@@ -188,6 +211,7 @@ function Workspace({ data, apiBase, businesses, onRestart, onRetryAccess, onSwit
   const authHeaders = useMemo(() => (apiKey ? { "X-API-Key": apiKey } : {}), [apiKey]);
   const selectedKeys = useMemo(() => new Set(integrations.map((item) => item.provider_key)), [integrations]);
   const [catalog, setCatalog] = useState([]);
+  const [capabilities, setCapabilities] = useState([]);
   const [activeKey, setActiveKey] = useState("");
   const [externalRef, setExternalRef] = useState("");
   const [secrets, setSecrets] = useState({});
@@ -217,6 +241,7 @@ function Workspace({ data, apiBase, businesses, onRestart, onRetryAccess, onSwit
     const payload = await getJson(workspaceUrl, authHeaders);
     const rows = Array.isArray(payload.providers) ? payload.providers : [];
     setCatalog(rows);
+    setCapabilities(Array.isArray(payload.capabilities) ? payload.capabilities : []);
     setActiveKey((current) => {
       if (current && rows.some((row) => row.provider_key === current)) return current;
       return rows.find((row) => selectedKeys.has(row.provider_key) && row.customer_selectable)?.provider_key
@@ -309,8 +334,11 @@ function Workspace({ data, apiBase, businesses, onRestart, onRetryAccess, onSwit
   }, [apiKey]);
 
   const providers = catalog
-    .filter((row) => selectedKeys.size === 0 || selectedKeys.has(row.provider_key))
-    .sort((left, right) => Number(Boolean(right.connected)) - Number(Boolean(left.connected)));
+    .filter((row) => row.connected || row.customer_selectable || selectedKeys.has(row.provider_key))
+    .sort((left, right) => Number(Boolean(right.connected)) - Number(Boolean(left.connected)) || Number(selectedKeys.has(right.provider_key)) - Number(selectedKeys.has(left.provider_key)) || String(left.title || "").localeCompare(String(right.title || ""), "ru"));
+  const capabilityRows = capabilities.map((item) => ({ ...item, userState: capabilityUserState(item, catalog) }));
+  const actionableCapabilities = capabilityRows.filter((item) => item.userState.provider?.connected || item.userState.provider?.customer_selectable);
+  const otherCapabilities = capabilityRows.filter((item) => !actionableCapabilities.includes(item));
   const activeProvider = providers.find((row) => row.provider_key === activeKey) || providers[0] || null;
   const liveEvidenceByProvider = useMemo(() => {
     const entries = Object.entries(historyByProvider).flatMap(([providerKey, rows]) => {
@@ -466,6 +494,15 @@ function Workspace({ data, apiBase, businesses, onRestart, onRetryAccess, onSwit
     await runWorkspaceAction("sync", { action: "read", mode: "live", operation, payload: {} });
   };
 
+  const openCapabilityProvider = (providerKey) => {
+    if (!providerKey) return;
+    setActiveKey(providerKey);
+    setExternalRef("");
+    setSecrets({});
+    setEditingAccessKey("");
+    requestAnimationFrame(() => document.getElementById("connections-panel")?.scrollIntoView({ behavior: "smooth", block: "start" }));
+  };
+
   const retryProtectedAccess = async () => {
     if (!data.intake_id || !onRetryAccess) return;
     setAccessRecoveryBusy(true);
@@ -533,8 +570,31 @@ function Workspace({ data, apiBase, businesses, onRestart, onRetryAccess, onSwit
         <div className="truth-note">{liveEvidence ? "Результат подтверждён реальным чтением данных из подключённого источника." : "До первого чтения здесь нет финансовых обещаний или выдуманных выводов. Сначала факты — потом рекомендации."}</div>
       </section>
 
+      <section className="panel capabilities-panel" aria-labelledby="business-capabilities-title">
+        <div className="panel-title-row">
+          <div><p className="eyebrow">Возможности</p><h2 id="business-capabilities-title">Что BusinessAIOS уже умеет для вашего бизнеса</h2></div>
+          <span className="privacy-badge">По фактической готовности</span>
+        </div>
+        <p className="muted-text">Это не рекламный список. Статус каждой возможности приходит из единого реестра BusinessAIOS и текущего состояния подключений. Если путь уже доказан, отсюда можно сразу перейти к существующей настройке.</p>
+        <div className="capability-summary">
+          <article><strong>{actionableCapabilities.length}</strong><span>можно открыть или подключить</span></article>
+          <article><strong>{capabilityRows.filter((item) => item.userState.provider?.connected).length}</strong><span>уже подключено</span></article>
+          <article><strong>{otherCapabilities.length}</strong><span>системные или готовятся</span></article>
+        </div>
+        {actionableCapabilities.length ? <div className="capability-grid">{actionableCapabilities.map((item) => <article className="capability-card" key={item.id}>
+          <div className="capability-card-head"><div><small>{capabilitySurfaceLabel(item.surface)}</small><strong>{item.title}</strong></div><span className={`status-pill ${item.userState.className}`}>{item.userState.label}</span></div>
+          <p>{capabilityPlainCopy(item, item.userState)}</p>
+          <button type="button" className="ghost small" onClick={() => openCapabilityProvider(item.userState.provider.provider_key)}>{item.userState.provider.connected ? "Открыть подключение" : "Подключить"}</button>
+        </article>)}</div> : <p className="empty-state">Сейчас нет возможностей с готовым пользовательским путём подключения.</p>}
+        {otherCapabilities.length ? <details className="capability-roadmap"><summary><span>Остальные возможности проекта</span><strong>{otherCapabilities.length}</strong></summary><div className="capability-grid roadmap-grid">{otherCapabilities.map((item) => <article className="capability-card muted-capability" key={item.id}>
+          <div className="capability-card-head"><div><small>{capabilitySurfaceLabel(item.surface)}</small><strong>{item.title}</strong></div><span className={`status-pill ${item.userState.className}`}>{item.userState.label}</span></div>
+          <p>{capabilityPlainCopy(item, item.userState)}</p>
+          {item.userState.provider?.customer_selectable ? <button type="button" className="ghost small" onClick={() => openCapabilityProvider(item.userState.provider.provider_key)}>Открыть настройку</button> : <small className="helper-text">BusinessAIOS не показывает кнопку действия, пока для неё нет честного пользовательского пути.</small>}
+        </article>)}</div></details> : null}
+      </section>
+
       <section className="workspace-grid">
-        <article className="panel primary-panel">
+        <article className="panel primary-panel" id="connections-panel">
           <div className="panel-title-row"><div><p className="eyebrow">Шаг к результату</p><h2>Подключите источник данных</h2></div><span className="privacy-badge">Только чтение</span></div>
           <p className="muted-text">Выберите источник и дайте доступ для чтения. Секреты используются только для подключения и не сохраняются в браузере.</p>
 

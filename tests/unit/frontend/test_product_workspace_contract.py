@@ -194,6 +194,17 @@ def test_owner_account_can_list_add_and_switch_multiple_businesses_without_brows
     assert all(selector in styles for selector in (".business-switcher", ".account-businesses", ".business-choice-grid", ".business-choice-card"))
 
 
+def test_owner_workspace_surfaces_canonical_capabilities_and_does_not_permanently_hide_unselected_providers() -> None:
+    app = _read("App.jsx")
+    styles = _read("styles.css")
+    assert 'setCapabilities(Array.isArray(payload.capabilities) ? payload.capabilities : [])' in app
+    assert 'row.connected || row.customer_selectable || selectedKeys.has(row.provider_key)' in app
+    assert 'selectedKeys.size === 0 || selectedKeys.has(row.provider_key)' not in app
+    assert all(token in app for token in ("Что BusinessAIOS уже умеет для вашего бизнеса", "Можно подключить", "Открыть подключение", "Остальные возможности проекта", "не показывает кнопку действия, пока для неё нет честного пользовательского пути"))
+    assert 'openCapabilityProvider' in app and 'id="connections-panel"' in app
+    assert all(selector in styles for selector in (".capabilities-panel", ".capability-summary", ".capability-grid", ".capability-card", ".capability-roadmap"))
+
+
 def test_owner_operational_cockpit_never_writes_directly_from_browser() -> None:
     app = _read("App.jsx")
     assert "/actions/execute" in app
