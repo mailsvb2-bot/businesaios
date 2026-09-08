@@ -24,9 +24,14 @@ function percent(value) {
   return Number.isFinite(number) ? `${(number * 100).toLocaleString("ru-RU", { maximumFractionDigits: 1 })}%` : "—";
 }
 
-function money(value) {
-  const number = Number(value);
-  return Number.isFinite(number) ? number.toLocaleString("ru-RU", { maximumFractionDigits: 2 }) : "—";
+function moneyFromMinor(value, currency = "") {
+  const minor = Number(value);
+  const normalizedCurrency = String(currency || "").trim().toUpperCase();
+  if (!Number.isSafeInteger(minor) || !normalizedCurrency) return "—";
+  try {
+    const formatter = new Intl.NumberFormat("ru-RU", { style: "currency", currency: normalizedCurrency, minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    return formatter.format(minor / 100);
+  } catch { return "—"; }
 }
 
 function metric(value) {
@@ -86,6 +91,22 @@ export function BusinessIntelligencePanel({ enabled, initialGoal, onLoad, onRunG
   const dashboard = snapshot.analytics?.dashboard || {};
   const business = snapshot.analytics?.business || {};
   const revenue = business.revenue || {};
+  const revenueMetadata = business.metadata || {};
+  const revenueCurrency = String(revenueMetadata.revenue_currency || "").trim().toUpperCase();
+  const revenueMoneyStatus = String(revenueMetadata.revenue_money_status || "unverified");
+  const revenueMinorTotal = Number(revenueMetadata.revenue_minor_total);
+  const revenueSuccessCount = Number(revenue.purchase_success_count);
+  const revenueWindowDays = Number.isFinite(Number(business.window_days)) ? Number(business.window_days) : 30;
+  const revenueAmountReady = Boolean(snapshot.analytics && Number.isSafeInteger(revenueSuccessCount) && revenueSuccessCount > 0 && revenueMoneyStatus === "verified_minor_units" && revenueCurrency && Number.isSafeInteger(revenueMinorTotal));
+  const revenueTruth = !snapshot.analytics
+    ? "Финансовая аналитика сейчас недоступна. BusinessAIOS не подставляет вместо неё нули."
+    : !Number.isFinite(revenueSuccessCount) || revenueSuccessCount <= 0
+      ? "За это окно событий успешной покупки нет. Это не доказывает нулевую выручку вне подключённых событий."
+      : revenueMoneyStatus === "mixed_currency"
+        ? "В подтверждённых событиях покупки несколько валют. BusinessAIOS не складывает их в одну фиктивную сумму."
+        : !revenueAmountReady
+          ? "События покупки есть, но у них нет полного строгого контракта amount_minor + currency. Сумма и средний чек скрыты, чтобы не перепутать рубли с копейками или разные денежные единицы."
+          : `Все денежные события этого окна имеют строгую сумму в minor units и одну валюту: ${revenueCurrency}.`;
   const retention = business.retention || {};
   const decisions = business.decisions || {};
   const funnel = business.funnel || {};
@@ -122,9 +143,24 @@ export function BusinessIntelligencePanel({ enabled, initialGoal, onLoad, onRunG
       {snapshot.errors.length ? <div className="intelligence-warning" role="status">Часть данных сейчас недоступна: {snapshot.errors.join(", ")}. Доступные факты показаны ниже.</div> : null}
       {loading && !snapshot.analytics && !snapshot.memory ? <div className="loading-box">Собираем факты из канонических данных бизнеса…</div> : null}
 
+      <article className="money-cockpit" aria-labelledby="business-money-title">
+        <div className="money-cockpit-head"><div><p className="eyebrow">Деньги</p><h3 id="business-money-title">Денежные факты</h3></div><span>Последние {revenueWindowDays} дней</span></div>
+        <p className="muted-text">Здесь только успешные и неуспешные события покупки из существующей Business Analytics. Денежную сумму показываем лишь при строгом amount_minor + currency. Это не банковский баланс и не бухгалтерский P&amp;L.</p>
+        <div className="money-metrics" aria-label="Подтверждённые финансовые показатели">
+          <div><small>Сумма успешных оплат</small><strong>{revenueAmountReady ? moneyFromMinor(revenueMinorTotal, revenueCurrency) : "—"}</strong><span>{revenueAmountReady ? `строгий minor-unit контракт · ${revenueCurrency}` : "сумма только из строгих minor units одной валюты"}</span></div>
+          <div><small>Успешные оплаты</small><strong>{metric(revenue.purchase_success_count)}</strong><span>событий успешной покупки</span></div>
+          <div><small>Средний чек</small><strong>{revenueAmountReady ? moneyFromMinor(Math.round(revenueMinorTotal / revenueSuccessCount), revenueCurrency) : "—"}</strong><span>{revenueAmountReady ? "по событиям успешной покупки" : "не считаем без безопасной суммы"}</span></div>
+          <div><small>Неуспешные оплаты</small><strong>{metric(revenue.purchase_failed_count)}</strong><span>зафиксированных неуспешных попыток</span></div>
+        </div>
+        <div className={`money-truth-note ${revenueAmountReady ? "verified" : "caution"}`} role="status"><strong>{revenueAmountReady ? "Сумма проверена по валюте" : "Почему сумма может быть скрыта"}</strong><span>{revenueTruth}</span></div>
+        <div className="money-scope-grid">
+          <div><strong>Что уже считаем</strong><span>События успешной/неуспешной покупки и денежную сумму — только когда amount_minor и currency однозначны для всего окна.</span></div>
+          <div><strong>Что пока не выдаём за факт</strong><span>Возвраты и chargeback этим числом не вычитаются. Остаток на счетах, расходы, налоги, чистую прибыль и долг тоже не показываем без подтверждённого пользовательского источника.</span></div>
+        </div>
+      </article>
+
       <div className="intelligence-metrics" aria-label="Ключевые показатели бизнеса">
         <article><small>Состояние</small><strong>{dashboard.overall_state ? humanText(dashboard.overall_state) : "Пока мало данных"}</strong><span>{Number.isFinite(Number(dashboard.overall_score)) ? `${Math.round(Number(dashboard.overall_score) * 100)} / 100` : "—"}</span></article>
-        <article><small>Выручка по событиям</small><strong>{money(revenue.revenue_total)}</strong><span>успешных оплат: {metric(revenue.purchase_success_count)}</span></article>
         <article><small>Возврат клиентов</small><strong>{percent(retention.retention_ratio)}</strong><span>вернулось: {metric(retention.returning_users)}</span></article>
         <article><small>Исполнение решений</small><strong>{percent(decisions.execution_ratio)}</strong><span>заблокировано: {percent(decisions.blocked_ratio)}</span></article>
         <article><small>Конверсия в покупку</small><strong>{percent(funnel.visitor_to_purchase_rate)}</strong><span>клиентов в событиях: {metric(funnel.visitors)}</span></article>

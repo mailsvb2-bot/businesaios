@@ -54,3 +54,8 @@ def test_analytics_ops_handlers_materialize_and_enqueue(tmp_path):
     enqueue = ops.enqueue_materialization(AnalyticsQueueMaterializeRequest(tenant_id='tenant-1', window_days=7))
     assert result['tenant_id'] == 'tenant-1'
     assert enqueue['accepted'] is True
+
+
+def test_public_analytics_routes_bound_window_days() -> None:
+    source = (__import__('pathlib').Path(__file__).parents[3] / 'adapters/api/fastapi/analytics_routes.py').read_text()
+    assert source.count('Query(30, ge=1, le=3650)') == 2

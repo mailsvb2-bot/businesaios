@@ -247,6 +247,10 @@ def test_real_api_onboarding_issues_owner_session_and_opens_workspace(tmp_path) 
             assert customers["count"] == 0
 
             owner_headers = {**secure_headers, "X-API-Key": switched_owner["api_key"]}
+            status, invalid_window = _request(port, f"/analytics/dashboard/{cta['tenant_id']}?window_days=0", headers=owner_headers)
+            assert status == 422, invalid_window
+            status, oversized_window = _request(port, f"/analytics/dashboard/{cta['tenant_id']}?window_days=3651", headers=owner_headers)
+            assert status == 422, oversized_window
             status, analytics = _request(port, f"/analytics/dashboard/{cta['tenant_id']}?window_days=30", headers=owner_headers)
             assert status == 200, analytics
             assert analytics["payload"]["dashboard"]["tenant_id"] == cta["tenant_id"]

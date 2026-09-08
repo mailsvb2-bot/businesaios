@@ -60,3 +60,20 @@ def test_intelligence_surface_is_responsive_and_accessible() -> None:
     assert panel.count('role="alert"') >= 2
     assert 'role="status"' in panel
     assert all(selector in styles for selector in (".intelligence-panel", ".intelligence-metrics", ".intelligence-columns", ".intelligence-goal-card", "@media (max-width: 480px)"))
+
+
+def test_money_cockpit_uses_same_analytics_snapshot_and_hides_unsafe_currency_totals() -> None:
+    panel = _read("BusinessIntelligencePanel.jsx")
+    styles = _read("BusinessIntelligencePanel.css")
+    assert all(token in panel for token in (
+        'id="business-money-title"', "Денежные факты", "revenue_money_status", "verified_minor_units", "mixed_currency",
+        "BusinessAIOS не складывает их в одну фиктивную сумму", "Это не банковский баланс и не бухгалтерский P&amp;L",
+        "Сумма успешных оплат", "Возвраты и chargeback этим числом не вычитаются", "сумма только из строгих minor units одной валюты",
+    ))
+    assert 'moneyFromMinor(revenueMinorTotal, revenueCurrency)' in panel
+    assert 'Number.isSafeInteger(revenueMinorTotal)' in panel
+    assert 'minor / 100' in panel
+    assert 'minimumFractionDigits: 2, maximumFractionDigits: 2' in panel
+    assert 'Math.round(revenueMinorTotal / revenueSuccessCount)' in panel
+    assert 'revenueAmountReady ? moneyFromMinor(revenueMinorTotal, revenueCurrency) : "—"' in panel
+    assert all(selector in styles for selector in (".money-cockpit", ".money-metrics", ".money-truth-note", ".money-scope-grid"))
