@@ -225,7 +225,7 @@ class VendorHttpLiveTransport:
             store_url = str(secrets.get('store_url') or payload.get('store_url') or '{store_url}')
             return f"{store_url}{path_family.format(operation=operation)}"
         if provider.provider_key == 'hubspot':
-            return f"{base_url}/crm/objects/2026-03/{({'health_probe': 'contacts', 'contact_sync': 'contacts', 'deal_sync': 'deals'}.get(operation, operation))}"
+            return import_internal_attr('runtime._internal.http_transport', 'url_with_params')(url=f"{base_url}/crm/objects/2026-03/{({'health_probe': 'contacts', 'contact_sync': 'contacts', 'deal_sync': 'deals'}.get(operation, operation))}", params={'after': payload.get('cursor')} if payload.get('cursor') not in {None, ''} else None)
         if provider.provider_key == 'meta_ads':
             return f"{base_url}{path_family.format(operation=operation).replace('{account_id}', str(secrets.get('account_id') or payload.get('account_id') or '{account_id}'))}"
         if provider.provider_key == 'google_ads':

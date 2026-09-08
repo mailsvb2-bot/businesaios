@@ -195,6 +195,27 @@ function isSuccessfulLiveEvidence(row) {
     && String(row?.status || "").toLowerCase() === "live_executed";
 }
 
+function latestSuccessfulOperationEvidence(rows, operation) {
+  return (rows || []).filter((row) => isSuccessfulLiveEvidence(row) && String(row?.operation || "") === operation)
+    .sort((left, right) => String(right?.recorded_at_utc || "").localeCompare(String(left?.recorded_at_utc || "")))[0] || null;
+}
+
+function evidenceResourceCount(row) {
+  const value = row?.parsed_response?.resource_count ?? row?.transport_response?.resource_count;
+  return value === null || value === undefined || !Number.isFinite(Number(value)) ? null : Number(value);
+}
+
+function evidenceHasNextPage(row) {
+  return Boolean(row?.parsed_response?.next_cursor ?? row?.transport_response?.next_cursor);
+}
+
+function evidenceTimeLabel(row) {
+  const value = String(row?.recorded_at_utc || "").trim();
+  if (!value) return "Время не указано";
+  const timestamp = new Date(value);
+  return Number.isNaN(timestamp.getTime()) ? "Время не указано" : timestamp.toLocaleString("ru-RU");
+}
+
 function Workspace({ data, apiBase, businesses, onRestart, onRetryAccess, onSwitchBusiness }) {
   const profile = data.business_profile || {};
   const progress = data.onboarding_progress || {};
@@ -240,6 +261,8 @@ function Workspace({ data, apiBase, businesses, onRestart, onRetryAccess, onSwit
   const [customerTimeline, setCustomerTimeline] = useState([]);
   const [customerBusy, setCustomerBusy] = useState(false);
   const [customerError, setCustomerError] = useState("");
+  const [salesBusy, setSalesBusy] = useState(false);
+  const [salesError, setSalesError] = useState("");
 
   const refreshCatalog = async () => {
     if (!apiKey) return [];
@@ -365,6 +388,16 @@ function Workspace({ data, apiBase, businesses, onRestart, onRetryAccess, onSwit
   const syncActionLabel = workspaceBusy === "sync"
     ? (activeLiveEvidence ? "Обновляем данные…" : "Получаем данные…")
     : (activeLiveEvidence ? "Обновить данные" : "Получить первые данные");
+  const hubspotProvider = catalog.find((row) => row.provider_key === "hubspot") || null;
+  const hubspotHistory = historyByProvider.hubspot || [];
+  const hubspotContactEvidence = latestSuccessfulOperationEvidence(hubspotHistory, "contact_sync");
+  const hubspotDealEvidence = latestSuccessfulOperationEvidence(hubspotHistory, "deal_sync");
+  const hubspotLastEvidence = [hubspotContactEvidence, hubspotDealEvidence].filter(Boolean).sort((left, right) => String(right.recorded_at_utc || "").localeCompare(String(left.recorded_at_utc || "")))[0] || null;
+  const hubspotContactCount = evidenceResourceCount(hubspotContactEvidence);
+  const hubspotDealCount = evidenceResourceCount(hubspotDealEvidence);
+  const hubspotReadOperations = new Set(hubspotProvider?.runtime_plan?.read_operations || []);
+  const hubspotCanRefreshSales = Boolean(hubspotProvider?.connected && hubspotReadOperations.has("contact_sync") && hubspotReadOperations.has("deal_sync"));
+  const hubspotRecentReads = hubspotHistory.filter((row) => ["contact_sync", "deal_sync"].includes(String(row?.operation || ""))).slice(0, 4);
 
   const operationProviders = catalog.filter((row) => row.write_supported).map((row) => {
     const required = Array.isArray(row.transport_binding?.live_required_secrets) ? row.transport_binding.live_required_secrets : [];
@@ -497,6 +530,23 @@ function Workspace({ data, apiBase, businesses, onRestart, onRetryAccess, onSwit
       return;
     }
     await runWorkspaceAction("sync", { action: "read", mode: "live", operation, payload: {} });
+  };
+
+  const refreshSalesCenter = async () => {
+    if (!hubspotProvider) { setSalesError("HubSpot пока не открыт для подключения в текущем реестре BusinessAIOS."); return; }
+    if (!hubspotProvider.connected) { setSalesError(""); openCapabilityProvider("hubspot"); return; }
+    if (!hubspotCanRefreshSales) { setSalesError("Подключение есть, но безопасное чтение контактов и сделок пока не открыто одновременно. Ничего внешнего не менялось."); return; }
+    setSalesBusy(true); setSalesError("");
+    try {
+      for (const operation of ["contact_sync", "deal_sync"]) {
+        const result = await postJson(workspaceUrl, { provider_key: "hubspot", action: "read", mode: "live", operation, payload: {} }, authHeaders);
+        setLastAction({ name: `sales_${operation}`, providerKey: "hubspot", result });
+      }
+      await refreshCatalog();
+      await loadHistory("hubspot");
+    } catch {
+      setSalesError("Не удалось обновить данные продаж. BusinessAIOS не выполнял внешних изменений — повторите чтение после проверки доступа.");
+    } finally { setSalesBusy(false); }
   };
 
   const openCapabilityProvider = (providerKey) => {
@@ -694,6 +744,48 @@ function Workspace({ data, apiBase, businesses, onRestart, onRetryAccess, onSwit
             <div className="check-row"><span>3</span><strong>Сравнить факты со сценарием и выбрать действие</strong></div>
           </div>
         </article>
+      </section>
+
+      <section className="panel sales-panel" aria-labelledby="business-sales-title">
+        <div className="panel-title-row">
+          <div><p className="eyebrow">Центр продаж</p><h2 id="business-sales-title">Продажи</h2></div>
+          <span className="privacy-badge">HubSpot · только чтение</span>
+        </div>
+        <p className="muted-text">Здесь BusinessAIOS показывает только подтверждённые чтением CRM-факты. Отдельную CRM-копию не создаём и неизвестные показатели не заменяем нулями.</p>
+        {salesError ? <div className="error-box inline-error" role="alert">{salesError}</div> : null}
+        {!hubspotProvider ? (
+          <div className="recovery-box"><p>HubSpot есть в архитектуре проекта, но текущий пользовательский реестр ещё не открыл его для безопасного подключения. Поэтому кнопки с фиктивными данными здесь нет.</p></div>
+        ) : !hubspotProvider.connected ? (
+          <div className="sales-empty-state">
+            <div><strong>Подключите CRM — и здесь появятся факты по контактам и сделкам.</strong><span>Нужен Private App Token только для чтения доступных CRM-объектов.</span></div>
+            <button type="button" className="primary" onClick={() => openCapabilityProvider("hubspot")}>Подключить HubSpot</button>
+          </div>
+        ) : (
+          <>
+            <div className="sales-metrics">
+              <article><small>Контакты</small><strong>{hubspotContactCount ?? "—"}</strong><span>{hubspotContactEvidence ? "объектов в последнем подтверждённом чтении" : "подтверждённых данных пока нет"}</span><em>{hubspotContactEvidence ? evidenceHasNextPage(hubspotContactEvidence) ? "Есть следующая страница — это не общий итог." : `Подтверждено ${evidenceTimeLabel(hubspotContactEvidence)}` : "Нажмите «Получить данные по продажам»."}</em></article>
+              <article><small>Сделки</small><strong>{hubspotDealCount ?? "—"}</strong><span>{hubspotDealEvidence ? "объектов в последнем подтверждённом чтении" : "подтверждённых данных пока нет"}</span><em>{hubspotDealEvidence ? evidenceHasNextPage(hubspotDealEvidence) ? "Есть следующая страница — это не общий итог." : `Подтверждено ${evidenceTimeLabel(hubspotDealEvidence)}` : "Нажмите «Получить данные по продажам»."}</em></article>
+              <article><small>Свежесть</small><strong className="sales-time-value">{hubspotLastEvidence ? evidenceTimeLabel(hubspotLastEvidence) : "—"}</strong><span>последнее подтверждённое чтение CRM</span><em>Дата берётся из защищённой истории чтений BusinessAIOS.</em></article>
+            </div>
+            <div className="sales-truth-grid">
+              <article className="sales-truth-card"><strong>Что уже подтверждено</strong><p>{hubspotContactEvidence && hubspotDealEvidence ? "BusinessAIOS уже получил реальные ответы HubSpot по контактам и сделкам. Эти значения можно использовать как факты последнего чтения." : "HubSpot подключён, но для Sales Center ещё нужны подтверждённые чтения и контактов, и сделок."}</p></article>
+              <article className="sales-truth-card caution"><strong>Что пока не считаем</strong><p>«Выиграно / проиграно / зависло», сумму воронки и конверсию по стадиям пока не показываем: BusinessAIOS ещё не доказал единые правила сопоставления стадий HubSpot. Нули вместо неизвестных значений не подставляются.</p></article>
+            </div>
+            <div className="navigation-row sales-actions">
+              <button type="button" className="primary" disabled={salesBusy || Boolean(workspaceBusy) || !hubspotCanRefreshSales} onClick={refreshSalesCenter}>{salesBusy ? "Обновляем CRM…" : hubspotLastEvidence ? "Обновить данные продаж" : "Получить данные по продажам"}</button>
+              <button type="button" className="ghost" onClick={() => document.getElementById("business-customers-title")?.scrollIntoView({ behavior: "smooth", block: "start" })}>Открыть клиентов</button>
+            </div>
+            {!hubspotCanRefreshSales ? <small className="sales-note">HubSpot подключён, но текущий контур подключения не подтверждает обе безопасные операции чтения. Sales Center остаётся в режиме просмотра без выдуманных результатов.</small> : <small className="sales-note">Кнопка выполняет только чтение HubSpot. Создание задач, изменение контактов и другие CRM-записи отсюда не запускаются.</small>}
+            <div className="sales-activity">
+              <div className="sales-activity-head"><h3>Последние чтения CRM</h3><small>{hubspotLastEvidence ? `Последнее подтверждение: ${evidenceTimeLabel(hubspotLastEvidence)}` : "Подтверждённых чтений пока нет."}</small></div>
+              {hubspotRecentReads.length ? hubspotRecentReads.map((row, index) => {
+                const successful = isSuccessfulLiveEvidence(row);
+                const count = evidenceResourceCount(row);
+                return <article className={`sales-activity-row ${successful ? "" : "warning"}`} key={row.history_id || `${row.operation}-${row.recorded_at_utc}-${index}`}><div><strong>{row.operation === "deal_sync" ? "Сделки" : "Контакты"}</strong><span>{successful ? count === null ? "Чтение подтверждено" : `Получено объектов: ${count}` : "Чтение не подтверждено"}</span></div><small>{evidenceTimeLabel(row)}{successful && evidenceHasNextPage(row) ? " · есть следующая страница" : ""}</small></article>;
+              }) : <p className="empty-state">История чтения HubSpot появится после первого безопасного запроса.</p>}
+            </div>
+          </>
+        )}
       </section>
 
       <section className="panel customers-panel" aria-labelledby="business-customers-title">

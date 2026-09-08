@@ -225,3 +225,17 @@ def test_owner_operational_cockpit_never_writes_directly_from_browser() -> None:
     assert "action_type: \"send_message@v1\"" in app
     assert '"X-Idempotency-Key": crypto.randomUUID()' in app
     assert "providerRecipientContext" in app and "messagingChannelForProvider" in app
+
+
+def test_owner_workspace_sales_center_uses_confirmed_hubspot_history_without_fake_pipeline_metrics() -> None:
+    app = _read("App.jsx")
+    styles = _read("styles.css")
+    assert all(token in app for token in (
+        'id="business-sales-title"', "Центр продаж", "Продажи", "hubspotContactEvidence", "hubspotDealEvidence",
+        'latestSuccessfulOperationEvidence(hubspotHistory, "contact_sync")', 'latestSuccessfulOperationEvidence(hubspotHistory, "deal_sync")',
+        'provider_key: "hubspot", action: "read", mode: "live"', "Получить данные по продажам", "Обновить данные продаж",
+        "Есть следующая страница — это не общий итог.", "Нули вместо неизвестных значений не подставляются.",
+        "BusinessAIOS ещё не доказал единые правила сопоставления стадий HubSpot", "Открыть клиентов",
+    ))
+    assert all(token not in app for token in ("open_deals=0", "won_deals_last_30d=0", "stalled_deals=0"))
+    assert all(selector in styles for selector in (".sales-panel", ".sales-metrics", ".sales-truth-grid", ".sales-activity-row", ".sales-actions"))
