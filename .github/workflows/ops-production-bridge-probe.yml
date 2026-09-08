@@ -16,20 +16,20 @@ jobs:
     environment: production
     timeout-minutes: 5
     steps:
-      - name: Diagnose and recover Remote Desktop Commander
+      - name: Inspect Remote Desktop Commander reconnect surface
         shell: bash
         run: |
           set -u
-          echo '--- service state before ---'
-          systemctl show remote-desktop-commander.service -p MainPID -p ActiveState -p SubState -p NRestarts -p ExecMainStatus -p Result --no-pager
-          pid="$(systemctl show remote-desktop-commander.service -p MainPID --value)"
-          if [[ "$pid" =~ ^[1-9][0-9]*$ ]]; then ps -o pid,ppid,user,etime,stat,comm,args -p "$pid" || true; fi
-          echo '--- recent service journal ---'
-          journalctl -u remote-desktop-commander.service -n 80 --no-pager 2>&1 || true
-          echo '--- outbound TCP snapshot ---'
-          ss -nt 2>/dev/null | head -n 80 || true
-          echo '--- non-root restart attempt ---'
-          systemctl --no-ask-password restart remote-desktop-commander.service 2>&1 || true
-          sleep 4
-          echo '--- service state after ---'
-          systemctl show remote-desktop-commander.service -p MainPID -p ActiveState -p SubState -p NRestarts -p ExecMainStatus -p Result --no-pager
+          NODE=/opt/node-v24.19.0-linux-x64/bin/node
+          CLI=/home/desktopcommander/rdc-app/node_modules/@wonderwhy-er/desktop-commander/dist/index.js
+          echo '--- readability ---'
+          stat -c '%A %U:%G %n' /home/desktopcommander /home/desktopcommander/rdc-app "$CLI" 2>&1 || true
+          echo '--- CLI help ---'
+          "$NODE" "$CLI" --help 2>&1 | head -n 120 || true
+          echo '--- remote help ---'
+          "$NODE" "$CLI" remote --help 2>&1 | head -n 160 || true
+          echo '--- reconnect/control references ---'
+          grep -RInE 'persist-session|reconnect|disconnect|remote.*status|control.*socket|listen\(' "$(dirname "$CLI")" 2>/dev/null | head -n 120 || true
+          echo '--- desktopcommander sockets ---'
+          find /run /tmp -maxdepth 4 -type s -user desktopcommander -ls 2>/dev/null | head -n 80 || true
+          ss -lnt 2>/dev/null | head -n 100 || true
