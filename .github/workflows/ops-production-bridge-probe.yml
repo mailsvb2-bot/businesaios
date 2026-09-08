@@ -16,12 +16,20 @@ jobs:
     environment: production
     timeout-minutes: 5
     steps:
-      - name: Verify Remote Desktop Commander restart policy
+      - name: Inspect installed production handoff surfaces
         shell: bash
         run: |
           set -euo pipefail
-          systemctl show remote-desktop-commander.service \
-            -p Restart -p RestartUSec -p StartLimitBurst -p StartLimitIntervalUSec \
-            -p MainPID -p ActiveState -p SubState -p User -p FragmentPath --no-pager
-          echo '--- unit ---'
-          systemctl cat remote-desktop-commander.service
+          echo '--- systemd references ---'
+          grep -RInE 'rdc-deploy-request|businesaios-rdc-deploy|desktopcommander|github-runner' /etc/systemd/system /usr/lib/systemd/system 2>/dev/null | head -n 240 || true
+          echo '--- path units ---'
+          systemctl list-unit-files --type=path --no-pager --no-legend | head -n 120 || true
+          echo '--- timers ---'
+          systemctl list-timers --all --no-pager | head -n 120 || true
+          echo '--- sockets ---'
+          systemctl list-sockets --all --no-pager | head -n 160 || true
+          echo '--- request dir ACL ---'
+          namei -l /var/lib/businesaios/rdc-deploy-request || true
+          getfacl -p /var/lib/businesaios/rdc-deploy-request 2>/dev/null || true
+          echo '--- runner groups ---'
+          id
