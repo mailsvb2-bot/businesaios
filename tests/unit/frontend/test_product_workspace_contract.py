@@ -233,7 +233,7 @@ def test_owner_workspace_sales_center_uses_confirmed_hubspot_history_without_fak
     assert all(token in app for token in (
         'id="business-sales-title"', "Центр продаж", "Продажи", "hubspotContactEvidence", "hubspotDealEvidence",
         'latestSuccessfulOperationEvidence(hubspotHistory, "contact_sync")', 'latestSuccessfulOperationEvidence(hubspotHistory, "deal_sync")',
-        'provider_key: "hubspot", action: "read", mode: "live"', "Получить данные по продажам", "Обновить данные продаж",
+        'provider_key: "hubspot", action: "read", mode: "live"', 'if (!isSuccessfulLiveEvidence(result)) throw new Error', 'key={`${result.business_id}:${result.owner_session?.expires_at || result.intake_id || ""}`}', "Получить данные по продажам", "Обновить данные продаж",
         "Есть следующая страница — это не общий итог.", "Нули вместо неизвестных значений не подставляются.",
         "BusinessAIOS ещё не доказал единые правила сопоставления стадий HubSpot", "Открыть клиентов",
     ))

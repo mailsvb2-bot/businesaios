@@ -540,13 +540,13 @@ function Workspace({ data, apiBase, businesses, onRestart, onRetryAccess, onSwit
     try {
       for (const operation of ["contact_sync", "deal_sync"]) {
         const result = await postJson(workspaceUrl, { provider_key: "hubspot", action: "read", mode: "live", operation, payload: {} }, authHeaders);
+        if (!isSuccessfulLiveEvidence(result)) throw new Error(`hubspot_sales_read_rejected:${operation}:${String(result?.status || "unknown")}`);
         setLastAction({ name: `sales_${operation}`, providerKey: "hubspot", result });
       }
       await refreshCatalog();
-      await loadHistory("hubspot");
     } catch {
-      setSalesError("Не удалось обновить данные продаж. BusinessAIOS не выполнял внешних изменений — повторите чтение после проверки доступа.");
-    } finally { setSalesBusy(false); }
+      setSalesError("Не все данные продаж удалось обновить. Внешних изменений не выполнялось — проверьте доступ HubSpot и повторите чтение.");
+    } finally { await loadHistory("hubspot").catch(() => []); setSalesBusy(false); }
   };
 
   const openCapabilityProvider = (providerKey) => {
@@ -1046,7 +1046,7 @@ export function App() {
     setError("");
   };
 
-  if (result) return <Workspace data={result} apiBase={apiBase} businesses={ownerBusinesses} onRestart={restart} onRetryAccess={restoreWorkspaceAccess} onSwitchBusiness={switchBusiness} />;
+  if (result) return <Workspace key={`${result.business_id}:${result.owner_session?.expires_at || result.intake_id || ""}`} data={result} apiBase={apiBase} businesses={ownerBusinesses} onRestart={restart} onRetryAccess={restoreWorkspaceAccess} onSwitchBusiness={switchBusiness} />;
   if (!creatingNewBusiness && !initialIntakeId() && !ownerAccountChecked) return <main className="onboarding-shell"><div className="account-loading" role="status">Открываем ваши бизнесы…</div></main>;
   if (!creatingNewBusiness && ownerBusinesses.length) return <BusinessChooser businesses={ownerBusinesses} onOpen={switchBusiness} onAdd={restart} />;
 
