@@ -7,7 +7,10 @@ from typing import Any, Protocol
 
 from application.business_autonomy.provider_admin_contract import ProviderDefinition
 from application.business_autonomy.provider_runtime_contract import ProviderSyncRunResult
-from runtime.business_autonomy.provider_connector_health import ProviderConnectorHealthService
+from runtime.business_autonomy.provider_connector_health import (
+    PROVIDER_HEALTH_CONNECTION_BLOCKING_STATUSES,
+    ProviderConnectorHealthService,
+)
 from runtime.business_autonomy.provider_error_taxonomy import ProviderErrorTaxonomy
 from runtime.business_autonomy.provider_incident_registry import FileProviderIncidentRegistry
 from runtime.business_autonomy.provider_media import public_provider_media_payload
@@ -105,7 +108,7 @@ class ProviderLiveSyncRuntime:
         if normalized_mode == 'live' and write_guard_decision.is_write_operation and not queue_job_id:
             return self._finalize_result(tenant_id=tenant_id, business_id=business_id, provider=provider, operation=normalized_operation, mode=normalized_mode, result=ProviderSyncRunResult(provider_key=provider.provider_key, operation=normalized_operation, mode=normalized_mode, status='rejected_provider_write_requires_queue', accepted=False, metadata={'provider_write_guard': write_guard_decision.to_metadata(), 'request_envelope': request_base}), payload=public_execution_payload)
         health = ProviderConnectorHealthService(self.secret_vault).probe(provider=provider, tenant_id=tenant_id, business_id=business_id, probe_mode=normalized_mode)
-        if health.status in {'misconfigured', 'invalid_secret_shape'}:
+        if health.status in PROVIDER_HEALTH_CONNECTION_BLOCKING_STATUSES:
             result = ProviderSyncRunResult(provider_key=provider.provider_key, operation=normalized_operation, mode=normalized_mode, status='rejected_misconfigured', accepted=False, metadata={'health_probe': {'status': health.status, 'reason': health.reason, 'metadata': dict(health.metadata or {})}, 'provider_write_guard': write_guard_decision.to_metadata()})
             return self._finalize_result(tenant_id=tenant_id, business_id=business_id, provider=provider, operation=normalized_operation, mode=normalized_mode, result=result, payload=public_execution_payload)
         envelope = {**request_base, 'provider_write_guard': write_guard_decision.to_metadata()}

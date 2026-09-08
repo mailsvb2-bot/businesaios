@@ -4,22 +4,17 @@ from dataclasses import dataclass
 
 from application.business_autonomy.provider_admin_contract import ProviderDefinition
 from application.business_autonomy.provider_runtime_contract import ProviderHealthProbeResult
-from contracts.email_outbound import (
-    normalize_email_address,
-    normalize_smtp_host,
-    normalize_smtp_port,
-    normalize_smtp_security,
-)
+from contracts.email_outbound import normalize_email_address, normalize_smtp_host, normalize_smtp_port, normalize_smtp_security
 from runtime.business_autonomy.provider_transport_bindings import provider_transport_binding_for_key
 from security.secret_contract import SecretRef
 from security.secret_vault import SecretVault
 
 CANON_PROVIDER_CONNECTOR_HEALTH = True
+PROVIDER_HEALTH_CONNECTION_BLOCKING_STATUSES = frozenset({'missing_required_secrets', 'invalid_secret_shape', 'misconfigured', 'contract_only'})
 _REQUIRED_BY_PROVIDER = {
     'telegram_bot': ('bot_token',),
     'whatsapp_cloud': ('access_token', 'phone_number_id'),
     'email_connector': ('smtp_host', 'smtp_port', 'smtp_security', 'from_address'),
-    'sms_connector': ('api_token', 'sender_id'),
     'generic_website': ('webhook_secret',),
     'webflow': ('api_token',),
     'wordpress': ('application_password',),
@@ -45,12 +40,9 @@ def _has_http_endpoint_shape(value: str) -> bool:
     if not text:
         return False
     lower = text.lower()
-    if lower.startswith('https://'):
-        rest = text[8:]
-    elif lower.startswith('http://'):
-        rest = text[7:]
-    else:
-        return False
+    if lower.startswith('https://'): rest = text[8:]
+    elif lower.startswith('http://'): rest = text[7:]
+    else: return False
     host = rest.split('/', 1)[0].split('?', 1)[0].split('#', 1)[0].strip()
     return bool(host and not host.startswith(':') and ' ' not in host)
 
@@ -62,6 +54,8 @@ class ProviderConnectorHealthService:
     def probe(self, *, provider: ProviderDefinition, tenant_id: str, business_id: str, probe_mode: str = 'dry_run') -> ProviderHealthProbeResult:
         mode = str(probe_mode or 'dry_run').strip().lower() or 'dry_run'
         binding, present, missing = provider_transport_binding_for_key(provider.provider_key), [], []
+        if bool(binding.get('contract_only')):
+            return ProviderHealthProbeResult(provider_key=provider.provider_key, status='contract_only', probe_mode=mode, reason='vendor_contract_not_selected', metadata={'present_fields': (), 'live_probe_supported': False})
         required = (*_REQUIRED_BY_PROVIDER.get(provider.provider_key, tuple(field.field_key for field in provider.secret_fields if field.required)), *(binding.get('live_required_secrets', ()) if mode == 'live' else ()))
         for field_key in required:
             value = self._read_optional_secret(
@@ -75,30 +69,14 @@ class ProviderConnectorHealthService:
             else:
                 missing.append(field_key)
         if missing:
-            return ProviderHealthProbeResult(
-                provider_key=provider.provider_key, status='misconfigured',
-                probe_mode=mode, reason='missing_required_secrets',
-                metadata={'missing_fields': tuple(missing), 'present_fields': tuple(present)},
-            )
+            return ProviderHealthProbeResult(provider_key=provider.provider_key, status='misconfigured', probe_mode=mode, reason='missing_required_secrets', metadata={'missing_fields': tuple(missing), 'present_fields': tuple(present)})
         shallow = self._shallow_validate(provider_key=provider.provider_key, tenant_id=tenant_id, connector_id=provider.connector_id, business_id=business_id)
         if not shallow[0]:
-            return ProviderHealthProbeResult(
-                provider_key=provider.provider_key, status='invalid_secret_shape',
-                probe_mode=mode, reason=shallow[1],
-                metadata={'present_fields': tuple(present)},
-            )
+            return ProviderHealthProbeResult(provider_key=provider.provider_key, status='invalid_secret_shape', probe_mode=mode, reason=shallow[1], metadata={'present_fields': tuple(present)})
         live_probe_ready = bool(binding.get('live_probe_ready', binding.get('live_ready')))
         if mode == 'live' and not live_probe_ready:
-            return ProviderHealthProbeResult(
-                provider_key=provider.provider_key, status='live_probe_unsupported',
-                probe_mode=mode, reason='live_transport_not_ready',
-                metadata={'present_fields': tuple(present), 'live_probe_supported': False},
-            )
-        return ProviderHealthProbeResult(
-            provider_key=provider.provider_key, status='ready_for_live_probe' if mode == 'live' else 'ready_for_credentials',
-            probe_mode=mode, reason='validated_secret_shape',
-            metadata={'present_fields': tuple(present), 'live_probe_supported': live_probe_ready},
-        )
+            return ProviderHealthProbeResult(provider_key=provider.provider_key, status='live_probe_unsupported', probe_mode=mode, reason='live_transport_not_ready', metadata={'present_fields': tuple(present), 'live_probe_supported': False})
+        return ProviderHealthProbeResult(provider_key=provider.provider_key, status='ready_for_live_probe' if mode == 'live' else 'ready_for_credentials', probe_mode=mode, reason='validated_secret_shape', metadata={'present_fields': tuple(present), 'live_probe_supported': live_probe_ready})
 
     def _shallow_validate(self, *, provider_key: str, tenant_id: str, connector_id: str, business_id: str) -> tuple[bool, str]:
         if provider_key == 'email_connector':
@@ -133,4 +111,4 @@ class ProviderConnectorHealthService:
             return ''
 
 
-__all__ = ['CANON_PROVIDER_CONNECTOR_HEALTH', 'ProviderConnectorHealthService']
+__all__ = ['CANON_PROVIDER_CONNECTOR_HEALTH', 'PROVIDER_HEALTH_CONNECTION_BLOCKING_STATUSES', 'ProviderConnectorHealthService']
