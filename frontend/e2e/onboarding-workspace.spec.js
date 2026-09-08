@@ -77,7 +77,7 @@ test(canonicalScenario.title, async ({ page }, testInfo) => {
   expect(workspace.write_actions_enabled).toBe(false);
 
   await expect(page.getByRole("heading", { name: businessName, level: 1 })).toBeVisible();
-  await expect(page.getByText("Только чтение")).toBeVisible();
+  await expect(page.getByText("Только чтение", { exact: true })).toBeVisible();
   await expect(page.getByRole("button", { name: new RegExp(providerTitle) })).toBeVisible();
   await expect(page.getByRole("heading", { name: "Первый полезный результат" })).toBeVisible();
   await expect(page.getByRole("heading", { name: "Продажи", level: 2 })).toBeVisible();
