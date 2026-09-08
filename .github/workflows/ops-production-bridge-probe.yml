@@ -16,20 +16,20 @@ jobs:
     environment: production
     timeout-minutes: 5
     steps:
-      - name: Inspect installed canonical deploy bridge
+      - name: Diagnose and recover Remote Desktop Commander
         shell: bash
         run: |
-          set -euo pipefail
-          echo "runner=$(id -un)"
-          echo '--- bridge source ---'
-          sed -n '1,260p' /usr/local/sbin/businesaios-rdc-deploy
-          echo '--- bridge path unit ---'
-          systemctl cat businesaios-rdc-deploy.path
-          echo '--- bridge service unit ---'
-          systemctl cat businesaios-rdc-deploy.service
-          echo '--- remote agent candidates ---'
-          systemctl list-unit-files --type=service --no-legend | grep -Ei 'desktop|commander|remote' || true
-          for unit in remote-desktop-commander.service desktop-commander.service desktopcommander.service; do
-            echo "--- $unit ---"
-            systemctl show "$unit" -p LoadState -p ActiveState -p SubState -p UnitFileState -p User -p FragmentPath --no-pager 2>/dev/null || true
-          done
+          set -u
+          echo '--- service state before ---'
+          systemctl show remote-desktop-commander.service -p MainPID -p ActiveState -p SubState -p NRestarts -p ExecMainStatus -p Result --no-pager
+          pid="$(systemctl show remote-desktop-commander.service -p MainPID --value)"
+          if [[ "$pid" =~ ^[1-9][0-9]*$ ]]; then ps -o pid,ppid,user,etime,stat,comm,args -p "$pid" || true; fi
+          echo '--- recent service journal ---'
+          journalctl -u remote-desktop-commander.service -n 80 --no-pager 2>&1 || true
+          echo '--- outbound TCP snapshot ---'
+          ss -nt 2>/dev/null | head -n 80 || true
+          echo '--- non-root restart attempt ---'
+          systemctl --no-ask-password restart remote-desktop-commander.service 2>&1 || true
+          sleep 4
+          echo '--- service state after ---'
+          systemctl show remote-desktop-commander.service -p MainPID -p ActiveState -p SubState -p NRestarts -p ExecMainStatus -p Result --no-pager
