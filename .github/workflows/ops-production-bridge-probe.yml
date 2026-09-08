@@ -16,20 +16,15 @@ jobs:
     environment: production
     timeout-minutes: 5
     steps:
-      - name: Inspect Remote Desktop Commander reconnect surface
+      - name: Identify local listener related to remote agent
         shell: bash
         run: |
           set -u
-          NODE=/opt/node-v24.19.0-linux-x64/bin/node
-          CLI=/home/desktopcommander/rdc-app/node_modules/@wonderwhy-er/desktop-commander/dist/index.js
-          echo '--- readability ---'
-          stat -c '%A %U:%G %n' /home/desktopcommander /home/desktopcommander/rdc-app "$CLI" 2>&1 || true
-          echo '--- CLI help ---'
-          "$NODE" "$CLI" --help 2>&1 | head -n 120 || true
-          echo '--- remote help ---'
-          "$NODE" "$CLI" remote --help 2>&1 | head -n 160 || true
-          echo '--- reconnect/control references ---'
-          grep -RInE 'persist-session|reconnect|disconnect|remote.*status|control.*socket|listen\(' "$(dirname "$CLI")" 2>/dev/null | head -n 120 || true
-          echo '--- desktopcommander sockets ---'
-          find /run /tmp -maxdepth 4 -type s -user desktopcommander -ls 2>/dev/null | head -n 80 || true
-          ss -lnt 2>/dev/null | head -n 100 || true
+          for port in 18080 41733; do
+            echo "--- port $port root ---"
+            curl -sS -i --max-time 3 "http://127.0.0.1:${port}/" 2>&1 | head -n 60 || true
+            echo "--- port $port health ---"
+            curl -sS -i --max-time 3 "http://127.0.0.1:${port}/health" 2>&1 | head -n 60 || true
+          done
+          echo '--- tcp owners where visible ---'
+          ss -lntp 2>&1 | grep -E '(:18080|:41733)' || true
