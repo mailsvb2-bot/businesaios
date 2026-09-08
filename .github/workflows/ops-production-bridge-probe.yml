@@ -1,0 +1,32 @@
+name: Ops Production Bridge Probe
+
+on:
+  push:
+    branches:
+      - feat/owner-intelligence-cockpit
+    paths:
+      - .github/workflows/ops-production-bridge-probe.yml
+
+permissions:
+  contents: read
+
+jobs:
+  probe:
+    runs-on: [self-hosted, linux, production]
+    environment: production
+    timeout-minutes: 5
+    steps:
+      - name: Inspect installed canonical deploy bridge
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "runner=$(id -un)"
+          id
+          stat -c 'bridge=%A %U:%G %n' /usr/local/sbin/businesaios-rdc-deploy
+          stat -c 'request=%A %U:%G %n' /var/lib/businesaios/rdc-deploy-request || true
+          systemctl is-active businesaios-rdc-deploy.path || true
+          systemctl is-enabled businesaios-rdc-deploy.path || true
+          printf 'request_writable='; test -w /var/lib/businesaios/rdc-deploy-request && echo yes || echo no
+          printf 'bridge_direct_executable='; test -x /usr/local/sbin/businesaios-rdc-deploy && echo yes || echo no
+          echo '--- noninteractive sudo policy ---'
+          sudo -n -l || true
