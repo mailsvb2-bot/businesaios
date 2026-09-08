@@ -7,6 +7,7 @@ from application.business_autonomy.integration_capability_catalog import (
 from application.business_autonomy.provider_catalog import (
     BRIDGE_MESSAGING_PROVIDER_KEYS,
     MESSAGING_CHANNEL_PROVIDER_KEYS,
+    MESSAGING_GUARDED_WRITE_PROVIDER_KEYS,
 )
 
 
@@ -59,7 +60,7 @@ def test_every_external_messaging_provider_has_honest_interaction_capability():
         capability = by_provider[provider_key][0]
         assert capability.status.value == 'partial'
         assert capability.read_supported is True
-        assert capability.write_supported is False
+        assert capability.write_supported is (provider_key in MESSAGING_GUARDED_WRITE_PROVIDER_KEYS)
         assert capability.verify_supported is True
         assert capability.connectable is True
 
