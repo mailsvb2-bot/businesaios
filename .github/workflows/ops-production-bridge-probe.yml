@@ -21,12 +21,15 @@ jobs:
         run: |
           set -euo pipefail
           echo "runner=$(id -un)"
-          id
-          stat -c 'bridge=%A %U:%G %n' /usr/local/sbin/businesaios-rdc-deploy
-          stat -c 'request=%A %U:%G %n' /var/lib/businesaios/rdc-deploy-request || true
-          systemctl is-active businesaios-rdc-deploy.path || true
-          systemctl is-enabled businesaios-rdc-deploy.path || true
-          printf 'request_writable='; test -w /var/lib/businesaios/rdc-deploy-request && echo yes || echo no
-          printf 'bridge_direct_executable='; test -x /usr/local/sbin/businesaios-rdc-deploy && echo yes || echo no
-          echo '--- noninteractive sudo policy ---'
-          sudo -n -l || true
+          echo '--- bridge source ---'
+          sed -n '1,260p' /usr/local/sbin/businesaios-rdc-deploy
+          echo '--- bridge path unit ---'
+          systemctl cat businesaios-rdc-deploy.path
+          echo '--- bridge service unit ---'
+          systemctl cat businesaios-rdc-deploy.service
+          echo '--- remote agent candidates ---'
+          systemctl list-unit-files --type=service --no-legend | grep -Ei 'desktop|commander|remote' || true
+          for unit in remote-desktop-commander.service desktop-commander.service desktopcommander.service; do
+            echo "--- $unit ---"
+            systemctl show "$unit" -p LoadState -p ActiveState -p SubState -p UnitFileState -p User -p FragmentPath --no-pager 2>/dev/null || true
+          done
