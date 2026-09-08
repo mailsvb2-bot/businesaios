@@ -15,6 +15,7 @@ _BRIDGE_NATIVE_FIELDS = {"vk": (_token("Group Access Token", "access_token", pla
 MESSAGING_INTERNAL_CHANNELS = frozenset({"api"})
 MESSAGING_CHANNEL_PROVIDER_KEYS = {"telegram": "telegram_bot", "whatsapp": "whatsapp_cloud", "email": "email_connector", "sms": "sms_connector", "web_chat": "generic_website", **{channel: f"{channel}_messaging" for channel in _BRIDGE_MESSAGING_TITLES}}
 BRIDGE_MESSAGING_PROVIDER_KEYS = frozenset(MESSAGING_CHANNEL_PROVIDER_KEYS[channel] for channel in _BRIDGE_MESSAGING_TITLES)
+MESSAGING_GUARDED_WRITE_PROVIDER_KEYS = frozenset({'vk_messaging', 'max_messaging', 'slack_messaging', 'discord_messaging', 'instagram_messaging', 'messenger_messaging', 'line_messaging', 'viber_messaging', 'email_connector'})
 
 
 def _bridge_messaging_provider(channel: str, title: str) -> ProviderDefinition:
