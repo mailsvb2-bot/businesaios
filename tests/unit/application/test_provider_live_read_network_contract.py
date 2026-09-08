@@ -49,6 +49,16 @@ def test_hubspot_live_read_uses_current_contacts_api_and_nested_cursor(monkeypat
     assert result.metadata['parsed_response']['next_cursor'] == '2' and result.metadata['parsed_response']['resource_count'] == 1
 
 
+def test_hubspot_live_read_renders_pagination_cursor_as_after_query(monkeypatch, tmp_path) -> None:
+    monkeypatch.setenv('DATA_DIR', str(tmp_path / 'data'))
+    provider, vault, calls = provider_map()['hubspot'], InMemorySecretVault(), []
+    _put(vault, provider, 'hub-a', 'private_app_token', 'pat-test')
+    monkeypatch.setattr('runtime.business_autonomy.provider_http_live_clients._sync_request', lambda **kwargs: (calls.append(kwargs) or SyncHTTPResult(status=200, headers={}, json={}, text='{"results":[]}')))
+    result = ProviderLiveSyncRuntime(vault, transports=build_live_http_transports(vault, bind_live_network=True)).run(provider=provider, tenant_id='tenant-a', business_id='hub-a', operation='deal_sync', mode='live', payload={'cursor': 'page 2'})
+    assert result.status == 'live_executed' and result.accepted is True
+    assert calls[0]['url'] == 'https://api.hubapi.com/crm/objects/2026-03/deals?after=page+2'
+
+
 def test_live_write_remains_fail_closed_before_network(monkeypatch, tmp_path) -> None:
     monkeypatch.setenv('DATA_DIR', str(tmp_path / 'data'))
     provider, vault = provider_map()['hubspot'], InMemorySecretVault()
