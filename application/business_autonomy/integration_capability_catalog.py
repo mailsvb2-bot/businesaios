@@ -5,7 +5,11 @@ from dataclasses import dataclass, field
 from enum import Enum
 from typing import Any
 
-from application.business_autonomy.provider_catalog import BRIDGE_MESSAGING_PROVIDER_KEYS, provider_map
+from application.business_autonomy.provider_catalog import (
+    BRIDGE_MESSAGING_PROVIDER_KEYS,
+    MESSAGING_GUARDED_WRITE_PROVIDER_KEYS,
+    provider_map,
+)
 
 CANON_INTEGRATION_CAPABILITY_CATALOG = True
 
@@ -183,12 +187,13 @@ def _bridge_messaging_interaction_capabilities() -> tuple[IntegrationCapability,
             provider_keys=(provider_key,),
             registry_sources=('application.business_autonomy.provider_catalog', 'runtime.business_autonomy.provider_webhook_messaging_bridge'),
             read_supported=True,
+            write_supported=provider_key in MESSAGING_GUARDED_WRITE_PROVIDER_KEYS,
             verify_supported=True,
             requires_credentials=True,
             requires_webhook=True,
             risk_level='medium',
-            owner_text=f'{provider.title} уже имеет signed provider-webhook bridge через единый canonical messaging runtime; native vendor API и outbound ещё не доказаны.',
-            next_required_step='Добавить official vendor auth/native transport, live probe, delivery receipts/rate-limit evidence и только затем отдельно сертифицировать guarded writes.',
+            owner_text=(f'{provider.title} уже имеет signed inbound и approval-gated guarded outbound через единый canonical messaging runtime; live production readiness отдельно не доказана.' if provider_key in MESSAGING_GUARDED_WRITE_PROVIDER_KEYS else f'{provider.title} уже имеет signed provider-webhook bridge через единый canonical messaging runtime; native vendor API и outbound ещё не доказаны.'),
+            next_required_step=('Доказать live credentials/probe, delivery receipts, rate-limit/retry evidence и только затем повышать live/production readiness.' if provider_key in MESSAGING_GUARDED_WRITE_PROVIDER_KEYS else 'Добавить official vendor auth/native transport, live probe, delivery receipts/rate-limit evidence и только затем отдельно сертифицировать guarded writes.'),
             evidence=(
                 _e(f'provider_catalog.{provider_key}', 'provider exists and maps to the canonical messaging channel'),
                 _e('provider_webhook_messaging_bridge', 'signed inbound bridge uses the canonical messaging decoder'),

@@ -7,7 +7,11 @@ from typing import Any
 
 from application.business_autonomy.integration_capability_catalog import CapabilityStatus, list_integration_capabilities
 from application.business_autonomy.provider_admin_contract import ProviderDefinition
-from application.business_autonomy.provider_catalog import BRIDGE_MESSAGING_PROVIDER_KEYS, PROVIDERS
+from application.business_autonomy.provider_catalog import (
+    BRIDGE_MESSAGING_PROVIDER_KEYS,
+    MESSAGING_GUARDED_WRITE_PROVIDER_KEYS,
+    PROVIDERS,
+)
 from runtime.business_autonomy.provider_sync_runtime import ProviderSyncRuntimePlanner
 from runtime.business_autonomy.provider_transport_bindings import ProviderTransportBindings
 
@@ -49,7 +53,6 @@ _PROVIDER_OWNERS: Mapping[str, str] = {
 }
 _HIGH_RISK_DOMAINS = {"ads", "marketplace", "platform_infra"}
 _HIGH_RISK_PROVIDERS = {"sms_connector", "whatsapp_cloud"}
-_GUARDED_WRITE_SUPPORTED: frozenset[str] = frozenset({'vk_messaging', 'max_messaging', 'slack_messaging', 'discord_messaging', 'instagram_messaging', 'messenger_messaging', 'line_messaging', 'viber_messaging', 'email_connector'})
 _GUARDED_WRITE_LIVE_READY: frozenset[str] = frozenset()
 
 
@@ -147,12 +150,12 @@ def _truth_row(provider: ProviderDefinition, *, planner: ProviderSyncRuntimePlan
     read_capabilities, write_capabilities = tuple(plan.read_operations), tuple(plan.write_operations)
     required_credentials, truth_binding = _required_credentials(provider), dict(binding)
     health_requirements = tuple(dict.fromkeys((*required_credentials, *tuple(str(value) for value in binding.get('live_required_secrets', ()) if str(value).strip()))))
-    if provider.provider_key in _GUARDED_WRITE_SUPPORTED:
+    if provider.provider_key in MESSAGING_GUARDED_WRITE_PROVIDER_KEYS:
         truth_binding['sync_path_family'] = str(truth_binding.get('sync_path_family') or '').replace('{operation}', 'operation').replace('{channel_id}', 'channel_id').replace('{ig_user_id}', 'ig_user_id').replace('{page_id}', 'page_id')
     has_placeholder_endpoint, has_real_endpoint = _has_placeholder_endpoint(truth_binding), _has_real_endpoint(truth_binding)
     capability_status = _best_capability_status(provider.provider_key, capability_statuses)
     read_only_supported = bool(read_capabilities) and capability_status not in {CapabilityStatus.CONTRACT_ONLY.value, CapabilityStatus.NOT_IMPLEMENTED.value, CapabilityStatus.NOT_FOUND.value}
-    write_supported, proven_live_write = provider.provider_key in _GUARDED_WRITE_SUPPORTED, provider.provider_key in (_GUARDED_WRITE_SUPPORTED & _GUARDED_WRITE_LIVE_READY)
+    write_supported, proven_live_write = provider.provider_key in MESSAGING_GUARDED_WRITE_PROVIDER_KEYS, provider.provider_key in (MESSAGING_GUARDED_WRITE_PROVIDER_KEYS & _GUARDED_WRITE_LIVE_READY)
     status = _truth_status(capability_status=capability_status, has_real_endpoint=has_real_endpoint,
         has_placeholder_endpoint=has_placeholder_endpoint, read_only_supported=read_only_supported, write_supported=proven_live_write)
     live_ready = status == ProviderTruthStatus.LIVE_READY.value and bool(binding.get("live_ready")) and has_real_endpoint and not has_placeholder_endpoint and proven_live_write

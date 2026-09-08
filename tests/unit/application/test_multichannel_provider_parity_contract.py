@@ -4,13 +4,16 @@ import json
 
 import pytest
 
+from application.business_autonomy.integration_capability_catalog import CapabilityStatus, capability_map
 from application.business_autonomy.non_ai_onboarding_mode import NonAiOperatingMode
 from application.business_autonomy.provider_catalog import (
     BRIDGE_MESSAGING_PROVIDER_KEYS,
     MESSAGING_CHANNEL_PROVIDER_KEYS,
+    MESSAGING_GUARDED_WRITE_PROVIDER_KEYS,
     MESSAGING_INTERNAL_CHANNELS,
     provider_map,
 )
+from application.business_autonomy.provider_truth_matrix import provider_truth_map
 from application.public_site.cta_intake import CTALandingIntakeService, public_integration_marketplace
 from runtime.business_autonomy.provider_sync_runtime import ProviderSyncRuntimePlanner
 from runtime.business_autonomy.provider_webhook_messaging_bridge import resolve_provider_webhook_messaging_ingress
@@ -103,6 +106,20 @@ def test_bridge_providers_are_signed_read_capable_and_write_planned_but_not_publ
             'messenger_messaging': 'native_messenger_send_api_or_provider_webhook_bridge',
         }.get(provider_key, 'provider_webhook_bridge')
         assert marketplace[provider_key]['connection_mode'] == expected_connection_mode
+
+
+def test_bridge_capability_truth_matches_canonical_guarded_write_support_without_claiming_live_ready() -> None:
+    providers, capabilities, truth = provider_map(), capability_map(), provider_truth_map()
+    for provider_key in BRIDGE_MESSAGING_PROVIDER_KEYS:
+        channel = str(providers[provider_key].messaging_channel)
+        capability_id = {'instagram': 'interaction.instagram_direct', 'messenger': 'interaction.facebook_messenger'}.get(channel, f'interaction.{channel}')
+        expected_write = provider_key in MESSAGING_GUARDED_WRITE_PROVIDER_KEYS
+        capability = capabilities[capability_id]
+        assert capability.status is CapabilityStatus.PARTIAL
+        assert capability.production_ready is False
+        assert capability.write_supported is expected_write
+        assert truth[provider_key].write_supported is expected_write
+        assert truth[provider_key].live_ready is False
 
 
 def test_marketplace_exposes_channel_specific_connection_modes() -> None:
