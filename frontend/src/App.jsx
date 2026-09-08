@@ -757,7 +757,7 @@ function Workspace({ data, apiBase, businesses, onRestart, onRetryAccess, onSwit
           <div className="recovery-box"><p>HubSpot есть в архитектуре проекта, но текущий пользовательский реестр ещё не открыл его для безопасного подключения. Поэтому кнопки с фиктивными данными здесь нет.</p></div>
         ) : !hubspotProvider.connected ? (
           <div className="sales-empty-state">
-            <div><strong>Подключите CRM — и здесь появятся факты по контактам и сделкам.</strong><span>Нужен Private App Token только для чтения доступных CRM-объектов.</span></div>
+            <div><strong>Подключите CRM — и здесь появятся факты по контактам и сделкам.</strong><span>Sales Center использует подключение только для чтения. Права самого Private App Token задаются в HubSpot.</span></div>
             <button type="button" className="primary" onClick={() => openCapabilityProvider("hubspot")}>Подключить HubSpot</button>
           </div>
         ) : (
