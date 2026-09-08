@@ -16,15 +16,12 @@ jobs:
     environment: production
     timeout-minutes: 5
     steps:
-      - name: Identify local listener related to remote agent
+      - name: Verify Remote Desktop Commander restart policy
         shell: bash
         run: |
-          set -u
-          for port in 18080 41733; do
-            echo "--- port $port root ---"
-            curl -sS -i --max-time 3 "http://127.0.0.1:${port}/" 2>&1 | head -n 60 || true
-            echo "--- port $port health ---"
-            curl -sS -i --max-time 3 "http://127.0.0.1:${port}/health" 2>&1 | head -n 60 || true
-          done
-          echo '--- tcp owners where visible ---'
-          ss -lntp 2>&1 | grep -E '(:18080|:41733)' || true
+          set -euo pipefail
+          systemctl show remote-desktop-commander.service \
+            -p Restart -p RestartUSec -p StartLimitBurst -p StartLimitIntervalUSec \
+            -p MainPID -p ActiveState -p SubState -p User -p FragmentPath --no-pager
+          echo '--- unit ---'
+          systemctl cat remote-desktop-commander.service
