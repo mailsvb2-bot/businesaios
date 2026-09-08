@@ -6,7 +6,10 @@ from typing import Any
 
 from application.business_autonomy.provider_admin_contract import ProviderDefinition
 from application.business_autonomy.provider_runtime_contract import ProviderLiveProbeResult
-from runtime.business_autonomy.provider_connector_health import ProviderConnectorHealthService
+from runtime.business_autonomy.provider_connector_health import (
+    PROVIDER_HEALTH_CONNECTION_BLOCKING_STATUSES,
+    ProviderConnectorHealthService,
+)
 from runtime.business_autonomy.provider_incident_registry import FileProviderIncidentRegistry
 from runtime.business_autonomy.provider_probe_result_enricher import (
     enrich_probe_result_with_messaging_health,
@@ -52,7 +55,7 @@ class ProviderLiveProbeRuntime:
             incident = self.incident_registry.append({'tenant_id': str(tenant_id), 'business_id': str(business_id), 'provider_key': provider.provider_key, 'kind': 'probe', 'status': 'probe_unsupported', 'severity': 'major', 'category': 'probe', 'message': 'probe transport unsupported', 'metadata': {'binding': binding}})
             result = ProviderLiveProbeResult(provider_key=provider.provider_key, mode=normalized_mode, status='probe_unsupported', ok=False, metadata={'binding': binding, 'health_probe': {'status': health.status, 'reason': health.reason}, 'incident': incident})
             return finalize_probe_result(observability=self.observability, tenant_id=str(tenant_id), provider_key=provider.provider_key, mode=normalized_mode, result=result)
-        if health.status in {'missing_required_secrets', 'invalid_secret_shape', 'misconfigured'}:
+        if health.status in PROVIDER_HEALTH_CONNECTION_BLOCKING_STATUSES:
             incident = self.incident_registry.append({'tenant_id': str(tenant_id), 'business_id': str(business_id), 'provider_key': provider.provider_key, 'kind': 'probe', 'status': 'probe_rejected_misconfigured', 'severity': 'major', 'category': 'probe', 'message': health.reason, 'metadata': {'binding': binding, 'health_status': health.status}})
             result = ProviderLiveProbeResult(provider_key=provider.provider_key, mode=normalized_mode, status='probe_rejected_misconfigured', ok=False, metadata={'binding': binding, 'health_probe': {'status': health.status, 'reason': health.reason}, 'incident': incident})
             result = enrich_probe_result_with_messaging_health(registry=self.channel_health_registry, provider=provider, probe_result=result)

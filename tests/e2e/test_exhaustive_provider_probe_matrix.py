@@ -106,7 +106,9 @@ def test_every_provider_reaches_declared_dry_run_state_without_network(
             business_id="business-probe-matrix",
             probe_mode="dry_run",
         )
-        assert health.status == "ready_for_credentials", provider.provider_key
+        binding = provider_transport_binding_for_key(provider.provider_key)
+        expected_health = "contract_only" if binding.get("contract_only") else "ready_for_credentials"
+        assert health.status == expected_health, provider.provider_key
 
         runtime = ProviderLiveProbeRuntime(
             secret_vault=vault,
@@ -151,7 +153,11 @@ def test_every_provider_live_probe_readiness_matches_transport_binding() -> None
         )
         binding = provider_transport_binding_for_key(provider.provider_key)
         live_probe_ready = bool(binding.get("live_probe_ready", binding.get("live_ready")))
-        expected = "ready_for_live_probe" if live_probe_ready else "live_probe_unsupported"
+        expected = (
+            "contract_only"
+            if binding.get("contract_only")
+            else ("ready_for_live_probe" if live_probe_ready else "live_probe_unsupported")
+        )
         assert health.status == expected, provider.provider_key
         assert bool(health.metadata.get("live_probe_supported")) is live_probe_ready
         cases += 1

@@ -15,11 +15,11 @@ from security.secret_contract import SecretRef
 from security.secret_vault import SecretVault
 
 CANON_PROVIDER_CONNECTOR_HEALTH = True
+PROVIDER_HEALTH_CONNECTION_BLOCKING_STATUSES = frozenset({'missing_required_secrets', 'invalid_secret_shape', 'misconfigured', 'contract_only'})
 _REQUIRED_BY_PROVIDER = {
     'telegram_bot': ('bot_token',),
     'whatsapp_cloud': ('access_token', 'phone_number_id'),
     'email_connector': ('smtp_host', 'smtp_port', 'smtp_security', 'from_address'),
-    'sms_connector': ('api_token', 'sender_id'),
     'generic_website': ('webhook_secret',),
     'webflow': ('api_token',),
     'wordpress': ('application_password',),
@@ -62,6 +62,12 @@ class ProviderConnectorHealthService:
     def probe(self, *, provider: ProviderDefinition, tenant_id: str, business_id: str, probe_mode: str = 'dry_run') -> ProviderHealthProbeResult:
         mode = str(probe_mode or 'dry_run').strip().lower() or 'dry_run'
         binding, present, missing = provider_transport_binding_for_key(provider.provider_key), [], []
+        if bool(binding.get('contract_only')):
+            return ProviderHealthProbeResult(
+                provider_key=provider.provider_key, status='contract_only',
+                probe_mode=mode, reason='vendor_contract_not_selected',
+                metadata={'present_fields': (), 'live_probe_supported': False},
+            )
         required = (*_REQUIRED_BY_PROVIDER.get(provider.provider_key, tuple(field.field_key for field in provider.secret_fields if field.required)), *(binding.get('live_required_secrets', ()) if mode == 'live' else ()))
         for field_key in required:
             value = self._read_optional_secret(
@@ -133,4 +139,4 @@ class ProviderConnectorHealthService:
             return ''
 
 
-__all__ = ['CANON_PROVIDER_CONNECTOR_HEALTH', 'ProviderConnectorHealthService']
+__all__ = ['CANON_PROVIDER_CONNECTOR_HEALTH', 'PROVIDER_HEALTH_CONNECTION_BLOCKING_STATUSES', 'ProviderConnectorHealthService']

@@ -62,6 +62,30 @@ def test_provider_admin_service_stores_secrets_and_onboards_business(tmp_path):
     assert 'region:eu-west-1' in record.persistent_surfaces
 
 
+def test_contract_only_sms_cannot_be_reported_connected(tmp_path):
+    service, registry = _service(tmp_path)
+    status = service.activate_provider(
+        ProviderCredentialSubmission(
+            tenant_id='tenant-a',
+            business_id='sms-a',
+            provider_key='sms_connector',
+            ownership_key='owner:sms-a',
+            requested_by='owner-user',
+            external_ref='sms://unselected-vendor',
+            secrets={'api_token': 'should-not-bind', 'sender_id': 'SHOULDNOTBIND'},
+            metadata={'probe_mode': 'dry_run'},
+        )
+    )
+    assert status.connected is False
+    assert status.onboarding_ready is False
+    assert status.governance_enabled is False
+    assert status.secret_fields_bound == ()
+    health = dict(status.metadata.get('health_probe') or {})
+    assert health.get('status') == 'contract_only'
+    assert health.get('reason') == 'vendor_contract_not_selected'
+    assert registry.get('tenant-a', 'sms-a') is None
+
+
 def test_platform_infra_activation_records_runtime_probe(tmp_path):
     service, _registry = _service(tmp_path)
     status = service.activate_provider(
