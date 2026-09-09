@@ -1,7 +1,7 @@
 .intelligence-panel { display: grid; gap: 20px; }
 .intelligence-title-row { align-items: center; }
 .intelligence-warning { padding: 12px 14px; border: 1px solid var(--line, #d8dde7); border-radius: 12px; background: rgba(148, 163, 184, 0.08); font-size: 14px; }
-.intelligence-metrics { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 12px; }
+.intelligence-metrics { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; }
 .intelligence-metrics article { min-width: 0; padding: 16px; border: 1px solid var(--line, #d8dde7); border-radius: 16px; display: grid; gap: 7px; background: rgba(255, 255, 255, 0.58); }
 .intelligence-metrics small { color: var(--muted, #667085); }
 .intelligence-metrics strong { font-size: 20px; overflow-wrap: anywhere; }
@@ -34,17 +34,39 @@
 .goal-outcome details { min-width: 0; }
 .goal-outcome pre { max-width: 100%; overflow: auto; white-space: pre-wrap; overflow-wrap: anywhere; }
 
+.money-cockpit { display: grid; gap: 14px; padding: 18px; border: 1px solid var(--line, #d8dde7); border-radius: 18px; background: rgba(15, 118, 110, 0.035); }
+.money-cockpit-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; }
+.money-cockpit-head > div { display: grid; gap: 4px; }
+.money-cockpit-head h3 { margin: 0; font-size: 20px; }
+.money-cockpit-head > span { padding: 6px 10px; border-radius: 999px; background: rgba(148, 163, 184, 0.1); color: var(--muted, #667085); font-size: 12px; white-space: nowrap; }
+.money-cockpit .muted-text { margin: 0; }
+.money-metrics { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; }
+.money-metrics > div { min-width: 0; display: grid; gap: 5px; padding: 14px; border: 1px solid var(--line, #d8dde7); border-radius: 14px; background: rgba(255, 255, 255, 0.68); }
+.money-metrics small, .money-metrics span { color: var(--muted, #667085); overflow-wrap: anywhere; }
+.money-metrics small { font-weight: 700; }
+.money-metrics strong { font-size: 20px; overflow-wrap: anywhere; }
+.money-metrics span { font-size: 12px; line-height: 1.4; }
+.money-truth-note { display: grid; gap: 4px; padding: 12px 14px; border-radius: 13px; border: 1px solid var(--line, #d8dde7); }
+.money-truth-note.verified { background: rgba(34, 197, 94, 0.07); }
+.money-truth-note.caution { background: rgba(245, 158, 11, 0.07); }
+.money-truth-note span { color: var(--muted, #667085); font-size: 13px; line-height: 1.45; }
+.money-scope-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+.money-scope-grid > div { display: grid; gap: 5px; padding: 12px 14px; border-radius: 13px; background: rgba(148, 163, 184, 0.07); }
+.money-scope-grid span { color: var(--muted, #667085); font-size: 12px; line-height: 1.45; }
+
 @media (max-width: 980px) {
   .intelligence-metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
 
 @media (max-width: 720px) {
-  .intelligence-columns { grid-template-columns: 1fr; }
+  .intelligence-columns, .money-scope-grid { grid-template-columns: 1fr; }
+  .money-metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .intelligence-title-row { align-items: stretch; }
 }
 
 @media (max-width: 480px) {
-  .intelligence-metrics { grid-template-columns: 1fr; }
+  .intelligence-metrics, .money-metrics { grid-template-columns: 1fr; }
+  .money-cockpit-head { flex-direction: column; }
   .memory-summary { grid-template-columns: 1fr; }
-  .intelligence-card, .intelligence-goal-card { padding: 14px; }
+  .intelligence-card, .intelligence-goal-card, .money-cockpit { padding: 14px; }
 }

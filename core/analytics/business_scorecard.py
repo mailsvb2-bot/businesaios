@@ -114,6 +114,9 @@ class BusinessAnalyticsService:
         success_count = sum(1 for e in normalized if e['event_type'] == et.PURCHASE_SUCCESS)
         failed_count = sum(1 for e in normalized if e['event_type'] == et.PURCHASE_FAILED)
         revenue_total = round(sum(_safe_float(e['payload'].get('amount')) for e in normalized if e['event_type'] == et.PURCHASE_SUCCESS), 2)
+        revenue_money_rows = [(e['payload'].get('amount_minor'), str(e['payload'].get('currency') or '').strip().upper()) for e in normalized if e['event_type'] == et.PURCHASE_SUCCESS]
+        revenue_money_valid = bool(revenue_money_rows) and all(isinstance(amount, int) and not isinstance(amount, bool) and amount >= 0 and len(currency) == 3 and currency.isascii() and currency.isalpha() for amount, currency in revenue_money_rows)
+        revenue_currencies = {currency for _, currency in revenue_money_rows}
         issued = sum(1 for e in normalized if e['event_type'] == et.DECISION_ISSUED)
         executed = sum(1 for e in normalized if e['event_type'] == et.DECISION_EXECUTED)
         blocked = sum(1 for e in normalized if e['event_type'] == et.DECISION_BLOCKED)
@@ -192,7 +195,7 @@ class BusinessAnalyticsService:
             latency=latency,
             diagnosis=diagnosis,
             generated_at_ms=generated,
-            metadata={'analytics_owner': 'core.analytics.business_scorecard'},
+            metadata={'analytics_owner': 'core.analytics.business_scorecard', 'revenue_currency': next(iter(revenue_currencies)) if revenue_money_valid and len(revenue_currencies) == 1 else '', 'revenue_money_status': 'verified_minor_units' if revenue_money_valid and len(revenue_currencies) == 1 else 'mixed_currency' if revenue_money_valid and len(revenue_currencies) > 1 else 'unverified', 'revenue_minor_total': str(sum(amount for amount, _ in revenue_money_rows)) if revenue_money_valid and len(revenue_currencies) == 1 else ''},
         )
 
     def _diagnose(

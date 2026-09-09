@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from fastapi import HTTPException, Request, status
+from fastapi import HTTPException, Query, Request, status
 
 from adapters.api.fastapi.router_support import authorize_request
 
@@ -23,7 +23,7 @@ def register_analytics_routes(*, router, analytics_handlers, security_guard, aut
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(exc)) from exc
 
     @router.get('/analytics/business/{tenant_id}')
-    def analytics_business_scorecard(tenant_id: str, request: Request, window_days: int = 30) -> dict:
+    def analytics_business_scorecard(tenant_id: str, request: Request, window_days: int = Query(30, ge=1, le=3650)) -> dict:
         enforce_public_analytics_security(
             route_path='/analytics/business/{tenant_id}',
             request=request,
@@ -32,7 +32,7 @@ def register_analytics_routes(*, router, analytics_handlers, security_guard, aut
         return analytics_handlers.get_business_scorecard(tenant_id=tenant_id, window_days=window_days)
 
     @router.get('/analytics/dashboard/{tenant_id}')
-    def analytics_dashboard_bundle(tenant_id: str, request: Request, window_days: int = 30) -> dict:
+    def analytics_dashboard_bundle(tenant_id: str, request: Request, window_days: int = Query(30, ge=1, le=3650)) -> dict:
         enforce_public_analytics_security(
             route_path='/analytics/dashboard/{tenant_id}',
             request=request,
