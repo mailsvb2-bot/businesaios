@@ -39,7 +39,12 @@ async function readResponse(resp) {
   } catch {
     parsed = { raw: text };
   }
-  if (!resp.ok) throw new Error(parsed?.detail || `HTTP ${resp.status}`);
+  if (!resp.ok) {
+    const error = new Error(parsed?.detail || `HTTP ${resp.status}`);
+    error.httpStatus = Number(resp.status || 0);
+    error.serverResponded = true;
+    throw error;
+  }
   return parsed;
 }
 
@@ -177,16 +182,99 @@ function providerRecipientContext(providerKey, recipient) {
   return {};
 }
 
+function recipientFieldCopy(providerKey) {
+  const key = String(providerKey || "");
+  if (key === "email_connector") return { label: "Email получателя", placeholder: "name@example.com" };
+  if (["slack_messaging", "discord_messaging"].includes(key)) return { label: "ID канала", placeholder: "ID канала, куда нужно отправить сообщение" };
+  if (key === "vk_messaging") return { label: "ID получателя или диалога", placeholder: "ID пользователя или диалога ВКонтакте" };
+  if (key === "max_messaging") return { label: "ID чата", placeholder: "ID чата MAX" };
+  if (["instagram_messaging", "messenger_messaging", "line_messaging", "viber_messaging"].includes(key)) return { label: "ID получателя", placeholder: "ID получателя в выбранном канале" };
+  return { label: "Получатель", placeholder: "ID пользователя, чата, канала или email" };
+}
+
 function approvalMessagePreview(row) {
   const metadata = row?.metadata || {};
   const resume = metadata.approval_resume_context || {};
   const payload = resume.payload || {};
+  const messages = Array.isArray(payload.messages) ? payload.messages : [];
+  const nestedText = messages.find((item) => item && typeof item === "object" && item.text)?.text;
   return {
     providerKey: String(resume.provider_key || ""),
-    recipient: String(payload.recipient || payload.user_id || payload.channel_id || payload.recipient_id || payload.to || payload.receiver || payload.peer_id || payload.chat_id || ""),
-    text: String(payload.body || payload.text || payload.message || ""),
+    recipient: String(payload.recipient || payload.user_id || payload.channel || payload.channel_id || payload.recipient_id || payload.to || payload.receiver || payload.peer_id || payload.chat_id || ""),
+    text: String(payload.body || payload.text || payload.message || nestedText || ""),
     subject: String(payload.subject || "")
   };
+}
+
+function approvalMatchesPreparedMessage(row, expected) {
+  const preview = approvalMessagePreview(row);
+  const expectedSubject = String(expected.subject || "");
+  const subjectMatches = preview.subject === expectedSubject
+    || (expected.providerKey === "email_connector" && !expectedSubject && preview.subject === "BusinessAIOS notification");
+  return preview.providerKey === expected.providerKey
+    && preview.recipient === expected.recipient
+    && preview.text === expected.text
+    && subjectMatches;
+}
+
+function approvalMatchesDraftIdentity(row, tenantId, actionId) {
+  const tenant = String(tenantId || "").trim();
+  const action = String(actionId || "").trim();
+  if (!tenant || !action) return false;
+  const expectedDecisionId = `api-command:${tenant}:${action}`;
+  const metadata = row?.metadata || {};
+  return [row?.decision_id, row?.subject_id, metadata.decision_id]
+    .some((value) => String(value || "") === expectedDecisionId);
+}
+
+function providerKeyFromActionName(actionName) {
+  const match = /^provider\.([^.]+)\.message_send$/.exec(String(actionName || ""));
+  return match ? match[1] : "";
+}
+
+function resumeCandidateQueueJobId(candidate) {
+  const providerKey = providerKeyFromActionName(candidate?.action_name);
+  const fingerprint = String(candidate?.subject_fingerprint || "").trim();
+  return providerKey && fingerprint ? `provider-sync-${providerKey}-${fingerprint.slice(0, 32)}` : "";
+}
+
+function providerHistoryDisposition(providerKey, row) {
+  const status = String(row?.status || "").trim();
+  const parsed = row?.parsed_response || {};
+  const errorCategory = String(row?.error?.category || "").trim();
+  const acceptedWithReceipt = row?.accepted === true && status === "live_executed" && Boolean(String(parsed.resource_id || "").trim());
+  let delivered = acceptedWithReceipt;
+  let acceptedWithoutDeliveryProof = false;
+  if (String(providerKey || "") === "email_connector" && acceptedWithReceipt) {
+    delivered = row?.transport_response?.smtp?.delivered === true;
+    acceptedWithoutDeliveryProof = !delivered;
+  }
+  const ambiguous = acceptedWithoutDeliveryProof || ["", "ambiguous_delivery", "in_progress"].includes(status) || status.startsWith("provider_queue_")
+    || (status === "live_execution_failed" && !String(parsed.error_code || "").trim()) || errorCategory === "ambiguous_delivery";
+  const terminalNonDelivery = !delivered && !ambiguous && (["rejected_misconfigured", "rejected_provider_write_guard", "rejected_provider_write_requires_queue", "live_transport_unbound", "unsupported_operation"].includes(status)
+    || (status === "live_execution_failed" && Boolean(String(parsed.error_code || "").trim())));
+  return delivered ? "delivered" : terminalNonDelivery ? "terminal_non_delivery" : ambiguous ? "ambiguous" : "unknown";
+}
+
+function resumeCandidateHistoryDisposition(candidate, rows) {
+  const serverDisposition = String(candidate?.completion_disposition || "");
+  if (["delivered", "terminal_non_delivery", "ambiguous", "unknown"].includes(serverDisposition)) return serverDisposition;
+  const jobId = resumeCandidateQueueJobId(candidate);
+  const providerKey = providerKeyFromActionName(candidate?.action_name);
+  const matching = (rows || []).filter((row) => String(row?.queue_job_id || "") === jobId)
+    .sort((left, right) => String(right?.recorded_at_utc || "").localeCompare(String(left?.recorded_at_utc || "")))[0];
+  return jobId && matching ? providerHistoryDisposition(providerKey, matching) : "unknown";
+}
+
+function resumeCandidateCompleted(candidate, rows) {
+  return resumeCandidateHistoryDisposition(candidate, rows) === "delivered";
+}
+
+function approvalDecisionMatchesCorrelation(row, correlationToken, expectedOutcome) {
+  const marker = `[owner-correlation:${String(correlationToken || "")}]`;
+  return Boolean(correlationToken) && (Array.isArray(row?.decisions) ? row.decisions : []).some((decision) =>
+    String(decision?.rationale || "").includes(marker)
+      && String(decision?.outcome || "").toLowerCase() === String(expectedOutcome || "").toLowerCase());
 }
 
 function isSuccessfulLiveEvidence(row) {
@@ -226,7 +314,7 @@ function Workspace({ data, apiBase, businesses, onRestart, onRetryAccess, onSwit
   const baseApi = apiBase.replace(/\/$/, "");
   const workspaceUrl = `${baseApi}/business-workspace/providers`;
   const actionExecuteUrl = `${baseApi}/actions/execute`;
-  const approvalsUrl = `${baseApi}/control-plane/approvals/open`;
+  const approvalsUrl = `${baseApi}/control-plane/approvals/open?business_id=${encodeURIComponent(data.business_id)}`;
   const approvalResumeUrl = `${baseApi}/control-plane/provider-runtime/approval-resume`;
   const customersUrl = `${baseApi}/business-workspace/customers`;
   const acquisitionUrl = `${baseApi}/business-workspace/acquisition-plan`;
@@ -256,6 +344,9 @@ function Workspace({ data, apiBase, businesses, onRestart, onRetryAccess, onSwit
   const [operationBusy, setOperationBusy] = useState("");
   const [operationError, setOperationError] = useState("");
   const [operationResult, setOperationResult] = useState(null);
+  const [operationQueueStale, setOperationQueueStale] = useState(false);
+  const [operationRecovery, setOperationRecovery] = useState(null);
+  const [operationDraftKey, setOperationDraftKey] = useState(() => crypto.randomUUID());
   const [customers, setCustomers] = useState([]);
   const [selectedCustomerId, setSelectedCustomerId] = useState("");
   const [customerTimeline, setCustomerTimeline] = useState([]);
@@ -263,6 +354,9 @@ function Workspace({ data, apiBase, businesses, onRestart, onRetryAccess, onSwit
   const [customerError, setCustomerError] = useState("");
   const [salesBusy, setSalesBusy] = useState(false);
   const [salesError, setSalesError] = useState("");
+
+  const markOperationStale = (recovery) => { setOperationRecovery(recovery); setOperationQueueStale(true); };
+  const clearOperationStale = () => { setOperationRecovery(null); setOperationQueueStale(false); };
 
   const refreshCatalog = async () => {
     if (!apiKey) return [];
@@ -279,15 +373,25 @@ function Workspace({ data, apiBase, businesses, onRestart, onRetryAccess, onSwit
     return rows;
   };
 
-  const refreshOperations = async () => {
-    if (!apiKey) { setOperations({ approvals: [] }); return { approvals: [] }; }
-    const payload = await getJson(approvalsUrl, authHeaders);
+  const refreshOperations = async (approvalId = "") => {
+    if (!apiKey) { setOperations({ approvals: [], resumeCandidates: [] }); return { approvals: [], resumeCandidates: [], lookup: null }; }
+    const payload = await getJson(`${approvalsUrl}${approvalId ? `&approval_id=${encodeURIComponent(approvalId)}` : ""}`, authHeaders);
     const approvals = (Array.isArray(payload.records) ? payload.records : []).filter((row) => {
       const action = String(row?.metadata?.action_name || "");
       const businessId = String(row?.metadata?.approval_resume_context?.business_id || row?.metadata?.business_id || "");
       return action.startsWith("provider.") && action.endsWith(".message_send") && businessId === String(data.business_id || "");
     });
-    const next = { approvals }; setOperations(next); return next;
+    const resumeCandidates = (Array.isArray(payload.resume_candidates) ? payload.resume_candidates : []).filter((row) => {
+      const action = String(row?.action_name || "");
+      return action.startsWith("provider.") && action.endsWith(".message_send") && row?.resume_ready === true && String(row?.business_id || "") === String(data.business_id || "");
+    });
+    const next = {
+      approvals,
+      resumeCandidates,
+      lookup: payload.lookup && typeof payload.lookup === "object" ? payload.lookup : null,
+      timeline: Array.isArray(payload.timeline) ? payload.timeline : []
+    };
+    setOperations(next); return next;
   };
 
   const refreshCustomers = async () => {
@@ -403,12 +507,22 @@ function Workspace({ data, apiBase, businesses, onRestart, onRetryAccess, onSwit
     const required = Array.isArray(row.transport_binding?.live_required_secrets) ? row.transport_binding.live_required_secrets : [];
     const bound = new Set(Array.isArray(row.bound_secret_fields) ? row.bound_secret_fields : []);
     const missing = required.filter((name) => !bound.has(name));
-    const canRequest = Boolean(row.connected && row.write_supported && missing.length === 0);
-    return { ...row, can_request_write: canRequest, missing_live_credentials: missing, status: canRequest ? "ready_for_approval" : !row.connected ? "connect_provider_first" : missing.length ? "live_credentials_missing" : "write_not_ready" };
+    const canRequest = Boolean(row.connected && row.write_supported && row.approval_required === true && missing.length === 0);
+    return { ...row, can_request_write: canRequest, missing_live_credentials: missing, status: canRequest ? "ready_for_approval" : !row.connected ? "connect_provider_first" : missing.length ? "live_credentials_missing" : row.approval_required !== true ? "approval_not_required" : "write_not_ready" };
   });
   const readyOperationProviders = operationProviders.filter((row) => row.can_request_write);
   const activeOperationProvider = readyOperationProviders.find((row) => row.provider_key === operationProviderKey) || readyOperationProviders[0] || null;
+  const operationRecipientCopy = recipientFieldCopy(activeOperationProvider?.provider_key);
   const pendingApprovals = Array.isArray(operations.approvals) ? operations.approvals : [];
+  const serverResumeCandidates = Array.isArray(operations.resumeCandidates) ? operations.resumeCandidates : [];
+  const resumeCandidates = serverResumeCandidates.filter((item) => {
+    const providerKey = providerKeyFromActionName(item?.action_name);
+    return !["delivered", "terminal_non_delivery"].includes(resumeCandidateHistoryDisposition(item, historyByProvider[providerKey] || []));
+  });
+  const terminalResumeCandidates = serverResumeCandidates.filter((item) => {
+    const providerKey = providerKeyFromActionName(item?.action_name);
+    return resumeCandidateHistoryDisposition(item, historyByProvider[providerKey] || []) === "terminal_non_delivery";
+  });
   const selectedCustomer = customers.find((row) => row.customer_id === selectedCustomerId) || customers[0] || null;
   const providerKeyForChannel = (channel) => channel === "email" ? "email_connector" : `${channel}_messaging`;
   const readyIdentityProvider = (identity) => readyOperationProviders.find((row) => row.provider_key === providerKeyForChannel(identity.channel));
@@ -419,6 +533,11 @@ function Workspace({ data, apiBase, businesses, onRestart, onRetryAccess, onSwit
   }, [selectedCustomerId, apiKey]);
 
   const prepareForCustomer = (identity) => {
+    if (operationQueueStale) {
+      setOperationError("Сначала обновите очередь подтверждений. Неразрешённый запрос сохраняет прежний idempotency key и черновик нельзя менять до сверки.");
+      document.getElementById("business-operations-title")?.scrollIntoView({ behavior: "smooth", block: "start" });
+      return;
+    }
     const provider = readyIdentityProvider(identity);
     if (!provider) {
       setOperationError(`Канал ${identity.channel} пока не готов к отправке. Проверьте доступ выше.`);
@@ -426,48 +545,248 @@ function Workspace({ data, apiBase, businesses, onRestart, onRetryAccess, onSwit
     }
     setOperationProviderKey(provider.provider_key);
     setOperationRecipient(String(identity.external_subject || ""));
+    setOperationSubject("");
+    setOperationDraftKey(crypto.randomUUID());
     setOperationError("");
+    document.getElementById("business-operations-title")?.scrollIntoView({ behavior: "smooth", block: "start" });
   };
 
   const runOperation = async (name, url, payload, headers = authHeaders) => {
     setOperationBusy(name);
     setOperationError("");
+    const draftRecovery = { kind: "draft", actionId: operationDraftKey };
+    let result = null;
     try {
-      const result = await postJson(url, payload, headers);
+      result = await postJson(url, payload, headers);
       setOperationResult(result);
-      await refreshOperations();
-      return result;
-    } catch {
-      setOperationError("Действие не выполнено. BusinessAIOS ничего не отправил. Проверьте канал и повторите попытку.");
+    } catch (error) {
+      const status = Number(error?.httpStatus || 0);
+      const definitiveClientRejection = error?.serverResponded === true && status >= 400 && status < 500 && status !== 408;
+      if (definitiveClientRejection) {
+        setOperationError(`Запрос отклонён сервером (HTTP ${status}). Черновик сохранён и остаётся редактируемым; внешнее действие не подтверждено.`);
+      } else {
+        markOperationStale(draftRecovery);
+        setOperationError("Ответ на запрос не получен или сервер не подтвердил безопасный отказ. Не повторяйте действие вслепую: сначала обновите очередь — тот же черновик сохранит idempotency key.");
+      }
+      setOperationBusy("");
       return null;
+    }
+    try {
+      const nextOperations = await refreshOperations();
+      return { result, nextOperations };
+    } catch {
+      markOperationStale(draftRecovery);
+      setOperationError("Запрос обработан, но очередь подтверждений не обновилась. Не повторяйте действие — сначала обновите очередь.");
+      return { result, nextOperations: null };
     } finally { setOperationBusy(""); }
   };
 
-  const prepareMessage = async () => {
+  const refreshActionQueue = async () => {
+    setOperationBusy("refresh_queue"); setOperationError("");
+    const recovery = operationRecovery || { kind: "draft", actionId: operationDraftKey };
+    try {
+      const snapshot = await refreshOperations(recovery.kind === "draft" ? "" : recovery.approvalId);
+      if (recovery.kind === "decision") {
+        const record = snapshot.lookup;
+        const status = String(record?.status || "").toLowerCase();
+        const ownDecision = approvalDecisionMatchesCorrelation(record, recovery.correlationToken, recovery.outcome);
+        if (!record) {
+          clearOperationStale();
+          setOperationError("Approval больше не найден в tenant-scoped хранилище. Повторять старое решение нельзя; очередь разблокирована без догадки о статусе.");
+        } else if (["approved", "rejected", "expired", "cancelled"].includes(status) || (status === "requested" && ownDecision)) {
+          clearOperationStale();
+          setOperationError(status === "requested" ? "Ваше решение найдено по собственному correlation marker. Approval всё ещё ждёт другого подтверждения." : `Фактический статус approval подтверждён targeted lookup: «${status}». Повторять решение не нужно.`);
+        } else {
+          markOperationStale(recovery);
+          setOperationError("Targeted lookup видит approval, но именно ваше решение ещё не доказано. Не повторяйте его вслепую — обновите очередь ещё раз.");
+        }
+        return;
+      }
+      if (recovery.kind === "resume") {
+        const candidate = (snapshot.resumeCandidates || []).find((row) => String(row?.approval_id || "") === String(recovery.approvalId || ""));
+        const signal = candidate || { action_name: recovery.actionName, subject_fingerprint: recovery.subjectFingerprint };
+        const providerKey = providerKeyFromActionName(signal?.action_name);
+        const rows = providerKey ? await loadHistory(providerKey) : [];
+        const disposition = resumeCandidateHistoryDisposition(signal, rows);
+        if (["delivered", "terminal_non_delivery"].includes(disposition) || candidate) {
+          clearOperationStale();
+          setOperationError(disposition === "delivered" ? "Выполнение подтверждено provider-history. Recovery больше не нужен." : disposition === "terminal_non_delivery" ? "Provider-history доказал окончательный отказ без доставки. Повторный resume не нужен; исправьте условия и подготовьте новое действие." : "Approval подтверждён и остаётся доступен в безопасной очереди восстановления выполнения.");
+        } else {
+          markOperationStale(recovery);
+          setOperationError("Не удалось доказать ни завершённое выполнение, ни доступный resume. Не создавайте новое действие — повторите обновление очереди.");
+        }
+        return;
+      }
+      const providerKey = activeOperationProvider?.provider_key || "";
+      const recipient = operationRecipient.trim();
+      const text = operationText.trim();
+      const subject = operationSubject.trim();
+      const actionId = String(recovery.actionId || operationDraftKey);
+      const alreadyPrepared = Boolean(providerKey && recipient && text)
+        && (snapshot.approvals || []).some((row) => approvalMatchesDraftIdentity(row, data.tenant_id, actionId)
+          && approvalMatchesPreparedMessage(row, { providerKey, recipient, text, subject }));
+      if (alreadyPrepared) {
+        clearOperationStale();
+        setOperationText(""); setOperationSubject("");
+        setOperationDraftKey(crypto.randomUUID());
+        setOperationError("Действие уже найдено в очереди подтверждений. Повторная подготовка не нужна.");
+      } else {
+        markOperationStale({ kind: "draft", actionId });
+        setOperationError("Очередь обновлена, но действие ещё не найдено. Неопределённый запрос остаётся заблокированным и сохраняет прежний idempotency key до доказанной сверки.");
+      }
+    } catch {
+      markOperationStale(recovery);
+      setOperationError("Не удалось обновить очередь. Неразрешённая операция остаётся заблокированной до доказанной сверки.");
+    } finally { setOperationBusy(""); }
+  };
+
+  const prepareMessage = async ({ allowStaleRetry = false } = {}) => {
+    const sameDraftRetry = allowStaleRetry && operationRecovery?.kind === "draft" && String(operationRecovery?.actionId || "") === String(operationDraftKey || "");
+    if (operationQueueStale && !sameDraftRetry) {
+      setOperationError("Сначала обновите очередь подтверждений. Повторная подготовка заблокирована, чтобы не создать дубликат.");
+      return;
+    }
     if (!activeOperationProvider || !operationRecipient.trim() || !operationText.trim()) {
       setOperationError("Выберите готовый канал, укажите получателя и текст сообщения.");
       return;
     }
     const recipient = operationRecipient.trim();
-    const result = await runOperation("message_send", actionExecuteUrl, {
+    const messageText = operationText.trim();
+    const subjectText = operationSubject.trim();
+    const providerKey = activeOperationProvider.provider_key;
+    const outcome = await runOperation("message_send", actionExecuteUrl, {
       action_type: "send_message@v1",
-      payload: { business_id: data.business_id, user_id: recipient, text: operationText.trim(), channel: messagingChannelForProvider(activeOperationProvider.provider_key), kind: "owner_manual", ...providerRecipientContext(activeOperationProvider.provider_key, recipient), ...(operationSubject.trim() ? { subject: operationSubject.trim() } : {}) }
-    }, { ...authHeaders, "X-Idempotency-Key": crypto.randomUUID() });
-    if (result) {
+      payload: { business_id: data.business_id, user_id: recipient, text: messageText, channel: messagingChannelForProvider(providerKey), kind: "owner_manual", ...providerRecipientContext(providerKey, recipient), ...(subjectText ? { subject: subjectText } : {}) }
+    }, { ...authHeaders, "X-Idempotency-Key": operationDraftKey, "X-Action-ID": operationDraftKey });
+    if (!outcome || !outcome.nextOperations) return;
+    const preparedApproval = (outcome.nextOperations.approvals || []).some((row) => approvalMatchesDraftIdentity(row, data.tenant_id, operationDraftKey)
+      && approvalMatchesPreparedMessage(row, { providerKey, recipient, text: messageText, subject: subjectText }));
+    const resultStatus = String(outcome.result?.status || "").toLowerCase();
+    const resultReason = String(outcome.result?.reason || outcome.result?.details?.guard_stage || "").toLowerCase();
+    const idempotencyInProgress = resultStatus === "blocked" && resultReason === "idempotency_in_progress";
+    if (resultStatus === "ok" || preparedApproval) {
+      clearOperationStale();
       setOperationText("");
       setOperationSubject("");
+      setOperationDraftKey(crypto.randomUUID());
+    } else if (idempotencyInProgress) {
+      markOperationStale({ kind: "draft", actionId: operationDraftKey });
+      setOperationError("Этот же запрос ещё обрабатывается. Idempotency key сохранён — не создавайте новое действие, сначала обновите очередь.");
+    } else {
+      clearOperationStale();
+      setOperationDraftKey(crypto.randomUUID());
+      setOperationError("Действие не подготовлено. Текст оставлен в форме — проверьте причину в технических деталях и исправьте условия.");
     }
   };
 
   const decideApproval = async (approvalId, approve) => {
     setOperationBusy(`approval:${approvalId}`); setOperationError("");
+    const before = pendingApprovals.find((row) => String(row.approval_id || "") === String(approvalId)) || null;
+    const decisionOutcome = approve ? "approve" : "reject";
+    const correlationToken = crypto.randomUUID();
+    const correlationMarker = `[owner-correlation:${correlationToken}]`;
+    const rationale = `${approve ? "Владелец подтвердил" : "Владелец отклонил"} действие в кабинете BusinessAIOS. ${correlationMarker}`;
+    const actionName = String(before?.metadata?.action_name || before?.action_name || "");
+    const subjectFingerprint = String(before?.subject_fingerprint || before?.metadata?.subject_fingerprint || "");
+    const providerKey = providerKeyFromActionName(actionName);
+    const decisionRecovery = { kind: "decision", approvalId, correlationToken, outcome: decisionOutcome, actionName, subjectFingerprint };
+    const resumeRecovery = { kind: "resume", approvalId, actionName, subjectFingerprint };
+    let decision = null;
+    let finalRecovery = decisionRecovery;
     try {
-      const rationale = approve ? "Владелец подтвердил действие в кабинете BusinessAIOS." : "Владелец отклонил действие в кабинете BusinessAIOS.";
-      const decision = await postJson(`${baseApi}/control-plane/approvals/${encodeURIComponent(approvalId)}/decide`, { outcome: approve ? "approve" : "reject", rationale }, authHeaders);
-      const execution = approve && decision?.status === "approved" ? await postJson(approvalResumeUrl, { approval_id: approvalId }, authHeaders) : null;
-      setOperationResult({ decision, execution }); await refreshOperations();
-    } catch { setOperationError("Не удалось обработать подтверждение. Внешнее действие не считается выполненным."); }
-    finally { setOperationBusy(""); }
+      decision = await postJson(`${baseApi}/control-plane/approvals/${encodeURIComponent(approvalId)}/decide`, { outcome: decisionOutcome, rationale }, authHeaders);
+    } catch (error) {
+      const status = Number(error?.httpStatus || 0);
+      const definitiveClientRejection = error?.serverResponded === true && status >= 400 && status < 500 && status !== 408;
+      if (definitiveClientRejection) {
+        setOperationError(`Решение отклонено сервером (HTTP ${status}). Approval не менялся; очередь остаётся доступной для корректного решения.`);
+        await refreshOperations().catch(() => null);
+        setOperationBusy("");
+        return;
+      }
+      try {
+        const snapshot = await refreshOperations();
+        const pending = (snapshot.approvals || []).find((row) => String(row.approval_id || "") === String(approvalId));
+        const timeline = (snapshot.timeline || []).find((row) => row?.kind === "approval" && String(row?.ref_id || "") === String(approvalId));
+        const status = String(timeline?.status || pending?.status || "").toLowerCase();
+        const ownDecision = approvalDecisionMatchesCorrelation(pending, correlationToken, decisionOutcome);
+        if (approve && status === "approved") {
+          try {
+            const execution = await postJson(approvalResumeUrl, { approval_id: approvalId }, authHeaders);
+            setOperationResult({ decision: { status: "approved", recovered: true }, execution });
+            if (providerKey) await loadHistory(providerKey).catch(() => []);
+            setOperationError("Approval уже подтверждён. BusinessAIOS продолжил выполнение по сохранённому approval без повторного голосования.");
+          } catch {
+            setOperationResult({ decision: { status: "approved", recovered: true }, execution: null });
+            setOperationError("Approval подтверждён, но внешнее выполнение не доказано. Используйте отдельную recovery-карточку, не подтверждая approval заново.");
+          }
+        } else if (status === "rejected") {
+          setOperationResult({ decision: { status: "rejected", recovered: true }, execution: null });
+          setOperationError("Approval уже отклонён. Повторять решение не нужно.");
+        } else if (status === "requested" && ownDecision) {
+          setOperationResult({ decision: { status: "requested", recovered: true }, execution: null });
+          setOperationError("Именно ваше решение найдено по correlation marker, но approval ещё ждёт дополнительного подтверждения.");
+        } else if (status === "requested") {
+          markOperationStale(decisionRecovery);
+          setOperationError("Ответ на решение потерян, а именно ваш голос пока не найден. Не повторяйте решение вслепую — сначала обновите очередь.");
+        } else if (status) {
+          setOperationResult({ decision: { status, recovered: true }, execution: null });
+          setOperationError(`Approval уже завершён со статусом «${status}». Повторять решение не нужно.`);
+        } else {
+          markOperationStale(decisionRecovery);
+          setOperationError("Ответ на решение потерян, а фактический статус approval не удалось доказать. Не повторяйте решение — сначала обновите очередь.");
+        }
+      } catch {
+        markOperationStale(decisionRecovery);
+        setOperationError("Ответ на решение потерян, и фактический статус approval не удалось перечитать. Не повторяйте решение — сначала обновите очередь.");
+      } finally { setOperationBusy(""); }
+      return;
+    }
+    try {
+      if (!approve || decision?.status !== "approved") {
+        setOperationResult({ decision, execution: null });
+        return;
+      }
+      finalRecovery = resumeRecovery;
+      try {
+        const execution = await postJson(approvalResumeUrl, { approval_id: approvalId }, authHeaders);
+        setOperationResult({ decision, execution });
+        if (providerKey) await loadHistory(providerKey).catch(() => []);
+      } catch {
+        setOperationResult({ decision, execution: null });
+        setOperationError("Подтверждение сохранено, но внешнее выполнение не подтверждено. Используйте recovery-карточку этого approval, не подтверждая его повторно.");
+      }
+    } finally {
+      try { await refreshOperations(); }
+      catch {
+        markOperationStale(finalRecovery);
+        setOperationError((current) => current || "Решение обработано, но серверную истину не удалось перечитать. Обновите очередь — тип recovery сохранён.");
+      }
+      setOperationBusy("");
+    }
+  };
+
+  const resumeApprovedOperation = async (approvalId) => {
+    setOperationBusy(`resume:${approvalId}`); setOperationError("");
+    const candidate = serverResumeCandidates.find((row) => String(row?.approval_id || "") === String(approvalId)) || null;
+    const providerKey = providerKeyFromActionName(candidate?.action_name);
+    const recovery = { kind: "resume", approvalId, actionName: String(candidate?.action_name || ""), subjectFingerprint: String(candidate?.subject_fingerprint || "") };
+    try {
+      const execution = await postJson(approvalResumeUrl, { approval_id: approvalId }, authHeaders);
+      setOperationResult({ decision: { status: "approved", recovered: true }, execution });
+      if (providerKey) await loadHistory(providerKey).catch(() => []);
+      setOperationError("Выполнение проверено через сохранённый approval. Подтверждённый provider-history уберёт recovery-карточку; недоказанное выполнение останется доступно для безопасного resume.");
+    } catch {
+      setOperationResult({ decision: { status: "approved", recovered: true }, execution: null });
+      setOperationError("Approval подтверждён, но выполнение всё ещё не доказано. Карточка восстановления сохранена — повторите resume, не подтверждая approval заново.");
+    } finally {
+      try { await refreshOperations(); }
+      catch {
+        markOperationStale(recovery);
+        setOperationError((current) => current || "Статус выполнения не удалось перечитать. Recovery сохранён именно для этого approval.");
+      }
+      setOperationBusy("");
+    }
   };
 
   const runWorkspaceAction = async (name, payload, providerKey = activeProvider?.provider_key) => {
@@ -829,43 +1148,68 @@ function Workspace({ data, apiBase, businesses, onRestart, onRetryAccess, onSwit
 
       <section className="panel operations-panel" aria-labelledby="business-operations-title">
         <div className="panel-title-row">
-          <div><p className="eyebrow">Работа с бизнесом</p><h2 id="business-operations-title">Действия</h2></div>
-          <span className="privacy-badge">С подтверждением</span>
+          <div><p className="eyebrow">Контроль внешних действий</p><h2 id="business-operations-title">Центр действий</h2></div>
+          <span className="privacy-badge">С подтверждением владельца</span>
         </div>
-        <p className="muted-text">BusinessAIOS не отправляет сообщение прямо из формы. Сначала он проверит действие и покажет его вам; только после вашего подтверждения сообщение может уйти во внешний канал.</p>
+        <p className="muted-text">Здесь видно, что требует вашего решения и какие каналы уже готовы к безопасному действию. BusinessAIOS сначала сохраняет и показывает действие; внешнее выполнение возможно только после вашего подтверждения.</p>
+        <div className="action-summary" aria-label="Сводка центра действий">
+          <article><small>Ждут решения</small><strong>{pendingApprovals.length}</strong><span>{pendingApprovals.length ? "проверьте получателя и содержание" : "очередь подтверждений пуста"}</span></article>
+          <article><small>Нужно проверить выполнение</small><strong>{resumeCandidates.length}</strong><span>{resumeCandidates.length ? "approval уже подтверждён — доступен безопасный resume" : "незавершённых resume нет"}</span></article>
+          <article><small>Готовые каналы</small><strong>{readyOperationProviders.length}</strong><span>{readyOperationProviders.length ? "можно подготовить новое действие" : "сначала завершите подключение канала"}</span></article>
+          <article><small>Последнее действие</small><strong>{operationResult ? "Есть результат" : "—"}</strong><span>{operationResult ? "технический результат доступен ниже" : "в этой сессии действий ещё не было"}</span></article>
+        </div>
+        <div className={`action-attention ${operationQueueStale ? "stale" : pendingApprovals.length ? "needs-review" : readyOperationProviders.length ? "ready" : "setup"}`} role="status">
+          <strong>{operationQueueStale ? "Очередь требует обновления" : pendingApprovals.length ? `Вашего решения ждут: ${pendingApprovals.length}` : readyOperationProviders.length ? "Сейчас ничего не ждёт подтверждения" : "Сначала нужен готовый канал"}</strong>
+          <span>{operationQueueStale ? "Последний запрос мог быть обработан, поэтому BusinessAIOS не разрешает повторять подготовку вслепую. Сначала перечитайте очередь." : pendingApprovals.length ? "Подтверждайте только после проверки получателя, темы и текста. После подтверждения BusinessAIOS возобновит именно сохранённое действие." : readyOperationProviders.length ? "Можно подготовить новое сообщение. Нажатие «Подготовить к отправке» ничего внешнему получателю не отправляет." : "Кнопка подготовки появится только когда BusinessAIOS видит подключение и готовый путь внешнего действия."}</span>
+          {operationQueueStale ? <div className="navigation-row"><button type="button" className="ghost small" disabled={Boolean(operationBusy)} onClick={refreshActionQueue}>{operationBusy === "refresh_queue" ? "Обновляем…" : "Обновить очередь"}</button>{operationRecovery?.kind === "draft" ? <button type="button" className="ghost small" disabled={Boolean(operationBusy)} onClick={() => prepareMessage({ allowStaleRetry: true })}>{operationBusy === "message_send" ? "Повторяем…" : "Повторить тот же запрос"}</button> : null}</div> : null}
+        </div>
         {operationError ? <div className="error-box inline-error" role="alert">{operationError}</div> : null}
         <div className="provider-readiness" aria-label="Готовность каналов к действиям">
-          {operationProviders.length ? operationProviders.map((item) => <span className={`status-pill ${item.can_request_write ? "ready" : "preparing"}`} key={item.provider_key}>{item.title}: {item.can_request_write ? "можно подготовить действие" : !item.connected ? "сначала подключите" : item.status === "live_credentials_missing" ? "добавьте данные для отправки" : "отправка пока не готова"}</span>) : <span className="muted-text">Подключённых каналов с доказанным write-путём пока нет.</span>}
+          {operationProviders.length ? operationProviders.map((item) => <span className={`status-pill ${item.can_request_write ? "ready" : "preparing"}`} key={item.provider_key}>{item.title}: {item.can_request_write ? "готов к подготовке" : !item.connected ? "нужно подключить" : item.status === "live_credentials_missing" ? "нужны данные для отправки" : "действие пока недоступно"}</span>) : <span className="muted-text">Каналов с доказанным путём внешнего действия пока нет.</span>}
         </div>
+        {terminalResumeCandidates.length ? <div className="recovery-box" aria-label="Завершённые неуспешные действия">
+          <strong>Выполнение завершилось без доставки</strong>
+          <p>Для этих approvals provider-history доказал окончательный отказ. Повторный resume не предлагается: исправьте подключение или условия и подготовьте новое действие.</p>
+          <div className="approval-list">{terminalResumeCandidates.map((item) => <article className="approval-card" key={`terminal:${item.approval_id}`}><div className="approval-card-head"><div><strong>{item.action_name || "Подтверждённое действие"}</strong><small>Approval: {item.approval_id}</small></div><span>Окончательный отказ</span></div></article>)}</div>
+        </div> : null}
+        {resumeCandidates.length ? <div className="recovery-box" aria-label="Восстановление подтверждённых действий">
+          <strong>Подтверждено — выполнение нужно проверить</strong>
+          <p>Эти approvals уже подтверждены владельцем. Не подтверждайте их повторно: используйте сохранённый resume. Повтор безопасно проходит через тот же серверный dedupe-контур.</p>
+          <div className="approval-list">{resumeCandidates.map((item) => <article className="approval-card" key={`resume:${item.approval_id}`}>
+            <div className="approval-card-head"><div><strong>{item.action_name || "Подтверждённое действие"}</strong><small>Approval: {item.approval_id}</small></div><span>Выполнение не закрыто в UI</span></div>
+            <button type="button" className="primary" disabled={Boolean(operationBusy)} onClick={() => resumeApprovedOperation(item.approval_id)}>{operationBusy === `resume:${item.approval_id}` ? "Проверяем…" : "Проверить / продолжить выполнение"}</button>
+          </article>)}</div>
+        </div> : null}
         <div className="operations-layout">
-          <div className="operations-form">
-            <h3>Подготовить сообщение</h3>
-            {readyOperationProviders.length ? (
-              <>
-                <label>Канал<select aria-label="Канал для действия" value={activeOperationProvider?.provider_key || ""} onChange={(event) => setOperationProviderKey(event.target.value)}>{readyOperationProviders.map((item) => <option value={item.provider_key} key={item.provider_key}>{item.title}</option>)}</select></label>
-                <label>Получатель<input value={operationRecipient} onChange={(event) => setOperationRecipient(event.target.value)} placeholder="ID пользователя, чата, канала или email" /></label>
-                {activeOperationProvider?.provider_key === "email_connector" ? <label>Тема<input value={operationSubject} onChange={(event) => setOperationSubject(event.target.value)} placeholder="Тема письма" /></label> : null}
-                <label>Сообщение<textarea value={operationText} onChange={(event) => setOperationText(event.target.value)} placeholder="Что BusinessAIOS должен отправить после вашего подтверждения" /></label>
-                <button type="button" className="primary" disabled={Boolean(operationBusy)} onClick={prepareMessage}>{operationBusy === "message_send" ? "Готовим…" : "Подготовить к отправке"}</button>
-                <small className="helper-text">Нажатие этой кнопки само по себе ничего внешнему получателю не отправляет.</small>
-              </>
-            ) : <div className="recovery-box"><p>Сначала подключите канал выше. Кнопка отправки появится только когда BusinessAIOS видит подключение и реальный сетевой transport.</p></div>}
-          </div>
           <div className="approval-list">
-            <h3>Ждут вашего подтверждения</h3>
+            <div className="action-column-heading"><div><span className="step-kicker">1 · Проверить</span><h3>Ждут вашего решения</h3></div><strong className="queue-count">{pendingApprovals.length}</strong></div>
             {pendingApprovals.length ? pendingApprovals.map((approval) => {
               const previewRow = approvalMessagePreview(approval);
               const provider = operationProviders.find((item) => item.provider_key === previewRow.providerKey);
               return <article className="approval-card" key={approval.approval_id}>
-                <div><strong>{provider?.title || previewRow.providerKey || "Сообщение"}</strong><small>Получатель: {previewRow.recipient || "—"}</small></div>
+                <div className="approval-card-head"><div><strong>{provider?.title || previewRow.providerKey || "Сообщение"}</strong><small>Получатель: {previewRow.recipient || "—"}</small></div><span>Ждёт решения</span></div>
                 {previewRow.subject ? <p><strong>{previewRow.subject}</strong></p> : null}
                 <p>{previewRow.text || "Текст действия сохранён и ждёт вашего решения."}</p>
-                <div className="navigation-row"><button type="button" className="ghost" disabled={Boolean(operationBusy)} onClick={() => decideApproval(approval.approval_id, false)}>Отклонить</button><button type="button" className="primary" disabled={Boolean(operationBusy)} onClick={() => decideApproval(approval.approval_id, true)}>{operationBusy === `approval:${approval.approval_id}` ? "Выполняем…" : "Подтвердить и выполнить"}</button></div>
+                <small className="helper-text">После подтверждения получатель и содержание берутся из этого сохранённого действия.</small>
+                <div className="navigation-row"><button type="button" className="ghost" disabled={Boolean(operationBusy) || operationQueueStale} onClick={() => decideApproval(approval.approval_id, false)}>Отклонить</button><button type="button" className="primary" disabled={Boolean(operationBusy) || operationQueueStale} onClick={() => decideApproval(approval.approval_id, true)}>{operationBusy === `approval:${approval.approval_id}` ? "Выполняем…" : "Подтвердить и выполнить"}</button></div>
               </article>;
-            }) : <p className="empty-state">Сейчас ничего не ждёт подтверждения.</p>}
+            }) : <p className="empty-state">Очередь пуста. Здесь появится действие после нажатия «Подготовить к отправке».</p>}
+          </div>
+          <div className="operations-form">
+            <div className="action-column-heading"><div><span className="step-kicker">2 · Подготовить</span><h3>Новое сообщение</h3></div></div>
+            {readyOperationProviders.length ? (
+              <>
+                <label>Канал<select aria-label="Канал для действия" disabled={operationQueueStale} value={activeOperationProvider?.provider_key || ""} onChange={(event) => { setOperationProviderKey(event.target.value); setOperationRecipient(""); setOperationSubject(""); setOperationDraftKey(crypto.randomUUID()); }}>{readyOperationProviders.map((item) => <option value={item.provider_key} key={item.provider_key}>{item.title}</option>)}</select></label>
+                <label>{operationRecipientCopy.label}<input disabled={operationQueueStale} value={operationRecipient} onChange={(event) => { setOperationRecipient(event.target.value); setOperationDraftKey(crypto.randomUUID()); }} placeholder={operationRecipientCopy.placeholder} /></label>
+                {activeOperationProvider?.provider_key === "email_connector" ? <label>Тема<input disabled={operationQueueStale} value={operationSubject} onChange={(event) => { setOperationSubject(event.target.value); setOperationDraftKey(crypto.randomUUID()); }} placeholder="Тема письма" /></label> : null}
+                <label>Сообщение<textarea disabled={operationQueueStale} value={operationText} onChange={(event) => { setOperationText(event.target.value); setOperationDraftKey(crypto.randomUUID()); }} placeholder="Что BusinessAIOS должен подготовить для отправки" /></label>
+                <button type="button" className="primary" disabled={Boolean(operationBusy) || operationQueueStale} onClick={prepareMessage}>{operationBusy === "message_send" ? "Готовим…" : "Подготовить к отправке"}</button>
+                <small className="helper-text">Это только создаёт действие для проверки. Нажатие этой кнопки само по себе ничего внешнему получателю не отправляет.</small>
+              </>
+            ) : <div className="recovery-box"><p>Сначала завершите подключение канала. Форма станет доступна только когда BusinessAIOS видит готовый путь внешнего действия.</p></div>}
           </div>
         </div>
-        {operationResult ? <details className="technical-inline"><summary>Результат последнего действия</summary><pre>{JSON.stringify(operationResult, null, 2)}</pre></details> : null}
+        {operationResult ? <details className="technical-inline"><summary>Технические детали последнего действия</summary><pre>{JSON.stringify(operationResult, null, 2)}</pre></details> : null}
       </section>
 
       <AcquisitionPlanner enabled={Boolean(apiKey)} onEvaluate={(payload) => postJson(acquisitionUrl, payload, authHeaders)} />

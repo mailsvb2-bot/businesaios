@@ -1,4 +1,4 @@
-from __future__ import annotations
+from __future__ import annotations  # noqa: I001
 
 from collections.abc import Mapping
 from dataclasses import dataclass, field
@@ -7,21 +7,14 @@ from typing import Any
 
 from application.business_autonomy.business_connector_framework import ConnectorOnboardingService
 from application.business_autonomy.onboarding_contract import BusinessOnboardingRequest
-from application.business_autonomy.provider_admin_contract import (
-    ProviderActivationStatus,
-    ProviderCredentialSubmission,
-    ProviderDefinition,
-)
+from application.business_autonomy.provider_admin_contract import ProviderActivationStatus, ProviderCredentialSubmission, ProviderDefinition
 from application.business_autonomy.provider_catalog import provider_map
 from application.business_autonomy.provider_messaging_binding import describe_provider_messaging_binding
 from application.business_autonomy.provider_messaging_metadata import messaging_binding_to_metadata
 from core.tenancy.normalization import require_tenant_id
 from reliability.idempotency_contract import IdempotencyStore
 from reliability.idempotency_store import InMemoryIdempotencyStore
-from runtime.business_autonomy.provider_connector_health import (
-    PROVIDER_HEALTH_CONNECTION_BLOCKING_STATUSES,
-    ProviderConnectorHealthService,
-)
+from runtime.business_autonomy.provider_connector_health import PROVIDER_HEALTH_CONNECTION_BLOCKING_STATUSES, ProviderConnectorHealthService
 from runtime.business_autonomy.provider_inbound_webhook_service import ProviderInboundWebhookService
 from runtime.business_autonomy.provider_incident_registry import FileProviderIncidentRegistry
 from runtime.business_autonomy.provider_live_probe_runtime import ProviderLiveProbeRuntime
@@ -34,10 +27,7 @@ from runtime.business_autonomy.provider_sync_runtime import ProviderSyncRuntimeP
 from runtime.business_autonomy.provider_sync_scheduler import ProviderSyncScheduler
 from runtime.business_autonomy.provider_transport_bindings import ProviderTransportBindings
 from runtime.business_autonomy.provider_vendor_transports import build_provider_vendor_transports
-from runtime.business_autonomy.provider_webhook_reconciliation import (
-    ProviderWebhookOperationalResponder,
-    ProviderWebhookReconciler,
-)
+from runtime.business_autonomy.provider_webhook_reconciliation import ProviderWebhookOperationalResponder, ProviderWebhookReconciler
 from runtime.business_autonomy.provider_webhook_replay_guard import ProviderWebhookReplayGuard
 from runtime.business_autonomy.provider_webhook_route_registry import ProviderWebhookRouteRegistry
 from runtime.business_autonomy.provider_webhook_runtime import ProviderWebhookRuntime
@@ -76,24 +66,10 @@ class ProviderAdminService:
         return build_provider_vendor_transports(self.secret_vault, media_preparation=self.provider_media)
     def _reconcile_provider_webhook(self, *, provider: ProviderDefinition, tenant_id: str, business_id: str) -> dict[str, Any]:
         try:
-            result = ProviderWebhookReconciler(self.secret_vault).reconcile(
-                provider=provider, tenant_id=tenant_id, business_id=business_id
-            )
-            return {
-                'status': result.status,
-                'ready': result.ready,
-                'callback_url': result.callback_url,
-                **dict(result.metadata or {}),
-            }
+            result = ProviderWebhookReconciler(self.secret_vault).reconcile(provider=provider, tenant_id=tenant_id, business_id=business_id)
+            return {'status': result.status, 'ready': result.ready, 'callback_url': result.callback_url, **dict(result.metadata or {})}
         except Exception as exc:
-            return {
-                'status': 'failed',
-                'ready': False,
-                'callback_url': None,
-                'error': exc.__class__.__name__,
-                'reason': str(exc)[:240],
-            }
-
+            return {'status': 'failed', 'ready': False, 'callback_url': None, 'error': exc.__class__.__name__, 'reason': str(exc)[:240]}
     @staticmethod
     def _webhook_reconciliation_blocks_connection(metadata: Mapping[str, Any]) -> bool:
         return str(metadata.get('status') or '') == 'failed'
@@ -131,6 +107,8 @@ class ProviderAdminService:
     def list_provider_sync_history(self, *, tenant_id: str, business_id: str, provider_key: str, limit: int = 20) -> tuple[dict[str, Any], ...]:
         runtime = ProviderLiveSyncRuntime(self.secret_vault, transports=self._live_transports())
         return runtime.sync_history.list_for_provider(tenant_id=require_tenant_id(tenant_id), business_id=str(business_id).strip(), provider_key=str(provider_key).strip(), limit=limit)
+    def find_provider_sync_history_jobs(self, *, tenant_id: str, business_id: str, provider_key: str, queue_job_ids: tuple[str, ...]) -> dict[str, dict[str, Any]]:
+        return ProviderLiveSyncRuntime(self.secret_vault, transports=self._live_transports()).sync_history.find_for_queue_jobs(tenant_id=require_tenant_id(tenant_id), business_id=str(business_id).strip(), provider_key=str(provider_key).strip(), queue_job_ids=queue_job_ids)
     def list_provider_runtime_incidents(self, *, tenant_id: str, business_id: str, provider_key: str, limit: int = 50) -> tuple[dict[str, Any], ...]:
         return FileProviderIncidentRegistry().list_for_provider(tenant_id=require_tenant_id(tenant_id), business_id=str(business_id).strip(), provider_key=str(provider_key).strip(), limit=limit)
     def describe_provider_response_parser(self, *, provider_key: str) -> dict[str, Any]:

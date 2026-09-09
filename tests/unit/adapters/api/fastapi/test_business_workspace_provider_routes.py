@@ -51,6 +51,7 @@ def _truth_rows():
         'contract-provider': SimpleNamespace(status='contract_only', read_only_supported=True, read_capabilities=('read',), required_credentials=()),
         'partial-provider': SimpleNamespace(status='partial', read_only_supported=True, read_capabilities=('read',), required_credentials=()),
         'hubspot': SimpleNamespace(status='partial', read_only_supported=True, read_capabilities=('contact_sync', 'deal_sync'), required_credentials=('access_token',)),
+        'email_connector': SimpleNamespace(status='partial', read_only_supported=False, write_supported=True, read_capabilities=(), required_credentials=()),
     }
 
 
@@ -183,3 +184,19 @@ def test_activation_validation_tracks_entire_provider_truth_matrix(monkeypatch) 
     with pytest.raises(HTTPException) as exc:
         asyncio.run(endpoint(object()))
     assert (exc.value.status_code, exc.value.detail) == (422, 'provider_secrets_invalid')
+
+
+def test_write_only_provider_history_is_owner_readable_without_enabling_provider_reads(monkeypatch) -> None:
+    handlers, router = _Handlers(), APIRouter()
+    workspace.register_business_workspace_provider_routes(router=router, auth_bundle=object(), provider_admin_handlers=handlers)
+    _authenticate_as(monkeypatch, _principal())
+    monkeypatch.setattr(workspace, 'provider_truth_map', _truth_rows)
+    history = asyncio.run(_route(router, 'GET')(object(), provider_key='email_connector', limit=20))
+    assert history == {'tenant_id': 'tenant-session', 'business_id': 'business-session', 'provider_key': 'email_connector', 'limit': 20}
+    async def fake_json_body(_request):
+        return {'action': 'read', 'provider_key': 'email_connector', 'operation': 'message_send', 'mode': 'live'}
+    monkeypatch.setattr(workspace, 'json_body', fake_json_body)
+    with pytest.raises(HTTPException) as exc:
+        asyncio.run(_route(router, 'POST')(object()))
+    assert exc.value.status_code == 409
+    assert handlers.sync_called is False

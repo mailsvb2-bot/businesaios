@@ -55,7 +55,7 @@ def resume_hint(item: Mapping[str, Any]) -> dict[str, object]:
     return {
         'execution_id': text(item.get('subject_id') or item.get('execution_id')) or None,
         'decision_id': text(item.get('decision_id') or metadata.get('decision_id')) or None,
-        'action_name': action_name or None,
+        'action_name': action_name or None, 'business_id': text(safe_dict(metadata.get('approval_resume_context')).get('business_id') or metadata.get('business_id')) or None,
         'approval_id': text(item.get('approval_id')) or None,
         'override_id': text(item.get('override_id')) or None,
         'subject_fingerprint': text(item.get('subject_fingerprint') or metadata.get('subject_fingerprint')) or None,

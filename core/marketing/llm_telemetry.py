@@ -107,7 +107,7 @@ async def emit_trace_async(*, event_store, debug_sampling, inp, model: str, prov
     if bool(getattr(debug_sampling, "hit", lambda: False)()):
         await append_event(
             event_store,
-            event_type=str(policy.debug_sample_event_type),
+            event_type=str((policy or DEFAULT_MARKETING_LLM_TELEMETRY_POLICY).debug_sample_event_type),
             ctx=ctx,
             payload={
                 "request_id": request_id,

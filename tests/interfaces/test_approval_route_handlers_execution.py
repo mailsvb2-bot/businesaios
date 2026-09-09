@@ -90,3 +90,14 @@ def test_execution_list_open_uses_recent_history_for_resume_candidates() -> None
     assert listing['summary']['resume_candidate_count'] == 1
     assert listing['resume_candidates'][0]['decision_id'] == 'dec-54'
     assert listing['timeline'][0]['decision_id'] == 'dec-54'
+
+
+def test_execution_list_open_can_defer_resume_limit_until_business_filtering() -> None:
+    handlers = ApprovalRouteHandlers(approval_store=InMemoryApprovalStore())
+    first = handlers.submit_execution_approval(tenant_id='tenant-a', execution_id='exec-old', decision_id='dec-old', action_name='provider.slack_messaging.message_send', requested_by='user-1', reason='approval required', required_role_groups=((RoleId.OWNER,),), min_distinct_approvers=1, subject_fingerprint='fp-old')
+    handlers.decide(approval_id=first['approval_id'], tenant_id='tenant-a', actor_id='owner-1', role_id=RoleId.OWNER, outcome=__import__('governance.approval_contract', fromlist=['ApprovalOutcome']).ApprovalOutcome.APPROVE, rationale='approved')
+    for idx in range(60):
+        handlers.submit_execution_approval(tenant_id='tenant-a', execution_id=f'exec-new-{idx}', decision_id=f'dec-new-{idx}', action_name='provider.slack_messaging.message_send', requested_by='user-1', reason='approval required', required_role_groups=((RoleId.OWNER,),), min_distinct_approvers=1, subject_fingerprint=f'fp-new-{idx}')
+    assert not any(row['approval_id'] == first['approval_id'] for row in handlers.list_open(tenant_id='tenant-a')['resume_candidates'])
+    unbounded = handlers.list_open(tenant_id='tenant-a', resume_limit=None)
+    assert any(row['approval_id'] == first['approval_id'] for row in unbounded['resume_candidates'])

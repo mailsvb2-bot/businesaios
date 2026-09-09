@@ -224,7 +224,78 @@ def test_owner_operational_cockpit_never_writes_directly_from_browser() -> None:
     assert "direct_provider_write" not in app
     assert "action_type: \"send_message@v1\"" in app
     assert '"X-Idempotency-Key": crypto.randomUUID()' in app
-    assert "providerRecipientContext" in app and "messagingChannelForProvider" in app
+    assert "providerRecipientContext" in app and "messagingChannelForProvider" in app and "recipientFieldCopy" in app
+    assert 'row.approval_required === true' in app and '"approval_not_required"' in app
+    assert all(token in app for token in ("Email получателя", "ID канала", "ID получателя или диалога", "ID чата", "ID получателя"))
+    assert all(token in app for token in ("Центр действий", "Ждут решения", "Готовые каналы", "Вашего решения ждут", "После подтверждения BusinessAIOS возобновит именно сохранённое действие.", "Технические детали последнего действия"))
+    assert "Это только создаёт действие для проверки. Нажатие этой кнопки само по себе ничего внешнему получателю не отправляет." in app
+    styles = _read("styles.css")
+    assert all(selector in styles for selector in (".action-summary", ".action-attention", ".action-column-heading", ".approval-card-head"))
+    assert 'document.getElementById("business-operations-title")?.scrollIntoView' in app
+    assert 'setOperationRecipient(""); setOperationSubject("");' in app
+    assert 'setOperationRecipient(String(identity.external_subject || ""));' in app and 'setOperationSubject("");' in app
+    assert "Подтверждение сохранено, но внешнее выполнение не подтверждено." in app
+    assert "Ответ на решение потерян, и фактический статус approval не удалось перечитать." in app
+    assert "именно ваш голос пока не найден" in app
+    assert "approvalDecisionMatchesCorrelation" in app and "owner-correlation" in app
+    assert "Approval уже завершён со статусом" in app
+    assert 'try { await refreshOperations(); }' in app
+    assert 'markOperationStale(' in app and 'clearOperationStale()' in app
+    assert "preparedApproval" in app and 'outcome.result?.status' in app
+    assert "approvalMatchesPreparedMessage(row" in app
+    assert all(token in app for token in ('payload.channel', 'payload.messages', 'nestedText', 'BusinessAIOS notification'))
+    assert "preview.providerKey === expected.providerKey" in app
+    assert "preview.recipient === expected.recipient" in app and "preview.text === expected.text" in app and "subjectMatches" in app
+    assert "Действие не подготовлено. Текст оставлен в форме" in app
+    assert "operationQueueStale" in app and 'const refreshActionQueue = async () =>' in app
+    assert 'error.httpStatus = Number(resp.status || 0)' in app and 'error.serverResponded = true' in app
+    assert 'definitiveClientRejection' in app and 'status >= 400 && status < 500 && status !== 408' in app
+    assert "Запрос отклонён сервером (HTTP ${status}). Черновик сохранён и остаётся редактируемым" in app
+    assert '"X-Idempotency-Key": operationDraftKey' in app and '"X-Action-ID": operationDraftKey' in app
+    assert 'useState(() => crypto.randomUUID())' in app
+    assert 'approvalMatchesDraftIdentity(row, data.tenant_id, operationDraftKey)' in app
+    assert '`api-command:${tenant}:${action}`' in app
+    assert "Действие уже найдено в очереди подтверждений. Повторная подготовка не нужна." in app
+    assert "Неопределённый запрос остаётся заблокированным" in app
+    assert 'resultReason === "idempotency_in_progress"' in app
+    assert "Этот же запрос ещё обрабатывается. Idempotency key сохранён" in app
+    assert "Неразрешённый запрос сохраняет прежний idempotency key" in app
+    assert 'allowStaleRetry' in app and 'sameDraftRetry' in app and 'Повторить тот же запрос' in app
+    assert 'operationRecovery?.kind === "draft"' in app and 'prepareMessage({ allowStaleRetry: true })' in app
+    assert "Решение отклонено сервером (HTTP ${status}). Approval не менялся" in app
+    assert 'catch (error)' in app and 'definitiveClientRejection' in app
+    assert 'disabled={operationQueueStale} value={activeOperationProvider?.provider_key || ""}' in app
+    assert 'disabled={operationQueueStale} value={operationRecipient}' in app
+    assert 'disabled={operationQueueStale} value={operationSubject}' in app
+    assert 'disabled={operationQueueStale} value={operationText}' in app
+    refresh_block = app.split('const refreshActionQueue = async () =>', 1)[1].split('const prepareMessage = async ({ allowStaleRetry = false } = {}) =>', 1)[0]
+    assert refresh_block.count('setOperationDraftKey(crypto.randomUUID())') == 1
+    assert 'if (alreadyPrepared)' in refresh_block and 'else {' in refresh_block
+    refresh_operations_block = app.split('const refreshOperations = async (approvalId = \"\") =>', 1)[1].split('const refreshCustomers = async () =>', 1)[0]
+    assert 'setOperationQueueStale(false)' not in refresh_operations_block
+    assert 'clearOperationStale()' in refresh_block and 'markOperationStale(' in refresh_block
+    assert 'recovery.kind === "decision"' in refresh_block and 'recovery.kind === "resume"' in refresh_block
+    assert "Неопределённый запрос остаётся заблокированным" in app
+    assert 'disabled={Boolean(operationBusy) || operationQueueStale} onClick={() => decideApproval' in app
+    assert "Запрос обработан, но очередь подтверждений не обновилась." in app
+    assert "Повторная подготовка заблокирована, чтобы не создать дубликат." in app
+    assert "Обновить очередь" in app and 'disabled={Boolean(operationBusy) || operationQueueStale}' in app
+    assert 'serverResumeCandidates' in app and 'payload.resume_candidates' in app
+    assert 'String(row?.business_id || "") === String(data.business_id || "")' in app
+    assert 'resumeCandidateQueueJobId' in app and 'resumeCandidateCompleted' in app
+    assert 'providerHistoryDisposition' in app and 'resumeCandidateHistoryDisposition' in app
+    assert 'candidate?.completion_disposition' in app and 'serverDisposition' in app
+    assert 'terminal_non_delivery' in app and 'parsed.resource_id' in app
+    assert 'row?.transport_response?.smtp?.delivered === true' in app
+    assert 'terminalResumeCandidates' in app and 'Выполнение завершилось без доставки' in app and 'Окончательный отказ' in app
+    assert 'refreshOperations(recovery.kind === \"draft\" ? \"\" : recovery.approvalId)' in app
+    assert 'const record = snapshot.lookup' in app and 'Targeted lookup видит approval' in app
+    assert '?business_id=${encodeURIComponent(data.business_id)}' in app and '&approval_id=${encodeURIComponent(approvalId)}' in app and 'lookup: payload.lookup' in app
+    assert 'queue_job_id' in app and 'subject_fingerprint' in app
+    assert 'const resumeApprovedOperation = async (approvalId) =>' in app
+    assert 'Проверить / продолжить выполнение' in app
+    assert 'Подтверждено — выполнение нужно проверить' in app
+    assert 'тот же серверный dedupe-контур' in app
 
 
 def test_owner_workspace_sales_center_uses_confirmed_hubspot_history_without_fake_pipeline_metrics() -> None:
