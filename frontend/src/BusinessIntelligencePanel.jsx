@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import "./BusinessIntelligencePanel.css";
+import { buildIntelligenceNextSteps } from "./intelligenceNextSteps.js";
 
 const REASON_COPY = {
   low_offer_ctr: "Мало переходов после показа предложения",
@@ -63,7 +64,7 @@ function PatternList({ title, items, empty }) {
   return <div className="intelligence-list"><strong>{title}</strong>{items?.length ? <ul>{items.slice(0, 5).map((item) => <li key={String(item)}>{humanText(item)}</li>)}</ul> : <small>{empty}</small>}</div>;
 }
 
-export function BusinessIntelligencePanel({ enabled, initialGoal, onLoad, onRunGoal }) {
+export function BusinessIntelligencePanel({ enabled, initialGoal, onLoad, onRunGoal, onOpenSurface }) {
   const [snapshot, setSnapshot] = useState({ analytics: null, memory: null, recentRuns: [], errors: [] });
   const [loading, setLoading] = useState(Boolean(enabled));
   const [loadError, setLoadError] = useState("");
@@ -113,10 +114,12 @@ export function BusinessIntelligencePanel({ enabled, initialGoal, onLoad, onRunG
   const diagnosis = business.diagnosis || {};
   const memory = snapshot.memory || {};
   const outcome = useMemo(() => goalResult ? goalOutcome(goalResult) : null, [goalResult]);
+  const nextSteps = useMemo(() => buildIntelligenceNextSteps(diagnosis.reasons || []), [diagnosis.reasons]);
 
-  const runGoal = async () => {
-    const clean = goal.trim();
+  const runGoal = async (suggestedGoal = "") => {
+    const clean = String(suggestedGoal || goal).trim();
     if (!clean || !enabled || !onRunGoal) return;
+    if (suggestedGoal) setGoal(clean);
     setGoalBusy(true);
     setGoalError("");
     setGoalResult(null);
@@ -165,6 +168,15 @@ export function BusinessIntelligencePanel({ enabled, initialGoal, onLoad, onRunG
         <article><small>Исполнение решений</small><strong>{percent(decisions.execution_ratio)}</strong><span>заблокировано: {percent(decisions.blocked_ratio)}</span></article>
         <article><small>Конверсия в покупку</small><strong>{percent(funnel.visitor_to_purchase_rate)}</strong><span>клиентов в событиях: {metric(funnel.visitors)}</span></article>
       </div>
+
+      {nextSteps.length ? <article className="intelligence-next-steps" aria-labelledby="business-next-steps-title">
+        <div className="next-steps-heading"><div><p className="eyebrow">Следующие шаги</p><h3 id="business-next-steps-title">Что имеет смысл разобрать сейчас</h3></div><span>{nextSteps.length} по текущим фактам</span></div>
+        <p className="muted-text">Шаги появляются только из текущих диагнозов Analytics. Нажатие «Разобрать» передаёт цель существующему DecisionCore в режиме советника; оно не отправляет сообщения, не меняет рекламу и не тратит деньги.</p>
+        <div className="next-step-grid">{nextSteps.map((step) => <div className="next-step-card" key={step.reason}>
+          <div><small>Почему сейчас</small><strong>{step.title}</strong><p>{step.why}</p></div>
+          <div className="next-step-actions"><button type="button" className="primary small" disabled={!enabled || goalBusy} onClick={() => runGoal(step.goal)}>{goalBusy && goal === step.goal ? "Разбираем…" : "Разобрать с DecisionCore"}</button><button type="button" className="ghost small" disabled={!onOpenSurface} onClick={() => onOpenSurface?.(step.surfaceId)}>{step.surfaceLabel}</button></div>
+        </div>)}</div>
+      </article> : null}
 
       <div className="intelligence-columns">
         <article className="intelligence-card">

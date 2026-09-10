@@ -126,6 +126,9 @@ def test_public_repo_self_hosted_workflow_is_manual_and_trust_gated() -> None:
     assert "pull_request_target:" not in text
     assert "runs-on: [self-hosted, linux, production]" in text
     assert "runs-on: [self-hosted, windows, x64, physical-hardware]" in text
+    actionlint = (ROOT / ".github" / "actionlint.yaml").read_text(encoding="utf-8")
+    assert "- production" in actionlint
+    assert "- physical-hardware" in actionlint
     assert "needs: trust_gate" in text
     assert "trusted certification accepts current main only" in text
     assert "Deep Release SHA mismatch" in text
