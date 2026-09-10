@@ -62,6 +62,11 @@ class FileDistributedDocumentStore:
         items.sort(key=lambda row: str(row.get("updated_at_utc") or row.get("updated_at") or ""), reverse=True)
         return tuple(items[: max(1, int(limit))])
 
+    def find_exact_many(self, *, collection: str, fields: Mapping[str, object], key_field: str, keys: tuple[str, ...]) -> Mapping[str, Mapping[str, Any]]:
+        wanted = {str(key) for key in keys}
+        with self._lock:
+            rows = sorted((dict(value) for value in self._read_collection(collection).values() if str(value.get(key_field) or '') in wanted and all(str(value.get(key) or '') == str(expected) for key, expected in fields.items())), key=lambda row: str(row.get("updated_at_utc") or row.get("updated_at") or ""))
+        return {str(row.get(key_field) or ''): row for row in rows}
     def _collection_path(self, collection: str) -> Path:
         normalized = str(collection).strip().replace("/", "__")
         return self._root_dir / f"{normalized}.json"

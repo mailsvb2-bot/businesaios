@@ -14,7 +14,7 @@ from runtime.messaging.channel_normalizer import normalize_channel
 from runtime.wiring import load_archived_decision
 
 CANON_API_PROVIDER_ADMIN_ROUTE_HANDLERS = True
-
+_PROVIDER_MESSAGE_ACTIONS = {'provider.vk_messaging.message_send': 'vk_messaging', 'provider.max_messaging.message_send': 'max_messaging', 'provider.slack_messaging.message_send': 'slack_messaging', 'provider.discord_messaging.message_send': 'discord_messaging', 'provider.instagram_messaging.message_send': 'instagram_messaging', 'provider.messenger_messaging.message_send': 'messenger_messaging', 'provider.line_messaging.message_send': 'line_messaging', 'provider.viber_messaging.message_send': 'viber_messaging', 'provider.email_connector.message_send': 'email_connector'}
 
 def _approval_completion_truth(*, provider_key: str, result: Mapping[str, Any]) -> tuple[bool, bool, bool]:
     status = str(result.get('status') or '').strip()
@@ -30,6 +30,9 @@ def _approval_completion_truth(*, provider_key: str, result: Mapping[str, Any]) 
     ambiguous = accepted_without_delivery_proof or status in {'', 'ambiguous_delivery', 'in_progress'} or status.startswith('provider_queue_') or (status == 'live_execution_failed' and not bool(parsed.get('error_code'))) or error_category == 'ambiguous_delivery'
     terminal_non_delivery = not delivered and not ambiguous and (status in {'rejected_misconfigured', 'rejected_provider_write_guard', 'rejected_provider_write_requires_queue', 'live_transport_unbound', 'unsupported_operation'} or (status == 'live_execution_failed' and bool(parsed.get('error_code'))))
     return delivered, ambiguous, terminal_non_delivery
+def _reject(condition: bool, reason: str) -> None:
+    if condition:
+        raise RuntimeError(reason)
 @dataclass(frozen=True)
 class ProviderAdminRouteHandlers:
     service_factory: Any = build_business_autonomy_guarded_service
@@ -160,54 +163,42 @@ class ProviderAdminRouteHandlers:
     def enqueue_provider_sync(self, *, payload: Mapping[str, Any]) -> dict[str, Any]:
         data = dict(payload or {})
         return self._service(str(data.get('business_id') or '').strip()).enqueue_provider_sync(tenant_id=str(data.get('tenant_id') or '').strip(), business_id=str(data.get('business_id') or '').strip(), provider_key=str(data.get('provider_key') or '').strip(), operation=str(data.get('operation') or '').strip(), mode=str(data.get('mode') or 'live').strip() or 'live', payload=dict(data.get('payload') or {}))
-    def resume_approved_message(self, *, tenant_id: str, approval_id: str) -> dict[str, Any]:
+    def resume_approved_message(self, *, tenant_id: str, approval_id: str, resolve_only: bool = False) -> dict[str, Any]:
         record = self.approval_store_factory().get(str(approval_id).strip())
         if record is None:
             raise ValueError(f'approval not found: {approval_id}')
-        if str(record.request.tenant_id) != str(tenant_id):
-            raise RuntimeError('cross_tenant_provider_approval_resume_forbidden')
-        if str(getattr(record.status, 'value', record.status)) != 'approved':
-            raise RuntimeError(f'provider_approval_not_approved:{getattr(record.status, "value", record.status)}')
+        _reject(str(record.request.tenant_id) != str(tenant_id), 'cross_tenant_provider_approval_resume_forbidden')
+        _reject(str(getattr(record.status, 'value', record.status)) != 'approved', f'provider_approval_not_approved:{getattr(record.status, "value", record.status)}')
         request_metadata = dict(record.request.metadata or {})
         action_name, decision_id = str(request_metadata.get('action_name') or '').strip(), str(request_metadata.get('decision_id') or '').strip()
-        provider_key = {'provider.vk_messaging.message_send': 'vk_messaging', 'provider.max_messaging.message_send': 'max_messaging', 'provider.slack_messaging.message_send': 'slack_messaging', 'provider.discord_messaging.message_send': 'discord_messaging', 'provider.instagram_messaging.message_send': 'instagram_messaging', 'provider.messenger_messaging.message_send': 'messenger_messaging', 'provider.line_messaging.message_send': 'line_messaging', 'provider.viber_messaging.message_send': 'viber_messaging', 'provider.email_connector.message_send': 'email_connector'}.get(action_name)
-        if provider_key is None:
-            raise RuntimeError(f'approval_not_provider_message_send:{action_name}')
-        if not decision_id:
-            raise RuntimeError('provider_approval_decision_id_missing')
+        provider_key = _PROVIDER_MESSAGE_ACTIONS.get(action_name)
+        _reject(provider_key is None, f'approval_not_provider_message_send:{action_name}')
+        _reject(not decision_id, 'provider_approval_decision_id_missing')
         envelope = self.decision_loader(tenant_id=str(tenant_id), decision_id=decision_id)
         decision = getattr(envelope, 'decision', None)
-        if decision is None or str(getattr(decision, 'decision_id', '') or '') != decision_id:
-            raise RuntimeError('provider_approval_decision_archive_mismatch')
+        _reject(decision is None or str(getattr(decision, 'decision_id', '') or '') != decision_id, 'provider_approval_decision_archive_mismatch')
         archived_payload = dict(getattr(decision, 'payload', {}) or {})
-        if str(archived_payload.get('tenant_id') or tenant_id) != str(tenant_id):
-            raise RuntimeError('provider_approval_resume_tenant_mismatch')
+        _reject(str(archived_payload.get('tenant_id') or tenant_id) != str(tenant_id), 'provider_approval_resume_tenant_mismatch')
         resume_context = request_metadata.get('approval_resume_context')
-        if not isinstance(resume_context, Mapping) and str(getattr(decision, 'action', '') or '') != 'send_message@v1':
-            raise RuntimeError('provider_approval_resume_requires_send_message_v1')
+        _reject(not isinstance(resume_context, Mapping) and str(getattr(decision, 'action', '') or '') != 'send_message@v1', 'provider_approval_resume_requires_send_message_v1')
         provider_payload: dict[str, Any] | None = None
         if isinstance(resume_context, Mapping):
             context = dict(resume_context)
-            if str(context.get('provider_key') or '').strip() != provider_key:
-                raise RuntimeError('provider_approval_resume_provider_mismatch')
-            if str(context.get('operation') or '').strip() != 'message_send':
-                raise RuntimeError('provider_approval_resume_operation_mismatch')
+            _reject(str(context.get('provider_key') or '').strip() != provider_key, 'provider_approval_resume_provider_mismatch')
+            _reject(str(context.get('operation') or '').strip() != 'message_send', 'provider_approval_resume_operation_mismatch')
             business_id = str(context.get('business_id') or '').strip()
             approved_payload = context.get('payload')
-            if not isinstance(approved_payload, Mapping):
-                raise RuntimeError('provider_approval_resume_payload_missing')
+            _reject(not isinstance(approved_payload, Mapping), 'provider_approval_resume_payload_missing')
             provider_payload = dict(approved_payload)
-            if any(str(key).startswith('_') for key in provider_payload):
-                raise RuntimeError('provider_approval_resume_payload_contains_internal_controls')
+            _reject(any(str(key).startswith('_') for key in provider_payload), 'provider_approval_resume_payload_contains_internal_controls')
         else:
             expected_channel = {'vk_messaging': 'vk', 'max_messaging': 'max', 'slack_messaging': 'slack', 'discord_messaging': 'discord', 'instagram_messaging': 'instagram', 'messenger_messaging': 'messenger', 'line_messaging': 'line', 'viber_messaging': 'viber', 'email_connector': 'email'}[provider_key]
             business_id = str(archived_payload.get('business_id') or '').strip()
-            if normalize_channel(str(archived_payload.get('channel') or '')) != expected_channel:
-                raise RuntimeError('provider_approval_resume_channel_mismatch')
-            if provider_key in {'slack_messaging', 'discord_messaging'} and not str(archived_payload.get('channel_id') or '').strip():
-                raise RuntimeError('provider_approval_resume_channel_id_missing')
-        if not business_id:
-            raise RuntimeError('provider_approval_resume_business_id_missing')
+            _reject(normalize_channel(str(archived_payload.get('channel') or '')) != expected_channel, 'provider_approval_resume_channel_mismatch')
+            _reject(provider_key in {'slack_messaging', 'discord_messaging'} and not str(archived_payload.get('channel_id') or '').strip(), 'provider_approval_resume_channel_id_missing')
+        _reject(not business_id, 'provider_approval_resume_business_id_missing')
+        if resolve_only:
+            return {'business_id': business_id}
         service = self._service(business_id)
         if provider_payload is None:
             provider_payload = ProviderPayloadNormalizers().normalize_outbound(provider=service.provider_registry.get(provider_key), operation='message_send', payload={'user_id': str(archived_payload.get('user_id') or archived_payload.get('recipient') or archived_payload.get('email') or ''), 'text': str(archived_payload.get('text') or archived_payload.get('body') or ''), **({'subject': archived_payload.get('subject')} if archived_payload.get('subject') else {}), **{key: archived_payload[key] for key in ('peer_id', 'chat_id', 'random_id', 'channel_id') if archived_payload.get(key) not in {None, ''}}})
@@ -220,6 +211,17 @@ class ProviderAdminRouteHandlers:
         if callable(self.approval_completion_handler) and (delivered or terminal_non_delivery or ambiguous):
             self.approval_completion_handler(tenant_id=str(tenant_id), approval_id=str(record.request.approval_id), dedup_key=str(completion.get('dedup_key') or ''), reservation_id=str(completion.get('reservation_id') or ''), delivered=delivered, ambiguous=ambiguous)
         return {'tenant_id': tenant_id, 'business_id': business_id, 'provider_key': provider_key, 'approval_id': record.request.approval_id, 'decision_id': decision_id, 'execution': execution}
+    def resolve_approved_message_business_id(self, *, tenant_id: str, approval_id: str) -> str:
+        return str(self.resume_approved_message(tenant_id=tenant_id, approval_id=approval_id, resolve_only=True)['business_id'])
+    def approved_message_completion_dispositions(self, *, tenant_id: str, business_id: str, candidates: tuple[Mapping[str, Any], ...]) -> dict[str, str]:
+        service = self._service(business_id)
+        identities = {str(row.get('approval_id') or ''): (_PROVIDER_MESSAGE_ACTIONS.get(str(row.get('action_name') or '')), str(row.get('subject_fingerprint') or '').strip()) for row in candidates}
+        identities = {approval_id: (provider_key, f'provider-sync-{provider_key}-{fingerprint[:32]}') for approval_id, (provider_key, fingerprint) in identities.items() if approval_id and provider_key and fingerprint}
+        histories = {provider_key: service.find_provider_sync_history_jobs(tenant_id=tenant_id, business_id=business_id, provider_key=provider_key, queue_job_ids=tuple(job_id for candidate_provider, job_id in identities.values() if candidate_provider == provider_key)) for provider_key in {provider_key for provider_key, _ in identities.values()}}
+        def disposition(provider_key: str, row: Mapping[str, Any] | None) -> str:
+            delivered, ambiguous, terminal = _approval_completion_truth(provider_key=provider_key, result=row or {})
+            return 'delivered' if delivered else 'terminal_non_delivery' if terminal else 'ambiguous' if ambiguous else 'unknown'
+        return {approval_id: disposition(provider_key, histories.get(provider_key, {}).get(job_id)) for approval_id, (provider_key, job_id) in identities.items()}
     def tick_provider_sync_queue(self, *, tenant_id: str, worker_id: str = 'provider-runtime-worker') -> dict[str, Any]:
         return self._service('default-business').tick_provider_sync_queue(tenant_id=tenant_id, worker_id=worker_id)
     def list_provider_queue_jobs(self, *, tenant_id: str, business_id: str | None = None, provider_key: str, limit: int = 50) -> dict[str, Any]:

@@ -19,6 +19,7 @@ def _runtime_root() -> Path:
 class ProviderSyncHistoryStore(Protocol):
     def append(self, row: Mapping[str, Any]) -> dict[str, Any]: ...
     def list_for_provider(self, *, tenant_id: str, business_id: str, provider_key: str, limit: int = 50) -> tuple[dict[str, Any], ...]: ...
+    def find_for_queue_jobs(self, *, tenant_id: str, business_id: str, provider_key: str, queue_job_ids: tuple[str, ...]) -> dict[str, dict[str, Any]]: ...
 
 
 @dataclass
@@ -34,8 +35,9 @@ class InMemoryProviderSyncHistoryStore:
         rows = [dict(item) for item in self.rows if str(item.get('tenant_id')) == str(tenant_id) and str(item.get('business_id')) == str(business_id) and str(item.get('provider_key')) == str(provider_key)]
         rows.sort(key=lambda row: str(row.get('recorded_at_utc') or ''), reverse=True)
         return tuple(rows[:max(1, int(limit))])
-
-
+    def find_for_queue_jobs(self, *, tenant_id: str, business_id: str, provider_key: str, queue_job_ids: tuple[str, ...]) -> dict[str, dict[str, Any]]:
+        wanted = {str(job_id) for job_id in queue_job_ids}
+        return {str(item.get('queue_job_id')): dict(item) for item in self.rows if str(item.get('queue_job_id')) in wanted and str(item.get('tenant_id')) == str(tenant_id) and str(item.get('business_id')) == str(business_id) and str(item.get('provider_key')) == str(provider_key)}
 @dataclass(frozen=True)
 class FileProviderSyncHistoryStore:
     documents: FileDistributedDocumentStore
@@ -67,7 +69,8 @@ class FileProviderSyncHistoryStore:
                 break
         result.sort(key=lambda row: str(row.get('recorded_at_utc') or ''), reverse=True)
         return tuple(result)
-
+    def find_for_queue_jobs(self, *, tenant_id: str, business_id: str, provider_key: str, queue_job_ids: tuple[str, ...]) -> dict[str, dict[str, Any]]:
+        return {job_id: dict(row) for job_id, row in self.documents.find_exact_many(collection=self.collection, fields={'tenant_id': tenant_id, 'business_id': business_id, 'provider_key': provider_key}, key_field='queue_job_id', keys=queue_job_ids).items()}
 
 @dataclass(frozen=True)
 class ProviderSyncHistory:
@@ -78,6 +81,8 @@ class ProviderSyncHistory:
 
     def list_for_provider(self, *, tenant_id: str, business_id: str, provider_key: str, limit: int = 50) -> tuple[dict[str, Any], ...]:
         return self.store.list_for_provider(tenant_id=tenant_id, business_id=business_id, provider_key=provider_key, limit=limit)
+    def find_for_queue_jobs(self, *, tenant_id: str, business_id: str, provider_key: str, queue_job_ids: tuple[str, ...]) -> dict[str, dict[str, Any]]:
+        return self.store.find_for_queue_jobs(tenant_id=tenant_id, business_id=business_id, provider_key=provider_key, queue_job_ids=queue_job_ids)
 
 
 __all__ = ['CANON_PROVIDER_SYNC_HISTORY', 'ProviderSyncHistory', 'InMemoryProviderSyncHistoryStore', 'FileProviderSyncHistoryStore']

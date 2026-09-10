@@ -21,8 +21,8 @@ def _workspace_scope(*, request: Request, auth_bundle) -> tuple[object, str, str
     return principal, tenant_id, business_id
 
 
-def _truth(provider_key: str):
-    if (row := provider_truth_map().get(str(provider_key or '').strip())) is None or not bool(row.read_only_supported) or str(row.status) not in _READY:
+def _truth(provider_key: str, *, history: bool = False):
+    if (row := provider_truth_map().get(str(provider_key or '').strip())) is None or not bool(row.read_only_supported or (history and bool(getattr(row, 'write_supported', False)))) or str(row.status) not in _READY:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail='provider_not_customer_read_ready')
     return row
 
@@ -33,7 +33,7 @@ def register_business_workspace_provider_routes(*, router: APIRouter, auth_bundl
     async def provider_workspace(request: Request, provider_key: str | None = None, limit: int = 50) -> dict[str, Any]:
         _, tenant_id, business_id = _workspace_scope(request=request, auth_bundle=auth_bundle)
         if provider_key:
-            _truth(provider_key)
+            _truth(provider_key, history=True)
             return handlers.list_provider_sync_history(tenant_id=tenant_id, business_id=business_id, provider_key=provider_key, limit=max(1, min(int(limit), 100)))
         payload, truth = handlers.list_provider_catalog(tenant_id=tenant_id, business_id=business_id), provider_truth_map()
         rows = [{**dict(raw), 'truth_status': 'not_implemented' if (row := truth.get(str(raw.get('provider_key') or '').strip())) is None else str(row.status), 'customer_selectable': bool(row and row.read_only_supported and str(row.status) in _READY), 'read_supported': bool(row and row.read_only_supported and str(row.status) in _READY), 'write_supported': bool(row and getattr(row, 'write_supported', False)), 'approval_required': bool(row and getattr(row, 'approval_required', False)), 'live_ready': bool(row and getattr(row, 'live_ready', False)), 'write_actions_enabled': False} for raw in list(payload.get('providers') or [])]

@@ -49,13 +49,33 @@ def register_control_plane_routes(*, router: APIRouter, auth_bundle, authz_bundl
         rate_limit_bundle.require_quota(principal=principal, request_context=request_context, dimension='api_requests_per_hour')
         return audit_handlers.list_decisions(trace_id=trace_id, limit=limit)
     @router.get('/control-plane/approvals/open')
-    async def control_plane_list_open_approvals(request: Request) -> dict[str, Any]:
+    async def control_plane_list_open_approvals(request: Request, approval_id: str = '', business_id: str = '') -> dict[str, Any]:
         request_context, principal = authorize_request(request=request, auth_bundle=auth_bundle)
         tenant_id = tenant_guard.enforce(principal=principal, request_context=request_context, body=None)
+        business_id = str(dict(getattr(principal, 'metadata', {}) or {}).get('business_id') or business_id).strip()
         action_name = 'api.control_plane.approvals.list_open'
         RoutePermissionGuard(permission=Permission.VIEW_APPROVALS, action_name=action_name).enforce(principal=principal, request_context=request_context, authz=authz_bundle)
-        enforce_control_plane_security(principal=principal, request_context=request_context, action_name=action_name, tenant_id=tenant_id, resource_id=f'approval-open:{tenant_id}')
-        return approval_handlers.list_open(tenant_id=tenant_id)
+        enforce_control_plane_security(principal=principal, request_context=request_context, action_name=action_name, tenant_id=tenant_id, resource_id=f'approval-open:{tenant_id}:{approval_id or "all"}:{business_id or "all"}')
+        payload = approval_handlers.list_open(tenant_id=tenant_id, **({'resume_limit': None} if business_id else {}))
+        if str(business_id or '').strip():
+            scoped = []
+            for raw in tuple(payload.get('resume_candidates') or ()):
+                row, resolved = dict(raw), str(dict(raw).get('business_id') or '').strip()
+                if not resolved:
+                    try:
+                        resolved = provider_admin_handlers.resolve_approved_message_business_id(tenant_id=tenant_id, approval_id=str(row.get('approval_id') or ''))
+                    except (KeyError, RuntimeError, ValueError):
+                        resolved = ''
+                if resolved == str(business_id).strip():
+                    scoped.append({**row, 'business_id': resolved})
+            dispositions = provider_admin_handlers.approved_message_completion_dispositions(tenant_id=tenant_id, business_id=business_id, candidates=tuple(scoped))
+            scoped = [{**row, 'completion_disposition': dispositions.get(str(row.get('approval_id') or ''), 'unknown')} for row in scoped]
+            scoped.sort(key=lambda row: (str(row.get('approval_id') or '') != str(approval_id or ''), str(row.get('completion_disposition') or '') in {'delivered', 'terminal_non_delivery'}))
+            payload = {**payload, 'resume_candidates': scoped[:50]}
+        record = approval_handlers.get(approval_id=str(approval_id).strip()) if str(approval_id or '').strip() else None
+        record_metadata = dict(record.get('metadata') or {}) if isinstance(record, dict) else {}
+        record_business_id = str(dict(record_metadata.get('approval_resume_context') or {}).get('business_id') or record_metadata.get('business_id') or '').strip()
+        return {**payload, **({'lookup': record if isinstance(record, dict) and str(record.get('tenant_id') or '') == str(tenant_id) and (not business_id or record_business_id == str(business_id).strip()) else None} if str(approval_id or '').strip() else {})}
     @router.post('/control-plane/approvals/submit')
     async def control_plane_submit_approval(request: Request) -> dict[str, Any]:
         request_context, principal = authorize_request(request=request, auth_bundle=auth_bundle)
@@ -74,9 +94,7 @@ def register_control_plane_routes(*, router: APIRouter, auth_bundle, authz_bundl
         action_name = 'api.control_plane.approvals.decide'
         RoutePermissionGuard(permission=Permission.APPROVE_CHANGE, action_name=action_name).enforce(principal=principal, request_context=request_context, authz=authz_bundle)
         enforce_control_plane_security(principal=principal, request_context=request_context, action_name=action_name, tenant_id=tenant_id, resource_id=f'approval-decision:{tenant_id}:{approval_id}', body=body, approval_id=approval_id)
-        role_id = first_role(principal)
-        outcome = ApprovalOutcome(str(body.get('outcome') or 'approve'))
-        return approval_handlers.evaluate(approval_id=approval_id, tenant_id=tenant_id, actor_id=principal.actor_id or principal.subject, role_id=role_id, outcome=outcome, rationale=str(body.get('rationale') or ''), metadata={'via': 'api.control-plane', 'request_id': request_context.normalized_request_id()})
+        return approval_handlers.evaluate(approval_id=approval_id, tenant_id=tenant_id, actor_id=principal.actor_id or principal.subject, role_id=first_role(principal), outcome=ApprovalOutcome(str(body.get('outcome') or 'approve')), rationale=str(body.get('rationale') or ''), metadata={'via': 'api.control-plane', 'request_id': request_context.normalized_request_id()})
     @router.get('/control-plane/admin/tenants')
     async def control_plane_list_active_tenants(request: Request) -> dict[str, Any]:
         request_context, principal = authorize_request(request=request, auth_bundle=auth_bundle)
@@ -448,13 +466,10 @@ def register_control_plane_routes(*, router: APIRouter, auth_bundle, authz_bundl
             raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail=payload)
         return payload
 
-
     if analytics_ops_handlers is not None:
         register_analytics_ops_routes(router=router, analytics_ops_handlers=analytics_ops_handlers, auth_bundle=auth_bundle, authz_bundle=authz_bundle, tenant_guard=tenant_guard, rate_limit_bundle=rate_limit_bundle, security_guard=security_guard)
     if analytics_signed_export_handlers is not None:
         register_analytics_signed_export_routes(router=router, analytics_signed_export_handlers=analytics_signed_export_handlers, auth_bundle=auth_bundle, authz_bundle=authz_bundle, tenant_guard=tenant_guard, rate_limit_bundle=rate_limit_bundle, security_guard=security_guard)
-
-
 
     @router.get('/control-plane/provider-runtime/sync-history')
     async def control_plane_provider_runtime_sync_history(request: Request, tenant_id: str, business_id: str, provider_key: str, limit: int = 20) -> dict[str, Any]:
@@ -531,7 +546,6 @@ def register_control_plane_routes(*, router: APIRouter, auth_bundle, authz_bundl
         RoutePermissionGuard(permission=Permission.MANAGE_TENANT_POLICY, action_name=action_name).enforce(principal=principal, request_context=request_context, authz=authz_bundle)
         enforce_control_plane_security(principal=principal, request_context=request_context, action_name=action_name, tenant_id=tenant_id, resource_id=f'provider-runtime-queue-tick:{tenant_id}', body=body)
         return provider_admin_handlers.tick_provider_sync_queue(tenant_id=tenant_id)
-
 
     @router.get('/control-plane/provider-runtime/incidents')
     async def control_plane_provider_runtime_incidents(request: Request, tenant_id: str, business_id: str, provider_key: str, limit: int = 50) -> dict[str, Any]:

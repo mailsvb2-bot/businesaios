@@ -166,7 +166,7 @@ def _route_kwargs(endpoint: object) -> dict[str, object]:
     return kwargs
 
 
-def _build_router(monkeypatch: pytest.MonkeyPatch, *, deny_security: bool = False, provider_admin_handlers: object | None = None) -> tuple[APIRouter, FakeSecurityGuard]:
+def _build_router(monkeypatch: pytest.MonkeyPatch, *, deny_security: bool = False, provider_admin_handlers: object | None = None, approval_handlers: object | None = None) -> tuple[APIRouter, FakeSecurityGuard]:
     monkeypatch.setattr(
         control_plane_routes,
         "authorize_request",
@@ -187,7 +187,7 @@ def _build_router(monkeypatch: pytest.MonkeyPatch, *, deny_security: bool = Fals
     security_guard = FakeSecurityGuard(deny=deny_security)
     handlers = {
         "audit_handlers": FakeHandlerBundle("audit"),
-        "approval_handlers": FakeHandlerBundle("approval"),
+        "approval_handlers": approval_handlers or FakeHandlerBundle("approval"),
         "admin_handlers": FakeHandlerBundle("admin"),
         "connector_admin_handlers": FakeHandlerBundle("connector_admin"),
         "provider_admin_handlers": provider_admin_handlers or FakeHandlerBundle("provider_admin"),
@@ -229,6 +229,53 @@ async def test_control_plane_registered_routes_execute_with_fake_bundles(monkeyp
 
     assert executed >= 30
     assert security_guard.calls
+
+
+class FakeApprovalLookupHandler(FakeHandlerBundle):
+    def __init__(self) -> None:
+        super().__init__("approval")
+
+    def list_open(self, *, tenant_id: str) -> dict[str, object]:
+        return {"tenant_id": tenant_id, "records": []}
+
+    def get(self, *, approval_id: str) -> dict[str, object] | None:
+        if approval_id == "missing":
+            return None
+        tenant_id = "other-tenant" if approval_id == "cross-tenant" else "tenant-demo"
+        return {"approval_id": approval_id, "tenant_id": tenant_id, "status": "rejected"}
+
+
+@pytest.mark.asyncio
+async def test_approval_open_targeted_lookup_is_tenant_scoped(monkeypatch: pytest.MonkeyPatch) -> None:
+    handler = FakeApprovalLookupHandler()
+    router, _ = _build_router(monkeypatch, approval_handlers=handler)
+    route = next(route for route in router.routes if getattr(route, "path", "") == "/control-plane/approvals/open")
+
+    own = await route.endpoint(FakeRequest(), approval_id="approval-1")
+    assert own["lookup"] == {"approval_id": "approval-1", "tenant_id": "tenant-demo", "status": "rejected"}
+
+    cross_tenant = await route.endpoint(FakeRequest(), approval_id="cross-tenant")
+    assert cross_tenant["lookup"] is None
+
+    missing = await route.endpoint(FakeRequest(), approval_id="missing")
+    assert missing["lookup"] is None
+
+
+@pytest.mark.asyncio
+async def test_approval_open_targeted_lookup_is_owner_business_scoped(monkeypatch: pytest.MonkeyPatch) -> None:
+    class Handler(FakeApprovalLookupHandler):
+        def list_open(self, *, tenant_id: str, resume_limit=None) -> dict[str, object]:
+            return {"tenant_id": tenant_id, "records": [], "resume_candidates": []}
+        def get(self, *, approval_id: str) -> dict[str, object] | None:
+            business_id = "business-2" if approval_id == "cross-business" else "business-1"
+            return {"approval_id": approval_id, "tenant_id": "tenant-demo", "status": "rejected", "metadata": {"business_id": business_id}}
+    router, _ = _build_router(monkeypatch, approval_handlers=Handler())
+    principal = FakePrincipal()
+    principal.metadata = {"business_id": "business-1"}
+    monkeypatch.setattr(control_plane_routes, "authorize_request", lambda **_: (FakeRequestContext(), principal))
+    route = next(route for route in router.routes if getattr(route, "path", "") == "/control-plane/approvals/open")
+    assert (await route.endpoint(FakeRequest(), approval_id="own-business"))["lookup"]["approval_id"] == "own-business"
+    assert (await route.endpoint(FakeRequest(), approval_id="cross-business"))["lookup"] is None
 
 
 @pytest.mark.asyncio
@@ -325,3 +372,60 @@ async def test_processed_max_webhook_can_ack_with_plain_http_success(monkeypatch
     router, _ = _build_router(monkeypatch, provider_admin_handlers=handler)
     route = next(route for route in router.routes if getattr(route, 'path', '') == '/providers/webhook/{tenant_id}/{business_id}/{provider_key}' and 'POST' in getattr(route, 'methods', set()))
     assert await route.endpoint('tenant-demo', 'business-1', 'max_messaging', FakeRequest()) == payload
+
+
+@pytest.mark.asyncio
+async def test_business_scoped_resume_filters_before_limit_and_recovers_legacy_business(monkeypatch: pytest.MonkeyPatch) -> None:
+    class ApprovalHandler(FakeApprovalLookupHandler):
+        resume_limit = 'unset'
+        def list_open(self, *, tenant_id: str, resume_limit=None) -> dict[str, object]:
+            self.resume_limit = resume_limit
+            newer = [{'approval_id': f'other-{idx}', 'action_name': 'provider.slack_messaging.message_send', 'business_id': 'other-business', 'resume_ready': True} for idx in range(60)]
+            completed = [{'approval_id': f'done-{idx}', 'action_name': 'provider.slack_messaging.message_send', 'business_id': 'business-1', 'subject_fingerprint': f'done-{idx}', 'resume_ready': True} for idx in range(50)]
+            target = {'approval_id': 'legacy-target', 'action_name': 'provider.slack_messaging.message_send', 'business_id': None, 'subject_fingerprint': 'target-ambiguous', 'resume_ready': True}
+            return {'tenant_id': tenant_id, 'records': [], 'resume_candidates': [*newer, *completed, target]}
+    class ProviderHandler(FakeHandlerBundle):
+        batch_calls = 0
+        def resolve_approved_message_business_id(self, *, tenant_id: str, approval_id: str) -> str:
+            assert tenant_id == 'tenant-demo'
+            return 'business-1' if approval_id == 'legacy-target' else ''
+        def approved_message_completion_dispositions(self, **kwargs) -> dict[str, str]:
+            self.batch_calls += 1
+            assert kwargs['business_id'] == 'business-1'
+            return {str(row['approval_id']): 'ambiguous' if row.get('subject_fingerprint') == 'target-ambiguous' else 'delivered' for row in kwargs['candidates']}
+    approvals, providers = ApprovalHandler(), ProviderHandler('provider_admin')
+    router, _ = _build_router(monkeypatch, approval_handlers=approvals, provider_admin_handlers=providers)
+    principal = FakePrincipal()
+    principal.metadata = {'business_id': 'business-1'}
+    monkeypatch.setattr(control_plane_routes, 'authorize_request', lambda **_: (FakeRequestContext(), principal))
+    route = next(route for route in router.routes if getattr(route, 'path', '') == '/control-plane/approvals/open')
+    result = await route.endpoint(FakeRequest(), business_id='attacker-selected-business')
+    assert approvals.resume_limit is None
+    assert len(result['resume_candidates']) == 50
+    assert result['resume_candidates'][0]['approval_id'] == 'legacy-target'
+    assert result['resume_candidates'][0]['business_id'] == 'business-1'
+    assert result['resume_candidates'][0]['completion_disposition'] == 'ambiguous'
+    assert providers.batch_calls == 1
+
+
+@pytest.mark.asyncio
+async def test_targeted_resume_candidate_survives_actionable_recovery_cap(monkeypatch: pytest.MonkeyPatch) -> None:
+    class ApprovalHandler(FakeApprovalLookupHandler):
+        def list_open(self, *, tenant_id: str, resume_limit=None) -> dict[str, object]:
+            rows = [{"approval_id": f"new-{idx}", "action_name": "provider.slack_messaging.message_send", "business_id": "business-1", "subject_fingerprint": f"new-{idx}", "resume_ready": True} for idx in range(60)]
+            rows.append({"approval_id": "target", "action_name": "provider.slack_messaging.message_send", "business_id": "business-1", "subject_fingerprint": "target", "resume_ready": True})
+            return {"tenant_id": tenant_id, "records": [], "resume_candidates": rows}
+        def get(self, *, approval_id: str) -> dict[str, object] | None:
+            return {"approval_id": approval_id, "tenant_id": "tenant-demo", "status": "approved", "metadata": {"business_id": "business-1"}}
+    class ProviderHandler(FakeHandlerBundle):
+        def approved_message_completion_dispositions(self, **kwargs) -> dict[str, str]:
+            return {str(row['approval_id']): "ambiguous" for row in kwargs['candidates']}
+    router, _ = _build_router(monkeypatch, approval_handlers=ApprovalHandler(), provider_admin_handlers=ProviderHandler("provider_admin"))
+    principal = FakePrincipal()
+    principal.metadata = {"business_id": "business-1"}
+    monkeypatch.setattr(control_plane_routes, "authorize_request", lambda **_: (FakeRequestContext(), principal))
+    route = next(route for route in router.routes if getattr(route, "path", "") == "/control-plane/approvals/open")
+    result = await route.endpoint(FakeRequest(), approval_id="target")
+    assert len(result["resume_candidates"]) == 50
+    assert result["resume_candidates"][0]["approval_id"] == "target"
+    assert result["lookup"]["approval_id"] == "target"

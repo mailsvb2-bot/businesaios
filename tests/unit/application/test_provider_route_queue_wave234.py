@@ -35,6 +35,8 @@ def test_provider_approval_resume_uses_archived_send_message_only():
     service = _Service()
     envelope = SimpleNamespace(decision=SimpleNamespace(decision_id='dec-1', action='send_message@v1', payload={'tenant_id': 'tenant-a', 'business_id': 'biz-a', 'channel': 'vk', 'user_id': '42', 'text': 'hello'}))
     handlers = ProviderAdminRouteHandlers(service_factory=lambda **_: service, approval_store_factory=lambda: _Store(), decision_loader=lambda **_: envelope)
+    assert handlers.resolve_approved_message_business_id(tenant_id='tenant-a', approval_id='ap-1') == 'biz-a'
+    assert service.calls == []
     result = handlers.resume_approved_message(tenant_id='tenant-a', approval_id='ap-1')
     assert result['provider_key'] == 'vk_messaging' and result['business_id'] == 'biz-a'
     call = service.calls[0]
@@ -49,9 +51,10 @@ def test_guarded_provider_approval_resume_replays_exact_approved_subject_after_f
         ("email_connector", "user@example.org", {"recipient": "user@example.org", "subject": "Exact subject", "body": "hello"}),
     ):
         action_name = f"provider.{provider_key}.message_send"
-        hint = resume_hint({"status": "approved", "action_name": action_name, "approval_id": "ap-1", "subject_id": "dec-1", "decision_id": "dec-1"})
+        hint = resume_hint({"status": "approved", "action_name": action_name, "approval_id": "ap-1", "subject_id": "dec-1", "decision_id": "dec-1", "metadata": {"approval_resume_context": {"business_id": "business-a"}}})
         assert hint["resume_ready"] is True
         assert hint["resume_action"] == "/control-plane/provider-runtime/approval-resume"
+        assert hint["business_id"] == "business-a"
 
         class _Store:
             def get(self, approval_id):

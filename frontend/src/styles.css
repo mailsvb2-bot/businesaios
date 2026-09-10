@@ -403,3 +403,24 @@ button:disabled { cursor: not-allowed; opacity: .46; transform: none !important;
   .sales-empty-state, .sales-activity-row, .sales-activity-head { align-items: flex-start; flex-direction: column; }
   .sales-empty-state .primary, .sales-actions .primary { width: 100%; }
 }
+
+.action-summary { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; margin: 18px 0 12px; }
+.action-summary article { display: grid; gap: 5px; min-width: 0; padding: 14px; border: 1px solid #e2e7ee; border-radius: 14px; background: #fff; }
+.action-summary small, .action-summary span { color: #7d899a; }
+.action-summary strong { font-size: 1.45rem; color: #26364d; overflow-wrap: anywhere; }
+.action-summary span { font-size: .78rem; line-height: 1.4; }
+.action-attention { display: grid; gap: 5px; padding: 13px 15px; border: 1px solid #dfe5ee; border-radius: 14px; margin-bottom: 14px; }
+.action-attention span { color: #5f6f84; font-size: .84rem; line-height: 1.5; }
+.action-attention.needs-review { background: rgba(245, 158, 11, .08); }
+.action-attention.ready { background: rgba(34, 197, 94, .07); }
+.action-attention.setup { background: rgba(148, 163, 184, .08); }
+.action-attention.stale { background: rgba(239, 68, 68, .06); }
+.action-attention .ghost { justify-self: start; margin-top: 4px; }
+.action-column-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
+.action-column-heading > div { display: grid; gap: 3px; }
+.step-kicker { color: #7d899a; font-size: .72rem; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; }
+.queue-count { min-width: 32px; padding: 5px 9px; border-radius: 999px; background: #edf1ff; color: #4156ad; text-align: center; font-size: .82rem; }
+.approval-card > .approval-card-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; }
+.approval-card-head > div { display: grid; gap: 3px; }
+.approval-card-head > span { padding: 4px 8px; border-radius: 999px; background: rgba(245, 158, 11, .1); color: #946200; font-size: .72rem; white-space: nowrap; }
+@media (max-width: 700px) { .action-summary { grid-template-columns: 1fr; } .approval-card-head { flex-direction: column; } }

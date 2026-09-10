@@ -2,25 +2,8 @@ from __future__ import annotations
 
 import secrets
 from dataclasses import dataclass, field, replace
-from datetime import datetime, timezone
-from typing import Any, Mapping
+from typing import Any
 
-from governance.approval_contract import ApprovalDecision, ApprovalOutcome, ApprovalRequest
-from governance.approval_store import ApprovalStoreContract, build_default_approval_store
-from governance.approval_workflow import ApprovalWorkflow
-from governance.rbac_contract import RoleId
-from execution.operator_override_contract import (
-    OperatorOverrideDecision,
-    OperatorOverrideRequest,
-    OperatorOverrideResolution,
-    OperatorOverrideStatus,
-    is_operator_override_role_allowed,
-)
-from execution.operator_override_store import (
-    InMemoryOperatorOverrideStore,
-    build_default_operator_override_store,
-)
-from governance.control_plane_audit_log import GovernanceAuditLogContract, PersistentGovernanceAuditLog
 from entrypoints.api.approval_route_support import (
     append_control_plane_audit,
     audit_payload_summary,
@@ -35,10 +18,23 @@ from entrypoints.api.approval_route_support import (
     route_action_summary,
     safe_dict,
     safe_int,
-    safe_iso,
     text,
 )
-
+from execution.operator_override_contract import (
+    OperatorOverrideDecision,
+    OperatorOverrideRequest,
+    OperatorOverrideResolution,
+    OperatorOverrideStatus,
+    is_operator_override_role_allowed,
+)
+from execution.operator_override_store import (
+    build_default_operator_override_store,
+)
+from governance.approval_contract import ApprovalDecision, ApprovalOutcome, ApprovalRequest
+from governance.approval_store import ApprovalStoreContract, build_default_approval_store
+from governance.approval_workflow import ApprovalWorkflow
+from governance.control_plane_audit_log import GovernanceAuditLogContract, PersistentGovernanceAuditLog
+from governance.rbac_contract import RoleId
 
 CANON_API_APPROVAL_ROUTE_HANDLERS_FINAL_OWNER = True
 CANON_API_APPROVAL_ROUTE_HANDLERS = True
@@ -316,7 +312,7 @@ class ApprovalRouteHandlers:
             },
         }
 
-    def list_open(self, *, tenant_id: str, subject_type: str | None = None) -> dict[str, Any]:
+    def list_open(self, *, tenant_id: str, subject_type: str | None = None, resume_limit: int | None = 50) -> dict[str, Any]:
         all_records = list_tenant_records(self.approval_store, tenant_id=tenant_id, include_terminal=True)
         normalized_subject_type = text(subject_type) or None
         normalized_records = []
@@ -334,7 +330,7 @@ class ApprovalRouteHandlers:
         expiring = [item for item in execution_pending if bool(item.get('expires_at'))]
         operator_actions = tuple(route_action_summary(item) for item in execution_pending[:25])
         lifecycle = lifecycle_counts(tuple(historical_records))
-        resume_ready = resume_candidates(latest_records(tuple(historical_records), limit=50, timestamp_keys=('created_at', 'expires_at')))
+        resume_ready = resume_candidates(tuple(reversed(historical_records)) if resume_limit is None else latest_records(tuple(historical_records), limit=resume_limit, timestamp_keys=('created_at', 'expires_at')))
         audit_summary = audit_payload_summary(self.audit_log, tenant_id=tenant_id)
         timeline = build_control_plane_timeline(approvals=tuple(historical_records), overrides=(), audit_summary=audit_summary)
         return {
