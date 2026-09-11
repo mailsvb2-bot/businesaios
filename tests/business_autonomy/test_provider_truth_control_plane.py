@@ -7,7 +7,7 @@ from adapters.api.fastapi.provider_truth_matrix_routes import (
     provider_truth_matrix_payload,
     register_provider_truth_matrix_routes,
 )
-from application.business_autonomy.provider_catalog import PROVIDERS
+from application.business_autonomy.provider_catalog import MESSAGING_GUARDED_WRITE_PROVIDER_KEYS, PROVIDERS
 
 
 def test_provider_truth_matrix_payload_is_read_only_control_plane_surface() -> None:
@@ -20,7 +20,7 @@ def test_provider_truth_matrix_payload_is_read_only_control_plane_surface() -> N
     assert payload["source"] == "application.business_autonomy.provider_truth_matrix"
     assert "guarded_write" in payload["live_ready_policy"]
     assert payload["summary"]["total"] == len(PROVIDERS)
-    assert payload["summary"]["write_supported"] == 9
+    assert payload["summary"]["write_supported"] == len(MESSAGING_GUARDED_WRITE_PROVIDER_KEYS)
     assert payload["summary"]["live_ready"] == 0
     assert payload["rows"]
 
