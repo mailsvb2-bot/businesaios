@@ -309,10 +309,91 @@
     "children": []
   },
   {
-    "title": "Expect \"toBeVisible\" getByRole('heading', { name: 'Продажи', level: 2 })",
+    "title": "Expect \"toBeVisible\" getByRole('heading', { name: 'Где бизнес теряет время и деньги' })",
     "location": [
       "onboarding-workspace.spec.js",
       83,
+      89
+    ],
+    "children": []
+  },
+  {
+    "title": "Click getByText('Добавить реальный факт о повторяющемся процессе')",
+    "location": [
+      "onboarding-workspace.spec.js",
+      84,
+      75
+    ],
+    "children": []
+  },
+  {
+    "title": "Fill \"browser_followup\" getByLabel('Процесс')",
+    "location": [
+      "onboarding-workspace.spec.js",
+      85,
+      36
+    ],
+    "children": []
+  },
+  {
+    "title": "Fill \"2026-09-10T22:11\" getByLabel('Когда произошло')",
+    "location": [
+      "onboarding-workspace.spec.js",
+      86,
+      44
+    ],
+    "children": []
+  },
+  {
+    "title": "Fill \"20\" getByLabel('Ручное время, мин')",
+    "location": [
+      "onboarding-workspace.spec.js",
+      87,
+      46
+    ],
+    "children": []
+  },
+  {
+    "title": "Wait for event \"response\"",
+    "location": [
+      "onboarding-workspace.spec.js",
+      88,
+      36
+    ],
+    "children": []
+  },
+  {
+    "title": "Click getByRole('button', { name: 'Сохранить факт' })",
+    "location": [
+      "onboarding-workspace.spec.js",
+      89,
+      62
+    ],
+    "children": []
+  },
+  {
+    "title": "Expect \"toBe\"",
+    "location": [
+      "onboarding-workspace.spec.js",
+      90,
+      48
+    ],
+    "children": []
+  },
+  {
+    "title": "Expect \"toBeVisible\" getByText(/Факт сохранён как owner-asserted evidence/)",
+    "location": [
+      "onboarding-workspace.spec.js",
+      91,
+      77
+    ],
+    "children": []
+  },
+  {
+    "title": "Expect \"toBeVisible\" getByRole('heading', { name: 'Продажи', level: 2 })",
+    "location": [
+      "onboarding-workspace.spec.js",
+      92,
       74
     ],
     "children": []
@@ -321,7 +402,7 @@
     "title": "Expect \"toHaveCount\" getByText('Нули вместо неизвестных значений не подставляются.')",
     "location": [
       "onboarding-workspace.spec.js",
-      84,
+      93,
       86
     ],
     "children": []
@@ -330,7 +411,7 @@
     "title": "Expect \"toBeVisible\" getByRole('button', { name: 'Подключить HubSpot' })",
     "location": [
       "onboarding-workspace.spec.js",
-      85,
+      94,
       74
     ],
     "children": []
@@ -339,7 +420,7 @@
     "title": "Expect \"toBe\"",
     "location": [
       "onboarding-workspace.spec.js",
-      87,
+      96,
       42
     ],
     "children": []
@@ -348,7 +429,7 @@
     "title": "Evaluate locator('details.capability-roadmap')",
     "location": [
       "onboarding-workspace.spec.js",
-      88,
+      97,
       52
     ],
     "children": []
@@ -357,7 +438,7 @@
     "title": "Expect \"toBeVisible\" locator('article.capability-card').filter({ hasText: 'WhatsApp-реактивация' })",
     "location": [
       "onboarding-workspace.spec.js",
-      90,
+      99,
       29
     ],
     "children": []
@@ -366,7 +447,7 @@
     "title": "Expect \"toHaveCount\" locator('article.capability-card').filter({ hasText: 'WhatsApp-реактивация' }).getByRole('button')",
     "location": [
       "onboarding-workspace.spec.js",
-      91,
+      100,
       49
     ],
     "children": []
@@ -375,7 +456,7 @@
     "title": "Expect \"toHaveCount\" getByText('Не удалось открыть защищённый workspace интеграций.')",
     "location": [
       "onboarding-workspace.spec.js",
-      92,
+      101,
       87
     ],
     "children": []
@@ -393,7 +474,7 @@
     "title": "Expect \"toBe\"",
     "location": [
       "onboarding-workspace.spec.js",
-      93,
+      102,
       47
     ],
     "children": []
@@ -420,7 +501,7 @@
     "title": "Expect \"toBe\"",
     "location": [
       "onboarding-workspace.spec.js",
-      94,
+      103,
       64
     ],
     "children": []
@@ -429,7 +510,7 @@
     "title": "Expect \"toBe\"",
     "location": [
       "onboarding-workspace.spec.js",
-      99,
+      108,
       43
     ],
     "children": []
@@ -438,7 +519,7 @@
     "title": "Expect \"toBe\"",
     "location": [
       "onboarding-workspace.spec.js",
-      100,
+      109,
       44
     ],
     "children": []
@@ -447,7 +528,7 @@
     "title": "Expect \"not toBe\"",
     "location": [
       "onboarding-workspace.spec.js",
-      101,
+      110,
       49
     ],
     "children": []
@@ -456,7 +537,7 @@
     "title": "Expect \"not toBe\"",
     "location": [
       "onboarding-workspace.spec.js",
-      102,
+      111,
       50
     ],
     "children": []
@@ -465,7 +546,7 @@
     "title": "Wait for event \"response\"",
     "location": [
       "onboarding-workspace.spec.js",
-      104,
+      113,
       37
     ],
     "children": []
@@ -474,7 +555,7 @@
     "title": "Wait for event \"response\"",
     "location": [
       "onboarding-workspace.spec.js",
-      105,
+      114,
       40
     ],
     "children": []
@@ -483,7 +564,7 @@
     "title": "Reload",
     "location": [
       "onboarding-workspace.spec.js",
-      106,
+      115,
       14
     ],
     "children": []
@@ -492,7 +573,7 @@
     "title": "Expect \"toBe\"",
     "location": [
       "onboarding-workspace.spec.js",
-      109,
+      118,
       42
     ],
     "children": []
@@ -501,7 +582,7 @@
     "title": "Expect \"toBe\"",
     "location": [
       "onboarding-workspace.spec.js",
-      112,
+      121,
       89
     ],
     "children": []
@@ -510,7 +591,7 @@
     "title": "Expect \"not toBe\"",
     "location": [
       "onboarding-workspace.spec.js",
-      113,
+      122,
       31
     ],
     "children": []
@@ -519,7 +600,7 @@
     "title": "Expect \"toBe\"",
     "location": [
       "onboarding-workspace.spec.js",
-      116,
+      125,
       45
     ],
     "children": []
@@ -528,7 +609,7 @@
     "title": "Expect \"toBe\"",
     "location": [
       "onboarding-workspace.spec.js",
-      118,
+      127,
       41
     ],
     "children": []
@@ -537,7 +618,7 @@
     "title": "Expect \"toBe\"",
     "location": [
       "onboarding-workspace.spec.js",
-      119,
+      128,
       50
     ],
     "children": []
@@ -546,7 +627,7 @@
     "title": "Expect \"toBeVisible\" getByRole('heading', { name: 'Canonical Browser E2E {project}', level: 1 })",
     "location": [
       "onboarding-workspace.spec.js",
-      121,
+      130,
       77
     ],
     "children": []
@@ -555,7 +636,7 @@
     "title": "Expect \"toHaveCount\" getByText(/Не удалось восстановить защищённый вход/)",
     "location": [
       "onboarding-workspace.spec.js",
-      122,
+      131,
       75
     ],
     "children": []
@@ -564,7 +645,7 @@
     "title": "Expect \"toBeVisible\" getByRole('button', { name: /Telegram Bot/ })",
     "location": [
       "onboarding-workspace.spec.js",
-      123,
+      132,
       79
     ],
     "children": []
@@ -582,7 +663,7 @@
     "title": "Expect \"toBe\"",
     "location": [
       "onboarding-workspace.spec.js",
-      124,
+      133,
       47
     ],
     "children": []
@@ -609,7 +690,7 @@
     "title": "Expect \"toBe\"",
     "location": [
       "onboarding-workspace.spec.js",
-      125,
+      134,
       64
     ],
     "children": []
@@ -636,7 +717,7 @@
     "title": "Expect \"toBe\"",
     "location": [
       "onboarding-workspace.spec.js",
-      126,
+      135,
       71
     ],
     "children": []
@@ -645,7 +726,7 @@
     "title": "Click getByRole('button', { name: 'Добавить бизнес' })",
     "location": [
       "onboarding-workspace.spec.js",
-      128,
+      137,
       63
     ],
     "children": []
@@ -654,7 +735,7 @@
     "title": "Expect \"toBeVisible\" getByRole('heading', { name: /Подключите бизнес/ })",
     "location": [
       "onboarding-workspace.spec.js",
-      129,
+      138,
       74
     ],
     "children": []
@@ -663,7 +744,7 @@
     "title": "Fill \"Canonical Browser E2E {project} · Second\" getByLabel('Название бизнеса')",
     "location": [
       "onboarding-workspace.spec.js",
-      131,
+      140,
       45
     ],
     "children": []
@@ -672,7 +753,7 @@
     "title": "Fill \"browser-e2e+{project}@example.test\" getByLabel('Email владельца')",
     "location": [
       "onboarding-workspace.spec.js",
-      132,
+      141,
       44
     ],
     "children": []
@@ -681,7 +762,7 @@
     "title": "Fill \"commerce\" getByLabel('Сфера')",
     "location": [
       "onboarding-workspace.spec.js",
-      133,
+      142,
       34
     ],
     "children": []
@@ -690,7 +771,7 @@
     "title": "Fill \"Tallinn\" getByLabel('Город')",
     "location": [
       "onboarding-workspace.spec.js",
-      134,
+      143,
       34
     ],
     "children": []
@@ -699,7 +780,7 @@
     "title": "Click getByRole('button', { name: /Продолжить/ })",
     "location": [
       "onboarding-workspace.spec.js",
-      135,
+      144,
       58
     ],
     "children": []
@@ -708,7 +789,7 @@
     "title": "Click getByRole('button', { name: /Сильнее продажи/ })",
     "location": [
       "onboarding-workspace.spec.js",
-      136,
+      145,
       63
     ],
     "children": []
@@ -717,7 +798,7 @@
     "title": "Click getByRole('button', { name: /Продолжить/ })",
     "location": [
       "onboarding-workspace.spec.js",
-      137,
+      146,
       58
     ],
     "children": []
@@ -726,7 +807,7 @@
     "title": "Click locator('button.integration-card:not([disabled])').first()",
     "location": [
       "onboarding-workspace.spec.js",
-      139,
+      148,
       27
     ],
     "children": []
@@ -735,7 +816,7 @@
     "title": "Click getByRole('button', { name: /Продолжить/ })",
     "location": [
       "onboarding-workspace.spec.js",
-      140,
+      149,
       58
     ],
     "children": []
@@ -744,7 +825,7 @@
     "title": "Click getByRole('button', { name: /Советник/ })",
     "location": [
       "onboarding-workspace.spec.js",
-      141,
+      150,
       56
     ],
     "children": []
@@ -753,7 +834,7 @@
     "title": "Wait for event \"response\"",
     "location": [
       "onboarding-workspace.spec.js",
-      142,
+      151,
       33
     ],
     "children": []
@@ -762,7 +843,7 @@
     "title": "Click getByRole('button', { name: /Создать мой BusinessAIOS/ })",
     "location": [
       "onboarding-workspace.spec.js",
-      143,
+      152,
       72
     ],
     "children": []
@@ -771,7 +852,7 @@
     "title": "Expect \"toBe\"",
     "location": [
       "onboarding-workspace.spec.js",
-      145,
+      154,
       38
     ],
     "children": []
@@ -780,7 +861,7 @@
     "title": "Expect \"toBe\"",
     "location": [
       "onboarding-workspace.spec.js",
-      147,
+      156,
       29
     ],
     "children": []
@@ -789,7 +870,7 @@
     "title": "Expect \"not toBe\"",
     "location": [
       "onboarding-workspace.spec.js",
-      148,
+      157,
       35
     ],
     "children": []
@@ -798,7 +879,7 @@
     "title": "Expect \"not toBe\"",
     "location": [
       "onboarding-workspace.spec.js",
-      149,
+      158,
       37
     ],
     "children": []
@@ -807,7 +888,7 @@
     "title": "Expect \"toHaveLength\"",
     "location": [
       "onboarding-workspace.spec.js",
-      150,
+      159,
       38
     ],
     "children": []
@@ -816,7 +897,7 @@
     "title": "Expect \"toBeVisible\" getByRole('combobox', { name: 'Выбор бизнеса', exact: true })",
     "location": [
       "onboarding-workspace.spec.js",
-      153,
+      162,
       26
     ],
     "children": []
@@ -825,7 +906,7 @@
     "title": "Expect \"toHaveCount\" getByRole('combobox', { name: 'Выбор бизнеса', exact: true }).locator('option')",
     "location": [
       "onboarding-workspace.spec.js",
-      154,
+      163,
       44
     ],
     "children": []
@@ -834,7 +915,7 @@
     "title": "Wait for event \"response\"",
     "location": [
       "onboarding-workspace.spec.js",
-      155,
+      164,
       36
     ],
     "children": []
@@ -843,7 +924,7 @@
     "title": "Select option getByRole('combobox', { name: 'Выбор бизнеса', exact: true })",
     "location": [
       "onboarding-workspace.spec.js",
-      156,
+      165,
       18
     ],
     "children": []
@@ -852,7 +933,7 @@
     "title": "Expect \"toBe\"",
     "location": [
       "onboarding-workspace.spec.js",
-      157,
+      166,
       48
     ],
     "children": []
@@ -861,7 +942,7 @@
     "title": "Expect \"toBeVisible\" getByRole('heading', { name: 'Canonical Browser E2E {project}', level: 1 })",
     "location": [
       "onboarding-workspace.spec.js",
-      158,
+      167,
       77
     ],
     "children": []
@@ -870,7 +951,7 @@
     "title": "Navigate to \"/\"",
     "location": [
       "onboarding-workspace.spec.js",
-      160,
+      169,
       14
     ],
     "children": []
@@ -879,7 +960,7 @@
     "title": "Expect \"toBeVisible\" getByRole('heading', { name: 'Мои бизнесы' })",
     "location": [
       "onboarding-workspace.spec.js",
-      161,
+      170,
       68
     ],
     "children": []
@@ -888,7 +969,7 @@
     "title": "Expect \"toBeVisible\" getByRole('button', { name: 'Открыть бизнес Canonical Browser E2E {project}', exact: true })",
     "location": [
       "onboarding-workspace.spec.js",
-      162,
+      171,
       99
     ],
     "children": []
@@ -897,7 +978,7 @@
     "title": "Expect \"toBeVisible\" getByRole('button', { name: 'Открыть бизнес Canonical Browser E2E {project} · Second', exact: true })",
     "location": [
       "onboarding-workspace.spec.js",
-      163,
+      172,
       105
     ],
     "children": []
@@ -915,7 +996,7 @@
     "title": "Expect \"toBe\"",
     "location": [
       "onboarding-workspace.spec.js",
-      164,
+      173,
       47
     ],
     "children": []
