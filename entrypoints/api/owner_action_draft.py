@@ -10,7 +10,7 @@ from entrypoints.api.headless_runtime_provider import HeadlessRuntimeProvider, b
 CANON_OWNER_ACTION_DRAFT_PROJECTION = True
 _RUN_ID = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_-]{0,127}$")
 _SUPPORTED_ACTION = "send_message@v1"
-_PROVIDER_BY_CHANNEL = {"vk": "vk_messaging", "max": "max_messaging", "email": "email_connector"}
+_PROVIDER_BY_CHANNEL = {"telegram": "telegram_bot", "whatsapp": "whatsapp_cloud", "vk": "vk_messaging", "max": "max_messaging", "email": "email_connector"}
 _PLACEHOLDERS = {"", "anonymous", "system", "unknown", "default", "none", "null"}
 
 

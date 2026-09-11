@@ -15,7 +15,7 @@ from runtime.messaging.channel_normalizer import normalize_channel
 from runtime.wiring import load_archived_decision
 
 CANON_API_PROVIDER_ADMIN_ROUTE_HANDLERS = True
-_PROVIDER_MESSAGE_ACTIONS = {'provider.vk_messaging.message_send': 'vk_messaging', 'provider.max_messaging.message_send': 'max_messaging', 'provider.slack_messaging.message_send': 'slack_messaging', 'provider.discord_messaging.message_send': 'discord_messaging', 'provider.instagram_messaging.message_send': 'instagram_messaging', 'provider.messenger_messaging.message_send': 'messenger_messaging', 'provider.line_messaging.message_send': 'line_messaging', 'provider.viber_messaging.message_send': 'viber_messaging', 'provider.email_connector.message_send': 'email_connector'}
+_PROVIDER_MESSAGE_ACTIONS = {'provider.telegram_bot.message_send': 'telegram_bot', 'provider.whatsapp_cloud.message_send': 'whatsapp_cloud', 'provider.vk_messaging.message_send': 'vk_messaging', 'provider.max_messaging.message_send': 'max_messaging', 'provider.slack_messaging.message_send': 'slack_messaging', 'provider.discord_messaging.message_send': 'discord_messaging', 'provider.instagram_messaging.message_send': 'instagram_messaging', 'provider.messenger_messaging.message_send': 'messenger_messaging', 'provider.line_messaging.message_send': 'line_messaging', 'provider.viber_messaging.message_send': 'viber_messaging', 'provider.email_connector.message_send': 'email_connector'}
 
 def _approval_completion_truth(*, provider_key: str, result: Mapping[str, Any]) -> tuple[bool, bool, bool]:
     status = str(result.get('status') or '').strip()
@@ -24,6 +24,9 @@ def _approval_completion_truth(*, provider_key: str, result: Mapping[str, Any]) 
     accepted_with_receipt = bool(result.get('accepted')) and status == 'live_executed' and bool(str(parsed.get('resource_id') or '').strip())
     delivered = accepted_with_receipt
     accepted_without_delivery_proof = False
+    if str(provider_key) == 'whatsapp_cloud' and accepted_with_receipt:
+        delivered = False
+        accepted_without_delivery_proof = True
     if str(provider_key) == 'email_connector' and accepted_with_receipt:
         smtp = dict(dict(result.get('transport_response') or {}).get('smtp') or {})
         delivered = smtp.get('delivered') is True
@@ -196,7 +199,7 @@ class ProviderAdminRouteHandlers:
             provider_payload = dict(approved_payload)
             _reject(any(str(key).startswith('_') for key in provider_payload), 'provider_approval_resume_payload_contains_internal_controls')
         else:
-            expected_channel = {'vk_messaging': 'vk', 'max_messaging': 'max', 'slack_messaging': 'slack', 'discord_messaging': 'discord', 'instagram_messaging': 'instagram', 'messenger_messaging': 'messenger', 'line_messaging': 'line', 'viber_messaging': 'viber', 'email_connector': 'email'}[provider_key]
+            expected_channel = {'telegram_bot': 'telegram', 'whatsapp_cloud': 'whatsapp', 'vk_messaging': 'vk', 'max_messaging': 'max', 'slack_messaging': 'slack', 'discord_messaging': 'discord', 'instagram_messaging': 'instagram', 'messenger_messaging': 'messenger', 'line_messaging': 'line', 'viber_messaging': 'viber', 'email_connector': 'email'}[provider_key]
             business_id = str(archived_payload.get('business_id') or '').strip()
             _reject(normalize_channel(str(archived_payload.get('channel') or '')) != expected_channel, 'provider_approval_resume_channel_mismatch')
             _reject(provider_key in {'slack_messaging', 'discord_messaging'} and not str(archived_payload.get('channel_id') or '').strip(), 'provider_approval_resume_channel_id_missing')

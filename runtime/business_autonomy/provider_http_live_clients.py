@@ -50,12 +50,12 @@ class VendorHttpLiveTransport:
         normalized_payload = self.normalizers.normalize_outbound(provider=provider, operation=operation, payload={k: v for k, v in payload.items() if not str(k).startswith('_')})
         prepared = self._prepare_request(provider=provider, tenant_id=tenant_id, business_id=business_id, operation=operation, payload=normalized_payload, binding=binding)
         public_request = _public_request_view(prepared)
-        guarded_native_write = provider.provider_key in {'vk_messaging', 'max_messaging', 'slack_messaging', 'discord_messaging', 'instagram_messaging', 'messenger_messaging', 'line_messaging', 'viber_messaging'}
+        guarded_native_write = provider.provider_key in {'telegram_bot', 'whatsapp_cloud', 'vk_messaging', 'max_messaging', 'slack_messaging', 'discord_messaging', 'instagram_messaging', 'messenger_messaging', 'line_messaging', 'viber_messaging'}
         bot_token_native = provider.provider_key in {'slack_messaging', 'discord_messaging'}
-        webhook_read_native = provider.provider_key in {'line_messaging', 'viber_messaging'}
+        webhook_read_native = provider.provider_key in {'whatsapp_cloud', 'line_messaging', 'viber_messaging'}
         outbound_only_native = provider.provider_key in {'instagram_messaging', 'messenger_messaging'}
         native_write_approved = operation == 'message_send' and bool(payload.get('_provider_write_approved', False))
-        if not self.bind_live_network or not bool(payload.get('_allow_network', False)) or (guarded_native_write and operation not in {'health_probe', 'message_read'} and not native_write_approved) or (webhook_read_native and operation not in {'health_probe', 'message_send'}) or (outbound_only_native and operation != 'message_send'):
+        if not self.bind_live_network or not bool(payload.get('_allow_network', False)) or (guarded_native_write and operation not in {'health_probe', 'message_read', 'contact_profile_read'} and not native_write_approved) or (webhook_read_native and operation not in {'health_probe', 'message_send'}) or (outbound_only_native and operation != 'message_send'):
             return {
                 '_prepared_only': True,
                 'provider_key': provider.provider_key,
@@ -67,6 +67,10 @@ class VendorHttpLiveTransport:
             }
         if guarded_native_write and '{access_token}' in str(prepared):
             return {'_prepared_only': True, 'provider_key': provider.provider_key, 'network_capable': False, 'request': public_request, 'normalized_payload': normalized_payload, 'transport_binding': binding, 'response_parser': self.response_parsers.describe(provider=provider), 'reason': 'native_access_token_missing'}
+        if provider.provider_key == 'telegram_bot' and '{bot_token}' in str(prepared):
+            return {'_prepared_only': True, 'provider_key': provider.provider_key, 'network_capable': False, 'request': public_request, 'normalized_payload': normalized_payload, 'transport_binding': binding, 'response_parser': self.response_parsers.describe(provider=provider), 'reason': 'native_bot_token_missing'}
+        if provider.provider_key == 'whatsapp_cloud' and '{phone_number_id}' in str(prepared):
+            return {'_prepared_only': True, 'provider_key': provider.provider_key, 'network_capable': False, 'request': public_request, 'normalized_payload': normalized_payload, 'transport_binding': binding, 'response_parser': self.response_parsers.describe(provider=provider), 'reason': 'native_phone_number_id_missing'}
         if webhook_read_native and (('{channel_access_token}' in str(prepared)) or ('{auth_token}' in str(prepared))):
             return {'_prepared_only': True, 'provider_key': provider.provider_key, 'network_capable': False, 'request': public_request, 'normalized_payload': normalized_payload, 'transport_binding': binding, 'response_parser': self.response_parsers.describe(provider=provider), 'reason': 'native_probe_token_missing'}
         if bot_token_native and '{bot_token}' in str(prepared):
@@ -77,14 +81,18 @@ class VendorHttpLiveTransport:
             return {'_prepared_only': True, 'provider_key': provider.provider_key, 'network_capable': False, 'request': public_request, 'normalized_payload': normalized_payload, 'transport_binding': binding, 'response_parser': self.response_parsers.describe(provider=provider), 'reason': 'native_message_read_payload_invalid'}
         if native_write_approved and operation == 'message_send':
             channel_id = str(normalized_payload.get('channel') or normalized_payload.get('channel_id') or '')
+            whatsapp_recipient = str(normalized_payload.get('to') or '').strip()
             invalid_recipient = (
-                (provider.provider_key == 'vk_messaging' and str(normalized_payload.get('peer_id') or '') in {'', '{peer_id}'})
+                (provider.provider_key == 'telegram_bot' and str(normalized_payload.get('chat_id') or '') in {'', '{chat_id}'})
+                or (provider.provider_key == 'whatsapp_cloud' and not (whatsapp_recipient.isascii() and whatsapp_recipient.isdigit() and 7 <= len(whatsapp_recipient) <= 15))
+                or (provider.provider_key == 'vk_messaging' and str(normalized_payload.get('peer_id') or '') in {'', '{peer_id}'})
                 or (provider.provider_key == 'max_messaging' and not (normalized_payload.get('chat_id') or normalized_payload.get('user_id')))
                 or (provider.provider_key == 'slack_messaging' and channel_id in {'', '{channel_id}'})
                 or (provider.provider_key == 'discord_messaging' and not (channel_id.isascii() and channel_id.isdigit()))
                 or (provider.provider_key in {'instagram_messaging', 'messenger_messaging', 'line_messaging', 'viber_messaging'} and (str(normalized_payload.get({'instagram_messaging': 'recipient_id', 'messenger_messaging': 'recipient_id', 'line_messaging': 'to', 'viber_messaging': 'receiver'}[provider.provider_key]) or '') in {'', '{recipient_id}'} or (provider.provider_key == 'viber_messaging' and str(dict(dict(prepared.get('json_body') or {}).get('sender') or {}).get('name') or '') in {'', '{sender_name}'})))
             )
-            has_text = bool(str(next((item.get('text') for item in (normalized_payload.get('messages') or ()) if isinstance(item, Mapping) and item.get('text')), '') or normalized_payload.get('message') or normalized_payload.get('text') or '').strip())
+            nested_text = str(dict(normalized_payload.get('text') or {}).get('body') or '') if isinstance(normalized_payload.get('text'), Mapping) else ''
+            has_text = bool(str(next((item.get('text') for item in (normalized_payload.get('messages') or ()) if isinstance(item, Mapping) and item.get('text')), '') or normalized_payload.get('message') or nested_text or normalized_payload.get('text') or '').strip())
             has_attachments = isinstance(normalized_payload.get('attachments'), list) and bool(normalized_payload.get('attachments'))
             if invalid_recipient or not (has_text or has_attachments):
                 return {'_prepared_only': True, 'provider_key': provider.provider_key, 'network_capable': False, 'request': public_request, 'normalized_payload': normalized_payload, 'transport_binding': binding, 'response_parser': self.response_parsers.describe(provider=provider), 'reason': 'native_message_send_payload_invalid'}
@@ -202,9 +210,15 @@ class VendorHttpLiveTransport:
         if provider.provider_key == 'viber_messaging':
             return f"{base_url}{'/get_account_info' if operation == 'health_probe' else '/send_message'}"
         if provider.provider_key == 'telegram_bot':
-            return f"{base_url}/bot{secrets.get('bot_token','{bot_token}')}/{({'health_probe': 'getMe', 'message_read': 'getUpdates', 'contact_profile_read': 'getMe'}.get(operation, operation))}"
+            endpoint = {'health_probe': 'getMe', 'message_read': 'getUpdates', 'contact_profile_read': 'getMe', 'message_send': 'sendMessage'}.get(operation, operation)
+            return f"{base_url}/bot{secrets.get('bot_token','{bot_token}')}/{endpoint}"
         if provider.provider_key == 'whatsapp_cloud':
-            return f"{base_url}{path_family.format(phone_number_id=secrets.get('phone_number_id', payload.get('phone_number_id','{phone_number_id}')), operation=operation)}"
+            phone_number_id = secrets.get('phone_number_id') or payload.get('phone_number_id') or '{phone_number_id}'
+            if operation == 'health_probe':
+                return f"{base_url}/v19.0/{phone_number_id}"
+            if operation == 'message_send':
+                return f"{base_url}/v19.0/{phone_number_id}/messages"
+            return f"{base_url}{path_family.format(phone_number_id=phone_number_id, operation=operation)}"
         if provider.provider_key == 'vk_messaging':
             return f"{base_url}/{ {'health_probe': 'groups.getById', 'message_read': 'messages.getConversations', 'message_send': 'messages.send'}.get(operation, operation) }"
         if provider.provider_key == 'max_messaging':
@@ -237,7 +251,7 @@ class VendorHttpLiveTransport:
 
 def build_live_http_transports(secret_vault: SecretVault, *, bind_live_network: bool = False, media_preparation: ProviderMediaPreparationCoordinator | None = None) -> dict[str, VendorHttpLiveTransport]:
     providers = ('telegram_bot','whatsapp_cloud','vk_messaging','max_messaging','slack_messaging','discord_messaging','instagram_messaging','messenger_messaging','line_messaging','viber_messaging','shopify','woocommerce','hubspot','meta_ads','google_ads','tiktok_ads')
-    live_network_keys = {'telegram_bot','hubspot','vk_messaging','max_messaging','slack_messaging','discord_messaging','instagram_messaging','messenger_messaging','line_messaging','viber_messaging'}
+    live_network_keys = {'telegram_bot','whatsapp_cloud','hubspot','vk_messaging','max_messaging','slack_messaging','discord_messaging','instagram_messaging','messenger_messaging','line_messaging','viber_messaging'}
     return {key: VendorHttpLiveTransport(secret_vault=secret_vault, provider_key=key, bind_live_network=bind_live_network and key in live_network_keys, media_preparation=media_preparation) for key in providers}
 
 

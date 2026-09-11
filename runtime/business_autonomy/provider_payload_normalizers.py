@@ -89,9 +89,26 @@ class ProviderPayloadNormalizers:
         key = provider.provider_key
         operation = str(operation or '').strip()
         if key == 'telegram_bot':
-            return {'chat_id': str(raw.get('chat_id') or '{chat_id}'), 'text': str(raw.get('text') or raw.get('message') or '')} if operation == 'communications_write' else raw
+            if operation not in {'communications_write', 'message_send'}:
+                return raw
+            return {
+                'chat_id': str(raw.get('chat_id') or raw.get('user_id') or raw.get('recipient') or '{chat_id}').strip(),
+                'text': str(raw.get('text') or raw.get('message') or raw.get('body') or ''),
+            }
         if key == 'whatsapp_cloud':
-            return {'messaging_product': raw.get('messaging_product') or 'whatsapp', 'to': str(raw.get('to') or '{recipient_phone}'), 'type': str(raw.get('type') or 'text'), 'text': dict(raw.get('text') or {'body': str(raw.get('body') or raw.get('message') or '')}), **{k: v for k, v in raw.items() if k not in {'messaging_product', 'to', 'type', 'text', 'body', 'message'}}}
+            if operation not in {'communications_write', 'message_send'}:
+                return raw
+            recipient = str(raw.get('to') or raw.get('user_id') or raw.get('recipient') or raw.get('phone') or '{recipient_phone}').strip()
+            if recipient.startswith('+'):
+                recipient = recipient[1:]
+            raw_text = raw.get('text')
+            body = str(raw_text.get('body') or '') if isinstance(raw_text, Mapping) else str(raw_text or raw.get('body') or raw.get('message') or '')
+            return {
+                'messaging_product': 'whatsapp',
+                'to': recipient,
+                'type': 'text',
+                'text': {'body': body},
+            }
         if operation in {'communications_write', 'message_send'} and key == 'email_connector':
             return {
                 'recipient': str(raw.get('recipient') or raw.get('email') or raw.get('to') or raw.get('user_id') or ''),

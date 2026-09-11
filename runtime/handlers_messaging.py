@@ -16,6 +16,19 @@ from runtime.tenancy import UNKNOWN_TENANT_ID, normalize_tenant_id
 
 log = logging.getLogger(__name__)
 
+_PROVIDER_KEY_BY_CHANNEL = {
+    "telegram": "telegram_bot",
+    "whatsapp": "whatsapp_cloud",
+    "vk": "vk_messaging",
+    "max": "max_messaging",
+    "slack": "slack_messaging",
+    "discord": "discord_messaging",
+    "instagram": "instagram_messaging",
+    "messenger": "messenger_messaging",
+    "line": "line_messaging",
+    "viber": "viber_messaging",
+}
+
 
 def _message_priority_fields(payload: dict) -> tuple[str, bool]:
     kind = payload.get("kind")
@@ -56,8 +69,19 @@ def _build_send_kwargs(payload: dict, env) -> dict:
     priority, critical = _message_priority_fields(payload)
     channel = normalize_channel(str(payload.get("channel") or "telegram"))
     track_payload = dict(payload.get("track_payload") or {})
-    if channel in {"vk", "max", "slack", "discord", "instagram", "messenger", "line", "viber"}:
-        track_payload["_provider_native"] = {"provider_key": f"{channel}_messaging", **{key: payload.get(key) for key in ("business_id", "approval_id", "peer_id", "chat_id", "random_id", "channel_id", "recipient_id", "to", "receiver") if payload.get(key) not in {None, ""}}}
+    expected_provider_key = _PROVIDER_KEY_BY_CHANNEL.get(channel)
+    requested_provider_key = str(payload.get("provider_key") or "").strip()
+    provider_native = bool(expected_provider_key and (channel != "telegram" or requested_provider_key == expected_provider_key))
+    if requested_provider_key and requested_provider_key != expected_provider_key:
+        raise ValueError("MESSAGING_PROVIDER_CHANNEL_MISMATCH")
+    if provider_native:
+        native_context = {
+            "provider_key": expected_provider_key,
+            **{key: payload.get(key) for key in ("business_id", "approval_id", "peer_id", "chat_id", "random_id", "channel_id", "recipient_id", "to", "receiver") if payload.get(key) not in {None, ""}},
+        }
+        if channel == "whatsapp" and isinstance(payload.get("whatsapp_policy_attestation"), dict):
+            native_context["whatsapp_policy_attestation"] = dict(payload["whatsapp_policy_attestation"])
+        track_payload["_provider_native"] = native_context
     return {
         "decision_id": env.decision.decision_id,
         "correlation_id": env.decision.correlation_id,

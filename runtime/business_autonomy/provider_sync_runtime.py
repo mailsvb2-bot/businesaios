@@ -29,7 +29,10 @@ _READS = {
 
 _WRITES = {
     'telegram_bot': ('message_send',),
-    'whatsapp_cloud': ('message_send', 'template_send'),
+    # Guarded owner outbound v1 certifies plain-text sends only. WhatsApp
+    # template policy/window semantics remain outside the live write plan until
+    # their separate consent/template evidence contract is proven.
+    'whatsapp_cloud': ('message_send',),
     'email_connector': ('message_send', 'campaign_send'),
     'sms_connector': ('message_send',),
     'webflow': ('page_publish', 'cms_item_publish'),

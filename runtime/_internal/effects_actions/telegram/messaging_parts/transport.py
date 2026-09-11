@@ -115,13 +115,14 @@ def telegram_delivery(self, *, msg) -> tuple[bool, dict]:
     return bool(ok), out
 
 
-def multichannel_delivery(self=None, *, msg) -> tuple[bool, dict]:
+def multichannel_delivery(self=None, *, msg, business_provider: bool = False) -> tuple[bool, dict]:
     delivery_key = msg.delivery_key
     existing = _receipt(getattr(self, "delivery_state", None), delivery_key=delivery_key)
     if existing is not None:
         phase = str(existing.get("delivery_phase") or existing.get("metadata", {}).get("delivery_phase") or "finalized")
         return True, {"channel": msg.channel, "dedup": True, "delivery_key": delivery_key, "receipt": existing, "payload_digest": getattr(msg, "payload_digest", None), "delivery_phase": phase, "delivery_finalized": phase == "finalized"}
-    result = get_multichannel_effects_bridge().send(msg)
+    bridge = get_multichannel_effects_bridge()
+    result = bridge.send_business_provider(msg) if business_provider else bridge.send(msg)
     if not isinstance(result, DeliveryResult):
         raise RuntimeError("INVALID_DELIVERY_RESULT")
     mode = str(result.mode or "").strip().casefold()
@@ -145,9 +146,11 @@ def multichannel_delivery(self=None, *, msg) -> tuple[bool, dict]:
 
 def build_single_sender(self):
     def _send_one(selected_msg):
-        if selected_msg.channel == "telegram":
+        native_context = (selected_msg.track_payload or {}).get("_provider_native") if isinstance(selected_msg.track_payload, dict) else None
+        business_telegram = selected_msg.channel == "telegram" and isinstance(native_context, Mapping) and str(native_context.get("provider_key") or "") == "telegram_bot"
+        if selected_msg.channel == "telegram" and not business_telegram:
             telegram_pre_send(self, msg=selected_msg)
             telegram_throttle(self, user_id=selected_msg.user_id, decision_id=selected_msg.decision_id, correlation_id=selected_msg.correlation_id, force_direct=callable(getattr(selected_msg, "transport_guard", None)))
             return telegram_delivery(self, msg=selected_msg)
-        return multichannel_delivery(self, msg=selected_msg)
+        return multichannel_delivery(self, msg=selected_msg, business_provider=business_telegram)
     return _send_one

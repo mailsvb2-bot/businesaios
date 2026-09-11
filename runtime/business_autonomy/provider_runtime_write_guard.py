@@ -55,6 +55,11 @@ class ProviderRuntimeWriteGuard:
         provenance = normalize_owner_decision_provenance(provenance_raw)
         if provenance_raw is not None and not provenance:
             return {"allowed": False, "reason": "decision_provenance_invalid"}
+        if provider.provider_key == "whatsapp_cloud":
+            attestation = raw.get("whatsapp_policy_attestation")
+            valid_attestation = isinstance(attestation, Mapping) and attestation.get("recipient_opted_in") is True and attestation.get("customer_service_window") is True
+            if not valid_attestation:
+                return {"allowed": False, "reason": "whatsapp_policy_attestation_required", "required_fields": ["whatsapp_policy_attestation.recipient_opted_in", "whatsapp_policy_attestation.customer_service_window"]}
         decision_id, execution_id = str(approval.get("decision_id") or "").strip(), str(approval.get("execution_id") or "").strip()
         if not str(tenant_id or "").strip() or not str(business_id or "").strip() or not decision_id or not execution_id:
             return {"allowed": False, "reason": "approval_context_missing", "required_fields": ["tenant_id", "business_id", "_approval.decision_id", "_approval.execution_id", "_approval.approval_id"]}

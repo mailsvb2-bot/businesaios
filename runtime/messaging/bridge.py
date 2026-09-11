@@ -3,7 +3,7 @@ from __future__ import annotations
 from collections.abc import Mapping
 from dataclasses import replace
 
-from runtime.messaging.bootstrap import build_multichannel_dispatcher
+from runtime.messaging.bootstrap import _NativeProviderQueueAdapter, build_multichannel_dispatcher
 from runtime.messaging.channel_normalizer import normalize_channel
 from runtime.messaging.delivery_result import DeliveryResult
 from runtime.messaging.outbound_message import OutboundMessage
@@ -60,8 +60,20 @@ def _bind_native_provider_context(msg: OutboundMessage) -> OutboundMessage:
 class MultiChannelEffectsBridge:
     def __init__(self) -> None:
         self._dispatcher = build_multichannel_dispatcher()
+        self._business_provider_adapters = {"telegram": _NativeProviderQueueAdapter("telegram")}
+
     def send(self, msg: OutboundMessage) -> DeliveryResult:
         return self._dispatcher.send(_bind_native_provider_context(msg))
+
+    def send_business_provider(self, msg: OutboundMessage) -> DeliveryResult:
+        try:
+            channel = normalize_channel(msg.channel)
+        except ValueError:
+            return DeliveryResult(False, str(msg.channel), "missing_adapter", "", {"reason": "missing_adapter", "channel": str(msg.channel)})
+        adapter = self._business_provider_adapters.get(channel)
+        if adapter is None:
+            return DeliveryResult(False, channel, "missing_adapter", "", {"reason": "missing_business_provider_adapter", "channel": channel})
+        return adapter.send(msg)
 
 _BRIDGE: MultiChannelEffectsBridge | None = None
 

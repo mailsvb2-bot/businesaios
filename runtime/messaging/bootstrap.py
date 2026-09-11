@@ -19,7 +19,7 @@ _SPECIAL_ADAPTER_FACTORIES = {
     "api": APIGatewayAdapter,
 }
 _PROVIDER_TRANSPORT_KINDS = frozenset({"provider_webhook", "smtp"})
-_NATIVE_QUEUE_PROVIDERS = {"vk": "vk_messaging", "max": "max_messaging", "slack": "slack_messaging", "discord": "discord_messaging", "instagram": "instagram_messaging", "messenger": "messenger_messaging", "line": "line_messaging", "viber": "viber_messaging", "email": "email_connector"}
+_NATIVE_QUEUE_PROVIDERS = {"telegram": "telegram_bot", "whatsapp": "whatsapp_cloud", "vk": "vk_messaging", "max": "max_messaging", "slack": "slack_messaging", "discord": "discord_messaging", "instagram": "instagram_messaging", "messenger": "messenger_messaging", "line": "line_messaging", "viber": "viber_messaging", "email": "email_connector"}
 def _build_provider_adapter(channel: str):
     spec = CHANNEL_SPECS[channel]
     runner_type = make_channel_runner(
@@ -29,6 +29,19 @@ def _build_provider_adapter(channel: str):
     )
     adapter_type = make_channel_adapter(runner_factory=runner_type)
     return adapter_type()
+
+class _ProviderAwareChannelAdapter:
+    def __init__(self, *, channel: str, fallback, native: _NativeProviderQueueAdapter) -> None:
+        self.channel = str(channel)
+        self.fallback = fallback
+        self.native = native
+
+    def send(self, msg) -> DeliveryResult:
+        native_context = (msg.track_payload or {}).get("_provider_native") if isinstance(msg.track_payload, dict) else None
+        if isinstance(native_context, Mapping) and str(native_context.get("provider_key") or "").strip() == self.native.provider_key:
+            return self.native.send(msg)
+        return self.fallback.send(msg)
+
 
 class _NativeProviderQueueAdapter:
     def __init__(self, channel: str, service_factory=None) -> None:
@@ -47,16 +60,20 @@ class _NativeProviderQueueAdapter:
         if native_context is None and self.provider_key != "email_connector":
             return DeliveryResult(False, self.channel, "blocked", "", {"provider": self.provider_key, "reason": "native_context_required"})
         context = dict(native_context or {})
+        if str(context.get("provider_key") or self.provider_key).strip() != self.provider_key:
+            return DeliveryResult(False, self.channel, "blocked", "", {"provider": self.provider_key, "reason": "native_provider_context_mismatch"})
         business_id = str(context.get("business_id") or getattr(msg, "business_id", "") or "").strip()
         if not business_id:
             return DeliveryResult(False, self.channel, "blocked", "", {"provider": self.provider_key, "reason": "native_business_id_required"})
         if self.provider_key in {"slack_messaging", "discord_messaging"} and not str(context.get("channel_id") or "").strip():
             return DeliveryResult(False, self.channel, "blocked", "", {"provider": self.provider_key, "reason": "native_channel_id_required"})
-        if (recipient_key := {"instagram_messaging": "recipient_id", "messenger_messaging": "recipient_id", "line_messaging": "to", "viber_messaging": "receiver"}.get(self.provider_key)) and not str(context.get(recipient_key) or "").strip():
+        if (recipient_key := {"telegram_bot": "chat_id", "whatsapp_cloud": "to", "instagram_messaging": "recipient_id", "messenger_messaging": "recipient_id", "line_messaging": "to", "viber_messaging": "receiver"}.get(self.provider_key)) and not str(context.get(recipient_key) or "").strip():
             return DeliveryResult(False, self.channel, "blocked", "", {"provider": self.provider_key, "reason": "native_recipient_id_required"})
         service = self._service()
         message_payload = dict(getattr(msg, "payload", {}) or {})
         payload = ProviderPayloadNormalizers().normalize_outbound(provider=service.provider_registry.get(self.provider_key), operation="message_send", payload={"user_id": msg.user_id, "text": msg.text, "reply_markup": msg.reply_markup, **({"subject": message_payload.get("subject")} if self.provider_key == "email_connector" and message_payload.get("subject") else {}), **({"attachments": [dict(item) for item in msg.attachments]} if msg.attachments else {}), **{key: context[key] for key in ("peer_id", "chat_id", "random_id", "channel_id", "recipient_id", "to", "receiver") if key in context}})
+        if self.provider_key == "whatsapp_cloud" and isinstance(context.get("whatsapp_policy_attestation"), Mapping):
+            payload["whatsapp_policy_attestation"] = dict(context["whatsapp_policy_attestation"])
         provenance = normalize_owner_decision_provenance(msg.track_payload)
         if provenance:
             payload["_decision_provenance"] = provenance
@@ -86,16 +103,19 @@ def build_multichannel_dispatcher() -> MultiChannelDispatcher:
     for channel, spec in CHANNEL_SPECS.items():
         if spec.transport_kind == "bot_api":
             continue
-        special_factory = _SPECIAL_ADAPTER_FACTORIES.get(channel)
-        if special_factory is not None:
-            adapters[channel] = special_factory()
+        if channel == "whatsapp":
+            adapters[channel] = _ProviderAwareChannelAdapter(channel=channel, fallback=_build_provider_adapter(channel), native=_NativeProviderQueueAdapter(channel))
             continue
         if channel in _NATIVE_QUEUE_PROVIDERS:
             adapters[channel] = _NativeProviderQueueAdapter(channel)
+            continue
+        special_factory = _SPECIAL_ADAPTER_FACTORIES.get(channel)
+        if special_factory is not None:
+            adapters[channel] = special_factory()
             continue
         if spec.transport_kind not in _PROVIDER_TRANSPORT_KINDS:
             raise RuntimeError(f"messaging adapter factory missing for {channel}: {spec.transport_kind}")
         adapters[channel] = _build_provider_adapter(channel)
     return MultiChannelDispatcher(adapters=adapters)
 
-__all__ = ["_NativeProviderQueueAdapter", "build_multichannel_dispatcher"]
+__all__ = ["_NativeProviderQueueAdapter", "_ProviderAwareChannelAdapter", "build_multichannel_dispatcher"]
