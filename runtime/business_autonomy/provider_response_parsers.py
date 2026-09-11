@@ -88,6 +88,10 @@ class ProviderResponseParsers:
                 value = body['result'].get('message_id') or body['result'].get('id')
                 if value not in {None, ''}:
                     return str(value)
+            if provider_key == 'whatsapp_cloud' and isinstance(body.get('messages'), list) and body.get('messages'):
+                first = body['messages'][0]
+                if isinstance(first, Mapping) and first.get('id') not in {None, ''}:
+                    return str(first['id'])
             if provider_key == 'vk_messaging' and body.get('response') is not None and body.get('response') != '' and not isinstance(body.get('response'), dict | list):
                 return str(body['response'])
             if provider_key == 'max_messaging':
@@ -123,6 +127,8 @@ class ProviderResponseParsers:
         if isinstance(body, dict):
             if provider_key == 'viber_messaging' and body.get('status') not in {None, 0, '0'}:
                 return str(body.get('status'))
+            if provider_key == 'telegram_bot' and body.get('ok') is False:
+                return str(body.get('error_code') or 'telegram_api_error')
             if provider_key == 'slack_messaging' and body.get('ok') is False:
                 return str(body.get('error') or 'slack_api_error')
             if isinstance(body.get('error'), dict):

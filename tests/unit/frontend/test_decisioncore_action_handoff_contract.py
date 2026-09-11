@@ -48,3 +48,15 @@ def test_action_center_shows_server_linked_decisioncore_result_without_overclaim
     assert "Сервер подтвердил происхождение" in app
     assert "не объявляется доказанной доставкой получателю" in app
     assert "decision_provenance" in app
+
+
+def test_action_center_routes_business_telegram_and_whatsapp_through_guarded_provider_keys() -> None:
+    app = _read("App.jsx")
+    assert 'key === "telegram_bot" ? "telegram"' in app
+    assert 'key === "whatsapp_cloud" ? "whatsapp"' in app
+    assert 'provider_key: providerKey' in app
+    assert 'if (key === "telegram_bot") return { chat_id: recipient }' in app
+    assert 'if (key === "whatsapp_cloud") return { to: recipient }' in app
+    assert 'providerKey === "whatsapp_cloud" ? { whatsapp_policy_attestation:' in app
+    assert "Получатель дал согласие на сообщения" in app
+    assert "24-часовом customer-service window" in app

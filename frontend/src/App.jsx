@@ -168,11 +168,13 @@ function providerWebhookUrl(apiBase, data, provider) {
 
 function messagingChannelForProvider(providerKey) {
   const key = String(providerKey || "");
-  return key === "email_connector" ? "email" : key.endsWith("_messaging") ? key.slice(0, -10) : "";
+  return key === "telegram_bot" ? "telegram" : key === "whatsapp_cloud" ? "whatsapp" : key === "email_connector" ? "email" : key.endsWith("_messaging") ? key.slice(0, -10) : "";
 }
 
 function providerRecipientContext(providerKey, recipient) {
   const key = String(providerKey || "");
+  if (key === "telegram_bot") return { chat_id: recipient };
+  if (key === "whatsapp_cloud") return { to: recipient };
   if (["slack_messaging", "discord_messaging"].includes(key)) return { channel_id: recipient };
   if (["instagram_messaging", "messenger_messaging"].includes(key)) return { recipient_id: recipient };
   if (key === "line_messaging") return { to: recipient };
@@ -184,6 +186,8 @@ function providerRecipientContext(providerKey, recipient) {
 
 function recipientFieldCopy(providerKey) {
   const key = String(providerKey || "");
+  if (key === "telegram_bot") return { label: "Chat ID Telegram", placeholder: "ID чата или @channelusername" };
+  if (key === "whatsapp_cloud") return { label: "Номер WhatsApp", placeholder: "79991234567" };
   if (key === "email_connector") return { label: "Email получателя", placeholder: "name@example.com" };
   if (["slack_messaging", "discord_messaging"].includes(key)) return { label: "ID канала", placeholder: "ID канала, куда нужно отправить сообщение" };
   if (key === "vk_messaging") return { label: "ID получателя или диалога", placeholder: "ID пользователя или диалога ВКонтакте" };
@@ -245,6 +249,10 @@ function providerHistoryDisposition(providerKey, row) {
   const acceptedWithReceipt = row?.accepted === true && status === "live_executed" && Boolean(String(parsed.resource_id || "").trim());
   let delivered = acceptedWithReceipt;
   let acceptedWithoutDeliveryProof = false;
+  if (String(providerKey || "") === "whatsapp_cloud" && acceptedWithReceipt) {
+    delivered = false;
+    acceptedWithoutDeliveryProof = true;
+  }
   if (String(providerKey || "") === "email_connector" && acceptedWithReceipt) {
     delivered = row?.transport_response?.smtp?.delivered === true;
     acceptedWithoutDeliveryProof = !delivered;
@@ -342,6 +350,8 @@ function Workspace({ data, apiBase, businesses, onRestart, onRetryAccess, onSwit
   const [operationRecipient, setOperationRecipient] = useState("");
   const [operationSubject, setOperationSubject] = useState("");
   const [operationText, setOperationText] = useState("");
+  const [operationWhatsappOptIn, setOperationWhatsappOptIn] = useState(false);
+  const [operationWhatsappWindow, setOperationWhatsappWindow] = useState(false);
   const [operationBusy, setOperationBusy] = useState("");
   const [operationError, setOperationError] = useState("");
   const [operationResult, setOperationResult] = useState(null);
@@ -530,7 +540,7 @@ function Workspace({ data, apiBase, businesses, onRestart, onRetryAccess, onSwit
   const operationProviderAccepted = Boolean(operationProviderResult?.accepted) && String(operationProviderResult?.status || "") === "live_executed";
   const operationProviderResourceId = String(operationProviderResult?.parsed_response?.resource_id || "");
   const selectedCustomer = customers.find((row) => row.customer_id === selectedCustomerId) || customers[0] || null;
-  const providerKeyForChannel = (channel) => channel === "email" ? "email_connector" : `${channel}_messaging`;
+  const providerKeyForChannel = (channel) => channel === "telegram" ? "telegram_bot" : channel === "whatsapp" ? "whatsapp_cloud" : channel === "email" ? "email_connector" : `${channel}_messaging`;
   const readyIdentityProvider = (identity) => readyOperationProviders.find((row) => row.provider_key === providerKeyForChannel(identity.channel));
 
   useEffect(() => {
@@ -657,6 +667,10 @@ function Workspace({ data, apiBase, businesses, onRestart, onRetryAccess, onSwit
       setOperationError("Выберите готовый канал, укажите получателя и текст сообщения.");
       return;
     }
+    if (activeOperationProvider.provider_key === "whatsapp_cloud" && (!operationWhatsappOptIn || !operationWhatsappWindow)) {
+      setOperationError("Для WhatsApp подтвердите согласие получателя и действующее 24-часовое окно переписки. Без этого plain-text отправка заблокирована.");
+      return;
+    }
     const recipient = operationRecipient.trim();
     const messageText = operationText.trim();
     const subjectText = operationSubject.trim();
@@ -669,7 +683,7 @@ function Workspace({ data, apiBase, businesses, onRestart, onRetryAccess, onSwit
     } : null;
     const outcome = await runOperation("message_send", actionExecuteUrl, {
       action_type: "send_message@v1",
-      payload: { business_id: data.business_id, user_id: recipient, text: messageText, channel: messagingChannelForProvider(providerKey), kind: operationOrigin ? "owner_decision_draft" : "owner_manual", ...providerRecipientContext(providerKey, recipient), ...(subjectText ? { subject: subjectText } : {}), ...(draftOrigin ? { track_payload: draftOrigin } : {}) }
+      payload: { business_id: data.business_id, provider_key: providerKey, user_id: recipient, text: messageText, channel: messagingChannelForProvider(providerKey), kind: operationOrigin ? "owner_decision_draft" : "owner_manual", ...providerRecipientContext(providerKey, recipient), ...(providerKey === "whatsapp_cloud" ? { whatsapp_policy_attestation: { recipient_opted_in: operationWhatsappOptIn, customer_service_window: operationWhatsappWindow } } : {}), ...(subjectText ? { subject: subjectText } : {}), ...(draftOrigin ? { track_payload: draftOrigin } : {}) }
     }, { ...authHeaders, "X-Idempotency-Key": operationDraftKey, "X-Action-ID": operationDraftKey });
     if (!outcome || !outcome.nextOperations) return;
     const preparedApproval = (outcome.nextOperations.approvals || []).some((row) => approvalMatchesDraftIdentity(row, data.tenant_id, operationDraftKey)
@@ -681,6 +695,8 @@ function Workspace({ data, apiBase, businesses, onRestart, onRetryAccess, onSwit
       clearOperationStale();
       setOperationText("");
       setOperationSubject("");
+      setOperationWhatsappOptIn(false);
+      setOperationWhatsappWindow(false);
       setOperationOrigin(null);
       setOperationDraftKey(crypto.randomUUID());
     } else if (idempotencyInProgress) {
@@ -1244,9 +1260,10 @@ function Workspace({ data, apiBase, businesses, onRestart, onRetryAccess, onSwit
             {operationOrigin ? <div className="decision-draft-origin" role="status"><strong>Черновик из DecisionCore</strong><span>Источник проверен по серверному ledger: run {operationOrigin.run_id}. Это только основа черновика — текст, канал и получателя нужно проверить перед созданием approval.</span>{!operationRecipient ? <button type="button" className="ghost small" onClick={() => document.getElementById("business-customers-title")?.scrollIntoView({ behavior: "smooth", block: "start" })}>Выбрать клиента</button> : null}</div> : null}
             {readyOperationProviders.length ? (
               <>
-                <label>Канал<select aria-label="Канал для действия" disabled={operationQueueStale} value={activeOperationProvider?.provider_key || ""} onChange={(event) => { setOperationProviderKey(event.target.value); setOperationRecipient(""); setOperationSubject(""); setOperationDraftKey(crypto.randomUUID()); }}>{readyOperationProviders.map((item) => <option value={item.provider_key} key={item.provider_key}>{item.title}</option>)}</select></label>
+                <label>Канал<select aria-label="Канал для действия" disabled={operationQueueStale} value={activeOperationProvider?.provider_key || ""} onChange={(event) => { setOperationProviderKey(event.target.value); setOperationRecipient(""); setOperationSubject(""); setOperationWhatsappOptIn(false); setOperationWhatsappWindow(false); setOperationDraftKey(crypto.randomUUID()); }}>{readyOperationProviders.map((item) => <option value={item.provider_key} key={item.provider_key}>{item.title}</option>)}</select></label>
                 <label>{operationRecipientCopy.label}<input disabled={operationQueueStale} value={operationRecipient} onChange={(event) => { setOperationRecipient(event.target.value); setOperationDraftKey(crypto.randomUUID()); }} placeholder={operationRecipientCopy.placeholder} /></label>
                 {activeOperationProvider?.provider_key === "email_connector" ? <label>Тема<input disabled={operationQueueStale} value={operationSubject} onChange={(event) => { setOperationSubject(event.target.value); setOperationDraftKey(crypto.randomUUID()); }} placeholder="Тема письма" /></label> : null}
+                {activeOperationProvider?.provider_key === "whatsapp_cloud" ? <div className="recovery-box"><strong>Условия WhatsApp plain-text</strong><label><input type="checkbox" disabled={operationQueueStale} checked={operationWhatsappOptIn} onChange={(event) => { setOperationWhatsappOptIn(event.target.checked); setOperationDraftKey(crypto.randomUUID()); }} /> Получатель дал согласие на сообщения</label><label><input type="checkbox" disabled={operationQueueStale} checked={operationWhatsappWindow} onChange={(event) => { setOperationWhatsappWindow(event.target.checked); setOperationDraftKey(crypto.randomUUID()); }} /> Диалог находится в допустимом 24-часовом customer-service window</label><small className="helper-text">Подтверждения войдут в approval fingerprint и не отправляются в Meta API. Template messages в этом контуре не включены.</small></div> : null}
                 <label>Сообщение<textarea disabled={operationQueueStale} value={operationText} onChange={(event) => { setOperationText(event.target.value); setOperationDraftKey(crypto.randomUUID()); }} placeholder="Что BusinessAIOS должен подготовить для отправки" /></label>
                 <button type="button" className="primary" disabled={Boolean(operationBusy) || operationQueueStale} onClick={prepareMessage}>{operationBusy === "message_send" ? "Готовим…" : "Подготовить к отправке"}</button>
                 <small className="helper-text">Это только создаёт действие для проверки. Нажатие этой кнопки само по себе ничего внешнему получателю не отправляет.</small>
