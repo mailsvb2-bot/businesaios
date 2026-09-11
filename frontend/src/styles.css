@@ -424,3 +424,10 @@ button:disabled { cursor: not-allowed; opacity: .46; transform: none !important;
 .approval-card-head > div { display: grid; gap: 3px; }
 .approval-card-head > span { padding: 4px 8px; border-radius: 999px; background: rgba(245, 158, 11, .1); color: #946200; font-size: .72rem; white-space: nowrap; }
 @media (max-width: 700px) { .action-summary { grid-template-columns: 1fr; } .approval-card-head { flex-direction: column; } }
+
+.decision-draft-origin { display: grid; gap: 7px; padding: 12px 14px; border: 1px solid var(--line); border-radius: 13px; background: rgba(59, 130, 246, 0.06); }
+.decision-draft-origin span { color: var(--muted); font-size: 13px; line-height: 1.45; overflow-wrap: anywhere; }
+.decision-draft-origin .ghost { justify-self: start; }
+
+.decision-result-evidence { display: grid; gap: .35rem; padding: .9rem 1rem; border: 1px solid var(--border-subtle); border-radius: 14px; margin-top: .9rem; }
+.decision-result-evidence span { color: var(--text-muted); font-size: .9rem; overflow-wrap: anywhere; }

@@ -1,13 +1,8 @@
-from __future__ import annotations
-
 """Final owner: entrypoints.api.headless_route_handlers."""
 
-CANON_API_HEADLESS_ROUTE_HANDLERS_FINAL_OWNER = True
-CANON_API_HEADLESS_ROUTE_HANDLERS_SINGLE_RUNTIME_PROVIDER = True
+from __future__ import annotations
 
 from dataclasses import dataclass, field
-
-from execution.headless_boot import build_headless_runtime
 
 from application.capability.capability_operator_view import merge_capability_views, normalize_capability_view
 from application.headless.models import CEOParticipation, GoalExecutionRequest
@@ -16,7 +11,17 @@ from entrypoints.api.headless_models import (
     ExecuteGoalResponse,
     ExecuteGoalStepResponse,
 )
-from entrypoints.api.headless_runtime_provider import HeadlessRuntimeProvider, build_default_headless_runtime_provider, build_headless_runtime_provider
+from entrypoints.api.headless_runtime_provider import (
+    HeadlessRuntimeProvider,
+    build_default_headless_runtime_provider,
+    build_headless_runtime_provider,
+)
+from execution.headless_boot import (
+    build_headless_runtime,  # noqa: F401 -- runtime owner is intentionally monkeypatchable via globals()
+)
+
+CANON_API_HEADLESS_ROUTE_HANDLERS_FINAL_OWNER = True
+CANON_API_HEADLESS_ROUTE_HANDLERS_SINGLE_RUNTIME_PROVIDER = True
 
 
 def _bootstrap_headless_runtime() -> object:
@@ -27,7 +32,7 @@ def _default_runtime_provider() -> HeadlessRuntimeProvider:
     return build_headless_runtime_provider(runtime=_bootstrap_headless_runtime())
 
 
-def build_headless_route_handlers(*, runtime_provider: HeadlessRuntimeProvider | None = None) -> "HeadlessRouteHandlers":
+def build_headless_route_handlers(*, runtime_provider: HeadlessRuntimeProvider | None = None) -> HeadlessRouteHandlers:
     return HeadlessRouteHandlers(runtime_provider=runtime_provider or build_default_headless_runtime_provider())
 
 
@@ -64,6 +69,8 @@ class HeadlessRouteHandlers:
             tenant_id=report.tenant_id,
             completed=report.completed,
             stop_reason=report.stop_reason,
+            run_id=str(getattr(report, "run_id", "") or ""),
+            trace_id=str(getattr(report, "trace_id", "") or ""),
             steps=[
                 ExecuteGoalStepResponse(
                     step_index=step.step_index,
@@ -72,6 +79,10 @@ class HeadlessRouteHandlers:
                     action=step.action,
                     status=step.status,
                     ok=step.ok,
+                    attempted=bool(getattr(step, "attempted", False)),
+                    executed=bool(getattr(step, "executed", False)),
+                    verified=bool(getattr(step, "verified", False)),
+                    operator_required=bool(getattr(step, "operator_required", False)),
                     correlation_id=step.correlation_id,
                     reason=step.reason,
                     payload=dict(step.payload),

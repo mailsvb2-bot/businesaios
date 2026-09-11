@@ -322,6 +322,7 @@ function Workspace({ data, apiBase, businesses, onRestart, onRetryAccess, onSwit
   const memorySummaryUrl = `${baseApi}/business-memory/summary`;
   const memoryRecentUrl = `${baseApi}/business-memory/recent-runs`;
   const goalExecuteUrl = `${baseApi}/goals/execute`;
+  const decisionDraftUrl = `${baseApi}/business-workspace/decision-draft`;
   const authHeaders = useMemo(() => (apiKey ? { "X-API-Key": apiKey } : {}), [apiKey]);
   const selectedKeys = useMemo(() => new Set(integrations.map((item) => item.provider_key)), [integrations]);
   const [catalog, setCatalog] = useState([]);
@@ -347,6 +348,7 @@ function Workspace({ data, apiBase, businesses, onRestart, onRetryAccess, onSwit
   const [operationQueueStale, setOperationQueueStale] = useState(false);
   const [operationRecovery, setOperationRecovery] = useState(null);
   const [operationDraftKey, setOperationDraftKey] = useState(() => crypto.randomUUID());
+  const [operationOrigin, setOperationOrigin] = useState(null);
   const [customers, setCustomers] = useState([]);
   const [selectedCustomerId, setSelectedCustomerId] = useState("");
   const [customerTimeline, setCustomerTimeline] = useState([]);
@@ -523,6 +525,10 @@ function Workspace({ data, apiBase, businesses, onRestart, onRetryAccess, onSwit
     const providerKey = providerKeyFromActionName(item?.action_name);
     return resumeCandidateHistoryDisposition(item, historyByProvider[providerKey] || []) === "terminal_non_delivery";
   });
+  const operationDecisionProvenance = operationResult?.execution?.decision_provenance || null;
+  const operationProviderResult = operationResult?.execution?.execution?.result || null;
+  const operationProviderAccepted = Boolean(operationProviderResult?.accepted) && String(operationProviderResult?.status || "") === "live_executed";
+  const operationProviderResourceId = String(operationProviderResult?.parsed_response?.resource_id || "");
   const selectedCustomer = customers.find((row) => row.customer_id === selectedCustomerId) || customers[0] || null;
   const providerKeyForChannel = (channel) => channel === "email" ? "email_connector" : `${channel}_messaging`;
   const readyIdentityProvider = (identity) => readyOperationProviders.find((row) => row.provider_key === providerKeyForChannel(identity.channel));
@@ -628,6 +634,7 @@ function Workspace({ data, apiBase, businesses, onRestart, onRetryAccess, onSwit
       if (alreadyPrepared) {
         clearOperationStale();
         setOperationText(""); setOperationSubject("");
+        setOperationOrigin(null);
         setOperationDraftKey(crypto.randomUUID());
         setOperationError("Действие уже найдено в очереди подтверждений. Повторная подготовка не нужна.");
       } else {
@@ -654,9 +661,15 @@ function Workspace({ data, apiBase, businesses, onRestart, onRetryAccess, onSwit
     const messageText = operationText.trim();
     const subjectText = operationSubject.trim();
     const providerKey = activeOperationProvider.provider_key;
+    const draftOrigin = operationOrigin ? {
+      source: "owner_decision_draft",
+      source_run_id: String(operationOrigin.run_id || ""),
+      source_decision_id: String(operationOrigin.decision_id || ""),
+      source_action_id: String(operationOrigin.action_id || "")
+    } : null;
     const outcome = await runOperation("message_send", actionExecuteUrl, {
       action_type: "send_message@v1",
-      payload: { business_id: data.business_id, user_id: recipient, text: messageText, channel: messagingChannelForProvider(providerKey), kind: "owner_manual", ...providerRecipientContext(providerKey, recipient), ...(subjectText ? { subject: subjectText } : {}) }
+      payload: { business_id: data.business_id, user_id: recipient, text: messageText, channel: messagingChannelForProvider(providerKey), kind: operationOrigin ? "owner_decision_draft" : "owner_manual", ...providerRecipientContext(providerKey, recipient), ...(subjectText ? { subject: subjectText } : {}), ...(draftOrigin ? { track_payload: draftOrigin } : {}) }
     }, { ...authHeaders, "X-Idempotency-Key": operationDraftKey, "X-Action-ID": operationDraftKey });
     if (!outcome || !outcome.nextOperations) return;
     const preparedApproval = (outcome.nextOperations.approvals || []).some((row) => approvalMatchesDraftIdentity(row, data.tenant_id, operationDraftKey)
@@ -668,6 +681,7 @@ function Workspace({ data, apiBase, businesses, onRestart, onRetryAccess, onSwit
       clearOperationStale();
       setOperationText("");
       setOperationSubject("");
+      setOperationOrigin(null);
       setOperationDraftKey(crypto.randomUUID());
     } else if (idempotencyInProgress) {
       markOperationStale({ kind: "draft", actionId: operationDraftKey });
@@ -908,6 +922,28 @@ function Workspace({ data, apiBase, businesses, onRestart, onRetryAccess, onSwit
     }, { ...authHeaders, "X-Idempotency-Key": crypto.randomUUID() });
   }, [apiKey, authHeaders, data.business_id, data.tenant_id, goalExecuteUrl, profile.business_model, profile.city, profile.industry]);
 
+  const prepareDecisionAction = useCallback(async (goalResult) => {
+    if (!apiKey) throw new Error("owner_session_required");
+    if (operationQueueStale) throw new Error("action_queue_stale");
+    const step = Array.isArray(goalResult?.steps) ? goalResult.steps[0] : null;
+    if (!goalResult?.run_id || !step?.decision_id || !step?.action_id) throw new Error("decision_draft_identity_missing");
+    const draft = await postJson(decisionDraftUrl, { run_id: goalResult.run_id, decision_id: step.decision_id, action_id: step.action_id }, authHeaders);
+    const suggestedProvider = readyOperationProviders.find((row) => row.provider_key === draft.suggested_provider_key) || null;
+    const customerMatches = (selectedCustomer?.identities || []).map((identity) => ({ identity, provider: readyIdentityProvider(identity) })).filter((item) => item.provider);
+    const customerMatch = customerMatches.length === 1 ? customerMatches[0] : null;
+    const provider = suggestedProvider || customerMatch?.provider || readyOperationProviders[0] || null;
+    const recipient = suggestedProvider && draft.recipient ? String(draft.recipient) : String(customerMatch?.identity?.external_subject || "");
+    setOperationProviderKey(provider?.provider_key || "");
+    setOperationRecipient(recipient);
+    setOperationSubject(provider?.provider_key === "email_connector" ? String(draft.subject || "") : "");
+    setOperationText(String(draft.text || ""));
+    setOperationOrigin(draft);
+    setOperationDraftKey(crypto.randomUUID());
+    setOperationError(recipient ? "" : "Черновик DecisionCore перенесён. Перед подготовкой выберите клиента или укажите получателя — BusinessAIOS не подставляет неизвестный адресат.");
+    document.getElementById("business-operations-title")?.scrollIntoView({ behavior: "smooth", block: "start" });
+    return draft;
+  }, [apiKey, authHeaders, decisionDraftUrl, operationQueueStale, readyOperationProviders, selectedCustomer]);
+
   const retryProtectedAccess = async () => {
     if (!data.intake_id || !onRetryAccess) return;
     setAccessRecoveryBusy(true);
@@ -981,6 +1017,7 @@ function Workspace({ data, apiBase, businesses, onRestart, onRetryAccess, onSwit
         initialGoal={GOALS.find((goal) => goal.value === profile.goal)?.title || "Улучшить результаты бизнеса"}
         onLoad={loadBusinessIntelligence}
         onRunGoal={runAdvisoryGoal}
+        onPrepareAction={prepareDecisionAction}
         onOpenSurface={openWorkspaceSection}
       />
 
@@ -1163,7 +1200,7 @@ function Workspace({ data, apiBase, businesses, onRestart, onRetryAccess, onSwit
           <article><small>Ждут решения</small><strong>{pendingApprovals.length}</strong><span>{pendingApprovals.length ? "проверьте получателя и содержание" : "очередь подтверждений пуста"}</span></article>
           <article><small>Нужно проверить выполнение</small><strong>{resumeCandidates.length}</strong><span>{resumeCandidates.length ? "approval уже подтверждён — доступен безопасный resume" : "незавершённых resume нет"}</span></article>
           <article><small>Готовые каналы</small><strong>{readyOperationProviders.length}</strong><span>{readyOperationProviders.length ? "можно подготовить новое действие" : "сначала завершите подключение канала"}</span></article>
-          <article><small>Последнее действие</small><strong>{operationResult ? "Есть результат" : "—"}</strong><span>{operationResult ? "технический результат доступен ниже" : "в этой сессии действий ещё не было"}</span></article>
+          <article><small>Последнее действие</small><strong>{operationDecisionProvenance ? "Связано с DecisionCore" : operationResult ? "Есть результат" : "—"}</strong><span>{operationDecisionProvenance ? `run ${operationDecisionProvenance.run_id}` : operationResult ? "технический результат доступен ниже" : "в этой сессии действий ещё не было"}</span></article>
         </div>
         <div className={`action-attention ${operationQueueStale ? "stale" : pendingApprovals.length ? "needs-review" : readyOperationProviders.length ? "ready" : "setup"}`} role="status">
           <strong>{operationQueueStale ? "Очередь требует обновления" : pendingApprovals.length ? `Вашего решения ждут: ${pendingApprovals.length}` : readyOperationProviders.length ? "Сейчас ничего не ждёт подтверждения" : "Сначала нужен готовый канал"}</strong>
@@ -1204,6 +1241,7 @@ function Workspace({ data, apiBase, businesses, onRestart, onRetryAccess, onSwit
           </div>
           <div className="operations-form">
             <div className="action-column-heading"><div><span className="step-kicker">2 · Подготовить</span><h3>Новое сообщение</h3></div></div>
+            {operationOrigin ? <div className="decision-draft-origin" role="status"><strong>Черновик из DecisionCore</strong><span>Источник проверен по серверному ledger: run {operationOrigin.run_id}. Это только основа черновика — текст, канал и получателя нужно проверить перед созданием approval.</span>{!operationRecipient ? <button type="button" className="ghost small" onClick={() => document.getElementById("business-customers-title")?.scrollIntoView({ behavior: "smooth", block: "start" })}>Выбрать клиента</button> : null}</div> : null}
             {readyOperationProviders.length ? (
               <>
                 <label>Канал<select aria-label="Канал для действия" disabled={operationQueueStale} value={activeOperationProvider?.provider_key || ""} onChange={(event) => { setOperationProviderKey(event.target.value); setOperationRecipient(""); setOperationSubject(""); setOperationDraftKey(crypto.randomUUID()); }}>{readyOperationProviders.map((item) => <option value={item.provider_key} key={item.provider_key}>{item.title}</option>)}</select></label>
@@ -1216,6 +1254,7 @@ function Workspace({ data, apiBase, businesses, onRestart, onRetryAccess, onSwit
             ) : <div className="recovery-box"><p>Сначала завершите подключение канала. Форма станет доступна только когда BusinessAIOS видит готовый путь внешнего действия.</p></div>}
           </div>
         </div>
+        {operationDecisionProvenance ? <div className="decision-result-evidence" role="status"><strong>Результат связан с решением DecisionCore</strong><span>Сервер подтвердил происхождение: run {operationDecisionProvenance.run_id}, decision {operationDecisionProvenance.decision_id}, action {operationDecisionProvenance.action_id}.</span><span>{operationProviderAccepted && operationProviderResourceId ? `Провайдер принял действие и вернул receipt ${operationProviderResourceId}. Это подтверждает приём провайдером, но не объявляется доказанной доставкой получателю.` : "Внешний результат пока не имеет подтверждённого provider receipt; используйте recovery и историю выполнения."}</span></div> : null}
         {operationResult ? <details className="technical-inline"><summary>Технические детали последнего действия</summary><pre>{JSON.stringify(operationResult, null, 2)}</pre></details> : null}
       </section>
 

@@ -263,6 +263,8 @@ class HeadlessExecutionContract:
             stop_reason=loop_result.stop_reason,
             steps=tuple(loop_result.steps),
             final_feedback=dict(loop_result.final_feedback),
+            run_id=str(loop_result.trace.run_id),
+            trace_id=str(loop_result.trace.trace_id),
             canonical_run_artifact=run_artifact,
         )
         last_step = loop_result.steps[-1] if loop_result.steps else None

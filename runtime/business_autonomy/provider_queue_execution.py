@@ -9,6 +9,7 @@ from uuid import uuid4
 from application.business_autonomy.provider_admin_contract import ProviderDefinition
 from application.business_autonomy.provider_runtime_contract import ProviderSyncRunResult
 from application.business_autonomy.provider_truth_matrix import provider_truth_map
+from contracts.owner_decision_provenance import normalize_owner_decision_provenance
 from runtime.business_autonomy.provider_live_sync_runtime import ProviderLiveSyncRuntime
 from runtime.business_autonomy.provider_media import (
     ProviderMediaPreparationCoordinator,
@@ -84,6 +85,15 @@ class ProviderQueueExecutionRuntime:
         normalized_mode = str(mode or 'live').strip().lower() or 'live'
         normalized_operation = str(operation).strip()
         source_payload = dict(payload or {})
+        provenance_raw = source_payload.get('_decision_provenance')
+        provenance = normalize_owner_decision_provenance(provenance_raw)
+        if provenance_raw is not None and not provenance:
+            return ProviderQueueDispatchResult(
+                job_id='', queued=False, status='decision_provenance_invalid',
+                metadata={'queue_name': str(queue_name), 'job_type': _PROVIDER_JOB_TYPE, 'provider_key': provider.provider_key, 'fail_closed_before_queue': True},
+            )
+        if provenance:
+            source_payload['_decision_provenance'] = provenance
         try:
             canonical_payload = _bind_native_audio_digest(source_payload, provider_key=provider.provider_key) if normalized_mode == 'live' and normalized_operation == 'message_send' else source_payload
         except (FileNotFoundError, OSError, ValueError) as exc:

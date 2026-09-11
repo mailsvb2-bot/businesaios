@@ -90,8 +90,10 @@ def build_approval_request(*, ctx: ActionExecutionContext, impact: ActionImpact,
     )
     resume_context = _safe_dict(ctx.metadata).get('approval_resume_context')
     completion_context = _safe_dict(ctx.metadata).get('approval_completion_context')
+    decision_provenance = _safe_dict(ctx.metadata).get('decision_provenance')
     persisted_resume_context = deepcopy(dict(resume_context)) if isinstance(resume_context, Mapping) else None
     persisted_completion_context = deepcopy(dict(completion_context)) if isinstance(completion_context, Mapping) else None
+    persisted_decision_provenance = deepcopy(dict(decision_provenance)) if isinstance(decision_provenance, Mapping) and decision_provenance else None
     return ApprovalRequest(
         approval_id=approval_id,
         tenant_id=ctx.tenant_id,
@@ -113,6 +115,7 @@ def build_approval_request(*, ctx: ActionExecutionContext, impact: ActionImpact,
             'impact_summary': _impact_summary(impact),
             'policy': dict(policy.to_dict()),
             **({'approval_resume_context': persisted_resume_context} if persisted_resume_context is not None else {}),
+            **({'decision_provenance': persisted_decision_provenance} if persisted_decision_provenance is not None else {}),
             **({'approval_completion_context': persisted_completion_context} if persisted_completion_context is not None else {}),
         },
     )

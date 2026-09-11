@@ -107,6 +107,8 @@ class GoalExecutionReport:
     stop_reason: str
     steps: tuple[GoalExecutionStep, ...]
     final_feedback: dict[str, Any] = field(default_factory=dict)
+    run_id: str = ""
+    trace_id: str = ""
     canonical_run_artifact: dict[str, Any] = field(default_factory=dict)
 
     @property

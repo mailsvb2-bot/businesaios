@@ -32,6 +32,10 @@ class ExecuteGoalStepResponse(BaseModel):
     action: str
     status: str
     ok: bool
+    attempted: bool = False
+    executed: bool = False
+    verified: bool = False
+    operator_required: bool = False
     correlation_id: str | None = None
     reason: str | None = None
     payload: dict = Field(default_factory=dict)
@@ -45,6 +49,8 @@ class ExecuteGoalResponse(BaseModel):
     tenant_id: str
     completed: bool
     stop_reason: str
+    run_id: str = ""
+    trace_id: str = ""
     steps: list[ExecuteGoalStepResponse] = Field(default_factory=list)
     final_feedback: dict = Field(default_factory=dict)
     capability_view: dict = Field(default_factory=dict)
