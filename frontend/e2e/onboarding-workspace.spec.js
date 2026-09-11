@@ -80,6 +80,15 @@ test(canonicalScenario.title, async ({ page }, testInfo) => {
   await expect(page.getByText("Только чтение", { exact: true })).toBeVisible();
   await expect(page.getByRole("button", { name: new RegExp(providerTitle) })).toBeVisible();
   await expect(page.getByRole("heading", { name: "Первый полезный результат" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Где бизнес теряет время и деньги" })).toBeVisible();
+  await page.getByText("Добавить реальный факт о повторяющемся процессе").click();
+  await page.getByLabel("Процесс").fill("browser_followup");
+  await page.getByLabel("Когда произошло").fill(new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString().slice(0, 16));
+  await page.getByLabel("Ручное время, мин").fill("20");
+  const processWritePromise = page.waitForResponse((response) => response.url().includes("/api/business-workspace/process-observations") && response.request().method() === "POST");
+  await page.getByRole("button", { name: "Сохранить факт" }).click();
+  expect((await processWritePromise).status()).toBe(200);
+  await expect(page.getByText(/Факт сохранён как owner-asserted evidence/)).toBeVisible();
   await expect(page.getByRole("heading", { name: "Продажи", level: 2 })).toBeVisible();
   await expect(page.getByText("Нули вместо неизвестных значений не подставляются.")).toHaveCount(0);
   await expect(page.getByRole("button", { name: "Подключить HubSpot" })).toBeVisible();

@@ -5,6 +5,7 @@ from dataclasses import asdict, dataclass
 from typing import Any
 
 from application.business_autonomy.provider_admin_contract import ProviderCredentialSubmission
+from application.business_autonomy.provider_delivery_truth import provider_approval_completion_truth
 from contracts.customer import CustomerNotFound
 from contracts.owner_decision_provenance import normalize_owner_decision_provenance
 from crm.customer_timeline import CustomerTimelineProjector
@@ -15,25 +16,10 @@ from runtime.messaging.channel_normalizer import normalize_channel
 from runtime.wiring import load_archived_decision
 
 CANON_API_PROVIDER_ADMIN_ROUTE_HANDLERS = True
+# Backward-compatible symbol; canonical implementation lives in provider_delivery_truth.
+_approval_completion_truth = provider_approval_completion_truth
 _PROVIDER_MESSAGE_ACTIONS = {'provider.telegram_bot.message_send': 'telegram_bot', 'provider.whatsapp_cloud.message_send': 'whatsapp_cloud', 'provider.vk_messaging.message_send': 'vk_messaging', 'provider.max_messaging.message_send': 'max_messaging', 'provider.slack_messaging.message_send': 'slack_messaging', 'provider.discord_messaging.message_send': 'discord_messaging', 'provider.instagram_messaging.message_send': 'instagram_messaging', 'provider.messenger_messaging.message_send': 'messenger_messaging', 'provider.line_messaging.message_send': 'line_messaging', 'provider.viber_messaging.message_send': 'viber_messaging', 'provider.email_connector.message_send': 'email_connector'}
 
-def _approval_completion_truth(*, provider_key: str, result: Mapping[str, Any]) -> tuple[bool, bool, bool]:
-    status = str(result.get('status') or '').strip()
-    parsed = dict(result.get('parsed_response') or {})
-    error_category = str(dict(result.get('error') or {}).get('category') or '').strip()
-    accepted_with_receipt = bool(result.get('accepted')) and status == 'live_executed' and bool(str(parsed.get('resource_id') or '').strip())
-    delivered = accepted_with_receipt
-    accepted_without_delivery_proof = False
-    if str(provider_key) == 'whatsapp_cloud' and accepted_with_receipt:
-        delivered = False
-        accepted_without_delivery_proof = True
-    if str(provider_key) == 'email_connector' and accepted_with_receipt:
-        smtp = dict(dict(result.get('transport_response') or {}).get('smtp') or {})
-        delivered = smtp.get('delivered') is True
-        accepted_without_delivery_proof = not delivered
-    ambiguous = accepted_without_delivery_proof or status in {'', 'ambiguous_delivery', 'in_progress'} or status.startswith('provider_queue_') or (status == 'live_execution_failed' and not bool(parsed.get('error_code'))) or error_category == 'ambiguous_delivery'
-    terminal_non_delivery = not delivered and not ambiguous and (status in {'rejected_misconfigured', 'rejected_provider_write_guard', 'rejected_provider_write_requires_queue', 'live_transport_unbound', 'unsupported_operation'} or (status == 'live_execution_failed' and bool(parsed.get('error_code'))))
-    return delivered, ambiguous, terminal_non_delivery
 def _reject(condition: bool, reason: str) -> None:
     if condition:
         raise RuntimeError(reason)
@@ -217,7 +203,7 @@ class ProviderAdminRouteHandlers:
         completion = dict(completion) if isinstance(completion, Mapping) else {}
         execution = service.execute_queued_provider_sync(tenant_id=tenant_id, business_id=business_id, provider_key=provider_key, operation='message_send', mode='live', payload=provider_payload, worker_id='provider-approval-resume', approval_completion_context=completion or None)
         result = dict(execution.get('result') or {})
-        delivered, ambiguous, terminal_non_delivery = _approval_completion_truth(provider_key=provider_key, result=result)
+        delivered, ambiguous, terminal_non_delivery = provider_approval_completion_truth(provider_key=provider_key, result=result)
         if callable(self.approval_completion_handler) and (delivered or terminal_non_delivery or ambiguous):
             self.approval_completion_handler(tenant_id=str(tenant_id), approval_id=str(record.request.approval_id), dedup_key=str(completion.get('dedup_key') or ''), reservation_id=str(completion.get('reservation_id') or ''), delivered=delivered, ambiguous=ambiguous)
         return {'tenant_id': tenant_id, 'business_id': business_id, 'provider_key': provider_key, 'approval_id': record.request.approval_id, 'decision_id': decision_id, **({'decision_provenance': decision_provenance} if decision_provenance else {}), 'execution': execution}
@@ -229,7 +215,7 @@ class ProviderAdminRouteHandlers:
         identities = {approval_id: (provider_key, f'provider-sync-{provider_key}-{fingerprint[:32]}') for approval_id, (provider_key, fingerprint) in identities.items() if approval_id and provider_key and fingerprint}
         histories = {provider_key: service.find_provider_sync_history_jobs(tenant_id=tenant_id, business_id=business_id, provider_key=provider_key, queue_job_ids=tuple(job_id for candidate_provider, job_id in identities.values() if candidate_provider == provider_key)) for provider_key in {provider_key for provider_key, _ in identities.values()}}
         def disposition(provider_key: str, row: Mapping[str, Any] | None) -> str:
-            delivered, ambiguous, terminal = _approval_completion_truth(provider_key=provider_key, result=row or {})
+            delivered, ambiguous, terminal = provider_approval_completion_truth(provider_key=provider_key, result=row or {})
             return 'delivered' if delivered else 'terminal_non_delivery' if terminal else 'ambiguous' if ambiguous else 'unknown'
         return {approval_id: disposition(provider_key, histories.get(provider_key, {}).get(job_id)) for approval_id, (provider_key, job_id) in identities.items()}
     def tick_provider_sync_queue(self, *, tenant_id: str, worker_id: str = 'provider-runtime-worker') -> dict[str, Any]:

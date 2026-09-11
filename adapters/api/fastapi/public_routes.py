@@ -8,6 +8,7 @@ from fastapi import APIRouter, HTTPException, Request, Response, status
 from adapters.api.fastapi.analytics_routes import register_analytics_routes
 from adapters.api.fastapi.business_workspace_acquisition_routes import register_business_workspace_acquisition_routes
 from adapters.api.fastapi.business_workspace_decision_routes import register_business_workspace_decision_routes
+from adapters.api.fastapi.business_workspace_process_routes import register_business_workspace_process_routes
 from adapters.api.fastapi.business_workspace_provider_routes import register_business_workspace_provider_routes
 from adapters.api.fastapi.public_client_outcome_routes import register_public_client_outcome_routes
 from adapters.api.fastapi.public_core_routes import register_public_core_routes
@@ -76,6 +77,8 @@ def register_public_api_routes(
     analytics_handlers=None,
     client_outcome_handlers=None,
     economic_handlers=None,
+    process_workspace=None,
+    process_request_idempotency=None,
 ) -> None:
     if tenant_registry is None and dependency_container is not None:
         tenant_registry = getattr(dependency_container, 'tenant_registry', None)
@@ -170,6 +173,11 @@ def register_public_api_routes(
                 router=router,
                 auth_bundle=auth_bundle,
                 projector=owner_action_draft_projector,
+            )
+        if process_workspace is not None and process_request_idempotency is not None and headless_handlers is not None:
+            register_business_workspace_process_routes(
+                router=router, auth_bundle=auth_bundle, workspace=process_workspace, headless_handlers=headless_handlers,
+                request_idempotency=process_request_idempotency, enforce_public_security=enforce_public_security,
             )
     register_public_client_outcome_routes(
         router=router,

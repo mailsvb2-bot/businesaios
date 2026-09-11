@@ -1,0 +1,43 @@
+.dbm-panel { display: grid; gap: 16px; margin-top: 18px; }
+.dbm-heading { display: flex; justify-content: space-between; gap: 18px; align-items: flex-start; }
+.dbm-heading h3, .dbm-card h4 { margin: 4px 0 8px; }
+.dbm-heading p { margin: 0; }
+.dbm-steps { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+.dbm-steps span { border: 1px solid var(--border, #d8dce5); border-radius: 999px; padding: 8px 12px; text-align: center; opacity: .55; }
+.dbm-steps span.active, .dbm-steps span.done { opacity: 1; font-weight: 700; }
+.dbm-grid { display: grid; grid-template-columns: minmax(220px, .8fr) minmax(0, 2fr); gap: 14px; }
+.dbm-list { display: grid; gap: 8px; align-content: start; }
+.dbm-list button { display: grid; gap: 4px; text-align: left; border: 1px solid var(--border, #d8dce5); border-radius: 12px; padding: 12px; background: transparent; }
+.dbm-list button.selected { outline: 2px solid currentColor; }
+.dbm-list span, .dbm-note, .dbm-card small { opacity: .72; }
+.dbm-card { border: 1px solid var(--border, #d8dce5); border-radius: 16px; padding: 16px; }
+.dbm-metrics { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; margin: 12px 0; }
+.dbm-metrics div { display: grid; gap: 4px; padding: 10px; border-radius: 12px; background: color-mix(in srgb, currentColor 5%, transparent); }
+.dbm-actions { display: flex; flex-wrap: wrap; gap: 10px; margin: 12px 0; }
+.dbm-proof { display: grid; gap: 4px; margin-top: 12px; padding: 12px; border-radius: 12px; border: 1px solid var(--border, #d8dce5); }
+.dbm-empty { padding: 14px; border: 1px dashed var(--border, #d8dce5); border-radius: 12px; }
+@media (max-width: 760px) { .dbm-heading { display: grid; } .dbm-grid { grid-template-columns: 1fr; } .dbm-metrics { grid-template-columns: 1fr; } }
+
+.dbm-evidence-entry {
+  margin: 14px 0;
+  padding: 14px;
+  border: 1px solid var(--border, #d9dde7);
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.55);
+}
+.dbm-evidence-entry > summary { cursor: pointer; font-weight: 700; }
+.dbm-form-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+  gap: 10px;
+  margin: 12px 0;
+}
+.dbm-form-grid label { display: grid; gap: 5px; font-size: 0.82rem; }
+.dbm-form-grid input {
+  width: 100%;
+  box-sizing: border-box;
+  border: 1px solid var(--border, #d9dde7);
+  border-radius: 10px;
+  padding: 9px 10px;
+  background: var(--surface, #fff);
+}

@@ -16,6 +16,14 @@ from adapters.api.fastapi.router_support import (
     resolve_metrics,
     tenant_registry_has_records,
 )
+from application.process_discovery import (
+    CanonicalBlueprintLedger,
+    CanonicalProcessEvidenceStore,
+    CanonicalProcessMeasurementSource,
+    CanonicalProcessWorkspace,
+    DiscoverBuildMeasureService,
+    ProcessRequestIdempotency,
+)
 from entrypoints.api.admin_route_handlers import AdminRouteHandlers
 from entrypoints.api.analytics_ops_route_handlers import AnalyticsOpsRouteHandlers
 from entrypoints.api.analytics_route_handlers import AnalyticsRouteHandlers
@@ -225,6 +233,31 @@ def create_api_router(*, application_service: object, dependency_container: Fast
     )
     queue_ops_handlers = QueueOpsRouteHandlers()
     telemetry_event_store = dependency_container.telemetry_event_store() if dependency_container is not None else None
+    process_workspace = None
+    process_request_idempotency = None
+    if telemetry_event_store is not None:
+        process_evidence_store = CanonicalProcessEvidenceStore(telemetry_event_store)
+        process_blueprint_ledger = CanonicalBlueprintLedger(telemetry_event_store)
+        def _process_provider_history_reader(*, tenant_id: str, business_id: str, provider_key: str, limit: int = 100):
+            payload = provider_admin_handlers.list_provider_sync_history(
+                tenant_id=tenant_id, business_id=business_id, provider_key=provider_key, limit=limit,
+            )
+            return tuple(payload.get('history') or ())
+        process_measurement_source = CanonicalProcessMeasurementSource(
+            event_store=telemetry_event_store,
+            evidence_source=process_evidence_store,
+            provider_history_reader=_process_provider_history_reader,
+        )
+        process_workspace = CanonicalProcessWorkspace(
+            service=DiscoverBuildMeasureService(),
+            evidence_source=process_evidence_store,
+            blueprint_ledger=process_blueprint_ledger,
+            measurement_source=process_measurement_source,
+            evidence_recorder=process_evidence_store,
+            decision_binding_store=process_measurement_source,
+        )
+        if dependency_container is not None and dependency_container.api_idempotency_store is not None:
+            process_request_idempotency = ProcessRequestIdempotency(dependency_container.api_idempotency_store)
     analytics_snapshot_db_path = str(dependency_container.analytics_snapshot_db_path()) if dependency_container is not None else 'runtime/data/analytics_snapshots.sqlite3'
     analytics_manifest_chain_db_path = str(dependency_container.analytics_manifest_chain_db_path()) if dependency_container is not None else 'runtime/data/analytics_manifest_chain.sqlite3'
     analytics_export_root = str(dependency_container.analytics_export_root()) if dependency_container is not None else 'runtime/data/analytics_exports'
@@ -260,6 +293,8 @@ def create_api_router(*, application_service: object, dependency_container: Fast
         auth_bundle=auth_bundle,
         analytics_handlers=analytics_handlers,
         client_outcome_handlers=client_outcome_handlers,
+        process_workspace=process_workspace,
+        process_request_idempotency=process_request_idempotency,
     )
     register_control_plane_routes(
         router=router,
