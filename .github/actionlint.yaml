@@ -2,3 +2,5 @@ self-hosted-runner:
   labels:
     - businesaios
     - full-ci
+    - production
+    - physical-hardware

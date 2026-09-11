@@ -893,6 +893,12 @@ function Workspace({ data, apiBase, businesses, onRestart, onRetryAccess, onSwit
     };
   }, [apiKey, analyticsUrl, authHeaders, data.business_id, data.tenant_id, memoryRecentUrl, memorySummaryUrl]);
 
+  const openWorkspaceSection = useCallback((sectionId) => {
+    const target = String(sectionId || "").trim();
+    if (!target) return;
+    requestAnimationFrame(() => document.getElementById(target)?.scrollIntoView({ behavior: "smooth", block: "start" }));
+  }, []);
+
   const runAdvisoryGoal = useCallback(async (goal) => {
     if (!apiKey) throw new Error("owner_session_required");
     return postJson(goalExecuteUrl, {
@@ -975,6 +981,7 @@ function Workspace({ data, apiBase, businesses, onRestart, onRetryAccess, onSwit
         initialGoal={GOALS.find((goal) => goal.value === profile.goal)?.title || "Улучшить результаты бизнеса"}
         onLoad={loadBusinessIntelligence}
         onRunGoal={runAdvisoryGoal}
+        onOpenSurface={openWorkspaceSection}
       />
 
       <section className="panel capabilities-panel" aria-labelledby="business-capabilities-title">
