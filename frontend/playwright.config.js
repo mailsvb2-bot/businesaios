@@ -16,7 +16,7 @@ const runtimeMode = process.env.BAIOS_E2E_RUNTIME_MODE || "development";
 const production = runtimeMode === "production";
 const projectMatrix = JSON.parse(fs.readFileSync(new URL("./e2e/project-matrix.json", import.meta.url), "utf8"));
 if (
-  projectMatrix.schema !== "businessaios_browser_project_matrix.v2"
+  projectMatrix.schema !== "businessaios_browser_project_matrix.v3"
   || !Array.isArray(projectMatrix.projects) || !projectMatrix.projects.length
   || !Array.isArray(projectMatrix.scenarios) || !projectMatrix.scenarios.length
 ) {
