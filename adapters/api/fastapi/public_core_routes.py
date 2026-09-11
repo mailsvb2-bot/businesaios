@@ -3,20 +3,53 @@ from __future__ import annotations
 from pathlib import Path
 
 from fastapi import HTTPException, Request, Response
+
 from entrypoints.api.action_models import ExecuteActionRequest, ExecuteActionResponse
-from entrypoints.api.baseline_models import PromoteBaselineRequest, PromoteBaselineResponse, SelectBaselineRequest, SelectBaselineResponse
-from entrypoints.api.business_memory_models import BusinessMemoryGetRequest, BusinessMemoryPatternsResponse, BusinessMemoryRecentRunsRequest, BusinessMemoryRecentRunsResponse, BusinessMemoryResponse, BusinessMemorySummaryRequest, BusinessMemorySummaryResponse
-from entrypoints.api.drift_models import DriftAuditRequest, DriftAuditResponse, RollbackBaselineRequest, RollbackBaselineResponse
-from entrypoints.api.governance_advanced_models import BusinessMemoryGovernanceSummaryRequest, BusinessMemoryGovernanceSummaryResponse, DriftTrendRequest, DriftTrendResponse, JoinedHistoryRequest, JoinedHistoryResponse, PromoteScenarioBaselineRequest, PromoteScenarioBaselineResponse, PromotionEvidenceVerifyRequest, PromotionEvidenceVerifyResponse, RollbackRecommendationRequest, RollbackRecommendationResponse, RollbackTimelineRequest, RollbackTimelineResponse
-from entrypoints.api.health_models import HealthResponse
+from entrypoints.api.baseline_models import (
+    PromoteBaselineRequest,
+    PromoteBaselineResponse,
+    SelectBaselineRequest,
+    SelectBaselineResponse,
+)
+from entrypoints.api.business_memory_models import (
+    BusinessMemoryGetRequest,
+    BusinessMemoryPatternsResponse,
+    BusinessMemoryRecentRunsRequest,
+    BusinessMemoryRecentRunsResponse,
+    BusinessMemoryResponse,
+    BusinessMemorySummaryRequest,
+    BusinessMemorySummaryResponse,
+)
+from entrypoints.api.drift_models import (
+    DriftAuditRequest,
+    DriftAuditResponse,
+    RollbackBaselineRequest,
+    RollbackBaselineResponse,
+)
+from entrypoints.api.governance_advanced_models import (
+    BusinessMemoryGovernanceSummaryRequest,
+    BusinessMemoryGovernanceSummaryResponse,
+    DriftTrendRequest,
+    DriftTrendResponse,
+    JoinedHistoryRequest,
+    JoinedHistoryResponse,
+    PromoteScenarioBaselineRequest,
+    PromoteScenarioBaselineResponse,
+    PromotionEvidenceVerifyRequest,
+    PromotionEvidenceVerifyResponse,
+    RollbackRecommendationRequest,
+    RollbackRecommendationResponse,
+    RollbackTimelineRequest,
+    RollbackTimelineResponse,
+)
 from entrypoints.api.headless_models import ExecuteGoalRequest, ExecuteGoalResponse
+from entrypoints.api.health_models import HealthResponse
+from entrypoints.api.owner_action_provenance import bind_verified_owner_action_provenance
 from entrypoints.api.request_context import RequestContext
-
-
 
 FRONTEND_RELEASE_MANIFEST = Path(__file__).resolve().parents[3] / 'frontend' / 'dist' / 'release-manifest.json'
 
-def register_public_core_routes(*, router, health_handler, handlers, headless_handlers, governance_handlers, business_memory_handlers, governance_advanced_handlers, enforce_public_security) -> None:
+def register_public_core_routes(*, router, health_handler, handlers, headless_handlers, governance_handlers, business_memory_handlers, governance_advanced_handlers, enforce_public_security, owner_action_draft_projector=None) -> None:
     @router.get('/release-manifest.json', tags=['system'])
     def release_manifest() -> Response:
         if not FRONTEND_RELEASE_MANIFEST.is_file():
@@ -48,6 +81,16 @@ def register_public_core_routes(*, router, health_handler, handlers, headless_ha
             body=request.model_dump(),
             http_request=http_request,
         )
+        try:
+            request = bind_verified_owner_action_provenance(
+                request=request,
+                request_context=request_context,
+                projector=owner_action_draft_projector,
+            )
+        except PermissionError as exc:
+            raise HTTPException(status_code=403, detail=str(exc)) from exc
+        except ValueError as exc:
+            raise HTTPException(status_code=getattr(exc, 'status_code', 409), detail=str(getattr(exc, 'code', exc))) from exc
         idempotency_key = http_request.headers.get('x-idempotency-key') or http_request.headers.get('idempotency-key')
         action_id = http_request.headers.get('x-action-id') or http_request.headers.get('action-id')
         return handlers.execute_action(

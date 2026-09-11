@@ -7,6 +7,7 @@ from typing import Any, Protocol
 
 from application.business_autonomy.provider_admin_contract import ProviderDefinition
 from application.business_autonomy.provider_runtime_contract import ProviderSyncRunResult
+from contracts.owner_decision_provenance import normalize_owner_decision_provenance
 from runtime.business_autonomy.provider_connector_health import (
     PROVIDER_HEALTH_CONNECTION_BLOCKING_STATUSES,
     ProviderConnectorHealthService,
@@ -67,9 +68,11 @@ class ProviderLiveSyncRuntime:
         }
 
     def _finalize_result(self, *, tenant_id: str, business_id: str, provider: ProviderDefinition, operation: str, mode: str, result: ProviderSyncRunResult, payload: Mapping[str, Any]) -> ProviderSyncRunResult:
-        refs = self.audit_recorder.record_sync_run(tenant_id=tenant_id, business_id=business_id, provider_key=provider.provider_key, operation=operation, mode=mode, status=result.status, accepted=result.accepted, payload=dict(payload or {}), metadata=dict(result.metadata))
+        raw_payload = dict(payload or {})
+        decision_provenance = normalize_owner_decision_provenance(raw_payload.pop('_decision_provenance', None))
+        refs = self.audit_recorder.record_sync_run(tenant_id=tenant_id, business_id=business_id, provider_key=provider.provider_key, operation=operation, mode=mode, status=result.status, accepted=result.accepted, payload=raw_payload, metadata=dict(result.metadata))
         export_refs = self.export_bridge.export_runtime_event(tenant_id=str(tenant_id), business_id=str(business_id), provider_key=provider.provider_key, event_kind='sync', payload={'operation': operation, 'mode': mode, 'status': result.status, 'accepted': result.accepted})
-        history_row = self.sync_history.append({'tenant_id': str(tenant_id), 'business_id': str(business_id), 'provider_key': provider.provider_key, 'operation': operation, 'mode': mode, 'status': result.status, 'accepted': result.accepted, 'queue_job_id': str(dict(payload or {}).get('_provider_queue_job_id') or '') or None, 'recorded_at_utc': refs.get('recorded_at_utc') if isinstance(refs, dict) else None, 'parsed_response': dict(result.metadata.get('parsed_response') or {}), 'transport_response': dict(result.metadata.get('transport_response') or {}), 'error': dict(result.metadata.get('error') or {}), 'retry_policy': dict(result.metadata.get('retry_policy') or {})})
+        history_row = self.sync_history.append({'tenant_id': str(tenant_id), 'business_id': str(business_id), 'provider_key': provider.provider_key, 'operation': operation, 'mode': mode, 'status': result.status, 'accepted': result.accepted, 'queue_job_id': str(dict(payload or {}).get('_provider_queue_job_id') or '') or None, 'recorded_at_utc': refs.get('recorded_at_utc') if isinstance(refs, dict) else None, 'parsed_response': dict(result.metadata.get('parsed_response') or {}), 'transport_response': dict(result.metadata.get('transport_response') or {}), 'error': dict(result.metadata.get('error') or {}), 'retry_policy': dict(result.metadata.get('retry_policy') or {}), **({'decision_provenance': decision_provenance} if decision_provenance else {})})
         self.observability.record_sync(tenant_id=str(tenant_id), provider_key=provider.provider_key, operation=operation, status=result.status, accepted=result.accepted, mode=mode)
         if not result.accepted or str(result.status).startswith('live_execution_failed'):
             error_view = dict(result.metadata.get('error') or {})
@@ -89,11 +92,17 @@ class ProviderLiveSyncRuntime:
         planner = ProviderSyncRuntimePlanner().describe(provider)
         normalized_mode = str(mode or 'dry_run').strip().lower() or 'dry_run'
         normalized_operation = str(operation or '').strip()
-        caller_payload = {str(key): value for key, value in dict(payload or {}).items() if str(key) not in {'_provider_queue_execution', '_provider_queue_job_id', '_provider_write_approved', '_allow_network'}}
+        source_payload = dict(payload or {})
+        provenance_raw = source_payload.get('_decision_provenance')
+        decision_provenance = normalize_owner_decision_provenance(provenance_raw)
+        if provenance_raw is not None and not decision_provenance:
+            result = ProviderSyncRunResult(provider_key=provider.provider_key, operation=normalized_operation, mode=normalized_mode, status='decision_provenance_invalid', accepted=False, metadata={'reason': 'decision_provenance_invalid'})
+            return self._finalize_result(tenant_id=tenant_id, business_id=business_id, provider=provider, operation=normalized_operation, mode=normalized_mode, result=result, payload={})
+        caller_payload = {str(key): value for key, value in source_payload.items() if str(key) not in {'_provider_queue_execution', '_provider_queue_job_id', '_provider_write_approved', '_allow_network', '_decision_provenance'}}
         queue_job_id = str(_queue_job_id or '').strip()
-        execution_payload = {**caller_payload, **({'_provider_queue_job_id': queue_job_id} if queue_job_id else {})}
+        execution_payload = {**caller_payload, **({'_decision_provenance': decision_provenance} if decision_provenance else {}), **({'_provider_queue_job_id': queue_job_id} if queue_job_id else {})}
         public_caller_payload = public_provider_media_payload(caller_payload)
-        public_execution_payload = {**public_caller_payload, **({'_provider_queue_job_id': queue_job_id} if queue_job_id else {})}
+        public_execution_payload = {**public_caller_payload, **({'_decision_provenance': decision_provenance} if decision_provenance else {}), **({'_provider_queue_job_id': queue_job_id} if queue_job_id else {})}
         if normalized_operation not in planner.operations:
             result = ProviderSyncRunResult(provider_key=provider.provider_key, operation=normalized_operation, mode=normalized_mode, status='unsupported_operation', accepted=False, metadata={'available_operations': list(planner.operations)})
             return self._finalize_result(tenant_id=tenant_id, business_id=business_id, provider=provider, operation=normalized_operation, mode=normalized_mode, result=result, payload=execution_payload)

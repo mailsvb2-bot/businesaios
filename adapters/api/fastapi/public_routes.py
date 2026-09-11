@@ -7,6 +7,7 @@ from fastapi import APIRouter, HTTPException, Request, Response, status
 
 from adapters.api.fastapi.analytics_routes import register_analytics_routes
 from adapters.api.fastapi.business_workspace_acquisition_routes import register_business_workspace_acquisition_routes
+from adapters.api.fastapi.business_workspace_decision_routes import register_business_workspace_decision_routes
 from adapters.api.fastapi.business_workspace_provider_routes import register_business_workspace_provider_routes
 from adapters.api.fastapi.public_client_outcome_routes import register_public_client_outcome_routes
 from adapters.api.fastapi.public_core_routes import register_public_core_routes
@@ -17,6 +18,7 @@ from adapters.api.fastapi.public_site_routes import (
 )
 from adapters.api.fastapi.router_support import authorize_request
 from application.business_autonomy.provider_catalog import provider_map
+from entrypoints.api.owner_action_draft import OwnerActionDraftProjector
 from entrypoints.api.public_surface_security_guard import PublicSurfaceSecurityGuard
 from entrypoints.api.request_context import RequestContext
 from runtime.business_autonomy.provider_webhook_runtime import ProviderWebhookRuntime
@@ -93,7 +95,11 @@ def register_public_api_routes(
                 if http_request is None:
                     raise PermissionError('api_perimeter_request_required')
                 request_context, principal = authorize_request(request=http_request, auth_bundle=auth_bundle)
-                request_context = request_context.with_metadata(route=route_path)
+                principal_business_id = str(dict(getattr(principal, 'metadata', {}) or {}).get('business_id') or '').strip()
+                request_context = request_context.with_metadata(
+                    route=route_path,
+                    **({'authenticated_business_id': principal_business_id} if principal_business_id else {}),
+                )
             _enforce_security_guard(
                 security_guard=security_guard,
                 route_path=route_path,
@@ -120,6 +126,13 @@ def register_public_api_routes(
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=detail) from exc
         raise exc
 
+    headless_runtime_provider = getattr(headless_handlers, 'runtime_provider', None)
+    owner_action_draft_projector = (
+        OwnerActionDraftProjector(runtime_provider=headless_runtime_provider)
+        if headless_runtime_provider is not None
+        else None
+    )
+
     register_public_core_routes(
         router=router,
         health_handler=health_handler,
@@ -129,6 +142,7 @@ def register_public_api_routes(
         business_memory_handlers=business_memory_handlers,
         governance_advanced_handlers=governance_advanced_handlers,
         enforce_public_security=enforce_public_security,
+        owner_action_draft_projector=owner_action_draft_projector,
     )
     if dependency_container is not None:
         @router.get('/providers/webhook/{tenant_id}/{business_id}/{provider_key}', tags=['provider-runtime'])
@@ -151,6 +165,12 @@ def register_public_api_routes(
     if auth_bundle is not None:
         register_business_workspace_provider_routes(router=router, auth_bundle=auth_bundle)
         register_business_workspace_acquisition_routes(router=router, auth_bundle=auth_bundle)
+        if owner_action_draft_projector is not None:
+            register_business_workspace_decision_routes(
+                router=router,
+                auth_bundle=auth_bundle,
+                projector=owner_action_draft_projector,
+            )
     register_public_client_outcome_routes(
         router=router,
         client_outcome_handlers=client_outcome_handlers,

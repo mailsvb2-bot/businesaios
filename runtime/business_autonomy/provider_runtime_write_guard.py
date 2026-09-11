@@ -7,6 +7,7 @@ from typing import Any
 from application.business_autonomy.provider_admin_contract import ProviderDefinition
 from application.business_autonomy.provider_truth_matrix import ProviderTruthRow, provider_truth_map
 from contracts.action_impact_contract import ActionCategory, ActionExecutionContext, ActionImpact
+from contracts.owner_decision_provenance import normalize_owner_decision_provenance
 from governance.approval_store import build_default_approval_store
 from runtime.business_autonomy.provider_sync_runtime import ProviderSyncRuntimePlanner
 from runtime.execution.governance_runtime_support import build_default_approval_execution_gate
@@ -50,6 +51,10 @@ class ProviderRuntimeWriteGuard:
     def _approval_evidence(self, *, provider: ProviderDefinition, operation: str, tenant_id: str, business_id: str, payload: Mapping[str, Any] | None, approval_completion_context: Mapping[str, Any] | None = None) -> dict[str, Any]:
         raw, visible = dict(payload or {}), {str(k): v for k, v in dict(payload or {}).items() if not str(k).startswith("_")}
         approval = raw.get("_approval") if isinstance(raw.get("_approval"), Mapping) else {}
+        provenance_raw = raw.get("_decision_provenance")
+        provenance = normalize_owner_decision_provenance(provenance_raw)
+        if provenance_raw is not None and not provenance:
+            return {"allowed": False, "reason": "decision_provenance_invalid"}
         decision_id, execution_id = str(approval.get("decision_id") or "").strip(), str(approval.get("execution_id") or "").strip()
         if not str(tenant_id or "").strip() or not str(business_id or "").strip() or not decision_id or not execution_id:
             return {"allowed": False, "reason": "approval_context_missing", "required_fields": ["tenant_id", "business_id", "_approval.decision_id", "_approval.execution_id", "_approval.approval_id"]}
@@ -57,7 +62,7 @@ class ProviderRuntimeWriteGuard:
         business_scope = str(business_id).strip()
         resume_context = {"provider_key": provider.provider_key, "business_id": business_scope, "operation": operation, "payload": visible}
         completion = dict(approval_completion_context or {}) if isinstance(approval_completion_context, Mapping) else None
-        ctx = ActionExecutionContext(tenant_id=str(tenant_id).strip(), user_id=None, action_name=action_name, payload={"provider_key": provider.provider_key, "business_id": business_scope, "operation": operation, "payload": visible}, metadata={"decision_id": decision_id, "approval_resume_context": resume_context, **({"approval_completion_context": completion} if completion else {})}, execution_id=execution_id)
+        ctx = ActionExecutionContext(tenant_id=str(tenant_id).strip(), user_id=None, action_name=action_name, payload={"provider_key": provider.provider_key, "business_id": business_scope, "operation": operation, "payload": visible}, metadata={"decision_id": decision_id, "approval_resume_context": resume_context, **({"decision_provenance": provenance} if provenance else {}), **({"approval_completion_context": completion} if completion else {})}, execution_id=execution_id)
         impact = ActionImpact(action_name=action_name, category=ActionCategory.OUTBOUND, outbound_count=1, requires_human_approval=True, dimensions={"provider_key": provider.provider_key, "business_id": business_scope})
         verdict = gate.evaluate(ctx=ctx, impact=impact, autonomy_tier="supervised", external_confirmation_mode="required", approval_policy={"force_human_approval": True, "allow_operator_override": False, "auto_submit_approval": True}, metadata={"decision_id": decision_id, "requires_manual_review": True, "tags": ["provider_outbound", provider.provider_key]}, approval_id=str(approval.get("approval_id") or "").strip() or None, requested_by="provider_runtime")
         evidence = verdict.to_dict()

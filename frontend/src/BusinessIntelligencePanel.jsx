@@ -64,7 +64,7 @@ function PatternList({ title, items, empty }) {
   return <div className="intelligence-list"><strong>{title}</strong>{items?.length ? <ul>{items.slice(0, 5).map((item) => <li key={String(item)}>{humanText(item)}</li>)}</ul> : <small>{empty}</small>}</div>;
 }
 
-export function BusinessIntelligencePanel({ enabled, initialGoal, onLoad, onRunGoal, onOpenSurface }) {
+export function BusinessIntelligencePanel({ enabled, initialGoal, onLoad, onRunGoal, onPrepareAction, onOpenSurface }) {
   const [snapshot, setSnapshot] = useState({ analytics: null, memory: null, recentRuns: [], errors: [] });
   const [loading, setLoading] = useState(Boolean(enabled));
   const [loadError, setLoadError] = useState("");
@@ -72,6 +72,8 @@ export function BusinessIntelligencePanel({ enabled, initialGoal, onLoad, onRunG
   const [goalBusy, setGoalBusy] = useState(false);
   const [goalError, setGoalError] = useState("");
   const [goalResult, setGoalResult] = useState(null);
+  const [handoffBusy, setHandoffBusy] = useState(false);
+  const [handoffError, setHandoffError] = useState("");
 
   const refresh = useCallback(async () => {
     if (!enabled || !onLoad) return;
@@ -114,6 +116,8 @@ export function BusinessIntelligencePanel({ enabled, initialGoal, onLoad, onRunG
   const diagnosis = business.diagnosis || {};
   const memory = snapshot.memory || {};
   const outcome = useMemo(() => goalResult ? goalOutcome(goalResult) : null, [goalResult]);
+  const goalStep = Array.isArray(goalResult?.steps) ? goalResult.steps[0] : null;
+  const handoffEligible = Boolean(goalResult?.run_id && goalStep?.action === "send_message@v1" && !goalStep?.executed && !goalStep?.verified);
   const nextSteps = useMemo(() => buildIntelligenceNextSteps(diagnosis.reasons || []), [diagnosis.reasons]);
 
   const runGoal = async (suggestedGoal = "") => {
@@ -123,6 +127,7 @@ export function BusinessIntelligencePanel({ enabled, initialGoal, onLoad, onRunG
     setGoalBusy(true);
     setGoalError("");
     setGoalResult(null);
+    setHandoffError("");
     try {
       const result = await onRunGoal(clean);
       setGoalResult(result);
@@ -131,6 +136,19 @@ export function BusinessIntelligencePanel({ enabled, initialGoal, onLoad, onRunG
       setGoalError("Не удалось разобрать цель. Ничего внешнему сервису не отправлено.");
     } finally {
       setGoalBusy(false);
+    }
+  };
+
+  const prepareGoalAction = async () => {
+    if (!handoffEligible || !onPrepareAction || !goalResult) return;
+    setHandoffBusy(true);
+    setHandoffError("");
+    try {
+      await onPrepareAction(goalResult);
+    } catch {
+      setHandoffError("Не удалось безопасно перенести решение в Центр действий. Ничего не отправлено и approval не создан.");
+    } finally {
+      setHandoffBusy(false);
     }
   };
 
@@ -199,7 +217,7 @@ export function BusinessIntelligencePanel({ enabled, initialGoal, onLoad, onRunG
         <label>Что вы хотите улучшить?<textarea value={goal} onChange={(event) => setGoal(event.target.value)} placeholder="Например: увеличить повторные продажи без роста рекламного бюджета" /></label>
         <div className="navigation-row"><button type="button" className="primary" disabled={!enabled || goalBusy || !goal.trim()} onClick={runGoal}>{goalBusy ? "Разбираем цель…" : "Разобрать цель"}</button><small className="helper-text">Эта кнопка не выполняет внешние действия.</small></div>
         {goalError ? <div className="error-box inline-error" role="alert">{goalError}</div> : null}
-        {outcome ? <div className={`goal-outcome ${outcome.kind}`} role="status"><strong>{outcome.title}</strong><p>{outcome.text}</p>{goalResult?.steps?.[0]?.action ? <small>Следующий шаг: {humanText(goalResult.steps[0].action)}</small> : null}<details><summary>Техническое доказательство решения</summary><pre>{JSON.stringify(goalResult, null, 2)}</pre></details></div> : null}
+        {outcome ? <div className={`goal-outcome ${outcome.kind}`} role="status"><strong>{outcome.title}</strong><p>{outcome.text}</p>{goalStep?.action ? <small>Следующий шаг: {humanText(goalStep.action)}</small> : null}{handoffEligible ? <div className="goal-handoff"><button type="button" className="primary small" disabled={handoffBusy || !onPrepareAction} onClick={prepareGoalAction}>{handoffBusy ? "Проверяем решение…" : "Передать как черновик в Центр действий"}</button><small>BusinessAIOS сначала сверит run/decision/action с серверным ledger. Отправки и approval на этом шаге нет.</small></div> : null}{handoffError ? <div className="error-box inline-error" role="alert">{handoffError}</div> : null}<details><summary>Техническое доказательство решения</summary><pre>{JSON.stringify(goalResult, null, 2)}</pre></details></div> : null}
       </article>
     </section>
   );

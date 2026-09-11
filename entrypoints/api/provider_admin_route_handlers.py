@@ -6,6 +6,7 @@ from typing import Any
 
 from application.business_autonomy.provider_admin_contract import ProviderCredentialSubmission
 from contracts.customer import CustomerNotFound
+from contracts.owner_decision_provenance import normalize_owner_decision_provenance
 from crm.customer_timeline import CustomerTimelineProjector
 from governance.approval_store import build_default_approval_store
 from runtime.business_autonomy.bootstrap import build_business_autonomy_guarded_service
@@ -170,6 +171,9 @@ class ProviderAdminRouteHandlers:
         _reject(str(record.request.tenant_id) != str(tenant_id), 'cross_tenant_provider_approval_resume_forbidden')
         _reject(str(getattr(record.status, 'value', record.status)) != 'approved', f'provider_approval_not_approved:{getattr(record.status, "value", record.status)}')
         request_metadata = dict(record.request.metadata or {})
+        provenance_raw = request_metadata.get('decision_provenance')
+        decision_provenance = normalize_owner_decision_provenance(provenance_raw)
+        _reject(provenance_raw is not None and not decision_provenance, 'provider_approval_decision_provenance_invalid')
         action_name, decision_id = str(request_metadata.get('action_name') or '').strip(), str(request_metadata.get('decision_id') or '').strip()
         provider_key = _PROVIDER_MESSAGE_ACTIONS.get(action_name)
         _reject(provider_key is None, f'approval_not_provider_message_send:{action_name}')
@@ -197,12 +201,15 @@ class ProviderAdminRouteHandlers:
             _reject(normalize_channel(str(archived_payload.get('channel') or '')) != expected_channel, 'provider_approval_resume_channel_mismatch')
             _reject(provider_key in {'slack_messaging', 'discord_messaging'} and not str(archived_payload.get('channel_id') or '').strip(), 'provider_approval_resume_channel_id_missing')
         _reject(not business_id, 'provider_approval_resume_business_id_missing')
+        if decision_provenance:
+            _reject(str(decision_provenance.get('tenant_id') or '') != str(tenant_id), 'provider_approval_decision_provenance_tenant_mismatch')
+            _reject(str(decision_provenance.get('business_id') or '') != business_id, 'provider_approval_decision_provenance_business_mismatch')
         if resolve_only:
             return {'business_id': business_id}
         service = self._service(business_id)
         if provider_payload is None:
             provider_payload = ProviderPayloadNormalizers().normalize_outbound(provider=service.provider_registry.get(provider_key), operation='message_send', payload={'user_id': str(archived_payload.get('user_id') or archived_payload.get('recipient') or archived_payload.get('email') or ''), 'text': str(archived_payload.get('text') or archived_payload.get('body') or ''), **({'subject': archived_payload.get('subject')} if archived_payload.get('subject') else {}), **{key: archived_payload[key] for key in ('peer_id', 'chat_id', 'random_id', 'channel_id') if archived_payload.get(key) not in {None, ''}}})
-        provider_payload = {**provider_payload, '_approval': {'decision_id': decision_id, 'execution_id': str(record.request.subject_id), 'approval_id': str(record.request.approval_id)}}
+        provider_payload = {**provider_payload, **({'_decision_provenance': decision_provenance} if decision_provenance else {}), '_approval': {'decision_id': decision_id, 'execution_id': str(record.request.subject_id), 'approval_id': str(record.request.approval_id)}}
         completion = request_metadata.get('approval_completion_context')
         completion = dict(completion) if isinstance(completion, Mapping) else {}
         execution = service.execute_queued_provider_sync(tenant_id=tenant_id, business_id=business_id, provider_key=provider_key, operation='message_send', mode='live', payload=provider_payload, worker_id='provider-approval-resume', approval_completion_context=completion or None)
@@ -210,7 +217,7 @@ class ProviderAdminRouteHandlers:
         delivered, ambiguous, terminal_non_delivery = _approval_completion_truth(provider_key=provider_key, result=result)
         if callable(self.approval_completion_handler) and (delivered or terminal_non_delivery or ambiguous):
             self.approval_completion_handler(tenant_id=str(tenant_id), approval_id=str(record.request.approval_id), dedup_key=str(completion.get('dedup_key') or ''), reservation_id=str(completion.get('reservation_id') or ''), delivered=delivered, ambiguous=ambiguous)
-        return {'tenant_id': tenant_id, 'business_id': business_id, 'provider_key': provider_key, 'approval_id': record.request.approval_id, 'decision_id': decision_id, 'execution': execution}
+        return {'tenant_id': tenant_id, 'business_id': business_id, 'provider_key': provider_key, 'approval_id': record.request.approval_id, 'decision_id': decision_id, **({'decision_provenance': decision_provenance} if decision_provenance else {}), 'execution': execution}
     def resolve_approved_message_business_id(self, *, tenant_id: str, approval_id: str) -> str:
         return str(self.resume_approved_message(tenant_id=tenant_id, approval_id=approval_id, resolve_only=True)['business_id'])
     def approved_message_completion_dispositions(self, *, tenant_id: str, business_id: str, candidates: tuple[Mapping[str, Any], ...]) -> dict[str, str]:

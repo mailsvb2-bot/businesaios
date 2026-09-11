@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from collections.abc import Mapping
 
+from contracts.owner_decision_provenance import normalize_owner_decision_provenance
 from interfaces.messaging.channel_common import (
     make_channel_adapter,
     make_channel_runner,
@@ -56,6 +57,9 @@ class _NativeProviderQueueAdapter:
         service = self._service()
         message_payload = dict(getattr(msg, "payload", {}) or {})
         payload = ProviderPayloadNormalizers().normalize_outbound(provider=service.provider_registry.get(self.provider_key), operation="message_send", payload={"user_id": msg.user_id, "text": msg.text, "reply_markup": msg.reply_markup, **({"subject": message_payload.get("subject")} if self.provider_key == "email_connector" and message_payload.get("subject") else {}), **({"attachments": [dict(item) for item in msg.attachments]} if msg.attachments else {}), **{key: context[key] for key in ("peer_id", "chat_id", "random_id", "channel_id", "recipient_id", "to", "receiver") if key in context}})
+        provenance = normalize_owner_decision_provenance(msg.track_payload)
+        if provenance:
+            payload["_decision_provenance"] = provenance
         payload["_approval"] = {"decision_id": str(msg.decision_id), "execution_id": str(msg.decision_id), **({"approval_id": str(context["approval_id"])} if context.get("approval_id") else {})}
         dedup_context = (msg.track_payload or {}).get("_alert_dedup") if isinstance(msg.track_payload, dict) else None
         completion_context = {key: str(dedup_context.get(key) or "").strip() for key in ("dedup_key", "reservation_id")} if isinstance(dedup_context, Mapping) else {}
