@@ -138,10 +138,8 @@ class CanonicalProcessEvidenceStore(TrustedProcessEvidenceSource):
         if occurred_at > datetime.now(UTC) + timedelta(minutes=5):
             raise ValueError("occurred_at_in_future")
         request_text = str(request_id or "").strip()
-        evidence_id = (
-            f"pev_{hashlib.sha256(f'{tenant_id}\x1f{business_id}\x1f{request_text}'.encode()).hexdigest()[:20]}"
-            if request_text else new_id("pev")
-        )
+        request_seed = "\x1f".join((tenant_id, business_id, request_text))
+        evidence_id = f"pev_{hashlib.sha256(request_seed.encode()).hexdigest()[:20]}" if request_text else new_id("pev")
         item = ProcessObservation(
             tenant_id=tenant_id, business_id=business_id, process_key=str(payload.get("process_key") or "").strip(),
             occurred_at=occurred_at, source="owner_asserted", evidence_id=evidence_id,
