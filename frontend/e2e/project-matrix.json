@@ -37,7 +37,7 @@
       "id": "onboarding_owner_workspace",
       "title": "onboarding creates a read-only OWNER workspace without persisting the API key",
       "file": "onboarding-workspace.spec.js",
-      "detail_step_sha256": "c256f7ff9d32290fce480f3fe4338edb83ef74789218238477057e733573f5d1",
+      "detail_step_sha256": "e1f43aa84b206bb92f95ce885adbb4f26162b09ad0e1eeab5002d21ebea86abe",
       "source_sha256": "54dc5e5be92f822685c77ca2b6d9b836742ad33ffd32351e4efb6172233e7f70"
     }
   ]

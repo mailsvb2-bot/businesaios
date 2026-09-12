@@ -52,6 +52,15 @@ def _step_shape(step: object, file: str, project: str) -> dict:
     _need(keys == _STEP_KEYS or (isinstance(location, dict) and set(location) == {"file", "line", "column"} and _text(location.get("file")) == file and min(_integer(location.get("line")), _integer(location.get("column"))) > 0 and _text(step.get("snippet"))))
     slug = "-".join(project.lower().split())
     title = _text(step.get("title")).replace(f"Canonical Browser E2E {project}", "Canonical Browser E2E {project}").replace(f"browser-e2e+{slug}@example.test", "browser-e2e+{project}@example.test")
+    observation_suffix = '" getByLabel(\'Когда произошло\')'
+    if title.startswith('Fill "') and title.endswith(observation_suffix):
+        observed_at = title[len('Fill "'):-len(observation_suffix)]
+        try:
+            datetime.strptime(observed_at, "%Y-%m-%dT%H:%M")
+        except ValueError:
+            pass
+        else:
+            title = 'Fill "{observation_datetime}' + observation_suffix
     return {"title": title, "location": [_text(location.get("file")), _integer(location.get("line")), _integer(location.get("column"))] if isinstance(location, dict) else None, "children": [_step_shape(child, file, project) for child in step["steps"]]}
 
 

@@ -3,7 +3,6 @@ from __future__ import annotations
 import json
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
-from pathlib import Path
 from threading import Barrier
 
 from runtime.execution.crash_window_recovery_contract import ExecutionCrashWindowState, required_recovery_action
@@ -12,6 +11,7 @@ from runtime.platform.postgres_contract import (
     PostgresRuntimeProof,
     evaluate_postgres_contract,
 )
+from runtime.platform.postgres_migration_runner import migration_files
 from runtime.platform.postgres_port import PostgresPort
 
 
@@ -24,13 +24,13 @@ class PostgresLiveProbeConfig:
     backup_evidence_ok: bool = False
 
 
-def _migration_path() -> Path:
-    return Path(__file__).resolve().parents[2] / "migrations" / "postgres" / "0001_runtime_core.sql"
-
-
 def _apply_migrations(port: PostgresPort) -> None:
-    port.execute(_migration_path().read_text(encoding="utf-8"))
-    port.commit()
+    files = migration_files()
+    if not files:
+        raise RuntimeError("postgres_migrations_missing")
+    for path in files:
+        port.execute(path.read_text(encoding="utf-8"))
+        port.commit()
 
 
 def _rows_to_names(rows: object) -> tuple[str, ...]:

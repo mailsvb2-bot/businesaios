@@ -18,7 +18,7 @@ from scripts.ci.subprocess_io import CommandOutcome
 
 TITLE = "onboarding creates a read-only OWNER workspace without persisting the API key"
 SPEC = "onboarding-workspace.spec.js"
-STEP_SHA = "c256f7ff9d32290fce480f3fe4338edb83ef74789218238477057e733573f5d1"
+STEP_SHA = "e1f43aa84b206bb92f95ce885adbb4f26162b09ad0e1eeab5002d21ebea86abe"
 SOURCE_SHA = "54dc5e5be92f822685c77ca2b6d9b836742ad33ffd32351e4efb6172233e7f70"
 STEP_SHAPE = json.loads(Path("tests/fixtures/playwright/onboarding-step-shape.json").read_text(encoding="utf-8"))
 MATRIX = [
@@ -47,6 +47,7 @@ def test_browser_contract_plans_provisioning_and_security_are_locked() -> None:
     assert hashlib.sha256(scenario_path.read_bytes()).hexdigest() == SOURCE_SHA
     assert 'readFileSync(new URL("./e2e/project-matrix.json", import.meta.url)' in config
     assert f'projectMatrix.schema !== "{browser_evidence.BROWSER_PROJECT_MATRIX_SCHEMA}"' in config
+    assert 'actualSourceSha256 !== sourceSha256' in config
     assert "browserName: entry.engine" in config and 'trace: "off"' in config
     assert 'const runtimeMode = process.env.BAIOS_E2E_RUNTIME_MODE || "development"' in config
     assert 'const production = runtimeMode === "production"' in config
@@ -123,6 +124,20 @@ def test_evidence_integer_types_are_strict(value, expected) -> None:
 ])
 def test_evidence_timestamp_types_are_strict(value, expected) -> None:
     assert browser_evidence._timestamp(value) is expected
+
+
+def test_volatile_observation_datetime_does_not_change_canonical_step_fingerprint() -> None:
+    def step(value: str) -> dict:
+        return {
+            "title": f'Fill "{value}" getByLabel(\'Когда произошло\')',
+            "startTime": "2026-08-11T10:48:09.726Z", "duration": 1, "steps": [],
+            "attachments": [], "count": 1, "skipped": False,
+        }
+
+    first = browser_evidence._step_fingerprint([step("2026-09-10T22:11")], SPEC, "chromium")
+    second = browser_evidence._step_fingerprint([step("2026-09-11T00:07")], SPEC, "chromium")
+    assert first == second
+    assert browser_evidence._step_fingerprint([step("not-a-datetime")], SPEC, "chromium") != first
 
 
 def _json_result() -> dict:

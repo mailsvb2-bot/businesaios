@@ -1,4 +1,5 @@
 import { defineConfig, devices } from "@playwright/test";
+import crypto from "node:crypto";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
@@ -25,6 +26,20 @@ if (
 const projectNames = projectMatrix.projects.map((entry) => String(entry?.name || "").trim());
 if (projectNames.some((name) => !name) || new Set(projectNames).size !== projectNames.length) {
   throw new Error("canonical browser project names must be non-empty and unique");
+}
+const canonicalHash = /^[0-9a-f]{64}$/;
+for (const scenario of projectMatrix.scenarios) {
+  const file = String(scenario?.file || "").trim();
+  const sourceSha256 = String(scenario?.source_sha256 || "").trim();
+  const stepSha256 = String(scenario?.detail_step_sha256 || "").trim();
+  if (!file || path.basename(file) !== file || !canonicalHash.test(sourceSha256) || !canonicalHash.test(stepSha256)) {
+    throw new Error("invalid canonical browser scenario proof contract");
+  }
+  const sourceUrl = new URL(`./e2e/${file}`, import.meta.url);
+  const actualSourceSha256 = crypto.createHash("sha256").update(fs.readFileSync(sourceUrl)).digest("hex");
+  if (actualSourceSha256 !== sourceSha256) {
+    throw new Error(`canonical browser scenario source drift: ${file}`);
+  }
 }
 const projects = projectMatrix.projects.map((entry) => {
   const device = devices[entry.device];
