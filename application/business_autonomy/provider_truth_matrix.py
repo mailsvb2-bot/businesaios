@@ -117,6 +117,28 @@ def _has_real_endpoint(binding: Mapping[str, Any]) -> bool:
     return bool(base_url) and not _has_placeholder_endpoint(binding) and base_url.startswith(("https://", "postgres://", "redis://"))
 
 
+_MESSAGING_ROUTE_TEMPLATE_FIELDS = frozenset({"operation", "channel_id", "ig_user_id", "page_id"})
+
+
+def _truth_binding_view(provider: ProviderDefinition, binding: Mapping[str, Any]) -> dict[str, Any]:
+    truth_binding = dict(binding)
+    if not provider.messaging_channel:
+        return truth_binding
+
+    allowed_fields = set(_MESSAGING_ROUTE_TEMPLATE_FIELDS)
+    allowed_fields.update(
+        str(value).strip()
+        for value in binding.get("live_required_secrets", ())
+        if str(value).strip()
+    )
+    for key in ("probe_path", "sync_path_family"):
+        text = str(truth_binding.get(key) or "")
+        for field_name in sorted(allowed_fields):
+            text = text.replace(f"{{{field_name}}}", field_name)
+        truth_binding[key] = text
+    return truth_binding
+
+
 def _capability_status_by_provider() -> dict[str, list[str]]:
     result: dict[str, list[str]] = {}
     for capability in list_integration_capabilities(include_roadmap=True):
@@ -135,12 +157,22 @@ def _risk_level(provider: ProviderDefinition, write_capabilities: Iterable[str])
     return "high" if provider.domain in _HIGH_RISK_DOMAINS or provider.provider_key in _HIGH_RISK_PROVIDERS else ("medium" if tuple(write_capabilities) else "low")
 
 
-def _truth_status(*, capability_status: str, has_real_endpoint: bool, has_placeholder_endpoint: bool, read_only_supported: bool, write_supported: bool) -> str:
+def _truth_status(
+    *,
+    capability_status: str,
+    has_real_endpoint: bool,
+    has_placeholder_endpoint: bool,
+    read_only_supported: bool,
+    write_supported: bool,
+    partial_readiness_proven: bool = False,
+) -> str:
     if capability_status in {CapabilityStatus.NOT_IMPLEMENTED.value, CapabilityStatus.NOT_FOUND.value}:
         return ProviderTruthStatus.NOT_IMPLEMENTED.value
     if capability_status == CapabilityStatus.CONTRACT_ONLY.value:
         return ProviderTruthStatus.CONTRACT_ONLY.value
     if has_real_endpoint and not has_placeholder_endpoint and read_only_supported:
+        if capability_status == CapabilityStatus.PARTIAL.value and not partial_readiness_proven:
+            return ProviderTruthStatus.PARTIAL.value
         return ProviderTruthStatus.LIVE_READY.value if write_supported else ProviderTruthStatus.READ_ONLY_READY.value
     return ProviderTruthStatus.IMPLEMENTED.value if capability_status == CapabilityStatus.IMPLEMENTED.value else ProviderTruthStatus.PARTIAL.value
 
@@ -148,16 +180,21 @@ def _truth_status(*, capability_status: str, has_real_endpoint: bool, has_placeh
 def _truth_row(provider: ProviderDefinition, *, planner: ProviderSyncRuntimePlanner, bindings: ProviderTransportBindings, capability_statuses: Mapping[str, list[str]]) -> ProviderTruthRow:
     binding, plan = bindings.describe(provider), planner.describe(provider)
     read_capabilities, write_capabilities = tuple(plan.read_operations), tuple(plan.write_operations)
-    required_credentials, truth_binding = _required_credentials(provider), dict(binding)
+    required_credentials = _required_credentials(provider)
+    truth_binding = _truth_binding_view(provider, binding)
     health_requirements = tuple(dict.fromkeys((*required_credentials, *tuple(str(value) for value in binding.get('live_required_secrets', ()) if str(value).strip()))))
-    if provider.provider_key in MESSAGING_GUARDED_WRITE_PROVIDER_KEYS:
-        truth_binding['sync_path_family'] = str(truth_binding.get('sync_path_family') or '').replace('{operation}', 'operation').replace('{channel_id}', 'channel_id').replace('{ig_user_id}', 'ig_user_id').replace('{page_id}', 'page_id')
     has_placeholder_endpoint, has_real_endpoint = _has_placeholder_endpoint(truth_binding), _has_real_endpoint(truth_binding)
     capability_status = _best_capability_status(provider.provider_key, capability_statuses)
     read_only_supported = bool(read_capabilities) and capability_status not in {CapabilityStatus.CONTRACT_ONLY.value, CapabilityStatus.NOT_IMPLEMENTED.value, CapabilityStatus.NOT_FOUND.value}
     write_supported, proven_live_write = provider.provider_key in MESSAGING_GUARDED_WRITE_PROVIDER_KEYS, provider.provider_key in (MESSAGING_GUARDED_WRITE_PROVIDER_KEYS & _GUARDED_WRITE_LIVE_READY)
-    status = _truth_status(capability_status=capability_status, has_real_endpoint=has_real_endpoint,
-        has_placeholder_endpoint=has_placeholder_endpoint, read_only_supported=read_only_supported, write_supported=proven_live_write)
+    status = _truth_status(
+        capability_status=capability_status,
+        has_real_endpoint=has_real_endpoint,
+        has_placeholder_endpoint=has_placeholder_endpoint,
+        read_only_supported=read_only_supported,
+        write_supported=proven_live_write,
+        partial_readiness_proven=provider.provider_key in BRIDGE_MESSAGING_PROVIDER_KEYS,
+    )
     live_ready = status == ProviderTruthStatus.LIVE_READY.value and bool(binding.get("live_ready")) and has_real_endpoint and not has_placeholder_endpoint and proven_live_write
     return ProviderTruthRow(
         provider_key=provider.provider_key, category=provider.domain, display_name=provider.title,
