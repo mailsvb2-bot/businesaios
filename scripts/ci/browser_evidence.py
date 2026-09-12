@@ -14,7 +14,7 @@ from scripts.ci.paths import repo_root
 BROWSER_EVIDENCE_NAME = "browser-e2e-evidence.json"
 BROWSER_EVIDENCE_SCHEMA = "businessaios_browser_e2e.v2"
 BROWSER_PROJECT_MATRIX = "frontend/e2e/project-matrix.json"
-BROWSER_PROJECT_MATRIX_SCHEMA = "businessaios_browser_project_matrix.v2"
+BROWSER_PROJECT_MATRIX_SCHEMA = "businessaios_browser_project_matrix.v3"
 _HTML_MARKER = '<template id="playwrightReportBase64">data:application/zip;base64,'
 _HTML_RESULT_KEYS = frozenset({"attachments", "startTime", "workerIndex"})
 _HTML_TEST_KEYS = frozenset({"testId", "title", "projectName", "location", "duration", "annotations", "tags", "outcome", "path", "ok", "results"})
@@ -52,6 +52,15 @@ def _step_shape(step: object, file: str, project: str) -> dict:
     _need(keys == _STEP_KEYS or (isinstance(location, dict) and set(location) == {"file", "line", "column"} and _text(location.get("file")) == file and min(_integer(location.get("line")), _integer(location.get("column"))) > 0 and _text(step.get("snippet"))))
     slug = "-".join(project.lower().split())
     title = _text(step.get("title")).replace(f"Canonical Browser E2E {project}", "Canonical Browser E2E {project}").replace(f"browser-e2e+{slug}@example.test", "browser-e2e+{project}@example.test")
+    observation_suffix = '" getByLabel(\'Когда произошло\')'
+    if title.startswith('Fill "') and title.endswith(observation_suffix):
+        observed_at = title[len('Fill "'):-len(observation_suffix)]
+        try:
+            datetime.strptime(observed_at, "%Y-%m-%dT%H:%M")
+        except ValueError:
+            pass
+        else:
+            title = 'Fill "{observation_datetime}' + observation_suffix
     return {"title": title, "location": [_text(location.get("file")), _integer(location.get("line")), _integer(location.get("column"))] if isinstance(location, dict) else None, "children": [_step_shape(child, file, project) for child in step["steps"]]}
 
 
@@ -69,13 +78,27 @@ def _matrix_snapshot():
         projects, scenarios = doc.get("projects"), doc.get("scenarios")
         _need(isinstance(projects, list) and len(projects) == 5 and isinstance(scenarios, list) and scenarios)
         rows = [{key: _text(item.get(key)) for key in ("name", "device", "engine", "surface")} for item in projects if isinstance(item, dict)]
-        identities = [(_text(item.get("id")), _text(item.get("title")), _text(item.get("file")), _text(item.get("detail_step_sha256"))) for item in scenarios if isinstance(item, dict)]
+        identities = [
+            (
+                _text(item.get("id")), _text(item.get("title")), _text(item.get("file")),
+                _text(item.get("detail_step_sha256")), _text(item.get("source_sha256")),
+            )
+            for item in scenarios if isinstance(item, dict)
+        ]
         _need(len(rows) == 5 and len(identities) == len(scenarios) and all(all(row.values()) for row in rows))
-        _need(all(all(item) for item in identities) and all(len(item[3]) == 64 and all(char in "0123456789abcdef" for char in item[3]) for item in identities) and len({item[0] for item in identities}) == len(identities))
+        _need(
+            all(all(item) for item in identities)
+            and all(all(len(value) == 64 and all(char in "0123456789abcdef" for char in value) for value in item[3:]) for item in identities)
+            and len({item[0] for item in identities}) == len(identities)
+        )
+        e2e_root = repo_root() / "frontend" / "e2e"
+        for _, _, file, _, source_sha in identities:
+            _need(Path(file).name == file)
+            _need(hashlib.sha256((e2e_root / file).read_bytes()).hexdigest() == source_sha)
         _need(len({row["name"] for row in rows}) == len({row["device"] for row in rows}) == 5)
         _need(len([row for row in rows if row["surface"] == "desktop"]) == 3 and {row["engine"] for row in rows if row["surface"] == "desktop"} == {"chromium", "firefox", "webkit"})
         _need(len([row for row in rows if row["surface"] == "mobile"]) == 2 and {row["engine"] for row in rows if row["surface"] == "mobile"} == {"chromium", "webkit"})
-        canonical = tuple(sorted((title, file, fingerprint) for _, title, file, fingerprint in identities))
+        canonical = tuple(sorted((title, file, fingerprint) for _, title, file, fingerprint, _ in identities))
         _need(len(canonical) == len(set(canonical)))
         return rows, canonical, hashlib.sha256(raw).hexdigest()
     except (OSError, UnicodeError, json.JSONDecodeError, ValueError):

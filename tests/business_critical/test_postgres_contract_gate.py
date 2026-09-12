@@ -9,6 +9,7 @@ from runtime.platform.postgres_contract import (
     PostgresRuntimeProof,
     evaluate_postgres_contract,
 )
+from runtime.platform.postgres_migration_runner import migration_files
 from scripts.ci.cli import build_parser
 from scripts.ci.plan_registry import plan_for_gate
 from scripts.ci.step_postgres_contract import run as run_postgres_contract
@@ -101,13 +102,17 @@ def test_postgres_deep_live_contract_requires_rollback_ledger_and_backup_evidenc
     assert report["claims_production_ready"] is False
 
 
-def test_postgres_migration_file_declares_required_schema_and_migrations() -> None:
-    text = Path("migrations/postgres/0001_runtime_core.sql").read_text(encoding="utf-8")
+def test_postgres_migration_set_declares_required_schema_and_migrations() -> None:
+    files = migration_files()
+    text = "\n".join(path.read_text(encoding="utf-8") for path in files)
 
+    assert [path.name for path in files] == ["0001_runtime_core.sql", "0002_decision_archive_v2.sql"]
     for table in REQUIRED_SCHEMA_OBJECTS:
         assert f"CREATE TABLE IF NOT EXISTS {table}" in text
     for migration in REQUIRED_MIGRATIONS:
         assert f"'{migration}'" in text
+    assert "ALTER TABLE decision_archive ADD COLUMN IF NOT EXISTS partition_key TEXT" in text
+    assert "ALTER TABLE decision_archive ALTER COLUMN partition_key SET NOT NULL" in text
     assert "schema_migrations" in text
     assert "ON CONFLICT" in text
 

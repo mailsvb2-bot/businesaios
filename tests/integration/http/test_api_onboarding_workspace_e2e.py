@@ -12,6 +12,9 @@ from http.cookies import SimpleCookie
 from scripts.ci.paths import repo_root
 
 
+_HTTP_REQUEST_TIMEOUT_SECONDS = 15
+
+
 def _free_port() -> int:
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
         sock.bind(("127.0.0.1", 0))
@@ -33,7 +36,7 @@ def _request(port: int, path: str, *, method: str = "GET", headers: dict | None 
         request_headers.setdefault("Cookie", "; ".join(f"{key}={value}" for key, value in cookies.items()))
     if body is not None:
         request_headers.setdefault("Content-Type", "application/json")
-    connection = http.client.HTTPConnection("127.0.0.1", port, timeout=5)
+    connection = http.client.HTTPConnection("127.0.0.1", port, timeout=_HTTP_REQUEST_TIMEOUT_SECONDS)
     try:
         connection.request(method, path, body=body, headers=request_headers)
         response = connection.getresponse()

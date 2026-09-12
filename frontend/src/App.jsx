@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { AcquisitionPlanner } from "./AcquisitionPlanner.jsx";
 import { BusinessIntelligencePanel } from "./BusinessIntelligencePanel.jsx";
+import { DiscoverBuildMeasurePanel } from "./DiscoverBuildMeasurePanel.jsx";
 
 const DEFAULT_API = import.meta.env.VITE_API_BASE || "https://api.businessaios.ru";
 
@@ -331,6 +332,9 @@ function Workspace({ data, apiBase, businesses, onRestart, onRetryAccess, onSwit
   const memoryRecentUrl = `${baseApi}/business-memory/recent-runs`;
   const goalExecuteUrl = `${baseApi}/goals/execute`;
   const decisionDraftUrl = `${baseApi}/business-workspace/decision-draft`;
+  const processObservationsUrl = `${baseApi}/business-workspace/process-observations`;
+  const processOpportunitiesUrl = `${baseApi}/business-workspace/process-opportunities`;
+  const processBlueprintsUrl = `${baseApi}/business-workspace/process-blueprints`;
   const authHeaders = useMemo(() => (apiKey ? { "X-API-Key": apiKey } : {}), [apiKey]);
   const selectedKeys = useMemo(() => new Set(integrations.map((item) => item.provider_key)), [integrations]);
   const [catalog, setCatalog] = useState([]);
@@ -938,6 +942,44 @@ function Workspace({ data, apiBase, businesses, onRestart, onRetryAccess, onSwit
     }, { ...authHeaders, "X-Idempotency-Key": crypto.randomUUID() });
   }, [apiKey, authHeaders, data.business_id, data.tenant_id, goalExecuteUrl, profile.business_model, profile.city, profile.industry]);
 
+  const discoverProcessOpportunities = useCallback(async () => {
+    if (!apiKey) throw new Error("owner_session_required");
+    return getJson(processOpportunitiesUrl, authHeaders);
+  }, [apiKey, authHeaders, processOpportunitiesUrl]);
+
+  const recordProcessObservation = useCallback(async (payload, requestKey) => {
+    if (!apiKey) throw new Error("owner_session_required");
+    return postJson(processObservationsUrl, payload || {}, { ...authHeaders, "X-Idempotency-Key": requestKey });
+  }, [apiKey, authHeaders, processObservationsUrl]);
+
+  const buildProcessBlueprint = useCallback(async (opportunity, payload, requestKey) => {
+    if (!apiKey) throw new Error("owner_session_required");
+    const opportunityId = String(opportunity?.opportunity_id || "").trim();
+    if (!opportunityId) throw new Error("process_opportunity_id_required");
+    return postJson(
+      `${processOpportunitiesUrl}/${encodeURIComponent(opportunityId)}/blueprint`,
+      payload || {},
+      { ...authHeaders, "X-Idempotency-Key": requestKey },
+    );
+  }, [apiKey, authHeaders, processOpportunitiesUrl]);
+
+  const runProcessBlueprintDecision = useCallback(async (blueprintId, requestKey) => {
+    if (!apiKey) throw new Error("owner_session_required");
+    const clean = String(blueprintId || "").trim();
+    if (!clean) throw new Error("process_blueprint_id_required");
+    return postJson(
+      `${processBlueprintsUrl}/${encodeURIComponent(clean)}/decision`, {},
+      { ...authHeaders, "X-Idempotency-Key": requestKey },
+    );
+  }, [apiKey, authHeaders, processBlueprintsUrl]);
+
+  const measureProcessBlueprint = useCallback(async (blueprintId) => {
+    if (!apiKey) throw new Error("owner_session_required");
+    const clean = String(blueprintId || "").trim();
+    if (!clean) throw new Error("process_blueprint_id_required");
+    return getJson(`${processBlueprintsUrl}/${encodeURIComponent(clean)}/measurement`, authHeaders);
+  }, [apiKey, authHeaders, processBlueprintsUrl]);
+
   const prepareDecisionAction = useCallback(async (goalResult) => {
     if (!apiKey) throw new Error("owner_session_required");
     if (operationQueueStale) throw new Error("action_queue_stale");
@@ -1035,6 +1077,17 @@ function Workspace({ data, apiBase, businesses, onRestart, onRetryAccess, onSwit
         onRunGoal={runAdvisoryGoal}
         onPrepareAction={prepareDecisionAction}
         onOpenSurface={openWorkspaceSection}
+      />
+
+      <DiscoverBuildMeasurePanel
+        key={`dbm-${data.business_id}`}
+        enabled={Boolean(apiKey)}
+        onRecordObservation={recordProcessObservation}
+        onDiscover={discoverProcessOpportunities}
+        onBuild={buildProcessBlueprint}
+        onRunBlueprintDecision={runProcessBlueprintDecision}
+        onPrepareAction={prepareDecisionAction}
+        onMeasure={measureProcessBlueprint}
       />
 
       <section className="panel capabilities-panel" aria-labelledby="business-capabilities-title">
