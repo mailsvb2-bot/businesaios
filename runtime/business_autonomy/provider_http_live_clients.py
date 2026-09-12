@@ -10,7 +10,7 @@ from runtime.business_autonomy.provider_max_media_http import execute_max_media_
 from runtime.business_autonomy.provider_media import ProviderMediaPreparationCoordinator, public_provider_media_payload
 from runtime.business_autonomy.provider_payload_normalizers import ProviderPayloadNormalizers
 from runtime.business_autonomy.provider_response_parsers import ProviderResponseParsers
-from runtime.business_autonomy.provider_transport_bindings import ProviderTransportBindings
+from runtime.business_autonomy.provider_transport_bindings import META_GRAPH_API_VERSION, ProviderTransportBindings
 from runtime.business_autonomy.provider_vk_media_http import prepare_vk_audio_attachment
 from runtime.handler_loader import import_internal_attr
 from security.secret_contract import SecretRef
@@ -215,9 +215,9 @@ class VendorHttpLiveTransport:
         if provider.provider_key == 'whatsapp_cloud':
             phone_number_id = secrets.get('phone_number_id') or payload.get('phone_number_id') or '{phone_number_id}'
             if operation == 'health_probe':
-                return f"{base_url}/v19.0/{phone_number_id}"
+                return f"{base_url}/{META_GRAPH_API_VERSION}/{phone_number_id}"
             if operation == 'message_send':
-                return f"{base_url}/v19.0/{phone_number_id}/messages"
+                return f"{base_url}/{META_GRAPH_API_VERSION}/{phone_number_id}/messages"
             return f"{base_url}{path_family.format(phone_number_id=phone_number_id, operation=operation)}"
         if provider.provider_key == 'vk_messaging':
             return f"{base_url}/{ {'health_probe': 'groups.getById', 'message_read': 'messages.getConversations', 'message_send': 'messages.send'}.get(operation, operation) }"

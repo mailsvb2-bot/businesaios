@@ -7,6 +7,7 @@ from typing import Any
 from application.business_autonomy.provider_admin_contract import ProviderDefinition
 
 CANON_PROVIDER_TRANSPORT_BINDINGS = True
+META_GRAPH_API_VERSION = 'v26.0'
 
 
 def _https_host(*parts: str) -> str:
@@ -15,10 +16,10 @@ def _https_host(*parts: str) -> str:
 
 _BINDINGS: Mapping[str, Mapping[str, Any]] = {
     'telegram_bot': {'auth_scheme': 'bearer_token', 'base_url': _https_host('api', 'telegram', 'org'), 'probe_path': '/bot{bot_token}/getMe', 'sync_path_family': '/bot{bot_token}/{operation}', 'live_required_secrets': ('bot_token',), 'live_probe_ready': True, 'live_read_ready': True, 'live_write_ready': True, 'live_ready': True},
-    'whatsapp_cloud': {'auth_scheme': 'bearer_token', 'base_url': 'https://graph.facebook.com', 'probe_path': '/v19.0/{phone_number_id}', 'sync_path_family': '/v19.0/{phone_number_id}/{operation}', 'live_required_secrets': ('access_token', 'phone_number_id'), 'live_probe_ready': True, 'live_read_ready': False, 'live_write_ready': True, 'live_ready': True},
+    'whatsapp_cloud': {'auth_scheme': 'bearer_token', 'base_url': 'https://graph.facebook.com', 'probe_path': f'/{META_GRAPH_API_VERSION}/{{phone_number_id}}', 'sync_path_family': f'/{META_GRAPH_API_VERSION}/{{phone_number_id}}/{{operation}}', 'live_required_secrets': ('access_token', 'phone_number_id'), 'live_probe_ready': True, 'live_read_ready': False, 'live_write_ready': True, 'live_ready': True},
     'vk_messaging': {'auth_scheme': 'vk_group_access_token', 'base_url': 'https://api.vk.com/method', 'probe_path': '/groups.getById', 'sync_path_family': '/{operation}', 'live_required_secrets': ('access_token',), 'live_ready': True},
     'max_messaging': {'auth_scheme': 'authorization_token', 'base_url': 'https://platform-api2.max.ru', 'probe_path': '/me', 'sync_path_family': '/{operation}', 'live_required_secrets': ('access_token',), 'live_ready': True},
-    'instagram_messaging': {'auth_scheme': 'bearer_access_token', 'base_url': 'https://graph.instagram.com', 'probe_path': '', 'sync_path_family': '/v26.0/{ig_user_id}/messages', 'live_required_secrets': ('access_token', 'ig_user_id'), 'live_probe_ready': False, 'live_read_ready': False, 'live_ready': False}, 'messenger_messaging': {'auth_scheme': 'bearer_page_access_token', 'base_url': 'https://graph.facebook.com', 'probe_path': '', 'sync_path_family': '/v26.0/{page_id}/messages', 'live_required_secrets': ('access_token', 'page_id'), 'live_probe_ready': False, 'live_read_ready': False, 'live_ready': False}, 'slack_messaging': {'auth_scheme': 'bearer_bot_token', 'base_url': 'https://slack.com/api', 'probe_path': '/auth.test', 'sync_path_family': '/{operation}', 'live_required_secrets': ('bot_token',), 'live_probe_ready': True, 'live_read_ready': True, 'live_ready': False},
+    'instagram_messaging': {'auth_scheme': 'bearer_access_token', 'base_url': 'https://graph.instagram.com', 'probe_path': '', 'sync_path_family': f'/{META_GRAPH_API_VERSION}/{{ig_user_id}}/messages', 'live_required_secrets': ('access_token', 'ig_user_id'), 'live_probe_ready': False, 'live_read_ready': False, 'live_ready': False}, 'messenger_messaging': {'auth_scheme': 'bearer_page_access_token', 'base_url': 'https://graph.facebook.com', 'probe_path': '', 'sync_path_family': f'/{META_GRAPH_API_VERSION}/{{page_id}}/messages', 'live_required_secrets': ('access_token', 'page_id'), 'live_probe_ready': False, 'live_read_ready': False, 'live_ready': False}, 'slack_messaging': {'auth_scheme': 'bearer_bot_token', 'base_url': 'https://slack.com/api', 'probe_path': '/auth.test', 'sync_path_family': '/{operation}', 'live_required_secrets': ('bot_token',), 'live_probe_ready': True, 'live_read_ready': True, 'live_ready': False},
     'discord_messaging': {'auth_scheme': 'bot_token', 'base_url': 'https://discord.com/api/v10', 'probe_path': '/users/@me', 'sync_path_family': '/channels/{channel_id}/messages', 'live_required_secrets': ('bot_token',), 'live_probe_ready': True, 'live_read_ready': True, 'live_ready': False},
     'line_messaging': {'auth_scheme': 'bearer_channel_access_token', 'base_url': 'https://api.line.me', 'probe_path': '/v2/bot/info', 'sync_path_family': '/v2/bot/message/{operation}', 'live_required_secrets': ('channel_access_token',), 'live_probe_ready': True, 'live_read_ready': False, 'live_ready': False},
     'viber_messaging': {'auth_scheme': 'x_viber_auth_token', 'base_url': 'https://chatapi.viber.com/pa', 'probe_path': '/get_account_info', 'sync_path_family': '/{operation}', 'live_required_secrets': ('auth_token',), 'live_probe_ready': True, 'live_read_ready': False, 'live_ready': False},
@@ -30,7 +31,7 @@ _BINDINGS: Mapping[str, Mapping[str, Any]] = {
     'shopify': {'auth_scheme': 'admin_access_token', 'base_url': 'https://{shop}.myshopify.com', 'probe_path': '/admin/api/2024-10/shop.json', 'sync_path_family': '/admin/api/2024-10/{operation}.json', 'live_ready': True},
     'woocommerce': {'auth_scheme': 'consumer_key_secret', 'base_url': '{store_url}', 'probe_path': '/wp-json/wc/v3', 'sync_path_family': '/wp-json/wc/v3/{operation}', 'live_ready': False},
     'hubspot': {'auth_scheme': 'bearer_token', 'base_url': 'https://api.hubapi.com', 'oauth_base_url': 'https://api.hubapi.com', 'probe_path': '/crm/objects/2026-03/contacts', 'sync_path_family': '/crm/objects/2026-03/{operation}', 'live_ready': True},
-    'meta_ads': {'auth_scheme': 'bearer_token', 'base_url': 'https://graph.facebook.com', 'probe_path': '/v19.0/me/adaccounts', 'sync_path_family': '/v19.0/{operation}', 'live_ready': True},
+    'meta_ads': {'auth_scheme': 'bearer_token', 'base_url': 'https://graph.facebook.com', 'probe_path': f'/{META_GRAPH_API_VERSION}/me/adaccounts', 'sync_path_family': f'/{META_GRAPH_API_VERSION}/{{operation}}', 'live_ready': True},
     'google_ads': {'auth_scheme': 'oauth_refresh_token', 'base_url': 'https://googleads.googleapis.com', 'oauth_authorize_url': 'https://accounts.google.com/o/oauth2/v2/auth', 'oauth_token_url': 'https://oauth2.googleapis.com/token', 'oauth_scope': 'https://www.googleapis.com/auth/adwords', 'probe_path': '/v16/customers:listAccessibleCustomers', 'sync_path_family': '/v16/{operation}', 'live_ready': False},
     'tiktok_ads': {'auth_scheme': 'bearer_token', 'base_url': 'https://business-api.tiktok.com', 'probe_path': '/open_api/v1.3/oauth2/advertiser/get/', 'sync_path_family': '/open_api/v1.3/{operation}', 'live_ready': False},
     'postgres_runtime': {'auth_scheme': 'dsn', 'base_url': 'postgres://', 'probe_path': 'connection-string', 'sync_path_family': 'sql/{operation}', 'live_ready': True},
@@ -69,6 +70,7 @@ class ProviderTransportBindings:
 
 __all__ = [
     'CANON_PROVIDER_TRANSPORT_BINDINGS',
+    'META_GRAPH_API_VERSION',
     'ProviderTransportBindings',
     'provider_endpoint_url',
     'provider_transport_binding_for_key',

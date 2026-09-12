@@ -68,6 +68,26 @@ def test_telegram_bot_is_not_telegram_ads() -> None:
     assert truth["telegram_bot"].category == "communications"
 
 
+def test_messaging_live_route_templates_are_not_fake_endpoints() -> None:
+    truth = provider_truth_map()
+    for provider_key in ("telegram_bot", "whatsapp_cloud"):
+        row = truth[provider_key]
+        assert row.has_real_endpoint is True
+        assert row.has_placeholder_endpoint is False
+        assert row.status == "partial"
+        assert row.live_ready is False
+        assert row._live_ready_false_reason() == "live_readiness_not_proven"
+
+
+def test_unresolved_messaging_vendor_endpoints_remain_fail_closed() -> None:
+    truth = provider_truth_map()
+    for provider_key in ("sms_connector", "wechat_messaging", "kakaotalk_messaging"):
+        row = truth[provider_key]
+        assert row.has_real_endpoint is False
+        assert row.has_placeholder_endpoint is True
+        assert row.live_ready is False
+
+
 def test_matrix_summary_is_admin_safe_guarded_write_pilot() -> None:
     summary = summarize_provider_truth()
     assert summary["total"] == len(PROVIDERS)
