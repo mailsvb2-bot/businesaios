@@ -44,3 +44,10 @@ def test_deep_release_workflow_is_the_single_tag_release_owner() -> None:
     assert "- 'v*'" in text
     assert not (ROOT / ".github/workflows/release.yml").exists()
     assert not (ROOT / ".github/workflows/release-gates.yml").exists()
+
+
+def test_deep_release_persists_full_evidence_only_outside_pull_requests() -> None:
+    text = WORKFLOW.read_text(encoding="utf-8")
+
+    assert "if: always() && github.event_name != 'pull_request'" in text
+    assert "name: deep-release-${{ env.BAIOS_CI_TARGET_SHA }}" in text
