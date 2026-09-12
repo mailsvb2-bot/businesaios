@@ -1,0 +1,22 @@
+{
+  "deletion_budget": {
+    "max_deleted_line_ratio": 0.2,
+    "max_files_deleted": 5
+  },
+  "prohibited_actions": [
+    "delete_repository",
+    "force_push_main",
+    "delete_backups"
+  ],
+  "protected_branches": [
+    "main"
+  ],
+  "protected_paths": [
+    ".ados/",
+    ".github/workflows/",
+    "CODEOWNERS",
+    "scripts/ados_businesaios_gate.py",
+    "scripts/ados_shadow_assess.py",
+    "third_party/ados/"
+  ]
+}

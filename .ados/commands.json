@@ -1,0 +1,160 @@
+{
+  "version": 1,
+  "gates": [
+    {
+      "gate": "architecture",
+      "argv": [
+        ".ados-project-venv/bin/python",
+        "scripts/ados_businesaios_gate.py",
+        "architecture"
+      ],
+      "cwd": ".",
+      "timeout_seconds": 900,
+      "max_output_bytes": 33554432,
+      "trusted_files": [
+        "scripts/ados_businesaios_gate.py",
+        "scripts/ci/cli.py",
+        "scripts/ci/plan_registry.py",
+        "scripts/ci/step_architecture_bypass_scan.py",
+        "scripts/ci/step_canon_audit.py"
+      ],
+      "assurances": ["architecture"]
+    },
+    {
+      "gate": "tests",
+      "argv": [
+        ".ados-project-venv/bin/python",
+        "scripts/ados_businesaios_gate.py",
+        "tests"
+      ],
+      "cwd": ".",
+      "timeout_seconds": 1800,
+      "max_output_bytes": 67108864,
+      "trusted_files": [
+        "scripts/ados_businesaios_gate.py",
+        "scripts/ci/cli.py",
+        "scripts/ci/plan_registry.py",
+        "scripts/ci/step_business_critical_tests.py"
+      ],
+      "assurances": ["tests"]
+    },
+    {
+      "gate": "security",
+      "argv": [
+        ".ados-project-venv/bin/python",
+        "scripts/ados_businesaios_gate.py",
+        "security"
+      ],
+      "cwd": ".",
+      "timeout_seconds": 1800,
+      "max_output_bytes": 67108864,
+      "trusted_files": [
+        "scripts/ados_businesaios_gate.py",
+        "scripts/ci/cli.py",
+        "scripts/ci/plan_registry.py",
+        "scripts/ci/step_rust_safety_core.py",
+        "tests/security/test_no_secrets_committed.py"
+      ],
+      "assurances": ["security"]
+    },
+    {
+      "gate": "contracts",
+      "argv": [
+        ".ados-project-venv/bin/python",
+        "scripts/ados_businesaios_gate.py",
+        "contracts"
+      ],
+      "cwd": ".",
+      "timeout_seconds": 900,
+      "max_output_bytes": 33554432,
+      "trusted_files": [
+        "scripts/ados_businesaios_gate.py",
+        "tests/contracts/test_builtin_organization_offer_catalog.py",
+        "tests/contracts/test_offer_catalog_ref_resolution.py",
+        "tests/contracts/test_provider_agnostic_checkout.py",
+        "tests/contracts/test_public_api_exports_contract.py"
+      ],
+      "assurances": ["contracts"]
+    },
+    {
+      "gate": "integration",
+      "argv": [
+        ".ados-project-venv/bin/python",
+        "scripts/ados_businesaios_gate.py",
+        "integration"
+      ],
+      "cwd": ".",
+      "timeout_seconds": 3600,
+      "max_output_bytes": 134217728,
+      "trusted_files": [
+        "scripts/ados_businesaios_gate.py",
+        "scripts/ci/cli.py",
+        "scripts/ci/plan_registry.py",
+        "scripts/ci/step_integration_tests.py",
+        "scripts/ci/step_user_scenario_gate.py"
+      ],
+      "assurances": ["integration"]
+    },
+    {
+      "gate": "user_journey",
+      "argv": [
+        ".ados-project-venv/bin/python",
+        "scripts/ados_businesaios_gate.py",
+        "user_journey"
+      ],
+      "cwd": ".",
+      "timeout_seconds": 1800,
+      "max_output_bytes": 67108864,
+      "trusted_files": [
+        "scripts/ados_businesaios_gate.py",
+        "scripts/ci/cli.py",
+        "scripts/ci/plan_registry.py",
+        "scripts/ci/step_user_scenario_gate.py"
+      ],
+      "assurances": ["user_journey"]
+    },
+    {
+      "gate": "data_migration",
+      "argv": [
+        ".ados-project-venv/bin/python",
+        "scripts/ados_businesaios_gate.py",
+        "data_migration"
+      ],
+      "cwd": ".",
+      "timeout_seconds": 1800,
+      "max_output_bytes": 67108864,
+      "trusted_files": [
+        "scripts/ados_businesaios_gate.py",
+        "scripts/ci/cli.py",
+        "scripts/ci/plan_registry.py",
+        "scripts/ci/step_postgres_migrations.py"
+      ],
+      "env": {
+        "DATABASE_URL": "postgresql://postgres:postgres@127.0.0.1:55432/businesaios",
+        "POSTGRES_DSN": "postgresql://postgres:postgres@127.0.0.1:55432/businesaios",
+        "POSTGRES_RUNTIME_ENABLED": "1",
+        "POSTGRES_EVENT_STORE_ENABLED": "1",
+        "POSTGRES_APPLY_MIGRATIONS": "1",
+        "RUN_MIGRATIONS_BEFORE_START": "1"
+      },
+      "assurances": ["data_migration"]
+    },
+    {
+      "gate": "full_regression",
+      "argv": [
+        ".ados-project-venv/bin/python",
+        "scripts/ados_businesaios_gate.py",
+        "full_regression"
+      ],
+      "cwd": ".",
+      "timeout_seconds": 5400,
+      "max_output_bytes": 201326592,
+      "trusted_files": [
+        "scripts/ados_businesaios_gate.py",
+        "scripts/ci/cli.py",
+        "scripts/ci/plan_registry.py"
+      ],
+      "assurances": ["full_regression"]
+    }
+  ]
+}

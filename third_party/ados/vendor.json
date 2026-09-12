@@ -1,0 +1,8 @@
+{
+  "component": "ados-control-plane",
+  "version": "0.6.0",
+  "mode": "shadow-only",
+  "wheel": "third_party/ados/ados_control_plane-0.6.0-py3-none-any.whl",
+  "sha256": "d00bc809685bd47f02d25ec84dd232996214be2ac2dbfa7a6d2c0b587925e85d",
+  "note": "Binary wheel is supplied by the patch bundle payload; it is not embedded in the textual git patch. Product and controller Python environments are intentionally isolated."
+}

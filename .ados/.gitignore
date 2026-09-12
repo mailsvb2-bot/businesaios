@@ -1,0 +1,7 @@
+state/
+evidence/
+worktrees/
+keys/
+*.db
+*.sqlite
+*.sqlite3

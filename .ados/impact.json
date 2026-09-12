@@ -1,0 +1,230 @@
+{
+  "component_patterns": {
+    "ados_policy": [
+      ".ados/**",
+      "scripts/ados_*.py",
+      "third_party/ados/**"
+    ],
+    "ci": [
+      ".github/workflows/**",
+      "scripts/ci/**"
+    ],
+    "dependencies": [
+      "requirements*.txt",
+      "requirements*.lock",
+      "pyproject.toml",
+      "frontend/package.json",
+      "frontend/package-lock.json",
+      "frontend/pnpm-lock.yaml",
+      "frontend/yarn.lock",
+      "rust/**/Cargo.toml",
+      "rust/**/Cargo.lock"
+    ],
+    "migrations": [
+      "migrations/**",
+      "**/migrations/**",
+      "alembic/**",
+      "**/alembic/**",
+      "sql/**"
+    ],
+    "billing": [
+      "billing/**",
+      "**/billing/**",
+      "*billing*.py",
+      "**/*billing*.py",
+      "*payment*.py",
+      "**/*payment*.py",
+      "*checkout*.py",
+      "**/*checkout*.py",
+      "tests/billing/**",
+      "tests/contracts/test_provider_agnostic_checkout.py"
+    ],
+    "licensing": [
+      "*license*.py",
+      "**/*license*.py",
+      "*licensing*.py",
+      "**/*licensing*.py",
+      "tests/**/test_*license*.py"
+    ],
+    "security": [
+      "auth/**",
+      "**/auth/**",
+      "security/**",
+      "**/security/**",
+      "vault/**",
+      "**/vault/**",
+      "tests/security/**",
+      "*permission*.py",
+      "**/*permission*.py"
+    ],
+    "integrations": [
+      "integrations/**",
+      "**/integrations/**",
+      "providers/**",
+      "**/providers/**",
+      "webhooks/**",
+      "**/webhooks/**",
+      "connectors/**",
+      "**/connectors/**",
+      "*telegram*",
+      "**/*telegram*",
+      "*vk*",
+      "**/*vk*",
+      "*max*",
+      "**/*max*"
+    ],
+    "automation": [
+      "autopilot/**",
+      "**/autopilot/**",
+      "agi/**",
+      "**/agi/**",
+      "execution/**",
+      "**/execution/**",
+      "tests/autopilot/**",
+      "tests/agi/**"
+    ],
+    "frontend": [
+      "frontend/**",
+      "web/**",
+      "templates/**",
+      "static/**",
+      "**/*.tsx",
+      "**/*.jsx",
+      "**/*.css",
+      "**/*.html"
+    ],
+    "rust": [
+      "rust/**"
+    ],
+    "backend": [
+      "app/**",
+      "src/**",
+      "services/**",
+      "repositories/**",
+      "api/**",
+      "scripts/**",
+      "*.py",
+      "**/*.py"
+    ],
+    "docs": [
+      "docs/**",
+      "README*",
+      "*.md",
+      "**/*.md"
+    ]
+  },
+  "dependencies": {
+    "frontend": [
+      "backend"
+    ],
+    "integrations": [
+      "security"
+    ],
+    "automation": [
+      "security",
+      "integrations"
+    ],
+    "billing": [
+      "security"
+    ]
+  },
+  "component_gates": {
+    "ados_policy": [
+      "architecture",
+      "tests"
+    ],
+    "ci": [
+      "architecture",
+      "tests",
+      "security"
+    ],
+    "dependencies": [
+      "tests",
+      "dependency_audit"
+    ],
+    "migrations": [
+      "data_migration",
+      "full_regression"
+    ],
+    "billing": [
+      "contracts",
+      "security",
+      "tests",
+      "red_team"
+    ],
+    "licensing": [
+      "contracts",
+      "security",
+      "tests"
+    ],
+    "security": [
+      "security",
+      "tests",
+      "red_team"
+    ],
+    "integrations": [
+      "contracts",
+      "integration"
+    ],
+    "automation": [
+      "architecture",
+      "integration",
+      "tests"
+    ],
+    "frontend": [
+      "tests",
+      "user_journey"
+    ],
+    "rust": [
+      "security",
+      "tests"
+    ],
+    "backend": [
+      "tests",
+      "architecture"
+    ],
+    "docs": []
+  },
+  "risk_overrides": [
+    {
+      "pattern": "requirements*.txt",
+      "level": "HIGH",
+      "reason": "dependency trust boundary"
+    },
+    {
+      "pattern": "requirements*.lock",
+      "level": "HIGH",
+      "reason": "dependency trust boundary"
+    },
+    {
+      "pattern": "migrations/**",
+      "level": "CRITICAL",
+      "reason": "persistent data migration"
+    },
+    {
+      "pattern": "**/migrations/**",
+      "level": "CRITICAL",
+      "reason": "persistent data migration"
+    },
+    {
+      "pattern": "**/*payment*.py",
+      "level": "CRITICAL",
+      "reason": "money movement or payment state"
+    },
+    {
+      "pattern": "**/*billing*.py",
+      "level": "CRITICAL",
+      "reason": "billing entitlement boundary"
+    },
+    {
+      "pattern": "**/*license*.py",
+      "level": "HIGH",
+      "reason": "license/entitlement boundary"
+    },
+    {
+      "pattern": ".github/workflows/**",
+      "level": "HIGH",
+      "reason": "CI/release trust boundary"
+    }
+  ]
+}

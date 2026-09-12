@@ -1,0 +1,110 @@
+name: ADOS Shadow
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ados-shadow-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  advisory:
+    name: shadow / advisory
+    runs-on: [self-hosted, Linux, X64, businesaios]
+    timeout-minutes: 90
+    env:
+      PYTHONDONTWRITEBYTECODE: '1'
+      BAIOS_CI_TARGET_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+      DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:55432/businesaios
+      POSTGRES_DSN: postgresql://postgres:postgres@127.0.0.1:55432/businesaios
+      POSTGRES_RUNTIME_ENABLED: '1'
+      POSTGRES_EVENT_STORE_ENABLED: '1'
+      POSTGRES_APPLY_MIGRATIONS: '1'
+      RUN_MIGRATIONS_BEFORE_START: '1'
+    steps:
+      - name: Checkout exact candidate
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+
+      - name: Verify exact checkout
+        shell: bash
+        env:
+          EXPECTED_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: test "$(git rev-parse HEAD)" = "$EXPECTED_SHA"
+
+      - name: Verify self-hosted Python and PostgreSQL tooling
+        shell: bash
+        run: |
+          set -euo pipefail
+          /usr/bin/python3.12 --version
+          test -x /usr/lib/postgresql/16/bin/initdb
+          test -x /usr/lib/postgresql/16/bin/pg_ctl
+          test -x /usr/lib/postgresql/16/bin/createdb
+
+      - name: Start isolated disposable PostgreSQL
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf "$RUNNER_TEMP/ados-postgres"
+          /usr/lib/postgresql/16/bin/initdb -D "$RUNNER_TEMP/ados-postgres" --username=postgres --auth-local=trust --auth-host=trust >/dev/null
+          /usr/lib/postgresql/16/bin/pg_ctl -D "$RUNNER_TEMP/ados-postgres" -o "-h 127.0.0.1 -p 55432 -k $RUNNER_TEMP/ados-postgres" -w start
+          /usr/lib/postgresql/16/bin/createdb -h 127.0.0.1 -p 55432 -U postgres businesaios
+          /usr/bin/pg_isready -h 127.0.0.1 -p 55432 -U postgres -d businesaios
+
+      - name: Verify bundled ADOS wheel
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "d00bc809685bd47f02d25ec84dd232996214be2ac2dbfa7a6d2c0b587925e85d  third_party/ados/ados_control_plane-0.6.0-py3-none-any.whl" | sha256sum -c -
+
+      - name: Install BusinessAIOS project environment
+        shell: bash
+        run: |
+          set -euo pipefail
+          /usr/bin/python3.12 -m venv .ados-project-venv
+          .ados-project-venv/bin/python -m pip install --upgrade pip
+          .ados-project-venv/bin/python -m pip install -r requirements.lock.txt
+          .ados-project-venv/bin/python scripts/ci/check_requirements_lock.py
+
+      - name: Install isolated ADOS control environment
+        shell: bash
+        run: |
+          set -euo pipefail
+          /usr/bin/python3.12 -m venv .ados-control-venv
+          .ados-control-venv/bin/python -m pip install --disable-pip-version-check pip==26.1.2
+          # BusinessAIOS intentionally owns cryptography==49.0.0. ADOS 0.6.0
+          # declares cryptography>=43,<47, so the controller is isolated instead
+          # of downgrading or mutating the product environment.
+          .ados-control-venv/bin/python -m pip install --only-binary=:all: "cryptography==46.0.4"
+          .ados-control-venv/bin/python -m pip install --no-deps third_party/ados/ados_control_plane-0.6.0-py3-none-any.whl
+          .ados-control-venv/bin/python -m pip check
+          .ados-control-venv/bin/ados --help >/dev/null
+
+      - name: Run non-blocking ADOS MERGE assessment
+        shell: bash
+        env:
+          ADOS_BASE_SHA: ${{ github.event.pull_request.base.sha || '' }}
+          ADOS_HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: |
+          set -euo pipefail
+          ionice -c2 -n7 nice -n 10 .ados-control-venv/bin/python scripts/ados_shadow_assess.py \
+            --ados-bin "$PWD/.ados-control-venv/bin/ados" \
+            --repository "mailsvb2-bot/businesaios" \
+            --base-sha "$ADOS_BASE_SHA" \
+            --head-sha "$ADOS_HEAD_SHA"
+
+      - name: Stop isolated disposable PostgreSQL
+        if: always()
+        shell: bash
+        run: |
+          if [ -f "$RUNNER_TEMP/ados-postgres/postmaster.pid" ]; then
+            /usr/lib/postgresql/16/bin/pg_ctl -D "$RUNNER_TEMP/ados-postgres" -m fast -w stop
+          fi

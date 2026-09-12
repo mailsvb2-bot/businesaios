@@ -1,0 +1,74 @@
+{
+  "profile": "WEB_SAAS",
+  "repository_id": "mailsvb2-bot/businesaios",
+  "capabilities": [],
+  "scheduler_resources": [
+    "source",
+    "tests",
+    "release",
+    "docs"
+  ],
+  "control_role": "controller_auditor",
+  "always_gates": [],
+  "adapter_manifest": ".ados/adapters.json",
+  "command_manifest": ".ados/commands.json",
+  "build_manifest": ".ados/build.json",
+  "gate_execution": {
+    "max_workers": 1,
+    "timeout_seconds": 1800.0,
+    "hard_timeout_seconds": 21600.0,
+    "start_method": "spawn"
+  },
+  "rollback_safe": false,
+  "remote_base": {
+    "mode": "required",
+    "remote": "origin",
+    "ref": "main",
+    "host": "github.com",
+    "allow_local_filesystem_for_release": false,
+    "timeout_seconds": 15.0
+  },
+  "trust": {
+    "require_asymmetric_release_signing": true,
+    "evidence_public_key_files": [],
+    "break_glass_public_key_files": [],
+    "allow_hmac_development": true,
+    "accepted_control_plane_versions": [
+      "0.6.0"
+    ],
+    "runner_public_key_files": [],
+    "require_runner_attestation_for_certification": true,
+    "runner_attestation_env": "ADOS_RUNNER_ATTESTATION_FILE",
+    "vulnerability_public_key_files": [],
+    "require_vulnerability_attestation_for_release": true,
+    "vulnerability_attestation_env": "ADOS_VULNERABILITY_ATTESTATION_FILE",
+    "vulnerability_max_severity": "NONE",
+    "deployment_public_key_files": [],
+    "require_deployment_attestation_for_health": true,
+    "deployment_attestation_env": "ADOS_DEPLOYMENT_ATTESTATION_FILE",
+    "deployment_environment": "production"
+  },
+  "evidence": {
+    "required_gates_ttl_seconds": 86400,
+    "release_ttl_seconds": 86400,
+    "rollout_health_ttl_seconds": 1800,
+    "recovery_ttl_seconds": 3600
+  },
+  "rollout": {
+    "health_required_tags": [
+      "health",
+      "candidate",
+      "production"
+    ]
+  },
+  "storage": {
+    "mode": "single_node",
+    "backend": "sqlite"
+  },
+  "audit": {
+    "require_external_anchor_for_release": true,
+    "anchor_env": "ADOS_AUDIT_ANCHOR_FILE"
+  },
+  "strict_project_gates": true,
+  "require_hermetic_build": false
+}

@@ -1,0 +1,15 @@
+{
+  "argv": [
+    "{python}",
+    "scripts/ados_businesaios_gate.py",
+    "release-disabled"
+  ],
+  "artifact_glob": "__ADOS_SHADOW_RELEASE_DISABLED__/*",
+  "cwd": ".",
+  "timeout_seconds": 60,
+  "max_output_bytes": 1048576,
+  "toolchain_commands": {
+    "python": ["{python}", "--version"]
+  },
+  "trusted_files": ["scripts/ados_businesaios_gate.py"]
+}
