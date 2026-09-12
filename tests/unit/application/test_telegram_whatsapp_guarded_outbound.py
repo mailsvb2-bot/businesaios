@@ -11,6 +11,10 @@ from runtime.business_autonomy.provider_http_live_clients import build_live_http
 from runtime.business_autonomy.provider_payload_normalizers import ProviderPayloadNormalizers
 from runtime.business_autonomy.provider_response_parsers import ProviderResponseParsers
 from runtime.business_autonomy.provider_runtime_write_guard import ProviderRuntimeWriteGuard
+from runtime.business_autonomy.provider_transport_bindings import (
+    META_GRAPH_API_VERSION,
+    provider_transport_binding_for_key,
+)
 from runtime.handlers_messaging import _build_send_kwargs
 from runtime.messaging.bootstrap import _NativeProviderQueueAdapter, build_multichannel_dispatcher
 from security.secret_contract import SecretRecord, SecretRef, SecretSource
@@ -81,6 +85,15 @@ def test_telegram_http_200_logical_error_is_not_accepted() -> None:
     assert parsed["delivery_state"] == "rejected"
 
 
+def test_meta_graph_bindings_share_supported_v26_contract() -> None:
+    assert META_GRAPH_API_VERSION == "v26.0"
+    for provider_key in ("whatsapp_cloud", "instagram_messaging", "messenger_messaging", "meta_ads"):
+        binding = provider_transport_binding_for_key(provider_key)
+        paths = f"{binding.get('probe_path', '')} {binding.get('sync_path_family', '')}"
+        assert "/v19.0/" not in paths
+        assert f"/{META_GRAPH_API_VERSION}/" in paths
+
+
 def test_whatsapp_plain_text_normalizer_drops_policy_attestation_from_vendor_body() -> None:
     normalized = ProviderPayloadNormalizers().normalize_outbound(
         provider=provider_map()["whatsapp_cloud"],
@@ -104,7 +117,7 @@ def test_whatsapp_live_send_requires_approval_policy_and_returns_provider_receip
     assert blocked["_prepared_only"] is True and calls == []
     sent = transport.execute(provider=provider, tenant_id="tenant-a", business_id="biz-a", operation="message_send", payload={"to": "79991234567", "text": "hello", "_allow_network": True, "_provider_write_approved": True})
     assert sent["_response_ok"] is True
-    assert calls[0]["url"] == "https://graph.facebook.com/v19.0/123456789/messages"
+    assert calls[0]["url"] == "https://graph.facebook.com/v26.0/123456789/messages"
     assert calls[0]["headers"]["Authorization"] == "Bearer wa-business-token"
     assert json.loads(calls[0]["body"]) == {"messaging_product": "whatsapp", "text": {"body": "hello"}, "to": "79991234567", "type": "text"}
     assert sent["parsed_response"]["resource_id"] == "wamid.abc"
