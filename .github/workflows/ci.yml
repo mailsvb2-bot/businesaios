@@ -25,7 +25,9 @@ env:
 
 jobs:
   clean-source:
-    if: github.event_name != 'pull_request_target' || github.event.pull_request.merged == true
+    if: >-
+      (github.event_name != 'pull_request_target' || github.event.pull_request.merged == true) &&
+      (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)
     name: clean source archive (3.12)
     runs-on: [self-hosted, Linux, X64, businesaios]
     env:
@@ -66,7 +68,9 @@ jobs:
           python -m pytest -q tests/security/test_no_secrets_committed.py tests/lock/test_tracked_files_fallback.py tests/lock/test_runtime_data_artifacts_not_tracked.py tests/lock/test_runtime_release_package_hygiene.py tests/business_critical/test_rust_safety_dependency_lock.py tests/unit/execution/test_evidence_identity_determinism.py
 
   test:
-    if: github.event_name != 'pull_request_target' || github.event.pull_request.merged == true
+    if: >-
+      (github.event_name != 'pull_request_target' || github.event.pull_request.merged == true) &&
+      (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)
     runs-on: [self-hosted, Linux, X64, businesaios]
     strategy:
       fail-fast: false
@@ -190,7 +194,9 @@ jobs:
           if-no-files-found: error
 
   complete-tree:
-    if: github.event_name != 'pull_request_target' || github.event.pull_request.merged == true
+    if: >-
+      (github.event_name != 'pull_request_target' || github.event.pull_request.merged == true) &&
+      (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)
     name: complete pytest tree (3.12)
     needs: test
     runs-on: [self-hosted, Linux, X64, businesaios]
