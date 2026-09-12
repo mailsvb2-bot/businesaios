@@ -14,7 +14,7 @@ def run() -> tuple[bool, str]:
     workflow_dir = root / ".github" / "workflows"
     if workflow_dir.exists():
         actual_workflows = tuple(sorted(path.relative_to(root).as_posix() for path in workflow_dir.glob("*.yml")))
-        allowed_workflows = tuple(sorted(cfg.allowed_workflows))
+        allowed_workflows = tuple(sorted((*cfg.allowed_workflows, *cfg.allowed_advisory_workflows)))
         if actual_workflows != allowed_workflows:
             return False, f"workflow contract drift: actual={actual_workflows} allowed={allowed_workflows}"
 

@@ -14,7 +14,10 @@ def test_project_shape_enforces_actual_workflow_allowlist() -> None:
     cfg = project_shape_config(root)
     actual = tuple(sorted(path.relative_to(root).as_posix() for path in (root / ".github" / "workflows").glob("*.yml")))
 
-    assert actual == tuple(sorted(cfg.allowed_workflows))
+    expected = tuple(sorted((*cfg.allowed_workflows, *cfg.allowed_advisory_workflows)))
+    assert actual == expected
+    assert set(cfg.allowed_workflows).isdisjoint(cfg.allowed_advisory_workflows)
+    assert ".github/workflows/ados-shadow.yml" in cfg.allowed_advisory_workflows
     ok, message = run_project_shape()
     assert ok is True, message
 

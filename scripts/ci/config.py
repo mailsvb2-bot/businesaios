@@ -18,6 +18,7 @@ class ProjectShapeConfig:
     lock_mark_expression: str
     allowed_ci_shell_files: tuple[str, ...]
     allowed_workflows: tuple[str, ...]
+    allowed_advisory_workflows: tuple[str, ...]
     matrix_python_versions: tuple[str, ...]
 
 
@@ -137,6 +138,9 @@ def project_shape_config(root: Path) -> ProjectShapeConfig:
             ".github/workflows/prune-stale-branches.yml",
             ".github/workflows/targeted-domain-ci.yml",
             ".github/workflows/trusted-production-certification.yml",
+        ),
+        allowed_advisory_workflows=(
+            ".github/workflows/ados-shadow.yml",
         ),
         matrix_python_versions=("3.11", "3.12"),
     )
