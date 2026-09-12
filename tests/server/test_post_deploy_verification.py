@@ -36,6 +36,8 @@ def _run_verify(tmp_path: Path, *, env_text: str, **extra_env: str) -> subproces
     env = {"PATH": os.environ.get("PATH", ""), "EXPECTED_SHA": EXPECTED_SHA,
            "BUSINESAIOS_DEPLOY_ROOT": str(deploy_root), "PRODUCTION_ENV_FILE": str(env_file),
            "PRODUCTION_VERDICT_PATH": str(tmp_path / "verdict.json"), **extra_env}
+    if ld_library_path := os.environ.get("LD_LIBRARY_PATH"):
+        env["LD_LIBRARY_PATH"] = ld_library_path
     return subprocess.run(["bash", str(VERIFY)], cwd=PROJECT_ROOT, env=env,
                           text=True, capture_output=True, check=False)
 
