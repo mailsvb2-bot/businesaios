@@ -27,7 +27,7 @@ env:
 jobs:
   targeted-domain-ci:
     if: github.event_name != 'pull_request_target' || github.event.pull_request.merged == true
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, Linux, X64, businesaios]
     strategy:
       fail-fast: false
       matrix:
