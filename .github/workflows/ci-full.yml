@@ -53,6 +53,7 @@ jobs:
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
           name: ci-full-311-artifacts
+          retention-days: 3
           path: artifacts/ci
           if-no-files-found: warn
 
@@ -85,5 +86,6 @@ jobs:
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
           name: ci-full-312-artifacts
+          retention-days: 3
           path: artifacts/ci
           if-no-files-found: warn

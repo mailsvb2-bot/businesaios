@@ -172,16 +172,20 @@ jobs:
           grep -R -F -q "https://api.businessaios.ru" frontend/dist
       - name: Upload frontend bundle
         if: success()
+        continue-on-error: true
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
           name: frontend-dist
+          retention-days: 3
           path: frontend/dist
           if-no-files-found: error
       - name: Upload browser evidence
         if: always()
+        continue-on-error: true
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
           name: browser-e2e-artifacts
+          retention-days: 3
           path: artifacts/ci
           if-no-files-found: error
 
@@ -308,8 +312,10 @@ jobs:
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
       - name: Upload Windows acceptance evidence
         if: always()
+        continue-on-error: true
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
           name: windows-acceptance-artifacts
+          retention-days: 3
           path: artifacts/ci
           if-no-files-found: error

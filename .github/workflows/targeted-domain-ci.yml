@@ -70,5 +70,6 @@ jobs:
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
           name: targeted-domain-${{ matrix.python-version }}-artifacts
+          retention-days: 3
           path: artifacts/ci
           if-no-files-found: warn
