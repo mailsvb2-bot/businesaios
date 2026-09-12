@@ -26,6 +26,9 @@ class FileStateAuditTrail:
             "observation_count": len(request.observations),
             "field_count": len(snapshot.fields),
             "conflict_count": len(snapshot.conflicts),
+            "conflict_resolution_count": len(request.conflict_resolutions),
+            "resolved_conflict_ids": [str(item.conflict_id) for item in request.conflict_resolutions],
+            "conflict_resolutions": [item.to_dict() for item in request.conflict_resolutions],
             "sources": sorted({str(item.source) for item in request.observations}),
             "meta": dict(request.meta),
         }

@@ -10,6 +10,8 @@ SEMANTIC_CLASS_OWNERS = {
     "DecisionEnvelope": Path("contracts/decisioning/sovereign_decision_contract.py"),
     "WorldStateV1": Path("kernel/world_state.py"),
     "BusinessFactV1": Path("contracts/event_store.py"),
+    "WorldModelSemanticRecordV1": Path("contracts/world_model_semantics.py"),
+    "WorldModelSemanticViewV1": Path("contracts/world_model_semantics.py"),
     "ActionIntentV1": Path("contracts/action_intent.py"),
     "PolicyDecisionV1": Path("contracts/policy_decision.py"),
     "ExecutableAction": Path("contracts/executable_action.py"),
@@ -42,11 +44,7 @@ def _class_definitions() -> dict[str, list[Path]]:
 def semantic_contract_owner_mismatches() -> dict[str, tuple[list[Path], list[Path]]]:
     actual = _class_definitions()
     expected = {name: [owner] for name, owner in SEMANTIC_CLASS_OWNERS.items()}
-    return {
-        name: (actual[name], expected[name])
-        for name in SEMANTIC_CLASS_OWNERS
-        if actual[name] != expected[name]
-    }
+    return {name: (actual[name], expected[name]) for name in SEMANTIC_CLASS_OWNERS if actual[name] != expected[name]}
 
 
 def test_new_semantic_contracts_have_one_physical_owner() -> None:
@@ -77,7 +75,17 @@ def test_compatibility_surfaces_preserve_owner_identity() -> None:
 
 def test_new_contract_owners_remain_declared_by_canon() -> None:
     role = (ROOT / "contracts/CANON_NAMESPACE_ROLE.md").read_text(encoding="utf-8")
-    for name in ("BusinessFactV1", "ActionIntentV1", "PolicyDecisionV1", "BusinessOutcomeV1", "Customer", "CustomerIdentity", "CustomerTimeline"):
+    for name in (
+        "BusinessFactV1",
+        "WorldModelSemanticRecordV1",
+        "WorldModelSemanticViewV1",
+        "ActionIntentV1",
+        "PolicyDecisionV1",
+        "BusinessOutcomeV1",
+        "Customer",
+        "CustomerIdentity",
+        "CustomerTimeline",
+    ):
         assert name in role
     assert "kernel.world_state.WorldStateV1" in role
     assert "contracts/decisioning/sovereign_decision_contract.py" in role
@@ -101,7 +109,10 @@ def test_customer_runtime_extends_existing_owners_without_second_semantic_store(
     assert "BusinessFactV1(" in registry
     assert "build_idempotency_key(" in registry
     assert "SecretVault" in registry
-    assert "CustomerRegistry(event_store=customer_event_store, idempotency_store=distributed['idempotency'], pii_vault=secret_vault)" in bootstrap
+    assert (
+        "CustomerRegistry(event_store=customer_event_store, idempotency_store=distributed['idempotency'], pii_vault=secret_vault)"
+        in bootstrap
+    )
     assert "customer_event_store=getattr(runtime_infra, 'event_store', None)" in router
     assert "customer_registry=self.customer_registry" in provider_admin
     assert "append_event(" not in timeline

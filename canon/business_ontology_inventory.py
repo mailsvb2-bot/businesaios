@@ -1,0 +1,302 @@
+from __future__ import annotations
+
+from dataclasses import dataclass
+from enum import StrEnum
+
+CANON_BUSINESS_ONTOLOGY_INVENTORY = True
+
+
+class OwnershipAuditStatus(StrEnum):
+    DONE = "done"
+    PARTIAL = "partial"
+    DUPLICATE = "duplicate"
+    LEGACY = "legacy"
+    MISSING = "missing"
+
+
+@dataclass(frozen=True)
+class OntologyOwnershipAudit:
+    entity: str
+    status: OwnershipAuditStatus
+    authoritative_module: str | None
+    storage_owner: str | None
+    allowed_writers: tuple[str, ...] = ()
+    allowed_readers: tuple[str, ...] = ()
+    reason: str = ""
+
+
+REQUIRED_BUSINESS_ONTOLOGY = (
+    "Business",
+    "Organization",
+    "Person",
+    "Customer",
+    "Lead",
+    "Partner",
+    "Employee",
+    "Product",
+    "Service",
+    "Offer",
+    "Channel",
+    "Conversation",
+    "Message",
+    "Campaign",
+    "Opportunity",
+    "Deal",
+    "Order",
+    "Invoice",
+    "Payment",
+    "Refund",
+    "Expense",
+    "Revenue",
+    "Asset",
+    "Resource",
+    "Goal",
+    "Constraint",
+    "Risk",
+    "Hypothesis",
+    "Decision",
+    "Action",
+    "Outcome",
+    "Task",
+    "Artifact",
+    "Document",
+    "Capability",
+    "Provider",
+    "Policy",
+    "Evidence",
+)
+
+
+def _row(
+    entity: str,
+    status: OwnershipAuditStatus,
+    owner: str | None,
+    storage: str | None,
+    reason: str,
+    *,
+    writers: tuple[str, ...] = (),
+    readers: tuple[str, ...] = (),
+) -> OntologyOwnershipAudit:
+    return OntologyOwnershipAudit(entity, status, owner, storage, writers, readers, reason)
+
+
+BUSINESS_ONTOLOGY_OWNERSHIP_AUDIT = (
+    _row(
+        "Business",
+        OwnershipAuditStatus.PARTIAL,
+        "contracts.business_profile",
+        None,
+        "BusinessProfile exists but lifecycle/storage ownership is not canonicalized.",
+    ),
+    _row("Organization", OwnershipAuditStatus.MISSING, None, None, "No universal Organization owner on main."),
+    _row(
+        "Person",
+        OwnershipAuditStatus.MISSING,
+        None,
+        None,
+        "Behavior-person snapshots are not a universal business Person owner.",
+    ),
+    _row(
+        "Customer",
+        OwnershipAuditStatus.DONE,
+        "contracts.customer",
+        "runtime.platform.event_store",
+        "Canonical Customer contract uses the existing EventStore chronology; CustomerRegistry is the writer and CustomerTimelineProjector is a read projection.",
+        writers=("crm.customer_registry",),
+        readers=("crm.customer_timeline",),
+    ),
+    _row(
+        "Lead",
+        OwnershipAuditStatus.PARTIAL,
+        "contracts.lead",
+        None,
+        "Lead contract exists; lifecycle/storage owner remains fragmented.",
+    ),
+    _row("Partner", OwnershipAuditStatus.MISSING, None, None, "No universal Partner owner on main."),
+    _row("Employee", OwnershipAuditStatus.MISSING, None, None, "No universal Employee owner on main."),
+    _row(
+        "Product",
+        OwnershipAuditStatus.PARTIAL,
+        "contracts.product_contract",
+        None,
+        "Product contract surface exists; entity lifecycle/storage owner is not complete.",
+    ),
+    _row("Service", OwnershipAuditStatus.MISSING, None, None, "No universal Service entity owner on main."),
+    _row(
+        "Offer",
+        OwnershipAuditStatus.PARTIAL,
+        "contracts.product_contract",
+        None,
+        "Offer is canonically defined in Product Contract, but persistence/storage ownership is not universalized.",
+    ),
+    _row(
+        "Channel",
+        OwnershipAuditStatus.PARTIAL,
+        "application.business_autonomy.channel_contracts",
+        None,
+        "Typed channel identity exists; universal business-channel owner is incomplete.",
+    ),
+    _row(
+        "Conversation",
+        OwnershipAuditStatus.PARTIAL,
+        "runtime.messaging.router_contract",
+        None,
+        "ConversationRoute exists but is routing projection, not full entity lifecycle.",
+    ),
+    _row(
+        "Message",
+        OwnershipAuditStatus.DUPLICATE,
+        None,
+        None,
+        "Message semantics remain spread across messaging/runtime/marketing surfaces.",
+    ),
+    _row(
+        "Campaign",
+        OwnershipAuditStatus.PARTIAL,
+        "contracts.campaign",
+        None,
+        "Campaign contract exists; lifecycle/storage paths remain distributed.",
+    ),
+    _row(
+        "Opportunity",
+        OwnershipAuditStatus.PARTIAL,
+        "contracts.opportunity",
+        None,
+        "Opportunity contract exists; multiple detectors/projections remain.",
+    ),
+    _row("Deal", OwnershipAuditStatus.MISSING, None, None, "No universal Deal owner on main."),
+    _row("Order", OwnershipAuditStatus.MISSING, None, None, "No universal Order owner on main."),
+    _row(
+        "Invoice",
+        OwnershipAuditStatus.PARTIAL,
+        "billing.commercial_cycle_contract",
+        None,
+        "Invoice lifecycle exists in billing but is not a universal ontology owner.",
+    ),
+    _row(
+        "Payment",
+        OwnershipAuditStatus.DUPLICATE,
+        None,
+        None,
+        "Payment types/contracts exist in several finance/payment surfaces; owner collapse required.",
+    ),
+    _row(
+        "Refund",
+        OwnershipAuditStatus.PARTIAL,
+        "billing.refund_orchestrator",
+        None,
+        "Refund flow exists but canonical semantic/storage owner is incomplete.",
+    ),
+    _row(
+        "Expense",
+        OwnershipAuditStatus.PARTIAL,
+        "core.finance.types",
+        None,
+        "Finance type exists without complete ontology ownership contract.",
+    ),
+    _row(
+        "Revenue",
+        OwnershipAuditStatus.DUPLICATE,
+        None,
+        None,
+        "Revenue semantics exist across finance/economics/revenue surfaces.",
+    ),
+    _row("Asset", OwnershipAuditStatus.MISSING, None, None, "No universal Asset owner on main."),
+    _row(
+        "Resource",
+        OwnershipAuditStatus.MISSING,
+        None,
+        None,
+        "Existing Resource classes are technical/security resources, not universal business resources.",
+    ),
+    _row(
+        "Goal",
+        OwnershipAuditStatus.PARTIAL,
+        "contracts.business_goal",
+        None,
+        "Goal contract/planners exist but first-class hierarchy/lifecycle is incomplete.",
+    ),
+    _row(
+        "Constraint",
+        OwnershipAuditStatus.PARTIAL,
+        "contracts.business_constraints",
+        None,
+        "BusinessConstraints exists but canonical constraint entity/engine is incomplete.",
+    ),
+    _row(
+        "Risk",
+        OwnershipAuditStatus.DUPLICATE,
+        None,
+        None,
+        "Risk representations exist across safety/economics/governance without one universal owner.",
+    ),
+    _row("Hypothesis", OwnershipAuditStatus.MISSING, None, None, "No universal Hypothesis entity owner on main."),
+    _row(
+        "Decision",
+        OwnershipAuditStatus.PARTIAL,
+        "contracts.decisioning.sovereign_decision_contract",
+        None,
+        "Sovereign Decision contract and sole issuer are explicitly locked, but the ontology storage-owner/read-writer map is not yet complete.",
+    ),
+    _row(
+        "Action",
+        OwnershipAuditStatus.PARTIAL,
+        "contracts.action_intent",
+        None,
+        "ActionIntent is canonical AI-to-execution interface and runtime executor is the side-effect gateway, but neither is itself a canonical storage owner.",
+    ),
+    _row(
+        "Outcome",
+        OwnershipAuditStatus.PARTIAL,
+        "contracts.business_outcome",
+        None,
+        "BusinessOutcomeV1 is canonical semantic owner; canonical storage/read-writer ownership and attribution loop remain incomplete.",
+    ),
+    _row(
+        "Task", OwnershipAuditStatus.MISSING, None, None, "No canonical Durable Task Runtime entity/state machine yet."
+    ),
+    _row("Artifact", OwnershipAuditStatus.MISSING, None, None, "No universal Artifact owner on main."),
+    _row("Document", OwnershipAuditStatus.MISSING, None, None, "No universal Document owner on main."),
+    _row(
+        "Capability",
+        OwnershipAuditStatus.DUPLICATE,
+        None,
+        None,
+        "Strong capability machinery exists but several registries/surfaces require canonical hardening.",
+    ),
+    _row(
+        "Provider",
+        OwnershipAuditStatus.PARTIAL,
+        "application.business_autonomy.provider_catalog",
+        None,
+        "Provider catalog is canonical for business autonomy integrations; universal provider ontology remains incomplete.",
+    ),
+    _row(
+        "Policy",
+        OwnershipAuditStatus.PARTIAL,
+        "contracts.policy_decision",
+        None,
+        "PolicyDecision is canonical verdict; Policy entity/version ownership remains distributed.",
+    ),
+    _row(
+        "Evidence",
+        OwnershipAuditStatus.DUPLICATE,
+        None,
+        None,
+        "Evidence mechanisms are strong but no single canonical Evidence Store contract/owner exists yet.",
+    ),
+)
+
+
+def ontology_ownership_by_entity() -> dict[str, OntologyOwnershipAudit]:
+    return {row.entity: row for row in BUSINESS_ONTOLOGY_OWNERSHIP_AUDIT}
+
+
+__all__ = [
+    "BUSINESS_ONTOLOGY_OWNERSHIP_AUDIT",
+    "CANON_BUSINESS_ONTOLOGY_INVENTORY",
+    "OntologyOwnershipAudit",
+    "OwnershipAuditStatus",
+    "REQUIRED_BUSINESS_ONTOLOGY",
+    "ontology_ownership_by_entity",
+]
