@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import argparse
 import os
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -17,6 +18,53 @@ from contextlib import contextmanager
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
+
+
+def rust_toolchain_env(cwd: Path) -> dict[str, str]:
+    """Expose the repository-pinned installed Rust toolchain via PATH."""
+    cargo = shutil.which("cargo")
+    rustup = shutil.which("rustup")
+    if not cargo or not rustup:
+        return {}
+
+    configured_cargo = os.environ.get("CARGO_HOME", "").strip()
+    proxy_home = Path(rustup).absolute().parent.parent
+    cargo_home = Path(configured_cargo).expanduser() if configured_cargo else proxy_home
+    configured_rustup = os.environ.get("RUSTUP_HOME", "").strip()
+    rustup_home = Path(configured_rustup).expanduser() if configured_rustup else cargo_home.parent / ".rustup"
+    cargo_home = cargo_home.absolute()
+    rustup_home = rustup_home.absolute()
+    if not (cargo_home / "bin" / "cargo").exists() or not (cargo_home / "bin" / "rustup").exists():
+        return {}
+    if not rustup_home.is_dir():
+        return {}
+
+    toolchain_file = cwd / "rust" / "rust-toolchain.toml"
+    if not toolchain_file.is_file():
+        return {}
+    channel = ""
+    for line in toolchain_file.read_text(encoding="utf-8").splitlines():
+        stripped = line.strip()
+        if stripped.startswith("channel") and "=" in stripped:
+            channel = stripped.split("=", 1)[1].strip().strip('"').strip("'")
+            break
+    if not channel or any(ch in channel for ch in ("/", "\\")):
+        return {}
+
+    candidates = sorted((rustup_home / "toolchains").glob(f"{channel}-*/bin"))
+    candidates.extend(
+        path for path in [rustup_home / "toolchains" / channel / "bin"] if path.is_dir()
+    )
+    usable = [path for path in candidates if (path / "cargo").is_file() and (path / "rustc").is_file()]
+    if len(usable) != 1:
+        return {}
+    direct_bin = usable[0].absolute()
+    current_path = os.environ.get("PATH", "")
+    return {
+        "CARGO_HOME": str(cargo_home),
+        "RUSTUP_HOME": str(rustup_home),
+        "PATH": str(direct_bin) + (os.pathsep + current_path if current_path else ""),
+    }
 
 
 @contextmanager
@@ -124,6 +172,7 @@ def run(
     extra_env: dict[str, str] | None = None,
 ) -> None:
     env = os.environ.copy()
+    env.update(rust_toolchain_env(cwd))
     if extra_env:
         env.update(extra_env)
     print("+", " ".join(command), flush=True)

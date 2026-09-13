@@ -66,3 +66,47 @@ def test_ados_gate_uses_exact_disposable_worktree() -> None:
 
     assert not remembered.exists()
     assert not (bridge.ROOT / "reports" / "integrity" / "proof.txt").exists()
+
+def test_rust_toolchain_env_recovers_repository_pinned_rustup_install(monkeypatch, tmp_path) -> None:
+    repo = tmp_path / "repo"
+    (repo / "rust").mkdir(parents=True)
+    (repo / "rust" / "rust-toolchain.toml").write_text(
+        '[toolchain]\nchannel = "1.75.0"\n', encoding="utf-8"
+    )
+    home = tmp_path / "runner"
+    cargo_home = home / ".cargo"
+    rustup_home = home / ".rustup"
+    proxy_bin = cargo_home / "bin"
+    direct_bin = rustup_home / "toolchains" / "1.75.0-x86_64-unknown-linux-gnu" / "bin"
+    proxy_bin.mkdir(parents=True)
+    direct_bin.mkdir(parents=True)
+    for path in (proxy_bin / "cargo", proxy_bin / "rustup", direct_bin / "cargo", direct_bin / "rustc"):
+        path.write_text("#!/bin/sh\nexit 0\n", encoding="utf-8")
+        path.chmod(0o755)
+    monkeypatch.setenv("PATH", str(proxy_bin))
+    monkeypatch.delenv("CARGO_HOME", raising=False)
+    monkeypatch.delenv("RUSTUP_HOME", raising=False)
+
+    env = bridge.rust_toolchain_env(repo)
+    assert env["CARGO_HOME"] == str(cargo_home.absolute())
+    assert env["RUSTUP_HOME"] == str(rustup_home.absolute())
+    assert env["PATH"].split(os.pathsep)[0] == str(direct_bin.absolute())
+
+
+def test_rust_toolchain_env_does_not_invent_missing_rustup_home(monkeypatch, tmp_path) -> None:
+    repo = tmp_path / "repo"
+    (repo / "rust").mkdir(parents=True)
+    (repo / "rust" / "rust-toolchain.toml").write_text(
+        '[toolchain]\nchannel = "1.75.0"\n', encoding="utf-8"
+    )
+    bin_dir = tmp_path / ".cargo" / "bin"
+    bin_dir.mkdir(parents=True)
+    for name in ("cargo", "rustup"):
+        tool = bin_dir / name
+        tool.write_text("#!/bin/sh\nexit 0\n", encoding="utf-8")
+        tool.chmod(0o755)
+    monkeypatch.setenv("PATH", str(bin_dir))
+    monkeypatch.delenv("CARGO_HOME", raising=False)
+    monkeypatch.delenv("RUSTUP_HOME", raising=False)
+
+    assert bridge.rust_toolchain_env(repo) == {}
