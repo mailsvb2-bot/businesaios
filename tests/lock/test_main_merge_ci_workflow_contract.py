@@ -15,6 +15,9 @@ MANDATORY = (
 MERGE_SHA = "github.event.pull_request.merge_commit_sha"
 TARGET_ENV = "BAIOS_CI_TARGET_SHA"
 MERGED_TARGET_GUARD = "github.event_name != 'pull_request_target' || github.event.pull_request.merged == true"
+SAME_REPO_PR_GUARD = "github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository"
+SELF_HOSTED_RUNNER = "runs-on: [self-hosted, Linux, X64, businesaios]"
+SELF_HOSTED_MANDATORY = tuple(path for path in MANDATORY if path != ".github/workflows/deep-release-validation.yml")
 UNMERGED_TARGET_GROUP = "format('pr-{0}-closed-unmerged', github.event.pull_request.number)"
 TARGET_SCOPED_CONCURRENCY = "group: ${{ github.workflow }}-${{ github.event_name }}-${{ github.event_name == 'push' && github.sha || github.event_name == 'pull_request_target' && github.event.pull_request.merged == true && github.event.pull_request.merge_commit_sha || github.event_name == 'pull_request_target' && format('pr-{0}-closed-unmerged', github.event.pull_request.number) || github.ref }}"
 ORDINARY_PR_TYPES = "  pull_request:\n    types:\n      - opened\n      - synchronize\n      - reopened\n  pull_request_target:\n    types:\n      - closed"
@@ -30,6 +33,14 @@ def test_mandatory_ci_uses_reliable_merged_pr_event_and_exact_main_commit() -> N
         assert "ref: ${{ env.BAIOS_CI_TARGET_SHA }}" in text
         assert "EXPECTED_SHA: ${{ env.BAIOS_CI_TARGET_SHA }}" in text
         assert "github.event_name == 'pull_request_target'" in text
+
+
+def test_self_hosted_mandatory_ci_rejects_fork_pr_heads() -> None:
+    for relative in SELF_HOSTED_MANDATORY:
+        text = (ROOT / relative).read_text(encoding="utf-8")
+        runner_count = text.count(SELF_HOSTED_RUNNER)
+        assert runner_count >= 1
+        assert text.count(SAME_REPO_PR_GUARD) == runner_count
 
 
 def test_mandatory_ci_concurrency_is_scoped_to_target_identity() -> None:
