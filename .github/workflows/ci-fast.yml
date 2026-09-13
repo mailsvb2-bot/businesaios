@@ -25,8 +25,10 @@ env:
 
 jobs:
   fast:
-    if: github.event_name != 'pull_request_target' || github.event.pull_request.merged == true
-    runs-on: ubuntu-latest
+    if: >-
+      (github.event_name != 'pull_request_target' || github.event.pull_request.merged == true) &&
+      (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)
+    runs-on: [self-hosted, Linux, X64, businesaios]
     strategy:
       fail-fast: false
       matrix:
@@ -62,5 +64,6 @@ jobs:
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
           name: ci-fast-${{ matrix.python-version }}-artifacts
+          retention-days: 3
           path: artifacts/ci
           if-no-files-found: warn

@@ -102,7 +102,10 @@ def test_expected_sha_requires_explicit_deploy_sha(monkeypatch: pytest.MonkeyPat
 
 
 def test_main_requires_staged_pair_in_canonical_production(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
-    monkeypatch.setattr(importer, "DIST", importer.PRODUCTION_ROOT / "frontend" / "dist")
+    root = tmp_path / "prod"
+    dist = root / "frontend" / "dist"
+    monkeypatch.setattr(importer, "PRODUCTION_ROOT", root)
+    monkeypatch.setattr(importer, "DIST", dist)
     monkeypatch.setattr(importer, "ARTIFACT_ZIP", tmp_path / "missing.zip")
     monkeypatch.setattr(importer, "ARTIFACT_ID", tmp_path / "missing.id")
     monkeypatch.setattr(importer, "_assert_deploy_lock", lambda: None)

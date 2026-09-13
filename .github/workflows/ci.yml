@@ -25,9 +25,11 @@ env:
 
 jobs:
   clean-source:
-    if: github.event_name != 'pull_request_target' || github.event.pull_request.merged == true
+    if: >-
+      (github.event_name != 'pull_request_target' || github.event.pull_request.merged == true) &&
+      (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)
     name: clean source archive (3.12)
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, Linux, X64, businesaios]
     env:
       PYTHONDONTWRITEBYTECODE: "1"
     steps:
@@ -66,8 +68,10 @@ jobs:
           python -m pytest -q tests/security/test_no_secrets_committed.py tests/lock/test_tracked_files_fallback.py tests/lock/test_runtime_data_artifacts_not_tracked.py tests/lock/test_runtime_release_package_hygiene.py tests/business_critical/test_rust_safety_dependency_lock.py tests/unit/execution/test_evidence_identity_determinism.py
 
   test:
-    if: github.event_name != 'pull_request_target' || github.event.pull_request.merged == true
-    runs-on: ubuntu-latest
+    if: >-
+      (github.event_name != 'pull_request_target' || github.event.pull_request.merged == true) &&
+      (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)
+    runs-on: [self-hosted, Linux, X64, businesaios]
     strategy:
       fail-fast: false
       matrix:
@@ -172,24 +176,30 @@ jobs:
           grep -R -F -q "https://api.businessaios.ru" frontend/dist
       - name: Upload frontend bundle
         if: success()
+        continue-on-error: true
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
           name: frontend-dist
+          retention-days: 3
           path: frontend/dist
           if-no-files-found: error
       - name: Upload browser evidence
         if: always()
+        continue-on-error: true
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
           name: browser-e2e-artifacts
+          retention-days: 3
           path: artifacts/ci
           if-no-files-found: error
 
   complete-tree:
-    if: github.event_name != 'pull_request_target' || github.event.pull_request.merged == true
+    if: >-
+      (github.event_name != 'pull_request_target' || github.event.pull_request.merged == true) &&
+      (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)
     name: complete pytest tree (3.12)
     needs: test
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, Linux, X64, businesaios]
     env:
       PYTHONDONTWRITEBYTECODE: "1"
       BUSINESAIOS_DEEP_TEST_CLEANUP: "1"
@@ -308,8 +318,10 @@ jobs:
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
       - name: Upload Windows acceptance evidence
         if: always()
+        continue-on-error: true
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
           name: windows-acceptance-artifacts
+          retention-days: 3
           path: artifacts/ci
           if-no-files-found: error
