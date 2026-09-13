@@ -12,10 +12,68 @@ import json
 import os
 import subprocess
 import sys
+from contextlib import contextmanager
 from pathlib import Path
+from typing import Iterator
 
 ROOT = Path(__file__).resolve().parents[1]
 OUT_DIR = ROOT / ".ados-shadow"
+CANONICAL_PYTHON_LOCK = ROOT / "requirements.lock.txt"
+ADOS_PYTHON_LOCK_ALIAS = ROOT / "requirements.lock"
+
+
+@contextmanager
+def ados_lockfile_compatibility() -> Iterator[None]:
+    """Expose the canonical BusinessAIOS lock under ADOS 0.6.0's fixed name.
+
+    ADOS 0.6.0 recognizes ``requirements.lock`` but BusinessAIOS canonically
+    owns ``requirements.lock.txt``.  A temporary hardlink preserves one set of
+    bytes and one source of truth; it is never committed and is always removed.
+    """
+    canonical = CANONICAL_PYTHON_LOCK
+    alias = ADOS_PYTHON_LOCK_ALIAS
+    if not canonical.is_file() or canonical.is_symlink():
+        raise RuntimeError(f"canonical Python lock is missing/unsafe: {canonical}")
+    if alias.exists() or alias.is_symlink():
+        raise RuntimeError(f"ADOS compatibility lock path already exists: {alias}")
+    os.link(canonical, alias)
+    try:
+        if not os.path.samefile(canonical, alias):
+            raise RuntimeError("ADOS compatibility lock is not a hardlink to the canonical lock")
+        yield
+    finally:
+        alias.unlink(missing_ok=True)
+
+
+def validate_assessment_payload(payload: object, *, returncode: int) -> dict:
+    """Accept valid advisory assessments and reject controller/infrastructure errors."""
+    if not isinstance(payload, dict):
+        raise RuntimeError("ADOS assessment payload must be a JSON object")
+    if payload.get("error"):
+        raise RuntimeError(f"ADOS controller error: {payload['error']}")
+    if returncode not in {0, 2, 3}:
+        raise RuntimeError(f"ADOS returned unexpected exit code {returncode}")
+    required = {
+        "task": dict,
+        "results": list,
+        "blocking_failures": int,
+        "unknown_gates": int,
+        "release_blockers": int,
+    }
+    for key, expected in required.items():
+        value = payload.get(key)
+        if type(value) is not expected:
+            raise RuntimeError(f"ADOS assessment field {key!r} must be {expected.__name__}")
+    for key in ("blocking_failures", "unknown_gates", "release_blockers"):
+        if payload[key] < 0:
+            raise RuntimeError(f"ADOS assessment field {key!r} cannot be negative")
+    for index, item in enumerate(payload["results"]):
+        if not isinstance(item, dict):
+            raise RuntimeError(f"ADOS result #{index} must be an object")
+        for key in ("gate", "status", "reason"):
+            if not isinstance(item.get(key), str) or not item[key]:
+                raise RuntimeError(f"ADOS result #{index} has invalid {key!r}")
+    return payload
 
 
 def git(*args: str, text: bool = True) -> str | bytes:
@@ -133,16 +191,18 @@ def main() -> int:
         for path in deleted:
             command.extend(["--deleted-file", path])
 
-        completed = subprocess.run(
-            command, cwd=ROOT, check=False,
-            stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True,
-        )
+        with ados_lockfile_compatibility():
+            completed = subprocess.run(
+                command, cwd=ROOT, check=False,
+                stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True,
+            )
         try:
-            payload = json.loads(completed.stdout)
+            decoded = json.loads(completed.stdout)
         except json.JSONDecodeError as exc:
             sys.stderr.write(completed.stderr)
             sys.stderr.write(completed.stdout)
             raise RuntimeError(f"ADOS did not emit valid JSON (rc={completed.returncode}): {exc}") from exc
+        payload = validate_assessment_payload(decoded, returncode=completed.returncode)
 
         OUT_DIR.mkdir(parents=True, exist_ok=True)
         (OUT_DIR / "assessment.json").write_text(
