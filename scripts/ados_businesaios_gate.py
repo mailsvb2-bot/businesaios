@@ -1,10 +1,9 @@
 #!/usr/bin/env python3
 """Measured BusinessAIOS gates used by ADOS shadow mode.
 
-The bridge composes already-canonical BusinessAIOS CI gates.  It does not
-replace the repository CI and it never converts an unsupported assurance into
-a PASS.  Unsupported strict gates (notably red_team and dependency_audit) are
-left unregistered so ADOS can report UNKNOWN / WOULD_BLOCK honestly.
+The bridge composes already-canonical BusinessAIOS CI gates. It does not
+replace repository CI and never converts an unsupported assurance into PASS.
+Unsupported strict gates remain unregistered so ADOS reports UNKNOWN honestly.
 """
 from __future__ import annotations
 
@@ -22,23 +21,42 @@ ROOT = Path(__file__).resolve().parents[1]
 
 @contextmanager
 def isolated_runtime_data_dir() -> Iterator[Path]:
-    """Keep every ADOS-measured BusinessAIOS gate out of the source tree.
-
-    ADOS intentionally gives command gates an isolated HOME. BusinessAIOS also
-    needs an equally short-lived data root so encrypted key-provider/vault state
-    cannot survive the temporary master key or leak between gates.
-    """
-    previous = {name: os.environ.get(name) for name in ("BUSINESAIOS_DATA_DIR", "DATA_DIR")}
-    with tempfile.TemporaryDirectory(prefix="businesaios-ados-gate-data-") as temp_dir:
+    """Give each measured gate private runtime, temp, and bootstrap roots."""
+    names = (
+        "BUSINESAIOS_DATA_DIR",
+        "DATA_DIR",
+        "BAIOS_BOOT_SMOKE_ROOT",
+        "RUNNER_TEMP",
+        "TMPDIR",
+        "TEMP",
+        "TMP",
+    )
+    previous = {name: os.environ.get(name) for name in names}
+    with tempfile.TemporaryDirectory(prefix="businesaios-ados-gate-runtime-") as temp_dir:
         runtime_root = Path(temp_dir).resolve()
         try:
             runtime_root.relative_to(ROOT.resolve())
         except ValueError:
             pass
         else:
-            raise RuntimeError("ADOS gate runtime data directory must be outside the repository")
-        os.environ["BUSINESAIOS_DATA_DIR"] = str(runtime_root)
-        os.environ["DATA_DIR"] = str(runtime_root)
+            raise RuntimeError("ADOS gate runtime directory must be outside the repository")
+        data_root = runtime_root / "data"
+        temp_root = runtime_root / "tmp"
+        runner_temp = runtime_root / "runner-temp"
+        boot_root = runtime_root / "boot-smoke"
+        for path in (data_root, temp_root, runner_temp, boot_root):
+            path.mkdir(parents=True, exist_ok=True)
+        os.environ.update(
+            {
+                "BUSINESAIOS_DATA_DIR": str(data_root),
+                "DATA_DIR": str(data_root),
+                "BAIOS_BOOT_SMOKE_ROOT": str(boot_root),
+                "RUNNER_TEMP": str(runner_temp),
+                "TMPDIR": str(temp_root),
+                "TEMP": str(temp_root),
+                "TMP": str(temp_root),
+            }
+        )
         try:
             yield runtime_root
         finally:
@@ -49,59 +67,117 @@ def isolated_runtime_data_dir() -> Iterator[Path]:
                     os.environ[name] = value
 
 
-def run(command: list[str], *, extra_env: dict[str, str] | None = None) -> None:
+@contextmanager
+def isolated_candidate_worktree() -> Iterator[Path]:
+    """Run one gate against an exact disposable detached checkout of HEAD."""
+    head = subprocess.run(
+        ["git", "rev-parse", "HEAD"],
+        cwd=ROOT,
+        check=True,
+        capture_output=True,
+        text=True,
+    ).stdout.strip()
+    with tempfile.TemporaryDirectory(prefix="businesaios-ados-worktree-") as parent:
+        worktree = Path(parent).resolve() / "candidate"
+        subprocess.run(
+            ["git", "worktree", "add", "--detach", str(worktree), head],
+            cwd=ROOT,
+            check=True,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.PIPE,
+            text=True,
+        )
+        try:
+            observed = subprocess.run(
+                ["git", "rev-parse", "HEAD"],
+                cwd=worktree,
+                check=True,
+                capture_output=True,
+                text=True,
+            ).stdout.strip()
+            if observed != head:
+                raise RuntimeError(
+                    f"ADOS gate worktree head mismatch: expected={head} observed={observed}"
+                )
+            yield worktree
+        finally:
+            subprocess.run(
+                ["git", "worktree", "remove", "--force", str(worktree)],
+                cwd=ROOT,
+                check=False,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+            )
+            subprocess.run(
+                ["git", "worktree", "prune"],
+                cwd=ROOT,
+                check=False,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+            )
+
+
+def run(
+    command: list[str],
+    *,
+    cwd: Path,
+    extra_env: dict[str, str] | None = None,
+) -> None:
     env = os.environ.copy()
     if extra_env:
         env.update(extra_env)
     print("+", " ".join(command), flush=True)
-    completed = subprocess.run(command, cwd=ROOT, env=env, check=False)
+    completed = subprocess.run(command, cwd=cwd, env=env, check=False)
     if completed.returncode != 0:
         raise SystemExit(completed.returncode)
 
 
-def canonical_gate(name: str, *, extra_env: dict[str, str] | None = None) -> None:
-    run([sys.executable, "-m", "scripts.ci.cli", "--gate", name], extra_env=extra_env)
+def canonical_gate(
+    cwd: Path,
+    name: str,
+    *,
+    extra_env: dict[str, str] | None = None,
+) -> None:
+    run(
+        [sys.executable, "-m", "scripts.ci.cli", "--gate", name],
+        cwd=cwd,
+        extra_env=extra_env,
+    )
 
 
-def pytest(*targets: str) -> None:
-    run([sys.executable, "-m", "pytest", "-q", *targets])
+def pytest(cwd: Path, *targets: str) -> None:
+    run([sys.executable, "-m", "pytest", "-q", *targets], cwd=cwd)
 
 
-def architecture() -> None:
-    # BusinessAIOS fast is canonical and contains the architecture-bypass scan,
-    # quality check, lock tests, import/boot smoke and regression-impact proof.
-    canonical_gate("fast")
+def architecture(cwd: Path) -> None:
+    canonical_gate(cwd, "fast")
 
 
-def tests() -> None:
-    canonical_gate("business-critical")
+def tests(cwd: Path) -> None:
+    canonical_gate(cwd, "business-critical")
 
 
-def security() -> None:
-    # Project-level security tests cover keys/vault/signing/PII/secrets.  Rust
-    # safety remains a separate canonical project gate and is composed here.
-    pytest("tests/security")
-    canonical_gate("rust-safety")
+def security(cwd: Path) -> None:
+    pytest(cwd, "tests/security")
+    canonical_gate(cwd, "rust-safety")
 
 
-def contracts() -> None:
-    pytest("tests/contracts")
+def contracts(cwd: Path) -> None:
+    pytest(cwd, "tests/contracts")
 
 
-def integration() -> None:
-    canonical_gate("full")
+def integration(cwd: Path) -> None:
+    canonical_gate(cwd, "full")
 
 
-def user_journey() -> None:
-    canonical_gate("acceptance")
+def user_journey(cwd: Path) -> None:
+    canonical_gate(cwd, "acceptance")
 
 
-def data_migration() -> None:
-    # The workflow supplies a disposable Postgres service and these flags match
-    # the repository's Deep Release migration environment.  Backup/restore proof
-    # deliberately remains owned by Deep Release Validation, not by shadow ADOS.
+def data_migration(cwd: Path) -> None:
     database_url = os.environ.get(
-        "DATABASE_URL", "postgresql://postgres:postgres@127.0.0.1:55432/businesaios"
+        "DATABASE_URL",
+        "postgresql://postgres:postgres@127.0.0.1:55432/businesaios",
     )
     env = {
         "DATABASE_URL": database_url,
@@ -111,14 +187,15 @@ def data_migration() -> None:
         "POSTGRES_APPLY_MIGRATIONS": "1",
         "RUN_MIGRATIONS_BEFORE_START": "1",
     }
-    canonical_gate("postgres-migrations", extra_env=env)
+    canonical_gate(cwd, "postgres-migrations", extra_env=env)
 
 
-def full_regression() -> None:
-    canonical_gate("full")
+def full_regression(cwd: Path) -> None:
+    canonical_gate(cwd, "full")
 
 
-def release_disabled() -> None:
+def release_disabled(cwd: Path) -> None:
+    del cwd
     print(
         "ADOS Phase 1 is shadow-only: BusinessAIOS build/release certification is intentionally disabled. "
         "Deep Release Validation and Trusted Production Certification remain authoritative.",
@@ -144,8 +221,8 @@ def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("gate", choices=sorted(HANDLERS))
     args = parser.parse_args()
-    with isolated_runtime_data_dir():
-        HANDLERS[args.gate]()
+    with isolated_runtime_data_dir(), isolated_candidate_worktree() as worktree:
+        HANDLERS[args.gate](worktree)
     return 0
 
 
