@@ -12,9 +12,9 @@ import json
 import os
 import subprocess
 import sys
+from collections.abc import Iterator
 from contextlib import contextmanager
 from pathlib import Path
-from typing import Iterator
 
 ROOT = Path(__file__).resolve().parents[1]
 OUT_DIR = ROOT / ".ados-shadow"
@@ -79,7 +79,7 @@ def validate_assessment_payload(payload: object, *, returncode: int) -> dict:
 def git(*args: str, text: bool = True) -> str | bytes:
     completed = subprocess.run(
         ["git", *args], cwd=ROOT, check=True,
-        stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=text,
+        capture_output=True, text=text,
     )
     return completed.stdout
 
@@ -194,7 +194,7 @@ def main() -> int:
         with ados_lockfile_compatibility():
             completed = subprocess.run(
                 command, cwd=ROOT, check=False,
-                stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True,
+                capture_output=True, text=True,
             )
         try:
             decoded = json.loads(completed.stdout)

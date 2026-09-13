@@ -12,9 +12,41 @@ import argparse
 import os
 import subprocess
 import sys
+import tempfile
+from collections.abc import Iterator
+from contextlib import contextmanager
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
+
+
+@contextmanager
+def isolated_runtime_data_dir() -> Iterator[Path]:
+    """Keep every ADOS-measured BusinessAIOS gate out of the source tree.
+
+    ADOS intentionally gives command gates an isolated HOME. BusinessAIOS also
+    needs an equally short-lived data root so encrypted key-provider/vault state
+    cannot survive the temporary master key or leak between gates.
+    """
+    previous = {name: os.environ.get(name) for name in ("BUSINESAIOS_DATA_DIR", "DATA_DIR")}
+    with tempfile.TemporaryDirectory(prefix="businesaios-ados-gate-data-") as temp_dir:
+        runtime_root = Path(temp_dir).resolve()
+        try:
+            runtime_root.relative_to(ROOT.resolve())
+        except ValueError:
+            pass
+        else:
+            raise RuntimeError("ADOS gate runtime data directory must be outside the repository")
+        os.environ["BUSINESAIOS_DATA_DIR"] = str(runtime_root)
+        os.environ["DATA_DIR"] = str(runtime_root)
+        try:
+            yield runtime_root
+        finally:
+            for name, value in previous.items():
+                if value is None:
+                    os.environ.pop(name, None)
+                else:
+                    os.environ[name] = value
 
 
 def run(command: list[str], *, extra_env: dict[str, str] | None = None) -> None:
@@ -112,7 +144,8 @@ def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("gate", choices=sorted(HANDLERS))
     args = parser.parse_args()
-    HANDLERS[args.gate]()
+    with isolated_runtime_data_dir():
+        HANDLERS[args.gate]()
     return 0
 
 

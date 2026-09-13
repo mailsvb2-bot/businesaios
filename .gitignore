@@ -91,6 +91,4 @@ data/tenancy/*.db
 data/tenancy/*.db-journal
 data/tenancy/*.sqlite3-journal
 # ADOS advisory shadow runtime state
-.ados-project-venv/
-.ados-control-venv/
 .ados-shadow/

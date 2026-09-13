@@ -4,7 +4,7 @@
     {
       "gate": "architecture",
       "argv": [
-        ".ados-project-venv/bin/python",
+        "../.ados-runtime/project-venv/bin/python",
         "scripts/ados_businesaios_gate.py",
         "architecture"
       ],
@@ -23,7 +23,7 @@
     {
       "gate": "tests",
       "argv": [
-        ".ados-project-venv/bin/python",
+        "../.ados-runtime/project-venv/bin/python",
         "scripts/ados_businesaios_gate.py",
         "tests"
       ],
@@ -41,7 +41,7 @@
     {
       "gate": "security",
       "argv": [
-        ".ados-project-venv/bin/python",
+        "../.ados-runtime/project-venv/bin/python",
         "scripts/ados_businesaios_gate.py",
         "security"
       ],
@@ -60,7 +60,7 @@
     {
       "gate": "contracts",
       "argv": [
-        ".ados-project-venv/bin/python",
+        "../.ados-runtime/project-venv/bin/python",
         "scripts/ados_businesaios_gate.py",
         "contracts"
       ],
@@ -79,7 +79,7 @@
     {
       "gate": "integration",
       "argv": [
-        ".ados-project-venv/bin/python",
+        "../.ados-runtime/project-venv/bin/python",
         "scripts/ados_businesaios_gate.py",
         "integration"
       ],
@@ -98,7 +98,7 @@
     {
       "gate": "user_journey",
       "argv": [
-        ".ados-project-venv/bin/python",
+        "../.ados-runtime/project-venv/bin/python",
         "scripts/ados_businesaios_gate.py",
         "user_journey"
       ],
@@ -116,7 +116,7 @@
     {
       "gate": "data_migration",
       "argv": [
-        ".ados-project-venv/bin/python",
+        "../.ados-runtime/project-venv/bin/python",
         "scripts/ados_businesaios_gate.py",
         "data_migration"
       ],
@@ -142,7 +142,7 @@
     {
       "gate": "full_regression",
       "argv": [
-        ".ados-project-venv/bin/python",
+        "../.ados-runtime/project-venv/bin/python",
         "scripts/ados_businesaios_gate.py",
         "full_regression"
       ],

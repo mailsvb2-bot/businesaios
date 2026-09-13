@@ -66,28 +66,32 @@ jobs:
           set -euo pipefail
           echo "d00bc809685bd47f02d25ec84dd232996214be2ac2dbfa7a6d2c0b587925e85d  third_party/ados/ados_control_plane-0.6.0-py3-none-any.whl" | sha256sum -c -
 
-      - name: Install BusinessAIOS project environment
+      - name: Install isolated BusinessAIOS project environment
         shell: bash
         run: |
           set -euo pipefail
-          /usr/bin/python3.12 -m venv .ados-project-venv
-          .ados-project-venv/bin/python -m pip install --upgrade pip
-          .ados-project-venv/bin/python -m pip install -r requirements.lock.txt
-          .ados-project-venv/bin/python scripts/ci/check_requirements_lock.py
+          RUNTIME_ROOT="$GITHUB_WORKSPACE/../.ados-runtime"
+          rm -rf "$RUNTIME_ROOT"
+          mkdir -p "$RUNTIME_ROOT"
+          /usr/bin/python3.12 -m venv "$RUNTIME_ROOT/project-venv"
+          "$RUNTIME_ROOT/project-venv/bin/python" -m pip install --upgrade pip
+          "$RUNTIME_ROOT/project-venv/bin/python" -m pip install -r requirements.lock.txt
+          "$RUNTIME_ROOT/project-venv/bin/python" scripts/ci/check_requirements_lock.py
 
       - name: Install isolated ADOS control environment
         shell: bash
         run: |
           set -euo pipefail
-          /usr/bin/python3.12 -m venv .ados-control-venv
-          .ados-control-venv/bin/python -m pip install --disable-pip-version-check pip==26.1.2
+          RUNTIME_ROOT="$GITHUB_WORKSPACE/../.ados-runtime"
+          /usr/bin/python3.12 -m venv "$RUNTIME_ROOT/control-venv"
+          "$RUNTIME_ROOT/control-venv/bin/python" -m pip install --disable-pip-version-check pip==26.1.2
           # BusinessAIOS intentionally owns cryptography==49.0.0. ADOS 0.6.0
           # declares cryptography>=43,<47, so the controller is isolated instead
           # of downgrading or mutating the product environment.
-          .ados-control-venv/bin/python -m pip install --only-binary=:all: "cryptography==46.0.4"
-          .ados-control-venv/bin/python -m pip install --no-deps third_party/ados/ados_control_plane-0.6.0-py3-none-any.whl
-          .ados-control-venv/bin/python -m pip check
-          .ados-control-venv/bin/ados --help >/dev/null
+          "$RUNTIME_ROOT/control-venv/bin/python" -m pip install --only-binary=:all: "cryptography==46.0.4"
+          "$RUNTIME_ROOT/control-venv/bin/python" -m pip install --no-deps third_party/ados/ados_control_plane-0.6.0-py3-none-any.whl
+          "$RUNTIME_ROOT/control-venv/bin/python" -m pip check
+          "$RUNTIME_ROOT/control-venv/bin/ados" --help >/dev/null
 
       - name: Run non-blocking ADOS MERGE assessment
         shell: bash
@@ -96,16 +100,19 @@ jobs:
           ADOS_HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
         run: |
           set -euo pipefail
-          ionice -c2 -n7 nice -n 10 .ados-control-venv/bin/python scripts/ados_shadow_assess.py \
-            --ados-bin "$PWD/.ados-control-venv/bin/ados" \
+          RUNTIME_ROOT="$GITHUB_WORKSPACE/../.ados-runtime"
+          ionice -c2 -n7 nice -n 10 "$RUNTIME_ROOT/control-venv/bin/python" scripts/ados_shadow_assess.py \
+            --ados-bin "$RUNTIME_ROOT/control-venv/bin/ados" \
             --repository "mailsvb2-bot/businesaios" \
             --base-sha "$ADOS_BASE_SHA" \
             --head-sha "$ADOS_HEAD_SHA"
 
-      - name: Stop isolated disposable PostgreSQL
+      - name: Cleanup isolated ADOS runtime
         if: always()
         shell: bash
         run: |
+          set +e
           if [ -f "$RUNNER_TEMP/ados-postgres/postmaster.pid" ]; then
             /usr/lib/postgresql/16/bin/pg_ctl -D "$RUNNER_TEMP/ados-postgres" -m fast -w stop
           fi
+          rm -rf "$RUNNER_TEMP/ados-postgres" "$GITHUB_WORKSPACE/../.ados-runtime" "$GITHUB_WORKSPACE/.ados-shadow"

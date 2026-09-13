@@ -52,8 +52,10 @@ not a CI failure.
 BusinessAIOS currently locks `cryptography==49.0.0`. ADOS 0.6.0 declares
 `cryptography>=43,<47`. The shadow workflow therefore uses:
 
-- `.ados-project-venv` for BusinessAIOS and its own `requirements.lock.txt`;
-- `.ados-control-venv` for ADOS with exactly `cryptography==46.0.4`.
+- `../.ados-runtime/project-venv` for BusinessAIOS and its own `requirements.lock.txt`;
+- `../.ados-runtime/control-venv` for ADOS with exactly `cryptography==46.0.4`.
+
+Both environments live outside the Git checkout so canonical source, architecture, and hygiene scanners never observe third-party site-packages as repository code.
 
 The ADOS integration **does not downgrade or replace BusinessAIOS runtime
 dependencies**.
