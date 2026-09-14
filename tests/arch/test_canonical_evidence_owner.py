@@ -69,7 +69,9 @@ def test_phase3_evidence_data_lineage_is_locked_done_in_canon_audit() -> None:
 def test_business_autonomy_bootstrap_does_not_restore_distributed_evidence_as_active_store() -> None:
     text = Path("runtime/business_autonomy/bootstrap.py").read_text(encoding="utf-8")
     assert "DistributedEvidenceStore(" not in text
-    assert "migrate_legacy_distributed_evidence" in text
+    helper = Path("runtime/business_autonomy/canonical_evidence_runtime.py").read_text(encoding="utf-8")
+    assert "build_business_autonomy_evidence_store(legacy_source=evidence_port)" in text
+    assert "migrate_legacy_distributed_evidence(source=legacy_source, target=store)" in helper
     assert "'evidence': canonical_evidence" in text
 
 

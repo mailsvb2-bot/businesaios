@@ -74,6 +74,10 @@ from application.planning.distributed_planning_memory_backend import Distributed
 from execution.distributed_operator_override_backend import DistributedOperatorOverrideStore
 from governance.distributed_approval_backend import DistributedApprovalStore
 from reliability.distributed_idempotency_backend import DistributedIdempotencyStore
+from runtime.business_autonomy.canonical_evidence_runtime import (
+    build_business_autonomy_evidence_store,
+    build_provider_runtime_audit_recorder,
+)
 from runtime.business_autonomy.distributed_runtime_views import (
     DistributedBusinessAutonomyAudit,
     DistributedBusinessAutonomyEvidenceStore,
@@ -90,7 +94,6 @@ from runtime.business_autonomy.fleet_read_model import BusinessAutonomyFleetRead
 from runtime.business_autonomy.provider_activation_store import FileProviderActivationStore
 from runtime.business_autonomy.provider_media import ProviderMediaPreparationCoordinator
 from runtime.business_autonomy.provider_pacing import ProviderPacingCoordinator
-from runtime.business_autonomy.provider_runtime_audit import ProviderRuntimeAuditRecorder
 from runtime.business_autonomy.sqlite_distributed_state import (
     SQLiteDistributedCompareAndSwap,
     SQLiteDistributedDocumentStore,
@@ -101,12 +104,7 @@ from runtime.business_autonomy.sqlite_distributed_state import (
 )
 from security.connector_secret_scope import ConnectorSecretScope
 from security.secret_vault import build_default_secret_vault
-from storage.audit_wiring import build_canonical_audit_store
-from storage.distributed_evidence_audit_backend import (
-    DistributedGovernanceAuditLog,
-    migrate_legacy_distributed_evidence,
-)
-from storage.evidence_wiring import build_canonical_evidence_store
+from storage.distributed_evidence_audit_backend import DistributedGovernanceAuditLog
 
 
 @dataclass(frozen=True)
@@ -408,8 +406,7 @@ def _build_distributed_state() -> dict[str, object]:
     database = SQLiteStateDatabase(_business_autonomy_state_path())
     documents = SQLiteDistributedDocumentStore(database)
     evidence_port = SQLiteDistributedEvidenceAppendPort(database)
-    canonical_evidence = build_canonical_evidence_store()
-    migrate_legacy_distributed_evidence(source=evidence_port, target=canonical_evidence)
+    canonical_evidence = build_business_autonomy_evidence_store(legacy_source=evidence_port)
     return {
         'database': database,
         'documents': documents,
@@ -671,10 +668,7 @@ def build_business_autonomy_guarded_service(*, business_id: str = 'external_busi
     if customer_event_store is not None:
         from crm import CustomerRegistry
         customer_registry = CustomerRegistry(event_store=customer_event_store, idempotency_store=distributed['idempotency'], pii_vault=secret_vault)
-    provider_runtime_audit = ProviderRuntimeAuditRecorder(
-        audit_store=build_canonical_audit_store(),
-        evidence_store=build_canonical_evidence_store(),
-    )
+    provider_runtime_audit = build_provider_runtime_audit_recorder()
     service._provider_admin_service = ProviderAdminService(
         onboarding_service=onboarding,
         secret_vault=secret_vault,
