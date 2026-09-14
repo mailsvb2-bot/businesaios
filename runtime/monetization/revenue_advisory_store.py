@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 from dataclasses import dataclass
@@ -7,6 +8,8 @@ from pathlib import Path
 from typing import Any, Protocol
 
 from runtime.monetization.revenue_advisory_contracts import RevenueDecisionEnvelope, RevenueExperimentSurface
+from storage.evidence_store import EvidenceRecord, EvidenceStore
+from storage.evidence_wiring import build_canonical_evidence_store
 
 CANON_RUNTIME_MONETIZATION_REVENUE_ADVISORY_STORE = True
 
@@ -132,16 +135,18 @@ class FileRevenueExperimentRegistry:
 class RevenueAdvisoryStoreWiring:
     experiment_registry: FileRevenueExperimentRegistry
     audit_store: RevenueAppendOnlyStore
-    evidence_store: RevenueAppendOnlyStore
+    evidence_store: EvidenceStore
     telemetry_store: RevenueAppendOnlyStore
 
 
-def build_revenue_advisory_store_wiring(*, root_dir: str | Path | None = None) -> RevenueAdvisoryStoreWiring:
+def build_revenue_advisory_store_wiring(
+    *, root_dir: str | Path | None = None, evidence_store: EvidenceStore | None = None
+) -> RevenueAdvisoryStoreWiring:
     root = Path(root_dir) if root_dir is not None else Path('.runtime_data/revenue_os')
     return RevenueAdvisoryStoreWiring(
         experiment_registry=FileRevenueExperimentRegistry(path=root / 'experiments.json'),
         audit_store=JsonlAppendOnlyStore(path=root / 'audit.jsonl'),
-        evidence_store=JsonlAppendOnlyStore(path=root / 'evidence.jsonl'),
+        evidence_store=evidence_store or build_canonical_evidence_store(),
         telemetry_store=JsonlAppendOnlyStore(path=root / 'telemetry.jsonl'),
     )
 
@@ -188,43 +193,80 @@ def persist_revenue_advisory_envelope(
         'experiments_count': len(envelope.experiments),
         'candidate_actions_count': len(envelope.candidate_actions),
     }
-    wiring.evidence_store.append(
-        {
-            'tenant_id': str(tenant_id),
-            'product_id': str(product_id),
-            'owner': owner,
-            'world_state_patch': dict(envelope.world_state_patch),
-            'candidate_actions': [
-                {
-                    'action_type': item.action_type,
-                    'kind': item.kind,
-                    'confidence': item.confidence,
-                    'payload': dict(item.payload),
-                    'evidence': dict(item.evidence),
-                    'reason_codes': list(item.reason_codes),
-                    'blast_radius': item.blast_radius,
-                    'requires_approval': item.requires_approval,
-                    'owner': item.owner,
-                }
-                for item in envelope.candidate_actions
-            ],
-            'experiments': [
-                {
-                    'experiment_id': item.experiment_id,
-                    'kind': item.kind,
-                    'hypothesis': item.hypothesis,
-                    'metric_primary': item.metric_primary,
-                    'metric_guardrails': list(item.metric_guardrails),
-                    'arms': [dict(arm) for arm in item.arms],
-                    'holdout_allocation': item.holdout_allocation,
-                    'max_daily_exposure': item.max_daily_exposure,
-                    'created_at': item.created_at,
-                    'metadata': dict(item.metadata),
-                }
-                for item in envelope.experiments
-            ],
-        }
-    )
+    evidence_payload = {
+        'product_id': str(product_id),
+        'owner': owner,
+        'mode': 'advisory_only',
+        'world_state_patch': dict(envelope.world_state_patch),
+        'candidate_actions': [
+            {
+                'action_type': item.action_type,
+                'kind': item.kind,
+                'confidence': item.confidence,
+                'payload': dict(item.payload),
+                'evidence': dict(item.evidence),
+                'reason_codes': list(item.reason_codes),
+                'blast_radius': item.blast_radius,
+                'requires_approval': item.requires_approval,
+                'owner': item.owner,
+            }
+            for item in envelope.candidate_actions
+        ],
+        'experiments': [
+            {
+                'experiment_id': item.experiment_id,
+                'kind': item.kind,
+                'hypothesis': item.hypothesis,
+                'metric_primary': item.metric_primary,
+                'metric_guardrails': list(item.metric_guardrails),
+                'arms': [dict(arm) for arm in item.arms],
+                'holdout_allocation': item.holdout_allocation,
+                'max_daily_exposure': item.max_daily_exposure,
+                'created_at': item.created_at,
+                'metadata': dict(item.metadata),
+            }
+            for item in envelope.experiments
+        ],
+    }
+    digest_input = json.dumps(
+        {'tenant_id': str(tenant_id), **evidence_payload},
+        ensure_ascii=False, sort_keys=True, separators=(',', ':'),
+    ).encode('utf-8')
+    digest = hashlib.sha256(digest_input).hexdigest()
+    evidence_id = f'revenue-advisory:{digest}'
+    existing = wiring.evidence_store.get(tenant_id=str(tenant_id), evidence_id=evidence_id)
+    created_at = existing.created_at if existing is not None else None
+    record_kwargs = {
+        'evidence_id': evidence_id,
+        'tenant_id': str(tenant_id),
+        'scope': 'revenue_advisory',
+        'run_id': f'revenue-advisory:{digest[:24]}',
+        'action_type': 'revenue_advisory_envelope',
+        'verification_status': 'recorded',
+        'source': owner,
+        'source_type': 'revenue_advisory',
+        'business_id': 'unknown',
+        'observed_at': None,
+        'confidence': None,
+        'privacy_class': 'internal',
+        'retention_policy': 'revenue_advisory_evidence',
+        'lineage': {
+            'source': owner,
+            'normalization': f'revenue-advisory-envelope:{digest}',
+            'derived_fact': f'revenue-advisory:{digest}',
+        },
+        'refs': tuple(item.experiment_id for item in envelope.experiments if str(item.experiment_id).strip()),
+        'payload': evidence_payload,
+        'labels': {'product_id': str(product_id), 'owner': owner, 'mode': 'advisory_only'},
+    }
+    if created_at is not None:
+        record_kwargs['created_at'] = created_at
+    record = EvidenceRecord(**record_kwargs).normalized()
+    if existing is not None:
+        if existing != record:
+            raise ValueError('revenue advisory evidence replay conflicts with persisted evidence')
+    else:
+        wiring.evidence_store.append(record)
     wiring.telemetry_store.append(telemetry_payload)
     return {
         'audit_records': audit_count,

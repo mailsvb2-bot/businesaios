@@ -13,6 +13,7 @@ from runtime.monetization import (
     build_revenue_advisory_store_wiring,
     persist_revenue_advisory_envelope,
 )
+from storage.evidence_store import InMemoryEvidenceStore
 
 
 def _inputs():
@@ -45,7 +46,8 @@ def _inputs():
 
 
 def test_persist_revenue_advisory_envelope_registers_experiments_once(tmp_path) -> None:
-    wiring = build_revenue_advisory_store_wiring(root_dir=tmp_path / 'runtime')
+    evidence_store = InMemoryEvidenceStore()
+    wiring = build_revenue_advisory_store_wiring(root_dir=tmp_path / 'runtime', evidence_store=evidence_store)
     service = RevenueAdvisoryService()
     snapshots, plans, variants = _inputs()
     envelope = service.build_envelope(tenant_id='tenant-1', product_id='product-1', snapshots=snapshots, plans=plans, paywall_variants=variants)
@@ -56,10 +58,14 @@ def test_persist_revenue_advisory_envelope_registers_experiments_once(tmp_path) 
     assert first['registered_experiments'] >= 1
     assert second['registered_experiments'] == 0
     audit_lines = (tmp_path / 'runtime' / 'audit.jsonl').read_text(encoding='utf-8').strip().splitlines()
-    evidence_lines = (tmp_path / 'runtime' / 'evidence.jsonl').read_text(encoding='utf-8').strip().splitlines()
+    evidence_rows = evidence_store.list_for_tenant(tenant_id='tenant-1')
     telemetry_lines = (tmp_path / 'runtime' / 'telemetry.jsonl').read_text(encoding='utf-8').strip().splitlines()
     assert audit_lines
-    assert evidence_lines
+    assert len(evidence_rows) == 1
+    assert evidence_rows[0].source_type == 'revenue_advisory'
+    assert evidence_rows[0].business_id == 'unknown'
+    assert evidence_rows[0].lineage['derived_fact'].startswith('revenue-advisory:')
+    assert not (tmp_path / 'runtime' / 'evidence.jsonl').exists()
     assert telemetry_lines
     telemetry = json.loads(telemetry_lines[-1])
     assert telemetry['owner'] == 'runtime.monetization.revenue_advisory'
@@ -67,7 +73,10 @@ def test_persist_revenue_advisory_envelope_registers_experiments_once(tmp_path) 
 
 
 def test_revenue_os_runtime_persists_and_returns_execution_envelope(tmp_path) -> None:
-    runtime = RevenueOSRuntime(wiring=build_revenue_advisory_store_wiring(root_dir=tmp_path / 'runtime'))
+    evidence_store = InMemoryEvidenceStore()
+    runtime = RevenueOSRuntime(
+        wiring=build_revenue_advisory_store_wiring(root_dir=tmp_path / 'runtime', evidence_store=evidence_store)
+    )
     snapshots, plans, variants = _inputs()
     result = runtime.analyze(tenant_id='tenant-2', product_id='product-2', snapshots=snapshots, plans=plans, paywall_variants=variants)
 
@@ -76,3 +85,6 @@ def test_revenue_os_runtime_persists_and_returns_execution_envelope(tmp_path) ->
     assert result.persisted['registered_experiments'] >= 1
     registry_payload = json.loads((tmp_path / 'runtime' / 'experiments.json').read_text(encoding='utf-8'))
     assert registry_payload
+    rows = evidence_store.list_for_tenant(tenant_id='tenant-2')
+    assert len(rows) == 1
+    assert rows[0].labels['product_id'] == 'product-2'

@@ -286,8 +286,10 @@ BUSINESS_ONTOLOGY_OWNERSHIP_AUDIT = (
         "Canonical EvidenceRecord and storage owner are now selected; domain-specific writers still need migration onto the canonical lineage contract before Phase 3 can be DONE.",
         writers=(
             "application.business_autonomy.persistence",
+            "application.evidence.evidence_persistence",
             "runtime.business_autonomy.provider_runtime_audit",
             "runtime.business_autonomy.distributed_runtime_views",
+            "runtime.monetization.revenue_advisory_store",
         ),
         readers=("storage.distributed_evidence_audit_backend", "application.business_autonomy.persistence"),
     ),
