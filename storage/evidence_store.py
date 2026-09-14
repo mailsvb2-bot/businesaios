@@ -1,12 +1,13 @@
 from __future__ import annotations
 
+import json
+import uuid
+from collections.abc import Mapping
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from hashlib import sha256
 from threading import RLock
-from typing import Any, Mapping
-import json
-import uuid
+from typing import Any
 
 from governance.persistence_codec import to_jsonable
 from storage.migration_registry import MigrationRegistry, default_storage_migration_registry
@@ -14,9 +15,9 @@ from storage.postgres_session import PostgresSessionFactory
 from storage.sqlite_fallback import SqliteSessionFactory
 from storage.tenant_partitioning import build_partition_key, normalize_storage_tenant_id
 
-
 CANON_STORAGE_EVIDENCE_STORE = True
 CANON_STORAGE_EVIDENCE_RECORD_EXPLICIT_LEGACY_FACTORY = True
+EVIDENCE_LINEAGE_STAGES = ("source", "normalization", "derived_fact", "decision", "action", "outcome")
 
 
 def utc_now() -> datetime:
@@ -37,6 +38,14 @@ def _first_non_empty(*values: object, default: str) -> str:
     return default
 
 
+def _normalize_lineage(value: Mapping[str, object] | None) -> dict[str, str]:
+    raw = dict(value or {})
+    unknown = tuple(sorted(set(raw) - set(EVIDENCE_LINEAGE_STAGES)))
+    if unknown:
+        raise ValueError(f"unsupported evidence lineage stages: {','.join(unknown)}")
+    return {stage: str(raw[stage]).strip() for stage in EVIDENCE_LINEAGE_STAGES if str(raw.get(stage) or '').strip()}
+
+
 @dataclass(frozen=True)
 class EvidenceRecord:
     tenant_id: str
@@ -52,6 +61,14 @@ class EvidenceRecord:
     retention_until: datetime | None = None
     legal_hold: bool = False
     evidence_id: str = field(default_factory=lambda: str(uuid.uuid4()))
+    source: str = "unknown"
+    source_type: str = "unknown"
+    business_id: str = "global"
+    observed_at: datetime | None = None
+    confidence: float | None = None
+    privacy_class: str = "internal"
+    retention_policy: str = "default"
+    lineage: Mapping[str, str] = field(default_factory=dict)
 
     @classmethod
     def from_legacy(
@@ -72,7 +89,15 @@ class EvidenceRecord:
         retention_until: datetime | None = None,
         legal_hold: bool = False,
         evidence_id: str | None = None,
-    ) -> "EvidenceRecord":
+        source: str = "legacy",
+        source_type: str = "legacy",
+        business_id: str | None = None,
+        observed_at: datetime | None = None,
+        confidence: float | None = None,
+        privacy_class: str = "internal",
+        retention_policy: str = "legacy",
+        lineage: Mapping[str, str] | None = None,
+    ) -> EvidenceRecord:
         return cls(
             tenant_id=tenant_id,
             scope=_first_non_empty(scope, subject, default="general"),
@@ -87,22 +112,38 @@ class EvidenceRecord:
             retention_until=retention_until,
             legal_hold=legal_hold,
             evidence_id=evidence_id or str(uuid.uuid4()),
+            source=source,
+            source_type=source_type,
+            business_id=business_id or tenant_id,
+            observed_at=observed_at or created_at,
+            confidence=confidence,
+            privacy_class=privacy_class,
+            retention_policy=retention_policy,
+            lineage=dict(lineage or {}),
         )
 
     def validate(self) -> None:
         if not str(self.tenant_id or "").strip():
             raise ValueError("tenant_id is required")
-        for field_name in ("scope", "run_id", "action_type", "verification_status", "evidence_id"):
+        for field_name in (
+            "scope", "run_id", "action_type", "verification_status", "evidence_id",
+            "source", "source_type", "business_id", "privacy_class", "retention_policy",
+        ):
             if not str(getattr(self, field_name) or "").strip():
                 raise ValueError(f"{field_name} is required")
         if self.created_at.tzinfo is None:
             raise ValueError("created_at must be timezone-aware")
+        if self.observed_at is not None and self.observed_at.tzinfo is None:
+            raise ValueError("observed_at must be timezone-aware")
+        if self.confidence is not None and not 0.0 <= float(self.confidence) <= 1.0:
+            raise ValueError("confidence must be between 0 and 1")
+        _normalize_lineage(self.lineage)
         if self.retention_until is not None and self.retention_until.tzinfo is None:
             raise ValueError("retention_until must be timezone-aware")
         if self.retention_until is not None and self.retention_until < self.created_at:
             raise ValueError("retention_until must be >= created_at")
 
-    def normalized(self) -> "EvidenceRecord":
+    def normalized(self) -> EvidenceRecord:
         record = EvidenceRecord(
             tenant_id=normalize_storage_tenant_id(self.tenant_id),
             scope=str(self.scope).strip(),
@@ -117,6 +158,14 @@ class EvidenceRecord:
             retention_until=self.retention_until,
             legal_hold=bool(self.legal_hold),
             evidence_id=str(self.evidence_id).strip(),
+            source=str(self.source).strip(),
+            source_type=str(self.source_type).strip(),
+            business_id=str(self.business_id).strip(),
+            observed_at=self.observed_at or self.created_at,
+            confidence=None if self.confidence is None else float(self.confidence),
+            privacy_class=str(self.privacy_class).strip(),
+            retention_policy=str(self.retention_policy).strip(),
+            lineage=_normalize_lineage(self.lineage),
         )
         record.validate()
         return record
@@ -130,6 +179,36 @@ class EvidenceRecord:
         normalized = self.normalized()
         return sha256(_json_dumps(normalized.payload).encode("utf-8")).hexdigest()
 
+    @property
+    def evidence_sha256(self) -> str:
+        normalized = self.normalized()
+        envelope = {
+            "source": normalized.source,
+            "source_type": normalized.source_type,
+            "business_id": normalized.business_id,
+            "observed_at": normalized.observed_at.isoformat(),
+            "confidence": normalized.confidence,
+            "privacy_class": normalized.privacy_class,
+            "retention_policy": normalized.retention_policy,
+            "lineage": dict(normalized.lineage),
+            "payload": normalized.payload,
+        }
+        return sha256(_json_dumps(envelope).encode("utf-8")).hexdigest()
+
+    @property
+    def hash(self) -> str:
+        return self.evidence_sha256
+
+    @property
+    def lineage_path(self) -> tuple[tuple[str, str], ...]:
+        normalized = self.normalized()
+        return tuple((stage, normalized.lineage[stage]) for stage in EVIDENCE_LINEAGE_STAGES if stage in normalized.lineage)
+
+    @property
+    def lineage_complete(self) -> bool:
+        normalized = self.normalized()
+        return all(stage in normalized.lineage for stage in EVIDENCE_LINEAGE_STAGES)
+
     def to_row(self) -> dict[str, object]:
         record = self.normalized()
         return {
@@ -142,6 +221,14 @@ class EvidenceRecord:
             "action_type": record.action_type,
             "verification_status": record.verification_status,
             "created_at": record.created_at.isoformat(),
+            "source": record.source,
+            "source_type": record.source_type,
+            "business_id": record.business_id,
+            "observed_at": record.observed_at.isoformat(),
+            "confidence": record.confidence,
+            "privacy_class": record.privacy_class,
+            "retention_policy": record.retention_policy,
+            "lineage_json": _json_dumps(record.lineage),
             "refs_json": _json_dumps(record.refs),
             "payload_json": _json_dumps(record.payload),
             "payload_sha256": record.payload_sha256,
@@ -151,7 +238,7 @@ class EvidenceRecord:
         }
 
     @classmethod
-    def from_row(cls, row: Mapping[str, object]) -> "EvidenceRecord":
+    def from_row(cls, row: Mapping[str, object]) -> EvidenceRecord:
         retention_until_raw = row.get("retention_until")
         return cls(
             evidence_id=str(row.get("evidence_id") or ""),
@@ -162,6 +249,14 @@ class EvidenceRecord:
             action_type=str(row.get("action_type") or ""),
             verification_status=str(row.get("verification_status") or ""),
             created_at=datetime.fromisoformat(str(row.get("created_at"))),
+            source=str(row.get("source") or "legacy"),
+            source_type=str(row.get("source_type") or "legacy"),
+            business_id=str(row.get("business_id") or row.get("tenant_id") or "global"),
+            observed_at=datetime.fromisoformat(str(row.get("observed_at") or row.get("created_at"))),
+            confidence=None if row.get("confidence") in (None, "") else float(row.get("confidence")),
+            privacy_class=str(row.get("privacy_class") or "internal"),
+            retention_policy=str(row.get("retention_policy") or "legacy"),
+            lineage=json.loads(str(row.get("lineage_json") or "{}")),
             refs=tuple(json.loads(str(row.get("refs_json") or "[]"))),
             payload=json.loads(str(row.get("payload_json") or "{}")),
             labels=json.loads(str(row.get("labels_json") or "{}")),
@@ -228,14 +323,17 @@ class SqliteEvidenceStore:
                 """
                 INSERT OR REPLACE INTO storage_evidence_log(
                     evidence_id, tenant_id, partition_key, scope, run_id, action_id, action_type,
-                    verification_status, created_at, refs_json, payload_json, payload_sha256,
+                    verification_status, created_at, source, source_type, business_id, observed_at,
+                    confidence, privacy_class, retention_policy, lineage_json, refs_json, payload_json, payload_sha256,
                     labels_json, retention_until, legal_hold
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     row["evidence_id"], row["tenant_id"], row["partition_key"], row["scope"], row["run_id"], row["action_id"],
-                    row["action_type"], row["verification_status"], row["created_at"], row["refs_json"], row["payload_json"],
-                    row["payload_sha256"], row["labels_json"], row["retention_until"], row["legal_hold"],
+                    row["action_type"], row["verification_status"], row["created_at"], row["source"], row["source_type"],
+                    row["business_id"], row["observed_at"], row["confidence"], row["privacy_class"], row["retention_policy"],
+                    row["lineage_json"], row["refs_json"], row["payload_json"], row["payload_sha256"], row["labels_json"],
+                    row["retention_until"], row["legal_hold"],
                 ),
             )
         return normalized
@@ -286,9 +384,10 @@ class PostgresEvidenceStore:
                 """
                 INSERT INTO storage_evidence_log(
                     evidence_id, tenant_id, partition_key, scope, run_id, action_id, action_type,
-                    verification_status, created_at, refs_json, payload_json, payload_sha256,
+                    verification_status, created_at, source, source_type, business_id, observed_at,
+                    confidence, privacy_class, retention_policy, lineage_json, refs_json, payload_json, payload_sha256,
                     labels_json, retention_until, legal_hold
-                ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                 ON CONFLICT (evidence_id) DO UPDATE SET
                     tenant_id=EXCLUDED.tenant_id,
                     partition_key=EXCLUDED.partition_key,
@@ -298,6 +397,14 @@ class PostgresEvidenceStore:
                     action_type=EXCLUDED.action_type,
                     verification_status=EXCLUDED.verification_status,
                     created_at=EXCLUDED.created_at,
+                    source=EXCLUDED.source,
+                    source_type=EXCLUDED.source_type,
+                    business_id=EXCLUDED.business_id,
+                    observed_at=EXCLUDED.observed_at,
+                    confidence=EXCLUDED.confidence,
+                    privacy_class=EXCLUDED.privacy_class,
+                    retention_policy=EXCLUDED.retention_policy,
+                    lineage_json=EXCLUDED.lineage_json,
                     refs_json=EXCLUDED.refs_json,
                     payload_json=EXCLUDED.payload_json,
                     payload_sha256=EXCLUDED.payload_sha256,
@@ -307,8 +414,10 @@ class PostgresEvidenceStore:
                 """,
                 (
                     row["evidence_id"], row["tenant_id"], row["partition_key"], row["scope"], row["run_id"], row["action_id"],
-                    row["action_type"], row["verification_status"], row["created_at"], row["refs_json"], row["payload_json"],
-                    row["payload_sha256"], row["labels_json"], row["retention_until"], row["legal_hold"],
+                    row["action_type"], row["verification_status"], row["created_at"], row["source"], row["source_type"],
+                    row["business_id"], row["observed_at"], row["confidence"], row["privacy_class"], row["retention_policy"],
+                    row["lineage_json"], row["refs_json"], row["payload_json"], row["payload_sha256"], row["labels_json"],
+                    row["retention_until"], row["legal_hold"],
                 ),
             )
         return normalized
@@ -344,6 +453,7 @@ class PostgresEvidenceStore:
 __all__ = [
     "CANON_STORAGE_EVIDENCE_STORE",
     "CANON_STORAGE_EVIDENCE_RECORD_EXPLICIT_LEGACY_FACTORY",
+    "EVIDENCE_LINEAGE_STAGES",
     "EvidenceRecord",
     "InMemoryEvidenceStore",
     "SqliteEvidenceStore",

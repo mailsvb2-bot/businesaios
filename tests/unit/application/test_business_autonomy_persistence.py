@@ -68,5 +68,11 @@ def test_persistent_business_autonomy_evidence_store_appends_result(tmp_path, mo
     )
     record = store.append_result(result)
     assert record.run_id == "e1"
+    assert record.business_id == "b1"
+    assert record.source == "business_autonomy"
+    assert record.source_type == "business_autonomy_execution"
+    assert record.retention_policy == "business_execution_evidence"
+    assert dict(record.lineage)["action"] == "g1"
+    assert dict(record.lineage)["outcome"] == "e1"
     items = store.list_recent(tenant_id="tenant-a")
     assert len(items) == 1

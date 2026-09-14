@@ -1,10 +1,10 @@
 from __future__ import annotations
 
+import json
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
-from typing import Callable, Protocol, Sequence
-import json
-
+from typing import Protocol
 
 CANON_STORAGE_MIGRATION_REGISTRY = True
 
@@ -223,7 +223,22 @@ _DEF = MigrationRegistry(
                 "CREATE INDEX IF NOT EXISTS idx_storage_evidence_partition_created ON storage_evidence_log(partition_key, created_at);",
                 "CREATE INDEX IF NOT EXISTS idx_storage_evidence_run ON storage_evidence_log(tenant_id, run_id);",
             ),
-        )
+        ),
+        Migration(
+            version=2,
+            name="canonical_evidence_lineage",
+            statements=(
+                "ALTER TABLE storage_evidence_log ADD COLUMN source TEXT NOT NULL DEFAULT 'legacy';",
+                "ALTER TABLE storage_evidence_log ADD COLUMN source_type TEXT NOT NULL DEFAULT 'legacy';",
+                "ALTER TABLE storage_evidence_log ADD COLUMN business_id TEXT NOT NULL DEFAULT 'global';",
+                "ALTER TABLE storage_evidence_log ADD COLUMN observed_at TEXT;",
+                "ALTER TABLE storage_evidence_log ADD COLUMN confidence REAL;",
+                "ALTER TABLE storage_evidence_log ADD COLUMN privacy_class TEXT NOT NULL DEFAULT 'internal';",
+                "ALTER TABLE storage_evidence_log ADD COLUMN retention_policy TEXT NOT NULL DEFAULT 'legacy';",
+                "ALTER TABLE storage_evidence_log ADD COLUMN lineage_json TEXT NOT NULL DEFAULT '{}';",
+                "CREATE INDEX IF NOT EXISTS idx_storage_evidence_business_observed ON storage_evidence_log(tenant_id, business_id, observed_at);",
+            ),
+        ),
     ]
 )
 

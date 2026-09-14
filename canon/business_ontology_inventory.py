@@ -280,10 +280,16 @@ BUSINESS_ONTOLOGY_OWNERSHIP_AUDIT = (
     ),
     _row(
         "Evidence",
-        OwnershipAuditStatus.DUPLICATE,
-        None,
-        None,
-        "Evidence mechanisms are strong but no single canonical Evidence Store contract/owner exists yet.",
+        OwnershipAuditStatus.PARTIAL,
+        "storage.evidence_store",
+        "storage.evidence_store",
+        "Canonical EvidenceRecord and storage owner are now selected; domain-specific writers still need migration onto the canonical lineage contract before Phase 3 can be DONE.",
+        writers=(
+            "application.business_autonomy.persistence",
+            "runtime.business_autonomy.provider_runtime_audit",
+            "runtime.business_autonomy.distributed_runtime_views",
+        ),
+        readers=("storage.distributed_evidence_audit_backend", "application.business_autonomy.persistence"),
     ),
 )
 

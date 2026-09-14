@@ -227,6 +227,22 @@ class PersistentBusinessAutonomyEvidenceStore:
             action_type="business_autonomy_execution",
             verification_status=result.verdict.value,
             created_at=created_at,
+            source=str(result.adapter_name or "business_autonomy"),
+            source_type="business_autonomy_execution",
+            business_id=str(result.business_id),
+            observed_at=created_at,
+            privacy_class="internal",
+            retention_policy="business_execution_evidence",
+            lineage={
+                "source": str(result.adapter_name or "business_autonomy"),
+                "decision": str(
+                    result.metadata.get("decision_id")
+                    or result.metadata.get("sovereign_decision_id")
+                    or ""
+                ),
+                "action": str(result.goal_id),
+                "outcome": str(result.execution_id),
+            },
             refs=tuple(filter(None, (result.adapter_name, result.business_id, result.goal_id))),
             payload=payload,
             labels={

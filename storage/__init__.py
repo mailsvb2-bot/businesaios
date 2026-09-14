@@ -1,7 +1,13 @@
 from __future__ import annotations
 
 from storage.audit_store import AuditRecord, InMemoryAuditStore, PostgresAuditStore, SqliteAuditStore
-from storage.evidence_store import EvidenceRecord, InMemoryEvidenceStore, PostgresEvidenceStore, SqliteEvidenceStore
+from storage.evidence_store import (
+    EVIDENCE_LINEAGE_STAGES,
+    EvidenceRecord,
+    InMemoryEvidenceStore,
+    PostgresEvidenceStore,
+    SqliteEvidenceStore,
+)
 from storage.inference_execution_record_repository import InferenceExecutionRecordRepository
 from storage.migration_registry import Migration, MigrationRegistry, default_storage_migration_registry
 from storage.postgres_session import PostgresSession, PostgresSessionFactory
@@ -30,6 +36,7 @@ __all__ = [
     "AuditRecord",
     "CANON_STORAGE_NAMESPACE",
     "CANON_STORAGE_PACKAGE_OWNER",
+    "EVIDENCE_LINEAGE_STAGES",
     "EvidenceRecord",
     "InMemoryAuditStore",
     "InMemoryEvidenceStore",
