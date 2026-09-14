@@ -5,7 +5,6 @@ from dataclasses import dataclass, replace
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
-from uuid import uuid4
 
 from application.business_autonomy.contracts import (
     BusinessCapability,
@@ -15,6 +14,7 @@ from application.business_autonomy.contracts import (
     CapabilityKind,
     ExecutionVerdict,
 )
+from application.business_autonomy.evidence_projection import append_business_autonomy_evidence
 from application.business_autonomy.execution_subject import (
     approval_subject_metadata,
     business_execution_approval_id,
@@ -38,7 +38,7 @@ from governance.persistence_codec import atomic_write_json, read_json_or_default
 from reliability.idempotency_contract import IdempotencyResolution
 from reliability.idempotency_scope import build_idempotency_key
 from reliability.idempotency_sqlite_backend import SQLiteIdempotencyStore
-from storage.evidence_store import EvidenceRecord, SqliteEvidenceStore
+from storage.evidence_store import EvidenceRecord, EvidenceStore
 from storage.evidence_wiring import build_canonical_evidence_store, canonical_evidence_store_path
 
 BUSINESS_AUTONOMY_OWNER_ID = "business_autonomy"
@@ -199,59 +199,11 @@ class PersistentBusinessAutonomyIdempotencyStore:
 
 
 class PersistentBusinessAutonomyEvidenceStore:
-    def __init__(self, backend: SqliteEvidenceStore | None = None) -> None:
+    def __init__(self, backend: EvidenceStore | None = None) -> None:
         self._backend = backend or build_canonical_evidence_store()
 
     def append_result(self, result: BusinessExecutionResult) -> EvidenceRecord:
-        created_at = datetime.now(UTC)
-        payload = {
-            "message": result.message,
-            "metrics": dict(result.metrics),
-            "metadata": dict(result.metadata),
-            "evidence": [
-                {
-                    "event_type": item.event_type,
-                    "payload": dict(item.payload),
-                    "timestamp_utc": item.timestamp_utc,
-                    "source": item.source,
-                }
-                for item in result.evidence
-            ],
-        }
-        record = EvidenceRecord(
-            evidence_id=str(uuid4()),
-            tenant_id=str(result.metadata.get("tenant_id") or result.business_id or "global"),
-            scope="business_autonomy",
-            run_id=str(result.execution_id),
-            action_id=str(result.goal_id),
-            action_type="business_autonomy_execution",
-            verification_status=result.verdict.value,
-            created_at=created_at,
-            source=str(result.adapter_name or "business_autonomy"),
-            source_type="business_autonomy_execution",
-            business_id=str(result.business_id),
-            observed_at=created_at,
-            privacy_class="internal",
-            retention_policy="business_execution_evidence",
-            lineage={
-                "source": str(result.adapter_name or "business_autonomy"),
-                "decision": str(
-                    result.metadata.get("decision_id")
-                    or result.metadata.get("sovereign_decision_id")
-                    or ""
-                ),
-                "action": str(result.goal_id),
-                "outcome": str(result.execution_id),
-            },
-            refs=tuple(filter(None, (result.adapter_name, result.business_id, result.goal_id))),
-            payload=payload,
-            labels={
-                "business_id": result.business_id,
-                "goal_id": result.goal_id,
-                "verdict": result.verdict.value,
-            },
-        )
-        return self._backend.append(record)
+        return append_business_autonomy_evidence(backend=self._backend, result=result)
 
     def list_recent(self, *, tenant_id: str, limit: int = 20) -> tuple[EvidenceRecord, ...]:
         return self._backend.list_for_tenant(tenant_id=tenant_id, limit=limit)

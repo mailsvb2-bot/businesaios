@@ -3,14 +3,17 @@ from __future__ import annotations
 import sqlite3
 from datetime import UTC, datetime
 
+import pytest
+
 from application.business_autonomy.contracts import BusinessExecutionResult, ExecutionVerdict
+from application.business_autonomy.persistence import PersistentBusinessAutonomyEvidenceStore
 from runtime.business_autonomy.bootstrap import _build_distributed_state
 from runtime.business_autonomy.distributed_runtime_views import DistributedBusinessAutonomyEvidenceStore
 from runtime.business_autonomy.sqlite_distributed_state import (
     SQLiteDistributedEvidenceAppendPort,
     SQLiteStateDatabase,
 )
-from storage.evidence_store import EvidenceRecord
+from storage.evidence_store import EvidenceRecord, InMemoryEvidenceStore
 from storage.evidence_wiring import canonical_evidence_store_path
 
 
@@ -68,3 +71,53 @@ def test_business_autonomy_migrates_legacy_evidence_then_writes_only_canonical_s
             "SELECT COUNT(*) FROM distributed_evidence WHERE partition_key LIKE 'evidence_%'"
         ).fetchone()[0]
     assert evidence_rows == 1
+
+
+def test_business_autonomy_compatibility_and_runtime_facades_share_one_projection() -> None:
+    canonical = InMemoryEvidenceStore()
+    compatibility = PersistentBusinessAutonomyEvidenceStore(backend=canonical)
+    runtime = DistributedBusinessAutonomyEvidenceStore(canonical)
+    result = BusinessExecutionResult(
+        verdict=ExecutionVerdict.COMPLETED,
+        business_id="business-a",
+        goal_id="goal-a",
+        execution_id="execution-shared",
+        message="completed",
+        adapter_name="test-adapter",
+        metadata={
+            "tenant_id": "tenant-a",
+            "decision_id": "decision-a",
+            "action_id": "action-a",
+            "semantic_state_id": "state-a",
+        },
+    )
+
+    first = compatibility.append_result(result)
+    second = runtime.append_result(result)
+
+    assert first == second
+    assert first.evidence_id == "business-autonomy:execution-shared"
+    assert first.action_id == "action-a"
+    assert first.lineage["normalization"] == "business-autonomy-result:execution-shared"
+    assert first.lineage["derived_fact"] == "state-a"
+    assert first.lineage["decision"] == "decision-a"
+    assert first.lineage["action"] == "action-a"
+    assert first.lineage["outcome"] == "execution-shared"
+    assert len(canonical.list_for_tenant(tenant_id="tenant-a")) == 1
+
+    conflict = BusinessExecutionResult(
+        verdict=ExecutionVerdict.COMPLETED,
+        business_id="business-a",
+        goal_id="goal-a",
+        execution_id="execution-shared",
+        message="tampered",
+        adapter_name="test-adapter",
+        metadata={
+            "tenant_id": "tenant-a",
+            "decision_id": "decision-a",
+            "action_id": "action-a",
+            "semantic_state_id": "state-a",
+        },
+    )
+    with pytest.raises(ValueError, match="replay conflicts with canonical evidence"):
+        runtime.append_result(conflict)

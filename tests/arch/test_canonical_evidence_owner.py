@@ -89,3 +89,14 @@ def test_all_active_evidence_record_writers_are_declared_in_the_ownership_invent
                 if name == "EvidenceRecord":
                     writers.add(path.with_suffix("").as_posix().replace("/", "."))
     assert writers == set(row.allowed_writers)
+
+
+def test_business_autonomy_evidence_semantics_have_one_projection_owner() -> None:
+    projection = Path("application/business_autonomy/evidence_projection.py").read_text(encoding="utf-8")
+    persistence = Path("application/business_autonomy/persistence.py").read_text(encoding="utf-8")
+    runtime_view = Path("runtime/business_autonomy/distributed_runtime_views.py").read_text(encoding="utf-8")
+    assert "EvidenceRecord(" in projection
+    assert "EvidenceRecord(" not in persistence
+    assert "EvidenceRecord(" not in runtime_view
+    assert "append_business_autonomy_evidence" in persistence
+    assert "append_business_autonomy_evidence" in runtime_view

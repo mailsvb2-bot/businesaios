@@ -285,11 +285,10 @@ BUSINESS_ONTOLOGY_OWNERSHIP_AUDIT = (
         "storage.evidence_store",
         "Canonical EvidenceRecord/storage ownership is locked and all active durable Evidence writers route to it; remaining Phase 3 work concerns historical backfill and lineage completeness, not competing ownership.",
         writers=(
-            "application.business_autonomy.persistence",
+            "application.business_autonomy.evidence_projection",
             "application.evidence.evidence_persistence",
             "application.process_discovery.canonical_adapters",
             "runtime.business_autonomy.provider_runtime_audit",
-            "runtime.business_autonomy.distributed_runtime_views",
             "runtime.monetization.revenue_advisory_store",
         ),
         readers=("storage.distributed_evidence_audit_backend", "application.business_autonomy.persistence"),
