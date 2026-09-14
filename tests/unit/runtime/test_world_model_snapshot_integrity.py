@@ -214,3 +214,41 @@ def test_corrected_successor_reactivates_previously_superseded_target() -> None:
         "fact-target",
         "fact-successor",
     }
+
+
+def test_current_snapshot_recomputes_freshness_from_protected_temporal_envelope() -> None:
+    snapshot = StateSynthesisEngine().synthesize(
+        _request(
+            semantic_observation(
+                field_path="business.expiring_offer",
+                value={"active": True},
+                source="catalog",
+                observed_at_ms=1_000,
+                valid_until_ms=1_500,
+                ttl_ms=10_000,
+                kind="fact",
+                authoritative=True,
+            ),
+            now_ms=2_000,
+        )
+    )
+    payload = _json_payload(snapshot)
+    field = payload["fields"]["business.expiring_offer"]
+    assert field["freshness_status"] == "expired"
+    field["freshness_status"] = "fresh"
+    field["freshness_reason"] = "tampered"
+
+    restored = snapshot_from_dict(payload)
+    record = restored.fields["business.expiring_offer"]
+    assert record.freshness_status == "expired"
+    assert record.freshness_reason == "after_valid_until"
+    assert restored.semantic_view is not None
+    assert restored.semantic_view.records == ()
+
+
+def test_current_snapshot_rejects_conflict_status_tamper_without_resolution_envelope() -> None:
+    payload = _json_payload(_conflicted_snapshot())
+    payload["conflicts"][0]["status"] = "resolved"
+
+    with pytest.raises(ValueError, match="resolved conflict field mismatch"):
+        snapshot_from_dict(payload)

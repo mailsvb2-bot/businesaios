@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-import hashlib
-import json
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -29,6 +27,7 @@ from runtime.state.state_contract import (
     StateSynthesizedSnapshot,
 )
 from runtime.state.state_freshness_policy import NON_DECISION_FRESHNESS_STATUSES, StateFreshnessPolicy
+from runtime.state.state_identity import build_state_id
 from runtime.state.world_model_semantic_projector import project_world_model_semantics
 
 CANON_STATE_SYNTHESIS_ENGINE = True
@@ -121,11 +120,12 @@ class StateSynthesisEngine:
         values = self._materialize_values(fields)
 
         snapshot = StateSynthesizedSnapshot(
-            state_id=self._build_state_id(
+            state_id=build_state_id(
                 tenant_id=request.tenant_id,
                 business_id=request.business_id,
                 now_ms=request.now_ms,
                 fields=fields,
+                conflicts=tuple(conflicts),
             ),
             tenant_id=request.tenant_id,
             business_id=request.business_id,
@@ -243,16 +243,6 @@ class StateSynthesisEngine:
         for item in observations:
             watermarks[str(item.source)] = max(int(item.observed_at_ms), int(watermarks.get(str(item.source), 0) or 0))
         return watermarks
-
-    def _build_state_id(self, *, tenant_id: str, business_id: str, now_ms: int, fields: dict[str, Any]) -> str:
-        payload = {
-            "tenant_id": str(tenant_id),
-            "business_id": str(business_id),
-            "now_ms": int(now_ms),
-            "fields": {key: value.provenance_hash for key, value in sorted(fields.items())},
-        }
-        encoded = json.dumps(payload, ensure_ascii=False, sort_keys=True, separators=(",", ":")).encode("utf-8")
-        return hashlib.sha256(encoded).hexdigest()[:24]
 
 
 def build_world_state_observations(

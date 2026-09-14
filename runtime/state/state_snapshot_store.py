@@ -5,6 +5,7 @@ from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import Any
 
+from runtime.state.business_fact_lifecycle import apply_business_fact_supersession
 from runtime.state.state_contract import (
     StateConflictRecord,
     StateEvidenceRef,
@@ -12,10 +13,97 @@ from runtime.state.state_contract import (
     StateObservation,
     StateSynthesizedSnapshot,
 )
+from runtime.state.state_freshness_policy import NON_DECISION_FRESHNESS_STATUSES, StateFreshnessPolicy
+from runtime.state.state_identity import build_state_id
 from runtime.state.state_provenance import provenance_hash, provenance_payload, validate_record_provenance
+from runtime.state.state_unknown_semantics import classify_value_kind
 from runtime.state.world_model_semantic_projector import project_world_model_semantics
 
 CANON_STATE_SNAPSHOT_STORE = True
+
+
+def _recompute_current_record_freshness(
+    record: StateFieldRecord,
+    *,
+    envelope: dict[str, Any],
+    tenant_id: str,
+    business_id: str,
+    now_ms: int,
+) -> StateFieldRecord:
+    original_meta = envelope.get("meta")
+    if not isinstance(original_meta, dict):
+        raise ValueError(f"state record provenance envelope meta is invalid: {record.field_path}")
+    observation = StateObservation(
+        field_path=str(envelope.get("field_path") or record.field_path),
+        value=envelope.get("value"),
+        source=str(envelope.get("source") or record.source),
+        observed_at_ms=int(envelope.get("observed_at_ms") or 0),
+        recorded_at_ms=int(envelope.get("recorded_at_ms") or envelope.get("observed_at_ms") or 0),
+        occurred_at_ms=None if envelope.get("occurred_at_ms") is None else int(envelope["occurred_at_ms"]),
+        valid_from_ms=None if envelope.get("valid_from_ms") is None else int(envelope["valid_from_ms"]),
+        valid_until_ms=None if envelope.get("valid_until_ms") is None else int(envelope["valid_until_ms"]),
+        superseded_at_ms=None if envelope.get("superseded_at_ms") is None else int(envelope["superseded_at_ms"]),
+        confidence=float(envelope.get("confidence") if envelope.get("confidence") is not None else record.confidence),
+        source_priority=int(envelope.get("source_priority") or 0),
+        authoritative=bool(envelope.get("authoritative")),
+        ttl_ms=None if envelope.get("ttl_ms") is None else int(envelope["ttl_ms"]),
+        unknown=bool(envelope.get("unknown")),
+        absent=bool(envelope.get("absent")),
+        evidence_refs=tuple(record.evidence_refs),
+        semantic_kind=str(envelope.get("semantic_kind") or record.semantic_kind),
+        meta=dict(original_meta),
+        tenant_id=tenant_id,
+        business_id=business_id,
+    )
+    freshness = StateFreshnessPolicy().evaluate(now_ms=int(now_ms), observation=observation)
+    meta = dict(record.meta)
+    meta["effective_ttl_ms"] = freshness.effective_ttl_ms
+    meta["age_ms"] = freshness.age_ms
+    return replace(
+        record,
+        value_kind=classify_value_kind(
+            value=record.value,
+            unknown=bool(envelope.get("unknown")),
+            absent=bool(envelope.get("absent")),
+            stale=freshness.status in NON_DECISION_FRESHNESS_STATUSES or freshness.status == "stale",
+            conflict=bool(record.conflict),
+        ),
+        freshness_status=freshness.status,
+        freshness_reason=freshness.reason,
+        superseded_at_ms=observation.superseded_at_ms,
+        meta=meta,
+    )
+
+
+def _validate_current_conflict_consistency(
+    conflict: StateConflictRecord,
+    field: StateFieldRecord,
+) -> None:
+    field_status = str(field.meta.get("conflict_status") or "")
+    field_policy = str(field.meta.get("resolution_policy") or "")
+    if conflict.status == "resolved":
+        if field.conflict or field_status != "resolved":
+            raise ValueError(f"current state resolved conflict field mismatch: {conflict.field_path}")
+        if str(field.meta.get("resolved_conflict_id") or "") != conflict.conflict_id:
+            raise ValueError(f"current state resolved conflict identity mismatch: {conflict.field_path}")
+        if field_policy != conflict.resolution_policy:
+            raise ValueError(f"current state resolved conflict policy mismatch: {conflict.field_path}")
+        if conflict.resolution_policy != "human_evidence_bound_resolution@v1":
+            raise ValueError(f"current state resolved conflict policy is invalid: {conflict.field_path}")
+        field_evidence = tuple(str(item) for item in field.meta.get("resolution_evidence_refs") or ())
+        if field_evidence != tuple(conflict.resolution_evidence_refs):
+            raise ValueError(f"current state resolved conflict evidence mismatch: {conflict.field_path}")
+        if not str(field.meta.get("resolved_by") or "").strip():
+            raise ValueError(f"current state resolved conflict actor is missing: {conflict.field_path}")
+        if int(field.meta.get("resolved_at_ms") or -1) < int(conflict.detected_at_ms):
+            raise ValueError(f"current state resolved conflict timestamp is invalid: {conflict.field_path}")
+        return
+    if not field.conflict or field_status != conflict.status:
+        raise ValueError(f"current state conflict status mismatch: {conflict.field_path}")
+    if field_policy != conflict.resolution_policy:
+        raise ValueError(f"current state conflict policy mismatch: {conflict.field_path}")
+    if field.meta.get("resolved_conflict_id"):
+        raise ValueError(f"current state unresolved conflict carries resolution identity: {conflict.field_path}")
 
 
 @dataclass
@@ -45,6 +133,7 @@ def snapshot_from_dict(
 ) -> StateSynthesizedSnapshot:
     tenant_id = str(payload.get("tenant_id") or "")
     business_id = str(payload.get("business_id") or "")
+    synthesized_at_ms = int(payload.get("synthesized_at_ms") or 0)
     schema_version = str(payload.get("schema_version") or "state_synthesis@v1")
     if schema_version not in {"state_synthesis@v1", "state_synthesis@v2"}:
         raise ValueError(f"unsupported state snapshot schema_version: {schema_version}")
@@ -159,7 +248,23 @@ def snapshot_from_dict(
             )
         else:
             validate_record_provenance(record=record, tenant_id=tenant_id, business_id=business_id)
+            record = _recompute_current_record_freshness(
+                record,
+                envelope=envelope,
+                tenant_id=tenant_id,
+                business_id=business_id,
+                now_ms=synthesized_at_ms,
+            )
         fields[field_path] = record
+
+    if not legacy_schema:
+        fields = apply_business_fact_supersession(
+            fields=fields,
+            now_ms=synthesized_at_ms,
+            tenant_id=tenant_id,
+            business_id=business_id,
+            freshness_policy=StateFreshnessPolicy(),
+        )
 
     conflicts = []
     for item in payload.get("conflicts") or []:
@@ -188,8 +293,7 @@ def snapshot_from_dict(
                 raise ValueError(f"current state conflict candidate sources are invalid: {field_path}")
         elif migrated_chosen != chosen_hash or candidate_hashes != original_candidate_hashes:
             conflict_id = ""
-        conflicts.append(
-            StateConflictRecord(
+        conflict_record = StateConflictRecord(
                 field_path=field_path,
                 tenant_id=conflict_tenant_id,
                 business_id=conflict_business_id,
@@ -205,13 +309,26 @@ def snapshot_from_dict(
                 resolution_policy=str(item.get("resolution_policy") or "ranked_state_conflict_policy@v1"),
                 resolution_evidence_refs=tuple(str(x) for x in item.get("resolution_evidence_refs") or ()),
             )
+        if not legacy_schema:
+            _validate_current_conflict_consistency(conflict_record, fields[field_path])
+        conflicts.append(conflict_record)
+
+    if not legacy_schema:
+        expected_state_id = build_state_id(
+            tenant_id=tenant_id,
+            business_id=business_id,
+            now_ms=synthesized_at_ms,
+            fields=fields,
+            conflicts=tuple(conflicts),
         )
+        if str(payload.get("state_id") or "") != expected_state_id:
+            raise ValueError("current state snapshot identity mismatch")
 
     snapshot = StateSynthesizedSnapshot(
         state_id=str(payload.get("state_id") or ""),
         tenant_id=tenant_id,
         business_id=business_id,
-        synthesized_at_ms=int(payload.get("synthesized_at_ms") or 0),
+        synthesized_at_ms=synthesized_at_ms,
         schema_version=("state_synthesis@v2" if legacy_schema else schema_version),
         values=dict(payload.get("values") or {}),
         fields=fields,
