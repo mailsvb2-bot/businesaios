@@ -4,6 +4,7 @@ from storage.audit_store import AuditRecord, InMemoryAuditStore, PostgresAuditSt
 from storage.evidence_store import (
     EVIDENCE_LINEAGE_STAGES,
     EvidenceRecord,
+    EvidenceStore,
     InMemoryEvidenceStore,
     PostgresEvidenceStore,
     SqliteEvidenceStore,
@@ -38,6 +39,7 @@ __all__ = [
     "CANON_STORAGE_PACKAGE_OWNER",
     "EVIDENCE_LINEAGE_STAGES",
     "EvidenceRecord",
+    "EvidenceStore",
     "InMemoryAuditStore",
     "InMemoryEvidenceStore",
     "InferenceExecutionRecordRepository",

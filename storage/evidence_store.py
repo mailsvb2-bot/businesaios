@@ -7,7 +7,7 @@ from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from hashlib import sha256
 from threading import RLock
-from typing import Any
+from typing import Any, Protocol, runtime_checkable
 
 from governance.persistence_codec import to_jsonable
 from storage.migration_registry import MigrationRegistry, default_storage_migration_registry
@@ -275,6 +275,19 @@ class EvidenceRecord:
         return record
 
 
+@runtime_checkable
+class EvidenceStore(Protocol):
+    def append(self, record: EvidenceRecord) -> EvidenceRecord: ...
+
+    def get(self, evidence_id: str) -> EvidenceRecord | None: ...
+
+    def list_for_tenant(
+        self, *, tenant_id: str, run_id: str | None = None, limit: int = 100
+    ) -> tuple[EvidenceRecord, ...]: ...
+
+    def delete_expired(self, *, now: datetime | None = None) -> int: ...
+
+
 class InMemoryEvidenceStore:
     def __init__(self) -> None:
         self._items: dict[str, EvidenceRecord] = {}
@@ -466,6 +479,7 @@ __all__ = [
     "CANON_STORAGE_EVIDENCE_RECORD_EXPLICIT_LEGACY_FACTORY",
     "EVIDENCE_LINEAGE_STAGES",
     "EvidenceRecord",
+    "EvidenceStore",
     "InMemoryEvidenceStore",
     "SqliteEvidenceStore",
     "PostgresEvidenceStore",

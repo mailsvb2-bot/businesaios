@@ -5,7 +5,13 @@ from dataclasses import fields
 from pathlib import Path
 
 from canon.business_ontology_inventory import OwnershipAuditStatus, ontology_ownership_by_entity
-from storage.evidence_store import CANON_STORAGE_EVIDENCE_STORE, EVIDENCE_LINEAGE_STAGES, EvidenceRecord
+from storage.evidence_store import (
+    CANON_STORAGE_EVIDENCE_STORE,
+    EVIDENCE_LINEAGE_STAGES,
+    EvidenceRecord,
+    EvidenceStore,
+    InMemoryEvidenceStore,
+)
 
 
 def test_evidence_has_one_selected_canonical_owner() -> None:
@@ -14,6 +20,7 @@ def test_evidence_has_one_selected_canonical_owner() -> None:
     assert row.authoritative_module == "storage.evidence_store"
     assert row.storage_owner == "storage.evidence_store"
     assert CANON_STORAGE_EVIDENCE_STORE is True
+    assert isinstance(InMemoryEvidenceStore(), EvidenceStore)
 
 
 def test_canonical_evidence_contract_contains_phase3_fields_and_lineage() -> None:
