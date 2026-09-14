@@ -1,13 +1,21 @@
 from __future__ import annotations
 
-import hashlib
-import json
 from dataclasses import dataclass, field
-from typing import Any
 
 from runtime.market.market_snapshot import MarketSnapshot
 from runtime.market.segment_trend_state import SegmentTrendState
+from runtime.state.business_fact_lifecycle import (
+    apply_business_fact_supersession,
+    validate_business_fact_observation,
+)
 from runtime.state.state_compaction import StateCompactor
+from runtime.state.state_conflict_resolution import (
+    apply_conflict_resolution,
+    base_observation_from_record,
+    carry_unresolved_conflict,
+    unresolved_base_conflict,
+    validate_conflict_resolutions,
+)
 from runtime.state.state_conflict_resolver import StateConflictResolver
 from runtime.state.state_contract import (
     StateAuditTrailPort,
@@ -17,7 +25,10 @@ from runtime.state.state_contract import (
     StateSynthesisRequest,
     StateSynthesizedSnapshot,
 )
-from runtime.state.state_freshness_policy import StateFreshnessPolicy
+from runtime.state.state_freshness_policy import NON_DECISION_FRESHNESS_STATUSES, StateFreshnessPolicy
+from runtime.state.state_identity import build_state_id
+from runtime.state.state_value_projection import materialize_state_values
+from runtime.state.world_model_semantic_projector import project_world_model_semantics
 
 CANON_STATE_SYNTHESIS_ENGINE = True
 STATE_SYNTHESIS_DOES_NOT_OWN_DECISIONS = True
@@ -35,6 +46,12 @@ class StateSynthesisEngine:
         self._resolver = StateConflictResolver(freshness_policy=self.freshness_policy)
 
     def synthesize(self, request: StateSynthesisRequest) -> StateSynthesizedSnapshot:
+        for observation in request.observations:
+            validate_business_fact_observation(
+                observation,
+                tenant_id=request.tenant_id,
+                business_id=request.business_id,
+            )
         base_snapshot = request.base_snapshot
         if base_snapshot is None and self.snapshot_store is not None:
             base_snapshot = self.snapshot_store.load_latest(
@@ -42,31 +59,73 @@ class StateSynthesisEngine:
                 business_id=request.business_id,
             )
 
+        resolution_by_path = validate_conflict_resolutions(request=request, base_snapshot=base_snapshot)
         grouped = self._group_observations(request.observations)
         if base_snapshot is not None:
-            grouped = self._merge_base_snapshot(grouped=grouped, base_snapshot=base_snapshot)
+            grouped = self._merge_base_snapshot(
+                grouped=grouped,
+                base_snapshot=base_snapshot,
+                now_ms=request.now_ms,
+            )
 
         fields = {}
-        conflicts = []
+        conflicts = (
+            []
+            if base_snapshot is None
+            else [item for item in base_snapshot.conflicts if item.status == "resolved"]
+        )
 
         for field_path, observations in sorted(grouped.items()):
             resolved = self._resolver.resolve(
                 now_ms=request.now_ms,
                 field_path=field_path,
                 observations=tuple(observations),
+                tenant_id=request.tenant_id,
+                business_id=request.business_id,
             )
-            fields[field_path] = resolved.record
-            if resolved.conflict is not None:
+            record = resolved.record
+            base_conflict = unresolved_base_conflict(base_snapshot=base_snapshot, field_path=field_path)
+            resolution = resolution_by_path.get(field_path)
+            if base_conflict is not None and resolution is not None:
+                record, resolved_conflict = apply_conflict_resolution(
+                    resolve_field=self._resolver.resolve,
+                    freshness_policy=self.freshness_policy,
+                    request=request,
+                    base_snapshot=base_snapshot,
+                    conflict=base_conflict,
+                    resolution=resolution,
+                )
+                conflicts.append(resolved_conflict)
+            elif base_conflict is not None:
+                record, carried_conflict = carry_unresolved_conflict(
+                    resolve_field=self._resolver.resolve,
+                    freshness_policy=self.freshness_policy,
+                    now_ms=request.now_ms,
+                    base_snapshot=base_snapshot,
+                    conflict=base_conflict,
+                    incoming_observations=tuple(observations),
+                )
+                conflicts.append(carried_conflict)
+            elif resolved.conflict is not None:
                 conflicts.append(resolved.conflict)
+            fields[field_path] = record
 
-        values = self._materialize_values(fields)
+        fields = apply_business_fact_supersession(
+            fields=fields,
+            now_ms=request.now_ms,
+            tenant_id=request.tenant_id,
+            business_id=request.business_id,
+            freshness_policy=self.freshness_policy,
+        )
+        values = materialize_state_values(fields)
 
         snapshot = StateSynthesizedSnapshot(
-            state_id=self._build_state_id(
+            state_id=build_state_id(
                 tenant_id=request.tenant_id,
                 business_id=request.business_id,
                 now_ms=request.now_ms,
                 fields=fields,
+                conflicts=tuple(conflicts),
             ),
             tenant_id=request.tenant_id,
             business_id=request.business_id,
@@ -86,6 +145,20 @@ class StateSynthesisEngine:
         )
 
         snapshot = self.compactor.compact(snapshot)
+        snapshot = StateSynthesizedSnapshot(
+            state_id=snapshot.state_id,
+            tenant_id=snapshot.tenant_id,
+            business_id=snapshot.business_id,
+            synthesized_at_ms=snapshot.synthesized_at_ms,
+            schema_version=snapshot.schema_version,
+            values=dict(snapshot.values),
+            fields=dict(snapshot.fields),
+            conflicts=tuple(snapshot.conflicts),
+            source_watermarks=dict(snapshot.source_watermarks),
+            audit=dict(snapshot.audit),
+            meta=dict(snapshot.meta),
+            semantic_view=project_world_model_semantics(snapshot),
+        )
 
         if self.snapshot_store is not None:
             self.snapshot_store.save_snapshot(snapshot)
@@ -98,8 +171,15 @@ class StateSynthesisEngine:
 
     def _group_observations(self, observations: tuple[StateObservation, ...]) -> dict[str, list[StateObservation]]:
         grouped: dict[str, list[StateObservation]] = {}
+        semantic_kinds_by_path: dict[str, set[str]] = {}
         for item in observations:
-            grouped.setdefault(str(item.field_path), []).append(item)
+            field_path = str(item.field_path)
+            semantic_kinds_by_path.setdefault(field_path, set()).add(str(item.semantic_kind))
+            grouped.setdefault(field_path, []).append(item)
+        mixed = {path: kinds for path, kinds in semantic_kinds_by_path.items() if len(kinds) > 1}
+        if mixed:
+            details = ", ".join(f"{path}={sorted(kinds)}" for path, kinds in sorted(mixed.items()))
+            raise ValueError(f"mixed epistemic kinds for the same field_path are forbidden: {details}")
         return grouped
 
     def _merge_base_snapshot(
@@ -107,41 +187,37 @@ class StateSynthesisEngine:
         *,
         grouped: dict[str, list[StateObservation]],
         base_snapshot: StateSynthesizedSnapshot,
+        now_ms: int,
     ) -> dict[str, list[StateObservation]]:
         merged = {key: list(value) for key, value in grouped.items()}
         for field_path, record in base_snapshot.fields.items():
             if field_path in merged:
+                incoming_kinds = {str(item.semantic_kind) for item in merged[field_path]}
+                if incoming_kinds != {str(record.semantic_kind)}:
+                    raise ValueError(
+                        "mixed epistemic kinds for the same field_path are forbidden across snapshots: "
+                        f"{field_path}={sorted(incoming_kinds | {str(record.semantic_kind)})}"
+                    )
+            base_observation = base_observation_from_record(
+                base_snapshot=base_snapshot,
+                field_path=field_path,
+                record=record,
+            )
+            if field_path not in merged:
+                merged[field_path] = [base_observation]
                 continue
-            merged[field_path] = [
-                StateObservation(
-                    field_path=field_path,
-                    value=record.value,
-                    source=f"snapshot:{record.source}",
-                    observed_at_ms=int(record.observed_at_ms),
-                    recorded_at_ms=int(record.recorded_at_ms),
-                    confidence=float(record.confidence),
-                    source_priority=int(record.source_priority),
-                    authoritative=bool(record.authoritative),
-                    ttl_ms=record.meta.get("effective_ttl_ms"),
-                    unknown=record.value_kind == "unknown",
-                    absent=record.value_kind == "absent",
-                    evidence_refs=tuple(record.evidence_refs),
-                    meta={"hydrated_from_state_id": base_snapshot.state_id},
-                )
-            ]
+            incoming_not_decision_eligible = all(
+                self.freshness_policy.evaluate(now_ms=now_ms, observation=item).status
+                in NON_DECISION_FRESHNESS_STATUSES
+                for item in merged[field_path]
+            )
+            base_is_decision_eligible = (
+                self.freshness_policy.evaluate(now_ms=now_ms, observation=base_observation).status
+                not in NON_DECISION_FRESHNESS_STATUSES
+            )
+            if incoming_not_decision_eligible and base_is_decision_eligible:
+                merged[field_path].append(base_observation)
         return merged
-
-    def _materialize_values(self, fields: dict[str, Any]) -> dict[str, Any]:
-        root: dict[str, Any] = {}
-        for field_path, record in fields.items():
-            target = root
-            parts = [part for part in str(field_path).split(".") if part]
-            if not parts:
-                continue
-            for part in parts[:-1]:
-                target = target.setdefault(part, {})
-            target[parts[-1]] = record.value
-        return root
 
     def _source_watermarks(
         self,
@@ -153,16 +229,6 @@ class StateSynthesisEngine:
         for item in observations:
             watermarks[str(item.source)] = max(int(item.observed_at_ms), int(watermarks.get(str(item.source), 0) or 0))
         return watermarks
-
-    def _build_state_id(self, *, tenant_id: str, business_id: str, now_ms: int, fields: dict[str, Any]) -> str:
-        payload = {
-            "tenant_id": str(tenant_id),
-            "business_id": str(business_id),
-            "now_ms": int(now_ms),
-            "fields": {key: value.provenance_hash for key, value in sorted(fields.items())},
-        }
-        encoded = json.dumps(payload, ensure_ascii=False, sort_keys=True, separators=(",", ":")).encode("utf-8")
-        return hashlib.sha256(encoded).hexdigest()[:24]
 
 
 def build_world_state_observations(
@@ -216,10 +282,46 @@ def build_world_state_observations(
                 authoritative=True,
             )
         )
-    observations.extend(_mapping_observations(prefix="world.architecture_state", source="architecture_state", values=architecture_state, observed_at_ms=generated_at_ms, source_priority=100, authoritative=True))
-    observations.extend(_mapping_observations(prefix="world.structure_state", source="structure_state", values=structure_state, observed_at_ms=generated_at_ms, source_priority=100, authoritative=True))
-    observations.extend(_mapping_observations(prefix="world.flow_state", source="flow_state", values=flow_state, observed_at_ms=generated_at_ms, source_priority=100, authoritative=True))
-    observations.extend(_mapping_observations(prefix="world.diffusion_state", source="diffusion_state", values=diffusion_state, observed_at_ms=generated_at_ms, source_priority=100, authoritative=True))
+    observations.extend(
+        _mapping_observations(
+            prefix="world.architecture_state",
+            source="architecture_state",
+            values=architecture_state,
+            observed_at_ms=generated_at_ms,
+            source_priority=100,
+            authoritative=True,
+        )
+    )
+    observations.extend(
+        _mapping_observations(
+            prefix="world.structure_state",
+            source="structure_state",
+            values=structure_state,
+            observed_at_ms=generated_at_ms,
+            source_priority=100,
+            authoritative=True,
+        )
+    )
+    observations.extend(
+        _mapping_observations(
+            prefix="world.flow_state",
+            source="flow_state",
+            values=flow_state,
+            observed_at_ms=generated_at_ms,
+            source_priority=100,
+            authoritative=True,
+        )
+    )
+    observations.extend(
+        _mapping_observations(
+            prefix="world.diffusion_state",
+            source="diffusion_state",
+            values=diffusion_state,
+            observed_at_ms=generated_at_ms,
+            source_priority=100,
+            authoritative=True,
+        )
+    )
     return tuple(observations)
 
 
@@ -236,18 +338,23 @@ def apply_synthesized_world_view(
     world = dict(snapshot.values.get("world") or {})
 
     user_state = _as_mapping(world.get("user_state"), fallback_user_observables)
-    market_state_values = _as_mapping(world.get("market_state"), {
-        "global_macro_score": fallback_market_snapshot.global_macro_score,
-        "global_micro_score": fallback_market_snapshot.global_micro_score,
-        "global_competitive_shift": fallback_market_snapshot.global_competitive_shift,
-    })
+    market_state_values = _as_mapping(
+        world.get("market_state"),
+        {
+            "global_macro_score": fallback_market_snapshot.global_macro_score,
+            "global_micro_score": fallback_market_snapshot.global_micro_score,
+            "global_competitive_shift": fallback_market_snapshot.global_competitive_shift,
+        },
+    )
     architecture_state = _float_mapping(_as_mapping(world.get("architecture_state"), fallback_architecture_state))
     structure_state = _float_mapping(_as_mapping(world.get("structure_state"), fallback_structure_state))
     flow_state = _float_mapping(_as_mapping(world.get("flow_state"), fallback_flow_state))
     diffusion_state = _float_mapping(_as_mapping(world.get("diffusion_state"), fallback_diffusion_state))
 
     segment_states = fallback_market_snapshot.segment_states
-    raw_segments = world.get("market_state", {}).get("segments") if isinstance(world.get("market_state"), dict) else None
+    raw_segments = (
+        world.get("market_state", {}).get("segments") if isinstance(world.get("market_state"), dict) else None
+    )
     if isinstance(raw_segments, dict) and raw_segments:
         rebuilt_segments: list[SegmentTrendState] = []
         for segment_key, raw_values in sorted(raw_segments.items()):
@@ -264,9 +371,15 @@ def apply_synthesized_world_view(
         segment_states = tuple(rebuilt_segments)
 
     market_snapshot = MarketSnapshot(
-        global_macro_score=float(market_state_values.get("global_macro_score", fallback_market_snapshot.global_macro_score)),
-        global_micro_score=float(market_state_values.get("global_micro_score", fallback_market_snapshot.global_micro_score)),
-        global_competitive_shift=float(market_state_values.get("global_competitive_shift", fallback_market_snapshot.global_competitive_shift)),
+        global_macro_score=float(
+            market_state_values.get("global_macro_score", fallback_market_snapshot.global_macro_score)
+        ),
+        global_micro_score=float(
+            market_state_values.get("global_micro_score", fallback_market_snapshot.global_micro_score)
+        ),
+        global_competitive_shift=float(
+            market_state_values.get("global_competitive_shift", fallback_market_snapshot.global_competitive_shift)
+        ),
         segment_states=segment_states,
     )
 
@@ -280,7 +393,15 @@ def apply_synthesized_world_view(
     )
 
 
-def _mapping_observations(*, prefix: str, source: str, values: dict[str, object], observed_at_ms: int, source_priority: int, authoritative: bool) -> list[StateObservation]:
+def _mapping_observations(
+    *,
+    prefix: str,
+    source: str,
+    values: dict[str, object],
+    observed_at_ms: int,
+    source_priority: int,
+    authoritative: bool,
+) -> list[StateObservation]:
     observations: list[StateObservation] = []
     for key, value in sorted(values.items()):
         observations.append(

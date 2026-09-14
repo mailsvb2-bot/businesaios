@@ -35,6 +35,7 @@ def assemble_world_state(
     reward_signal: RewardSignalContract,
     history_summary: HistorySummary | None = None,
     advisory_flags: dict[str, str] | None = None,
+    world_model_semantics: Mapping[str, object] | None = None,
     notes: tuple[str, ...] = (),
 ) -> DecisionContextProjection:
     assert_world_state_boundary(dict(advisory_flags or {}))
@@ -58,5 +59,6 @@ def assemble_world_state(
             **({} if history_summary is None else history_summary.as_dict()),
         },
         advisory_flags=dict(advisory_flags or {}),
+        world_model_semantics=dict(world_model_semantics or {}),
         notes=tuple(notes),
     )

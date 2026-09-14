@@ -5,6 +5,8 @@ from dataclasses import dataclass, field
 from runtime.state.state_contract import StateObservation
 
 CANON_STATE_FRESHNESS_POLICY = True
+TEMPORALLY_INVALID_FRESHNESS_STATUSES = frozenset({"not_yet_valid", "expired", "superseded"})
+NON_DECISION_FRESHNESS_STATUSES = TEMPORALLY_INVALID_FRESHNESS_STATUSES | frozenset({"invalid_future"})
 
 
 @dataclass(frozen=True)
@@ -39,7 +41,9 @@ class StateFreshnessPolicy:
             normalized = str(prefix).strip(".")
             if not normalized:
                 continue
-            if (field_path == normalized or field_path.startswith(normalized + ".")) and len(normalized) > len(best_prefix):
+            if (field_path == normalized or field_path.startswith(normalized + ".")) and len(normalized) > len(
+                best_prefix
+            ):
                 best_prefix = normalized
                 best_policy = policy
 
@@ -57,6 +61,28 @@ class StateFreshnessPolicy:
         effective_ttl_ms = observation.ttl_ms if observation.ttl_ms is not None else policy.ttl_ms
         observed_at_ms = int(observation.observed_at_ms)
         age_ms = int(now_ms) - observed_at_ms
+
+        if observation.valid_from_ms is not None and int(now_ms) < int(observation.valid_from_ms):
+            return FreshnessDecision(
+                status="not_yet_valid",
+                reason="before_valid_from",
+                effective_ttl_ms=effective_ttl_ms,
+                age_ms=age_ms,
+            )
+        if observation.superseded_at_ms is not None and int(now_ms) >= int(observation.superseded_at_ms):
+            return FreshnessDecision(
+                status="superseded",
+                reason="superseded_at_reached",
+                effective_ttl_ms=effective_ttl_ms,
+                age_ms=age_ms,
+            )
+        if observation.valid_until_ms is not None and int(now_ms) > int(observation.valid_until_ms):
+            return FreshnessDecision(
+                status="expired",
+                reason="after_valid_until",
+                effective_ttl_ms=effective_ttl_ms,
+                age_ms=age_ms,
+            )
 
         if age_ms < 0:
             if abs(age_ms) > int(policy.max_future_skew_ms):

@@ -21,6 +21,6 @@ Rule:
 - `interfaces/` owns **boundary adapters, connectors, and delivery surfaces**.
 - sovereign `Decision` / signed `DecisionEnvelope` definitions are owned by `contracts/decisioning/sovereign_decision_contract.py`; `core/ai/decision_contracts.py` is compatibility-only and must not redefine them.
 - `DecisionContextProjection` is advisory input only; the sovereign world state remains `kernel.world_state.WorldStateV1`.
-- `BusinessFactV1`, `ActionIntentV1`, `PolicyDecisionV1`, and `BusinessOutcomeV1` are canonical semantic contracts; application/runtime layers may project or consume them but must not redefine them.
+- `BusinessFactV1`, `WorldModelSemanticRecordV1`, `WorldModelSemanticViewV1`, `ActionIntentV1`, `PolicyDecisionV1`, and `BusinessOutcomeV1` are canonical semantic contracts; application/runtime layers may project or consume them but must not redefine them. The semantic view classifies knowledge as fact/state/belief/assumption/goal/constraint/opportunity/risk/hypothesis/forecast/preference/recommendation/unknown, carries temporal/provenance metadata, and never creates a second `WorldState`.
 - `Customer`, `CustomerIdentity`, and `CustomerTimeline` are canonical customer semantic contracts owned by `contracts/customer.py`; `crm/` owns customer operations and read projections while the canonical EventStore remains chronology truth.
 - Future versioned `Execution`, `Evaluation`, capability and delegated-authority contracts extend this surface instead of creating parallel semantic owners.

@@ -98,14 +98,16 @@ def resolve_world_state_inputs(
             meta={"surface": "runtime.integration.world_state_integration_service"},
         )
     )
-    user_observables, market_snapshot, architecture_state, structure_state, flow_state, diffusion_state = apply_world_view_with_policy(
-        snapshot=synthesized_state,
-        user_observables=user_observables,
-        market_snapshot=market_snapshot,
-        architecture_state=architecture_state,
-        structure_state=structure_state,
-        flow_state=flow_state,
-        diffusion_state=diffusion_state,
+    user_observables, market_snapshot, architecture_state, structure_state, flow_state, diffusion_state = (
+        apply_world_view_with_policy(
+            snapshot=synthesized_state,
+            user_observables=user_observables,
+            market_snapshot=market_snapshot,
+            architecture_state=architecture_state,
+            structure_state=structure_state,
+            flow_state=flow_state,
+            diffusion_state=diffusion_state,
+        )
     )
     return {
         "notes": notes,
@@ -152,7 +154,9 @@ def empty_creative_snapshot() -> CreativeIntelligenceSnapshot:
     )
 
 
-def build_world_state_reward_signal(*, creative_snapshots: tuple[CreativeIntelligenceSnapshot, ...], resolved: Mapping[str, object]) -> float:
+def build_world_state_reward_signal(
+    *, creative_snapshots: tuple[CreativeIntelligenceSnapshot, ...], resolved: Mapping[str, object]
+) -> float:
     return build_reward_signal_from_world_view(
         creative_snapshots=creative_snapshots,
         architecture_state=resolved["architecture_state"],
@@ -173,7 +177,13 @@ def emit_world_state_observed_trace(*, observability, generated_at_ms: int, synt
     )
 
 
-def emit_world_state_materialized_trace(*, observability, generated_at_ms: int, advisory_packet: AutonomyAdvisoryPacket, history_summary: HistorySummary | None) -> None:
+def emit_world_state_materialized_trace(
+    *,
+    observability,
+    generated_at_ms: int,
+    advisory_packet: AutonomyAdvisoryPacket,
+    history_summary: HistorySummary | None,
+) -> None:
     observability.record_world_state_trace(
         trace_name="decision_input_packet",
         stage="materialized",
@@ -183,7 +193,9 @@ def emit_world_state_materialized_trace(*, observability, generated_at_ms: int, 
     )
 
 
-def emit_world_state_packet_metrics(*, observability, advisory_packet: AutonomyAdvisoryPacket, history_summary: HistorySummary | None) -> None:
+def emit_world_state_packet_metrics(
+    *, observability, advisory_packet: AutonomyAdvisoryPacket, history_summary: HistorySummary | None
+) -> None:
     observability.record_advisory_packet_built(
         packet_name="decision_input_packet",
         recommendation_count=len(advisory_packet.recommendations),
@@ -222,6 +234,11 @@ def materialize_world_state_packet(
         reward_signal=reward_signal,
         history_summary=None,
         advisory_flags={"packet_name": advisory_packet.packet_name},
+        world_model_semantics=(
+            {}
+            if resolved["synthesized_state"].semantic_view is None
+            else resolved["synthesized_state"].semantic_view.as_dict()
+        ),
         notes=advisory_notes,
     )
     history_summary: HistorySummary | None = None
@@ -239,6 +256,11 @@ def materialize_world_state_packet(
             reward_signal=reward_signal,
             history_summary=history_summary,
             advisory_flags={"packet_name": advisory_packet.packet_name},
+            world_model_semantics=(
+                {}
+                if resolved["synthesized_state"].semantic_view is None
+                else resolved["synthesized_state"].semantic_view.as_dict()
+            ),
             notes=advisory_notes,
         )
     packet = build_recommendation_packet(

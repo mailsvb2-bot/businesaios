@@ -51,21 +51,25 @@ def test_mandatory_ci_concurrency_is_scoped_to_target_identity() -> None:
         assert "group: ${{ github.workflow }}-${{ github.ref }}" not in text
 
 
-def test_targeted_ci_uses_pre_change_base_for_push_and_merged_events() -> None:
+def test_targeted_ci_uses_pre_change_base_without_network_fetch_for_pr_push_and_merged_events() -> None:
     text = (ROOT / ".github/workflows/targeted-domain-ci.yml").read_text(encoding="utf-8")
     assert "BAIOS_TARGETED_BASE_SHA:" in text
     assert "github.event_name == 'push' && github.event.before" in text
+    assert "github.event_name == 'pull_request' && github.event.pull_request.base.sha" in text
     assert "github.event_name == 'pull_request_target'" in text
     assert "github.event.pull_request.base.sha" in text
     assert 'if [ -n "$BAIOS_TARGETED_BASE_SHA" ]; then' in text
-    assert 'TARGETED_CI_BASE=$BAIOS_TARGETED_BASE_SHA' in text
-    assert 'TARGETED_CI_BASE=origin/main' in text
+    assert "TARGETED_CI_BASE=$BAIOS_TARGETED_BASE_SHA" in text
+    assert "TARGETED_CI_BASE=origin/main" in text
     assert "TARGETED_CI_BASE: origin/main" not in text
 
 
 def test_deep_release_keeps_untrusted_pr_head_blocked_but_allows_merged_commit() -> None:
     text = (ROOT / ".github/workflows/deep-release-validation.yml").read_text(encoding="utf-8")
-    assert "github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository" in text
+    assert (
+        "github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository"
+        in text
+    )
     assert MERGED_TARGET_GUARD in text
     assert "GIT_COMMIT_SHA: ${{ env.BAIOS_CI_TARGET_SHA }}" in text
     assert "deep-release-${{ env.BAIOS_CI_TARGET_SHA }}" in text

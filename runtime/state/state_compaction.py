@@ -38,8 +38,14 @@ class StateCompactor:
                 authoritative=record.authoritative,
                 provenance_hash=record.provenance_hash,
                 evidence_refs=record.evidence_refs,
+                occurred_at_ms=record.occurred_at_ms,
+                valid_from_ms=record.valid_from_ms,
+                valid_until_ms=record.valid_until_ms,
+                superseded_at_ms=record.superseded_at_ms,
+                semantic_kind=record.semantic_kind,
                 candidates_considered=record.candidates_considered,
                 conflict=record.conflict,
+                provenance_envelope=dict(record.provenance_envelope),
                 meta=meta,
             )
 
@@ -59,4 +65,5 @@ class StateCompactor:
             source_watermarks=dict(snapshot.source_watermarks),
             audit=audit,
             meta=dict(snapshot.meta),
+            semantic_view=snapshot.semantic_view,
         )

@@ -1,6 +1,7 @@
-from dataclasses import dataclass, asdict, field
-from typing import Any, Dict, Optional
+from dataclasses import asdict, dataclass, field
+from typing import Any
 
+from contracts.world_model_semantics import WorldModelSemanticViewV1
 from core.utils.canonical import canonical_json_bytes
 
 
@@ -15,18 +16,18 @@ class WorldStateV1:
     """
 
     schema_version: int
-    user: Dict[str, Any]
-    session: Dict[str, Any]
-    product: Dict[str, Any]
-    economy: Dict[str, Any]
+    user: dict[str, Any]
+    session: dict[str, Any]
+    product: dict[str, Any]
+    economy: dict[str, Any]
     timestamp_ms: int
 
     # Tenant isolation (must be propagated everywhere)
     tenant_id: str = "default"
-    meta: Dict[str, Any] = field(default_factory=dict)
+    meta: dict[str, Any] = field(default_factory=dict)
 
     # Additional canonical fields:
-    user_id: Optional[str] = None
+    user_id: str | None = None
     safe_mode: bool = False
 
     # Economic governance fields (required in strict prod)
@@ -34,17 +35,20 @@ class WorldStateV1:
     horizon_state: str = "stable"
 
     # Behavioral snapshot (read-model input for DecisionCore; optional)
-    behavior: Optional[Dict[str, Any]] = None
+    behavior: dict[str, Any] | None = None
 
     # DecisionCore-issued constraints for pricing/offer selection (no second brain)
     # Example: {"max_band": "low"|"standard"|"premium"}
-    price_constraints: Optional[Dict[str, Any]] = None
+    price_constraints: dict[str, Any] | None = None
 
     # Self-driving deployment proposal (set by LearningSystem; DecisionCore decides)
-    deployment_proposal: Optional[Dict[str, Any]] = None
+    deployment_proposal: dict[str, Any] | None = None
 
     # Safe human override request (still decided by DecisionCore)
     manual_override: bool = False
+
+    # Canonical semantic view over the same sovereign state; never a second WorldState.
+    world_model_semantics: WorldModelSemanticViewV1 | None = None
 
     def canonical_bytes(self) -> bytes:
         return canonical_json_bytes(asdict(self))
