@@ -6,7 +6,10 @@ from hashlib import sha256
 
 import pytest
 
-from storage.distributed_evidence_audit_backend import DistributedEvidenceStore
+from storage.distributed_evidence_audit_backend import (
+    DistributedEvidenceStore,
+    migrate_legacy_distributed_evidence,
+)
 from storage.evidence_store import (
     EVIDENCE_LINEAGE_STAGES,
     EvidenceRecord,
@@ -144,6 +147,11 @@ class _DistributedEvidencePort:
 
     def read_prefix(self, *, prefix, limit=100, cursor=None):
         return tuple(self.rows[:limit]), None
+
+    def read_prefix_batch(self, *, prefix, after_sequence_id=0, limit=500):
+        start = max(0, int(after_sequence_id))
+        rows = tuple(self.rows[start : start + max(1, int(limit))])
+        return rows, (None if not rows else start + len(rows))
 
 
 def test_distributed_store_has_narrow_legacy_adapter_but_rejects_explicit_downgrade() -> None:
@@ -488,3 +496,72 @@ def test_sqlite_retention_compares_offset_time_in_utc(tmp_path) -> None:
     assert store.get(tenant_id="tenant-a", evidence_id=record.evidence_id) is not None
     assert store.delete_expired(now=datetime(2026, 1, 1, 14, 0, tzinfo=plus_three)) == 1
     assert store.get(tenant_id="tenant-a", evidence_id=record.evidence_id) is None
+
+
+def test_legacy_distributed_evidence_migration_is_batched_idempotent_and_upgrades_v1() -> None:
+    created = datetime(2026, 1, 1, tzinfo=UTC)
+    rows = []
+    for index in range(5):
+        legacy = EvidenceRecord.from_legacy(
+            tenant_id="tenant-a",
+            subject=f"legacy-{index}",
+            evidence_type="trace",
+            payload={"value": index},
+            created_at=created + timedelta(seconds=index),
+            evidence_id=f"legacy-migrate-{index}",
+        )
+        rows.append(legacy.to_row())
+
+    source = _DistributedEvidencePort(rows)
+    target = InMemoryEvidenceStore()
+    assert migrate_legacy_distributed_evidence(source=source, target=target, batch_size=2) == 5
+    assert migrate_legacy_distributed_evidence(source=source, target=target, batch_size=2) == 0
+    assert len(source.rows) == 5
+
+    migrated = target.list_for_tenant(tenant_id="tenant-a", limit=10)
+    assert len(migrated) == 5
+    assert {record.schema_version for record in migrated} == {2}
+    assert {record.evidence_id for record in migrated} == {f"legacy-migrate-{index}" for index in range(5)}
+
+
+def test_legacy_distributed_evidence_migration_fails_closed_on_conflict_or_tamper() -> None:
+    created = datetime(2026, 1, 1, tzinfo=UTC)
+    legacy = EvidenceRecord.from_legacy(
+        tenant_id="tenant-a",
+        subject="legacy",
+        evidence_type="trace",
+        payload={"value": 1},
+        created_at=created,
+        evidence_id="legacy-conflict",
+    )
+    row = legacy.to_row()
+    upgraded = replace(legacy, schema_version=2).normalized_for_write()
+
+    conflict_target = InMemoryEvidenceStore()
+    conflict_target.append(replace(upgraded, payload={"value": 999}))
+    with pytest.raises(ValueError, match="conflicts with canonical evidence"):
+        migrate_legacy_distributed_evidence(
+            source=_DistributedEvidencePort([row]),
+            target=conflict_target,
+        )
+
+    current = EvidenceRecord(
+        evidence_id="tampered-current",
+        tenant_id="tenant-a",
+        scope="provider",
+        run_id="run-current",
+        action_type="sync",
+        verification_status="verified",
+        payload={"value": 1},
+        source="provider",
+        source_type="provider_api",
+        business_id="business-a",
+        observed_at=created,
+    )
+    tampered = current.to_row()
+    tampered["evidence_sha256"] = "0" * 64
+    with pytest.raises(ValueError, match="canonical hash mismatch"):
+        migrate_legacy_distributed_evidence(
+            source=_DistributedEvidencePort([tampered]),
+            target=InMemoryEvidenceStore(),
+        )

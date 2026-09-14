@@ -6,7 +6,7 @@ from datetime import datetime
 from typing import Any, Protocol
 
 from governance.control_plane_audit_log import GovernanceAuditEvent
-from storage.evidence_store import EvidenceRecord
+from storage.evidence_store import EVIDENCE_SCHEMA_VERSION, EvidenceRecord, EvidenceStore
 from storage.tenant_partitioning import build_partition_key, normalize_storage_tenant_id
 
 CANON_DISTRIBUTED_EVIDENCE_AUDIT_BACKEND = True
@@ -47,6 +47,61 @@ class DistributedEvidenceStore:
                 continue
             records.append(EvidenceRecord.from_row(row))
         return tuple(records), next_cursor
+
+
+class LegacyDistributedEvidenceMigrationPort(Protocol):
+    def read_prefix_batch(
+        self,
+        *,
+        prefix: str,
+        after_sequence_id: int = 0,
+        limit: int = 500,
+    ) -> tuple[Sequence[Mapping[str, Any]], int | None]: ...
+
+
+def migrate_legacy_distributed_evidence(
+    *,
+    source: LegacyDistributedEvidenceMigrationPort,
+    target: EvidenceStore,
+    batch_size: int = 500,
+) -> int:
+    """Copy historical distributed Evidence rows into the canonical store.
+
+    The legacy rows are intentionally retained as a rollback/archive surface.
+    Active writers must use ``target`` after this migration completes. Rows are
+    scanned in bounded sequence batches so startup migration cannot truncate or
+    load the complete historical evidence set into memory.
+    """
+    migrated = 0
+    cursor = 0
+    while True:
+        rows, next_cursor = source.read_prefix_batch(
+            prefix="evidence_",
+            after_sequence_id=cursor,
+            limit=max(1, int(batch_size)),
+        )
+        if not rows:
+            return migrated
+        for raw in rows:
+            row = dict(raw)
+            schema_version = int(row.get("evidence_schema_version") or 1)
+            if schema_version < EVIDENCE_SCHEMA_VERSION:
+                legacy = EvidenceRecord.from_row(row, allow_legacy_schema=True)
+                record = replace(legacy, schema_version=EVIDENCE_SCHEMA_VERSION).normalized_for_write()
+            else:
+                record = EvidenceRecord.from_row(row).normalized_for_write()
+            existing = target.get(tenant_id=record.tenant_id, evidence_id=record.evidence_id)
+            if existing is not None:
+                if existing != record:
+                    raise ValueError("legacy distributed evidence conflicts with canonical evidence")
+                continue
+            target.append(record)
+            migrated += 1
+        if next_cursor is None:
+            return migrated
+        if int(next_cursor) <= cursor:
+            raise RuntimeError("legacy distributed evidence migration cursor did not advance")
+        cursor = int(next_cursor)
 
 
 @dataclass(frozen=True)
@@ -96,4 +151,6 @@ __all__ = [
     "DistributedEvidenceStore",
     "DistributedGovernanceAuditLog",
     "EvidenceAppendPort",
+    "LegacyDistributedEvidenceMigrationPort",
+    "migrate_legacy_distributed_evidence",
 ]

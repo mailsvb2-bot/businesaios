@@ -55,3 +55,10 @@ def test_phase0_audit_does_not_report_evidence_as_duplicate_after_owner_selectio
     duplicate_line = next(line for line in text.splitlines() if line.startswith("- **DUPLICATE/ambiguous ownership:**"))
     assert "Evidence" not in duplicate_line.split(":**", 1)[-1].split(".", 1)[0]
     assert "Evidence has a selected canonical owner" in duplicate_line
+
+
+def test_business_autonomy_bootstrap_does_not_restore_distributed_evidence_as_active_store() -> None:
+    text = Path("runtime/business_autonomy/bootstrap.py").read_text(encoding="utf-8")
+    assert "DistributedEvidenceStore(" not in text
+    assert "migrate_legacy_distributed_evidence" in text
+    assert "'evidence': canonical_evidence" in text

@@ -102,7 +102,10 @@ from runtime.business_autonomy.sqlite_distributed_state import (
 from security.connector_secret_scope import ConnectorSecretScope
 from security.secret_vault import build_default_secret_vault
 from storage.audit_wiring import build_canonical_audit_store
-from storage.distributed_evidence_audit_backend import DistributedEvidenceStore, DistributedGovernanceAuditLog
+from storage.distributed_evidence_audit_backend import (
+    DistributedGovernanceAuditLog,
+    migrate_legacy_distributed_evidence,
+)
 from storage.evidence_wiring import build_canonical_evidence_store
 
 
@@ -405,6 +408,8 @@ def _build_distributed_state() -> dict[str, object]:
     database = SQLiteStateDatabase(_business_autonomy_state_path())
     documents = SQLiteDistributedDocumentStore(database)
     evidence_port = SQLiteDistributedEvidenceAppendPort(database)
+    canonical_evidence = build_canonical_evidence_store()
+    migrate_legacy_distributed_evidence(source=evidence_port, target=canonical_evidence)
     return {
         'database': database,
         'documents': documents,
@@ -418,7 +423,7 @@ def _build_distributed_state() -> dict[str, object]:
             key_prefix='__raw_scoped_key__',
         ),
         'audit': DistributedGovernanceAuditLog(evidence_port, partition_prefix='business_autonomy_audit'),
-        'evidence': DistributedEvidenceStore(evidence_port),
+        'evidence': canonical_evidence,
         'planning_memory': DistributedPlanningMemoryBackend(FilePlanningMemoryDocumentPort(documents)),
         'registry': DistributedBusinessRegistry(documents=documents),
         'region_state': SQLiteRegionRouteState(database),

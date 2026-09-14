@@ -13,8 +13,8 @@ from application.business_autonomy.registry import RegisteredBusinessCapabilitie
 from application.business_autonomy.trust import BusinessTrustSnapshot
 from application.planning.distributed_planning_memory_backend import DistributedPlanningMemoryBackend
 from governance.control_plane_audit_log import GovernanceAuditEvent
-from storage.distributed_evidence_audit_backend import DistributedEvidenceStore, DistributedGovernanceAuditLog
-from storage.evidence_store import EvidenceRecord
+from storage.distributed_evidence_audit_backend import DistributedGovernanceAuditLog
+from storage.evidence_store import EvidenceRecord, EvidenceStore
 
 
 @dataclass(frozen=True)
@@ -109,7 +109,7 @@ class DistributedBusinessAutonomyAudit:
 
 @dataclass(frozen=True)
 class DistributedBusinessAutonomyEvidenceStore:
-    backend: DistributedEvidenceStore
+    backend: EvidenceStore
 
     def append_result(self, result: BusinessExecutionResult) -> EvidenceRecord:
         created_at = datetime.now(UTC)
@@ -158,8 +158,7 @@ class DistributedBusinessAutonomyEvidenceStore:
         return self.backend.append(record)
 
     def list_recent(self, *, tenant_id: str, limit: int = 20):
-        items, _ = self.backend.list_for_tenant(tenant_id=tenant_id, limit=limit)
-        return items
+        return self.backend.list_for_tenant(tenant_id=tenant_id, limit=limit)
 
 
 @dataclass(frozen=True)
