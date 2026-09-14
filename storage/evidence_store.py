@@ -39,6 +39,13 @@ def _first_non_empty(*values: object, default: str) -> str:
     return default
 
 
+def _require_evidence_tenant_id(tenant_id: str) -> str:
+    raw = str(tenant_id or "").strip()
+    if not raw:
+        raise ValueError("tenant_id is required")
+    return normalize_storage_tenant_id(raw)
+
+
 def _normalize_lineage(value: Mapping[str, object] | None) -> dict[str, str]:
     raw = dict(value or {})
     unknown = tuple(sorted(set(raw) - set(EVIDENCE_LINEAGE_STAGES)))
@@ -148,8 +155,9 @@ class EvidenceRecord:
             raise ValueError("retention_until must be >= created_at")
 
     def normalized(self) -> EvidenceRecord:
+        tenant_id = _require_evidence_tenant_id(self.tenant_id)
         record = EvidenceRecord(
-            tenant_id=normalize_storage_tenant_id(self.tenant_id),
+            tenant_id=tenant_id,
             scope=str(self.scope).strip(),
             run_id=str(self.run_id).strip(),
             action_type=str(self.action_type).strip(),
@@ -265,7 +273,7 @@ class EvidenceRecord:
         retention_until_raw = row.get("retention_until")
         record = cls(
             evidence_id=str(row.get("evidence_id") or ""),
-            tenant_id=str(row.get("tenant_id") or "global"),
+            tenant_id=str(row.get("tenant_id") or ""),
             scope=str(row.get("scope") or ""),
             run_id=str(row.get("run_id") or ""),
             action_id=None if row.get("action_id") in (None, "") else str(row.get("action_id")),
@@ -331,7 +339,7 @@ def _backfill_legacy_evidence_integrity(session: Any) -> None:
 class EvidenceStore(Protocol):
     def append(self, record: EvidenceRecord) -> EvidenceRecord: ...
 
-    def get(self, evidence_id: str) -> EvidenceRecord | None: ...
+    def get(self, *, tenant_id: str, evidence_id: str) -> EvidenceRecord | None: ...
 
     def list_for_tenant(
         self, *, tenant_id: str, run_id: str | None = None, limit: int = 100
@@ -356,12 +364,16 @@ class InMemoryEvidenceStore:
             self._items[normalized.evidence_id] = normalized
         return normalized
 
-    def get(self, evidence_id: str) -> EvidenceRecord | None:
+    def get(self, *, tenant_id: str, evidence_id: str) -> EvidenceRecord | None:
+        tenant = _require_evidence_tenant_id(tenant_id)
         with self._lock:
-            return self._items.get(str(evidence_id).strip())
+            item = self._items.get(str(evidence_id).strip())
+            if item is None or item.tenant_id != tenant:
+                return None
+            return item
 
     def list_for_tenant(self, *, tenant_id: str, run_id: str | None = None, limit: int = 100) -> tuple[EvidenceRecord, ...]:
-        normalized_tenant = normalize_storage_tenant_id(tenant_id)
+        normalized_tenant = _require_evidence_tenant_id(tenant_id)
         normalized_run_id = None if run_id is None else str(run_id).strip()
         with self._lock:
             items = [
@@ -428,13 +440,17 @@ class SqliteEvidenceStore:
             raise ValueError("evidence_id is immutable and already bound to different evidence")
         return existing
 
-    def get(self, evidence_id: str) -> EvidenceRecord | None:
+    def get(self, *, tenant_id: str, evidence_id: str) -> EvidenceRecord | None:
+        tenant = _require_evidence_tenant_id(tenant_id)
         with self._session_factory.open() as session:
-            row = session.fetchone("SELECT * FROM storage_evidence_log WHERE evidence_id = ?", (str(evidence_id).strip(),))
+            row = session.fetchone(
+                "SELECT * FROM storage_evidence_log WHERE tenant_id = ? AND evidence_id = ?",
+                (tenant, str(evidence_id).strip()),
+            )
         return None if row is None else EvidenceRecord.from_row(dict(row))
 
     def list_for_tenant(self, *, tenant_id: str, run_id: str | None = None, limit: int = 100) -> tuple[EvidenceRecord, ...]:
-        tenant = normalize_storage_tenant_id(tenant_id)
+        tenant = _require_evidence_tenant_id(tenant_id)
         params: list[object] = [tenant]
         sql = "SELECT * FROM storage_evidence_log WHERE tenant_id = ?"
         if run_id is not None:
@@ -500,13 +516,17 @@ class PostgresEvidenceStore:
             raise ValueError("evidence_id is immutable and already bound to different evidence")
         return existing
 
-    def get(self, evidence_id: str) -> EvidenceRecord | None:
+    def get(self, *, tenant_id: str, evidence_id: str) -> EvidenceRecord | None:
+        tenant = _require_evidence_tenant_id(tenant_id)
         with self._session_factory.open() as session:
-            row = session.fetchone("SELECT * FROM storage_evidence_log WHERE evidence_id = %s", (str(evidence_id).strip(),))
+            row = session.fetchone(
+                "SELECT * FROM storage_evidence_log WHERE tenant_id = %s AND evidence_id = %s",
+                (tenant, str(evidence_id).strip()),
+            )
         return None if row is None else EvidenceRecord.from_row(row)
 
     def list_for_tenant(self, *, tenant_id: str, run_id: str | None = None, limit: int = 100) -> tuple[EvidenceRecord, ...]:
-        tenant = normalize_storage_tenant_id(tenant_id)
+        tenant = _require_evidence_tenant_id(tenant_id)
         params: list[object] = [tenant]
         sql = "SELECT * FROM storage_evidence_log WHERE tenant_id = %s"
         if run_id is not None:

@@ -31,7 +31,7 @@ def test_canonical_evidence_contract_round_trips_lineage_and_metadata(tmp_path) 
         business_id="business-a", observed_at=now, confidence=0.91, privacy_class="confidential",
         retention_policy="business_evidence_365d", retention_until=now + timedelta(days=365), lineage=_lineage(),
     ))
-    restored = store.get(record.evidence_id)
+    restored = store.get(tenant_id="tenant-a", evidence_id=record.evidence_id)
     assert restored == record.normalized()
     assert restored is not None and restored.lineage_complete
     assert tuple(stage for stage, _ in restored.lineage_path) == EVIDENCE_LINEAGE_STAGES
@@ -87,7 +87,7 @@ def test_evidence_id_is_append_only_and_identical_replay_is_idempotent(tmp_path)
     assert sqlite.append(record) == sqlite.append(record)
     with pytest.raises(ValueError, match="evidence_id is immutable"):
         sqlite.append(replace(record, source="forged"))
-    assert sqlite.get(record.evidence_id) == record.normalized()
+    assert sqlite.get(tenant_id="tenant-a", evidence_id=record.evidence_id) == record.normalized()
 
 
 def test_canonical_hash_normalizes_equivalent_timezone_offsets() -> None:
@@ -167,6 +167,109 @@ def test_distributed_store_has_narrow_legacy_adapter_but_rejects_explicit_downgr
     with pytest.raises(ValueError, match="legacy evidence schema requires controlled migration"):
         DistributedEvidenceStore(_DistributedEvidencePort([downgraded])).list_for_tenant(tenant_id="tenant-a")
 
+def test_persisted_evidence_with_missing_tenant_fails_closed() -> None:
+    record = EvidenceRecord(
+        evidence_id="tenant-bound-evidence", tenant_id="tenant-a", scope="decision", run_id="run-1",
+        action_type="trace", verification_status="verified", payload={"value": 1},
+        source="crm", source_type="provider_api", business_id="business-a",
+        observed_at=datetime(2026, 1, 1, tzinfo=UTC),
+    )
+    row = record.to_row()
+    row["tenant_id"] = ""
+    row["partition_key"] = "evidence_decision:global"
+    with pytest.raises(ValueError, match="tenant_id is required"):
+        EvidenceRecord.from_row(row)
+
+
+def test_evidence_reads_are_tenant_scoped_and_blank_tenant_fails_closed(tmp_path) -> None:
+    record = EvidenceRecord(
+        evidence_id="tenant-bound-evidence",
+        tenant_id="tenant-a",
+        scope="decision",
+        run_id="run-1",
+        action_type="trace",
+        verification_status="verified",
+        payload={"value": 1},
+        source="crm",
+        source_type="provider_api",
+        business_id="business-a",
+        observed_at=datetime(2026, 1, 1, tzinfo=UTC),
+    )
+
+    memory = InMemoryEvidenceStore()
+    memory.append(record)
+    assert memory.get(tenant_id="tenant-a", evidence_id=record.evidence_id) == record.normalized()
+    assert memory.get(tenant_id="tenant-b", evidence_id=record.evidence_id) is None
+    with pytest.raises(ValueError, match="tenant_id is required"):
+        memory.get(tenant_id="", evidence_id=record.evidence_id)
+
+    sqlite = SqliteEvidenceStore(SqliteSessionFactory(tmp_path / "tenant-scope.db"))
+    sqlite.append(record)
+    assert sqlite.get(tenant_id="tenant-a", evidence_id=record.evidence_id) == record.normalized()
+    assert sqlite.get(tenant_id="tenant-b", evidence_id=record.evidence_id) is None
+    with pytest.raises(ValueError, match="tenant_id is required"):
+        sqlite.list_for_tenant(tenant_id="")
+
+    with pytest.raises(ValueError, match="tenant_id is required"):
+        replace(record, tenant_id="").normalized()
+
+
+def test_distributed_store_never_borrows_requested_tenant_for_unscoped_rows() -> None:
+    created = datetime(2026, 1, 1, tzinfo=UTC)
+    scoped = EvidenceRecord.from_legacy(
+        tenant_id="tenant-a", subject="legacy", evidence_type="trace",
+        payload={"value": 1}, created_at=created, evidence_id="scoped",
+    ).to_row()
+    unscoped = dict(scoped)
+    unscoped["evidence_id"] = "unscoped"
+    unscoped.pop("tenant_id")
+    other_tenant = dict(scoped)
+    other_tenant["evidence_id"] = "other"
+    other_tenant["tenant_id"] = "tenant-b"
+
+    records, _ = DistributedEvidenceStore(
+        _DistributedEvidencePort([unscoped, other_tenant, scoped])
+    ).list_for_tenant(tenant_id="tenant-a")
+    assert [item.evidence_id for item in records] == ["scoped"]
+    with pytest.raises(ValueError, match="tenant_id is required"):
+        DistributedEvidenceStore(_DistributedEvidencePort([scoped])).list_for_tenant(tenant_id="")
+
+
+class _FakePostgresTenantReadSession:
+    dialect = "postgres"
+
+    def __init__(self):
+        self.calls = []
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, exc_type, exc, tb):
+        return None
+
+    def fetchone(self, sql, params=None):
+        self.calls.append((sql, params))
+        return None
+
+
+class _FakePostgresTenantReadFactory:
+    def __init__(self):
+        self.session = _FakePostgresTenantReadSession()
+
+    def open(self):
+        return self.session
+
+
+def test_postgres_evidence_get_queries_by_tenant_and_evidence_id() -> None:
+    factory = _FakePostgresTenantReadFactory()
+    store = object.__new__(PostgresEvidenceStore)
+    store._session_factory = factory
+    assert store.get(tenant_id="tenant-a", evidence_id="evidence-1") is None
+    sql, params = factory.session.calls[0]
+    assert "tenant_id = %s AND evidence_id = %s" in sql
+    assert params == ("tenant-a", "evidence-1")
+
+
 def test_evidence_contract_rejects_invalid_confidence_and_unknown_lineage_stage() -> None:
     with pytest.raises(ValueError, match="confidence"):
         EvidenceRecord(tenant_id="t", scope="s", run_id="r", action_type="a", verification_status="ok", confidence=1.1).normalized()
@@ -198,7 +301,7 @@ def test_v1_evidence_database_upgrades_without_losing_legacy_records(tmp_path) -
         session.commit()
 
     upgraded = SqliteEvidenceStore(factory)
-    restored = upgraded.get("legacy-1")
+    restored = upgraded.get(tenant_id="tenant-a", evidence_id="legacy-1")
     assert restored is not None
     assert restored.schema_version == 2
     assert restored.source == "legacy"
@@ -271,7 +374,7 @@ def test_current_schema_missing_canonical_hash_fails_closed(tmp_path) -> None:
             (record.evidence_id,),
         )
     with pytest.raises(ValueError, match="missing canonical hash"):
-        store.get(record.evidence_id)
+        store.get(tenant_id="tenant-a", evidence_id=record.evidence_id)
 
 
 def test_runtime_read_rejects_schema_downgrade_after_controlled_backfill(tmp_path) -> None:
@@ -289,7 +392,7 @@ def test_runtime_read_rejects_schema_downgrade_after_controlled_backfill(tmp_pat
             (record.evidence_id,),
         )
     with pytest.raises(ValueError, match="legacy evidence schema requires controlled migration"):
-        store.get(record.evidence_id)
+        store.get(tenant_id="tenant-a", evidence_id=record.evidence_id)
 
 
 def test_persisted_hashes_fail_closed_on_tampering(tmp_path) -> None:
@@ -309,7 +412,7 @@ def test_persisted_hashes_fail_closed_on_tampering(tmp_path) -> None:
         )
         session.commit()
     with pytest.raises(ValueError, match="payload hash mismatch"):
-        store.get(record.evidence_id)
+        store.get(tenant_id="tenant-a", evidence_id=record.evidence_id)
 
     db_path_2 = tmp_path / "tamper-envelope.db"
     factory_2 = SqliteSessionFactory(db_path_2)
@@ -327,4 +430,4 @@ def test_persisted_hashes_fail_closed_on_tampering(tmp_path) -> None:
         )
         session.commit()
     with pytest.raises(ValueError, match="canonical hash mismatch"):
-        store_2.get(record_2.evidence_id)
+        store_2.get(tenant_id="tenant-a", evidence_id=record_2.evidence_id)

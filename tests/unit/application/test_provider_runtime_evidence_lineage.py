@@ -16,7 +16,7 @@ def test_provider_runtime_audit_emits_canonical_evidence_lineage() -> None:
         payload={"cursor": "1"},
         metadata={"items": 3},
     )
-    record = recorder.evidence_store.get(refs["evidence_id"])
+    record = recorder.evidence_store.get(tenant_id="tenant-a", evidence_id=refs["evidence_id"])
     assert record is not None
     assert record.business_id == "business-a"
     assert record.source == "shopify"

@@ -28,9 +28,17 @@ class DistributedEvidenceStore:
         return normalized
 
     def list_for_tenant(self, *, tenant_id: str, limit: int = 100, cursor: str | None = None) -> tuple[tuple[EvidenceRecord, ...], str | None]:
-        tenant = normalize_storage_tenant_id(tenant_id)
+        raw_tenant = str(tenant_id or "").strip()
+        if not raw_tenant:
+            raise ValueError("tenant_id is required")
+        tenant = normalize_storage_tenant_id(raw_tenant)
         rows, next_cursor = self._append_port.read_prefix(prefix="evidence_", limit=limit, cursor=cursor)
-        filtered = [row for row in rows if str(row.get("tenant_id") or tenant) == tenant]
+        filtered = [
+            row
+            for row in rows
+            if str(row.get("tenant_id") or "").strip()
+            and normalize_storage_tenant_id(str(row.get("tenant_id"))) == tenant
+        ]
         records: list[EvidenceRecord] = []
         for row in filtered:
             if "evidence_schema_version" not in row:
