@@ -519,13 +519,18 @@ class PostgresEvidenceStore:
         return tuple(EvidenceRecord.from_row(row) for row in rows)
 
     def delete_expired(self, *, now: datetime | None = None) -> int:
-        moment = now or utc_now()
+        moment = (now or utc_now()).astimezone(UTC).isoformat()
         with self._session_factory.open() as session:
-            cursor = session.execute(
-                "DELETE FROM storage_evidence_log WHERE legal_hold = false AND retention_until IS NOT NULL AND retention_until <= %s",
+            row = session.fetchone(
+                "SELECT COUNT(*) AS deleted_count FROM storage_evidence_log WHERE legal_hold = 0 AND retention_until IS NOT NULL AND retention_until <= %s",
                 (moment,),
             )
-            return int(cursor.rowcount or 0)
+            deleted_count = int((row or {}).get("deleted_count") or 0)
+            session.execute(
+                "DELETE FROM storage_evidence_log WHERE legal_hold = 0 AND retention_until IS NOT NULL AND retention_until <= %s",
+                (moment,),
+            )
+        return deleted_count
 
 
 __all__ = [

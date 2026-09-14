@@ -7,7 +7,13 @@ from hashlib import sha256
 import pytest
 
 from storage.distributed_evidence_audit_backend import DistributedEvidenceStore
-from storage.evidence_store import EVIDENCE_LINEAGE_STAGES, EvidenceRecord, InMemoryEvidenceStore, SqliteEvidenceStore
+from storage.evidence_store import (
+    EVIDENCE_LINEAGE_STAGES,
+    EvidenceRecord,
+    InMemoryEvidenceStore,
+    PostgresEvidenceStore,
+    SqliteEvidenceStore,
+)
 from storage.migration_registry import MigrationRegistry, default_storage_migration_registry
 from storage.sqlite_fallback import SqliteSessionFactory
 
@@ -202,6 +208,53 @@ def test_v1_evidence_database_upgrades_without_losing_legacy_records(tmp_path) -
     assert restored.retention_policy == "legacy"
     assert restored.payload == {"score": 1}
 
+
+
+class _FakePostgresEvidenceSession:
+    dialect = "postgres"
+
+    def __init__(self):
+        self.calls = []
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, exc_type, exc, tb):
+        return None
+
+    def fetchone(self, sql, params=None):
+        self.calls.append(("fetchone", sql, params))
+        return {"deleted_count": 3}
+
+    def execute(self, sql, params=None):
+        self.calls.append(("execute", sql, params))
+        return None
+
+
+class _FakePostgresEvidenceFactory:
+    def __init__(self):
+        self.session = _FakePostgresEvidenceSession()
+
+    def open(self):
+        return self.session
+
+
+def test_postgres_retention_counts_before_delete_without_cursor_rowcount() -> None:
+    factory = _FakePostgresEvidenceFactory()
+    store = object.__new__(PostgresEvidenceStore)
+    store._session_factory = factory
+    deleted = store.delete_expired(now=datetime(2026, 1, 1, 12, 0, tzinfo=UTC))
+    assert deleted == 3
+    assert len(factory.session.calls) == 2
+    count_call, delete_call = factory.session.calls
+    assert count_call[0] == "fetchone"
+    assert "COUNT(*) AS deleted_count" in count_call[1]
+    assert "legal_hold = 0" in count_call[1]
+    assert delete_call[0] == "execute"
+    assert delete_call[1].startswith("DELETE FROM storage_evidence_log")
+    assert delete_call[2] == count_call[2]
+    assert isinstance(delete_call[2][0], str)
+    assert delete_call[2][0].endswith("+00:00")
 
 def test_current_schema_missing_canonical_hash_fails_closed(tmp_path) -> None:
     db_path = tmp_path / "missing-hash.db"
