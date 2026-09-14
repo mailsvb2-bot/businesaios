@@ -84,6 +84,23 @@ def test_evidence_id_is_append_only_and_identical_replay_is_idempotent(tmp_path)
     assert sqlite.get(record.evidence_id) == record.normalized()
 
 
+def test_canonical_hash_normalizes_equivalent_timezone_offsets() -> None:
+    utc_time = datetime(2026, 1, 1, 12, 0, tzinfo=UTC)
+    plus_three = utc_time.astimezone(__import__("datetime").timezone(timedelta(hours=3)))
+    base = EvidenceRecord(
+        evidence_id="timezone-evidence", tenant_id="tenant-a", scope="decision", run_id="run-1",
+        action_type="observe", verification_status="verified", payload={"value": 1},
+        source="crm", source_type="provider_api", business_id="business-a", observed_at=utc_time,
+        created_at=utc_time, retention_until=utc_time + timedelta(days=1), retention_policy="evidence_1d",
+    )
+    shifted = replace(
+        base, observed_at=plus_three, created_at=plus_three,
+        retention_until=plus_three + timedelta(days=1),
+    )
+    assert shifted.normalized() == base.normalized()
+    assert shifted.hash == base.hash
+
+
 def test_canonical_hash_binds_tenant_and_execution_identity() -> None:
     now = datetime(2026, 1, 1, tzinfo=UTC)
     base = EvidenceRecord(
