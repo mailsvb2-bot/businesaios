@@ -48,6 +48,7 @@ jobs:
       - name: Run canonical full CI gate
         run: python -m scripts.ci.cli --gate full
         env:
+          BAIOS_CI_CARGO_TARGET_ROOT: /dev/shm/businesaios-ci
           BAIOS_BOOT_SMOKE_ROOT: ${{ runner.temp }}/businesaios-boot-smoke/${{ github.run_id }}-${{ github.run_attempt }}-${{ github.job }}-3.11
       - name: Upload full gate artifacts
         if: always()
@@ -83,6 +84,7 @@ jobs:
       - name: Run canonical full CI gate
         run: python -m scripts.ci.cli --gate full
         env:
+          BAIOS_CI_CARGO_TARGET_ROOT: /dev/shm/businesaios-ci
           BAIOS_BOOT_SMOKE_ROOT: ${{ runner.temp }}/businesaios-boot-smoke/${{ github.run_id }}-${{ github.run_attempt }}-${{ github.job }}-3.12
       - name: Upload full gate artifacts
         if: always()

@@ -80,7 +80,11 @@ def isolated_cargo_target(scope: str) -> Iterator[dict[str, str]]:
         character if character.isalnum() or character in {"-", "_"} else "-"
         for character in str(scope).strip()
     ).strip("-") or "cargo"
-    parent = Path(os.environ.get("RUNNER_TEMP") or tempfile.gettempdir())
+    parent = Path(
+        os.environ.get("BAIOS_CI_CARGO_TARGET_ROOT")
+        or os.environ.get("RUNNER_TEMP")
+        or tempfile.gettempdir()
+    )
     parent.mkdir(parents=True, exist_ok=True)
     target_dir = Path(
         tempfile.mkdtemp(prefix=f"businesaios-{normalized_scope}-", dir=str(parent))
