@@ -55,3 +55,74 @@ def test_business_autonomy_boot_wires_provider_runtime_to_durable_canonical_stor
     persisted = reopened_evidence.get(tenant_id="tenant-a", evidence_id=refs["evidence_id"])
     assert persisted is not None
     assert persisted.source_type == "provider_sync"
+
+
+def test_provider_runtime_evidence_preserves_verified_decision_provenance() -> None:
+    recorder = ProviderRuntimeAuditRecorder.in_memory()
+    provenance = {
+        "source": "owner_decision_draft",
+        "verification": "server_ledger",
+        "tenant_id": "tenant-a",
+        "business_id": "business-a",
+        "run_id": "run-owner-1",
+        "decision_id": "decision-owner-1",
+        "action_id": "action-owner-1",
+        "action_type": "send_message@v1",
+    }
+    refs = recorder.record_sync_run(
+        tenant_id="tenant-a",
+        business_id="business-a",
+        provider_key="vk_messaging",
+        operation="message_send",
+        mode="live",
+        status="live_executed",
+        accepted=True,
+        payload={"peer_id": "42"},
+        metadata={"decision_provenance": provenance, "parsed_response": {"resource_id": "77"}},
+    )
+
+    record = recorder.evidence_store.get(tenant_id="tenant-a", evidence_id=refs["evidence_id"])
+    assert record is not None
+    assert record.run_id == "run-owner-1"
+    assert record.action_id == "action-owner-1"
+    assert record.lineage["decision"] == "decision-owner-1"
+    assert record.lineage["action"] == "action-owner-1"
+    assert record.lineage["outcome"] == "business-a:vk_messaging:message_send:live_executed"
+    assert record.refs == (
+        refs["audit_event_id"],
+        "run-owner-1",
+        "decision-owner-1",
+        "action-owner-1",
+    )
+    assert record.labels["decision_id"] == "decision-owner-1"
+
+
+def test_provider_runtime_evidence_rejects_cross_scope_decision_provenance() -> None:
+    recorder = ProviderRuntimeAuditRecorder.in_memory()
+    provenance = {
+        "source": "owner_decision_draft",
+        "verification": "server_ledger",
+        "tenant_id": "tenant-other",
+        "business_id": "business-other",
+        "run_id": "run-owner-1",
+        "decision_id": "decision-owner-1",
+        "action_id": "action-owner-1",
+        "action_type": "send_message@v1",
+    }
+
+    import pytest
+
+    with pytest.raises(ValueError, match="provenance scope mismatch"):
+        recorder.record_sync_run(
+            tenant_id="tenant-a",
+            business_id="business-a",
+            provider_key="vk_messaging",
+            operation="message_send",
+            mode="live",
+            status="live_executed",
+            accepted=True,
+            payload={"peer_id": "42"},
+            metadata={"decision_provenance": provenance},
+        )
+
+    assert recorder.evidence_store.list_for_tenant(tenant_id="tenant-a") == ()

@@ -143,9 +143,12 @@ def test_provider_history_records_provenance_without_sending_it_to_audit_payload
     history = ProviderSyncHistory(store=InMemoryProviderSyncHistoryStore())
 
     class _Audit:
-        def __init__(self): self.payloads = []
+        def __init__(self):
+            self.payloads = []
+            self.metadata = []
         def record_sync_run(self, **kwargs):
             self.payloads.append(dict(kwargs["payload"]))
+            self.metadata.append(dict(kwargs["metadata"]))
             return {"recorded_at_utc": "2026-09-11T10:00:00Z"}
 
     class _Export:
@@ -174,6 +177,7 @@ def test_provider_history_records_provenance_without_sending_it_to_audit_payload
     )
     assert result.metadata["history_row"]["decision_provenance"] == provenance
     assert "_decision_provenance" not in audit.payloads[0]
+    assert audit.metadata[0]["decision_provenance"] == provenance
 
 
 def test_queue_rejects_unverified_provenance_before_job_persistence(tmp_path) -> None:
