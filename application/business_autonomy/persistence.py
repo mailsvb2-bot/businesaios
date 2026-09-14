@@ -39,7 +39,7 @@ from reliability.idempotency_contract import IdempotencyResolution
 from reliability.idempotency_scope import build_idempotency_key
 from reliability.idempotency_sqlite_backend import SQLiteIdempotencyStore
 from storage.evidence_store import EvidenceRecord, SqliteEvidenceStore
-from storage.sqlite_fallback import SqliteSessionFactory
+from storage.evidence_wiring import build_canonical_evidence_store, canonical_evidence_store_path
 
 BUSINESS_AUTONOMY_OWNER_ID = "business_autonomy"
 
@@ -66,7 +66,7 @@ def business_autonomy_idempotency_store_path() -> Path:
 
 
 def business_autonomy_evidence_store_path() -> Path:
-    return business_autonomy_runtime_dir() / "business_autonomy_evidence.sqlite3"
+    return canonical_evidence_store_path()
 
 
 class PersistentBusinessAutonomyAudit:
@@ -200,7 +200,7 @@ class PersistentBusinessAutonomyIdempotencyStore:
 
 class PersistentBusinessAutonomyEvidenceStore:
     def __init__(self, backend: SqliteEvidenceStore | None = None) -> None:
-        self._backend = backend or SqliteEvidenceStore(SqliteSessionFactory(business_autonomy_evidence_store_path()))
+        self._backend = backend or build_canonical_evidence_store()
 
     def append_result(self, result: BusinessExecutionResult) -> EvidenceRecord:
         created_at = datetime.now(UTC)

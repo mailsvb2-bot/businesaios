@@ -55,9 +55,12 @@ class ActionIntentV1:
     reversible: bool | None = None
     requested_by: str = "sovereign_decision"
     schema_version: int = 1
+    evidence_refs: tuple[str, ...] = ()
 
     def __post_init__(self) -> None:
         object.__setattr__(self, "payload", _freeze(dict(self.payload or {})))
+        refs = tuple(dict.fromkeys(str(item).strip() for item in self.evidence_refs if str(item).strip()))
+        object.__setattr__(self, "evidence_refs", refs)
 
     def payload_copy(self) -> dict[str, Any]:
         return _thaw(self.payload)
@@ -88,7 +91,7 @@ class ActionIntentV1:
     def from_projection(
         cls, *, intent_id: str, tenant_id: str, business_id: str, decision_id: str,
         correlation_id: str, action_type: str, channel: str, payload: Mapping[str, Any],
-        payload_hash: str, requested_by: str = "sovereign_decision",
+        payload_hash: str, requested_by: str = "sovereign_decision", evidence_refs: tuple[str, ...] = (),
     ) -> ActionIntentV1:
         data = dict(payload or {})
         intent = cls(
@@ -98,7 +101,7 @@ class ActionIntentV1:
             expected_value=_finite(data.get("expected_value"), "expected_value"),
             confidence=_finite(data.get("confidence"), "confidence"),
             reversible=data.get("reversible") if isinstance(data.get("reversible"), bool) else None,
-            requested_by=requested_by,
+            requested_by=requested_by, evidence_refs=evidence_refs,
         )
         issues = intent.validate_contract()
         if issues:

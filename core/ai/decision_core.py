@@ -7,6 +7,7 @@ from typing import Any
 
 from application.decision_policy.pricing import allowed_price_band, band_rank, merge_price_constraints
 from application.decision_runtime.run import run_decision
+from application.decision_state.world_model_metadata import extract_pinned_evidence_refs_from_payload
 from contracts.action_intent import ActionIntentV1
 from contracts.executable_action import ExecutableAction
 from core.decision_core_contract import CANONICAL_DECISION_CORE_IMPORT_PATH
@@ -52,6 +53,7 @@ def project_action_intent(
         correlation_id=str(correlation_id or "").strip(), action_type=str(decided_action_type or "").strip(),
         channel=str(channel or "").strip(), payload=payload, payload_hash=canonical_payload_hash(dict(payload)),
         requested_by=str(requested_by or "sovereign_decision").strip(),
+        evidence_refs=extract_pinned_evidence_refs_from_payload(payload),
     )
 
 def project_executable_action(
@@ -124,6 +126,7 @@ def project_executable_action(
         correlation_id=normalized_correlation_id,
         objective_name="profit_adjusted_growth",
         intent_id="" if action_intent is None else action_intent.intent_id,
+        evidence_refs=() if action_intent is None else tuple(action_intent.evidence_refs),
     )
     issues = action.validate_contract()
     if issues:

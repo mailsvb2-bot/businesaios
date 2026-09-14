@@ -53,6 +53,7 @@ from execution.scenario_goal_score import ScenarioGoalScoreEngine
 from execution.self_healing_retry import SelfHealingRetryEngine
 from execution.world_state_updater import WorldStateUpdater
 from runtime.platform.business_memory.service import BusinessMemoryService
+from storage.evidence_store import EvidenceStore
 
 CANON_HEADLESS_EXECUTION_CONTRACT = True
 
@@ -125,6 +126,7 @@ class HeadlessExecutionContract:
         goal_plan_memory_service: GoalPlanMemoryService | None = None,
         self_healing_retry_engine: SelfHealingRetryEngine | None = None,
         evidence_persistence_service: EvidencePersistenceService | None = None,
+        evidence_store: EvidenceStore | None = None,
         performance_feedback_learning_service: PerformanceFeedbackLearningService | None = None,
         capability_health_scoring_service: CapabilityHealthScoringService | None = None,
         adaptive_optimization_service: AdaptiveOptimizationService | None = None,
@@ -188,6 +190,7 @@ class HeadlessExecutionContract:
         self._evidence_persistence_service = evidence_persistence_service or EvidencePersistenceService(
             business_memory_store=business_memory,
             business_memory_service=business_memory_service,
+            evidence_store=evidence_store,
         )
         self._performance_feedback_learning_service = performance_feedback_learning_service
         self._capability_health_scoring_service = capability_health_scoring_service

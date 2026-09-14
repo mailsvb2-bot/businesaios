@@ -14,6 +14,11 @@ class ExecutableAction:
     correlation_id: str = ''
     objective_name: str = 'profit_adjusted_growth'
     intent_id: str = ''
+    evidence_refs: tuple[str, ...] = ()
+
+    def __post_init__(self) -> None:
+        refs = tuple(dict.fromkeys(str(item).strip() for item in self.evidence_refs if str(item).strip()))
+        object.__setattr__(self, 'evidence_refs', refs)
 
     def validate_contract(self) -> list[str]:
         issues: list[str] = []
@@ -43,4 +48,5 @@ class ExecutableAction:
             'correlation_id': self.correlation_id,
             'objective_name': self.objective_name,
             'intent_id': self.intent_id,
+            'evidence_refs': list(self.evidence_refs),
         }

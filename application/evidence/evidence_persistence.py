@@ -2,9 +2,10 @@ from __future__ import annotations
 
 import logging
 from collections.abc import Mapping
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import UTC, datetime
 from typing import Any
+from uuid import NAMESPACE_URL, uuid5
 
 from application.effects.effect_outcome_vocabulary import (
     normalize_outcome_status,
@@ -30,6 +31,7 @@ from execution.evidence_persistence_feedback import (
     refs_from_verification as _refs_from_verification,
 )
 from execution.evidence_persistence_reliability import EvidencePersistenceReliabilitySupport
+from storage.evidence_store import EvidenceRecord, EvidenceStore
 
 CANON_EVIDENCE_PERSISTENCE = True
 CANON_MEMORY_EVIDENCE_PERSISTENCE = True
@@ -81,8 +83,10 @@ class EvidencePersistenceService:
         reliability_namespace: str = 'evidence_persistence',
         reliability_operation: str = 'persist_feedback',
         idempotency_owner_id: str = 'evidence-persistence',
+        evidence_store: EvidenceStore | None = None,
     ) -> None:
         self._business_memory_store = business_memory_store
+        self._evidence_store = evidence_store
         self._business_memory_service = business_memory_service
         self._tenant_default = str(tenant_default or 'system')
         self._reliability = EvidencePersistenceReliabilitySupport(
@@ -176,6 +180,104 @@ class EvidencePersistenceService:
             payload['verification_persistence'] = persistence
         return payload
 
+    @staticmethod
+    def _canonical_evidence_id(*, persistence_key: str) -> str:
+        return str(uuid5(NAMESPACE_URL, f"businesaios:evidence-persistence:{persistence_key}"))
+
+    def _persist_canonical_evidence(
+        self,
+        *,
+        tenant_id: str,
+        business_id: str,
+        run_id: str,
+        step_index: int,
+        action_payload: Mapping[str, Any],
+        verification_payload: Mapping[str, Any],
+        execution_payload: Mapping[str, Any],
+        feedback_payload: Mapping[str, Any],
+        outcome_record: Mapping[str, Any],
+        persistence_key: str,
+    ) -> EvidenceRecord | None:
+        if self._evidence_store is None:
+            return None
+
+        action = dict(action_payload or {})
+        verification = dict(verification_payload or {})
+        execution = dict(execution_payload or {})
+        feedback = dict(feedback_payload or {})
+        outcome = dict(outcome_record or {})
+        business_outcome = _safe_dict(feedback.get('business_outcome'))
+        external_refs = tuple(str(item).strip() for item in outcome.get('external_refs') or () if str(item).strip())
+        prior_ref_values = action.get('evidence_refs') or business_outcome.get('evidence_refs') or ()
+        prior_refs = tuple(str(item).strip() for item in prior_ref_values if str(item).strip())
+        refs = tuple(dict.fromkeys((*prior_refs, *external_refs)))
+        source = _text(
+            business_outcome.get('source_of_truth')
+            or _safe_dict(verification.get('verification')).get('source_of_truth')
+            or execution.get('source_of_truth')
+        ) or 'unknown'
+        lineage = {
+            'normalization': str(persistence_key),
+            'decision': _text(action.get('decision_id') or business_outcome.get('decision_id')),
+            'action': _text(outcome.get('action_id')),
+            'outcome': _text(business_outcome.get('outcome_id')),
+        }
+        if external_refs:
+            lineage['source'] = external_refs[0]
+        elif source != 'unknown':
+            lineage['source'] = source
+        lineage = {key: value for key, value in lineage.items() if value}
+        evidence_id = self._canonical_evidence_id(persistence_key=persistence_key)
+        created_at = _utc_now()
+        existing = self._evidence_store.get(tenant_id=str(tenant_id), evidence_id=evidence_id)
+        if existing is not None:
+            created_at = existing.created_at
+        record = EvidenceRecord(
+            evidence_id=evidence_id,
+            tenant_id=str(tenant_id),
+            scope='closed_loop',
+            run_id=str(run_id),
+            action_id=_text(outcome.get('action_id')) or None,
+            action_type=_text(outcome.get('action_type')) or 'unknown',
+            verification_status=_text(outcome.get('verification_status')) or 'unknown',
+            created_at=created_at,
+            source=source,
+            source_type='closed_loop_verification',
+            business_id=str(business_id),
+            observed_at=None,
+            confidence=None,
+            privacy_class='internal',
+            retention_policy='closed_loop_evidence',
+            lineage=lineage,
+            refs=refs,
+            payload={
+                'outcome': outcome,
+                'verification': _compact_verification_payload(verification, action=action, execution_receipt=execution),
+                'evidence': _compact_evidence_payload(verification),
+            },
+            labels={
+                'business_id': str(business_id),
+                'step_index': str(int(step_index)),
+                'persistence_key': str(persistence_key),
+            },
+        ).normalized()
+        if existing is not None:
+            if existing != record:
+                raise ValueError('canonical evidence replay conflicts with persisted evidence')
+            return existing
+        try:
+            return self._evidence_store.append(record)
+        except ValueError as exc:
+            # Another worker may have won the same idempotent append after our
+            # pre-read. Reconcile only the non-semantic creation timestamp; any
+            # payload/lineage/scope difference remains a hard conflict.
+            current = self._evidence_store.get(tenant_id=str(tenant_id), evidence_id=evidence_id)
+            if current is not None:
+                replay = replace(record, created_at=current.created_at).normalized()
+                if current == replay:
+                    return current
+            raise ValueError('canonical evidence replay conflicts with persisted evidence') from exc
+
     def persist(
         self,
         *,
@@ -251,6 +353,16 @@ class EvidencePersistenceService:
             'action_id': outcome_record['action_id'],
             'ref': ref,
         } for ref in outcome_record['external_refs'])
+        persistence_key = _persistence_key(
+            tenant_id=tenant_id, business_id=business_id, run_id=run_id,
+            step_index=step_index, outcome=outcome_record,
+        )
+        self._persist_canonical_evidence(
+            tenant_id=tenant_id, business_id=business_id, run_id=run_id, step_index=step_index,
+            action_payload=action_payload, verification_payload=verification_payload,
+            execution_payload=execution_payload, feedback_payload=feedback_payload,
+            outcome_record=outcome_record, persistence_key=persistence_key,
+        )
 
         memory_record: dict[str, Any] | None = None
         if self._business_memory_store is not None:
@@ -284,7 +396,7 @@ class EvidencePersistenceService:
                 stop_reason=str(stop_reason),
             )
         receipt = {
-            'persistence_key': _persistence_key(tenant_id=tenant_id, business_id=business_id, run_id=run_id, step_index=step_index, outcome=outcome_record),
+            'persistence_key': persistence_key,
             'persisted_at': _utc_now().isoformat(),
             'evidence_count': len(evidence_records),
         }

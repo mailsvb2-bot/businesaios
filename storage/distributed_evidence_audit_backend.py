@@ -23,7 +23,7 @@ class DistributedEvidenceStore:
         self._append_port = append_port
 
     def append(self, record: EvidenceRecord) -> EvidenceRecord:
-        normalized = record.normalized()
+        normalized = record.normalized_for_write()
         self._append_port.append(partition_key=normalized.partition_key, payload=normalized.to_row())
         return normalized
 

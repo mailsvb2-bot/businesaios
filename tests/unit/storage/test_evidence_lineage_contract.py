@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import replace
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, datetime, timedelta, timezone
 from hashlib import sha256
 
 import pytest
@@ -431,3 +431,60 @@ def test_persisted_hashes_fail_closed_on_tampering(tmp_path) -> None:
         session.commit()
     with pytest.raises(ValueError, match="canonical hash mismatch"):
         store_2.get(tenant_id="tenant-a", evidence_id=record_2.evidence_id)
+
+
+
+def test_runtime_append_rejects_legacy_schema_before_persistence(tmp_path) -> None:
+    record = EvidenceRecord(
+        evidence_id="legacy-runtime-write",
+        tenant_id="tenant-a",
+        scope="provider",
+        run_id="run-legacy",
+        action_type="sync",
+        verification_status="verified",
+        payload={"value": 1},
+        source="legacy",
+        source_type="legacy",
+        business_id="business-a",
+        observed_at=datetime(2026, 1, 1, tzinfo=UTC),
+        schema_version=1,
+    )
+
+    memory = InMemoryEvidenceStore()
+    with pytest.raises(ValueError, match="legacy evidence schema requires controlled migration"):
+        memory.append(record)
+    assert memory.list_for_tenant(tenant_id="tenant-a") == ()
+
+    sqlite = SqliteEvidenceStore(SqliteSessionFactory(tmp_path / "reject-runtime-downgrade.db"))
+    with pytest.raises(ValueError, match="legacy evidence schema requires controlled migration"):
+        sqlite.append(record)
+    assert sqlite.get(tenant_id="tenant-a", evidence_id=record.evidence_id) is None
+
+    port = _DistributedEvidencePort([])
+    with pytest.raises(ValueError, match="legacy evidence schema requires controlled migration"):
+        DistributedEvidenceStore(port).append(record)
+    assert port.rows == []
+
+
+def test_sqlite_retention_compares_offset_time_in_utc(tmp_path) -> None:
+    store = SqliteEvidenceStore(SqliteSessionFactory(tmp_path / "retention-offset.db"))
+    record = store.append(EvidenceRecord(
+        evidence_id="retention-offset",
+        tenant_id="tenant-a",
+        scope="provider",
+        run_id="run-retention",
+        action_type="sync",
+        verification_status="verified",
+        payload={"value": 1},
+        source="provider",
+        source_type="provider_api",
+        business_id="business-a",
+        created_at=datetime(2026, 1, 1, 8, 0, tzinfo=UTC),
+        retention_until=datetime(2026, 1, 1, 10, 0, tzinfo=UTC),
+    ))
+
+    plus_three = timezone(timedelta(hours=3))
+    assert store.delete_expired(now=datetime(2026, 1, 1, 12, 0, tzinfo=plus_three)) == 0
+    assert store.get(tenant_id="tenant-a", evidence_id=record.evidence_id) is not None
+    assert store.delete_expired(now=datetime(2026, 1, 1, 14, 0, tzinfo=plus_three)) == 1
+    assert store.get(tenant_id="tenant-a", evidence_id=record.evidence_id) is None

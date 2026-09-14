@@ -183,6 +183,12 @@ class EvidenceRecord:
         record.validate()
         return record
 
+    def normalized_for_write(self) -> EvidenceRecord:
+        record = self.normalized()
+        if record.schema_version != EVIDENCE_SCHEMA_VERSION:
+            raise ValueError("legacy evidence schema requires controlled migration")
+        return record
+
     @property
     def partition_key(self) -> str:
         return build_partition_key(self.tenant_id, scope=f"evidence_{self.scope}")
@@ -354,7 +360,7 @@ class InMemoryEvidenceStore:
         self._lock = RLock()
 
     def append(self, record: EvidenceRecord) -> EvidenceRecord:
-        normalized = record.normalized()
+        normalized = record.normalized_for_write()
         with self._lock:
             existing = self._items.get(normalized.evidence_id)
             if existing is not None:
@@ -409,7 +415,7 @@ class SqliteEvidenceStore:
             _backfill_legacy_evidence_integrity(session)
 
     def append(self, record: EvidenceRecord) -> EvidenceRecord:
-        normalized = record.normalized()
+        normalized = record.normalized_for_write()
         row = normalized.to_row()
         with self._session_factory.open() as session:
             session.execute(
@@ -463,7 +469,7 @@ class SqliteEvidenceStore:
         return tuple(EvidenceRecord.from_row(dict(row)) for row in rows)
 
     def delete_expired(self, *, now: datetime | None = None) -> int:
-        moment = (now or utc_now()).isoformat()
+        moment = (now or utc_now()).astimezone(UTC).isoformat()
         with self._session_factory.open() as session:
             cursor = session.execute(
                 "DELETE FROM storage_evidence_log WHERE legal_hold = 0 AND retention_until IS NOT NULL AND retention_until <= ?",
@@ -484,7 +490,7 @@ class PostgresEvidenceStore:
             _backfill_legacy_evidence_integrity(session)
 
     def append(self, record: EvidenceRecord) -> EvidenceRecord:
-        normalized = record.normalized()
+        normalized = record.normalized_for_write()
         row = normalized.to_row()
         with self._session_factory.open() as session:
             session.execute(

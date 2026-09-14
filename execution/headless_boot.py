@@ -4,47 +4,51 @@ from dataclasses import dataclass
 from functools import lru_cache
 from pathlib import Path
 
-from execution.blast_radius_guard import BlastRadiusGuard
-from execution.autonomy_counters import AutonomyCounterResolver, FileAutonomyCounterStore
-from execution.autonomy_kill_switch import FileAutonomyKillSwitchRegistry
 from application.autonomy.autonomy_safety_bundle import AutonomySafetyBundle
-from application.memory.business_memory_query import BusinessMemoryQueryService
-from application.memory.business_memory_state_adapter import BusinessMemoryStateAdapter
-from application.memory.business_operating_memory import BusinessMemoryCompactor, BusinessMemoryPolicy, FileBusinessOperatingMemoryStore
 from application.effects.effect_journal import FileEffectJournal
-from execution.goal_score import GoalScoreEngine
-from application.planning.long_horizon_planner import LongHorizonPlanner
-from application.planning.multi_goal_planner import FileMultiGoalPlannerStore, MultiGoalPlannerService
-from execution.performance_feedback_learning import FilePerformanceFeedbackStore, PerformanceFeedbackLearningService
-from application.planning.strategy_memory import FileStrategyMemoryStore, StrategyMemoryService
 from application.headless.contract import HeadlessExecutionContract
 from application.headless.feedback import SimpleHeadlessFeedbackReader
 from application.headless.goal_mapper import HeadlessGoalStateMapper
+from application.headless.stop_policy import HeadlessStopPolicy
+from application.learning.retry_learning_engine import RetryLearningEngine
+from application.learning.retry_learning_store import RetryLearningStore
+from application.learning.retry_taxonomy import RetryTaxonomy
+from application.memory.business_memory_query import BusinessMemoryQueryService
+from application.memory.business_memory_state_adapter import BusinessMemoryStateAdapter
+from application.memory.business_operating_memory import (
+    BusinessMemoryCompactor,
+    BusinessMemoryPolicy,
+    FileBusinessOperatingMemoryStore,
+)
+from application.planning.long_horizon_planner import LongHorizonPlanner
+from application.planning.multi_goal_planner import FileMultiGoalPlannerStore, MultiGoalPlannerService
+from application.planning.strategy_memory import FileStrategyMemoryStore, StrategyMemoryService
+from bootstrap.entrypoint_context import bootstrap_entrypoint, is_allowed_bootstrap_entrypoint
+from core.safety.operational.runtime_bootstrap import resolve_operational_safety_runtime
+from execution.autonomy_counters import AutonomyCounterResolver, FileAutonomyCounterStore
+from execution.autonomy_kill_switch import FileAutonomyKillSwitchRegistry
+from execution.blast_radius_guard import BlastRadiusGuard
+from execution.goal_score import GoalScoreEngine
 from execution.headless_ledger import FileHeadlessLedger
 from execution.headless_paths import build_headless_runtime_paths
 from execution.headless_state_store import FileHeadlessStateStore
-from application.headless.stop_policy import HeadlessStopPolicy
 from execution.idempotency_guard import FileIdempotencyGuard
 from execution.operator_handoff import FileOperatorHandoffStore
-from execution.outcome_normalizer import OutcomeNormalizer
-from execution.revenue_outcome import RevenueOutcomeProjector
-from execution.policy_explainer import PolicyExplainer
 from execution.optimization.adaptive_optimization_service import AdaptiveOptimizationService
 from execution.optimization.adaptive_optimizer import AdaptiveOptimizer
 from execution.optimization.performance_profile_store import FilePerformanceProfileStore
+from execution.outcome_normalizer import OutcomeNormalizer
 from execution.owner_path import FileOwnerPathStore, OwnerPathService
+from execution.performance_feedback_learning import FilePerformanceFeedbackStore, PerformanceFeedbackLearningService
+from execution.policy_explainer import PolicyExplainer
 from execution.retry_executor_policy import RetryExecutorPolicy
-from application.learning.retry_learning_engine import RetryLearningEngine
-from application.learning.retry_learning_store import RetryLearningStore
-from execution.self_healing_retry import SelfHealingRetryEngine
-from application.learning.retry_taxonomy import RetryTaxonomy
+from execution.revenue_outcome import RevenueOutcomeProjector
 from execution.scenario_goal_score import ScenarioGoalScoreEngine
-from bootstrap.entrypoint_context import bootstrap_entrypoint, is_allowed_bootstrap_entrypoint
+from execution.self_healing_retry import SelfHealingRetryEngine
 from runtime.boot.system_builder import build_system
 from runtime.platform.business_memory.service import BusinessMemoryService
-from core.safety.operational.runtime_bootstrap import resolve_operational_safety_runtime
 from runtime.platform.business_memory.store import FileBusinessMemoryStore
-
+from storage.evidence_wiring import build_canonical_evidence_store
 
 CANON_HEADLESS_BOOT = True
 
@@ -75,6 +79,7 @@ class HeadlessRuntime:
     performance_feedback_learning_service: object | None = None
     self_healing_retry_engine: object | None = None
     multi_goal_planner_service: object | None = None
+    evidence_store: object | None = None
 
 
 @lru_cache(maxsize=8)
@@ -86,6 +91,7 @@ def build_headless_runtime(*, entrypoint: str = "headless_sdk", root_dir: str | 
         core, executor, event_log, event_store, payment_outbox, stack, learning_job = build_system()
     del event_store, payment_outbox, stack, learning_job
     paths = build_headless_runtime_paths(root_dir=root_dir)
+    evidence_store = build_canonical_evidence_store(root_dir=root_dir)
     ledger = FileHeadlessLedger(root_dir=paths.headless_ledger_dir)
     memory_policy = BusinessMemoryPolicy()
     business_memory = FileBusinessOperatingMemoryStore(
@@ -170,6 +176,7 @@ def build_headless_runtime(*, entrypoint: str = "headless_sdk", root_dir: str | 
         performance_feedback_learning_service=performance_feedback_learning_service,
         self_healing_retry_engine=self_healing_retry_engine,
         multi_goal_planner_service=multi_goal_planner_service,
+        evidence_store=evidence_store,
     )
     return HeadlessRuntime(
         decision_core=core,
@@ -195,6 +202,7 @@ def build_headless_runtime(*, entrypoint: str = "headless_sdk", root_dir: str | 
         performance_feedback_learning_service=performance_feedback_learning_service,
         self_healing_retry_engine=self_healing_retry_engine,
         multi_goal_planner_service=multi_goal_planner_service,
+        evidence_store=evidence_store,
     )
 
 

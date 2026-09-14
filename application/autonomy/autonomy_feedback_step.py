@@ -239,6 +239,7 @@ class AutonomyFeedbackStep:
                 intent_id=str(getattr(executable_action, "intent_id", "") or f"intent:{decision_id}"),
                 decision_id=decision_id, action_id=str(executable_action.action_id), action_type=str(executable_action.action_type),
                 goal=str(getattr(request, "goal", "") or ""), status=str(action_result.status), feedback=feedback,
+                evidence_refs=tuple(getattr(executable_action, "evidence_refs", ()) or ()),
             ).as_dict()
         step = self._contract._step_builder.build(
             step_index=step_index,
