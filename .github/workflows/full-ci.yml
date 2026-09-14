@@ -61,11 +61,21 @@ jobs:
       - name: Run documented complete pytest tree
         env:
           BUSINESAIOS_DEEP_TEST_CLEANUP: "1"
+          BAIOS_LITERAL_PYTEST_TMP: /dev/shm/businesaios-pytest/${{ github.run_id }}-${{ github.run_attempt }}-${{ github.job }}
         shell: bash
         run: |
-          mkdir -p artifacts/ci/literal-pytest
+          scratch="$BAIOS_LITERAL_PYTEST_TMP"
+          case "$scratch" in
+            /dev/shm/businesaios-pytest/*) ;;
+            *) echo "refusing unsafe pytest scratch path: $scratch" >&2; exit 2 ;;
+          esac
+          rm -rf -- "$scratch"
+          mkdir -p "$scratch/pytest" artifacts/ci/literal-pytest
+          trap 'rm -rf -- "$BAIOS_LITERAL_PYTEST_TMP"' EXIT
+          export TMPDIR="$scratch" TMP="$scratch" TEMP="$scratch"
           set +e
           pytest -q \
+            --basetemp="$scratch/pytest" \
             --junitxml=artifacts/ci/literal-pytest/junit.xml \
             2>&1 | tee artifacts/ci/literal-pytest/pytest.log
           status=${PIPESTATUS[0]}
