@@ -16,7 +16,7 @@ from storage.evidence_store import (
 
 def test_evidence_has_one_selected_canonical_owner() -> None:
     row = ontology_ownership_by_entity()["Evidence"]
-    assert row.status is OwnershipAuditStatus.PARTIAL
+    assert row.status is OwnershipAuditStatus.DONE
     assert row.authoritative_module == "storage.evidence_store"
     assert row.storage_owner == "storage.evidence_store"
     assert CANON_STORAGE_EVIDENCE_STORE is True
@@ -54,7 +54,7 @@ def test_phase0_audit_does_not_report_evidence_as_duplicate_after_owner_selectio
     text = Path("docs/canon/BUSINESSAIOS_NEXT_PHASE0_AUDIT.md").read_text(encoding="utf-8")
     duplicate_line = next(line for line in text.splitlines() if line.startswith("- **DUPLICATE/ambiguous ownership:**"))
     assert "Evidence" not in duplicate_line.split(":**", 1)[-1].split(".", 1)[0]
-    assert "Evidence has a selected canonical owner" in duplicate_line
+    assert "Evidence ownership is DONE" in duplicate_line
 
 
 def test_business_autonomy_bootstrap_does_not_restore_distributed_evidence_as_active_store() -> None:
@@ -69,3 +69,23 @@ def test_process_discovery_owner_observations_are_wired_to_canonical_evidence_st
     router_text = Path("adapters/api/fastapi/router_adapter.py").read_text(encoding="utf-8")
     assert "evidence_store: EvidenceStore" in adapter_text
     assert "dependency_container.canonical_evidence_store()" in router_text
+
+
+def test_all_active_evidence_record_writers_are_declared_in_the_ownership_inventory() -> None:
+    row = ontology_ownership_by_entity()["Evidence"]
+    roots = (Path("application"), Path("runtime"), Path("execution"), Path("core"), Path("adapters"), Path("entrypoints"))
+    writers: set[str] = set()
+    blocked = {"__pycache__", ".venv", "venv"}
+    for root in roots:
+        for path in root.rglob("*.py"):
+            if any(part in blocked for part in path.parts):
+                continue
+            tree = ast.parse(path.read_text(encoding="utf-8"), filename=path.as_posix())
+            for node in ast.walk(tree):
+                if not isinstance(node, ast.Call):
+                    continue
+                func = node.func
+                name = func.id if isinstance(func, ast.Name) else (func.attr if isinstance(func, ast.Attribute) else "")
+                if name == "EvidenceRecord":
+                    writers.add(path.with_suffix("").as_posix().replace("/", "."))
+    assert writers == set(row.allowed_writers)

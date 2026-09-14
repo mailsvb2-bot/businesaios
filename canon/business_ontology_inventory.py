@@ -280,10 +280,10 @@ BUSINESS_ONTOLOGY_OWNERSHIP_AUDIT = (
     ),
     _row(
         "Evidence",
-        OwnershipAuditStatus.PARTIAL,
+        OwnershipAuditStatus.DONE,
         "storage.evidence_store",
         "storage.evidence_store",
-        "Canonical EvidenceRecord and storage owner are now selected; domain-specific writers still need migration onto the canonical lineage contract before Phase 3 can be DONE.",
+        "Canonical EvidenceRecord/storage ownership is locked and all active durable Evidence writers route to it; remaining Phase 3 work concerns historical backfill and lineage completeness, not competing ownership.",
         writers=(
             "application.business_autonomy.persistence",
             "application.evidence.evidence_persistence",

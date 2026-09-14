@@ -10,7 +10,7 @@
 | 0 | Audit | **PARTIAL** | Exact main 64e937e audited at roadmap/domain level; exhaustive 245-clause evidence matrix remains to be completed. |
 | 1 | Business Ontology + Ownership | **PARTIAL** | Customer/Decision/Action/Outcome have strong owners; multiple required entities are missing or ambiguous. Machine-readable inventory added in this change. |
 | 2 | World Model v1 | **PARTIAL** | State synthesis already has provenance, conflicts, freshness and unknown semantics; epistemic/temporal canonical projection is being added without a second World Model. |
-| 3 | Evidence/Data Lineage | **PARTIAL** | `storage.evidence_store` is selected as the canonical Evidence owner and now carries source/privacy/retention metadata plus ordered lineage; remaining domain writers still require migration and full source→decision→action→outcome closure. |
+| 3 | Evidence/Data Lineage | **PARTIAL** | Evidence ownership is now **DONE** on `storage.evidence_store`: active durable writers are canonicalized and duplicate durable write paths are retired. Phase 3 remains PARTIAL for historical backfill and full source→decision→action→outcome lineage coverage. |
 | 4 | Business Event Spine | **PARTIAL** | Canonical EventStore and BusinessFactV1 exist; not every meaningful business mutation is normalized through one event contract. |
 | 5 | Canonical Closed Loop | **PARTIAL** | Decision→intent→policy/execution/outcome pieces exist; mandatory real-event→next-different-decision proof is not closed. |
 | 6 | Goal/Constraint Engine | **PARTIAL** | Goal/constraint contracts, planners and conflict helpers exist; first-class hierarchy/lifecycle/constraint engine is incomplete. |
@@ -33,7 +33,7 @@
 ## Critical duplicate/missing hotspots
 
 - **MISSING canonical owner:** Organization, Person, Partner, Employee, Service, Deal, Order, Asset, Resource, Hypothesis, Durable Task, Artifact, Document.
-- **DUPLICATE/ambiguous ownership:** Message, Payment, Revenue, Risk, Capability. Evidence has a selected canonical owner but remains PARTIAL until remaining writers migrate.
+- **DUPLICATE/ambiguous ownership:** Message, Payment, Revenue, Risk, Capability. Evidence ownership is DONE on `storage.evidence_store`; Phase 3 remains PARTIAL for lineage/backfill completeness rather than owner ambiguity.
 - **Strong locked owners already present:** Customer, sovereign Decision, ActionIntent/execution projection, BusinessOutcome, canonical World Model port.
 
 ## Next gate
