@@ -33,7 +33,7 @@
 ## Critical duplicate/missing hotspots
 
 - **MISSING canonical owner:** Organization, Person, Partner, Employee, Service, Deal, Order, Asset, Resource, Hypothesis, Durable Task, Artifact, Document.
-- **DUPLICATE/ambiguous ownership:** Message, Payment, Revenue, Risk, Capability, Evidence.
+- **DUPLICATE/ambiguous ownership:** Message, Payment, Revenue, Risk, Capability. Evidence has a selected canonical owner but remains PARTIAL until remaining writers migrate.
 - **Strong locked owners already present:** Customer, sovereign Decision, ActionIntent/execution projection, BusinessOutcome, canonical World Model port.
 
 ## Next gate

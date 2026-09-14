@@ -48,3 +48,10 @@ def test_no_second_canonical_evidence_store_marker_exists() -> None:
                     if isinstance(node.value, ast.Constant) and node.value.value is True:
                         owners.append(f"{path.as_posix()}:{target.id}")
     assert owners == ["storage/evidence_store.py:CANON_STORAGE_EVIDENCE_STORE"]
+
+
+def test_phase0_audit_does_not_report_evidence_as_duplicate_after_owner_selection() -> None:
+    text = Path("docs/canon/BUSINESSAIOS_NEXT_PHASE0_AUDIT.md").read_text(encoding="utf-8")
+    duplicate_line = next(line for line in text.splitlines() if line.startswith("- **DUPLICATE/ambiguous ownership:**"))
+    assert "Evidence" not in duplicate_line.split(":**", 1)[-1].split(".", 1)[0]
+    assert "Evidence has a selected canonical owner" in duplicate_line
