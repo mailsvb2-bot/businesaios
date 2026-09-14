@@ -62,3 +62,10 @@ def test_business_autonomy_bootstrap_does_not_restore_distributed_evidence_as_ac
     assert "DistributedEvidenceStore(" not in text
     assert "migrate_legacy_distributed_evidence" in text
     assert "'evidence': canonical_evidence" in text
+
+
+def test_process_discovery_owner_observations_are_wired_to_canonical_evidence_store() -> None:
+    adapter_text = Path("application/process_discovery/canonical_adapters.py").read_text(encoding="utf-8")
+    router_text = Path("adapters/api/fastapi/router_adapter.py").read_text(encoding="utf-8")
+    assert "evidence_store: EvidenceStore" in adapter_text
+    assert "dependency_container.canonical_evidence_store()" in router_text

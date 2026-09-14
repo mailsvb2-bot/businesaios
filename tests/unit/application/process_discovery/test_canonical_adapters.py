@@ -11,6 +11,7 @@ from application.process_discovery.canonical_adapters import (
     CanonicalProcessMeasurementSource,
 )
 from observability.platform.telemetry.event_store import InMemoryEventStore
+from storage.evidence_store import InMemoryEvidenceStore
 
 BASE = datetime(2026, 9, 1, tzinfo=UTC)
 
@@ -30,7 +31,7 @@ def _owner_payload(*, day: int, process_key: str = "follow_up") -> dict:
 
 
 def _built(store: InMemoryEventStore):
-    evidence = CanonicalProcessEvidenceStore(store)
+    evidence = CanonicalProcessEvidenceStore(store, InMemoryEvidenceStore())
     for day in range(6):
         evidence.record_owner_observation(
             tenant_id="t1", business_id="b1", user_id="owner-1", payload=_owner_payload(day=day)
@@ -45,7 +46,7 @@ def _built(store: InMemoryEventStore):
 
 def test_owner_observation_is_server_identified_and_owner_money_is_not_verified() -> None:
     store = InMemoryEventStore()
-    evidence = CanonicalProcessEvidenceStore(store)
+    evidence = CanonicalProcessEvidenceStore(store, InMemoryEvidenceStore())
     item = evidence.record_owner_observation(
         tenant_id="t1",
         business_id="b1",
@@ -166,9 +167,44 @@ def test_provider_delivery_uses_same_canonical_delivery_truth_as_action_center()
 
 def test_future_owner_observation_is_rejected() -> None:
     store = InMemoryEventStore()
-    evidence = CanonicalProcessEvidenceStore(store)
+    evidence = CanonicalProcessEvidenceStore(store, InMemoryEvidenceStore())
     with pytest.raises(ValueError, match="occurred_at_in_future"):
         evidence.record_owner_observation(
             tenant_id="t1", business_id="b1", user_id="owner-1",
             payload={**_owner_payload(day=0), "occurred_at": (datetime.now(UTC) + timedelta(days=1)).isoformat()},
+        )
+
+
+def test_owner_process_observation_is_backed_by_canonical_evidence_and_replay_is_idempotent() -> None:
+    event_store = InMemoryEventStore()
+    canonical = InMemoryEvidenceStore()
+    evidence = CanonicalProcessEvidenceStore(event_store, canonical)
+    payload = _owner_payload(day=0)
+
+    first = evidence.record_owner_observation(
+        tenant_id="t1", business_id="b1", user_id="owner-1", payload=payload, request_id="req-1"
+    )
+    second = evidence.record_owner_observation(
+        tenant_id="t1", business_id="b1", user_id="owner-1", payload=payload, request_id="req-1"
+    )
+
+    assert first.evidence_id == second.evidence_id
+    records = canonical.list_for_tenant(tenant_id="t1")
+    assert len(records) == 1
+    record = records[0]
+    assert record.evidence_id == first.evidence_id
+    assert record.business_id == "b1"
+    assert record.source == "owner_asserted"
+    assert record.source_type == "owner_process_observation"
+    assert record.observed_at == first.occurred_at
+    assert record.confidence == 0.65
+    assert record.payload["process_key"] == first.process_key
+
+    with pytest.raises(ValueError, match="replay conflicts with canonical evidence"):
+        evidence.record_owner_observation(
+            tenant_id="t1",
+            business_id="b1",
+            user_id="owner-1",
+            payload={**payload, "manual_minutes": 999},
+            request_id="req-1",
         )

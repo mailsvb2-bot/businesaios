@@ -287,6 +287,7 @@ BUSINESS_ONTOLOGY_OWNERSHIP_AUDIT = (
         writers=(
             "application.business_autonomy.persistence",
             "application.evidence.evidence_persistence",
+            "application.process_discovery.canonical_adapters",
             "runtime.business_autonomy.provider_runtime_audit",
             "runtime.business_autonomy.distributed_runtime_views",
             "runtime.monetization.revenue_advisory_store",

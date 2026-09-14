@@ -10,6 +10,7 @@ from typing import Any
 from application.business_autonomy.provider_catalog import MESSAGING_GUARDED_WRITE_PROVIDER_KEYS
 from application.business_autonomy.provider_delivery_truth import provider_approval_completion_truth
 from shared.types import new_id
+from storage.evidence_store import EvidenceRecord, EvidenceStore
 
 from .contracts import (
     AgentBlueprint,
@@ -132,6 +133,7 @@ def _blueprint_from_payload(payload: Mapping[str, Any]) -> AgentBlueprint:
 @dataclass
 class CanonicalProcessEvidenceStore(TrustedProcessEvidenceSource):
     event_store: Any
+    evidence_store: EvidenceStore
 
     def record_owner_observation(self, *, tenant_id: str, business_id: str, user_id: str | None, payload: Mapping[str, Any], request_id: str | None = None) -> ProcessObservation:
         occurred_at = _dt(payload.get("occurred_at"))
@@ -152,6 +154,36 @@ class CanonicalProcessEvidenceStore(TrustedProcessEvidenceSource):
             operational_risk=float(payload.get("operational_risk") if payload.get("operational_risk") is not None else 0.5),
             trust_weight=0.65, metadata={"assertion_kind": "owner_process_occurrence", "server_issued_evidence_id": True},
         )
+        existing = self.evidence_store.get(tenant_id=tenant_id, evidence_id=item.evidence_id)
+        created_at = existing.created_at if existing is not None else datetime.now(UTC)
+        evidence = EvidenceRecord(
+            evidence_id=item.evidence_id,
+            tenant_id=tenant_id,
+            scope="process_discovery",
+            run_id=request_text or item.evidence_id,
+            action_type="process_observation",
+            verification_status="owner_asserted",
+            created_at=created_at,
+            source=item.source,
+            source_type="owner_process_observation",
+            business_id=business_id,
+            observed_at=occurred_at,
+            confidence=item.trust_weight,
+            privacy_class="internal",
+            retention_policy="process_observation_evidence",
+            lineage={
+                "source": item.source,
+                "normalization": f"process_observation:{item.evidence_id}",
+            },
+            refs=tuple(filter(None, (request_text, item.process_key))),
+            payload=_observation_payload(item),
+            labels={"business_id": business_id, "process_key": item.process_key},
+        ).normalized_for_write()
+        if existing is not None:
+            if existing != evidence:
+                raise ValueError("process observation evidence replay conflicts with canonical evidence")
+        else:
+            self.evidence_store.append(evidence)
         self.event_store.append(tenant_id=tenant_id, user_id=user_id, event_type=PROCESS_OBSERVATION_EVENT, payload=_observation_payload(item))
         return item
 

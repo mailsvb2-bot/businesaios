@@ -236,7 +236,9 @@ def create_api_router(*, application_service: object, dependency_container: Fast
     process_workspace = None
     process_request_idempotency = None
     if telemetry_event_store is not None:
-        process_evidence_store = CanonicalProcessEvidenceStore(telemetry_event_store)
+        process_evidence_store = CanonicalProcessEvidenceStore(
+            telemetry_event_store, dependency_container.canonical_evidence_store()
+        )
         process_blueprint_ledger = CanonicalBlueprintLedger(telemetry_event_store)
         def _process_provider_history_reader(*, tenant_id: str, business_id: str, provider_key: str, limit: int = 100):
             payload = provider_admin_handlers.list_provider_sync_history(
