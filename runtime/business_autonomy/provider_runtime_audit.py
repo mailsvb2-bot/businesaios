@@ -62,6 +62,7 @@ class ProviderRuntimeAuditRecorder:
                 source=str(provider_key),
                 source_type='provider_sync',
                 business_id=str(business_id),
+                observed_at=audit.created_at,
                 privacy_class='internal',
                 retention_policy='provider_runtime_evidence',
                 lineage={
@@ -111,6 +112,7 @@ class ProviderRuntimeAuditRecorder:
                 source=str(provider_key),
                 source_type='provider_webhook',
                 business_id=str(business_id),
+                observed_at=audit.created_at,
                 privacy_class='internal',
                 retention_policy='provider_runtime_evidence',
                 lineage={

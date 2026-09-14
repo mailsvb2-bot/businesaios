@@ -21,6 +21,7 @@ def test_provider_runtime_audit_emits_canonical_evidence_lineage() -> None:
     assert record.business_id == "business-a"
     assert record.source == "shopify"
     assert record.source_type == "provider_sync"
+    assert record.observed_at is not None
     assert record.retention_policy == "provider_runtime_evidence"
     assert dict(record.lineage)["source"] == "provider:shopify"
     assert dict(record.lineage)["normalization"] == refs["audit_event_id"]

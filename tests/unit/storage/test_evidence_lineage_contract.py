@@ -1,11 +1,12 @@
 from __future__ import annotations
 
+from dataclasses import replace
 from datetime import UTC, datetime, timedelta
 from hashlib import sha256
 
 import pytest
 
-from storage.evidence_store import EVIDENCE_LINEAGE_STAGES, EvidenceRecord, SqliteEvidenceStore
+from storage.evidence_store import EVIDENCE_LINEAGE_STAGES, EvidenceRecord, InMemoryEvidenceStore, SqliteEvidenceStore
 from storage.migration_registry import MigrationRegistry, default_storage_migration_registry
 from storage.sqlite_fallback import SqliteSessionFactory
 
@@ -36,6 +37,73 @@ def test_canonical_evidence_contract_round_trips_lineage_and_metadata(tmp_path) 
     )
     assert same_payload_other_source.payload_sha256 == restored.payload_sha256
     assert same_payload_other_source.hash != restored.hash
+
+
+def test_unknown_business_and_observed_time_are_not_invented() -> None:
+    record = EvidenceRecord.from_legacy(
+        tenant_id="tenant-a",
+        subject="legacy",
+        evidence_type="trace",
+        payload={"value": 1},
+        created_at=datetime(2026, 1, 1, tzinfo=UTC),
+    ).normalized()
+    assert record.business_id == "unknown"
+    assert record.observed_at is None
+    row = record.to_row()
+    assert row["business_id"] == "unknown"
+    assert row["observed_at"] is None
+
+
+def test_evidence_id_is_append_only_and_identical_replay_is_idempotent(tmp_path) -> None:
+    now = datetime(2026, 1, 1, tzinfo=UTC)
+    record = EvidenceRecord(
+        evidence_id="evidence-fixed",
+        tenant_id="tenant-a",
+        scope="provider",
+        run_id="run-1",
+        action_type="sync",
+        verification_status="verified",
+        payload={"value": 1},
+        source="shopify",
+        source_type="provider_api",
+        business_id="business-a",
+        observed_at=now,
+        retention_policy="evidence_30d",
+        lineage={"source": "shopify:1", "action": "sync:1", "outcome": "ok:1"},
+    )
+    memory = InMemoryEvidenceStore()
+    assert memory.append(record) == memory.append(record)
+    with pytest.raises(ValueError, match="evidence_id is immutable"):
+        memory.append(replace(record, payload={"value": 2}))
+
+    sqlite = SqliteEvidenceStore(SqliteSessionFactory(tmp_path / "append-only.db"))
+    assert sqlite.append(record) == sqlite.append(record)
+    with pytest.raises(ValueError, match="evidence_id is immutable"):
+        sqlite.append(replace(record, source="forged"))
+    assert sqlite.get(record.evidence_id) == record.normalized()
+
+
+def test_canonical_hash_binds_tenant_and_execution_identity() -> None:
+    now = datetime(2026, 1, 1, tzinfo=UTC)
+    base = EvidenceRecord(
+        evidence_id="evidence-fixed",
+        tenant_id="tenant-a",
+        scope="decision",
+        run_id="run-1",
+        action_id="action-1",
+        action_type="send_message",
+        verification_status="verified",
+        payload={"value": 1},
+        source="crm",
+        source_type="provider_api",
+        business_id="business-a",
+        observed_at=now,
+        retention_policy="evidence_30d",
+    )
+    assert replace(base, tenant_id="tenant-b").hash != base.hash
+    assert replace(base, run_id="run-2").hash != base.hash
+    assert replace(base, action_id="action-2").hash != base.hash
+    assert replace(base, verification_status="rejected").hash != base.hash
 
 
 def test_evidence_contract_rejects_invalid_confidence_and_unknown_lineage_stage() -> None:
@@ -73,8 +141,8 @@ def test_v1_evidence_database_upgrades_without_losing_legacy_records(tmp_path) -
     assert restored is not None
     assert restored.source == "legacy"
     assert restored.source_type == "legacy"
-    assert restored.business_id == "global"
-    assert restored.observed_at == datetime(2026, 1, 1, tzinfo=UTC)
+    assert restored.business_id == "unknown"
+    assert restored.observed_at is None
     assert restored.retention_policy == "legacy"
     assert restored.payload == {"score": 1}
 

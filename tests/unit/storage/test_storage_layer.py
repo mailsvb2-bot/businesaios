@@ -135,8 +135,8 @@ def test_sqlite_evidence_store_round_trip_and_retention(tmp_path) -> None:
     assert fetched_active.payload["score"] == 1.0
     assert fetched_active.source == "legacy"
     assert fetched_active.source_type == "legacy"
-    assert fetched_active.business_id == "tenant-a"
-    assert fetched_active.observed_at == now
+    assert fetched_active.business_id == "unknown"
+    assert fetched_active.observed_at is None
     assert fetched_active.privacy_class == "internal"
     assert fetched_active.retention_policy == "legacy"
     assert len(fetched_active.hash) == 64

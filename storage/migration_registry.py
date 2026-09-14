@@ -230,7 +230,7 @@ _DEF = MigrationRegistry(
             statements=(
                 "ALTER TABLE storage_evidence_log ADD COLUMN source TEXT NOT NULL DEFAULT 'legacy';",
                 "ALTER TABLE storage_evidence_log ADD COLUMN source_type TEXT NOT NULL DEFAULT 'legacy';",
-                "ALTER TABLE storage_evidence_log ADD COLUMN business_id TEXT NOT NULL DEFAULT 'global';",
+                "ALTER TABLE storage_evidence_log ADD COLUMN business_id TEXT NOT NULL DEFAULT 'unknown';",
                 "ALTER TABLE storage_evidence_log ADD COLUMN observed_at TEXT;",
                 "ALTER TABLE storage_evidence_log ADD COLUMN confidence REAL;",
                 "ALTER TABLE storage_evidence_log ADD COLUMN privacy_class TEXT NOT NULL DEFAULT 'internal';",

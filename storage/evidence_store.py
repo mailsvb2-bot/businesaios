@@ -63,7 +63,7 @@ class EvidenceRecord:
     evidence_id: str = field(default_factory=lambda: str(uuid.uuid4()))
     source: str = "unknown"
     source_type: str = "unknown"
-    business_id: str = "global"
+    business_id: str = "unknown"
     observed_at: datetime | None = None
     confidence: float | None = None
     privacy_class: str = "internal"
@@ -114,8 +114,8 @@ class EvidenceRecord:
             evidence_id=evidence_id or str(uuid.uuid4()),
             source=source,
             source_type=source_type,
-            business_id=business_id or tenant_id,
-            observed_at=observed_at or created_at,
+            business_id=business_id or "unknown",
+            observed_at=observed_at,
             confidence=confidence,
             privacy_class=privacy_class,
             retention_policy=retention_policy,
@@ -161,7 +161,7 @@ class EvidenceRecord:
             source=str(self.source).strip(),
             source_type=str(self.source_type).strip(),
             business_id=str(self.business_id).strip(),
-            observed_at=self.observed_at or self.created_at,
+            observed_at=self.observed_at,
             confidence=None if self.confidence is None else float(self.confidence),
             privacy_class=str(self.privacy_class).strip(),
             retention_policy=str(self.retention_policy).strip(),
@@ -182,17 +182,29 @@ class EvidenceRecord:
     @property
     def evidence_sha256(self) -> str:
         normalized = self.normalized()
-        observed_at = normalized.observed_at or normalized.created_at
         envelope = {
+            "evidence_id": normalized.evidence_id,
+            "tenant_id": normalized.tenant_id,
+            "partition_key": normalized.partition_key,
+            "scope": normalized.scope,
+            "run_id": normalized.run_id,
+            "action_id": normalized.action_id,
+            "action_type": normalized.action_type,
+            "verification_status": normalized.verification_status,
+            "created_at": normalized.created_at.isoformat(),
             "source": normalized.source,
             "source_type": normalized.source_type,
             "business_id": normalized.business_id,
-            "observed_at": observed_at.isoformat(),
+            "observed_at": None if normalized.observed_at is None else normalized.observed_at.isoformat(),
             "confidence": normalized.confidence,
             "privacy_class": normalized.privacy_class,
             "retention_policy": normalized.retention_policy,
             "lineage": dict(normalized.lineage),
+            "refs": normalized.refs,
+            "labels": dict(normalized.labels),
             "payload": normalized.payload,
+            "retention_until": None if normalized.retention_until is None else normalized.retention_until.isoformat(),
+            "legal_hold": normalized.legal_hold,
         }
         return sha256(_json_dumps(envelope).encode("utf-8")).hexdigest()
 
@@ -212,7 +224,6 @@ class EvidenceRecord:
 
     def to_row(self) -> dict[str, object]:
         record = self.normalized()
-        observed_at = record.observed_at or record.created_at
         return {
             "evidence_id": record.evidence_id,
             "tenant_id": record.tenant_id,
@@ -226,7 +237,7 @@ class EvidenceRecord:
             "source": record.source,
             "source_type": record.source_type,
             "business_id": record.business_id,
-            "observed_at": observed_at.isoformat(),
+            "observed_at": None if record.observed_at is None else record.observed_at.isoformat(),
             "confidence": record.confidence,
             "privacy_class": record.privacy_class,
             "retention_policy": record.retention_policy,
@@ -254,8 +265,8 @@ class EvidenceRecord:
             created_at=datetime.fromisoformat(str(row.get("created_at"))),
             source=str(row.get("source") or "legacy"),
             source_type=str(row.get("source_type") or "legacy"),
-            business_id=str(row.get("business_id") or row.get("tenant_id") or "global"),
-            observed_at=datetime.fromisoformat(str(row.get("observed_at") or row.get("created_at"))),
+            business_id=str(row.get("business_id") or "unknown"),
+            observed_at=None if row.get("observed_at") in (None, "") else datetime.fromisoformat(str(row.get("observed_at"))),
             confidence=None if row.get("confidence") in (None, "") else float(row.get("confidence")),
             privacy_class=str(row.get("privacy_class") or "internal"),
             retention_policy=str(row.get("retention_policy") or "legacy"),
@@ -266,6 +277,9 @@ class EvidenceRecord:
             retention_until=None if retention_until_raw in (None, "") else datetime.fromisoformat(str(retention_until_raw)),
             legal_hold=bool(row.get("legal_hold") or 0),
         ).normalized()
+        stored_partition_key = str(row.get("partition_key") or "").strip()
+        if stored_partition_key and stored_partition_key != record.partition_key:
+            raise ValueError("evidence partition key mismatch")
         stored_payload_sha256 = str(row.get("payload_sha256") or "").strip()
         if stored_payload_sha256 and stored_payload_sha256 != record.payload_sha256:
             raise ValueError("evidence payload hash mismatch")
@@ -296,6 +310,11 @@ class InMemoryEvidenceStore:
     def append(self, record: EvidenceRecord) -> EvidenceRecord:
         normalized = record.normalized()
         with self._lock:
+            existing = self._items.get(normalized.evidence_id)
+            if existing is not None:
+                if existing != normalized:
+                    raise ValueError("evidence_id is immutable and already bound to different evidence")
+                return existing
             self._items[normalized.evidence_id] = normalized
         return normalized
 
@@ -344,7 +363,7 @@ class SqliteEvidenceStore:
         with self._session_factory.open() as session:
             session.execute(
                 """
-                INSERT OR REPLACE INTO storage_evidence_log(
+                INSERT OR IGNORE INTO storage_evidence_log(
                     evidence_id, tenant_id, partition_key, scope, run_id, action_id, action_type,
                     verification_status, created_at, source, source_type, business_id, observed_at,
                     confidence, privacy_class, retention_policy, lineage_json, refs_json, payload_json, payload_sha256,
@@ -359,7 +378,16 @@ class SqliteEvidenceStore:
                     row["evidence_sha256"], row["labels_json"], row["retention_until"], row["legal_hold"],
                 ),
             )
-        return normalized
+            stored = session.fetchone(
+                "SELECT * FROM storage_evidence_log WHERE evidence_id = ?",
+                (normalized.evidence_id,),
+            )
+        if stored is None:
+            raise RuntimeError("evidence append did not persist a record")
+        existing = EvidenceRecord.from_row(dict(stored))
+        if existing != normalized:
+            raise ValueError("evidence_id is immutable and already bound to different evidence")
+        return existing
 
     def get(self, evidence_id: str) -> EvidenceRecord | None:
         with self._session_factory.open() as session:
@@ -411,30 +439,7 @@ class PostgresEvidenceStore:
                     confidence, privacy_class, retention_policy, lineage_json, refs_json, payload_json, payload_sha256,
                     evidence_sha256, labels_json, retention_until, legal_hold
                 ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
-                ON CONFLICT (evidence_id) DO UPDATE SET
-                    tenant_id=EXCLUDED.tenant_id,
-                    partition_key=EXCLUDED.partition_key,
-                    scope=EXCLUDED.scope,
-                    run_id=EXCLUDED.run_id,
-                    action_id=EXCLUDED.action_id,
-                    action_type=EXCLUDED.action_type,
-                    verification_status=EXCLUDED.verification_status,
-                    created_at=EXCLUDED.created_at,
-                    source=EXCLUDED.source,
-                    source_type=EXCLUDED.source_type,
-                    business_id=EXCLUDED.business_id,
-                    observed_at=EXCLUDED.observed_at,
-                    confidence=EXCLUDED.confidence,
-                    privacy_class=EXCLUDED.privacy_class,
-                    retention_policy=EXCLUDED.retention_policy,
-                    lineage_json=EXCLUDED.lineage_json,
-                    refs_json=EXCLUDED.refs_json,
-                    payload_json=EXCLUDED.payload_json,
-                    payload_sha256=EXCLUDED.payload_sha256,
-                    evidence_sha256=EXCLUDED.evidence_sha256,
-                    labels_json=EXCLUDED.labels_json,
-                    retention_until=EXCLUDED.retention_until,
-                    legal_hold=EXCLUDED.legal_hold
+                ON CONFLICT (evidence_id) DO NOTHING
                 """,
                 (
                     row["evidence_id"], row["tenant_id"], row["partition_key"], row["scope"], row["run_id"], row["action_id"],
@@ -444,7 +449,16 @@ class PostgresEvidenceStore:
                     row["evidence_sha256"], row["labels_json"], row["retention_until"], row["legal_hold"],
                 ),
             )
-        return normalized
+            stored = session.fetchone(
+                "SELECT * FROM storage_evidence_log WHERE evidence_id = %s",
+                (normalized.evidence_id,),
+            )
+        if stored is None:
+            raise RuntimeError("evidence append did not persist a record")
+        existing = EvidenceRecord.from_row(stored)
+        if existing != normalized:
+            raise ValueError("evidence_id is immutable and already bound to different evidence")
+        return existing
 
     def get(self, evidence_id: str) -> EvidenceRecord | None:
         with self._session_factory.open() as session:
