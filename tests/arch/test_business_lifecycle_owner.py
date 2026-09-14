@@ -48,3 +48,22 @@ def test_no_production_code_writes_business_registry_collection_directly() -> No
                 if keyword.arg == "collection" and isinstance(keyword.value, ast.Constant) and keyword.value.value == "business_registry":
                     offenders.append((path.relative_to(ROOT), node.lineno))
     assert offenders == []
+
+
+def test_business_registry_mutation_callers_match_canonical_writer_inventory() -> None:
+    from canon.business_ontology_inventory import ontology_ownership_by_entity
+
+    expected = set(ontology_ownership_by_entity()["Business"].allowed_writers)
+    actual = set()
+    for path in _python_files():
+        if path.relative_to(ROOT) == OWNER:
+            continue
+        tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+        for node in ast.walk(tree):
+            if not isinstance(node, ast.Call) or not isinstance(node.func, ast.Attribute):
+                continue
+            if node.func.attr != "register_or_update":
+                continue
+            module = ".".join(path.relative_to(ROOT).with_suffix("").parts)
+            actual.add(module)
+    assert actual == expected
