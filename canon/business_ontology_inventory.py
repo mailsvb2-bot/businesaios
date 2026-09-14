@@ -83,10 +83,20 @@ def _row(
 BUSINESS_ONTOLOGY_OWNERSHIP_AUDIT = (
     _row(
         "Business",
-        OwnershipAuditStatus.PARTIAL,
+        OwnershipAuditStatus.DONE,
         "contracts.business_profile",
-        None,
-        "BusinessProfile exists but lifecycle/storage ownership is not canonicalized.",
+        "application.business_autonomy.distributed_capability_trust_registry",
+        "BusinessProfile is the canonical semantic projection; DistributedBusinessRegistry is the single durable tenant/business lifecycle owner and all production mutations route through its versioned register_or_update boundary.",
+        writers=(
+            "application.business_autonomy.business_connector_framework",
+            "runtime.business_autonomy.bootstrap",
+            "runtime.business_autonomy.distributed_runtime_views",
+        ),
+        readers=(
+            "runtime.business_autonomy.fleet_read_model",
+            "runtime.business_autonomy.bootstrap",
+            "runtime.business_autonomy.distributed_runtime_views",
+        ),
     ),
     _row("Organization", OwnershipAuditStatus.MISSING, None, None, "No universal Organization owner on main."),
     _row(

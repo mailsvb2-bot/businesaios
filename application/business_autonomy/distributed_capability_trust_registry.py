@@ -8,9 +8,11 @@ from typing import Any, Protocol
 from application.business_autonomy.contracts import BusinessCapability, CapabilityKind
 from application.business_autonomy.registry import RegisteredBusinessCapabilities
 from application.business_autonomy.trust import BusinessTrustSnapshot, BusinessTrustTier
+from contracts.business_profile import BusinessProfile
 from core.tenancy.normalization import require_tenant_id
 
 CANON_DISTRIBUTED_BUSINESS_REGISTRY = True
+CANON_BUSINESS_LIFECYCLE_OWNER = True
 
 
 class DistributedDocumentPort(Protocol):
@@ -191,6 +193,15 @@ class DistributedBusinessRegistry:
             raise KeyError(f"business registry tenant binding ambiguous: {key}")
         return matches[0]
 
+    def profile_snapshot(self, *, tenant_id: str, business_id: str) -> BusinessProfile:
+        record = self.get(tenant_id=tenant_id, business_id=business_id)
+        if record is None:
+            raise KeyError(f"business registry record missing: {tenant_id}:{business_id}")
+        return BusinessProfile(
+            business_id=record.business_id,
+            region=record.region,
+        )
+
     def capability_snapshot(self, *, tenant_id: str, business_id: str) -> RegisteredBusinessCapabilities:
         record = self.get(tenant_id=tenant_id, business_id=business_id)
         if record is None:
@@ -212,6 +223,7 @@ class DistributedBusinessRegistry:
 
 __all__ = [
     "BusinessRegistryRecord",
+    "CANON_BUSINESS_LIFECYCLE_OWNER",
     "CANON_DISTRIBUTED_BUSINESS_REGISTRY",
     "DistributedBusinessRegistry",
     "DistributedDocumentPort",
