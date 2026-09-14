@@ -347,12 +347,13 @@ def test_repository_scan_handles_os_errors_and_post_stat_growth(
 ) -> None:
     from scripts.ci import repository_sources
 
-    monkeypatch.setattr(
-        repository_sources.os,
-        "scandir",
-        lambda _directory: (_ for _ in ()).throw(PermissionError()),
-    )
-    assert repository_sources.iter_repository_python_files(tmp_path) == ()
+    with monkeypatch.context() as patch:
+        patch.setattr(
+            repository_sources.os,
+            "scandir",
+            lambda _directory: (_ for _ in ()).throw(PermissionError()),
+        )
+        assert repository_sources.iter_repository_python_files(tmp_path) == ()
 
     class BrokenEntry:
         name = "broken.py"
@@ -361,12 +362,13 @@ def test_repository_scan_handles_os_errors_and_post_stat_growth(
         def is_symlink(self):
             raise OSError("stat failed")
 
-    monkeypatch.setattr(
-        repository_sources.os,
-        "scandir",
-        lambda _directory: (BrokenEntry(),),
-    )
-    assert repository_sources.iter_repository_python_files(tmp_path) == ()
+    with monkeypatch.context() as patch:
+        patch.setattr(
+            repository_sources.os,
+            "scandir",
+            lambda _directory: (BrokenEntry(),),
+        )
+        assert repository_sources.iter_repository_python_files(tmp_path) == ()
 
     class NonFileEntry:
         name = "socket.py"
@@ -381,12 +383,13 @@ def test_repository_scan_handles_os_errors_and_post_stat_growth(
         def is_file(self, *, follow_symlinks=False):
             return False
 
-    monkeypatch.setattr(
-        repository_sources.os,
-        "scandir",
-        lambda _directory: (NonFileEntry(),),
-    )
-    assert repository_sources.iter_repository_python_files(tmp_path) == ()
+    with monkeypatch.context() as patch:
+        patch.setattr(
+            repository_sources.os,
+            "scandir",
+            lambda _directory: (NonFileEntry(),),
+        )
+        assert repository_sources.iter_repository_python_files(tmp_path) == ()
 
     path = _write(tmp_path / "grows.py", "1234")
     real_open = Path.open
@@ -401,7 +404,8 @@ def test_repository_scan_handles_os_errors_and_post_stat_growth(
         def read(self, _limit):
             return b"12345"
 
-    monkeypatch.setattr(Path, "open", lambda self, *args, **kwargs: GrowingReader())
-    with pytest.raises(ValueError, match="source file exceeds"):
-        repository_sources.read_python_source(path, max_bytes=4)
-    monkeypatch.setattr(Path, "open", real_open)
+    with monkeypatch.context() as patch:
+        patch.setattr(Path, "open", lambda self, *args, **kwargs: GrowingReader())
+        with pytest.raises(ValueError, match="source file exceeds"):
+            repository_sources.read_python_source(path, max_bytes=4)
+    assert Path.open is real_open

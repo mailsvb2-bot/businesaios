@@ -59,3 +59,44 @@ def test_runtime_business_autonomy_public_api_builds_operationalization() -> Non
     assert "workflow_runtime" in stack
     assert "dashboard_service" in stack
     assert "readiness_report_builder" in stack
+
+
+def test_operationalization_cache_is_scoped_to_storage_configuration(tmp_path, monkeypatch) -> None:
+    first_root = tmp_path / "first"
+    second_root = tmp_path / "second"
+
+    monkeypatch.setenv("DATA_DIR", str(first_root))
+    first = build_business_autonomy_operationalization()
+    assert build_business_autonomy_operationalization() is first
+
+    monkeypatch.setenv("DATA_DIR", str(second_root))
+    second = build_business_autonomy_operationalization()
+
+    assert second is not first
+    assert build_business_autonomy_operationalization() is second
+    view = second["operator_admin_plane"].get_fleet_view(limit=10)
+    assert view.fleet_cards
+
+
+def test_operationalization_storage_key_does_not_retain_raw_postgres_dsn(monkeypatch) -> None:
+    from types import SimpleNamespace
+
+    from runtime.business_autonomy import public_api
+
+    secret_dsn = "postgresql://user:super-secret-password@db.example.test/business"
+    monkeypatch.setattr(
+        public_api,
+        "resolve_storage_config",
+        lambda: SimpleNamespace(
+            env="dev",
+            backend="postgres",
+            postgres_dsn=secret_dsn,
+            postgres_event_store_enabled=True,
+        ),
+    )
+
+    key = public_api._operationalization_storage_key()
+
+    assert secret_dsn not in key
+    assert "super-secret-password" not in "|".join(key)
+    assert len(key[3]) == 64
