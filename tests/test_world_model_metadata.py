@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from application.decision_state.world_model_metadata import (
     attach_world_model_metadata,
+    extract_pinned_derived_fact_ref_from_payload,
     extract_pinned_evidence_refs_from_payload,
     extract_world_model_metadata,
     summarize_pricing_world_state,
@@ -76,5 +77,7 @@ def test_world_model_evidence_refs_are_pinned_into_signed_payload_metadata():
         generated_at_ms=12, records=(record,),
     )
     payload = attach_world_model_metadata(envelope_payload={"decision_id": "d1"}, state=state)
+    assert payload["world_model_meta"]["semantic_state_id"] == "state-1"
     assert payload["world_model_meta"]["evidence_refs"] == ["evidence-1", "evidence-2"]
+    assert extract_pinned_derived_fact_ref_from_payload(payload) == "state-1"
     assert extract_pinned_evidence_refs_from_payload(payload) == ("evidence-1", "evidence-2")

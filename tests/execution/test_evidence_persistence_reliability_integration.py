@@ -194,6 +194,7 @@ def test_evidence_persistence_writes_one_canonical_record_and_replays_idempotent
         tenant_id='tenant-1', business_id='biz-1', run_id='run-canonical', goal='Grow revenue', step_index=1,
         action={
             'action_type': 'send_email', 'action_id': 'act-canonical', 'decision_id': 'dec-canonical',
+            'derived_fact_ref': 'semantic-state-canonical',
             'evidence_refs': ['evidence-world-1', 'evidence-world-2'],
         },
         execution_result={'executed': True, 'source_of_truth': 'provider_receipt'},
@@ -205,7 +206,11 @@ def test_evidence_persistence_writes_one_canonical_record_and_replays_idempotent
         world_state_before={}, world_state_after={},
         final_feedback={
             'verification_status': 'accepted',
-            'business_outcome': {'outcome_id': 'outcome:act-canonical', 'source_of_truth': 'provider_receipt'},
+            'business_outcome': {
+                'outcome_id': 'outcome:act-canonical',
+                'source_of_truth': 'provider_receipt',
+                'derived_fact_ref': 'semantic-state-canonical',
+            },
         },
     )
     first = service.persist(**kwargs)
@@ -214,10 +219,12 @@ def test_evidence_persistence_writes_one_canonical_record_and_replays_idempotent
     record = first_rows[0]
     assert record.business_id == 'biz-1'
     assert record.refs == ('evidence-world-1', 'evidence-world-2', 'msg:canonical')
+    assert record.lineage['derived_fact'] == 'semantic-state-canonical'
     assert record.lineage['decision'] == 'dec-canonical'
     assert record.lineage['action'] == 'act-canonical'
     assert record.lineage['outcome'] == 'outcome:act-canonical'
     assert record.lineage['source'] == 'msg:canonical'
+    assert record.lineage_complete is True
     second = service.persist(**kwargs)
     second_rows = evidence_store.list_for_tenant(tenant_id='tenant-1')
     assert len(second_rows) == 1

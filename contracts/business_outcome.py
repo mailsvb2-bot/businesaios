@@ -53,12 +53,14 @@ class BusinessOutcomeV1:
     metrics: Mapping[str, Any] = field(default_factory=dict)
     schema_version: int = 1
     evidence_refs: tuple[str, ...] = ()
+    derived_fact_ref: str = ""
 
     @classmethod
     def from_feedback(
         cls, *, tenant_id: str, business_id: str, run_id: str, intent_id: str,
         decision_id: str, action_id: str, action_type: str, goal: str, status: str,
         feedback: Mapping[str, Any], evidence_refs: tuple[str, ...] = (),
+        derived_fact_ref: str = "",
     ) -> BusinessOutcomeV1:
         data = dict(feedback or {})
         goal_eval = _dict(data.get("goal_evaluation"))
@@ -76,6 +78,7 @@ class BusinessOutcomeV1:
             tuple(str(value) for value in data.get("external_refs") or () if str(value).strip()),
             _dict(data.get("normalized_outcome")),
             evidence_refs=tuple(dict.fromkeys(str(value).strip() for value in evidence_refs if str(value).strip())),
+            derived_fact_ref=str(derived_fact_ref or "").strip(),
         )
         required = (
             outcome.outcome_id, outcome.tenant_id, outcome.business_id, outcome.run_id,

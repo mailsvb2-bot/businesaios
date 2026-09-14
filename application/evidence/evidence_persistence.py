@@ -218,6 +218,7 @@ class EvidencePersistenceService:
         ) or 'unknown'
         lineage = {
             'normalization': str(persistence_key),
+            'derived_fact': _text(action.get('derived_fact_ref') or business_outcome.get('derived_fact_ref')),
             'decision': _text(action.get('decision_id') or business_outcome.get('decision_id')),
             'action': _text(outcome.get('action_id')),
             'outcome': _text(business_outcome.get('outcome_id')),

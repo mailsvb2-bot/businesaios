@@ -52,6 +52,7 @@ class AutonomyDecisionStep:
                 "correlation_id": envelope.decision.correlation_id,
                 "action_intent_id": action_intent.intent_id,
                 "evidence_refs": list(action_intent.evidence_refs),
+                "derived_fact_ref": action_intent.derived_fact_ref,
                 "policy_explanation": {
                     "policy_id": explanation.policy_id,
                     "summary": explanation.summary,
