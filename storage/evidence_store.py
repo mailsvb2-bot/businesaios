@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 import uuid
 from collections.abc import Mapping
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from datetime import UTC, datetime
 from hashlib import sha256
 from threading import RLock
@@ -18,6 +18,7 @@ from storage.tenant_partitioning import build_partition_key, normalize_storage_t
 CANON_STORAGE_EVIDENCE_STORE = True
 CANON_STORAGE_EVIDENCE_RECORD_EXPLICIT_LEGACY_FACTORY = True
 EVIDENCE_LINEAGE_STAGES = ("source", "normalization", "derived_fact", "decision", "action", "outcome")
+EVIDENCE_SCHEMA_VERSION = 2
 
 
 def utc_now() -> datetime:
@@ -69,6 +70,7 @@ class EvidenceRecord:
     privacy_class: str = "internal"
     retention_policy: str = "default"
     lineage: Mapping[str, str] = field(default_factory=dict)
+    schema_version: int = EVIDENCE_SCHEMA_VERSION
 
     @classmethod
     def from_legacy(
@@ -135,6 +137,8 @@ class EvidenceRecord:
             raise ValueError("created_at must be timezone-aware")
         if self.observed_at is not None and self.observed_at.tzinfo is None:
             raise ValueError("observed_at must be timezone-aware")
+        if int(self.schema_version) not in (1, EVIDENCE_SCHEMA_VERSION):
+            raise ValueError("unsupported evidence schema_version")
         if self.confidence is not None and not 0.0 <= float(self.confidence) <= 1.0:
             raise ValueError("confidence must be between 0 and 1")
         _normalize_lineage(self.lineage)
@@ -166,6 +170,7 @@ class EvidenceRecord:
             privacy_class=str(self.privacy_class).strip(),
             retention_policy=str(self.retention_policy).strip(),
             lineage=_normalize_lineage(self.lineage),
+            schema_version=int(self.schema_version),
         )
         record.validate()
         return record
@@ -183,6 +188,7 @@ class EvidenceRecord:
     def evidence_sha256(self) -> str:
         normalized = self.normalized()
         envelope = {
+            "schema_version": normalized.schema_version,
             "evidence_id": normalized.evidence_id,
             "tenant_id": normalized.tenant_id,
             "partition_key": normalized.partition_key,
@@ -226,6 +232,7 @@ class EvidenceRecord:
         record = self.normalized()
         return {
             "evidence_id": record.evidence_id,
+            "evidence_schema_version": record.schema_version,
             "tenant_id": record.tenant_id,
             "partition_key": record.partition_key,
             "scope": record.scope,
@@ -252,7 +259,9 @@ class EvidenceRecord:
         }
 
     @classmethod
-    def from_row(cls, row: Mapping[str, object]) -> EvidenceRecord:
+    def from_row(
+        cls, row: Mapping[str, object], *, allow_legacy_schema: bool = False
+    ) -> EvidenceRecord:
         retention_until_raw = row.get("retention_until")
         record = cls(
             evidence_id=str(row.get("evidence_id") or ""),
@@ -276,7 +285,10 @@ class EvidenceRecord:
             labels=json.loads(str(row.get("labels_json") or "{}")),
             retention_until=None if retention_until_raw in (None, "") else datetime.fromisoformat(str(retention_until_raw)),
             legal_hold=bool(row.get("legal_hold") or 0),
+            schema_version=int(row.get("evidence_schema_version") or 1),
         ).normalized()
+        if record.schema_version < EVIDENCE_SCHEMA_VERSION and not allow_legacy_schema:
+            raise ValueError("legacy evidence schema requires controlled migration")
         stored_partition_key = str(row.get("partition_key") or "").strip()
         if stored_partition_key and stored_partition_key != record.partition_key:
             raise ValueError("evidence partition key mismatch")
@@ -284,9 +296,35 @@ class EvidenceRecord:
         if stored_payload_sha256 and stored_payload_sha256 != record.payload_sha256:
             raise ValueError("evidence payload hash mismatch")
         stored_evidence_sha256 = str(row.get("evidence_sha256") or "").strip()
+        if record.schema_version >= EVIDENCE_SCHEMA_VERSION and not stored_evidence_sha256:
+            raise ValueError("current evidence record is missing canonical hash")
         if stored_evidence_sha256 and stored_evidence_sha256 != record.evidence_sha256:
             raise ValueError("evidence canonical hash mismatch")
         return record
+
+
+def _backfill_legacy_evidence_integrity(session: Any) -> None:
+    rows = session.fetchall(
+        "SELECT * FROM storage_evidence_log WHERE evidence_schema_version = 1"
+    )
+    if not rows:
+        return
+    dialect = str(getattr(session, "dialect", "")).strip().lower()
+    for raw in rows:
+        row = dict(raw)
+        legacy = EvidenceRecord.from_row(row, allow_legacy_schema=True)
+        upgraded = replace(legacy, schema_version=EVIDENCE_SCHEMA_VERSION).normalized()
+        digest = upgraded.evidence_sha256
+        if dialect == "postgres":
+            session.execute(
+                "UPDATE storage_evidence_log SET evidence_schema_version = %s, evidence_sha256 = %s WHERE evidence_id = %s",
+                (EVIDENCE_SCHEMA_VERSION, digest, upgraded.evidence_id),
+            )
+        else:
+            session.execute(
+                "UPDATE storage_evidence_log SET evidence_schema_version = ?, evidence_sha256 = ? WHERE evidence_id = ?",
+                (EVIDENCE_SCHEMA_VERSION, digest, upgraded.evidence_id),
+            )
 
 
 @runtime_checkable
@@ -356,6 +394,7 @@ class SqliteEvidenceStore:
     def _init_schema(self) -> None:
         with self._session_factory.open() as session:
             self._migrations.apply_pending(session)
+            _backfill_legacy_evidence_integrity(session)
 
     def append(self, record: EvidenceRecord) -> EvidenceRecord:
         normalized = record.normalized()
@@ -364,14 +403,14 @@ class SqliteEvidenceStore:
             session.execute(
                 """
                 INSERT OR IGNORE INTO storage_evidence_log(
-                    evidence_id, tenant_id, partition_key, scope, run_id, action_id, action_type,
+                    evidence_id, evidence_schema_version, tenant_id, partition_key, scope, run_id, action_id, action_type,
                     verification_status, created_at, source, source_type, business_id, observed_at,
                     confidence, privacy_class, retention_policy, lineage_json, refs_json, payload_json, payload_sha256,
                     evidence_sha256, labels_json, retention_until, legal_hold
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
-                    row["evidence_id"], row["tenant_id"], row["partition_key"], row["scope"], row["run_id"], row["action_id"],
+                    row["evidence_id"], row["evidence_schema_version"], row["tenant_id"], row["partition_key"], row["scope"], row["run_id"], row["action_id"],
                     row["action_type"], row["verification_status"], row["created_at"], row["source"], row["source_type"],
                     row["business_id"], row["observed_at"], row["confidence"], row["privacy_class"], row["retention_policy"],
                     row["lineage_json"], row["refs_json"], row["payload_json"], row["payload_sha256"],
@@ -426,6 +465,7 @@ class PostgresEvidenceStore:
     def _init_schema(self) -> None:
         with self._session_factory.open() as session:
             self._migrations.apply_pending(session)
+            _backfill_legacy_evidence_integrity(session)
 
     def append(self, record: EvidenceRecord) -> EvidenceRecord:
         normalized = record.normalized()
@@ -434,15 +474,15 @@ class PostgresEvidenceStore:
             session.execute(
                 """
                 INSERT INTO storage_evidence_log(
-                    evidence_id, tenant_id, partition_key, scope, run_id, action_id, action_type,
+                    evidence_id, evidence_schema_version, tenant_id, partition_key, scope, run_id, action_id, action_type,
                     verification_status, created_at, source, source_type, business_id, observed_at,
                     confidence, privacy_class, retention_policy, lineage_json, refs_json, payload_json, payload_sha256,
                     evidence_sha256, labels_json, retention_until, legal_hold
-                ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                 ON CONFLICT (evidence_id) DO NOTHING
                 """,
                 (
-                    row["evidence_id"], row["tenant_id"], row["partition_key"], row["scope"], row["run_id"], row["action_id"],
+                    row["evidence_id"], row["evidence_schema_version"], row["tenant_id"], row["partition_key"], row["scope"], row["run_id"], row["action_id"],
                     row["action_type"], row["verification_status"], row["created_at"], row["source"], row["source_type"],
                     row["business_id"], row["observed_at"], row["confidence"], row["privacy_class"], row["retention_policy"],
                     row["lineage_json"], row["refs_json"], row["payload_json"], row["payload_sha256"],
@@ -492,6 +532,7 @@ __all__ = [
     "CANON_STORAGE_EVIDENCE_STORE",
     "CANON_STORAGE_EVIDENCE_RECORD_EXPLICIT_LEGACY_FACTORY",
     "EVIDENCE_LINEAGE_STAGES",
+    "EVIDENCE_SCHEMA_VERSION",
     "EvidenceRecord",
     "EvidenceStore",
     "InMemoryEvidenceStore",

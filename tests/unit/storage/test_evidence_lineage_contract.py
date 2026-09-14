@@ -6,6 +6,7 @@ from hashlib import sha256
 
 import pytest
 
+from storage.distributed_evidence_audit_backend import DistributedEvidenceStore
 from storage.evidence_store import EVIDENCE_LINEAGE_STAGES, EvidenceRecord, InMemoryEvidenceStore, SqliteEvidenceStore
 from storage.migration_registry import MigrationRegistry, default_storage_migration_registry
 from storage.sqlite_fallback import SqliteSessionFactory
@@ -106,6 +107,43 @@ def test_canonical_hash_binds_tenant_and_execution_identity() -> None:
     assert replace(base, verification_status="rejected").hash != base.hash
 
 
+
+class _DistributedEvidencePort:
+    def __init__(self, rows):
+        self.rows = list(rows)
+
+    def append(self, *, partition_key, payload):
+        self.rows.append(dict(payload))
+        return str(payload.get("evidence_id") or "")
+
+    def read_partition(self, *, partition_key, limit=100, cursor=None):
+        return tuple(self.rows[:limit]), None
+
+    def read_prefix(self, *, prefix, limit=100, cursor=None):
+        return tuple(self.rows[:limit]), None
+
+
+def test_distributed_store_has_narrow_legacy_adapter_but_rejects_explicit_downgrade() -> None:
+    created = datetime(2026, 1, 1, tzinfo=UTC)
+    legacy = EvidenceRecord.from_legacy(
+        tenant_id="tenant-a", subject="legacy", evidence_type="trace",
+        payload={"value": 1}, created_at=created, evidence_id="legacy-dist",
+    )
+    row = legacy.to_row()
+    row.pop("evidence_schema_version")
+    row.pop("evidence_sha256")
+    records, _ = DistributedEvidenceStore(_DistributedEvidencePort([row])).list_for_tenant(tenant_id="tenant-a")
+    assert len(records) == 1
+    assert records[0].schema_version == 2
+    assert records[0].business_id == "unknown"
+    assert records[0].observed_at is None
+
+    downgraded = legacy.to_row()
+    downgraded["evidence_schema_version"] = 1
+    downgraded["evidence_sha256"] = ""
+    with pytest.raises(ValueError, match="legacy evidence schema requires controlled migration"):
+        DistributedEvidenceStore(_DistributedEvidencePort([downgraded])).list_for_tenant(tenant_id="tenant-a")
+
 def test_evidence_contract_rejects_invalid_confidence_and_unknown_lineage_stage() -> None:
     with pytest.raises(ValueError, match="confidence"):
         EvidenceRecord(tenant_id="t", scope="s", run_id="r", action_type="a", verification_status="ok", confidence=1.1).normalized()
@@ -139,12 +177,49 @@ def test_v1_evidence_database_upgrades_without_losing_legacy_records(tmp_path) -
     upgraded = SqliteEvidenceStore(factory)
     restored = upgraded.get("legacy-1")
     assert restored is not None
+    assert restored.schema_version == 2
     assert restored.source == "legacy"
     assert restored.source_type == "legacy"
     assert restored.business_id == "unknown"
     assert restored.observed_at is None
     assert restored.retention_policy == "legacy"
     assert restored.payload == {"score": 1}
+
+
+def test_current_schema_missing_canonical_hash_fails_closed(tmp_path) -> None:
+    db_path = tmp_path / "missing-hash.db"
+    factory = SqliteSessionFactory(db_path)
+    store = SqliteEvidenceStore(factory)
+    record = store.append(EvidenceRecord(
+        tenant_id="tenant-a", scope="provider", run_id="run-1", action_type="sync",
+        verification_status="verified", payload={"value": 1}, source="shopify", source_type="provider_api",
+        business_id="business-a", observed_at=datetime.now(UTC), retention_policy="evidence_30d",
+    ))
+    with factory.open() as session:
+        session.execute(
+            "UPDATE storage_evidence_log SET evidence_sha256 = '' WHERE evidence_id = ?",
+            (record.evidence_id,),
+        )
+    with pytest.raises(ValueError, match="missing canonical hash"):
+        store.get(record.evidence_id)
+
+
+def test_runtime_read_rejects_schema_downgrade_after_controlled_backfill(tmp_path) -> None:
+    db_path = tmp_path / "downgrade.db"
+    factory = SqliteSessionFactory(db_path)
+    store = SqliteEvidenceStore(factory)
+    record = store.append(EvidenceRecord(
+        tenant_id="tenant-a", scope="provider", run_id="run-1", action_type="sync",
+        verification_status="verified", payload={"value": 1}, source="shopify", source_type="provider_api",
+        business_id="business-a", observed_at=datetime.now(UTC), retention_policy="evidence_30d",
+    ))
+    with factory.open() as session:
+        session.execute(
+            "UPDATE storage_evidence_log SET evidence_schema_version = 1, evidence_sha256 = '' WHERE evidence_id = ?",
+            (record.evidence_id,),
+        )
+    with pytest.raises(ValueError, match="legacy evidence schema requires controlled migration"):
+        store.get(record.evidence_id)
 
 
 def test_persisted_hashes_fail_closed_on_tampering(tmp_path) -> None:

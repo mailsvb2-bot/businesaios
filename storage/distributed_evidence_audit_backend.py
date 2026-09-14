@@ -1,13 +1,13 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
+from collections.abc import Mapping, Sequence
+from dataclasses import dataclass, replace
 from datetime import datetime
-from typing import Any, Mapping, Protocol, Sequence
+from typing import Any, Protocol
 
 from governance.control_plane_audit_log import GovernanceAuditEvent
 from storage.evidence_store import EvidenceRecord
 from storage.tenant_partitioning import build_partition_key, normalize_storage_tenant_id
-
 
 CANON_DISTRIBUTED_EVIDENCE_AUDIT_BACKEND = True
 
@@ -31,7 +31,14 @@ class DistributedEvidenceStore:
         tenant = normalize_storage_tenant_id(tenant_id)
         rows, next_cursor = self._append_port.read_prefix(prefix="evidence_", limit=limit, cursor=cursor)
         filtered = [row for row in rows if str(row.get("tenant_id") or tenant) == tenant]
-        return tuple(EvidenceRecord.from_row(row) for row in filtered), next_cursor
+        records: list[EvidenceRecord] = []
+        for row in filtered:
+            if "evidence_schema_version" not in row:
+                legacy = EvidenceRecord.from_row(row, allow_legacy_schema=True)
+                records.append(replace(legacy, schema_version=2).normalized())
+                continue
+            records.append(EvidenceRecord.from_row(row))
+        return tuple(records), next_cursor
 
 
 @dataclass(frozen=True)

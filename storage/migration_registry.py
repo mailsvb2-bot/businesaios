@@ -228,6 +228,7 @@ _DEF = MigrationRegistry(
             version=2,
             name="canonical_evidence_lineage",
             statements=(
+                "ALTER TABLE storage_evidence_log ADD COLUMN evidence_schema_version INTEGER NOT NULL DEFAULT 1;",
                 "ALTER TABLE storage_evidence_log ADD COLUMN source TEXT NOT NULL DEFAULT 'legacy';",
                 "ALTER TABLE storage_evidence_log ADD COLUMN source_type TEXT NOT NULL DEFAULT 'legacy';",
                 "ALTER TABLE storage_evidence_log ADD COLUMN business_id TEXT NOT NULL DEFAULT 'unknown';",
