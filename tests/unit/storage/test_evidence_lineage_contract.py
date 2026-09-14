@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from datetime import UTC, datetime, timedelta
+from hashlib import sha256
 
 import pytest
 
@@ -61,7 +62,7 @@ def test_v1_evidence_database_upgrades_without_losing_legacy_records(tmp_path) -
             """,
             (
                 "legacy-1", "tenant-a", "evidence_decision:tenant-a", "decision", "run-old", None, "trace",
-                "recorded", "2026-01-01T00:00:00+00:00", "[]", "{\"score\":1}", "legacy-sha",
+                "recorded", "2026-01-01T00:00:00+00:00", "[]", "{\"score\":1}", sha256(b'{"score":1}').hexdigest(),
                 "{}", None, 0,
             ),
         )
@@ -76,3 +77,41 @@ def test_v1_evidence_database_upgrades_without_losing_legacy_records(tmp_path) -
     assert restored.observed_at == datetime(2026, 1, 1, tzinfo=UTC)
     assert restored.retention_policy == "legacy"
     assert restored.payload == {"score": 1}
+
+
+def test_persisted_hashes_fail_closed_on_tampering(tmp_path) -> None:
+    db_path = tmp_path / "tamper-evidence.db"
+    factory = SqliteSessionFactory(db_path)
+    store = SqliteEvidenceStore(factory)
+    record = store.append(EvidenceRecord(
+        tenant_id="tenant-a", scope="provider", run_id="run-1", action_type="sync",
+        verification_status="verified", payload={"value": 1}, source="shopify", source_type="provider_api",
+        business_id="business-a", observed_at=datetime.now(UTC), retention_policy="evidence_30d",
+        lineage={"source": "shopify:1", "action": "sync:1", "outcome": "ok:1"},
+    ))
+    with factory.open() as session:
+        session.execute(
+            "UPDATE storage_evidence_log SET payload_json = ? WHERE evidence_id = ?",
+            ('{\"value\":2}', record.evidence_id),
+        )
+        session.commit()
+    with pytest.raises(ValueError, match="payload hash mismatch"):
+        store.get(record.evidence_id)
+
+    db_path_2 = tmp_path / "tamper-envelope.db"
+    factory_2 = SqliteSessionFactory(db_path_2)
+    store_2 = SqliteEvidenceStore(factory_2)
+    record_2 = store_2.append(EvidenceRecord(
+        tenant_id="tenant-a", scope="provider", run_id="run-1", action_type="sync",
+        verification_status="verified", payload={"value": 1}, source="shopify", source_type="provider_api",
+        business_id="business-a", observed_at=datetime.now(UTC), retention_policy="evidence_30d",
+        lineage={"source": "shopify:1", "action": "sync:1", "outcome": "ok:1"},
+    ))
+    with factory_2.open() as session:
+        session.execute(
+            "UPDATE storage_evidence_log SET source = ? WHERE evidence_id = ?",
+            ("forged-provider", record_2.evidence_id),
+        )
+        session.commit()
+    with pytest.raises(ValueError, match="canonical hash mismatch"):
+        store_2.get(record_2.evidence_id)

@@ -232,6 +232,7 @@ class EvidenceRecord:
             "refs_json": _json_dumps(record.refs),
             "payload_json": _json_dumps(record.payload),
             "payload_sha256": record.payload_sha256,
+            "evidence_sha256": record.evidence_sha256,
             "labels_json": _json_dumps(record.labels),
             "retention_until": None if record.retention_until is None else record.retention_until.isoformat(),
             "legal_hold": 1 if record.legal_hold else 0,
@@ -240,7 +241,7 @@ class EvidenceRecord:
     @classmethod
     def from_row(cls, row: Mapping[str, object]) -> EvidenceRecord:
         retention_until_raw = row.get("retention_until")
-        return cls(
+        record = cls(
             evidence_id=str(row.get("evidence_id") or ""),
             tenant_id=str(row.get("tenant_id") or "global"),
             scope=str(row.get("scope") or ""),
@@ -263,6 +264,13 @@ class EvidenceRecord:
             retention_until=None if retention_until_raw in (None, "") else datetime.fromisoformat(str(retention_until_raw)),
             legal_hold=bool(row.get("legal_hold") or 0),
         ).normalized()
+        stored_payload_sha256 = str(row.get("payload_sha256") or "").strip()
+        if stored_payload_sha256 and stored_payload_sha256 != record.payload_sha256:
+            raise ValueError("evidence payload hash mismatch")
+        stored_evidence_sha256 = str(row.get("evidence_sha256") or "").strip()
+        if stored_evidence_sha256 and stored_evidence_sha256 != record.evidence_sha256:
+            raise ValueError("evidence canonical hash mismatch")
+        return record
 
 
 class InMemoryEvidenceStore:
@@ -325,15 +333,15 @@ class SqliteEvidenceStore:
                     evidence_id, tenant_id, partition_key, scope, run_id, action_id, action_type,
                     verification_status, created_at, source, source_type, business_id, observed_at,
                     confidence, privacy_class, retention_policy, lineage_json, refs_json, payload_json, payload_sha256,
-                    labels_json, retention_until, legal_hold
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    evidence_sha256, labels_json, retention_until, legal_hold
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     row["evidence_id"], row["tenant_id"], row["partition_key"], row["scope"], row["run_id"], row["action_id"],
                     row["action_type"], row["verification_status"], row["created_at"], row["source"], row["source_type"],
                     row["business_id"], row["observed_at"], row["confidence"], row["privacy_class"], row["retention_policy"],
-                    row["lineage_json"], row["refs_json"], row["payload_json"], row["payload_sha256"], row["labels_json"],
-                    row["retention_until"], row["legal_hold"],
+                    row["lineage_json"], row["refs_json"], row["payload_json"], row["payload_sha256"],
+                    row["evidence_sha256"], row["labels_json"], row["retention_until"], row["legal_hold"],
                 ),
             )
         return normalized
@@ -386,8 +394,8 @@ class PostgresEvidenceStore:
                     evidence_id, tenant_id, partition_key, scope, run_id, action_id, action_type,
                     verification_status, created_at, source, source_type, business_id, observed_at,
                     confidence, privacy_class, retention_policy, lineage_json, refs_json, payload_json, payload_sha256,
-                    labels_json, retention_until, legal_hold
-                ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                    evidence_sha256, labels_json, retention_until, legal_hold
+                ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                 ON CONFLICT (evidence_id) DO UPDATE SET
                     tenant_id=EXCLUDED.tenant_id,
                     partition_key=EXCLUDED.partition_key,
@@ -408,6 +416,7 @@ class PostgresEvidenceStore:
                     refs_json=EXCLUDED.refs_json,
                     payload_json=EXCLUDED.payload_json,
                     payload_sha256=EXCLUDED.payload_sha256,
+                    evidence_sha256=EXCLUDED.evidence_sha256,
                     labels_json=EXCLUDED.labels_json,
                     retention_until=EXCLUDED.retention_until,
                     legal_hold=EXCLUDED.legal_hold
@@ -416,8 +425,8 @@ class PostgresEvidenceStore:
                     row["evidence_id"], row["tenant_id"], row["partition_key"], row["scope"], row["run_id"], row["action_id"],
                     row["action_type"], row["verification_status"], row["created_at"], row["source"], row["source_type"],
                     row["business_id"], row["observed_at"], row["confidence"], row["privacy_class"], row["retention_policy"],
-                    row["lineage_json"], row["refs_json"], row["payload_json"], row["payload_sha256"], row["labels_json"],
-                    row["retention_until"], row["legal_hold"],
+                    row["lineage_json"], row["refs_json"], row["payload_json"], row["payload_sha256"],
+                    row["evidence_sha256"], row["labels_json"], row["retention_until"], row["legal_hold"],
                 ),
             )
         return normalized

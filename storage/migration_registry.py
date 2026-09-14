@@ -236,6 +236,7 @@ _DEF = MigrationRegistry(
                 "ALTER TABLE storage_evidence_log ADD COLUMN privacy_class TEXT NOT NULL DEFAULT 'internal';",
                 "ALTER TABLE storage_evidence_log ADD COLUMN retention_policy TEXT NOT NULL DEFAULT 'legacy';",
                 "ALTER TABLE storage_evidence_log ADD COLUMN lineage_json TEXT NOT NULL DEFAULT '{}';",
+                "ALTER TABLE storage_evidence_log ADD COLUMN evidence_sha256 TEXT NOT NULL DEFAULT '';",
                 "CREATE INDEX IF NOT EXISTS idx_storage_evidence_business_observed ON storage_evidence_log(tenant_id, business_id, observed_at);",
             ),
         ),
