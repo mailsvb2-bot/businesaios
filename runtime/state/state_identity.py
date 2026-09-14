@@ -54,7 +54,9 @@ def _field_identity(record: StateFieldRecord) -> dict[str, object]:
         "conflict_status": record.meta.get("conflict_status"),
         "conflict_id": record.meta.get("conflict_id"),
         "resolved_conflict_id": record.meta.get("resolved_conflict_id"),
+        "resolved_by": record.meta.get("resolved_by"),
         "resolved_at_ms": record.meta.get("resolved_at_ms"),
+        "resolution_reason": record.meta.get("resolution_reason"),
         "resolution_policy": record.meta.get("resolution_policy"),
         "resolution_evidence_refs": record.meta.get("resolution_evidence_refs"),
     }
@@ -65,6 +67,8 @@ def _conflict_identity(record: StateConflictRecord) -> dict[str, object]:
         "conflict_id": str(record.conflict_id),
         "field_path": str(record.field_path),
         "status": str(record.status),
+        "reason": str(record.reason),
+        "conflict_kind": str(record.conflict_kind),
         "chosen_source": str(record.chosen_source),
         "chosen_provenance_hash": str(record.chosen_provenance_hash),
         "candidate_sources": [str(item) for item in record.candidate_sources],
