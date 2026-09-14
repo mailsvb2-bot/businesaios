@@ -243,10 +243,12 @@ BUSINESS_ONTOLOGY_OWNERSHIP_AUDIT = (
     _row("Hypothesis", OwnershipAuditStatus.MISSING, None, None, "No universal Hypothesis entity owner on main."),
     _row(
         "Decision",
-        OwnershipAuditStatus.PARTIAL,
+        OwnershipAuditStatus.DONE,
         "contracts.decisioning.sovereign_decision_contract",
-        None,
-        "Sovereign Decision contract and sole issuer are explicitly locked, but the ontology storage-owner/read-writer map is not yet complete.",
+        "core.ai.decision_archive",
+        "The sovereign Decision contract has one issuer path; application.decision_runtime.emission is the canonical runtime archive writer, DecisionArchive is the storage abstraction, and replay/recovery are read-only consumers. The canonical e2e smoke is a verification-only direct archive client, not an alternative runtime owner.",
+        writers=("application.decision_runtime.emission",),
+        readers=("runtime.replay", "runtime.recovery"),
     ),
     _row(
         "Action",
