@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Any
 
 from runtime.market.market_snapshot import MarketSnapshot
 from runtime.market.segment_trend_state import SegmentTrendState
@@ -28,6 +27,7 @@ from runtime.state.state_contract import (
 )
 from runtime.state.state_freshness_policy import NON_DECISION_FRESHNESS_STATUSES, StateFreshnessPolicy
 from runtime.state.state_identity import build_state_id
+from runtime.state.state_value_projection import materialize_state_values
 from runtime.state.world_model_semantic_projector import project_world_model_semantics
 
 CANON_STATE_SYNTHESIS_ENGINE = True
@@ -117,7 +117,7 @@ class StateSynthesisEngine:
             business_id=request.business_id,
             freshness_policy=self.freshness_policy,
         )
-        values = self._materialize_values(fields)
+        values = materialize_state_values(fields)
 
         snapshot = StateSynthesizedSnapshot(
             state_id=build_state_id(
@@ -218,20 +218,6 @@ class StateSynthesisEngine:
             if incoming_not_decision_eligible and base_is_decision_eligible:
                 merged[field_path].append(base_observation)
         return merged
-
-    def _materialize_values(self, fields: dict[str, Any]) -> dict[str, Any]:
-        root: dict[str, Any] = {}
-        for field_path, record in fields.items():
-            if record.freshness_status in NON_DECISION_FRESHNESS_STATUSES:
-                continue
-            target = root
-            parts = [part for part in str(field_path).split(".") if part]
-            if not parts:
-                continue
-            for part in parts[:-1]:
-                target = target.setdefault(part, {})
-            target[parts[-1]] = record.value
-        return root
 
     def _source_watermarks(
         self,

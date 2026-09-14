@@ -17,6 +17,7 @@ from runtime.state.state_freshness_policy import NON_DECISION_FRESHNESS_STATUSES
 from runtime.state.state_identity import build_state_id
 from runtime.state.state_provenance import provenance_hash, provenance_payload, validate_record_provenance
 from runtime.state.state_unknown_semantics import classify_value_kind
+from runtime.state.state_value_projection import materialize_state_values
 from runtime.state.world_model_semantic_projector import project_world_model_semantics
 
 CANON_STATE_SNAPSHOT_STORE = True
@@ -330,7 +331,7 @@ def snapshot_from_dict(
         business_id=business_id,
         synthesized_at_ms=synthesized_at_ms,
         schema_version=("state_synthesis@v2" if legacy_schema else schema_version),
-        values=dict(payload.get("values") or {}),
+        values=materialize_state_values(fields),
         fields=fields,
         conflicts=tuple(conflicts),
         source_watermarks={str(key): int(value) for key, value in dict(payload.get("source_watermarks") or {}).items()},

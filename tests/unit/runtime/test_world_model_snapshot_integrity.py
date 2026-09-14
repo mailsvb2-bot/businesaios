@@ -252,3 +252,22 @@ def test_current_snapshot_rejects_conflict_status_tamper_without_resolution_enve
 
     with pytest.raises(ValueError, match="resolved conflict field mismatch"):
         snapshot_from_dict(payload)
+
+
+def test_persisted_values_are_rebuilt_from_validated_fields() -> None:
+    payload = _json_payload(_simple_snapshot())
+    payload["values"]["business"]["cash"] = 999_999
+
+    restored = snapshot_from_dict(payload)
+
+    assert restored.fields["business.cash"].value == 100
+    assert restored.values == {"business": {"cash": 100}}
+
+
+def test_missing_persisted_values_are_rebuilt_from_validated_fields() -> None:
+    payload = _json_payload(_simple_snapshot())
+    payload.pop("values")
+
+    restored = snapshot_from_dict(payload)
+
+    assert restored.values == {"business": {"cash": 100}}
