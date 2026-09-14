@@ -135,6 +135,61 @@ class CanonicalProcessEvidenceStore(TrustedProcessEvidenceSource):
     event_store: Any
     evidence_store: EvidenceStore
 
+    def _evidence_record(
+        self, *, item: ProcessObservation, created_at: datetime
+    ) -> EvidenceRecord:
+        return EvidenceRecord(
+            evidence_id=item.evidence_id,
+            tenant_id=item.tenant_id,
+            scope="process_discovery",
+            run_id=item.evidence_id,
+            action_type="process_observation",
+            verification_status="owner_asserted",
+            created_at=created_at,
+            source=item.source,
+            source_type="owner_process_observation",
+            business_id=item.business_id,
+            observed_at=item.occurred_at,
+            confidence=item.trust_weight,
+            privacy_class="internal",
+            retention_policy="process_observation_evidence",
+            lineage={
+                "source": item.source,
+                "normalization": f"process_observation:{item.evidence_id}",
+            },
+            refs=(item.process_key,),
+            payload=_observation_payload(item),
+            labels={"business_id": item.business_id, "process_key": item.process_key},
+        ).normalized_for_write()
+
+    def _ensure_canonical_evidence(
+        self, *, item: ProcessObservation, fallback_created_at: datetime
+    ) -> EvidenceRecord:
+        existing = self.evidence_store.get(tenant_id=item.tenant_id, evidence_id=item.evidence_id)
+        created_at = existing.created_at if existing is not None else fallback_created_at
+        expected = self._evidence_record(item=item, created_at=created_at)
+        if existing is not None:
+            if existing != expected:
+                raise ValueError("process observation evidence replay conflicts with canonical evidence")
+            return existing
+        return self.evidence_store.append(expected)
+
+    def _observation_event_exists(self, *, item: ProcessObservation) -> bool:
+        iter_events = getattr(self.event_store, "iter_events", None)
+        if not callable(iter_events):
+            raise TypeError("process observation history requires an event store with iter_events")
+        for row in iter_events(
+            tenant_id=item.tenant_id, event_type=PROCESS_OBSERVATION_EVENT, limit=None
+        ):
+            payload = dict(row.get("payload") or {})
+            if str(payload.get("evidence_id") or "") != item.evidence_id:
+                continue
+            persisted = _observation_from_payload(payload)
+            if persisted != item:
+                raise ValueError("process observation event replay conflicts with canonical evidence")
+            return True
+        return False
+
     def record_owner_observation(self, *, tenant_id: str, business_id: str, user_id: str | None, payload: Mapping[str, Any], request_id: str | None = None) -> ProcessObservation:
         occurred_at = _dt(payload.get("occurred_at"))
         if occurred_at > datetime.now(UTC) + timedelta(minutes=5):
@@ -142,6 +197,7 @@ class CanonicalProcessEvidenceStore(TrustedProcessEvidenceSource):
         request_text = str(request_id or "").strip()
         request_seed = "\x1f".join((tenant_id, business_id, request_text))
         evidence_id = f"pev_{hashlib.sha256(request_seed.encode()).hexdigest()[:20]}" if request_text else new_id("pev")
+        metadata = {"assertion_kind": "owner_process_occurrence", "server_issued_evidence_id": True}
         item = ProcessObservation(
             tenant_id=tenant_id, business_id=business_id, process_key=str(payload.get("process_key") or "").strip(),
             occurred_at=occurred_at, source="owner_asserted", evidence_id=evidence_id,
@@ -152,49 +208,28 @@ class CanonicalProcessEvidenceStore(TrustedProcessEvidenceSource):
             currency=str(payload.get("currency") or "").strip() or None,
             automation_fit=float(payload.get("automation_fit") if payload.get("automation_fit") is not None else 0.5),
             operational_risk=float(payload.get("operational_risk") if payload.get("operational_risk") is not None else 0.5),
-            trust_weight=0.65, metadata={"assertion_kind": "owner_process_occurrence", "server_issued_evidence_id": True},
+            trust_weight=0.65, metadata=metadata,
         )
         existing = self.evidence_store.get(tenant_id=tenant_id, evidence_id=item.evidence_id)
-        created_at = existing.created_at if existing is not None else datetime.now(UTC)
-        evidence = EvidenceRecord(
-            evidence_id=item.evidence_id,
-            tenant_id=tenant_id,
-            scope="process_discovery",
-            run_id=request_text or item.evidence_id,
-            action_type="process_observation",
-            verification_status="owner_asserted",
-            created_at=created_at,
-            source=item.source,
-            source_type="owner_process_observation",
-            business_id=business_id,
-            observed_at=occurred_at,
-            confidence=item.trust_weight,
-            privacy_class="internal",
-            retention_policy="process_observation_evidence",
-            lineage={
-                "source": item.source,
-                "normalization": f"process_observation:{item.evidence_id}",
-            },
-            refs=tuple(filter(None, (request_text, item.process_key))),
-            payload=_observation_payload(item),
-            labels={"business_id": business_id, "process_key": item.process_key},
-        ).normalized_for_write()
-        if existing is not None:
-            if existing != evidence:
-                raise ValueError("process observation evidence replay conflicts with canonical evidence")
-        else:
-            self.evidence_store.append(evidence)
+        self._ensure_canonical_evidence(item=item, fallback_created_at=datetime.now(UTC))
+        if existing is not None and self._observation_event_exists(item=item):
+            return item
         self.event_store.append(tenant_id=tenant_id, user_id=user_id, event_type=PROCESS_OBSERVATION_EVENT, payload=_observation_payload(item))
         return item
 
     def load_process_observations(self, *, tenant_id: str, business_id: str) -> Sequence[ProcessObservation]:
-        rows = self.event_store.latest_events(tenant_id=tenant_id, event_type=PROCESS_OBSERVATION_EVENT, limit=5000)
+        iter_events = getattr(self.event_store, "iter_events", None)
+        if not callable(iter_events):
+            raise TypeError("process observation history requires an event store with iter_events")
+        rows = iter_events(tenant_id=tenant_id, event_type=PROCESS_OBSERVATION_EVENT, limit=None)
         items = []
-        for row in reversed(list(rows)):
+        for row in rows:
             payload = dict(row.get("payload") or {})
             if str(payload.get("business_id") or "") != business_id:
                 continue
-            items.append(_observation_from_payload(payload))
+            item = _observation_from_payload(payload)
+            self._ensure_canonical_evidence(item=item, fallback_created_at=_dt(row.get("ts_iso")))
+            items.append(item)
         return tuple(items)
 
 
