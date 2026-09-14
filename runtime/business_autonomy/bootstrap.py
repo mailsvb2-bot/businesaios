@@ -90,6 +90,7 @@ from runtime.business_autonomy.fleet_read_model import BusinessAutonomyFleetRead
 from runtime.business_autonomy.provider_activation_store import FileProviderActivationStore
 from runtime.business_autonomy.provider_media import ProviderMediaPreparationCoordinator
 from runtime.business_autonomy.provider_pacing import ProviderPacingCoordinator
+from runtime.business_autonomy.provider_runtime_audit import ProviderRuntimeAuditRecorder
 from runtime.business_autonomy.sqlite_distributed_state import (
     SQLiteDistributedCompareAndSwap,
     SQLiteDistributedDocumentStore,
@@ -100,7 +101,9 @@ from runtime.business_autonomy.sqlite_distributed_state import (
 )
 from security.connector_secret_scope import ConnectorSecretScope
 from security.secret_vault import build_default_secret_vault
+from storage.audit_wiring import build_canonical_audit_store
 from storage.distributed_evidence_audit_backend import DistributedEvidenceStore, DistributedGovernanceAuditLog
+from storage.evidence_wiring import build_canonical_evidence_store
 
 
 @dataclass(frozen=True)
@@ -663,6 +666,10 @@ def build_business_autonomy_guarded_service(*, business_id: str = 'external_busi
     if customer_event_store is not None:
         from crm import CustomerRegistry
         customer_registry = CustomerRegistry(event_store=customer_event_store, idempotency_store=distributed['idempotency'], pii_vault=secret_vault)
+    provider_runtime_audit = ProviderRuntimeAuditRecorder(
+        audit_store=build_canonical_audit_store(),
+        evidence_store=build_canonical_evidence_store(),
+    )
     service._provider_admin_service = ProviderAdminService(
         onboarding_service=onboarding,
         secret_vault=secret_vault,
@@ -673,6 +680,7 @@ def build_business_autonomy_guarded_service(*, business_id: str = 'external_busi
         customer_registry=customer_registry,
         provider_pacing=ProviderPacingCoordinator(distributed['provider_pacing']),
         provider_media=ProviderMediaPreparationCoordinator(distributed['provider_media']),
+        audit_recorder=provider_runtime_audit,
     )
     return service
 
