@@ -5,6 +5,7 @@ from collections.abc import Callable, Mapping
 from dataclasses import dataclass, field
 from typing import Any
 
+from application.evidence.market_intelligence_evidence import persist_market_intelligence_derived_evidence
 from execution.market_intelligence_business_memory_bridge import MarketIntelligenceBusinessMemoryBridge
 from execution.market_intelligence_circuit_breaker import MarketIntelligenceCircuitBreaker
 from execution.market_intelligence_compliance_boundary import MarketIntelligenceComplianceBoundary
@@ -30,6 +31,7 @@ from execution.market_intelligence_quota_guard import MarketIntelligenceQuotaGua
 from execution.market_intelligence_retry_policy import MarketIntelligenceRetryPolicy
 from execution.market_intelligence_tenancy_scope import MarketIntelligenceTenancyScope
 from execution.market_intelligence_world_state_adapter import MarketIntelligenceWorldStateAdapter
+from storage.evidence_store import EvidenceRecord, EvidenceStore
 
 CANON_MARKET_INTELLIGENCE_LOOP = True
 
@@ -61,6 +63,7 @@ class MarketIntelligenceLoop:
     memory_bridge: MarketIntelligenceBusinessMemoryBridge = field(default_factory=MarketIntelligenceBusinessMemoryBridge)
     telemetry: MarketIntelligenceTelemetry = field(default_factory=MarketIntelligenceTelemetry)
     observability_store: PersistentMarketIntelligenceObservabilityStore = field(default_factory=PersistentMarketIntelligenceObservabilityStore)
+    evidence_store: EvidenceStore | None = None
     evaluation: MarketIntelligenceEvaluationFramework = field(default_factory=MarketIntelligenceEvaluationFramework)
     operator_low_quality_threshold: float = 0.34
 
@@ -70,8 +73,11 @@ class MarketIntelligenceLoop:
         idempotency_key = build_market_intelligence_idempotency_key(scoped)
         cached = self.idempotency_store.get(idempotency_key)
         if cached is not None:
-            self.telemetry.emit('market_intelligence_idempotency_hit', provider=scoped.provider, tenant_id=scoped.tenant_id)
             cached_result = dict(cached)
+            cached_derived = cached_result.get('derived_evidence')
+            if isinstance(cached_derived, Mapping):
+                self._persist_derived_evidence(scoped=scoped, derived_evidence=cached_derived)
+            self.telemetry.emit('market_intelligence_idempotency_hit', provider=scoped.provider, tenant_id=scoped.tenant_id)
             cached_result['idempotency_hit'] = True
             cached_result['telemetry_snapshot'] = self.telemetry.snapshot()
             cached_result['observability_snapshot'] = self.observability_store.snapshot()
@@ -114,6 +120,7 @@ class MarketIntelligenceLoop:
                 result.setdefault('source_family', scoped.source_family)
                 result.setdefault('action_type', scoped.action_type)
                 result.setdefault('tenant_id', scoped.tenant_id)
+                result.setdefault('business_id', str(scoped.metadata.get('business_id') or '').strip() or 'unknown')
 
                 pre_dedup = [self.normalizer.normalize_record(item) for item in list(result.get('records') or []) if isinstance(item, Mapping)]
                 normalized_records = self.deduplicator.deduplicate(pre_dedup)
@@ -125,10 +132,17 @@ class MarketIntelligenceLoop:
                 memory_payload = self.memory_bridge.to_memory_payload(result)
                 result['memory_payload'] = memory_payload
                 if memory_payload.get('derived_evidence'):
-                    result['derived_evidence'] = memory_payload.get('derived_evidence')
+                    derived_evidence = memory_payload.get('derived_evidence')
+                    if not isinstance(derived_evidence, Mapping):
+                        raise MarketIntelligenceExecutionError(
+                            'evidence_persistence_failed', 'derived evidence must be a mapping'
+                        )
+                    canonical_evidence = self._persist_derived_evidence(scoped=scoped, derived_evidence=derived_evidence)
+                    result['derived_evidence'] = dict(derived_evidence)
+                    result['derived_evidence']['evidence_id'] = canonical_evidence.evidence_id
                     self.telemetry.emit_provenance_audit(
                         tenant_id=scoped.tenant_id,
-                        evidence_id=str(memory_payload['derived_evidence'].get('evidence_id') or ''),
+                        evidence_id=canonical_evidence.evidence_id,
                         source_provider=scoped.provider,
                         source_family=scoped.source_family,
                         derived_kind=str(memory_payload['derived_evidence'].get('derived_kind') or 'market_signal_summary'),
@@ -136,7 +150,7 @@ class MarketIntelligenceLoop:
                     )
                     self.observability_store.append_provenance(
                         tenant_id=scoped.tenant_id,
-                        evidence_id=str(memory_payload['derived_evidence'].get('evidence_id') or ''),
+                        evidence_id=canonical_evidence.evidence_id,
                         provider=scoped.provider,
                         source_family=scoped.source_family,
                         derived_kind=str(memory_payload['derived_evidence'].get('derived_kind') or 'market_signal_summary'),
@@ -214,7 +228,8 @@ class MarketIntelligenceLoop:
                     time.sleep(self.retry_policy.backoff_seconds(attempt))
                     attempt += 1
                     continue
-                self.circuit_breaker.on_failure(scoped.provider)
+                if exc.code != 'evidence_persistence_failed':
+                    self.circuit_breaker.on_failure(scoped.provider)
                 self.telemetry.observe_error(provider=scoped.provider, code=exc.code)
                 self.telemetry.emit('market_intelligence_sync_failed', provider=scoped.provider, tenant_id=scoped.tenant_id, attempt=attempt, code=exc.code)
                 self.telemetry.finish_trace(trace_id=trace_id, status='failed', error_code=exc.code)
@@ -258,6 +273,29 @@ class MarketIntelligenceLoop:
                 ))
                 raise wrapped
 
+
+    def _persist_derived_evidence(
+        self, *, scoped: MarketIntelligenceIngestionRequest, derived_evidence: Mapping[str, Any]
+    ) -> EvidenceRecord:
+        if self.evidence_store is None:
+            raise MarketIntelligenceExecutionError(
+                'evidence_persistence_failed', 'canonical evidence store is required for derived evidence'
+            )
+        business_id = str(scoped.metadata.get('business_id') or '').strip() or None
+        try:
+            return persist_market_intelligence_derived_evidence(
+                evidence_store=self.evidence_store,
+                tenant_id=scoped.tenant_id,
+                business_id=business_id,
+                provider=scoped.provider,
+                source_family=scoped.source_family,
+                derived_evidence=derived_evidence,
+            )
+        except Exception as exc:
+            raise MarketIntelligenceExecutionError(
+                'evidence_persistence_failed', str(exc) or exc.__class__.__name__
+            ) from exc
+
     @staticmethod
     def _normalize_result_payload(raw_result: Mapping[str, Any]) -> dict[str, Any]:
         if not isinstance(raw_result, Mapping):
@@ -266,7 +304,7 @@ class MarketIntelligenceLoop:
         records = result.get('records')
         if records is None:
             result['records'] = []
-        elif isinstance(records, (list, tuple)):
+        elif isinstance(records, list | tuple):
             result['records'] = list(records)
         else:
             raise MarketIntelligenceExecutionError('provider_contract_error', 'provider records must be a list or tuple')

@@ -10,6 +10,7 @@ from execution.market_intelligence_loop import (
     MarketIntelligenceLoop,
 )
 from execution.market_intelligence_models import MarketIntelligenceIngestionRequest
+from storage.evidence_store import InMemoryEvidenceStore
 
 
 class Policy:
@@ -183,8 +184,21 @@ class Memory:
         if self.derived:
             payload["derived_evidence"] = {
                 "evidence_id": "e-1",
+                "tenant_id": str(result.get("tenant_id") or "tenant-a"),
+                "business_id": str(result.get("business_id") or "unknown"),
                 "derived_kind": "trend",
                 "policy_name": "policy-v1",
+                "confidence": 0.8,
+                "raw_refs": [
+                    {
+                        "provider": str(result.get("provider") or "amazon"),
+                        "source_family": str(result.get("source_family") or "marketplace"),
+                        "external_id": "1",
+                        "checksum": "checksum-1",
+                    }
+                ],
+                "explainability": {"ranking_policy_name": "policy-v1"},
+                "payload": {"records": len(result.get("records") or [])},
             }
         return payload
 
@@ -268,7 +282,7 @@ def request(**changes):
     return MarketIntelligenceIngestionRequest(**values)
 
 
-def make_loop(execute_action, *, quality=0.8, derived=False, cached=None, normalize_fail=False, retry=None, compliance=None, operator=None, fail_put=False):
+def make_loop(execute_action, *, quality=0.8, derived=False, cached=None, normalize_fail=False, retry=None, compliance=None, operator=None, fail_put=False, evidence_store=None, canonical_evidence=True):
     return MarketIntelligenceLoop(
         execute_action=execute_action,
         policy=Policy(),
@@ -287,6 +301,7 @@ def make_loop(execute_action, *, quality=0.8, derived=False, cached=None, normal
         memory_bridge=Memory(derived=derived),
         telemetry=Telemetry(),
         observability_store=Observability(),
+        evidence_store=(evidence_store if evidence_store is not None else (InMemoryEvidenceStore() if canonical_evidence else None)),
         evaluation=Evaluation(quality),
     )
 
@@ -330,6 +345,9 @@ def test_success_derived_evidence_dedup_and_low_quality_review(monkeypatch):
     assert [item["external_id"] for item in result["records"]] == ["1"]
     assert result["governance"]["requires_approval"] is True
     assert result["derived_evidence"]["evidence_id"] == "e-1"
+    persisted = loop.evidence_store.get(tenant_id="tenant-a", evidence_id="e-1")
+    assert persisted is not None
+    assert persisted.lineage["derived_fact"] == "e-1"
     assert result["dataset_rows"] == [{"record_id": "1"}]
     assert result["world_state_patch"] == {"records": 1}
     assert loop.operator_control.reviews[0][1]["reason"] == "low_quality_result"
@@ -447,3 +465,48 @@ def test_result_normalization_and_scope_helpers():
     assert MarketIntelligenceLoop._scope_key({"query": " q ", "account_ref": "a"}) == "q"
     assert MarketIntelligenceLoop._scope_key({"account_ref": " a "}) == "a"
     assert MarketIntelligenceLoop._scope_key({}) == "global"
+
+
+def test_derived_evidence_fails_closed_before_provenance_or_cache_without_canonical_store(monkeypatch):
+    monkeypatch.setattr("execution.market_intelligence_loop.time.sleep", lambda _: None)
+    loop = make_loop(
+        lambda *_: {"records": [{"external_id": "1"}]},
+        derived=True,
+        canonical_evidence=False,
+        retry=Retry(retryable=()),
+    )
+    with pytest.raises(MarketIntelligenceExecutionError) as caught:
+        loop.run(request())
+    assert caught.value.code == "evidence_persistence_failed"
+    assert loop.observability_store.provenance == []
+    assert loop.idempotency_store.puts == []
+    assert loop.circuit_breaker.failure == []
+
+
+def test_cached_derived_evidence_is_lazily_backfilled_before_return():
+    evidence_store = InMemoryEvidenceStore()
+    loop = make_loop(lambda *_: pytest.fail("provider must not run"), evidence_store=evidence_store)
+    req = request(metadata={"business_id": "business-a"})
+    key = __import__("execution.market_intelligence_idempotency", fromlist=["build_market_intelligence_idempotency_key"]).build_market_intelligence_idempotency_key(req)
+    cached = {
+        "ok": True,
+        "records": [{"external_id": "1"}],
+        "derived_evidence": {
+            "evidence_id": "cached-derived-1",
+            "tenant_id": "tenant-a",
+            "business_id": "business-a",
+            "derived_kind": "trend",
+            "policy_name": "policy-v1",
+            "confidence": 0.8,
+            "raw_refs": [{"provider": "amazon", "source_family": "marketplace", "external_id": "1", "checksum": "cached-sha"}],
+            "explainability": {"ranking_policy_name": "policy-v1"},
+            "payload": {"records": 1},
+        },
+    }
+    loop.idempotency_store.values[key] = cached
+    result = loop.run(req)
+    assert result["idempotency_hit"] is True
+    record = evidence_store.get(tenant_id="tenant-a", evidence_id="cached-derived-1")
+    assert record is not None
+    assert record.business_id == "business-a"
+    assert record.lineage["derived_fact"] == "cached-derived-1"

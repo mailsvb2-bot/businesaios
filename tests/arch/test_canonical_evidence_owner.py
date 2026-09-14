@@ -100,3 +100,27 @@ def test_business_autonomy_evidence_semantics_have_one_projection_owner() -> Non
     assert "EvidenceRecord(" not in runtime_view
     assert "append_business_autonomy_evidence" in persistence
     assert "append_business_autonomy_evidence" in runtime_view
+
+
+def test_business_autonomy_file_evidence_surface_remains_canonical_fed_mirror() -> None:
+    text = Path("runtime/business_autonomy/bootstrap.py").read_text(encoding="utf-8")
+    assert "Local file surface for dev/test/admin proof, fed from the canonical path." in text
+    primary_index = text.index("record = self.primary.append_result(result)")
+    mirror_index = text.index("self.mirror.append_result(result)", primary_index)
+    assert primary_index < mirror_index
+
+
+def test_legacy_distributed_evidence_store_is_never_constructed_by_active_runtime() -> None:
+    roots = (Path("application"), Path("runtime"), Path("execution"), Path("core"), Path("adapters"), Path("entrypoints"))
+    constructors: list[str] = []
+    for root in roots:
+        for path in root.rglob("*.py"):
+            tree = ast.parse(path.read_text(encoding="utf-8"), filename=path.as_posix())
+            for node in ast.walk(tree):
+                if not isinstance(node, ast.Call):
+                    continue
+                func = node.func
+                name = func.id if isinstance(func, ast.Name) else (func.attr if isinstance(func, ast.Attribute) else "")
+                if name == "DistributedEvidenceStore":
+                    constructors.append(path.as_posix())
+    assert constructors == []

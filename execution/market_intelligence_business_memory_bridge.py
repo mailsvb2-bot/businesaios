@@ -1,12 +1,11 @@
 from __future__ import annotations
 
+from collections.abc import Mapping
 from dataclasses import dataclass, field
 from typing import Any
-from collections.abc import Mapping
 
 from execution.market_intelligence_derived_evidence_governance import MarketIntelligenceDerivedEvidenceGovernance
 from execution.market_intelligence_memory_discipline import MarketIntelligenceMemoryDiscipline
-
 
 CANON_MARKET_INTELLIGENCE_BUSINESS_MEMORY_BRIDGE = True
 
@@ -51,6 +50,7 @@ class MarketIntelligenceBusinessMemoryBridge:
         if promoted:
             derived = self.governance.build(
                 tenant_id=str(normalized.get('tenant_id') or 'default'),
+                business_id=str(normalized.get('business_id') or 'unknown'),
                 derived_kind='market_signal_summary',
                 confidence=0.80,
                 raw_records=records,
