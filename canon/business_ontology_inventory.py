@@ -283,7 +283,7 @@ BUSINESS_ONTOLOGY_OWNERSHIP_AUDIT = (
         OwnershipAuditStatus.DONE,
         "storage.evidence_store",
         "storage.evidence_store",
-        "Canonical EvidenceRecord/storage ownership is locked and all active durable Evidence writers route to it; remaining Phase 3 work concerns historical backfill and lineage completeness, not competing ownership.",
+        "Canonical EvidenceRecord/storage ownership is locked; active durable writers route to it, legacy surfaces are migration/archive or mirror-only, historical backfills are idempotent/fail-closed, and closed-loop lineage preserves all six canonical stages.",
         writers=(
             "application.business_autonomy.evidence_projection",
             "application.evidence.evidence_persistence",

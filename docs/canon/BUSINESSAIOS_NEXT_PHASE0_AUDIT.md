@@ -10,7 +10,7 @@
 | 0 | Audit | **PARTIAL** | Exact main 64e937e audited at roadmap/domain level; exhaustive 245-clause evidence matrix remains to be completed. |
 | 1 | Business Ontology + Ownership | **PARTIAL** | Customer/Decision/Action/Outcome have strong owners; multiple required entities are missing or ambiguous. Machine-readable inventory added in this change. |
 | 2 | World Model v1 | **PARTIAL** | State synthesis already has provenance, conflicts, freshness and unknown semantics; epistemic/temporal canonical projection is being added without a second World Model. |
-| 3 | Evidence/Data Lineage | **PARTIAL** | Evidence ownership is now **DONE** on `storage.evidence_store`: active durable writers are canonicalized and duplicate durable write paths are retired. Phase 3 remains PARTIAL for historical backfill and full source→decision→action→outcome lineage coverage. |
+| 3 | Evidence/Data Lineage | **DONE** | `storage.evidence_store` is the single durable Evidence owner; Business Autonomy, Process Discovery, Revenue Advisory, provider runtime and Market Intelligence writers are canonicalized, legacy durable surfaces are migrated or mirror-only, historical backfills are idempotent/fail-closed, and the canonical closed loop preserves source→normalization→derived_fact→decision→action→outcome lineage. |
 | 4 | Business Event Spine | **PARTIAL** | Canonical EventStore and BusinessFactV1 exist; not every meaningful business mutation is normalized through one event contract. |
 | 5 | Canonical Closed Loop | **PARTIAL** | Decision→intent→policy/execution/outcome pieces exist; mandatory real-event→next-different-decision proof is not closed. |
 | 6 | Goal/Constraint Engine | **PARTIAL** | Goal/constraint contracts, planners and conflict helpers exist; first-class hierarchy/lifecycle/constraint engine is incomplete. |
@@ -33,9 +33,9 @@
 ## Critical duplicate/missing hotspots
 
 - **MISSING canonical owner:** Organization, Person, Partner, Employee, Service, Deal, Order, Asset, Resource, Hypothesis, Durable Task, Artifact, Document.
-- **DUPLICATE/ambiguous ownership:** Message, Payment, Revenue, Risk, Capability. Evidence ownership is DONE on `storage.evidence_store`; Phase 3 remains PARTIAL for lineage/backfill completeness rather than owner ambiguity.
+- **DUPLICATE/ambiguous ownership:** Message, Payment, Revenue, Risk, Capability. Evidence/Data Lineage (Phase 3) is DONE on `storage.evidence_store`; legacy evidence surfaces are migration/archive or rebuildable mirrors rather than competing owners.
 - **Strong locked owners already present:** Customer, sovereign Decision, ActionIntent/execution projection, BusinessOutcome, canonical World Model port.
 
 ## Next gate
 
-Phase 1 cannot be called DONE until every required ontology entity has one explicit authoritative owner and CI can detect an alternative owner. Phase 2 cannot be called DONE until epistemic type, time, provenance, conflicts, freshness and UNKNOWN-first semantics survive durable snapshot/replay and reach the existing Decision input path without introducing a second World Model.
+Phase 1 cannot be called DONE until every required ontology entity has one explicit authoritative owner and CI can detect an alternative owner. Phase 2 cannot be called DONE until epistemic type, time, provenance, conflicts, freshness and UNKNOWN-first semantics survive durable snapshot/replay and reach the existing Decision input path without introducing a second World Model. Phase 3 is closed at the architecture/data-lineage level; this status does not imply deployment or production readiness, which remain subject to release and Deep Release gates.

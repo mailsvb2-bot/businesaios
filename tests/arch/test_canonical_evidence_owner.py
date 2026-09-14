@@ -54,7 +54,16 @@ def test_phase0_audit_does_not_report_evidence_as_duplicate_after_owner_selectio
     text = Path("docs/canon/BUSINESSAIOS_NEXT_PHASE0_AUDIT.md").read_text(encoding="utf-8")
     duplicate_line = next(line for line in text.splitlines() if line.startswith("- **DUPLICATE/ambiguous ownership:**"))
     assert "Evidence" not in duplicate_line.split(":**", 1)[-1].split(".", 1)[0]
-    assert "Evidence ownership is DONE" in duplicate_line
+    assert "Evidence/Data Lineage (Phase 3) is DONE" in duplicate_line
+
+
+def test_phase3_evidence_data_lineage_is_locked_done_in_canon_audit() -> None:
+    text = Path("docs/canon/BUSINESSAIOS_NEXT_PHASE0_AUDIT.md").read_text(encoding="utf-8")
+    phase3 = next(line for line in text.splitlines() if line.startswith("| 3 | Evidence/Data Lineage |"))
+    assert "| **DONE** |" in phase3
+    assert "storage.evidence_store" in phase3
+    assert "source→normalization→derived_fact→decision→action→outcome" in phase3
+    assert "Phase 3 remains PARTIAL" not in text
 
 
 def test_business_autonomy_bootstrap_does_not_restore_distributed_evidence_as_active_store() -> None:
