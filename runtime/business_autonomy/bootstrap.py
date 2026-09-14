@@ -665,9 +665,14 @@ def build_business_autonomy_guarded_service(*, business_id: str = 'external_busi
     service._operator_admin_plane = UnifiedOperatorAdminPlane(BusinessAutonomyFleetReadModel(distributed_registry))
     service._execution_runtime = build_execution_runtime(route_state=distributed['region_state'])
     customer_registry = None
+    organization_registry = None
     if customer_event_store is not None:
+        from application.organization import OrganizationRegistry
         from crm import CustomerRegistry
+
         customer_registry = CustomerRegistry(event_store=customer_event_store, idempotency_store=distributed['idempotency'], pii_vault=secret_vault)
+        organization_registry = OrganizationRegistry(event_store=customer_event_store, idempotency_store=distributed['idempotency'])
+    service._organization_registry = organization_registry
     provider_runtime_audit = build_provider_runtime_audit_recorder()
     service._provider_admin_service = ProviderAdminService(
         onboarding_service=onboarding,

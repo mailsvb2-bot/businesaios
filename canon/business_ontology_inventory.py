@@ -98,7 +98,15 @@ BUSINESS_ONTOLOGY_OWNERSHIP_AUDIT = (
             "runtime.business_autonomy.distributed_runtime_views",
         ),
     ),
-    _row("Organization", OwnershipAuditStatus.MISSING, None, None, "No universal Organization owner on main."),
+    _row(
+        "Organization",
+        OwnershipAuditStatus.DONE,
+        "contracts.organization",
+        "runtime.platform.event_store",
+        "Organization is a minimal UNKNOWN-first tenant/business-scoped lifecycle. OrganizationRegistry is the single writer over canonical EventStore facts and OrganizationProjector is read-only.",
+        writers=("application.organization.registry",),
+        readers=("application.organization.projector",),
+    ),
     _row(
         "Person",
         OwnershipAuditStatus.MISSING,
