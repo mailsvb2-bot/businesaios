@@ -182,11 +182,12 @@ class EvidenceRecord:
     @property
     def evidence_sha256(self) -> str:
         normalized = self.normalized()
+        observed_at = normalized.observed_at or normalized.created_at
         envelope = {
             "source": normalized.source,
             "source_type": normalized.source_type,
             "business_id": normalized.business_id,
-            "observed_at": normalized.observed_at.isoformat(),
+            "observed_at": observed_at.isoformat(),
             "confidence": normalized.confidence,
             "privacy_class": normalized.privacy_class,
             "retention_policy": normalized.retention_policy,
@@ -211,6 +212,7 @@ class EvidenceRecord:
 
     def to_row(self) -> dict[str, object]:
         record = self.normalized()
+        observed_at = record.observed_at or record.created_at
         return {
             "evidence_id": record.evidence_id,
             "tenant_id": record.tenant_id,
@@ -224,7 +226,7 @@ class EvidenceRecord:
             "source": record.source,
             "source_type": record.source_type,
             "business_id": record.business_id,
-            "observed_at": record.observed_at.isoformat(),
+            "observed_at": observed_at.isoformat(),
             "confidence": record.confidence,
             "privacy_class": record.privacy_class,
             "retention_policy": record.retention_policy,
