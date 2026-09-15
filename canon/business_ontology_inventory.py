@@ -233,7 +233,7 @@ BUSINESS_ONTOLOGY_OWNERSHIP_AUDIT = (
         "runtime.platform.event_store",
         "Deal is the canonical PII-free tenant/business-scoped commercial lifecycle. DealRegistry is the single lifecycle writer over canonical EventStore facts; CRM/provider deal records remain transport surfaces rather than ontology ownership.",
         writers=("application.deal.registry",),
-        readers=("application.deal.projector",),
+        readers=("application.deal.registry",),
     ),
     _row("Order", OwnershipAuditStatus.MISSING, None, None, "No universal Order owner on main."),
     _row(

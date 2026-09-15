@@ -4,8 +4,7 @@ import ast
 from dataclasses import fields
 from pathlib import Path
 
-from application.deal.projector import CANON_DEAL_PROJECTOR
-from application.deal.registry import CANON_DEAL_LIFECYCLE_OWNER
+from application.deal.registry import CANON_DEAL_LIFECYCLE_OWNER, CANON_DEAL_PROJECTOR
 from application.ontology import CANON_ONTOLOGY_EVENT_FACT_MUTATION
 from canon.business_ontology_inventory import OwnershipAuditStatus, ontology_ownership_by_entity
 from contracts.deal import Deal
@@ -13,7 +12,7 @@ from contracts.deal import Deal
 ROOT = Path(__file__).resolve().parents[2]
 PRODUCTION_ROOTS = ("application", "runtime", "storage", "core", "adapters", "billing", "crm")
 REGISTRY = Path("application/deal/registry.py")
-FACTS = Path("application/deal/facts.py")
+FACTS = REGISTRY
 FACT_TYPES = {"deal.created", "deal.updated", "deal.archived"}
 
 
@@ -31,7 +30,7 @@ def test_deal_inventory_names_one_writer_and_projection() -> None:
     assert CANON_ONTOLOGY_EVENT_FACT_MUTATION is True
     assert row.status is OwnershipAuditStatus.DONE
     assert row.allowed_writers == ("application.deal.registry",)
-    assert row.allowed_readers == ("application.deal.projector",)
+    assert row.allowed_readers == ("application.deal.registry",)
 
 
 def test_deal_lifecycle_owner_marker_is_unique() -> None:
