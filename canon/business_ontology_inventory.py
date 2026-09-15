@@ -324,7 +324,15 @@ BUSINESS_ONTOLOGY_OWNERSHIP_AUDIT = (
         writers=("application.artifact.registry",),
         readers=("application.artifact.projector",),
     ),
-    _row("Document", OwnershipAuditStatus.MISSING, None, None, "No universal Document owner on main."),
+    _row(
+        "Document",
+        OwnershipAuditStatus.DONE,
+        "contracts.document",
+        "runtime.platform.event_store",
+        "Document is the canonical stable business-document identity; revisions point to immutable canonical Artifacts while DocumentRegistry owns document lifecycle facts in the existing EventStore.",
+        writers=("application.document.registry",),
+        readers=("application.document.projector",),
+    ),
     _row(
         "Capability",
         OwnershipAuditStatus.DUPLICATE,
