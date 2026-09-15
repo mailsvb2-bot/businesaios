@@ -2,13 +2,20 @@ tenant_id: businesaios-retention
 product_id: retentionbot
 product_version: v1
 domain: retention
+name: RetentionBot
+environment: prod
 modules:
   reminders: true
   offers: true
   pricing: false
-name: RetentionBot
-entry_policy: telegram_policy@v3
-environment: prod
+entry_policy:
+  entrypoints: [telegram]
+  default_entrypoint: telegram
+  requires_auth: true
+  requires_entitlement: false
+  required_entitlements: []
+entitlements:
+  keys: []
 offer_catalog_ref: default:retentionbot:prod
 autopilot_contract_ref: default
 economics:
@@ -18,7 +25,7 @@ economics:
 pricing_model:
   id: pricing_fixed@v1
   params:
-    base_price_rub: 0
+    offer_id: retention_soft
 offer_catalog:
   id: offer_catalog_none@v1
   params: {}

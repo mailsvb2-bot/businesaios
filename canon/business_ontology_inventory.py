@@ -154,10 +154,12 @@ BUSINESS_ONTOLOGY_OWNERSHIP_AUDIT = (
     ),
     _row(
         "Product",
-        OwnershipAuditStatus.PARTIAL,
+        OwnershipAuditStatus.DONE,
         "contracts.product_contract",
-        None,
-        "Product contract surface exists; entity lifecycle/storage owner is not complete.",
+        "products.product_catalog",
+        "ProductContract is the single semantic owner; the immutable built-in catalog is indexed only by products/manifest.yaml and materialized exclusively by ProductLoader. Product capability flags remain distinct from runtime module wiring.",
+        writers=("products.product_loader",),
+        readers=("products.product_resolver", "runtime.boot.system_builder_products"),
     ),
     _row(
         "Service",

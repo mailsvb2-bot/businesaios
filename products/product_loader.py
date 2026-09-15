@@ -5,17 +5,30 @@ from pathlib import Path
 
 from contracts.economics_config import EconomicsConfigV1
 from contracts.product_contract import (
-    EntryPolicy,
     EntitlementsSpec,
+    EntryPolicy,
     ModuleSpec,
     ModulesSpec,
     ProductContract,
 )
-from runtime.platform.config.env_flags import env_str
-from runtime.platform.config.yaml_loader import load_yaml
 from products.offer_catalog_resolver import resolve_offer_catalog
 from products.pricing_models import resolve_pricing_model
 from products.telemetry_schemas import resolve_telemetry_schema
+from runtime.platform.config.env_flags import env_str
+from runtime.platform.config.yaml_loader import load_yaml
+
+
+def _modules_spec(raw: dict) -> ModulesSpec:
+    return ModulesSpec(
+        modules=tuple(
+            ModuleSpec(
+                module_id=str(key),
+                enabled_by_default=bool(value) if isinstance(value, bool) else True,
+                config=(value if isinstance(value, dict) else {}),
+            )
+            for key, value in raw.items()
+        )
+    )
 
 
 @dataclass(frozen=True)
@@ -66,16 +79,9 @@ class ProductLoader:
         ent = EntitlementsSpec(keys=tuple(ent_raw.get("keys") or ()))
 
         mods_raw = raw.get("modules") if isinstance(raw.get("modules"), dict) else {}
-        modules = ModulesSpec(
-            modules=tuple(
-                ModuleSpec(
-                    module_id=str(k),
-                    enabled_by_default=bool(v) if isinstance(v, bool) else True,
-                    config=(v if isinstance(v, dict) else {}),
-                )
-                for k, v in mods_raw.items()
-            )
-        )
+        modules = _modules_spec(mods_raw)
+        runtime_mods_raw = raw.get("runtime_modules") if isinstance(raw.get("runtime_modules"), dict) else {}
+        runtime_modules = _modules_spec(runtime_mods_raw)
 
         pc = ProductContract(
             tenant_id=tenant_id,
@@ -90,6 +96,7 @@ class ProductLoader:
             telemetry_schema=telemetry_schema,
             entitlements=ent,
             modules=modules,
+            runtime_modules=runtime_modules,
             economics=economics,
             autopilot_contract_ref=autopilot_contract_ref,
         )

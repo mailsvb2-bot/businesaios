@@ -171,7 +171,10 @@ class ProductContract:
         default_factory=lambda: TelemetrySchema(schema_id="telemetry_default@v1", events=())
     )
     entitlements: EntitlementsSpec = field(default_factory=lambda: EntitlementsSpec(keys=()))
+    # Product capability flags consumed by deterministic action/offer gates.
     modules: ModulesSpec = field(default_factory=lambda: ModulesSpec(modules=()))
+    # Boot-only runtime modules. Empty means the canonical runtime defaults.
+    runtime_modules: ModulesSpec = field(default_factory=lambda: ModulesSpec(modules=()))
 
     economics: EconomicsConfigV1 = field(default_factory=EconomicsConfigV1)
     autopilot_contract_ref: str = ""
@@ -192,6 +195,7 @@ class ProductContract:
         self.telemetry_schema.validate()
         self.entitlements.validate()
         self.modules.validate()
+        self.runtime_modules.validate()
 
     def as_dict(self) -> dict[str, Any]:
         return {

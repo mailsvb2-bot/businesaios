@@ -1,10 +1,8 @@
-from __future__ import annotations
-
-CANON_BOOT_WIRING_ONLY = True
-CANON_PRODUCT_SYSTEM_WIRING_ADAPTER_OWNER = True
-
 """Phase adapters for the product-contract boot pipeline."""
 
+from __future__ import annotations
+
+from bootstrap.product_system_builder_contracts import RuntimeView
 from runtime.boot.boot_context import (
     AccessEnforced,
     AccessEnforcerPort,
@@ -13,12 +11,14 @@ from runtime.boot.boot_context import (
     ProductSelectorPort,
     SelectedProduct,
 )
-from bootstrap.product_system_builder_contracts import RuntimeView
 from runtime.boot.system_builder_products import RuntimeRequest, SystemBuilderProducts
 from runtime.modules.builtin_modules import DEFAULT_RUNTIME_MODULE_IDS
 from runtime.modules.module_protocol import ModuleWiringContext
 from runtime.modules.registry import ModuleRegistry
 from runtime.platform.identity.enforcement import ProductAccessEnforcer
+
+CANON_BOOT_WIRING_ONLY = True
+CANON_PRODUCT_SYSTEM_WIRING_ADAPTER_OWNER = True
 
 
 class SelectorAdapter(ProductSelectorPort):
@@ -75,8 +75,14 @@ class WiringAdapter(ModuleWiringPort):
             entrypoint=selected.req.entrypoint,
             contract=contract,
         )
+        runtime_specs = tuple(getattr(getattr(contract, "runtime_modules", None), "modules", ()) or ())
+        if not runtime_specs:
+            legacy_specs = tuple(getattr(getattr(contract, "modules", None), "modules", ()) or ())
+            legacy_ids = {str(spec.module_id) for spec in legacy_specs if spec.enabled_by_default}
+            if legacy_ids and legacy_ids.issubset(set(DEFAULT_RUNTIME_MODULE_IDS)):
+                runtime_specs = legacy_specs
         wired_any = False
-        for module_spec in contract.modules.modules:
+        for module_spec in runtime_specs:
             if not module_spec.enabled_by_default:
                 continue
             module = self._modules.get(module_spec.module_id)
