@@ -4,6 +4,7 @@ from typing import Any
 
 from application.artifact import ArtifactRegistry
 from application.business_service import BusinessServiceRegistry
+from application.campaign import CampaignRegistry
 from application.deal import DealRegistry
 from application.document import DocumentRegistry
 from application.employee import EmployeeRegistry
@@ -40,6 +41,7 @@ def wire_business_ontology_runtime(
         "_artifact_registry": None,
         "_document_registry": None,
         "_deal_registry": None,
+        "_campaign_registry": None,
     }
     customer_registry: Any | None = None
     if event_store is not None:
@@ -59,6 +61,7 @@ def wire_business_ontology_runtime(
             "_artifact_registry": ArtifactRegistry(event_store=event_store, idempotency_store=idempotency_store),
             "_document_registry": DocumentRegistry(event_store=event_store, idempotency_store=idempotency_store),
             "_deal_registry": DealRegistry(event_store=event_store, idempotency_store=idempotency_store),
+            "_campaign_registry": CampaignRegistry(event_store=event_store, idempotency_store=idempotency_store),
         }
     for attribute, registry in bindings.items():
         setattr(service, attribute, registry)

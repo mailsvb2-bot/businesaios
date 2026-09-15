@@ -210,10 +210,12 @@ BUSINESS_ONTOLOGY_OWNERSHIP_AUDIT = (
     ),
     _row(
         "Campaign",
-        OwnershipAuditStatus.PARTIAL,
+        OwnershipAuditStatus.DONE,
         "contracts.campaign",
-        None,
-        "Campaign contract exists; lifecycle/storage paths remain distributed.",
+        "runtime.platform.event_store",
+        "Campaign is a PII-free tenant/business-scoped lifecycle entity over the existing canonical EventStore. Ads connector Campaign DTOs and campaign builders remain provider/read/plan projections rather than lifecycle ownership.",
+        writers=("application.campaign.registry",),
+        readers=("application.campaign.projector",),
     ),
     _row(
         "Opportunity",
