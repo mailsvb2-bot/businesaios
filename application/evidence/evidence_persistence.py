@@ -253,6 +253,7 @@ class EvidencePersistenceService:
             refs=refs,
             payload={
                 'outcome': outcome,
+                **({'business_outcome': business_outcome} if business_outcome else {}),
                 'verification': _compact_verification_payload(verification, action=action, execution_receipt=execution),
                 'evidence': _compact_evidence_payload(verification),
             },

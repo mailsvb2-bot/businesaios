@@ -303,8 +303,10 @@ BUSINESS_ONTOLOGY_OWNERSHIP_AUDIT = (
         "Outcome",
         OwnershipAuditStatus.PARTIAL,
         "contracts.business_outcome",
-        None,
-        "BusinessOutcomeV1 is canonical semantic owner; canonical storage/read-writer ownership and attribution loop remain incomplete.",
+        "storage.evidence_store",
+        "BusinessOutcomeV1 is the canonical semantic owner. New closed-loop outcomes are persisted inside the existing canonical EvidenceStore and projected read-only by BusinessOutcomeEvidenceProjector; legacy Evidence rows created before full-body persistence still require historical backfill before Outcome can be marked DONE.",
+        writers=("application.evidence.evidence_persistence",),
+        readers=("application.outcome.evidence_projection",),
     ),
     _row(
         "Task",
