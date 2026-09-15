@@ -365,10 +365,10 @@ BUSINESS_ONTOLOGY_OWNERSHIP_AUDIT = (
     ),
     _row(
         "Capability",
-        OwnershipAuditStatus.DUPLICATE,
+        OwnershipAuditStatus.PARTIAL,
+        "application.business_autonomy.integration_capability_catalog",
         None,
-        None,
-        "Strong capability machinery exists but several registries/surfaces require canonical hardening.",
+        "Business integration capability definitions have one semantic catalog after removing duplicate DecisionCore advisory vocabularies. Decision advisory capabilities and execution-route capabilities remain intentionally scoped projections; universal capability lifecycle/storage ownership is still incomplete.",
     ),
     _row(
         "Provider",
