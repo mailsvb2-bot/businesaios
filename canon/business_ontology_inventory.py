@@ -271,7 +271,15 @@ BUSINESS_ONTOLOGY_OWNERSHIP_AUDIT = (
         None,
         "Revenue semantics exist across finance/economics/revenue surfaces.",
     ),
-    _row("Asset", OwnershipAuditStatus.MISSING, None, None, "No universal Asset owner on main."),
+    _row(
+        "Asset",
+        OwnershipAuditStatus.DONE,
+        "contracts.asset",
+        "runtime.platform.event_store",
+        "Asset is the canonical PII-free tenant/business-scoped business-asset lifecycle. AssetRegistry is the single lifecycle writer over canonical EventStore facts; technical resource identifiers and provider resources remain non-ontology projections.",
+        writers=("application.asset",),
+        readers=("application.asset",),
+    ),
     _row(
         "Resource",
         OwnershipAuditStatus.MISSING,

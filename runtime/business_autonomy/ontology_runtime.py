@@ -3,6 +3,7 @@ from __future__ import annotations
 from typing import Any
 
 from application.artifact import ArtifactRegistry
+from application.asset import AssetRegistry
 from application.business_service import BusinessServiceRegistry
 from application.campaign.registry import CampaignRegistry
 from application.deal import DealRegistry
@@ -40,6 +41,7 @@ def wire_business_ontology_runtime(
         "_business_service_registry": None,
         "_task_registry": None,
         "_artifact_registry": None,
+        "_asset_registry": None,
         "_document_registry": None,
         "_deal_registry": None,
         "_campaign_registry": None,
@@ -61,6 +63,7 @@ def wire_business_ontology_runtime(
             "_business_service_registry": BusinessServiceRegistry(event_store=event_store, idempotency_store=idempotency_store),
             "_task_registry": DurableTaskRegistry(event_store=event_store, idempotency_store=idempotency_store),
             "_artifact_registry": ArtifactRegistry(event_store=event_store, idempotency_store=idempotency_store),
+            "_asset_registry": AssetRegistry(event_store=event_store, idempotency_store=idempotency_store),
             "_document_registry": DocumentRegistry(event_store=event_store, idempotency_store=idempotency_store),
             "_deal_registry": DealRegistry(event_store=event_store, idempotency_store=idempotency_store),
             "_campaign_registry": CampaignRegistry(event_store=event_store, idempotency_store=idempotency_store),
