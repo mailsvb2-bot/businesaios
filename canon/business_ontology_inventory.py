@@ -296,8 +296,10 @@ BUSINESS_ONTOLOGY_OWNERSHIP_AUDIT = (
         "Action",
         OwnershipAuditStatus.PARTIAL,
         "contracts.action_intent",
-        None,
-        "ActionIntent is canonical AI-to-execution interface and runtime executor is the side-effect gateway, but neither is itself a canonical storage owner.",
+        "storage.evidence_store",
+        "ActionIntentV1 is the canonical non-effectful AI-to-execution semantic owner. New closed-loop intents are preserved as full immutable bodies inside the existing canonical EvidenceStore and projected read-only; legacy Evidence rows created before full-body intent persistence require historical backfill before Action can be marked DONE.",
+        writers=("application.evidence.evidence_persistence",),
+        readers=("application.action.evidence_projection",),
     ),
     _row(
         "Outcome",

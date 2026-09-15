@@ -67,6 +67,28 @@ class ActionIntentV1:
     def payload_copy(self) -> dict[str, Any]:
         return _thaw(self.payload)
 
+    def as_dict(self) -> dict[str, Any]:
+        return {
+            "intent_id": self.intent_id,
+            "tenant_id": self.tenant_id,
+            "business_id": self.business_id,
+            "decision_id": self.decision_id,
+            "correlation_id": self.correlation_id,
+            "action_type": self.action_type,
+            "channel": self.channel,
+            "payload": self.payload_copy(),
+            "payload_hash": self.payload_hash,
+            "objective_name": self.objective_name,
+            "estimated_cost": self.estimated_cost,
+            "expected_value": self.expected_value,
+            "confidence": self.confidence,
+            "reversible": self.reversible,
+            "requested_by": self.requested_by,
+            "schema_version": self.schema_version,
+            "evidence_refs": list(self.evidence_refs),
+            "derived_fact_ref": self.derived_fact_ref,
+        }
+
     def validate_contract(self) -> list[str]:
         identity = (
             "intent_id", "tenant_id", "business_id", "decision_id",
