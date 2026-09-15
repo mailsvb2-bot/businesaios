@@ -47,7 +47,7 @@ from application.business_autonomy.business_connector_framework import (
 )
 from application.business_autonomy.channel_adapter_registry import TypedChannelAdapterRegistry
 from application.business_autonomy.channel_backed_adapter import ChannelBackedBusinessAdapter
-from application.business_autonomy.channel_contracts import ChannelKind
+from application.business_autonomy.channel_contracts import ChannelIdentity, ChannelKind
 from application.business_autonomy.contracts import (
     BusinessExecutionRequest,
     BusinessExecutionResult,
@@ -529,34 +529,46 @@ def build_business_autonomy_guarded_service(*, business_id: str = 'external_busi
     trust_registry = RequestTenantTrustRegistryView(distributed_registry)
 
     def ensure_scope_for(*, tenant_id: str, scoped_business_id: str, requested_by: str, envelope_metadata: Mapping[str, Any]) -> None:
-        channel_kind, adapter_key, external_ref, region, metadata = _channel_defaults_for(scoped_business_id)
-        metadata = {**metadata, **dict(envelope_metadata or {})}
-        existing = distributed_registry.get(tenant_id, scoped_business_id)
-        if existing is None:
+        registry_record = distributed_registry.get(tenant_id, scoped_business_id)
+        if registry_record is None:
             raise KeyError(f'business is not explicitly onboarded for tenant: {tenant_id}:{scoped_business_id}')
+        legacy_region = registry_record.region
+        try:
+            identity = distributed_registry.channel_identity_snapshot(
+                tenant_id=tenant_id,
+                business_id=scoped_business_id,
+            )
+        except KeyError:
+            channel_kind, adapter_key, external_ref, legacy_region, legacy_metadata = _channel_defaults_for(scoped_business_id)
+            identity = BusinessOnboardingRequest(
+                business_id=scoped_business_id,
+                tenant_id=tenant_id,
+                ownership_key=registry_record.ownership_key,
+                region=registry_record.region or legacy_region,
+                channel_kind=channel_kind,
+                adapter_key=adapter_key,
+                external_ref=external_ref,
+                requested_by=requested_by,
+                metadata={**legacy_metadata, 'channel_identity_source': 'legacy_default'},
+            ).to_identity()
+        identity = ChannelIdentity(
+            business_id=identity.business_id,
+            tenant_id=identity.tenant_id,
+            channel_kind=identity.channel_kind,
+            adapter_key=identity.adapter_key,
+            external_ref=identity.external_ref,
+            region=identity.region,
+            metadata={**dict(identity.metadata or {}), **dict(envelope_metadata or {})},
+        )
         ensure_business_route(
             route_state=distributed['region_state'],
             tenant_id=tenant_id,
             business_id=scoped_business_id,
-            primary_region=existing.region or region,
-            failover_region='us-east-1' if (existing.region or region) != 'us-east-1' else 'eu-west-1',
+            primary_region=registry_record.region or legacy_region,
+            failover_region='us-east-1' if (registry_record.region or legacy_region) != 'us-east-1' else 'eu-west-1',
         )
-        registry_record = distributed_registry.get(tenant_id, scoped_business_id)
-        if registry_record is None:
-            raise KeyError(f'business registry record missing: {tenant_id}:{scoped_business_id}')
         if not bool(registry_record.governance_enabled):
             raise ValueError(f'business governance is not enabled: {tenant_id}:{scoped_business_id}')
-        identity = BusinessOnboardingRequest(
-            business_id=scoped_business_id,
-            tenant_id=tenant_id,
-            ownership_key=registry_record.ownership_key,
-            region=registry_record.region,
-            channel_kind=channel_kind,
-            adapter_key=adapter_key,
-            external_ref=external_ref,
-            requested_by=requested_by,
-            metadata=metadata,
-        ).to_identity()
         resolved = typed_registry.resolve(identity)
         business_adapter = ChannelBackedBusinessAdapter(
             identity=identity,

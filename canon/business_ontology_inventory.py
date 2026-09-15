@@ -187,10 +187,12 @@ BUSINESS_ONTOLOGY_OWNERSHIP_AUDIT = (
     ),
     _row(
         "Channel",
-        OwnershipAuditStatus.PARTIAL,
+        OwnershipAuditStatus.DONE,
         "application.business_autonomy.channel_contracts",
-        None,
-        "Typed channel identity exists; universal business-channel owner is incomplete.",
+        "application.business_autonomy.distributed_capability_trust_registry",
+        "ChannelIdentity is the canonical semantic owner. New onboarding writes persist adapter_key/external_ref in the existing durable BusinessRegistryRecord; bootstrap reads that identity first and uses defaults only for explicit legacy rows that predate full channel identity persistence.",
+        writers=("application.business_autonomy.business_connector_framework",),
+        readers=("application.business_autonomy.distributed_capability_trust_registry", "runtime.business_autonomy.bootstrap"),
     ),
     _row(
         "Conversation",
