@@ -133,7 +133,15 @@ BUSINESS_ONTOLOGY_OWNERSHIP_AUDIT = (
         "Lead contract exists; lifecycle/storage owner remains fragmented.",
     ),
     _row("Partner", OwnershipAuditStatus.MISSING, None, None, "No universal Partner owner on main."),
-    _row("Employee", OwnershipAuditStatus.MISSING, None, None, "No universal Employee owner on main."),
+    _row(
+        "Employee",
+        OwnershipAuditStatus.DONE,
+        "contracts.employee",
+        "runtime.platform.event_store",
+        "Employee is a PII-minimal scoped Person-to-Organization relationship. EmployeeRegistry is the single writer over canonical EventStore facts and validates both referenced lifecycle owners before creation.",
+        writers=("application.employee.registry",),
+        readers=("application.employee.projector",),
+    ),
     _row(
         "Product",
         OwnershipAuditStatus.PARTIAL,

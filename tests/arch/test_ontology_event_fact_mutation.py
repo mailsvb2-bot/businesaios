@@ -11,6 +11,7 @@ OWNER = Path("application/ontology/event_fact_lifecycle.py")
 ENTITY_REGISTRIES = (
     Path("application/organization/registry.py"),
     Path("application/person/registry.py"),
+    Path("application/employee/registry.py"),
 )
 
 
