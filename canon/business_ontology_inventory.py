@@ -307,7 +307,13 @@ BUSINESS_ONTOLOGY_OWNERSHIP_AUDIT = (
         "BusinessOutcomeV1 is canonical semantic owner; canonical storage/read-writer ownership and attribution loop remain incomplete.",
     ),
     _row(
-        "Task", OwnershipAuditStatus.MISSING, None, None, "No canonical Durable Task Runtime entity/state machine yet."
+        "Task",
+        OwnershipAuditStatus.DONE,
+        "contracts.task",
+        "runtime.platform.event_store",
+        "DurableTask is the canonical task entity/state machine; DurableTaskRegistry is the single lifecycle writer over canonical EventStore facts and DurableTaskProjector is read-only. Full Run/Step/Checkpoint/Wait/Compensation runtime remains a separate Phase 9 gap.",
+        writers=("application.task.registry",),
+        readers=("application.task.projector",),
     ),
     _row("Artifact", OwnershipAuditStatus.MISSING, None, None, "No universal Artifact owner on main."),
     _row("Document", OwnershipAuditStatus.MISSING, None, None, "No universal Document owner on main."),

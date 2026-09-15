@@ -16,7 +16,7 @@
 | 6 | Goal/Constraint Engine | **PARTIAL** | Goal/constraint contracts, planners and conflict helpers exist; first-class hierarchy/lifecycle/constraint engine is incomplete. |
 | 7 | Policy + Autonomy + Risk Budgets | **PARTIAL** | Strong policy/autonomy/risk controls exist; canonical accumulated risk/error/autonomy budget model is incomplete. |
 | 8 | Agent Identity + Delegation | **MISSING** | No canonical AgentIdentity/delegation graph contract with inherited authority bounds. |
-| 9 | Durable Task Runtime | **MISSING** | Recovery/jobs/outbox exist, but no universal Task/Run/Step/Checkpoint/Wait/Compensation runtime. |
+| 9 | Durable Task Runtime | **PARTIAL** | Canonical durable Task entity/state machine now uses EventStore + shared idempotent ontology mutation; Run/Step/Checkpoint/Wait/Compensation, scheduling and universal recovery orchestration remain incomplete. |
 | 10 | Capability Registry Hardening | **PARTIAL** | Capability registries/health/routing exist; lifecycle truth and single universal ownership still need collapse/hardening. |
 | 11 | Model Runtime / Context Engine | **MISSING** | No canonical ModelProvider/Profile/CapabilityRegistry/Router/Policy/Evaluation stack. |
 | 12 | Economic Engine | **PARTIAL** | Economics, capital allocation, budgets and revenue logic exist; unified ActionIntent economics/portfolio optimization is incomplete. |
@@ -32,9 +32,9 @@
 
 ## Critical duplicate/missing hotspots
 
-- **MISSING canonical owner:** Deal, Order, Asset, Resource, Durable Task, Artifact, Document.
+- **MISSING canonical owner:** Deal, Order, Asset, Resource, Artifact, Document.
 - **DUPLICATE/ambiguous ownership:** Message, Payment, Revenue, Risk, Capability. Evidence/Data Lineage (Phase 3) is DONE on `storage.evidence_store`; legacy evidence surfaces are migration/archive or rebuildable mirrors rather than competing owners.
-- **Phase 1 ownership rows proven DONE:** Business (`DistributedBusinessRegistry` lifecycle owner), Organization (`OrganizationRegistry` + EventStore chronology), Person (`PersonRegistry` + EventStore chronology, PII-minimal), Employee (`EmployeeRegistry` scoped Person↔Organization relation), Partner (`PartnerRegistry` scoped Person/Organization party relation), Service (`BusinessServiceRegistry` business-offering lifecycle), Hypothesis (`GrowthHypothesisV1` + growth EventStore backlog), Customer (`CustomerRegistry` + EventStore chronology), Decision (sovereign issuer + `DecisionArchive` runtime write boundary), and Evidence (`storage.evidence_store`). Action and Outcome remain PARTIAL until their universal storage/read-owner maps are complete; their semantic/runtime contracts alone are not treated as lifecycle ownership.
+- **Phase 1 ownership rows proven DONE:** Business (`DistributedBusinessRegistry` lifecycle owner), Organization (`OrganizationRegistry` + EventStore chronology), Person (`PersonRegistry` + EventStore chronology, PII-minimal), Employee (`EmployeeRegistry` scoped Person↔Organization relation), Partner (`PartnerRegistry` scoped Person/Organization party relation), Service (`BusinessServiceRegistry` business-offering lifecycle), Hypothesis (`GrowthHypothesisV1` + growth EventStore backlog), Task (`DurableTaskRegistry` + EventStore state machine), Customer (`CustomerRegistry` + EventStore chronology), Decision (sovereign issuer + `DecisionArchive` runtime write boundary), and Evidence (`storage.evidence_store`). Action and Outcome remain PARTIAL until their universal storage/read-owner maps are complete; their semantic/runtime contracts alone are not treated as lifecycle ownership.
 
 ## Next gate
 

@@ -14,6 +14,7 @@ ENTITY_REGISTRIES = (
     Path("application/employee/registry.py"),
     Path("application/partner/registry.py"),
     Path("application/business_service/registry.py"),
+    Path("application/task/registry.py"),
 )
 
 

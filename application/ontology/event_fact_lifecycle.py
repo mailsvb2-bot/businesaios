@@ -85,6 +85,55 @@ class EventFactLifecycleWriter:
         self._claims.mark_completed(key=scope, owner_id=owner_id, result_ref=fact_id, result_digest=str(scope.scope_hash))
         return True
 
+    def append_transition_once(
+        self, *, tenant_id: str, business_id: str, entity_id: str,
+        expected_state_token: str, operation: str, idempotency_key: str,
+        fact_type: str, payload: dict[str, object], occurred_at_ms: int,
+    ) -> str:
+        state_token = str(expected_state_token or "").strip()
+        if not state_token:
+            raise ValueError("expected_state_token is required")
+        user_key = str(idempotency_key or "").strip()
+        if not user_key:
+            raise ValueError("idempotency_key is required")
+        guard = build_idempotency_key(
+            tenant_id=str(tenant_id),
+            namespace=f"{self._namespace}.transition",
+            operation="state_transition",
+            key=f"{business_id}:{entity_id}:{state_token}",
+            semantic_scope={
+                "business_id": str(business_id),
+                "entity_id": str(entity_id),
+                "expected_state_token": state_token,
+                "operation": str(operation),
+                "idempotency_key": user_key,
+                "fact_type": str(fact_type),
+                "payload": dict(payload),
+            },
+        )
+        owner_id = f"ontology-transition:{self._id_prefix}:{guard.scope_hash}"
+        decision = self._claims.reserve(key=guard, owner_id=owner_id, lease_ttl_seconds=300)
+        if decision.resolution is IdempotencyResolution.REPLAY_COMPLETED:
+            fact_id = self.append_once(
+                tenant_id=tenant_id, business_id=business_id, entity_id=entity_id,
+                operation=operation, idempotency_key=user_key, fact_type=fact_type,
+                payload=payload, occurred_at_ms=occurred_at_ms,
+            )
+            if decision.replay_result_ref not in {None, fact_id}:
+                raise RuntimeError("ontology transition guard points to a different durable fact")
+            return fact_id
+        if decision.resolution is not IdempotencyResolution.ACCEPTED:
+            raise RuntimeError(f"ontology transition rejected: {decision.resolution.value}")
+        fact_id = self.append_once(
+            tenant_id=tenant_id, business_id=business_id, entity_id=entity_id,
+            operation=operation, idempotency_key=user_key, fact_type=fact_type,
+            payload=payload, occurred_at_ms=occurred_at_ms,
+        )
+        self._claims.mark_completed(
+            key=guard, owner_id=owner_id, result_ref=fact_id, result_digest=str(guard.scope_hash)
+        )
+        return fact_id
+
     def append_once(self, *, tenant_id: str, business_id: str, entity_id: str, operation: str, idempotency_key: str, fact_type: str, payload: dict[str, object], occurred_at_ms: int) -> str:
         _, scope, fact_id = self._scope(tenant_id=tenant_id, business_id=business_id, entity_id=entity_id, operation=operation, idempotency_key=idempotency_key, payload=payload)
         if self.repair_existing(tenant_id=tenant_id, business_id=business_id, entity_id=entity_id, operation=operation, idempotency_key=idempotency_key, fact_type=fact_type, payload=payload):
