@@ -53,6 +53,13 @@ def test_organization_fact_vocabulary_stays_inside_owner_and_projection() -> Non
     assert owners == {FACTS}
 
 
+def test_organization_reuses_shared_ontology_mutation_primitive() -> None:
+    registry = (ROOT / "application/organization/registry.py").read_text(encoding="utf-8")
+    assert "EventFactLifecycleWriter" in registry
+    assert "BusinessFactV1(" not in registry
+    assert "build_idempotency_key(" not in registry
+
+
 def test_business_autonomy_bootstrap_wires_organization_owner_to_existing_event_store() -> None:
     bootstrap = (ROOT / "runtime/business_autonomy/bootstrap.py").read_text(encoding="utf-8")
     assert "OrganizationRegistry(event_store=customer_event_store, idempotency_store=distributed['idempotency'])" in bootstrap

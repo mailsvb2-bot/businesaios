@@ -32,9 +32,9 @@
 
 ## Critical duplicate/missing hotspots
 
-- **MISSING canonical owner:** Organization, Person, Partner, Employee, Service, Deal, Order, Asset, Resource, Hypothesis, Durable Task, Artifact, Document.
+- **MISSING canonical owner:** Partner, Employee, Service, Deal, Order, Asset, Resource, Hypothesis, Durable Task, Artifact, Document.
 - **DUPLICATE/ambiguous ownership:** Message, Payment, Revenue, Risk, Capability. Evidence/Data Lineage (Phase 3) is DONE on `storage.evidence_store`; legacy evidence surfaces are migration/archive or rebuildable mirrors rather than competing owners.
-- **Phase 1 ownership rows proven DONE:** Business (`DistributedBusinessRegistry` lifecycle owner), Organization (`OrganizationRegistry` + EventStore chronology), Customer (`CustomerRegistry` + EventStore chronology), Decision (sovereign issuer + `DecisionArchive` runtime write boundary), and Evidence (`storage.evidence_store`). Action and Outcome remain PARTIAL until their universal storage/read-owner maps are complete; their semantic/runtime contracts alone are not treated as lifecycle ownership.
+- **Phase 1 ownership rows proven DONE:** Business (`DistributedBusinessRegistry` lifecycle owner), Organization (`OrganizationRegistry` + EventStore chronology), Person (`PersonRegistry` + EventStore chronology, PII-minimal), Customer (`CustomerRegistry` + EventStore chronology), Decision (sovereign issuer + `DecisionArchive` runtime write boundary), and Evidence (`storage.evidence_store`). Action and Outcome remain PARTIAL until their universal storage/read-owner maps are complete; their semantic/runtime contracts alone are not treated as lifecycle ownership.
 
 ## Next gate
 

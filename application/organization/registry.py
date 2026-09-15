@@ -1,237 +1,33 @@
 from __future__ import annotations
 
-import hashlib
 import time
 from typing import Any
 
+from application.ontology import EventFactLifecycleWriter
 from application.organization.facts import ORGANIZATION_ARCHIVED, ORGANIZATION_CREATED, ORGANIZATION_UPDATED
 from application.organization.projector import OrganizationProjector
-from contracts.event_store import BUSINESS_FACT_EVENT_TYPE, BusinessFactV1
 from contracts.organization import Organization, OrganizationStatus
-from reliability.idempotency_contract import IdempotencyResolution, IdempotencyState, IdempotencyStore
-from reliability.idempotency_scope import build_idempotency_key
+from reliability.idempotency_contract import IdempotencyStore
 
 CANON_ORGANIZATION_LIFECYCLE_OWNER = True
-
-
-def _now_ms(value: int | None) -> int:
-    return int(time.time() * 1000) if value is None else max(0, int(value))
-
-
-def _fact_id(
-    *,
-    tenant_id: str,
-    business_id: str,
-    organization_id: str,
-    operation: str,
-    idempotency_key: str,
-    scope_hash: str,
-) -> str:
-    raw = "\0".join(
-        (tenant_id, business_id, organization_id, operation, idempotency_key, scope_hash)
-    ).encode("utf-8")
-    return f"organization:{hashlib.sha256(raw).hexdigest()}"
 
 
 class OrganizationRegistry:
     """Single Organization lifecycle writer backed by the canonical EventStore."""
 
     def __init__(self, *, event_store: Any, idempotency_store: IdempotencyStore) -> None:
-        self._events = event_store
-        self._claims = idempotency_store
         self._projector = OrganizationProjector(event_store)
-
-    def _find_fact(self, *, tenant_id: str, fact_id: str) -> dict[str, Any] | None:
-        for event in self._events.iter_events(
-            tenant_id=str(tenant_id), start_ms=0, event_type=BUSINESS_FACT_EVENT_TYPE
-        ):
-            if str(event.get("event_id") or "") == str(fact_id):
-                return dict(event)
-        return None
+        self._writer = EventFactLifecycleWriter(
+            event_store=event_store,
+            idempotency_store=idempotency_store,
+            namespace="organization_fact",
+            source="organization_registry",
+            id_prefix="organization",
+        )
 
     @staticmethod
-    def _assert_fact_matches(
-        event: dict[str, Any],
-        *,
-        business_id: str,
-        organization_id: str,
-        fact_type: str,
-        payload: dict[str, object],
-    ) -> None:
-        envelope = dict(event.get("payload") or {})
-        matches = (
-            str(event.get("source") or "") == "organization_registry"
-            and str(envelope.get("business_id") or "") == str(business_id)
-            and str(envelope.get("fact_type") or "") == str(fact_type)
-            and str(envelope.get("entity_id") or "") == str(organization_id)
-            and dict(envelope.get("payload") or {}) == dict(payload)
-        )
-        if not matches:
-            raise ValueError("organization durable fact conflicts with requested mutation")
-
-    def _repair_existing_fact(
-        self,
-        *,
-        tenant_id: str,
-        business_id: str,
-        organization_id: str,
-        operation: str,
-        idempotency_key: str,
-        fact_type: str,
-        payload: dict[str, object],
-    ) -> bool:
-        normalized_key = str(idempotency_key or "").strip()
-        if not normalized_key:
-            raise ValueError("idempotency_key is required")
-        scope = build_idempotency_key(
-            tenant_id=str(tenant_id),
-            namespace="organization_fact",
-            operation=str(operation),
-            key=normalized_key,
-            semantic_scope={
-                "business_id": str(business_id),
-                "organization_id": str(organization_id),
-                "payload": dict(payload),
-            },
-        )
-        fact_id = _fact_id(
-            tenant_id=str(tenant_id),
-            business_id=str(business_id),
-            organization_id=str(organization_id),
-            operation=str(operation),
-            idempotency_key=normalized_key,
-            scope_hash=str(scope.scope_hash),
-        )
-        event = self._find_fact(tenant_id=str(tenant_id), fact_id=fact_id)
-        if event is None:
-            return False
-        self._assert_fact_matches(
-            event,
-            business_id=business_id,
-            organization_id=organization_id,
-            fact_type=fact_type,
-            payload=payload,
-        )
-        owner_id = f"organization-fact:{fact_id}"
-        record = self._claims.get(key=scope)
-        if record is None:
-            raise RuntimeError("organization durable fact has no idempotency claim")
-        if not record.idempotency_key.same_scope(scope):
-            raise RuntimeError("organization durable fact idempotency scope mismatch")
-        if record.state is IdempotencyState.COMPLETED:
-            if record.result_ref != fact_id:
-                raise RuntimeError("organization completed claim points to a different fact")
-            if record.result_digest not in {None, str(scope.scope_hash)}:
-                raise RuntimeError("organization completed claim digest mismatch")
-            return True
-        if record.state is IdempotencyState.FAILED:
-            raise RuntimeError("organization durable fact has terminal failed idempotency claim")
-        if str(record.owner_id or "") != owner_id:
-            raise RuntimeError("organization durable fact idempotency owner mismatch")
-        if record.has_live_lease():
-            self._claims.mark_completed(
-                key=scope, owner_id=owner_id, result_ref=fact_id, result_digest=str(scope.scope_hash)
-            )
-            return True
-        decision = self._claims.reserve(key=scope, owner_id=owner_id, lease_ttl_seconds=300)
-        if decision.resolution is IdempotencyResolution.REPLAY_COMPLETED:
-            if decision.replay_result_ref != fact_id:
-                raise RuntimeError("organization replay claim points to a different fact")
-            return True
-        if decision.resolution is not IdempotencyResolution.ACCEPTED:
-            raise RuntimeError(f"organization recovery rejected: {decision.resolution.value}")
-        self._claims.mark_completed(
-            key=scope, owner_id=owner_id, result_ref=fact_id, result_digest=str(scope.scope_hash)
-        )
-        return True
-
-    def _append_once(
-        self,
-        *,
-        tenant_id: str,
-        business_id: str,
-        organization_id: str,
-        operation: str,
-        idempotency_key: str,
-        fact_type: str,
-        payload: dict[str, object],
-        occurred_at_ms: int,
-    ) -> None:
-        normalized_key = str(idempotency_key or "").strip()
-        if not normalized_key:
-            raise ValueError("idempotency_key is required")
-        scope = build_idempotency_key(
-            tenant_id=str(tenant_id),
-            namespace="organization_fact",
-            operation=str(operation),
-            key=normalized_key,
-            semantic_scope={
-                "business_id": str(business_id),
-                "organization_id": str(organization_id),
-                "payload": dict(payload),
-            },
-        )
-        fact_id = _fact_id(
-            tenant_id=str(tenant_id),
-            business_id=str(business_id),
-            organization_id=str(organization_id),
-            operation=str(operation),
-            idempotency_key=normalized_key,
-            scope_hash=str(scope.scope_hash),
-        )
-        if self._repair_existing_fact(
-            tenant_id=tenant_id,
-            business_id=business_id,
-            organization_id=organization_id,
-            operation=operation,
-            idempotency_key=normalized_key,
-            fact_type=fact_type,
-            payload=payload,
-        ):
-            return
-        owner_id = f"organization-fact:{fact_id}"
-        resolution = self._claims.reserve(key=scope, owner_id=owner_id, lease_ttl_seconds=300)
-        if resolution.resolution is IdempotencyResolution.REPLAY_COMPLETED:
-            raise RuntimeError("organization idempotency claim completed without durable fact")
-        if resolution.resolution is not IdempotencyResolution.ACCEPTED:
-            raise RuntimeError(f"organization mutation rejected: {resolution.resolution.value}")
-        event = BusinessFactV1(
-            fact_id=fact_id,
-            tenant_id=str(tenant_id),
-            business_id=str(business_id),
-            fact_type=str(fact_type),
-            entity_id=str(organization_id),
-            event_time_ms=int(occurred_at_ms),
-            observed_at_ms=int(occurred_at_ms),
-            source="organization_registry",
-            payload=dict(payload),
-        ).as_event()
-        try:
-            self._events.append_event(event)
-        except Exception:
-            durable = self._find_fact(tenant_id=str(tenant_id), fact_id=fact_id)
-            if durable is None:
-                raise
-            self._assert_fact_matches(
-                durable,
-                business_id=business_id,
-                organization_id=organization_id,
-                fact_type=fact_type,
-                payload=payload,
-            )
-        durable = self._find_fact(tenant_id=str(tenant_id), fact_id=fact_id)
-        if durable is None:
-            raise RuntimeError("organization EventStore append did not become durable")
-        self._assert_fact_matches(
-            durable,
-            business_id=business_id,
-            organization_id=organization_id,
-            fact_type=fact_type,
-            payload=payload,
-        )
-        self._claims.mark_completed(
-            key=scope, owner_id=owner_id, result_ref=fact_id, result_digest=str(scope.scope_hash)
-        )
+    def _time(value: int | None) -> int:
+        return int(time.time() * 1000) if value is None else max(0, int(value))
 
     def create(
         self,
@@ -244,7 +40,7 @@ class OrganizationRegistry:
         organization_type: str | None = None,
         occurred_at_ms: int | None = None,
     ) -> Organization:
-        when = _now_ms(occurred_at_ms)
+        when = self._time(occurred_at_ms)
         candidate = Organization(
             organization_id=organization_id,
             tenant_id=tenant_id,
@@ -255,41 +51,38 @@ class OrganizationRegistry:
             updated_at_ms=when,
         )
         try:
-            existing = self._projector.get(
+            current = self._projector.get(
                 tenant_id=candidate.tenant_id,
                 business_id=candidate.business_id,
                 organization_id=candidate.organization_id,
             )
         except LookupError:
-            existing = None
-        if existing is not None:
-            if existing.name != candidate.name or existing.organization_type != candidate.organization_type:
+            current = None
+        payload = {"name": candidate.name, "organization_type": candidate.organization_type}
+        if current is not None:
+            if current.name != candidate.name or current.organization_type != candidate.organization_type:
                 raise ValueError("organization already exists with different identity metadata")
-            self._repair_existing_fact(
-                tenant_id=candidate.tenant_id,
-                business_id=candidate.business_id,
-                organization_id=candidate.organization_id,
+            self._writer.repair_existing(
+                tenant_id=tenant_id,
+                business_id=business_id,
+                entity_id=organization_id,
                 operation="create",
                 idempotency_key=idempotency_key,
                 fact_type=ORGANIZATION_CREATED,
-                payload={"name": candidate.name, "organization_type": candidate.organization_type},
+                payload=payload,
             )
-            return existing
-        self._append_once(
-            tenant_id=candidate.tenant_id,
-            business_id=candidate.business_id,
-            organization_id=candidate.organization_id,
+            return current
+        self._writer.append_once(
+            tenant_id=tenant_id,
+            business_id=business_id,
+            entity_id=organization_id,
             operation="create",
             idempotency_key=idempotency_key,
             fact_type=ORGANIZATION_CREATED,
-            payload={"name": candidate.name, "organization_type": candidate.organization_type},
+            payload=payload,
             occurred_at_ms=when,
         )
-        return self._projector.get(
-            tenant_id=candidate.tenant_id,
-            business_id=candidate.business_id,
-            organization_id=candidate.organization_id,
-        )
+        return self._projector.get(tenant_id=tenant_id, business_id=business_id, organization_id=organization_id)
 
     def update(
         self,
@@ -305,7 +98,7 @@ class OrganizationRegistry:
         current = self._projector.get(tenant_id=tenant_id, business_id=business_id, organization_id=organization_id)
         if current.status is OrganizationStatus.ARCHIVED:
             raise ValueError("archived organization cannot be updated")
-        when = max(current.updated_at_ms, _now_ms(occurred_at_ms))
+        when = max(current.updated_at_ms, self._time(occurred_at_ms))
         candidate = Organization(
             organization_id=current.organization_id,
             tenant_id=current.tenant_id,
@@ -315,25 +108,26 @@ class OrganizationRegistry:
             created_at_ms=current.created_at_ms,
             updated_at_ms=when,
         )
+        payload = {"name": candidate.name, "organization_type": candidate.organization_type}
         if candidate.name == current.name and candidate.organization_type == current.organization_type:
-            self._repair_existing_fact(
+            self._writer.repair_existing(
                 tenant_id=tenant_id,
                 business_id=business_id,
-                organization_id=organization_id,
+                entity_id=organization_id,
                 operation="update",
                 idempotency_key=idempotency_key,
                 fact_type=ORGANIZATION_UPDATED,
-                payload={"name": candidate.name, "organization_type": candidate.organization_type},
+                payload=payload,
             )
             return current
-        self._append_once(
+        self._writer.append_once(
             tenant_id=tenant_id,
             business_id=business_id,
-            organization_id=organization_id,
+            entity_id=organization_id,
             operation="update",
             idempotency_key=idempotency_key,
             fact_type=ORGANIZATION_UPDATED,
-            payload={"name": candidate.name, "organization_type": candidate.organization_type},
+            payload=payload,
             occurred_at_ms=when,
         )
         return self._projector.get(tenant_id=tenant_id, business_id=business_id, organization_id=organization_id)
@@ -349,21 +143,21 @@ class OrganizationRegistry:
     ) -> Organization:
         current = self._projector.get(tenant_id=tenant_id, business_id=business_id, organization_id=organization_id)
         if current.status is OrganizationStatus.ARCHIVED:
-            self._repair_existing_fact(
+            self._writer.repair_existing(
                 tenant_id=tenant_id,
                 business_id=business_id,
-                organization_id=organization_id,
+                entity_id=organization_id,
                 operation="archive",
                 idempotency_key=idempotency_key,
                 fact_type=ORGANIZATION_ARCHIVED,
                 payload={},
             )
             return current
-        when = max(current.updated_at_ms, _now_ms(occurred_at_ms))
-        self._append_once(
+        when = max(current.updated_at_ms, self._time(occurred_at_ms))
+        self._writer.append_once(
             tenant_id=tenant_id,
             business_id=business_id,
-            organization_id=organization_id,
+            entity_id=organization_id,
             operation="archive",
             idempotency_key=idempotency_key,
             fact_type=ORGANIZATION_ARCHIVED,

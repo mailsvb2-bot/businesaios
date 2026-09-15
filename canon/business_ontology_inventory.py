@@ -109,10 +109,12 @@ BUSINESS_ONTOLOGY_OWNERSHIP_AUDIT = (
     ),
     _row(
         "Person",
-        OwnershipAuditStatus.MISSING,
-        None,
-        None,
-        "Behavior-person snapshots are not a universal business Person owner.",
+        OwnershipAuditStatus.DONE,
+        "contracts.person",
+        "runtime.platform.event_store",
+        "Person is a PII-minimal tenant/business-scoped human identity lifecycle. PersonRegistry is the single writer over canonical EventStore facts; behavior snapshots remain derived observations, not entity ownership.",
+        writers=("application.person.registry",),
+        readers=("application.person.projector",),
     ),
     _row(
         "Customer",
