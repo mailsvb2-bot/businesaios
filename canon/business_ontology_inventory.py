@@ -356,10 +356,12 @@ BUSINESS_ONTOLOGY_OWNERSHIP_AUDIT = (
     ),
     _row(
         "Provider",
-        OwnershipAuditStatus.PARTIAL,
+        OwnershipAuditStatus.DONE,
         "application.business_autonomy.provider_catalog",
-        None,
-        "Provider catalog is canonical for business autonomy integrations; universal provider ontology remains incomplete.",
+        "runtime.business_autonomy.provider_activation_store",
+        "ProviderDefinition catalog is the single static semantic owner and FileProviderActivationStore is the single durable tenant/business/provider activation lifecycle owner; ProviderAdminService is the only production mutation boundary.",
+        writers=("application.business_autonomy.provider_admin_service",),
+        readers=("application.business_autonomy.provider_admin_service",),
     ),
     _row(
         "Policy",
