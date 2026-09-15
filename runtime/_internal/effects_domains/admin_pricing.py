@@ -15,16 +15,42 @@ from core.offers.catalogs.yaml_schema import validate_yaml_offer_catalog_spec
 from runtime._internal.offer_catalog_mutation import (
     CatalogMutationTransaction,
     acquire_catalog_lock,
-    canonical_catalog_path,
     digest_bytes,
     dump_yaml,
     file_digest,
     runtime_environment,
     scope_segment,
 )
-from runtime.platform.config.env_flags import env_bool
+from runtime._internal.offer_catalog_mutation import (
+    canonical_catalog_path as _canonical_catalog_path,
+)
+from runtime.platform.config.env_flags import env_bool, env_path
 
 PricingChangeTransaction = CatalogMutationTransaction
+
+
+def canonical_catalog_path(
+    *,
+    tenant_id: str,
+    product_id: str,
+    environment: str | None = None,
+    catalog_root: Path | None = None,
+) -> Path:
+    """Compatibility seam over the canonical mutation owner's path resolver."""
+
+    root = catalog_root
+    if root is None:
+        repo_root = Path(__file__).resolve().parents[3]
+        root = env_path(
+            "OFFER_CATALOGS_DATA_DIR",
+            str(repo_root / "data" / "offer_catalogs"),
+        )
+    return _canonical_catalog_path(
+        tenant_id=tenant_id,
+        product_id=product_id,
+        environment=environment,
+        catalog_root=root,
+    )
 
 
 def validate_pricing_change(
