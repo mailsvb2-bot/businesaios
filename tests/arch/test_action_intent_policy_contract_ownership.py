@@ -109,10 +109,9 @@ def test_customer_runtime_extends_existing_owners_without_second_semantic_store(
     assert "BusinessFactV1(" in registry
     assert "build_idempotency_key(" in registry
     assert "SecretVault" in registry
-    assert (
-        "CustomerRegistry(event_store=customer_event_store, idempotency_store=distributed['idempotency'], pii_vault=secret_vault)"
-        in bootstrap
-    )
+    ontology_wiring = (ROOT / "runtime/business_autonomy/ontology_runtime.py").read_text(encoding="utf-8")
+    assert "CustomerRegistry(" in ontology_wiring
+    assert "wire_business_ontology_runtime(" in bootstrap
     assert "customer_event_store=getattr(runtime_infra, 'event_store', None)" in router
     assert "customer_registry=self.customer_registry" in provider_admin
     assert "append_event(" not in timeline

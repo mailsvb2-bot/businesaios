@@ -68,5 +68,7 @@ def test_behavior_person_snapshot_is_not_lifecycle_owner() -> None:
 
 def test_business_autonomy_bootstrap_wires_person_to_existing_event_store() -> None:
     bootstrap = (ROOT / "runtime/business_autonomy/bootstrap.py").read_text(encoding="utf-8")
-    assert "PersonRegistry(event_store=customer_event_store, idempotency_store=distributed['idempotency'])" in bootstrap
-    assert "service._person_registry = person_registry" in bootstrap
+    wiring = (ROOT / "runtime/business_autonomy/ontology_runtime.py").read_text(encoding="utf-8")
+    assert "PersonRegistry(event_store=event_store, idempotency_store=idempotency_store)" in wiring
+    assert '"_person_registry"' in wiring
+    assert "wire_business_ontology_runtime(" in bootstrap

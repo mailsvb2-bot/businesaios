@@ -63,5 +63,7 @@ def test_business_service_registry_delegates_durable_mutation() -> None:
 
 def test_business_autonomy_bootstrap_wires_business_service_owner() -> None:
     bootstrap = (ROOT / "runtime/business_autonomy/bootstrap.py").read_text(encoding="utf-8")
-    assert "BusinessServiceRegistry(event_store=customer_event_store, idempotency_store=distributed['idempotency'])" in bootstrap
-    assert "service._business_service_registry = business_service_registry" in bootstrap
+    wiring = (ROOT / "runtime/business_autonomy/ontology_runtime.py").read_text(encoding="utf-8")
+    assert "BusinessServiceRegistry(event_store=event_store, idempotency_store=idempotency_store)" in wiring
+    assert '"_business_service_registry"' in wiring
+    assert "wire_business_ontology_runtime(" in bootstrap

@@ -53,5 +53,7 @@ def test_document_registry_reuses_artifact_and_shared_event_owners():
 
 def test_bootstrap_wires_document_to_existing_event_store():
     src=(ROOT/'runtime/business_autonomy/bootstrap.py').read_text(encoding='utf-8')
-    assert "DocumentRegistry(event_store=customer_event_store, idempotency_store=distributed['idempotency'])" in src
-    assert 'service._document_registry = document_registry' in src
+    wiring=(ROOT/'runtime/business_autonomy/ontology_runtime.py').read_text(encoding='utf-8')
+    assert "DocumentRegistry(event_store=event_store, idempotency_store=idempotency_store)" in wiring
+    assert '"_document_registry"' in wiring
+    assert 'wire_business_ontology_runtime(' in src

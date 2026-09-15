@@ -70,8 +70,7 @@ def test_task_registry_delegates_durable_mutation_to_shared_owner() -> None:
 
 def test_business_autonomy_bootstrap_wires_task_to_existing_event_store() -> None:
     bootstrap = (ROOT / "runtime/business_autonomy/bootstrap.py").read_text(encoding="utf-8")
-    assert (
-        "DurableTaskRegistry(event_store=customer_event_store, "
-        "idempotency_store=distributed['idempotency'])"
-    ) in bootstrap
-    assert "service._task_registry = task_registry" in bootstrap
+    wiring = (ROOT / "runtime/business_autonomy/ontology_runtime.py").read_text(encoding="utf-8")
+    assert "DurableTaskRegistry(event_store=event_store, idempotency_store=idempotency_store)" in wiring
+    assert '"_task_registry"' in wiring
+    assert "wire_business_ontology_runtime(" in bootstrap

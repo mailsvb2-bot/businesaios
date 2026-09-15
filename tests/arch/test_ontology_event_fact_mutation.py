@@ -49,3 +49,23 @@ def test_event_sourced_entity_registries_delegate_durable_mutation() -> None:
         assert "BusinessFactV1(" not in source
         assert "build_idempotency_key(" not in source
         assert "IdempotencyState" not in source
+
+
+def test_business_autonomy_bootstrap_delegates_ontology_composition() -> None:
+    bootstrap = (ROOT / "runtime/business_autonomy/bootstrap.py").read_text(encoding="utf-8")
+    wiring = (ROOT / "runtime/business_autonomy/ontology_runtime.py").read_text(encoding="utf-8")
+    registry_names = (
+        "CustomerRegistry",
+        "OrganizationRegistry",
+        "PersonRegistry",
+        "EmployeeRegistry",
+        "PartnerRegistry",
+        "BusinessServiceRegistry",
+        "DurableTaskRegistry",
+        "ArtifactRegistry",
+        "DocumentRegistry",
+    )
+    assert "wire_business_ontology_runtime(" in bootstrap
+    for name in registry_names:
+        assert name not in bootstrap
+        assert name in wiring

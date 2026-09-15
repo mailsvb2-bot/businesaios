@@ -72,5 +72,7 @@ def test_employee_registry_delegates_durable_mutation_and_validates_relations() 
 
 def test_business_autonomy_bootstrap_wires_employee_to_existing_event_store() -> None:
     bootstrap = (ROOT / "runtime/business_autonomy/bootstrap.py").read_text(encoding="utf-8")
-    assert "EmployeeRegistry(event_store=customer_event_store, idempotency_store=distributed['idempotency'])" in bootstrap
-    assert "service._employee_registry = employee_registry" in bootstrap
+    wiring = (ROOT / "runtime/business_autonomy/ontology_runtime.py").read_text(encoding="utf-8")
+    assert "EmployeeRegistry(event_store=event_store, idempotency_store=idempotency_store)" in wiring
+    assert '"_employee_registry"' in wiring
+    assert "wire_business_ontology_runtime(" in bootstrap

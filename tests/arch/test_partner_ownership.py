@@ -72,5 +72,7 @@ def test_partner_registry_uses_canonical_party_projectors_and_shared_writer() ->
 
 def test_business_autonomy_bootstrap_wires_partner_to_existing_event_store() -> None:
     bootstrap = (ROOT / "runtime/business_autonomy/bootstrap.py").read_text(encoding="utf-8")
-    assert "PartnerRegistry(event_store=customer_event_store, idempotency_store=distributed['idempotency'])" in bootstrap
-    assert "service._partner_registry = partner_registry" in bootstrap
+    wiring = (ROOT / "runtime/business_autonomy/ontology_runtime.py").read_text(encoding="utf-8")
+    assert "PartnerRegistry(event_store=event_store, idempotency_store=idempotency_store)" in wiring
+    assert '"_partner_registry"' in wiring
+    assert "wire_business_ontology_runtime(" in bootstrap

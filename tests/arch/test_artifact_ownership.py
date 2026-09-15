@@ -80,8 +80,7 @@ def test_artifact_registry_uses_shared_event_mutation_not_technical_artifact_sto
 
 def test_business_autonomy_bootstrap_wires_artifact_to_existing_event_store() -> None:
     bootstrap = (ROOT / "runtime/business_autonomy/bootstrap.py").read_text(encoding="utf-8")
-    assert (
-        "ArtifactRegistry(event_store=customer_event_store, "
-        "idempotency_store=distributed['idempotency'])"
-    ) in bootstrap
-    assert "service._artifact_registry = artifact_registry" in bootstrap
+    wiring = (ROOT / "runtime/business_autonomy/ontology_runtime.py").read_text(encoding="utf-8")
+    assert "ArtifactRegistry(event_store=event_store, idempotency_store=idempotency_store)" in wiring
+    assert '"_artifact_registry"' in wiring
+    assert "wire_business_ontology_runtime(" in bootstrap
