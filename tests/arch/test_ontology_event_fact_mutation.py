@@ -12,6 +12,7 @@ ENTITY_REGISTRIES = (
     Path("application/organization/registry.py"),
     Path("application/person/registry.py"),
     Path("application/employee/registry.py"),
+    Path("application/partner/registry.py"),
 )
 
 
