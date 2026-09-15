@@ -174,8 +174,16 @@ BUSINESS_ONTOLOGY_OWNERSHIP_AUDIT = (
         "Offer",
         OwnershipAuditStatus.PARTIAL,
         "contracts.product_contract",
-        None,
-        "Offer is canonically defined in Product Contract, but persistence/storage ownership is not universalized.",
+        "runtime._internal.offer_catalog_mutation",
+        "Offer catalog storage mutation is canonicalized through one lock/digest/atomic-commit owner shared by governed pricing and offer-patch effects. Semantic Offer shapes still require consolidation before the entity can be declared DONE.",
+        writers=(
+            "runtime._internal.effects_domains.admin_pricing",
+            "runtime._internal.effects_actions.offer_patch_actions",
+        ),
+        readers=(
+            "core.offers.offer_catalog_resolver",
+            "products.offer_catalog_resolver",
+        ),
     ),
     _row(
         "Channel",

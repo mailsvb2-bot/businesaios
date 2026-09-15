@@ -7,7 +7,6 @@ from typing import Any
 
 import yaml
 
-from config.yaml_loader_shared import invalidate_yaml_cache
 from runtime._internal.effects_actions.offer_patch_apply_support import (
     load_offer_catalog,
     locate_offer,
@@ -16,6 +15,12 @@ from runtime._internal.effects_actions.offer_patch_apply_support import (
     summarize_patch_application,
 )
 from runtime._internal.effects_tenant import assert_event_log_tenant
+from runtime._internal.offer_catalog_mutation import (
+    acquire_catalog_lock,
+    atomic_replace_bytes,
+    build_locked_transaction,
+    restore_optional_bytes,
+)
 from runtime.security.runtime_asserts import assert_called_from_executor
 
 
@@ -23,30 +28,6 @@ def _event_id(event: Any) -> str:
     if isinstance(event, dict):
         return str(event.get("event_id") or "").strip()
     return str(getattr(event, "event_id", "") or "").strip()
-
-
-def _read_bytes(path: Path) -> bytes | None:
-    return path.read_bytes() if path.exists() else None
-
-
-def _restore_bytes(path: Path, raw: bytes | None) -> None:
-    if raw is None:
-        path.unlink(missing_ok=True)
-        invalidate_yaml_cache(path)
-        return
-    path.parent.mkdir(parents=True, exist_ok=True)
-    temp = path.with_suffix(path.suffix + ".restore.tmp")
-    temp.write_bytes(raw)
-    temp.replace(path)
-    invalidate_yaml_cache(path)
-
-
-def _atomic_write_text(path: Path, text: str) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    temp = path.with_suffix(path.suffix + ".write.tmp")
-    temp.write_text(str(text), encoding="utf-8")
-    temp.replace(path)
-    invalidate_yaml_cache(path)
 
 
 def _ledger_evidence(
@@ -215,13 +196,24 @@ class OfferPatchEffectsMixin:
                     "scope": scope,
                     "offer_id": offer,
                 }
-            current_catalog = _read_bytes(catalog_path)
             backup_raw = backup_path.read_bytes()
             parsed = yaml.safe_load(backup_raw.decode("utf-8"))
             if not isinstance(parsed, dict):
                 raise RuntimeError("OFFER_PATCH_BACKUP_INVALID")
+            mutation_lock = acquire_catalog_lock(catalog_path)
+            transaction = None
             try:
-                _atomic_write_text(catalog_path, backup_raw.decode("utf-8"))
+                if not catalog_path.exists():
+                    raise RuntimeError(f"OFFER_CATALOG_NOT_FOUND:{catalog_path}")
+                transaction = build_locked_transaction(
+                    catalog_path=catalog_path,
+                    prepared_bytes=backup_raw,
+                    original_catalog=catalog_path.read_bytes(),
+                    mutation_lock=mutation_lock,
+                    tmp_suffix=".offerpatch.rollback.tmp",
+                    error_prefix="OFFER_PATCH",
+                )
+                transaction.apply()
                 event_payload = {
                     "tenant_id": tenant,
                     "product_id": str(product),
@@ -239,8 +231,14 @@ class OfferPatchEffectsMixin:
                     payload=event_payload,
                 )
             except Exception:
-                _restore_bytes(catalog_path, current_catalog)
+                if transaction is not None and transaction.applied:
+                    transaction.rollback()
                 raise
+            finally:
+                if transaction is not None:
+                    transaction.finalize()
+                elif not mutation_lock.released:
+                    mutation_lock.release()
             evidence = _ledger_evidence(
                 code="offer_patch_rollback_recorded",
                 event=event,
@@ -268,24 +266,24 @@ class OfferPatchEffectsMixin:
                 "router_evidence": evidence,
             }
 
-        raw = load_offer_catalog(catalog_path)
-        offers = raw.get("offers") if isinstance(raw.get("offers"), list) else []
-        target = locate_offer(offers=offers, offer_id=offer)
-        before, after, changed = summarize_patch_application(
-            target=target,
-            patch=patch if isinstance(patch, dict) else {},
-        )
-        summary: dict[str, Any] = {
-            "ok": True,
-            "status": "dry_run" if normalized_mode == "dry_run" else "pending",
-            "mode": normalized_mode,
-            "scope": scope,
-            "offer_id": offer,
-            "changed": bool(changed),
-            "before": before,
-            "after": after,
-        }
         if normalized_mode == "dry_run":
+            raw = load_offer_catalog(catalog_path)
+            offers = raw.get("offers") if isinstance(raw.get("offers"), list) else []
+            target = locate_offer(offers=offers, offer_id=offer)
+            before, after, changed = summarize_patch_application(
+                target=target,
+                patch=patch if isinstance(patch, dict) else {},
+            )
+            summary: dict[str, Any] = {
+                "ok": True,
+                "status": "dry_run",
+                "mode": "dry_run",
+                "scope": scope,
+                "offer_id": offer,
+                "changed": bool(changed),
+                "before": before,
+                "after": after,
+            }
             summary["notification"] = _notify(
                 self,
                 decision_id=decision_id,
@@ -299,19 +297,39 @@ class OfferPatchEffectsMixin:
             )
             return summary
 
-        original_catalog = _read_bytes(catalog_path)
-        original_backup = _read_bytes(backup_path)
-        raw["offers"] = offers
-        serialized = yaml.safe_dump(raw, sort_keys=False, allow_unicode=True)
-        if not isinstance(yaml.safe_load(serialized), dict):
-            raise RuntimeError("OFFER_PATCH_RESULT_INVALID")
+        mutation_lock = acquire_catalog_lock(catalog_path)
+        transaction = None
+        original_backup = backup_path.read_bytes() if backup_path.exists() else None
         try:
-            if original_catalog is not None:
-                _atomic_write_text(
-                    backup_path,
-                    original_catalog.decode("utf-8"),
-                )
-            _atomic_write_text(catalog_path, serialized)
+            if not catalog_path.exists():
+                raise RuntimeError(f"OFFER_CATALOG_NOT_FOUND:{catalog_path}")
+            original_catalog = catalog_path.read_bytes()
+            raw = load_offer_catalog(catalog_path)
+            offers = raw.get("offers") if isinstance(raw.get("offers"), list) else []
+            target = locate_offer(offers=offers, offer_id=offer)
+            before, after, changed = summarize_patch_application(
+                target=target,
+                patch=patch if isinstance(patch, dict) else {},
+            )
+            raw["offers"] = offers
+            serialized = yaml.safe_dump(raw, sort_keys=False, allow_unicode=True)
+            if not isinstance(yaml.safe_load(serialized), dict):
+                raise RuntimeError("OFFER_PATCH_RESULT_INVALID")
+            transaction = build_locked_transaction(
+                catalog_path=catalog_path,
+                prepared_bytes=serialized.encode("utf-8"),
+                original_catalog=original_catalog,
+                mutation_lock=mutation_lock,
+                tmp_suffix=".offerpatch.apply.tmp",
+                error_prefix="OFFER_PATCH",
+            )
+            atomic_replace_bytes(
+                backup_path,
+                original_catalog,
+                suffix=".backup.tmp",
+                invalidate=False,
+            )
+            transaction.apply()
             event_payload = {
                 "tenant_id": tenant,
                 "product_id": str(product),
@@ -330,10 +348,30 @@ class OfferPatchEffectsMixin:
                 payload=event_payload,
             )
         except Exception:
-            _restore_bytes(catalog_path, original_catalog)
-            _restore_bytes(backup_path, original_backup)
+            if transaction is not None and transaction.applied:
+                transaction.rollback()
+            restore_optional_bytes(
+                backup_path,
+                original_backup,
+                suffix=".backup.restore.tmp",
+            )
             raise
+        finally:
+            if transaction is not None:
+                transaction.finalize()
+            elif not mutation_lock.released:
+                mutation_lock.release()
 
+        summary = {
+            "ok": True,
+            "status": "verified",
+            "mode": "apply",
+            "scope": scope,
+            "offer_id": offer,
+            "changed": bool(changed),
+            "before": before,
+            "after": after,
+        }
         evidence = _ledger_evidence(
             code="offer_patch_apply_recorded",
             event=event,
@@ -353,7 +391,6 @@ class OfferPatchEffectsMixin:
         )
         return {
             **summary,
-            "status": "verified",
             "notification": notification,
             "router_evidence": evidence,
         }
