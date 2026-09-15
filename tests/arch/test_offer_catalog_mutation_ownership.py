@@ -28,14 +28,19 @@ def test_effect_layers_do_not_own_catalog_file_replacement_mechanics() -> None:
         assert ".write_text(" not in text
 
 
-def test_offer_inventory_records_single_storage_owner_without_overclaiming_done() -> None:
+def test_offer_inventory_records_single_semantic_and_storage_owners() -> None:
     from canon.business_ontology_inventory import OwnershipAuditStatus, ontology_ownership_by_entity
 
     row = ontology_ownership_by_entity()["Offer"]
-    assert row.status is OwnershipAuditStatus.PARTIAL
+    assert row.status is OwnershipAuditStatus.DONE
+    assert row.authoritative_module == "contracts.product_contract"
     assert row.storage_owner == "runtime._internal.offer_catalog_mutation"
     assert set(row.allowed_writers) == {
         "runtime._internal.effects_domains.admin_pricing",
         "runtime._internal.effects_actions.offer_patch_actions",
     }
-    assert "Semantic Offer shapes" in row.reason
+    assert set(row.allowed_readers) == {
+        "core.offers.offer_catalog_resolver",
+        "products.offer_catalog_resolver",
+    }
+    assert "ProductOffer" in row.reason

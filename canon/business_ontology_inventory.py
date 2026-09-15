@@ -172,10 +172,10 @@ BUSINESS_ONTOLOGY_OWNERSHIP_AUDIT = (
     ),
     _row(
         "Offer",
-        OwnershipAuditStatus.PARTIAL,
+        OwnershipAuditStatus.DONE,
         "contracts.product_contract",
         "runtime._internal.offer_catalog_mutation",
-        "Offer catalog storage mutation is canonicalized through one lock/digest/atomic-commit owner shared by governed pricing and offer-patch effects. Semantic Offer shapes still require consolidation before the entity can be declared DONE.",
+        "ProductOffer is the single canonical sellable definition. Offer is its compatibility alias; runtime OfferSummary/OfferRender/OfferEligibility are read projections, retention Offer is a legacy alias, and unused BusinessOffer/MarketplaceOffer contracts are explicitly legacy. Live tenant catalog mutations share one lock/digest/atomic-commit owner.",
         writers=(
             "runtime._internal.effects_domains.admin_pricing",
             "runtime._internal.effects_actions.offer_patch_actions",

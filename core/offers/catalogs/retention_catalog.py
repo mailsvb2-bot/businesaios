@@ -11,28 +11,32 @@ CATALOG_ID: str = "retention_legacy"
 
 
 @dataclass(frozen=True)
-class Offer:
+class LegacyRetentionOffer:
     arm: str
     title: str
     base_price_rub: int
     entitlements: list[tuple[str, int]]
 
 
+# Historical import compatibility; this is not the canonical business Offer type.
+Offer = LegacyRetentionOffer
+
+
 # Stable retention offer IDs preserved for existing pricing flows.
-OFFERS: dict[str, Offer] = {
-    "offer_30": Offer(
+OFFERS: dict[str, LegacyRetentionOffer] = {
+    "offer_30": LegacyRetentionOffer(
         arm="offer_30",
         title="30 дней",
         base_price_rub=14_900,
         entitlements=[("program30", 30)],
     ),
-    "offer_90": Offer(
+    "offer_90": LegacyRetentionOffer(
         arm="offer_90",
         title="90 дней",
         base_price_rub=21_900,
         entitlements=[("program90", 90)],
     ),
-    "bundle_14_30": Offer(
+    "bundle_14_30": LegacyRetentionOffer(
         arm="bundle_14_30",
         title="Бандл 14 + 30",
         base_price_rub=24_900,
@@ -41,7 +45,7 @@ OFFERS: dict[str, Offer] = {
 }
 
 
-def build_catalog() -> dict[str, Offer]:
+def build_catalog() -> dict[str, LegacyRetentionOffer]:
     return dict(OFFERS)
 
 
@@ -88,6 +92,7 @@ class LegacyOfferCatalogV1(OfferCatalog):
 __all__ = [
     "CATALOG_ID",
     "OFFERS",
+    "LegacyRetentionOffer",
     "Offer",
     "LegacyOfferCatalogV1",
     "build_catalog",

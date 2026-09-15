@@ -4,7 +4,7 @@ from collections.abc import Mapping
 from decimal import Decimal, InvalidOperation
 from pathlib import Path
 
-from contracts.product_contract import Offer, OfferCatalog
+from contracts.product_contract import OfferCatalog, ProductOffer
 from core.offers.catalogs.yaml_catalog_loader import load_yaml_offer_catalog_spec
 from runtime.platform.config.yaml_loader import load_yaml
 
@@ -83,7 +83,7 @@ def _external(raw: Mapping[str, object], root: Path, ref: str) -> OfferCatalog:
     catalog_id, items = str(payload.get("catalog_id") or "").strip(), payload.get("offers")
     if not catalog_id or not isinstance(items, list) or not items:
         _fail(f"BAD_OFFER_CATALOG:{ref}")
-    offers: list[Offer] = []
+    offers: list[ProductOffer] = []
     for raw_offer in items:
         item = _mapping(raw_offer, f"BAD_OFFER_CATALOG_ENTRY:{ref}")
         offer_id = str(item.get("offer_id") or "").strip()
@@ -110,7 +110,7 @@ def _external(raw: Mapping[str, object], root: Path, ref: str) -> OfferCatalog:
         if period_days is not None and period_days <= 0:
             _fail(f"BAD_OFFER_PERIOD:{offer_id}")
         offers.append(
-            Offer(
+            ProductOffer(
                 offer_id=offer_id,
                 title=str(item.get("title") or "").strip() or title or offer_id,
                 price_minor=_minor(item["base_price_rub"], offer_id),
@@ -127,7 +127,7 @@ def _external(raw: Mapping[str, object], root: Path, ref: str) -> OfferCatalog:
 def _legacy(raw: Mapping[str, object]) -> OfferCatalog:
     raw_catalog = raw.get("offer_catalog")
     catalog_data = raw_catalog if isinstance(raw_catalog, dict) else {}
-    offers: list[Offer] = []
+    offers: list[ProductOffer] = []
     raw_offers = catalog_data.get("offers") if isinstance(catalog_data.get("offers"), list) else []
     for item in raw_offers:
         if not isinstance(item, dict) or not str(item.get("offer_id") or "").strip():
@@ -139,7 +139,7 @@ def _legacy(raw: Mapping[str, object]) -> OfferCatalog:
             price, period = 0, None
         tags = item.get("tags")
         offers.append(
-            Offer(
+            ProductOffer(
                 offer_id=str(item["offer_id"]).strip(),
                 title=str(item.get("title") or item["offer_id"]).strip(),
                 price_minor=price,
@@ -151,7 +151,7 @@ def _legacy(raw: Mapping[str, object]) -> OfferCatalog:
         )
     catalog = OfferCatalog(
         catalog_id=str(catalog_data.get("catalog_id") or raw.get("product_id") or "catalog"),
-        offers=tuple(offers or [Offer(offer_id="basic", title="Basic", price_minor=490_000, currency="RUB")]),
+        offers=tuple(offers or [ProductOffer(offer_id="basic", title="Basic", price_minor=490_000, currency="RUB")]),
     )
     catalog.validate()
     return catalog
