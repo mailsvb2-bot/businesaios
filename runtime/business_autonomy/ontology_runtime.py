@@ -6,6 +6,7 @@ from application.artifact import ArtifactRegistry
 from application.business_service import BusinessServiceRegistry
 from application.document import DocumentRegistry
 from application.employee import EmployeeRegistry
+from application.lead import LeadRegistry
 from application.organization import OrganizationRegistry
 from application.partner import PartnerRegistry
 from application.person import PersonRegistry
@@ -29,6 +30,7 @@ def wire_business_ontology_runtime(
     """
     bindings: dict[str, Any | None] = {
         "_organization_registry": None,
+        "_lead_registry": None,
         "_person_registry": None,
         "_employee_registry": None,
         "_partner_registry": None,
@@ -46,6 +48,7 @@ def wire_business_ontology_runtime(
         )
         bindings = {
             "_organization_registry": OrganizationRegistry(event_store=event_store, idempotency_store=idempotency_store),
+            "_lead_registry": LeadRegistry(event_store=event_store, idempotency_store=idempotency_store),
             "_person_registry": PersonRegistry(event_store=event_store, idempotency_store=idempotency_store),
             "_employee_registry": EmployeeRegistry(event_store=event_store, idempotency_store=idempotency_store),
             "_partner_registry": PartnerRegistry(event_store=event_store, idempotency_store=idempotency_store),

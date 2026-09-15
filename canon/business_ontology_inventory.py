@@ -127,10 +127,12 @@ BUSINESS_ONTOLOGY_OWNERSHIP_AUDIT = (
     ),
     _row(
         "Lead",
-        OwnershipAuditStatus.PARTIAL,
+        OwnershipAuditStatus.DONE,
         "contracts.lead",
-        None,
-        "Lead contract exists; lifecycle/storage owner remains fragmented.",
+        "runtime.platform.event_store",
+        "Lead is the canonical PII-minimal tenant/business-scoped lead lifecycle. LeadRegistry is the single lifecycle writer over canonical EventStore facts; CRM/provider lead records remain transport/PII surfaces rather than ontology ownership.",
+        writers=("application.lead.registry",),
+        readers=("application.lead.projector",),
     ),
     _row(
         "Partner",
