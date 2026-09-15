@@ -274,7 +274,15 @@ BUSINESS_ONTOLOGY_OWNERSHIP_AUDIT = (
         None,
         "Risk representations exist across safety/economics/governance without one universal owner.",
     ),
-    _row("Hypothesis", OwnershipAuditStatus.MISSING, None, None, "No universal Hypothesis entity owner on main."),
+    _row(
+        "Hypothesis",
+        OwnershipAuditStatus.DONE,
+        "contracts.growth_hypothesis",
+        "core.growth.strategy.backlog_store",
+        "GrowthHypothesisV1 is the single semantic owner; core.growth.strategy.contracts only re-exports it, while backlog_store is the sole EventStore chronology owner for creation/state reads and writes.",
+        writers=("core.growth.strategy.backlog_store",),
+        readers=("core.growth.strategy.backlog_store",),
+    ),
     _row(
         "Decision",
         OwnershipAuditStatus.DONE,
