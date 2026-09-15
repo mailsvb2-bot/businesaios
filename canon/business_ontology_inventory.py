@@ -282,10 +282,12 @@ BUSINESS_ONTOLOGY_OWNERSHIP_AUDIT = (
     ),
     _row(
         "Resource",
-        OwnershipAuditStatus.MISSING,
-        None,
-        None,
-        "Existing Resource classes are technical/security resources, not universal business resources.",
+        OwnershipAuditStatus.DONE,
+        "contracts.business_resource",
+        "runtime.platform.event_store",
+        "BusinessResource is the canonical PII-free operational Resource identity/lifecycle. BusinessResourceRegistry is the single EventStore writer; technical ResourceAllocator/provider resource_id surfaces remain infrastructure or transport metadata, not ontology ownership.",
+        writers=("application.business_resource",),
+        readers=("application.business_resource",),
     ),
     _row(
         "Goal",
