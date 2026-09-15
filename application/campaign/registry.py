@@ -3,8 +3,7 @@ from __future__ import annotations
 import time
 from typing import Any
 
-from application.campaign.facts import CAMPAIGN_ARCHIVED, CAMPAIGN_CREATED, CAMPAIGN_UPDATED
-from application.campaign.projector import CampaignProjector
+from application.campaign.projector import CAMPAIGN_ARCHIVED, CAMPAIGN_CREATED, CAMPAIGN_UPDATED, CampaignProjector
 from application.ontology import EventFactLifecycleWriter
 from contracts.campaign import Campaign, CampaignLifecycleStatus
 from reliability.idempotency_contract import IdempotencyStore

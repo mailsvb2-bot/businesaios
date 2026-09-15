@@ -3,10 +3,13 @@ from __future__ import annotations
 from dataclasses import replace
 from typing import Any
 
-from application.campaign.facts import CAMPAIGN_ARCHIVED, CAMPAIGN_CREATED, CAMPAIGN_FACT_TYPES, CAMPAIGN_UPDATED
 from contracts.campaign import Campaign, CampaignLifecycleStatus, CampaignNotFound
 from contracts.event_store import BUSINESS_FACT_EVENT_TYPE
 
+CAMPAIGN_CREATED = "campaign.created"
+CAMPAIGN_UPDATED = "campaign.updated"
+CAMPAIGN_ARCHIVED = "campaign.archived"
+CAMPAIGN_FACT_TYPES = frozenset({CAMPAIGN_CREATED, CAMPAIGN_UPDATED, CAMPAIGN_ARCHIVED})
 CANON_CAMPAIGN_PROJECTOR = True
 
 

@@ -9,7 +9,7 @@ from canon.business_ontology_inventory import OwnershipAuditStatus, ontology_own
 
 ROOT = Path(__file__).resolve().parents[2]
 REGISTRY = Path("application/campaign/registry.py")
-FACTS = Path("application/campaign/facts.py")
+PROJECTOR = Path("application/campaign/projector.py")
 FACT_TYPES = {"campaign.created", "campaign.updated", "campaign.archived"}
 
 
@@ -49,7 +49,7 @@ def test_campaign_fact_vocabulary_has_one_owner() -> None:
         for node in ast.walk(tree):
             if isinstance(node, ast.Constant) and isinstance(node.value, str) and node.value in FACT_TYPES:
                 owners.add(path.relative_to(ROOT))
-    assert owners == {FACTS}
+    assert owners == {PROJECTOR}
 
 
 def test_ads_campaign_dto_and_builders_are_not_lifecycle_owners() -> None:

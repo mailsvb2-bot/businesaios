@@ -1,8 +1,0 @@
-from __future__ import annotations
-
-CAMPAIGN_CREATED = "campaign.created"
-CAMPAIGN_UPDATED = "campaign.updated"
-CAMPAIGN_ARCHIVED = "campaign.archived"
-CAMPAIGN_FACT_TYPES = frozenset({CAMPAIGN_CREATED, CAMPAIGN_UPDATED, CAMPAIGN_ARCHIVED})
-
-__all__ = ["CAMPAIGN_ARCHIVED", "CAMPAIGN_CREATED", "CAMPAIGN_FACT_TYPES", "CAMPAIGN_UPDATED"]
