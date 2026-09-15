@@ -2,7 +2,8 @@ from __future__ import annotations
 
 import pytest
 
-from application.campaign import CampaignHistoryInvariantViolation, CampaignProjector, CampaignRegistry
+from application.campaign.projector import CampaignHistoryInvariantViolation, CampaignProjector
+from application.campaign.registry import CampaignRegistry
 from contracts.campaign import Campaign, CampaignLifecycleStatus, CampaignNotFound
 from contracts.event_store import BusinessFactV1
 from reliability.idempotency_store import InMemoryIdempotencyStore

@@ -219,10 +219,12 @@ BUSINESS_ONTOLOGY_OWNERSHIP_AUDIT = (
     ),
     _row(
         "Opportunity",
-        OwnershipAuditStatus.PARTIAL,
+        OwnershipAuditStatus.DONE,
         "contracts.opportunity",
-        None,
-        "Opportunity contract exists; multiple detectors/projections remain.",
+        "runtime.platform.event_store",
+        "Opportunity is a PII-free tenant/business-scoped lifecycle entity over the existing canonical EventStore. Process-discovery AutomationOpportunity and growth OpportunityScoreV1 remain detector/scoring projections rather than lifecycle ownership.",
+        writers=("application.opportunity",),
+        readers=("application.opportunity",),
     ),
     _row(
         "Deal",
