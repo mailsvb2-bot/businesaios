@@ -669,7 +669,9 @@ def build_business_autonomy_guarded_service(*, business_id: str = 'external_busi
     person_registry = None
     employee_registry = None
     partner_registry = None
+    business_service_registry = None
     if customer_event_store is not None:
+        from application.business_service import BusinessServiceRegistry
         from application.employee import EmployeeRegistry
         from application.organization import OrganizationRegistry
         from application.partner import PartnerRegistry
@@ -681,10 +683,12 @@ def build_business_autonomy_guarded_service(*, business_id: str = 'external_busi
         person_registry = PersonRegistry(event_store=customer_event_store, idempotency_store=distributed['idempotency'])
         employee_registry = EmployeeRegistry(event_store=customer_event_store, idempotency_store=distributed['idempotency'])
         partner_registry = PartnerRegistry(event_store=customer_event_store, idempotency_store=distributed['idempotency'])
+        business_service_registry = BusinessServiceRegistry(event_store=customer_event_store, idempotency_store=distributed['idempotency'])
     service._organization_registry = organization_registry
     service._person_registry = person_registry
     service._employee_registry = employee_registry
     service._partner_registry = partner_registry
+    service._business_service_registry = business_service_registry
     provider_runtime_audit = build_provider_runtime_audit_recorder()
     service._provider_admin_service = ProviderAdminService(
         onboarding_service=onboarding,

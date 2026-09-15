@@ -157,7 +157,15 @@ BUSINESS_ONTOLOGY_OWNERSHIP_AUDIT = (
         None,
         "Product contract surface exists; entity lifecycle/storage owner is not complete.",
     ),
-    _row("Service", OwnershipAuditStatus.MISSING, None, None, "No universal Service entity owner on main."),
+    _row(
+        "Service",
+        OwnershipAuditStatus.DONE,
+        "contracts.business_service",
+        "runtime.platform.event_store",
+        "Service is a scoped business-offering entity distinct from technical runtime/application services. BusinessServiceRegistry is the single lifecycle writer over canonical EventStore facts.",
+        writers=("application.business_service.registry",),
+        readers=("application.business_service.projector",),
+    ),
     _row(
         "Offer",
         OwnershipAuditStatus.PARTIAL,
