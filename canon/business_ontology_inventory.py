@@ -315,7 +315,15 @@ BUSINESS_ONTOLOGY_OWNERSHIP_AUDIT = (
         writers=("application.task.registry",),
         readers=("application.task.projector",),
     ),
-    _row("Artifact", OwnershipAuditStatus.MISSING, None, None, "No universal Artifact owner on main."),
+    _row(
+        "Artifact",
+        OwnershipAuditStatus.DONE,
+        "contracts.artifact",
+        "runtime.platform.event_store",
+        "Artifact is the canonical immutable business-artifact metadata identity; ArtifactRegistry owns lifecycle facts in the existing EventStore while binary/blob storage remains external and non-authoritative for ontology ownership.",
+        writers=("application.artifact.registry",),
+        readers=("application.artifact.projector",),
+    ),
     _row("Document", OwnershipAuditStatus.MISSING, None, None, "No universal Document owner on main."),
     _row(
         "Capability",
