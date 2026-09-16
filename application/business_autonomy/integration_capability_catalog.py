@@ -3,6 +3,7 @@ from __future__ import annotations
 from collections.abc import Iterable, Mapping
 from dataclasses import dataclass, field
 from enum import Enum
+from types import MappingProxyType
 from typing import Any
 
 from application.business_autonomy.provider_catalog import (
@@ -12,6 +13,8 @@ from application.business_autonomy.provider_catalog import (
 )
 
 CANON_INTEGRATION_CAPABILITY_CATALOG = True
+CANON_CAPABILITY_ENTITY_OWNER = True
+CAPABILITY_SCHEMA_VERSION = 1
 
 
 class CapabilityStatus(str, Enum):
@@ -85,6 +88,7 @@ class IntegrationCapability:
     risk_level: str = 'medium'
     evidence: tuple[CapabilityEvidence, ...] = field(default_factory=tuple)
     metadata: Mapping[str, Any] = field(default_factory=dict)
+    schema_version: int = CAPABILITY_SCHEMA_VERSION
 
     def __post_init__(self) -> None:
         capability_id = str(self.capability_id or '').strip()
@@ -93,6 +97,8 @@ class IntegrationCapability:
             raise ValueError('capability_id is required')
         if not title:
             raise ValueError('capability title is required')
+        if int(self.schema_version) != CAPABILITY_SCHEMA_VERSION:
+            raise ValueError('unsupported capability schema version')
         provider_keys = tuple(str(item).strip() for item in self.provider_keys if str(item).strip())
         registry_sources = tuple(str(item).strip() for item in self.registry_sources if str(item).strip())
         status = CapabilityStatus(self.status)
@@ -104,10 +110,12 @@ class IntegrationCapability:
         object.__setattr__(self, 'title', title)
         object.__setattr__(self, 'provider_keys', provider_keys)
         object.__setattr__(self, 'registry_sources', registry_sources)
+        object.__setattr__(self, 'evidence', tuple(self.evidence))
         object.__setattr__(self, 'status', status)
         object.__setattr__(self, 'surface', surface)
         object.__setattr__(self, 'production_ready', production_ready)
-        object.__setattr__(self, 'metadata', dict(self.metadata or {}))
+        object.__setattr__(self, 'schema_version', CAPABILITY_SCHEMA_VERSION)
+        object.__setattr__(self, 'metadata', MappingProxyType(dict(self.metadata or {})))
 
     @property
     def connectable(self) -> bool:
@@ -138,6 +146,7 @@ class IntegrationCapability:
             )
         return {
             'id': self.capability_id,
+            'schema_version': self.schema_version,
             'title': self.title,
             'surface': self.surface.value,
             'group': self.group,
@@ -604,6 +613,25 @@ CAPABILITIES: tuple[IntegrationCapability, ...] = (
 )
 
 
+def _validate_capability_catalog(items: tuple[IntegrationCapability, ...]) -> dict[str, IntegrationCapability]:
+    by_id: dict[str, IntegrationCapability] = {}
+    for item in items:
+        if item.capability_id in by_id:
+            raise ValueError(f'duplicate capability_id: {item.capability_id}')
+        expected_prefix = f'{item.surface.value}.'
+        if not item.capability_id.startswith(expected_prefix):
+            raise ValueError(
+                f'capability surface mismatch: {item.capability_id} != {item.surface.value}'
+            )
+        if item.schema_version != CAPABILITY_SCHEMA_VERSION:
+            raise ValueError(f'unsupported capability schema version: {item.capability_id}')
+        by_id[item.capability_id] = item
+    return by_id
+
+
+_CAPABILITY_BY_ID = _validate_capability_catalog(CAPABILITIES)
+
+
 def list_integration_capabilities(
     *,
     surface: CapabilitySurface | str | None = None,
@@ -619,7 +647,7 @@ def list_integration_capabilities(
 
 
 def capability_map() -> dict[str, IntegrationCapability]:
-    return {item.capability_id: item for item in CAPABILITIES}
+    return dict(_CAPABILITY_BY_ID)
 
 
 def summarize_integration_capabilities(capabilities: Iterable[IntegrationCapability] | None = None) -> dict[str, Any]:
@@ -660,7 +688,9 @@ def list_integration_capability_payloads(
 
 
 __all__ = [
+    'CANON_CAPABILITY_ENTITY_OWNER',
     'CANON_INTEGRATION_CAPABILITY_CATALOG',
+    'CAPABILITY_SCHEMA_VERSION',
     'CapabilityEvidence',
     'CapabilityStatus',
     'CapabilitySurface',

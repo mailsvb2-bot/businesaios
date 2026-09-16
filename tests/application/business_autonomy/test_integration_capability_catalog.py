@@ -1,5 +1,7 @@
 from application.business_autonomy.integration_capability_catalog import (
+    CAPABILITY_SCHEMA_VERSION,
     CapabilitySurface,
+    IntegrationCapability,
     capability_map,
     list_integration_capability_payloads,
     summarize_integration_capabilities,
@@ -67,3 +69,23 @@ def test_every_external_messaging_provider_has_honest_interaction_capability():
     catalog = capability_map()
     assert catalog['interaction.instagram_direct'].provider_keys == ('instagram_messaging',)
     assert catalog['interaction.facebook_messenger'].provider_keys == ('messenger_messaging',)
+
+
+def test_capability_definitions_are_versioned_and_immutable():
+    capability = capability_map()["interaction.telegram"]
+    assert capability.schema_version == CAPABILITY_SCHEMA_VERSION == 1
+    payload = capability.to_payload()
+    assert payload["schema_version"] == 1
+    try:
+        capability.metadata["forged"] = True
+    except TypeError:
+        pass
+    else:
+        raise AssertionError("capability metadata must be immutable")
+
+
+def test_capability_map_is_a_copy_of_release_catalog_index():
+    first = capability_map()
+    first.pop("interaction.telegram")
+    assert "interaction.telegram" in capability_map()
+    assert all(isinstance(item, IntegrationCapability) for item in capability_map().values())
