@@ -692,6 +692,7 @@ def build_business_autonomy_guarded_service(*, business_id: str = 'external_busi
         route_state=distributed['region_state'],
         idempotency_store=distributed['idempotency'],
         customer_registry=customer_registry,
+        conversation_registry=getattr(service, '_conversation_registry', None),
         provider_pacing=ProviderPacingCoordinator(distributed['provider_pacing']),
         provider_media=ProviderMediaPreparationCoordinator(distributed['provider_media']),
         audit_recorder=provider_runtime_audit,

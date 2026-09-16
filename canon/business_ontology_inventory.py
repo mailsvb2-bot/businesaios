@@ -196,10 +196,12 @@ BUSINESS_ONTOLOGY_OWNERSHIP_AUDIT = (
     ),
     _row(
         "Conversation",
-        OwnershipAuditStatus.PARTIAL,
-        "runtime.messaging.router_contract",
-        None,
-        "ConversationRoute exists but is routing projection, not full entity lifecycle.",
+        OwnershipAuditStatus.DONE,
+        "runtime.messaging.conversation_registry",
+        "runtime.platform.event_store",
+        "ConversationRegistry is the single PII-free tenant/business/customer-scoped lifecycle owner over canonical BusinessFact/EventStore chronology. Accepted provider ingress resolves canonical Customer first, records one deterministic conversation identity and activity, and projects conversation_id into messaging metadata while UnifiedConversationRouter remains a pure routing projection.",
+        writers=("runtime.messaging.conversation_registry",),
+        readers=("runtime.business_autonomy.provider_inbound_webhook_service", "runtime.messaging.router_contract"),
     ),
     _row(
         "Message",

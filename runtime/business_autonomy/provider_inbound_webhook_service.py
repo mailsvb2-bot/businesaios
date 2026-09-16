@@ -30,6 +30,7 @@ class ProviderInboundWebhookService:
     incident_registry: FileProviderIncidentRegistry = field(default_factory=FileProviderIncidentRegistry)
     inbound_processor: ProviderWebhookInboundProcessor | None = None
     customer_registry: object | None = None
+    conversation_registry: object | None = None
     operational_responder: object | None = None
 
     def ingest(
@@ -106,9 +107,28 @@ class ProviderInboundWebhookService:
                 contact_id=str(inbound.get('transport_message_id') or event_key), occurred_at_ms=None,
                 correlation_id=str(inbound.get('correlation_id') or '') or None,
             )
-            inbound['metadata'] = {**dict(inbound.get('metadata') or {}), 'customer_id': customer_id}
+            conversation_id = ''
+            if self.conversation_registry is not None:
+                conversation = self.conversation_registry.ensure_ingress(
+                    tenant_id=str(tenant_id),
+                    business_id=str(business_id),
+                    customer_id=customer_id,
+                    channel=str(inbound.get('channel') or ''),
+                    route_ref=str(inbound.get('chat_id') or inbound.get('external_user_ref') or inbound.get('user_id') or ''),
+                    contact_id=str(inbound.get('transport_message_id') or event_key),
+                )
+                conversation_id = str(conversation.conversation_id)
+            inbound['metadata'] = {
+                **dict(inbound.get('metadata') or {}),
+                'customer_id': customer_id,
+                **({'conversation_id': conversation_id} if conversation_id else {}),
+            }
             handoff = {**handoff, 'inbound_message': inbound}
-            customer_result = {'customer_id': customer_id, 'identity_count': len(customer.identities)}
+            customer_result = {
+                'customer_id': customer_id,
+                'identity_count': len(customer.identities),
+                **({'conversation_id': conversation_id} if conversation_id else {}),
+            }
         inbound_result = self.inbound_processor.process(handoff=handoff) if decision.accepted and self.inbound_processor is not None and handoff else {}
         if decision.accepted and (not handoff or inbound_result):
             self.complete(provider=provider, tenant_id=tenant_id, business_id=business_id, event_key=event_key, payload_digest=payload_digest, owner_id=decision.owner_id, topic=topic)
