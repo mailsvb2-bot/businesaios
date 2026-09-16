@@ -104,6 +104,13 @@ class ProviderActivationStatus:
     onboarding_ready: bool
     metadata: Mapping[str, Any] = field(default_factory=dict)
 
+    def validate_scope(self) -> None:
+        require_tenant_id(self.tenant_id)
+        if not str(self.business_id or "").strip():
+            raise ValueError("business_id is required")
+        if not str(self.provider_key or "").strip():
+            raise ValueError("provider_key is required")
+
 
 __all__ = [
     "CANON_PROVIDER_ADMIN_CONTRACT",

@@ -44,7 +44,7 @@ class EntryPolicy:
 
 
 @dataclass(frozen=True)
-class Offer:
+class ProductOffer:
     offer_id: str
     title: str
     price_minor: int  # cents/kopeks
@@ -53,25 +53,39 @@ class Offer:
     tags: tuple[str, ...] = ()
     metadata: Mapping[str, Any] = field(default_factory=dict)
 
+    def validate(self) -> None:
+        if not str(self.offer_id or "").strip():
+            raise ValueError("ProductOffer.offer_id is required")
+        if not str(self.title or "").strip():
+            raise ValueError("ProductOffer.title is required")
+        if type(self.price_minor) is not int or self.price_minor < 0:
+            raise ValueError("ProductOffer.price_minor must be a non-negative integer")
+        currency = str(self.currency or "").strip()
+        if len(currency) != 3 or not currency.isalpha():
+            raise ValueError("ProductOffer.currency must be a 3-letter code")
+        if self.period_days is not None and (type(self.period_days) is not int or self.period_days <= 0):
+            raise ValueError("ProductOffer.period_days must be a positive integer when set")
+
+
+# Backward-compatible public name. ProductOffer is the canonical semantic owner.
+Offer = ProductOffer
+
 
 @dataclass(frozen=True)
 class OfferCatalog:
     """Declarative catalog: "what we can sell" (not how we decide)."""
 
     catalog_id: str
-    offers: tuple[Offer, ...]
+    offers: tuple[ProductOffer, ...]
 
     def validate(self) -> None:
         if not self.catalog_id:
             raise ValueError("OfferCatalog.catalog_id is required")
         seen: set[str] = set()
         for o in self.offers:
-            if not o.offer_id:
-                raise ValueError("Offer.offer_id is required")
+            o.validate()
             if o.offer_id in seen:
                 raise ValueError(f"Duplicate offer_id: {o.offer_id}")
-            if int(o.price_minor) < 0:
-                raise ValueError(f"Offer.price_minor must be >= 0 for offer_id={o.offer_id}")
             seen.add(o.offer_id)
 
 
@@ -171,7 +185,10 @@ class ProductContract:
         default_factory=lambda: TelemetrySchema(schema_id="telemetry_default@v1", events=())
     )
     entitlements: EntitlementsSpec = field(default_factory=lambda: EntitlementsSpec(keys=()))
+    # Product capability flags consumed by deterministic action/offer gates.
     modules: ModulesSpec = field(default_factory=lambda: ModulesSpec(modules=()))
+    # Boot-only runtime modules. Empty means the canonical runtime defaults.
+    runtime_modules: ModulesSpec = field(default_factory=lambda: ModulesSpec(modules=()))
 
     economics: EconomicsConfigV1 = field(default_factory=EconomicsConfigV1)
     autopilot_contract_ref: str = ""
@@ -192,6 +209,7 @@ class ProductContract:
         self.telemetry_schema.validate()
         self.entitlements.validate()
         self.modules.validate()
+        self.runtime_modules.validate()
 
     def as_dict(self) -> dict[str, Any]:
         return {
@@ -265,6 +283,7 @@ class _DefaultPricingModel:
 
 __all__ = [
     "EntryPolicy",
+    "ProductOffer",
     "Offer",
     "OfferCatalog",
     "PricingModel",

@@ -1,12 +1,11 @@
 from __future__ import annotations
 
+from collections.abc import Mapping
 from dataclasses import dataclass, field, replace
 from datetime import datetime
-from typing import Mapping
 
 from billing.commercial_cycle_contract import InvoiceLifecycleStatus, utc_now
 from core.tenancy.normalization import require_tenant_id
-
 
 CANON_BILLING_INVOICE_LIFECYCLE = True
 
@@ -15,6 +14,7 @@ CANON_BILLING_INVOICE_LIFECYCLE = True
 class CommercialInvoiceEnvelope:
     tenant_id: str
     invoice_id: str
+    business_id: str = ""
     subscription_id: str | None = None
     currency: str = 'USD'
     subtotal_minor: int = 0
@@ -30,6 +30,8 @@ class CommercialInvoiceEnvelope:
         require_tenant_id(self.tenant_id)
         if not str(self.invoice_id or '').strip():
             raise ValueError('invoice_id is required')
+        if self.business_id and not str(self.business_id).strip():
+            raise ValueError('business_id must be canonical non-empty text when provided')
         if not str(self.currency or '').strip():
             raise ValueError('currency is required')
         if int(self.subtotal_minor) < 0:
@@ -38,9 +40,10 @@ class CommercialInvoiceEnvelope:
             raise ValueError('tax_minor must be >= 0')
         if int(self.total_minor) < 0:
             raise ValueError('total_minor must be >= 0')
-        if int(self.subtotal_minor) != 0 or int(self.tax_minor) != 0:
-            if int(self.subtotal_minor) + int(self.tax_minor) != int(self.total_minor):
-                raise ValueError('subtotal_minor + tax_minor must equal total_minor')
+        if (int(self.subtotal_minor) != 0 or int(self.tax_minor) != 0) and (
+            int(self.subtotal_minor) + int(self.tax_minor) != int(self.total_minor)
+        ):
+            raise ValueError('subtotal_minor + tax_minor must equal total_minor')
         if int(self.paid_minor) < 0:
             raise ValueError('paid_minor must be >= 0')
         if int(self.paid_minor) > int(self.total_minor):

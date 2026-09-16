@@ -1,9 +1,21 @@
 from __future__ import annotations
 
-GROWTH_STRATEGY_SNAPSHOT = "growth_strategy_snapshot@v1"
-GROWTH_STRATEGY_PLAN_MANIFEST = "growth_strategy_plan_manifest@v1"
-GROWTH_STRATEGY_GENERATED = "growth_strategy_generated@v1"
-GROWTH_HYPOTHESIS_CREATED = "growth_hypothesis_created@v1"
-GROWTH_HYPOTHESIS_SCORED = "growth_hypothesis_scored@v1"
-GROWTH_HYPOTHESIS_STATE = "growth_hypothesis_state@v1"
-GROWTH_EXPERIMENT_CREATED = "growth_experiment_created@v1"
+from core.events.event_types import (
+    GROWTH_EXPERIMENT_CREATED,
+    GROWTH_HYPOTHESIS_CREATED,
+    GROWTH_HYPOTHESIS_SCORED,
+    GROWTH_HYPOTHESIS_STATE,
+    GROWTH_STRATEGY_GENERATED,
+    GROWTH_STRATEGY_PLAN_MANIFEST,
+    GROWTH_STRATEGY_SNAPSHOT,
+)
+
+__all__ = [
+    "GROWTH_EXPERIMENT_CREATED",
+    "GROWTH_HYPOTHESIS_CREATED",
+    "GROWTH_HYPOTHESIS_SCORED",
+    "GROWTH_HYPOTHESIS_STATE",
+    "GROWTH_STRATEGY_GENERATED",
+    "GROWTH_STRATEGY_PLAN_MANIFEST",
+    "GROWTH_STRATEGY_SNAPSHOT",
+]

@@ -1,4 +1,5 @@
 from billing.billable_event import BillableEvent
+from billing.chargeback_orchestrator import ChargebackCase, ChargebackOrchestrator, InMemoryChargebackStore
 from billing.commercial_cycle_contract import (
     BillingCycleWindow,
     CommercialCollectionAttempt,
@@ -12,29 +13,38 @@ from billing.commercial_cycle_contract import (
     next_cycle_window,
 )
 from billing.connector_usage_meter import ConnectorUsageMeter, ConnectorUsageRecord
-from billing.chargeback_orchestrator import ChargebackCase, ChargebackOrchestrator, InMemoryChargebackStore
 from billing.credit_balance import CreditBalance, InMemoryCreditBalanceStore
+from billing.dispute_orchestrator import (
+    DisputeCase,
+    DisputeOrchestrator,
+    DisputeStoreContract,
+    InMemoryDisputeStore,
+    SqliteDisputeStore,
+)
 from billing.dispute_policy import DisputeClassification, DisputePolicy
-from billing.dispute_orchestrator import DisputeCase, DisputeOrchestrator, DisputeStoreContract, InMemoryDisputeStore, SqliteDisputeStore
 from billing.dunning_orchestrator import DunningOrchestrator, InMemoryDunningScheduleStore
 from billing.dunning_policy import DunningPolicy
 from billing.invoice_builder import InvoiceBuilder
 from billing.invoice_event_mapper import InvoiceEventMapper, InvoiceLineItem
 from billing.invoice_lifecycle import CommercialInvoiceEnvelope, InvoiceLifecycleService
+from billing.invoice_registry import InvoiceRegistry
 from billing.ledger_event import LedgerEntry, LedgerPosting
-from billing.lineage import derive_lineage_metadata, invoice_lineage_root
 from billing.ledger_store import InMemoryLedgerStore, LedgerStoreContract
+from billing.lineage import derive_lineage_metadata, invoice_lineage_root
 from billing.monetization_adapter import BillingMonetizationAdapter
 from billing.outcome_tariff import OutcomeTariff
 from billing.payment_collection import InMemoryCollectionResultStore, PaymentCollectionOrchestrator
-from billing.payment_provider_capability import PaymentProviderCapabilities
-from billing.payment_provider_contract import PaymentCheckoutRequest, PaymentCheckoutSession, PaymentCustomerProfile, PaymentProviderContract
 from billing.payment_provider_adapter import RoutingPaymentProviderAdapter
-from billing.refund_orchestrator import InMemoryRefundStore, RefundOrchestrator, RefundRequest, RefundResult
+from billing.payment_provider_capability import PaymentProviderCapabilities
+from billing.payment_provider_contract import (
+    PaymentCheckoutRequest,
+    PaymentCheckoutSession,
+    PaymentCustomerProfile,
+    PaymentProviderContract,
+)
 from billing.payment_provider_health_registry import PaymentProviderHealthRegistry, ProviderHealthStatus
 from billing.payment_provider_registry import PaymentProviderRegistration, PaymentProviderRegistry
 from billing.payment_provider_router import PaymentProviderRouter, PaymentProviderSelection
-from billing.sqlite_store import SqliteCollectionResultStore, SqliteLedgerStore
 from billing.plan_change_policy import PlanChangePolicy, PlanChangeQuote
 from billing.plan_contract import (
     BillingMeterKey,
@@ -46,11 +56,31 @@ from billing.plan_contract import (
 from billing.quota_enforcement import QuotaEnforcementDecision, QuotaEnforcer
 from billing.quota_policy import EffectiveQuotaPolicy, QuotaPolicyResolver
 from billing.reconciliation_service import BillingReconciliationService, ReconciliationReport
-from billing.recovery_store import ChargebackStoreContract, RefundStoreContract, SqliteChargebackStore, SqliteRefundStore
+from billing.recovery_store import (
+    ChargebackStoreContract,
+    RefundStoreContract,
+    SqliteChargebackStore,
+    SqliteRefundStore,
+)
+from billing.refund_orchestrator import InMemoryRefundStore, RefundOrchestrator, RefundRequest, RefundResult
 from billing.revenue_os_bridge import BillingRevenueOSBridge
-from billing.scheduler import BillingJobLeaseStoreContract, BillingJobRun, BillingJobRunStoreContract, DunningRetryJob, InMemoryBillingJobLeaseStore, InMemoryBillingJobRunStore, InvoiceIssueJob, ReconciliationJob, RenewalJob, SqliteBillingJobLeaseStore, SqliteBillingJobRunStore, create_job_lease
+from billing.scheduler import (
+    BillingJobLeaseStoreContract,
+    BillingJobRun,
+    BillingJobRunStoreContract,
+    DunningRetryJob,
+    InMemoryBillingJobLeaseStore,
+    InMemoryBillingJobRunStore,
+    InvoiceIssueJob,
+    ReconciliationJob,
+    RenewalJob,
+    SqliteBillingJobLeaseStore,
+    SqliteBillingJobRunStore,
+    create_job_lease,
+)
 from billing.settlement_engine import SettlementEngine
 from billing.spend_guard import SpendGuard, SpendLimitPolicy
+from billing.sqlite_store import SqliteCollectionResultStore, SqliteLedgerStore
 from billing.subscription_lifecycle import SubscriptionLifecycleService
 from billing.tax_policy_bridge import BillingTaxCountryPolicy, BillingTaxPolicyBridge, BillingTaxPolicyRegistry
 from billing.tenant_plan_store import InMemoryTenantPlanStore, TenantPlanStoreContract
@@ -120,6 +150,7 @@ __all__ = [
     'InvoiceBuilder',
     'InvoiceEventMapper',
     'InvoiceLifecycleService',
+    'InvoiceRegistry',
     'InvoiceLifecycleStatus',
     'InvoiceLineItem',
     'LedgerEntry',
@@ -171,10 +202,10 @@ __all__ = [
 
 
 from billing.scheduler.queue_bridge import (
-    BillingQueueDispatchResult,
-    BillingQueueDispatcherContract,
-    BillingQueueJobSpec,
     CANON_BILLING_QUEUE_BRIDGE,
+    BillingQueueDispatcherContract,
+    BillingQueueDispatchResult,
+    BillingQueueJobSpec,
     build_billing_job_request,
     dispatch_billing_job,
 )

@@ -2,10 +2,11 @@ from __future__ import annotations
 
 from typing import Any
 
+from core.payments.contracts import PAYMENT_TERMINAL_EVENT_TYPES
 from runtime.observability.error_handling import swallow
 
 RUNTIME_EFFECTS_IMPL_PATH = "runtime/_internal/_effects_impl.py"
-TERMINAL_EVENTS = {"payment_captured", "payment_failed"}
+TERMINAL_EVENTS = PAYMENT_TERMINAL_EVENT_TYPES
 SUCCESS_STATUSES = {"succeeded", "success", "paid"}
 FAILED_STATUSES = {"canceled", "cancelled", "failed"}
 
@@ -62,7 +63,7 @@ def _business_metadata(payload: object) -> dict[str, Any]:
         return {}
     return {
         key: metadata[key]
-        for key in ("tenant_id", "product_id", "order_id")
+        for key in ("tenant_id", "business_id", "product_id", "order_id")
         if str(metadata.get(key) or "").strip()
     }
 

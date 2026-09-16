@@ -342,6 +342,7 @@ def test_payment_link_delivery_forwards_multimessenger_metadata() -> None:
     handle_create_payment_and_send_link(
         {
             "tenant_id": "business-a",
+            "business_id": "business-a",
             "product_id": "product-a",
             "order_id": "order-a",
             "user_id": "owner-1",

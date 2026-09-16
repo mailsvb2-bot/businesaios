@@ -6,8 +6,7 @@ import pytest
 
 from core.events.log import EventLog
 from runtime._internal.effects_actions.payments import access, selection
-from runtime._internal.effects_domains import marketing, user_state
-from runtime._internal.effects_domains import admin_pricing
+from runtime._internal.effects_domains import admin_pricing, marketing, user_state
 from runtime._internal.effects_domains.admin_state_support import (
     apply_pricing_change_effect,
     perform_admin_toggle,
@@ -156,6 +155,7 @@ def test_payment_mismatch_stops_before_provider_call(monkeypatch: pytest.MonkeyP
             provider="yookassa",
             metadata={
                 "tenant_id": "business-b",
+                "business_id": "business-a",
                 "product_id": "crm-pro",
                 "order_id": "order-1",
             },

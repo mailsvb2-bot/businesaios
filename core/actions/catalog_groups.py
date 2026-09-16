@@ -104,9 +104,9 @@ def ads_catalog() -> dict[str, CatalogEntry]:
 
 
 def payments_catalog() -> dict[str, CatalogEntry]:
-    payment_optional = {"provider", "metadata", "expected_amount", "pricing_version"}
+    payment_optional = {"business_id", "provider", "metadata", "expected_amount", "pricing_version"}
     payment_delivery_optional = payment_optional | {"channel", "channel_policy"}
-    payment_types: dict[str, FieldType] = {"tenant_id": str, "product_id": str, "order_id": str, "user_id": str, "amount": int, "currency": str, "provider": str, "metadata": dict, "expected_amount": int, "pricing_version": str}
+    payment_types: dict[str, FieldType] = {"tenant_id": str, "business_id": str, "product_id": str, "order_id": str, "user_id": str, "amount": int, "currency": str, "provider": str, "metadata": dict, "expected_amount": int, "pricing_version": str}
     payment_delivery_types: dict[str, FieldType] = {
         **payment_types,
         "channel": str,
@@ -116,8 +116,8 @@ def payments_catalog() -> dict[str, CatalogEntry]:
     return {
         "capture_payment@v1": _entry("capture_payment@v1", 1, required=payment_required, optional=payment_optional, field_types=payment_types),
         "create_payment_and_send_link@v1": _entry("create_payment_and_send_link@v1", 1, required=payment_required, optional=payment_delivery_optional, field_types=payment_delivery_types),
-        "reconcile_payments@v1": _entry("reconcile_payments@v1", 1, required=set(), optional={"window_min"}, field_types={"window_min": int}),
-        "reconcile_payment@v1": _entry("reconcile_payment@v1", 1, required={"external_id"}, optional={"notification_id", "event", "user_id"}, field_types={"external_id": str, "notification_id": str, "event": str, "user_id": str}),
+        "reconcile_payments@v1": _entry("reconcile_payments@v1", 1, required=set(), optional={"business_id", "window_min"}, field_types={"business_id": str, "window_min": int}),
+        "reconcile_payment@v1": _entry("reconcile_payment@v1", 1, required={"external_id"}, optional={"business_id", "notification_id", "event", "user_id"}, field_types={"external_id": str, "business_id": str, "notification_id": str, "event": str, "user_id": str}),
         "grant_access@v1": _entry("grant_access@v1", 1, required={"tenant_id", "product_id", "user_id"}, optional={"grant_key", "full_access", "notify_text", "notify_reply_markup", "track_event_type", "track_payload", "channel", "channel_policy"}, field_types={"tenant_id": str, "product_id": str, "user_id": str, "grant_key": str, "full_access": bool, "notify_text": str, "notify_reply_markup": dict, "track_event_type": str, "track_payload": dict, "channel": str, "channel_policy": dict}),
         "select_tariff@v1": _entry("select_tariff@v1", 1, required={"tenant_id", "product_id", "user_id", "tariff", "days", "period", "amount"}, optional={"plan_id", "title", "expected_price", "notify_text", "notify_reply_markup", "segment", "traffic_source", "utm_source", "channel", "channel_policy"}, field_types={"tenant_id": str, "product_id": str, "user_id": str, "tariff": str, "days": int, "period": str, "amount": int, "plan_id": int, "title": str, "expected_price": int, "notify_text": str, "notify_reply_markup": dict, "segment": str, "traffic_source": str, "utm_source": str, "channel": str, "channel_policy": dict}),
     }

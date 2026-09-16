@@ -5,6 +5,8 @@ from dataclasses import dataclass, field
 from enum import Enum
 from typing import Any
 
+from contracts.business_constraints import ConstraintSeverity
+
 
 class IntegrationMode(str, Enum):
     PLATFORM_DIRECT = "platform_direct"
@@ -24,11 +26,6 @@ class CapabilityKind(str, Enum):
     CONTENT_ENGINE = "content_engine"
     PAYMENT_ORCHESTRATOR = "payment_orchestrator"
     ANALYTICS_ENGINE = "analytics_engine"
-
-
-class ConstraintSeverity(str, Enum):
-    HARD = "hard"
-    SOFT = "soft"
 
 
 class ExecutionVerdict(str, Enum):

@@ -1,18 +1,28 @@
 from __future__ import annotations
 
-from typing import Any, Mapping
+from collections.abc import Mapping
+from typing import Any
 
+from billing.commercial_cycle_contract import (
+    CommercialCollectionAttempt,
+    CommercialCollectionResult,
+    InvoiceLifecycleStatus,
+    utc_now,
+)
 from billing.invoice_lifecycle import CommercialInvoiceEnvelope, InvoiceLifecycleService
 from billing.payment_collection import PaymentCollectionOrchestrator
 from billing.payment_provider_contract import PaymentCustomerProfile, PaymentProviderContract
-from billing.commercial_cycle_contract import CommercialCollectionAttempt, CommercialCollectionResult, utc_now
-from billing.commercial_cycle_contract import InvoiceLifecycleStatus
-from .contracts import ClickBillingCollectionPreview, ClickBillingExecutionRecord, ClickBillingHandoffRecord, ClickBillingInvoicePreview, ClickBillingProviderDispatchRecord, ClickBillingSettlementRecord
+
+from .contracts import (
+    ClickBillingCollectionPreview,
+    ClickBillingExecutionRecord,
+    ClickBillingHandoffRecord,
+    ClickBillingInvoicePreview,
+    ClickBillingProviderDispatchRecord,
+    ClickBillingSettlementRecord,
+)
 from .public_api_core import (
-    _resolve_currency,
-    _safe_dict,
     build_click_billable_fact_contract_from_client_outcome,
-    build_click_billable_fact_from_client_outcome,
     build_click_commercial_fact_from_client_outcome,
 )
 
@@ -114,6 +124,7 @@ def build_click_billing_invoice_preview_from_client_outcome(*, truth_snapshot: M
         draft = CommercialInvoiceEnvelope(
             tenant_id=record.tenant_id,
             invoice_id=invoice_id,
+            business_id=record.business_id,
             currency=currency,
             subtotal_minor=total_minor,
             tax_minor=0,
@@ -175,6 +186,7 @@ def build_click_billing_collection_preview_from_client_outcome(*, truth_snapshot
         envelope = CommercialInvoiceEnvelope(
             tenant_id=invoice_preview.tenant_id,
             invoice_id=invoice_preview.invoice_id,
+            business_id=invoice_preview.business_id,
             currency=invoice_preview.currency,
             subtotal_minor=invoice_preview.total_minor,
             tax_minor=0,

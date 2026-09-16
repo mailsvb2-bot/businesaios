@@ -1,27 +1,17 @@
-"""Canonical product-definition namespace.
-
-This package intentionally stays separate from ``product``:
-- ``products`` = contracts / loaders / catalogs / manifests
-- ``product`` = runtime-facing service behavior
-"""
+"""Canonical product-definition namespace."""
 
 from __future__ import annotations
 
-from typing import Tuple
-
 from contracts.product_contract import ProductContract
-from products.organization_platform.contract import build_organization_platform_contract
+from products.product_catalog import load_builtin_product_contracts
 
 CANON_PRODUCTS_DEFINITION_NAMESPACE = True
 
-def load_all_product_contracts() -> Tuple[ProductContract, ...]:
-    """Single import point for all built-in product templates."""
 
-    return (
-        build_organization_platform_contract(),
-    )
+def load_all_product_contracts() -> tuple[ProductContract, ...]:
+    """Load every built-in product through the single manifest/YAML owner."""
 
-__all__ = [
-    'CANON_PRODUCTS_DEFINITION_NAMESPACE',
-    'load_all_product_contracts',
-]
+    return load_builtin_product_contracts()
+
+
+__all__ = ["CANON_PRODUCTS_DEFINITION_NAMESPACE", "load_all_product_contracts"]

@@ -65,6 +65,7 @@ def _env() -> SimpleNamespace:
 def _payload() -> dict[str, object]:
     return {
         "tenant_id": "business-a",
+        "business_id": "business-a",
         "product_id": "crm-pro",
         "order_id": "order-42",
         "user_id": "user-1",
@@ -86,6 +87,7 @@ def test_payment_link_flow_preserves_confirmation_url_causality_and_both_evidenc
     assert effects.sent[0]["critical"] is True
     assert effects.payment_calls[0]["metadata"] == {
         "tenant_id": "business-a",
+        "business_id": "business-a",
         "product_id": "crm-pro",
         "order_id": "order-42",
     }

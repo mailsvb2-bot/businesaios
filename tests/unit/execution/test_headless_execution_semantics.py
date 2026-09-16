@@ -187,3 +187,21 @@ def test_stop_policy_distinguishes_execution_and_verification_failure() -> None:
     )
     assert execution_failed.reason == "execution_failed"
     assert verification_failed.reason == "verification_failed"
+
+
+def test_headless_feedback_preserves_original_action_intent_body() -> None:
+    report = _make_contract(VerifiedExecutor()).execute_autopilot(
+        GoalExecutionRequest(
+            goal="publish listing",
+            business_id="biz-1",
+            tenant_id="tenant-1",
+            max_steps=1,
+        )
+    )
+    body = report.final_feedback["action_intent"]
+    assert body["intent_id"] == "intent:dec-semantics"
+    assert body["decision_id"] == "dec-semantics"
+    assert body["tenant_id"] == "tenant-1"
+    assert body["business_id"] == "biz-1"
+    assert len(body["payload_hash"]) == 64
+    assert body["payload"]["feedback_seed"]["terminal"] is True

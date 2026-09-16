@@ -7,6 +7,8 @@ from typing import Protocol
 
 from core.ai.decision import DecisionEnvelope
 
+CANON_DECISION_ARCHIVE_STORAGE_OWNER = True
+
 
 class DecisionArchive(Protocol):
     def put(self, env: DecisionEnvelope) -> None: ...
@@ -25,3 +27,6 @@ class MemoryDecisionArchive:
 
     def get(self, decision_id: str) -> DecisionEnvelope | None:
         return self._store.get(str(decision_id))
+
+
+__all__ = ["CANON_DECISION_ARCHIVE_STORAGE_OWNER", "DecisionArchive", "MemoryDecisionArchive"]

@@ -44,3 +44,12 @@ def test_inventory_never_claims_unresolved_entity_has_authoritative_owner() -> N
     for row in BUSINESS_ONTOLOGY_OWNERSHIP_AUDIT:
         if row.status in {OwnershipAuditStatus.MISSING, OwnershipAuditStatus.DUPLICATE}:
             assert row.authoritative_module is None
+
+
+def test_partial_rows_have_real_semantic_owner_and_explicit_gap() -> None:
+    for row in BUSINESS_ONTOLOGY_OWNERSHIP_AUDIT:
+        if row.status is not OwnershipAuditStatus.PARTIAL:
+            continue
+        assert row.authoritative_module, row
+        assert importlib.util.find_spec(row.authoritative_module) is not None, row
+        assert row.reason and len(row.reason.strip()) >= 12, row

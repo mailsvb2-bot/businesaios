@@ -207,8 +207,9 @@ class EvidencePersistenceService:
         feedback = dict(feedback_payload or {})
         outcome = dict(outcome_record or {})
         business_outcome = _safe_dict(feedback.get('business_outcome'))
+        action_intent = _safe_dict(feedback.get('action_intent'))
         external_refs = tuple(str(item).strip() for item in outcome.get('external_refs') or () if str(item).strip())
-        prior_ref_values = action.get('evidence_refs') or business_outcome.get('evidence_refs') or ()
+        prior_ref_values = action_intent.get('evidence_refs') or action.get('evidence_refs') or business_outcome.get('evidence_refs') or ()
         prior_refs = tuple(str(item).strip() for item in prior_ref_values if str(item).strip())
         refs = tuple(dict.fromkeys((*prior_refs, *external_refs)))
         source = _text(
@@ -218,8 +219,8 @@ class EvidencePersistenceService:
         ) or 'unknown'
         lineage = {
             'normalization': str(persistence_key),
-            'derived_fact': _text(action.get('derived_fact_ref') or business_outcome.get('derived_fact_ref')),
-            'decision': _text(action.get('decision_id') or business_outcome.get('decision_id')),
+            'derived_fact': _text(action_intent.get('derived_fact_ref') or action.get('derived_fact_ref') or business_outcome.get('derived_fact_ref')),
+            'decision': _text(action_intent.get('decision_id') or action.get('decision_id') or business_outcome.get('decision_id')),
             'action': _text(outcome.get('action_id')),
             'outcome': _text(business_outcome.get('outcome_id')),
         }
@@ -253,6 +254,8 @@ class EvidencePersistenceService:
             refs=refs,
             payload={
                 'outcome': outcome,
+                **({'action_intent': action_intent} if action_intent else {}),
+                **({'business_outcome': business_outcome} if business_outcome else {}),
                 'verification': _compact_verification_payload(verification, action=action, execution_receipt=execution),
                 'evidence': _compact_evidence_payload(verification),
             },

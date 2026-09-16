@@ -2,13 +2,20 @@ tenant_id: businesaios-sales
 product_id: salesbot
 product_version: v1
 domain: sales
+name: SalesBot
+environment: prod
 modules:
   audio: false
   pricing: true
   offers: true
-name: SalesBot
-entry_policy: telegram_policy@v3
-environment: prod
+entry_policy:
+  entrypoints: [telegram]
+  default_entrypoint: telegram
+  requires_auth: true
+  requires_entitlement: false
+  required_entitlements: []
+entitlements:
+  keys: []
 offer_catalog_ref: default:salesbot:prod
 autopilot_contract_ref: default
 economics:
@@ -16,13 +23,9 @@ economics:
   target_payback_days: 30
   min_ltv_cac_ratio: 2.0
 pricing_model:
-  id: pricing_ladder@v1
+  id: pricing_fixed@v1
   params:
-    base_price_rub: 490
-    ladder:
-      low: 199
-      standard: 490
-      premium: 990
+    offer_id: sales_entry
 offer_catalog:
   id: offer_catalog_sales@v1
   params: {}

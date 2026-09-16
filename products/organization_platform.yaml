@@ -2,15 +2,22 @@ tenant_id: businesaios
 product_id: organization_platform
 product_version: v1
 domain: organization_platform
+name: BusinesAIOS Workspace
+environment: prod
 modules:
   workspace: true
   pricing: true
   offers: true
   ads: true
   audio: false
-name: BusinesAIOS Workspace
-entry_policy: telegram_policy@v3
-environment: prod
+entry_policy:
+  entrypoints: [telegram, webapp, api]
+  default_entrypoint: telegram
+  requires_auth: true
+  requires_entitlement: false
+  required_entitlements: []
+entitlements:
+  keys: [workspace.access, workspace.paid, workspace.admin]
 offer_catalog_ref: default:organization_platform:prod
 autopilot_contract_ref: default
 economics:
@@ -20,15 +27,12 @@ economics:
 pricing_model:
   id: pricing_ladder@v1
   params:
-    base_price_rub: 990
-    ladder:
-      launch: 990
-      growth: 1990
-      scale: 2990
-offer_catalog:
-  id: offer_catalog_organization_platform@v1
-  params: {}
+    default_offer_id: org_launch
+    context_field: lifecycle_stage
+    offer_by_value:
+      launch: org_launch
+      growth: org_scale
+      scale: org_scale
 telemetry_schema:
-  id: telemetry_default@v1
-  params:
-    sla_router_p95_ms: 250
+  id: organization_platform_telemetry_v1
+  params: {}

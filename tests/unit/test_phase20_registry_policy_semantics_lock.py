@@ -6,11 +6,11 @@ from registry.routing_policy_registry import RoutingPolicyRegistry
 
 
 class _PolicyA:
-    id = "policy-a"
+    id = "policy-a@v1"
 
 
 class _PolicyB:
-    id = "policy-b"
+    id = "policy-b@v1"
 
 
 def test_base_registry_and_routing_registry_semantics_stay_stable() -> None:
@@ -52,7 +52,7 @@ def test_core_ai_policy_registry_semantics_stay_stable() -> None:
     second = _PolicyA()
     registry.register(first)
     registry.register(second)
-    assert registry.get("policy-a") is second
+    assert registry.get("policy-a@v1") is second
     assert registry.active() is second
 
     registry = PolicyRegistry()
@@ -60,6 +60,6 @@ def test_core_ai_policy_registry_semantics_stay_stable() -> None:
     b = _PolicyB()
     registry.register(a)
     registry.register(b)
-    assert registry.maybe_get("policy-a") is a
+    assert registry.maybe_get("policy-a@v1") is a
     assert registry.maybe_get("missing") is None
-    assert registry.registered_policy_ids() == ("policy-a", "policy-b")
+    assert registry.registered_policy_ids() == ("policy-a@v1", "policy-b@v1")

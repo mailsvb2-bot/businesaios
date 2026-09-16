@@ -47,7 +47,7 @@ from application.business_autonomy.business_connector_framework import (
 )
 from application.business_autonomy.channel_adapter_registry import TypedChannelAdapterRegistry
 from application.business_autonomy.channel_backed_adapter import ChannelBackedBusinessAdapter
-from application.business_autonomy.channel_contracts import ChannelKind
+from application.business_autonomy.channel_contracts import ChannelIdentity, ChannelKind
 from application.business_autonomy.contracts import (
     BusinessExecutionRequest,
     BusinessExecutionResult,
@@ -91,6 +91,7 @@ from runtime.business_autonomy.distributed_state import (
 )
 from runtime.business_autonomy.execution_support import build_execution_runtime, ensure_business_route
 from runtime.business_autonomy.fleet_read_model import BusinessAutonomyFleetReadModel
+from runtime.business_autonomy.ontology_runtime import wire_business_ontology_runtime
 from runtime.business_autonomy.provider_activation_store import FileProviderActivationStore
 from runtime.business_autonomy.provider_media import ProviderMediaPreparationCoordinator
 from runtime.business_autonomy.provider_pacing import ProviderPacingCoordinator
@@ -508,6 +509,27 @@ def _build_typed_channel_registry() -> TypedChannelAdapterRegistry:
     return registry
 
 
+def _canonical_ontology_event_store(customer_event_store: Any | None):
+    if customer_event_store is not None:
+        return customer_event_store, None
+    from contextlib import ExitStack
+
+    from application.business_autonomy.persistence import business_autonomy_runtime_dir
+    from runtime.wiring import build_event_store, resolve_storage_config
+
+    stack = ExitStack()
+    try:
+        event_store = build_event_store(
+            stack,
+            base_dir=str(business_autonomy_runtime_dir()),
+            storage=resolve_storage_config(),
+        )
+    except Exception:
+        stack.close()
+        raise
+    return event_store, stack
+
+
 def build_business_autonomy_guarded_service(*, business_id: str = 'external_business', seed_admin_read_model: bool = False, customer_event_store: Any | None = None) -> BusinessAutonomyGuardedService:
     admin_dependencies = build_business_autonomy_admin_dependencies()
     distributed = admin_dependencies['distributed']
@@ -528,34 +550,46 @@ def build_business_autonomy_guarded_service(*, business_id: str = 'external_busi
     trust_registry = RequestTenantTrustRegistryView(distributed_registry)
 
     def ensure_scope_for(*, tenant_id: str, scoped_business_id: str, requested_by: str, envelope_metadata: Mapping[str, Any]) -> None:
-        channel_kind, adapter_key, external_ref, region, metadata = _channel_defaults_for(scoped_business_id)
-        metadata = {**metadata, **dict(envelope_metadata or {})}
-        existing = distributed_registry.get(tenant_id, scoped_business_id)
-        if existing is None:
+        registry_record = distributed_registry.get(tenant_id, scoped_business_id)
+        if registry_record is None:
             raise KeyError(f'business is not explicitly onboarded for tenant: {tenant_id}:{scoped_business_id}')
+        legacy_region = registry_record.region
+        try:
+            identity = distributed_registry.channel_identity_snapshot(
+                tenant_id=tenant_id,
+                business_id=scoped_business_id,
+            )
+        except KeyError:
+            channel_kind, adapter_key, external_ref, legacy_region, legacy_metadata = _channel_defaults_for(scoped_business_id)
+            identity = BusinessOnboardingRequest(
+                business_id=scoped_business_id,
+                tenant_id=tenant_id,
+                ownership_key=registry_record.ownership_key,
+                region=registry_record.region or legacy_region,
+                channel_kind=channel_kind,
+                adapter_key=adapter_key,
+                external_ref=external_ref,
+                requested_by=requested_by,
+                metadata={**legacy_metadata, 'channel_identity_source': 'legacy_default'},
+            ).to_identity()
+        identity = ChannelIdentity(
+            business_id=identity.business_id,
+            tenant_id=identity.tenant_id,
+            channel_kind=identity.channel_kind,
+            adapter_key=identity.adapter_key,
+            external_ref=identity.external_ref,
+            region=identity.region,
+            metadata={**dict(identity.metadata or {}), **dict(envelope_metadata or {})},
+        )
         ensure_business_route(
             route_state=distributed['region_state'],
             tenant_id=tenant_id,
             business_id=scoped_business_id,
-            primary_region=existing.region or region,
-            failover_region='us-east-1' if (existing.region or region) != 'us-east-1' else 'eu-west-1',
+            primary_region=registry_record.region or legacy_region,
+            failover_region='us-east-1' if (registry_record.region or legacy_region) != 'us-east-1' else 'eu-west-1',
         )
-        registry_record = distributed_registry.get(tenant_id, scoped_business_id)
-        if registry_record is None:
-            raise KeyError(f'business registry record missing: {tenant_id}:{scoped_business_id}')
         if not bool(registry_record.governance_enabled):
             raise ValueError(f'business governance is not enabled: {tenant_id}:{scoped_business_id}')
-        identity = BusinessOnboardingRequest(
-            business_id=scoped_business_id,
-            tenant_id=tenant_id,
-            ownership_key=registry_record.ownership_key,
-            region=registry_record.region,
-            channel_kind=channel_kind,
-            adapter_key=adapter_key,
-            external_ref=external_ref,
-            requested_by=requested_by,
-            metadata=metadata,
-        ).to_identity()
         resolved = typed_registry.resolve(identity)
         business_adapter = ChannelBackedBusinessAdapter(
             identity=identity,
@@ -664,10 +698,19 @@ def build_business_autonomy_guarded_service(*, business_id: str = 'external_busi
     service._typed_channel_registry = typed_registry
     service._operator_admin_plane = UnifiedOperatorAdminPlane(BusinessAutonomyFleetReadModel(distributed_registry))
     service._execution_runtime = build_execution_runtime(route_state=distributed['region_state'])
-    customer_registry = None
-    if customer_event_store is not None:
-        from crm import CustomerRegistry
-        customer_registry = CustomerRegistry(event_store=customer_event_store, idempotency_store=distributed['idempotency'], pii_vault=secret_vault)
+    ontology_event_store, ontology_event_store_stack = _canonical_ontology_event_store(customer_event_store)
+    customer_registry = wire_business_ontology_runtime(
+        service=service,
+        event_store=ontology_event_store,
+        idempotency_store=distributed['idempotency'],
+        pii_vault=secret_vault,
+    )
+    service._ontology_event_store = ontology_event_store
+    service._ontology_event_store_stack = ontology_event_store_stack
+    if ontology_event_store_stack is not None:
+        import weakref
+
+        service._ontology_event_store_finalizer = weakref.finalize(service, ontology_event_store_stack.close)
     provider_runtime_audit = build_provider_runtime_audit_recorder()
     service._provider_admin_service = ProviderAdminService(
         onboarding_service=onboarding,
@@ -677,6 +720,8 @@ def build_business_autonomy_guarded_service(*, business_id: str = 'external_busi
         route_state=distributed['region_state'],
         idempotency_store=distributed['idempotency'],
         customer_registry=customer_registry,
+        conversation_registry=getattr(service, '_conversation_registry', None),
+        message_registry=getattr(service, '_message_registry', None),
         provider_pacing=ProviderPacingCoordinator(distributed['provider_pacing']),
         provider_media=ProviderMediaPreparationCoordinator(distributed['provider_media']),
         audit_recorder=provider_runtime_audit,

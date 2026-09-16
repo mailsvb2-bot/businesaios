@@ -4,6 +4,7 @@ from collections.abc import Mapping
 from dataclasses import asdict
 from typing import Any
 
+from contracts.action_intent import ActionIntentV1
 from contracts.action_result import ActionResult
 from contracts.business_outcome import BusinessOutcomeV1
 from contracts.executable_action import ExecutableAction
@@ -37,6 +38,7 @@ class AutonomyFeedbackStep:
         attempt_index: int,
         envelope: Any,
         explanation: Any,
+        action_intent: ActionIntentV1,
         executable_action: ExecutableAction,
         autonomy_decision: Any,
         result: Any,
@@ -107,6 +109,11 @@ class AutonomyFeedbackStep:
                 )
             )
         feedback.setdefault("policy_explanation", asdict(explanation))
+        if action_intent.intent_id != str(getattr(executable_action, "intent_id", "") or ""):
+            raise ValueError("action intent identity changed before feedback persistence")
+        if action_intent.decision_id != str(getattr(envelope.decision, "decision_id", "") or ""):
+            raise ValueError("action intent decision identity changed before feedback persistence")
+        feedback["action_intent"] = action_intent.as_dict()
         feedback.setdefault("action_type", str(executable_action.action_type or ""))
         feedback.setdefault("intent_id", str(getattr(executable_action, "intent_id", "") or ""))
         feedback.setdefault("decision_id", str(getattr(envelope.decision, "decision_id", "") or ""))

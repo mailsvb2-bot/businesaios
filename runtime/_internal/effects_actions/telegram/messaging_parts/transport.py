@@ -60,6 +60,14 @@ def _bound_transport_guard(msg):
     return (lambda: guard(msg)) if callable(guard) else None
 
 
+def _record_business_message(self, msg):
+    business_id = str(getattr(msg, "business_id", "") or "").strip()
+    registry = getattr(self, "message_registry", None)
+    if not business_id or registry is None:
+        return None
+    return registry.record(identity=msg.canonical_identity, business_id=business_id)
+
+
 def telegram_pre_send(self, *, msg) -> None:
     if isinstance(msg.callback_query_id, str) and msg.callback_query_id.strip():
         try:
@@ -146,6 +154,7 @@ def multichannel_delivery(self=None, *, msg, business_provider: bool = False) ->
 
 def build_single_sender(self):
     def _send_one(selected_msg):
+        _record_business_message(self, selected_msg)
         native_context = (selected_msg.track_payload or {}).get("_provider_native") if isinstance(selected_msg.track_payload, dict) else None
         business_telegram = selected_msg.channel == "telegram" and isinstance(native_context, Mapping) and str(native_context.get("provider_key") or "") == "telegram_bot"
         if selected_msg.channel == "telegram" and not business_telegram:

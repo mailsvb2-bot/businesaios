@@ -1,14 +1,15 @@
 from __future__ import annotations
 
+from collections.abc import Mapping
 from dataclasses import dataclass, field
 from datetime import datetime
-from typing import Mapping
 from uuid import uuid4
 
 from billing.ledger_event import utc_now
 from core.tenancy.normalization import require_tenant_id
 
 CANON_BILLING_RECOVERY_CONTRACTS = True
+CANON_BILLING_REFUND_CONTRACT = True
 
 
 @dataclass(frozen=True)
@@ -72,4 +73,9 @@ class RefundResult:
             raise ValueError('processed_at must be timezone-aware')
 
 
-__all__ = ["CANON_BILLING_RECOVERY_CONTRACTS", "ChargebackCase", "RefundResult"]
+__all__ = [
+    "CANON_BILLING_RECOVERY_CONTRACTS",
+    "CANON_BILLING_REFUND_CONTRACT",
+    "ChargebackCase",
+    "RefundResult",
+]

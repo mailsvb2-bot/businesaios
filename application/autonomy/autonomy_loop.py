@@ -286,6 +286,7 @@ class AutonomyLoop:
                 attempt_index=attempt_index,
                 envelope=decision.envelope,
                 explanation=decision.explanation,
+                action_intent=decision.action_intent,
                 executable_action=decision.executable_action,
                 autonomy_decision=decision.autonomy_decision,
                 result=result,

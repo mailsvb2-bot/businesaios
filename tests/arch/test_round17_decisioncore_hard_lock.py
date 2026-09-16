@@ -23,3 +23,8 @@ def test_decision_space_invariants_exist() -> None:
     text = path.read_text(encoding="utf-8")
     assert "FORBIDDEN_CAPABILITIES_OUTSIDE_CORE" in text
     assert "ALLOWED_ADVISORY_CAPABILITIES" in text
+
+
+def test_application_does_not_redeclare_decision_capability_vocabulary() -> None:
+    assert not (ROOT / "application" / "decisioning" / "capability_vocabulary.py").exists()
+    assert not (ROOT / "application" / "decisioning" / "decision_space_invariants.py").exists()

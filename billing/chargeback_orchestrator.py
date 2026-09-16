@@ -1,19 +1,18 @@
 from __future__ import annotations
 
+from collections.abc import Mapping
 from dataclasses import dataclass, field
 from datetime import datetime
-from collections.abc import Mapping
 from uuid import uuid4
 
 from billing.invoice_lifecycle import CommercialInvoiceEnvelope
 from billing.ledger_event import LedgerEntry, LedgerPosting, utc_now
-from billing.lineage import derive_lineage_metadata
 from billing.ledger_store import LedgerStoreContract
+from billing.lineage import derive_lineage_metadata
 from billing.recovery_store import ChargebackStoreContract
 from core.tenancy.normalization import require_tenant_id
 from observability.tenant_metrics_registry import TenantMetricsRegistry
 from runtime.monetization import ChargebackRecord, MonetizationService
-
 
 CANON_BILLING_CHARGEBACK_ORCHESTRATOR = True
 
@@ -130,6 +129,7 @@ class ChargebackOrchestrator:
             updated_invoice = CommercialInvoiceEnvelope(
                 tenant_id=invoice.tenant_id,
                 invoice_id=invoice.invoice_id,
+                business_id=invoice.business_id,
                 subscription_id=invoice.subscription_id,
                 currency=invoice.currency,
                 subtotal_minor=invoice.subtotal_minor,
@@ -179,6 +179,7 @@ class ChargebackOrchestrator:
         updated_invoice = CommercialInvoiceEnvelope(
             tenant_id=invoice.tenant_id,
             invoice_id=invoice.invoice_id,
+            business_id=invoice.business_id,
             subscription_id=invoice.subscription_id,
             currency=invoice.currency,
             subtotal_minor=invoice.subtotal_minor,

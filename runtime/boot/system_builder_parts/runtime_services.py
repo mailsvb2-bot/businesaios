@@ -103,7 +103,7 @@ def build_runtime_services(*, ctx, stack, base, storage, repo_root, model_regist
         ctx.set_value(key, value, min_phase=BootPhase.P60_RETENTION)
 
     ctx.enter(BootPhase.P70_POLICIES)
-    preg = boot_phase_70_policy_registry(settings=settings, pricing=pricing, retention=retention, logging_mod=logging_mod)
+    preg = boot_phase_70_policy_registry(settings=settings, pricing=pricing, retention=retention, logging_mod=logging_mod, base=base)
     ctx.set_value('policy_registry', preg, min_phase=BootPhase.P70_POLICIES)
     policy_services = {'preg': preg}
 

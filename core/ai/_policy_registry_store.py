@@ -1,10 +1,18 @@
 from __future__ import annotations
 
-from collections.abc import Iterable, MutableMapping
+from collections.abc import Iterable, Mapping, MutableMapping
 from dataclasses import dataclass, field
-from typing import Generic, TypeVar
+from typing import Any, Generic, Protocol, TypeVar
 
 T = TypeVar("T")
+
+
+class PolicyRuntimeStateStore(Protocol):
+    """Durable runtime-state port; concrete persistence remains in runtime wiring."""
+
+    def load(self) -> Mapping[str, Any] | None: ...
+
+    def save(self, payload: Mapping[str, Any], *, expected_generation: int) -> None: ...
 
 
 @dataclass
@@ -43,3 +51,6 @@ class PolicyRegistryStore(Generic[T]):
         if not normalized:
             raise ValueError(f"empty registry key in {self.namespace}")
         return normalized
+
+
+__all__ = ["PolicyRegistryStore", "PolicyRuntimeStateStore"]

@@ -148,21 +148,35 @@ def load_archived_decision(*, tenant_id: str, decision_id: str):
     with SqliteDecisionArchive(_sqlite_path("DECISIONS_SQLITE_PATH", base_dir=base, filename="decisions.db")) as archive:
         return archive.get(str(decision_id))
 
+def build_event_store(stack: ExitStack, *, base_dir: str, storage: StorageConfig):
+    """Open the canonical EventStore backend without constructing unrelated stores."""
+    if storage.backend == "postgres":
+        assert storage.postgres_dsn
+        from runtime.platform.event_store.postgres_event_store import PostgresEventStore
+
+        if not bool(getattr(storage, "postgres_event_store_enabled", False)):
+            raise RuntimeError("POSTGRES_EVENT_STORE_REQUIRES_EXPLICIT_ENABLEMENT")
+        return stack.enter_context(PostgresEventStore(storage.postgres_dsn, enabled=True))
+
+    from runtime.platform.event_store.sqlite_event_store import SqliteEventStore
+
+    return stack.enter_context(
+        SqliteEventStore(_sqlite_path("EVENTS_SQLITE_PATH", base_dir=base_dir, filename="events.db"))
+    )
+
+
 def build_durable_stores(stack: ExitStack, *, base_dir: str, storage: StorageConfig):
     """Return (event_store, ledger, snapshot_store, decision_archive, outbox, payment_outbox)."""
 
+    event_store = build_event_store(stack, base_dir=base_dir, storage=storage)
     if storage.backend == "postgres":
         assert storage.postgres_dsn
         from observability.platform.decision_archive.postgres_decision_archive import PostgresDecisionArchive
         from observability.platform.snapshot_store.postgres_snapshot_store import PostgresSnapshotStore
-        from runtime.platform.event_store.postgres_event_store import PostgresEventStore
         from runtime.platform.ledger.postgres_ledger import PostgresLedger
         from runtime.platform.outbox.postgres_outbox import PostgresOutbox
         from runtime.platform.outbox.postgres_payment_outbox import PostgresPaymentOutbox
 
-        if not bool(getattr(storage, "postgres_event_store_enabled", False)):
-            raise RuntimeError("POSTGRES_EVENT_STORE_REQUIRES_EXPLICIT_ENABLEMENT")
-        event_store = stack.enter_context(PostgresEventStore(storage.postgres_dsn, enabled=True))
         ledger = stack.enter_context(PostgresLedger(storage.postgres_dsn))
         snapshot_store = stack.enter_context(PostgresSnapshotStore(storage.postgres_dsn))
         decision_archive = stack.enter_context(PostgresDecisionArchive(storage.postgres_dsn))
@@ -172,12 +186,10 @@ def build_durable_stores(stack: ExitStack, *, base_dir: str, storage: StorageCon
 
     from observability.platform.decision_archive.sqlite_decision_archive import SqliteDecisionArchive
     from observability.platform.snapshot_store.sqlite_snapshot_store import SqliteSnapshotStore
-    from runtime.platform.event_store.sqlite_event_store import SqliteEventStore
     from runtime.platform.ledger.sqlite_ledger import SqliteLedger
     from runtime.platform.outbox.sqlite_outbox import SqliteOutbox
     from runtime.platform.outbox.sqlite_payment_outbox import SqlitePaymentOutbox
 
-    event_store = stack.enter_context(SqliteEventStore(_sqlite_path("EVENTS_SQLITE_PATH", base_dir=base_dir, filename="events.db")))
     ledger = stack.enter_context(SqliteLedger(_sqlite_path("LEDGER_SQLITE_PATH", base_dir=base_dir, filename="ledger.db")))
     snapshot_store = stack.enter_context(SqliteSnapshotStore(_sqlite_path("SNAPSHOT_SQLITE_PATH", base_dir=base_dir, filename="snapshots.db")))
     decision_archive = stack.enter_context(SqliteDecisionArchive(_sqlite_path("DECISIONS_SQLITE_PATH", base_dir=base_dir, filename="decisions.db")))
@@ -212,6 +224,7 @@ __all__ = [
     "StorageConfig",
     "build_behavior_graph_store",
     "build_durable_stores",
+    "build_event_store",
     "load_archived_decision",
     "describe_storage_readiness",
     "resolve_storage_config",

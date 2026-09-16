@@ -8,6 +8,7 @@ from billing.payment_provider_capability import PaymentProviderCapabilities
 from billing.payment_provider_contract import PaymentCheckoutRequest, PaymentCheckoutSession
 from billing.payment_provider_registry import PaymentProviderRegistration, PaymentProviderRegistry
 from billing.payment_provider_router import PaymentProviderRouter
+from core.payments.contracts import PAYMENT_SCHEMA_VERSION, PaymentIdentity
 from core.payments.provider import idempotence_key_for_order
 from runtime._internal.effects_tenant import assert_event_log_tenant
 from runtime.observability.error_handling import swallow
@@ -16,12 +17,12 @@ from runtime.security.runtime_asserts import assert_called_from_executor
 
 def _business_metadata(metadata: dict[str, Any] | None) -> dict[str, Any]:
     data = dict(metadata or {})
-    return {key: data[key] for key in ("tenant_id", "product_id", "order_id") if str(data.get(key) or "").strip()}
+    return {key: data[key] for key in ("tenant_id", "business_id", "product_id", "order_id") if str(data.get(key) or "").strip()}
 
 
 def _required_business_metadata(metadata: dict[str, Any] | None) -> dict[str, str]:
     observed = _business_metadata(metadata)
-    required = {field: str(observed.get(field) or "").strip() for field in ("tenant_id", "product_id", "order_id")}
+    required = {field: str(observed.get(field) or "").strip() for field in ("tenant_id", "business_id", "product_id", "order_id")}
     missing = next((field for field, value in required.items() if not value), None)
     if missing:
         raise RuntimeError(f"{missing.upper()}_REQUIRED")
@@ -248,12 +249,19 @@ def capture_payment_effect(
     external_id: str | None = None
     if session is not None:
         try:
-            from core.payments.contracts import validate_payment_external_id
-            external_id = validate_payment_external_id(session.external_reference)
+            identity = PaymentIdentity(
+                tenant_id=tenant,
+                business_id=causal_metadata["business_id"],
+                product_id=causal_metadata["product_id"],
+                order_id=causal_metadata["order_id"],
+                provider=session.provider_name,
+                external_id=session.external_reference,
+            )
+            external_id = identity.external_id
             effects.event_log.emit(
                 event_type="payment_created", source="payments", user_id=str(user_id),
                 decision_id=str(decision_id), correlation_id=str(correlation_id),
-                payload={"external_id": external_id, "status": session.status, "provider": session.provider_name, "amount": int(amount), "currency": str(currency), "metadata": causal_metadata},
+                payload={"schema_version": PAYMENT_SCHEMA_VERSION, "external_id": external_id, "status": session.status, "provider": identity.provider, "amount": int(amount), "currency": str(currency), "metadata": causal_metadata},
             )
         except Exception as exc:
             external_id = None

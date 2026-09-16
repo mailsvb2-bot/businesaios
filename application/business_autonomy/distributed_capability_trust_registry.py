@@ -5,12 +5,15 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import Any, Protocol
 
+from application.business_autonomy.channel_contracts import ChannelIdentity, ChannelKind
 from application.business_autonomy.contracts import BusinessCapability, CapabilityKind
 from application.business_autonomy.registry import RegisteredBusinessCapabilities
 from application.business_autonomy.trust import BusinessTrustSnapshot, BusinessTrustTier
+from contracts.business_profile import BusinessProfile
 from core.tenancy.normalization import require_tenant_id
 
 CANON_DISTRIBUTED_BUSINESS_REGISTRY = True
+CANON_BUSINESS_LIFECYCLE_OWNER = True
 
 
 class DistributedDocumentPort(Protocol):
@@ -30,6 +33,8 @@ class BusinessRegistryRecord:
     trust: BusinessTrustSnapshot
     governance_enabled: bool
     persistent_surfaces: tuple[str, ...]
+    channel_adapter_key: str = ""
+    channel_external_ref: str = ""
     version: int = 0
     updated_at_utc: str = ""
 
@@ -43,6 +48,10 @@ class BusinessRegistryRecord:
             raise ValueError("region is required")
         if not str(self.channel_kind or "").strip():
             raise ValueError("channel_kind is required")
+        adapter_key = str(self.channel_adapter_key or "").strip()
+        external_ref = str(self.channel_external_ref or "").strip()
+        if bool(adapter_key) != bool(external_ref):
+            raise ValueError("channel_adapter_key and channel_external_ref must be provided together")
         if self.trust.business_id and self.trust.business_id != self.business_id:
             raise ValueError("trust.business_id must match business_id")
 
@@ -58,6 +67,8 @@ class BusinessRegistryRecord:
             "ownership_key": self.ownership_key,
             "region": self.region,
             "channel_kind": self.channel_kind,
+            "channel_adapter_key": str(self.channel_adapter_key or "").strip(),
+            "channel_external_ref": str(self.channel_external_ref or "").strip(),
             "capabilities": [
                 {
                     "kind": item.kind.value,
@@ -108,6 +119,8 @@ class BusinessRegistryRecord:
             ),
             governance_enabled=bool(payload.get("governance_enabled", False)),
             persistent_surfaces=tuple(sorted({str(item) for item in list(payload.get("persistent_surfaces") or []) if str(item).strip()})),
+            channel_adapter_key=str(payload.get("channel_adapter_key") or "").strip(),
+            channel_external_ref=str(payload.get("channel_external_ref") or "").strip(),
             version=max(0, int(payload.get("version") or 0)),
             updated_at_utc=str(payload.get("updated_at_utc") or ""),
         )
@@ -124,12 +137,24 @@ class DistributedBusinessRegistry:
         record.validate()
         existing_payload = self._documents.get(collection=self._collection, document_id=record.document_id)
         existing_version = 0 if existing_payload is None else int(existing_payload.get("version") or 0)
+        existing: BusinessRegistryRecord | None = None
         if existing_payload is not None:
             existing = BusinessRegistryRecord.from_dict(existing_payload)
             if existing.tenant_id != record.tenant_id:
                 raise ValueError("business registry tenant reassignment is forbidden")
             if existing.ownership_key != record.ownership_key:
                 raise ValueError("business registry ownership_key reassignment is forbidden")
+            if (
+                existing.channel_adapter_key
+                and not record.channel_adapter_key
+                and record.channel_kind != existing.channel_kind
+            ):
+                raise ValueError("channel_kind reassignment requires explicit channel identity")
+        adapter_key = str(record.channel_adapter_key or "").strip()
+        external_ref = str(record.channel_external_ref or "").strip()
+        if existing is not None and not adapter_key and not external_ref:
+            adapter_key = existing.channel_adapter_key
+            external_ref = existing.channel_external_ref
         stamped = BusinessRegistryRecord(
             business_id=record.business_id,
             tenant_id=record.tenant_id,
@@ -140,6 +165,8 @@ class DistributedBusinessRegistry:
             trust=record.trust,
             governance_enabled=bool(record.governance_enabled),
             persistent_surfaces=tuple(sorted({str(item) for item in record.persistent_surfaces if str(item).strip()})),
+            channel_adapter_key=adapter_key,
+            channel_external_ref=external_ref,
             version=existing_version + 1,
             updated_at_utc=datetime.now(UTC).isoformat(),
         )
@@ -191,6 +218,38 @@ class DistributedBusinessRegistry:
             raise KeyError(f"business registry tenant binding ambiguous: {key}")
         return matches[0]
 
+    def profile_snapshot(self, *, tenant_id: str, business_id: str) -> BusinessProfile:
+        record = self.get(tenant_id=tenant_id, business_id=business_id)
+        if record is None:
+            raise KeyError(f"business registry record missing: {tenant_id}:{business_id}")
+        return BusinessProfile(
+            business_id=record.business_id,
+            region=record.region,
+        )
+
+
+    def channel_identity_snapshot(self, *, tenant_id: str, business_id: str) -> ChannelIdentity:
+        record = self.get(tenant_id=tenant_id, business_id=business_id)
+        if record is None:
+            raise KeyError(f"business registry record missing: {tenant_id}:{business_id}")
+        if not record.channel_adapter_key or not record.channel_external_ref:
+            raise KeyError(f"channel identity unavailable for legacy business record: {tenant_id}:{business_id}")
+        try:
+            kind = ChannelKind(record.channel_kind)
+        except ValueError as exc:
+            raise ValueError(f"unsupported durable channel_kind: {record.channel_kind}") from exc
+        identity = ChannelIdentity(
+            business_id=record.business_id,
+            tenant_id=record.tenant_id,
+            channel_kind=kind,
+            adapter_key=record.channel_adapter_key,
+            external_ref=record.channel_external_ref,
+            region=record.region,
+            metadata={"registry_version": record.version, "source": "business_registry"},
+        )
+        identity.validate()
+        return identity
+
     def capability_snapshot(self, *, tenant_id: str, business_id: str) -> RegisteredBusinessCapabilities:
         record = self.get(tenant_id=tenant_id, business_id=business_id)
         if record is None:
@@ -212,6 +271,7 @@ class DistributedBusinessRegistry:
 
 __all__ = [
     "BusinessRegistryRecord",
+    "CANON_BUSINESS_LIFECYCLE_OWNER",
     "CANON_DISTRIBUTED_BUSINESS_REGISTRY",
     "DistributedBusinessRegistry",
     "DistributedDocumentPort",

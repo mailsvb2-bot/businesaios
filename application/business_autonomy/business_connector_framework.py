@@ -137,6 +137,8 @@ class ConnectorOnboardingService:
             trust=trust,
             governance_enabled=True,
             persistent_surfaces=tuple(sorted(set(governance_surfaces + persistent_surfaces))),
+            channel_adapter_key=identity.adapter_key,
+            channel_external_ref=identity.external_ref,
         )
         self.business_registry.register_or_update(record)
         states = (

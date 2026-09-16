@@ -36,6 +36,7 @@ def test_valid_provider_payment_id_emits_gateway_evidence() -> None:
         meta={"yookassa": {"status": "pending"}},
         business_metadata={
             "tenant_id": "business-a",
+            "business_id": "business-a",
             "product_id": "crm-pro",
             "order_id": "order-42",
         },
@@ -94,6 +95,7 @@ def test_provider_ok_without_external_id_fails_the_payment_effect(
         provider="yookassa",
         metadata={
             "tenant_id": "business-a",
+            "business_id": "business-a",
             "product_id": "crm-pro",
             "order_id": "order-1",
         },

@@ -58,6 +58,7 @@ def _captured_kwargs() -> dict:
         "status": "succeeded",
         "business_metadata": {
             "tenant_id": "business-a",
+            "business_id": "business-a",
             "product_id": "crm-pro",
             "order_id": "order-8",
         },
@@ -130,6 +131,7 @@ def test_created_payment_context_preserves_business_product_order_causality() ->
                     "external_id": "payment-7",
                     "metadata": {
                         "tenant_id": "business-a",
+                        "business_id": "business-a",
                         "product_id": "crm-pro",
                         "order_id": "order-7",
                         "ignored_provider_field": "not-causal",
@@ -147,6 +149,7 @@ def test_created_payment_context_preserves_business_product_order_causality() ->
         "correlation_id": "correlation-create-7",
         "metadata": {
             "tenant_id": "business-a",
+            "business_id": "business-a",
             "product_id": "crm-pro",
             "order_id": "order-7",
         },
@@ -187,6 +190,7 @@ def test_payment_captured_is_attributed_to_original_payment_decision_and_scope()
     assert event["payload"]["reconciled_by_decision_id"] == "decision-reconcile-8"
     assert event["payload"]["metadata"] == {
         "tenant_id": "business-a",
+        "business_id": "business-a",
         "product_id": "crm-pro",
         "order_id": "order-8",
     }

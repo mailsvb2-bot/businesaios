@@ -187,7 +187,7 @@ def boot_phase_60_retention_adapter(
     )
 
 
-def boot_phase_70_policy_registry(*, settings, pricing, retention, logging_mod):
+def boot_phase_70_policy_registry(*, settings, pricing, retention, logging_mod, base: str):
     from runtime.boot.phase_policy_registry import build_policy_registry
 
     return build_policy_registry(
@@ -195,4 +195,5 @@ def boot_phase_70_policy_registry(*, settings, pricing, retention, logging_mod):
         pricing=pricing,
         retention=retention,
         logging_mod=logging_mod,
+        base=base,
     )

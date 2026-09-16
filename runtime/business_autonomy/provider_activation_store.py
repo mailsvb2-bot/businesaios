@@ -22,6 +22,7 @@ class FileProviderActivationStore:
     collection: str = "provider_activation_state"
 
     def put(self, status: ProviderActivationStatus) -> ProviderActivationStatus:
+        status.validate_scope()
         doc_id = self._doc_id(status.tenant_id, status.business_id, status.provider_key)
         current = self.documents.get(collection=self.collection, document_id=doc_id)
         expected_version = None if current is None else int(current.get("version") or 0)
@@ -61,11 +62,18 @@ class FileProviderActivationStore:
 
     @staticmethod
     def _doc_id(tenant_id: str, business_id: str, provider_key: str) -> str:
-        return f"{require_tenant_id(tenant_id)}:{str(business_id).strip()}:{str(provider_key).strip()}"
+        tenant = require_tenant_id(tenant_id)
+        business = str(business_id or "").strip()
+        provider = str(provider_key or "").strip()
+        if not business:
+            raise ValueError("business_id is required")
+        if not provider:
+            raise ValueError("provider_key is required")
+        return f"{tenant}:{business}:{provider}"
 
     @staticmethod
     def _from_payload(payload: Mapping[str, Any]) -> ProviderActivationStatus:
-        return ProviderActivationStatus(
+        status = ProviderActivationStatus(
             tenant_id=require_tenant_id(payload.get("tenant_id")),
             business_id=str(payload.get("business_id") or "").strip(),
             provider_key=str(payload.get("provider_key") or "").strip(),
@@ -80,6 +88,8 @@ class FileProviderActivationStore:
             onboarding_ready=bool(payload.get("onboarding_ready")),
             metadata=dict(payload.get("metadata") or {}),
         )
+        status.validate_scope()
+        return status
 
 
 __all__ = ["CANON_PROVIDER_ACTIVATION_STORE", "FileProviderActivationStore"]

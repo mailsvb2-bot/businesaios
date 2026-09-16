@@ -3,6 +3,7 @@ from reliability.idempotency_store import InMemoryIdempotencyStore
 from runtime.business_autonomy.provider_inbound_webhook_service import ProviderInboundWebhookService
 from runtime.business_autonomy.provider_webhook_replay_guard import ProviderWebhookReplayGuard
 from runtime.business_autonomy.provider_webhook_runtime import ProviderWebhookRuntime
+from runtime.messaging.conversation_registry import ConversationRegistry
 from security.secret_vault import InMemorySecretVault
 
 
@@ -56,12 +57,18 @@ def test_provider_inbound_webhook_projects_one_customer_before_decision_handoff(
     events = MemoryEventStore()
     claims = InMemoryIdempotencyStore()
     registry = CustomerRegistry(event_store=events, idempotency_store=claims, pii_vault=InMemorySecretVault())
+    conversations = ConversationRegistry(
+        event_store=events, idempotency_store=claims, customer_registry=registry
+    )
 
     class _CustomerAwareProcessor:
         def __init__(self):
             self.customer_ids = []
+            self.conversation_ids = []
         def process(self, *, handoff):
-            self.customer_ids.append(handoff['inbound_message']['metadata']['customer_id'])
+            metadata = handoff['inbound_message']['metadata']
+            self.customer_ids.append(metadata['customer_id'])
+            self.conversation_ids.append(metadata['conversation_id'])
             return {'accepted': True, 'decision_envelope': {'decision_id': 'd-customer'}}
 
     processor = _CustomerAwareProcessor()
@@ -70,14 +77,20 @@ def test_provider_inbound_webhook_projects_one_customer_before_decision_handoff(
         replay_guard=ProviderWebhookReplayGuard(claims),
         inbound_processor=processor,
         customer_registry=registry,
+        conversation_registry=conversations,
     )
     body = b'{"message":{"from":{"id":42,"username":"anna"},"text":"hello","message_id":9},"update_id":123}'
     first = service.ingest(provider=provider, tenant_id='t1', business_id='b1', headers={}, body=body, event_key='evt-customer', topic='telegram_update', owner_id='provider_admin')
     replay = service.ingest(provider=provider, tenant_id='t1', business_id='b1', headers={}, body=body, event_key='evt-customer', topic='telegram_update', owner_id='provider_admin')
 
     customer_id = first.metadata['customer']['customer_id']
+    conversation_id = first.metadata['customer']['conversation_id']
     assert processor.customer_ids == [customer_id]
+    assert processor.conversation_ids == [conversation_id]
     assert replay.metadata['decision']['resolution'] == 'replay_completed'
+    conversation = conversations.get(tenant_id='t1', business_id='b1', conversation_id=conversation_id)
+    assert conversation.customer_id == customer_id
+    assert conversation.activity_count == 1
     customer = registry.find_by_identity(tenant_id='t1', business_id='b1', channel='telegram', external_subject='42')
     assert customer.customer.customer_id == customer_id
     assert customer.identities[0].last_contact_at_ms is not None
@@ -94,10 +107,14 @@ def test_invalid_signature_never_projects_customer(monkeypatch):
     events = MemoryEventStore()
     claims = InMemoryIdempotencyStore()
     registry = CustomerRegistry(event_store=events, idempotency_store=claims, pii_vault=InMemorySecretVault())
+    conversations = ConversationRegistry(
+        event_store=events, idempotency_store=claims, customer_registry=registry
+    )
     service = ProviderInboundWebhookService(
         webhook_runtime=ProviderWebhookRuntime(None),
         replay_guard=ProviderWebhookReplayGuard(claims),
         customer_registry=registry,
+        conversation_registry=conversations,
     )
     body = b'{"message":{"from":{"id":42},"text":"hello","message_id":9},"update_id":123}'
     out = service.ingest(provider=provider, tenant_id='t1', business_id='b1', headers={}, body=body, event_key='evt-invalid', topic='telegram_update', owner_id='provider_admin')
