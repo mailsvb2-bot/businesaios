@@ -11,6 +11,7 @@ from application.process_discovery.canonical_adapters import (
     CanonicalProcessMeasurementSource,
 )
 from observability.platform.telemetry.event_store import InMemoryEventStore
+from storage.evidence_store import EvidenceRecord, InMemoryEvidenceStore
 
 BASE = datetime(2026, 9, 1, tzinfo=UTC)
 
@@ -30,7 +31,7 @@ def _owner_payload(*, day: int, process_key: str = "follow_up") -> dict:
 
 
 def _built(store: InMemoryEventStore):
-    evidence = CanonicalProcessEvidenceStore(store)
+    evidence = CanonicalProcessEvidenceStore(store, InMemoryEvidenceStore())
     for day in range(6):
         evidence.record_owner_observation(
             tenant_id="t1", business_id="b1", user_id="owner-1", payload=_owner_payload(day=day)
@@ -45,7 +46,7 @@ def _built(store: InMemoryEventStore):
 
 def test_owner_observation_is_server_identified_and_owner_money_is_not_verified() -> None:
     store = InMemoryEventStore()
-    evidence = CanonicalProcessEvidenceStore(store)
+    evidence = CanonicalProcessEvidenceStore(store, InMemoryEvidenceStore())
     item = evidence.record_owner_observation(
         tenant_id="t1",
         business_id="b1",
@@ -166,9 +167,192 @@ def test_provider_delivery_uses_same_canonical_delivery_truth_as_action_center()
 
 def test_future_owner_observation_is_rejected() -> None:
     store = InMemoryEventStore()
-    evidence = CanonicalProcessEvidenceStore(store)
+    evidence = CanonicalProcessEvidenceStore(store, InMemoryEvidenceStore())
     with pytest.raises(ValueError, match="occurred_at_in_future"):
         evidence.record_owner_observation(
             tenant_id="t1", business_id="b1", user_id="owner-1",
             payload={**_owner_payload(day=0), "occurred_at": (datetime.now(UTC) + timedelta(days=1)).isoformat()},
         )
+
+
+def test_owner_process_observation_is_backed_by_canonical_evidence_and_replay_is_idempotent() -> None:
+    event_store = InMemoryEventStore()
+    canonical = InMemoryEvidenceStore()
+    evidence = CanonicalProcessEvidenceStore(event_store, canonical)
+    payload = _owner_payload(day=0)
+
+    first = evidence.record_owner_observation(
+        tenant_id="t1", business_id="b1", user_id="owner-1", payload=payload, request_id="req-1"
+    )
+    second = evidence.record_owner_observation(
+        tenant_id="t1", business_id="b1", user_id="owner-1", payload=payload, request_id="req-1"
+    )
+
+    assert first.evidence_id == second.evidence_id
+    records = canonical.list_for_tenant(tenant_id="t1")
+    assert len(records) == 1
+    record = records[0]
+    assert record.evidence_id == first.evidence_id
+    assert record.business_id == "b1"
+    assert record.source == "owner_asserted"
+    assert record.source_type == "owner_process_observation"
+    assert record.observed_at == first.occurred_at
+    assert record.confidence == 0.65
+    assert record.payload["process_key"] == first.process_key
+    assert record.refs == ("follow_up",)
+    assert len(tuple(event_store.iter_events(tenant_id="t1", event_type="business.process.observation.v1"))) == 1
+
+    with pytest.raises(ValueError, match="replay conflicts with canonical evidence"):
+        evidence.record_owner_observation(
+            tenant_id="t1",
+            business_id="b1",
+            user_id="owner-1",
+            payload={**payload, "manual_minutes": 999},
+            request_id="req-1",
+        )
+
+class _HistoricalProcessEventStore:
+    def __init__(self, rows):
+        self.rows = tuple(rows)
+
+    def iter_events(self, *, tenant_id, event_type=None, limit=None, **_kwargs):
+        assert limit is None
+        return tuple(
+            row for row in self.rows
+            if row["tenant_id"] == tenant_id and (event_type is None or row["event_type"] == event_type)
+        )
+
+    def latest_events(self, **_kwargs):
+        raise AssertionError("historical process evidence must not use a bounded latest_events read")
+
+
+def _historical_process_event(index: int, *, business_id: str = "b1") -> dict:
+    occurred_at = BASE + timedelta(minutes=index)
+    evidence_id = f"pev_historical_{index:05d}"
+    return {
+        "event_id": f"evt-historical-{index}",
+        "tenant_id": "t1",
+        "user_id": "owner-legacy",
+        "event_type": "business.process.observation.v1",
+        "ts_iso": (occurred_at + timedelta(seconds=5)).isoformat(),
+        "payload": {
+            "tenant_id": "t1",
+            "business_id": business_id,
+            "process_key": "legacy_follow_up",
+            "occurred_at": occurred_at.isoformat(),
+            "source": "owner_asserted",
+            "evidence_id": evidence_id,
+            "manual_minutes": 25,
+            "actor_cost_per_hour_minor": None,
+            "direct_loss_minor": None,
+            "revenue_at_risk_minor": None,
+            "currency": None,
+            "automation_fit": 0.7,
+            "operational_risk": 0.2,
+            "trust_weight": 0.65,
+            "metadata": {
+                "assertion_kind": "owner_process_occurrence",
+                "server_issued_evidence_id": True,
+            },
+        },
+    }
+
+
+def test_historical_process_observations_backfill_without_latest_events_limit() -> None:
+    rows = [_historical_process_event(index) for index in range(5001)]
+    canonical = InMemoryEvidenceStore()
+    adapter = CanonicalProcessEvidenceStore(_HistoricalProcessEventStore(rows), canonical)
+
+    first = adapter.load_process_observations(tenant_id="t1", business_id="b1")
+    second = adapter.load_process_observations(tenant_id="t1", business_id="b1")
+
+    assert len(first) == 5001
+    assert second == first
+    records = canonical.list_for_tenant(tenant_id="t1", limit=6000)
+    assert len(records) == 5001
+    by_id = {record.evidence_id: record for record in records}
+    oldest = by_id["pev_historical_00000"]
+    assert oldest.created_at == BASE + timedelta(seconds=5)
+    assert oldest.observed_at == BASE
+    assert oldest.business_id == "b1"
+    assert oldest.refs == ("legacy_follow_up",)
+    assert oldest.lineage == {
+        "source": "owner_asserted",
+        "normalization": "process_observation:pev_historical_00000",
+    }
+
+
+def test_historical_process_backfill_is_business_scoped_and_conflicts_fail_closed() -> None:
+    row = _historical_process_event(7, business_id="b1")
+    other = _historical_process_event(8, business_id="b2")
+    canonical = InMemoryEvidenceStore()
+    canonical.append(EvidenceRecord(
+        evidence_id="pev_historical_00007",
+        tenant_id="t1",
+        scope="process_discovery",
+        run_id="pev_historical_00007",
+        action_type="process_observation",
+        verification_status="owner_asserted",
+        created_at=BASE,
+        source="owner_asserted",
+        source_type="owner_process_observation",
+        business_id="b1",
+        observed_at=BASE + timedelta(minutes=7),
+        confidence=0.65,
+        privacy_class="internal",
+        retention_policy="process_observation_evidence",
+        lineage={
+            "source": "owner_asserted",
+            "normalization": "process_observation:pev_historical_00007",
+        },
+        refs=("legacy_follow_up",),
+        payload={"tampered": True},
+        labels={"business_id": "b1", "process_key": "legacy_follow_up"},
+    ))
+    adapter = CanonicalProcessEvidenceStore(_HistoricalProcessEventStore((row, other)), canonical)
+
+    with pytest.raises(ValueError, match="replay conflicts with canonical evidence"):
+        adapter.load_process_observations(tenant_id="t1", business_id="b1")
+
+    assert canonical.get(tenant_id="t1", evidence_id="pev_historical_00008") is None
+
+
+class _FailOnceProcessEventStore:
+    def __init__(self):
+        self.inner = InMemoryEventStore()
+        self.fail_next_append = True
+
+    def append(self, **kwargs):
+        if self.fail_next_append:
+            self.fail_next_append = False
+            raise RuntimeError("simulated event-store interruption")
+        return self.inner.append(**kwargs)
+
+    def iter_events(self, **kwargs):
+        return self.inner.iter_events(**kwargs)
+
+
+def test_owner_observation_replay_repairs_event_after_interrupted_first_append() -> None:
+    event_store = _FailOnceProcessEventStore()
+    canonical = InMemoryEvidenceStore()
+    adapter = CanonicalProcessEvidenceStore(event_store, canonical)
+    payload = _owner_payload(day=0)
+
+    with pytest.raises(RuntimeError, match="simulated event-store interruption"):
+        adapter.record_owner_observation(
+            tenant_id="t1", business_id="b1", user_id="owner-1", payload=payload, request_id="repair-1"
+        )
+
+    assert len(canonical.list_for_tenant(tenant_id="t1")) == 1
+    assert tuple(event_store.iter_events(tenant_id="t1", event_type="business.process.observation.v1")) == ()
+
+    repaired = adapter.record_owner_observation(
+        tenant_id="t1", business_id="b1", user_id="owner-1", payload=payload, request_id="repair-1"
+    )
+    replayed = adapter.record_owner_observation(
+        tenant_id="t1", business_id="b1", user_id="owner-1", payload=payload, request_id="repair-1"
+    )
+
+    assert repaired == replayed
+    assert len(canonical.list_for_tenant(tenant_id="t1")) == 1
+    assert len(tuple(event_store.iter_events(tenant_id="t1", event_type="business.process.observation.v1"))) == 1

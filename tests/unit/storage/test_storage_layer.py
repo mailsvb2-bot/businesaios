@@ -130,14 +130,23 @@ def test_sqlite_evidence_store_round_trip_and_retention(tmp_path) -> None:
             retention_until=now + timedelta(days=30),
         )
     )
-    assert store.get(active.evidence_id).payload["score"] == 1.0
+    fetched_active = store.get(tenant_id="tenant-a", evidence_id=active.evidence_id)
+    assert fetched_active is not None
+    assert fetched_active.payload["score"] == 1.0
+    assert fetched_active.source == "legacy"
+    assert fetched_active.source_type == "legacy"
+    assert fetched_active.business_id == "unknown"
+    assert fetched_active.observed_at is None
+    assert fetched_active.privacy_class == "internal"
+    assert fetched_active.retention_policy == "legacy"
+    assert len(fetched_active.hash) == 64
     assert len(store.list_for_tenant(tenant_id="tenant-a")) == 2
     runner = StorageRetentionJobRunner(evidence_store=store)
     result = runner.run(now=now)
     assert result.evidence_deleted == 1
     assert result.total_deleted == 1
-    assert store.get(expired.evidence_id) is None
-    assert store.get(active.evidence_id) is not None
+    assert store.get(tenant_id="tenant-a", evidence_id=expired.evidence_id) is None
+    assert store.get(tenant_id="tenant-a", evidence_id=active.evidence_id) is not None
 
 
 def test_schema_version_store_round_trip(tmp_path) -> None:

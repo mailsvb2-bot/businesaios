@@ -227,6 +227,14 @@ class FastAPIDependencyContainer:
             return shared
         return build_default_event_store(config_surface=self.config_surface)
 
+    def canonical_evidence_store(self):
+        shared = self._shared('evidence_store')
+        if shared is not None:
+            return shared
+        from storage.evidence_wiring import build_canonical_evidence_store
+
+        return build_canonical_evidence_store()
+
     def metrics(self) -> InMemoryMetrics:
         shared = self._shared('metrics')
         if isinstance(shared, InMemoryMetrics):

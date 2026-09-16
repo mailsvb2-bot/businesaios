@@ -18,6 +18,8 @@ from runtime.market_intelligence_runtime_registry_bridge import (
 from runtime.market_intelligence_runtime_support import build_market_intelligence_runtime_support
 from runtime.runtime_observability import RuntimeObservability
 from runtime.service_names import RuntimeServiceName
+from storage.evidence_store import EvidenceStore
+from storage.evidence_wiring import build_canonical_evidence_store
 
 CANON_BOOT_WIRING_ONLY = True
 CANON_MARKET_INTELLIGENCE_BOOT = True
@@ -64,9 +66,11 @@ class MarketIntelligenceBoot:
     runtime_registry: Any | None = None
     runtime_observability: RuntimeObservability | None = None
     managed_runtime_plane: ManagedRuntimePlane | None = None
+    evidence_store: EvidenceStore | None = None
 
     def build(self) -> MarketIntelligenceRuntime:
-        loop = MarketIntelligenceLoop(execute_action=self.execute_action)
+        evidence_store = self.evidence_store or build_canonical_evidence_store()
+        loop = MarketIntelligenceLoop(execute_action=self.execute_action, evidence_store=evidence_store)
         runtime_support = build_market_intelligence_runtime_support(
             runtime_infra=self.runtime_infra,
             recovery_support=self.recovery_support,
@@ -102,7 +106,7 @@ class MarketIntelligenceBoot:
         return runtime
 
 
-def build_market_intelligence_runtime(*, execute_action: Callable[[str, Mapping[str, Any]], Mapping[str, Any]], schedules: Mapping[str, SyncSchedule] | None = None, distributed_lock: DistributedLock | None = None, distributed_lock_backend_name: str | None = None, runtime_infra: Any | None = None, recovery_support: RuntimeExecutorRecoverySupport | None = None, outbox: Any | None = None, runtime_registry: Any | None = None, runtime_observability: RuntimeObservability | None = None, managed_runtime_plane: ManagedRuntimePlane | None = None) -> MarketIntelligenceRuntime:
+def build_market_intelligence_runtime(*, execute_action: Callable[[str, Mapping[str, Any]], Mapping[str, Any]], schedules: Mapping[str, SyncSchedule] | None = None, distributed_lock: DistributedLock | None = None, distributed_lock_backend_name: str | None = None, runtime_infra: Any | None = None, recovery_support: RuntimeExecutorRecoverySupport | None = None, outbox: Any | None = None, runtime_registry: Any | None = None, runtime_observability: RuntimeObservability | None = None, managed_runtime_plane: ManagedRuntimePlane | None = None, evidence_store: EvidenceStore | None = None) -> MarketIntelligenceRuntime:
     orchestration = MarketIntelligenceOrchestration()
     for name, schedule in dict(schedules or {}).items():
         orchestration.register(str(name), schedule)
@@ -117,4 +121,5 @@ def build_market_intelligence_runtime(*, execute_action: Callable[[str, Mapping[
         runtime_registry=runtime_registry,
         runtime_observability=runtime_observability,
         managed_runtime_plane=managed_runtime_plane,
+        evidence_store=evidence_store,
     ).build()

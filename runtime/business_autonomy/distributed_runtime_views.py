@@ -9,12 +9,13 @@ from application.business_autonomy.contracts import (
     ExecutionVerdict,
 )
 from application.business_autonomy.distributed_capability_trust_registry import DistributedBusinessRegistry
+from application.business_autonomy.evidence_projection import append_business_autonomy_evidence
 from application.business_autonomy.registry import RegisteredBusinessCapabilities
 from application.business_autonomy.trust import BusinessTrustSnapshot
 from application.planning.distributed_planning_memory_backend import DistributedPlanningMemoryBackend
 from governance.control_plane_audit_log import GovernanceAuditEvent
-from storage.distributed_evidence_audit_backend import DistributedEvidenceStore, DistributedGovernanceAuditLog
-from storage.evidence_store import EvidenceRecord
+from storage.distributed_evidence_audit_backend import DistributedGovernanceAuditLog
+from storage.evidence_store import EvidenceRecord, EvidenceStore
 
 
 @dataclass(frozen=True)
@@ -109,41 +110,13 @@ class DistributedBusinessAutonomyAudit:
 
 @dataclass(frozen=True)
 class DistributedBusinessAutonomyEvidenceStore:
-    backend: DistributedEvidenceStore
+    backend: EvidenceStore
 
     def append_result(self, result: BusinessExecutionResult) -> EvidenceRecord:
-        created_at = datetime.now(UTC)
-        record = EvidenceRecord(
-            evidence_id=f"business-autonomy:{result.execution_id}",
-            tenant_id=str(result.metadata.get("tenant_id") or result.business_id or "global"),
-            scope="business_autonomy",
-            run_id=str(result.execution_id),
-            action_id=str(result.goal_id),
-            action_type="business_autonomy_execution",
-            verification_status=result.verdict.value,
-            created_at=created_at,
-            refs=tuple(filter(None, (result.adapter_name, result.business_id, result.goal_id))),
-            payload={
-                "message": result.message,
-                "metrics": dict(result.metrics),
-                "metadata": dict(result.metadata),
-                "evidence": [
-                    {
-                        "event_type": item.event_type,
-                        "payload": dict(item.payload),
-                        "timestamp_utc": item.timestamp_utc,
-                        "source": item.source,
-                    }
-                    for item in result.evidence
-                ],
-            },
-            labels={"business_id": result.business_id, "goal_id": result.goal_id, "verdict": result.verdict.value},
-        )
-        return self.backend.append(record)
+        return append_business_autonomy_evidence(backend=self.backend, result=result)
 
     def list_recent(self, *, tenant_id: str, limit: int = 20):
-        items, _ = self.backend.list_for_tenant(tenant_id=tenant_id, limit=limit)
-        return items
+        return self.backend.list_for_tenant(tenant_id=tenant_id, limit=limit)
 
 
 @dataclass(frozen=True)

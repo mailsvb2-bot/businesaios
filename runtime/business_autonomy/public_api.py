@@ -1,3 +1,7 @@
+import os
+from hashlib import sha256
+from pathlib import Path
+
 from application.business_autonomy.operationalization import (
     BusinessActiveActiveQuorumService,
     BusinessAutonomyMetrics,
@@ -14,13 +18,35 @@ from observability.audit_export_service import AuditExportService
 from observability.metrics import InMemoryMetrics
 from observability.tenant_metrics_registry import TenantMetricsRegistry
 from runtime.business_autonomy.bootstrap import build_business_autonomy_guarded_service
+from runtime.wiring import resolve_storage_config
 
 _STACK: dict | None = None
+_STACK_KEY: tuple[str, ...] | None = None
+
+
+def _operationalization_storage_key() -> tuple[str, ...]:
+    storage = resolve_storage_config()
+    data_dir = Path(str(os.getenv("DATA_DIR", "data")).strip() or "data").resolve()
+    postgres_dsn = str(storage.postgres_dsn or "").strip()
+    dsn_fingerprint = sha256(postgres_dsn.encode("utf-8")).hexdigest() if postgres_dsn else ""
+    explicit_state_db = str(os.getenv("BUSINESAIOS_BUSINESS_AUTONOMY_STATE_DB", "") or "").strip()
+    state_db_key = str(Path(explicit_state_db).resolve()) if explicit_state_db else ""
+    return (
+        str(data_dir),
+        str(storage.env or "").strip().lower(),
+        str(storage.backend or "").strip().lower(),
+        dsn_fingerprint,
+        "1" if storage.postgres_event_store_enabled else "0",
+        state_db_key,
+        str(os.getenv("BUSINESAIOS_BUSINESS_AUTONOMY_STATE_BACKEND", "sqlite") or "sqlite").strip().lower(),
+        str(os.getenv("BUSINESAIOS_RUNTIME_REPLICA_COUNT", "1") or "1").strip(),
+    )
 
 
 def build_business_autonomy_operationalization() -> dict:
-    global _STACK
-    if _STACK is not None:
+    global _STACK, _STACK_KEY
+    stack_key = _operationalization_storage_key()
+    if _STACK is not None and stack_key == _STACK_KEY:
         return _STACK
     audit_log = PersistentBusinessAutonomyAudit()
     metrics = BusinessAutonomyMetrics(local=InMemoryMetrics(), registry=TenantMetricsRegistry())
@@ -30,7 +56,7 @@ def build_business_autonomy_operationalization() -> dict:
     invariant_service = BusinessInvariantEnforcementService(audit_log=audit_log, metrics=metrics)
     chaos_matrix = BusinessRecoveryChaosMatrix()
     guarded_service = build_business_autonomy_guarded_service()
-    _STACK = {
+    stack = {
         "audit_log": audit_log,
         "guarded_service": guarded_service,
         "operator_admin_plane": getattr(guarded_service, '_operator_admin_plane', None),
@@ -45,8 +71,9 @@ def build_business_autonomy_operationalization() -> dict:
         "readiness_report_builder": BusinessFinalReadinessReportBuilder(),
         "chaos_matrix": chaos_matrix,
     }
-    return _STACK
-
+    _STACK = stack
+    _STACK_KEY = stack_key
+    return stack
 
 
 

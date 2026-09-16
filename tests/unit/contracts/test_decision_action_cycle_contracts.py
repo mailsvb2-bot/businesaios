@@ -150,3 +150,49 @@ def test_business_outcome_excludes_nonfinite_revenue() -> None:
         feedback={"revenue_outcome": {"revenue_amount": float("nan")}},
     )
     assert outcome.revenue_amount is None
+
+
+def test_canonical_evidence_refs_survive_decision_intent_action_outcome_chain() -> None:
+    payload = {
+        "meta": {
+            "world_model_meta": {
+                "semantic_state_id": "semantic-state-1",
+                "evidence_refs": ["evidence-1", "evidence-2", "evidence-1"],
+            }
+        },
+        "recipient": {"id": "customer-1"},
+    }
+    intent = _intent(payload=payload)
+    assert intent.evidence_refs == ("evidence-1", "evidence-2")
+    assert intent.derived_fact_ref == "semantic-state-1"
+    action = project_executable_action(
+        decision_id=intent.decision_id, correlation_id=intent.correlation_id, decided_action_type=intent.action_type,
+        channel=intent.channel, payload=intent.payload_copy(), capability_plan=_capability(),
+        enforce_capability_plan=True, action_intent=intent,
+    )
+    assert action.evidence_refs == intent.evidence_refs
+    assert action.derived_fact_ref == intent.derived_fact_ref
+    outcome = BusinessOutcomeV1.from_feedback(
+        tenant_id=intent.tenant_id, business_id=intent.business_id, run_id="run-1",
+        intent_id=intent.intent_id, decision_id=intent.decision_id, action_id=action.action_id,
+        action_type=action.action_type, goal="reactivate_customer", status="verified",
+        feedback={"attempted": True, "executed": True, "verified": True}, evidence_refs=action.evidence_refs,
+        derived_fact_ref=action.derived_fact_ref,
+    )
+    assert outcome.evidence_refs == intent.evidence_refs
+    assert outcome.derived_fact_ref == "semantic-state-1"
+    assert outcome.as_dict()["evidence_refs"] == ["evidence-1", "evidence-2"]
+    assert outcome.as_dict()["derived_fact_ref"] == "semantic-state-1"
+
+
+def test_legacy_decision_cycle_without_evidence_refs_remains_compatible() -> None:
+    intent = _intent(payload={"recipient": {"id": "customer-1"}})
+    assert intent.evidence_refs == ()
+    assert intent.derived_fact_ref == ""
+    action = project_executable_action(
+        decision_id=intent.decision_id, correlation_id=intent.correlation_id, decided_action_type=intent.action_type,
+        channel=intent.channel, payload=intent.payload_copy(), capability_plan=_capability(),
+        enforce_capability_plan=True, action_intent=intent,
+    )
+    assert action.evidence_refs == ()
+    assert action.derived_fact_ref == ""

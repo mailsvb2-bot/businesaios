@@ -74,6 +74,10 @@ from application.planning.distributed_planning_memory_backend import Distributed
 from execution.distributed_operator_override_backend import DistributedOperatorOverrideStore
 from governance.distributed_approval_backend import DistributedApprovalStore
 from reliability.distributed_idempotency_backend import DistributedIdempotencyStore
+from runtime.business_autonomy.canonical_evidence_runtime import (
+    build_business_autonomy_evidence_store,
+    build_provider_runtime_audit_recorder,
+)
 from runtime.business_autonomy.distributed_runtime_views import (
     DistributedBusinessAutonomyAudit,
     DistributedBusinessAutonomyEvidenceStore,
@@ -100,7 +104,7 @@ from runtime.business_autonomy.sqlite_distributed_state import (
 )
 from security.connector_secret_scope import ConnectorSecretScope
 from security.secret_vault import build_default_secret_vault
-from storage.distributed_evidence_audit_backend import DistributedEvidenceStore, DistributedGovernanceAuditLog
+from storage.distributed_evidence_audit_backend import DistributedGovernanceAuditLog
 
 
 @dataclass(frozen=True)
@@ -402,6 +406,7 @@ def _build_distributed_state() -> dict[str, object]:
     database = SQLiteStateDatabase(_business_autonomy_state_path())
     documents = SQLiteDistributedDocumentStore(database)
     evidence_port = SQLiteDistributedEvidenceAppendPort(database)
+    canonical_evidence = build_business_autonomy_evidence_store(legacy_source=evidence_port)
     return {
         'database': database,
         'documents': documents,
@@ -415,7 +420,7 @@ def _build_distributed_state() -> dict[str, object]:
             key_prefix='__raw_scoped_key__',
         ),
         'audit': DistributedGovernanceAuditLog(evidence_port, partition_prefix='business_autonomy_audit'),
-        'evidence': DistributedEvidenceStore(evidence_port),
+        'evidence': canonical_evidence,
         'planning_memory': DistributedPlanningMemoryBackend(FilePlanningMemoryDocumentPort(documents)),
         'registry': DistributedBusinessRegistry(documents=documents),
         'region_state': SQLiteRegionRouteState(database),
@@ -663,6 +668,7 @@ def build_business_autonomy_guarded_service(*, business_id: str = 'external_busi
     if customer_event_store is not None:
         from crm import CustomerRegistry
         customer_registry = CustomerRegistry(event_store=customer_event_store, idempotency_store=distributed['idempotency'], pii_vault=secret_vault)
+    provider_runtime_audit = build_provider_runtime_audit_recorder()
     service._provider_admin_service = ProviderAdminService(
         onboarding_service=onboarding,
         secret_vault=secret_vault,
@@ -673,6 +679,7 @@ def build_business_autonomy_guarded_service(*, business_id: str = 'external_busi
         customer_registry=customer_registry,
         provider_pacing=ProviderPacingCoordinator(distributed['provider_pacing']),
         provider_media=ProviderMediaPreparationCoordinator(distributed['provider_media']),
+        audit_recorder=provider_runtime_audit,
     )
     return service
 

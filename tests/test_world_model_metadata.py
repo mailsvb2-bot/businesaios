@@ -2,9 +2,12 @@ from __future__ import annotations
 
 from application.decision_state.world_model_metadata import (
     attach_world_model_metadata,
+    extract_pinned_derived_fact_ref_from_payload,
+    extract_pinned_evidence_refs_from_payload,
     extract_world_model_metadata,
     summarize_pricing_world_state,
 )
+from contracts.world_model_semantics import WorldModelSemanticRecordV1, WorldModelSemanticViewV1
 
 
 class FakeState:
@@ -58,3 +61,23 @@ def test_summarize_pricing_world_state():
     assert summary is not None
     assert summary["expected_profit"] == 12.5
     assert summary["point_elasticity"] == -1.4
+
+
+def test_world_model_evidence_refs_are_pinned_into_signed_payload_metadata():
+    state = FakeState()
+    record = WorldModelSemanticRecordV1(
+        record_id="fact-1", tenant_id="tenant-1", business_id="business-1",
+        epistemic_type="fact", key="crm.customer_state", value={"active": True},
+        source="crm", occurred_at_ms=10, observed_at_ms=11, recorded_at_ms=12,
+        confidence=0.9, authoritative=True, provenance_hash="prov-1",
+        evidence_refs=("evidence-1", "evidence-2", "evidence-1"),
+    )
+    state.world_model_semantics = WorldModelSemanticViewV1(
+        state_id="state-1", tenant_id="tenant-1", business_id="business-1",
+        generated_at_ms=12, records=(record,),
+    )
+    payload = attach_world_model_metadata(envelope_payload={"decision_id": "d1"}, state=state)
+    assert payload["world_model_meta"]["semantic_state_id"] == "state-1"
+    assert payload["world_model_meta"]["evidence_refs"] == ["evidence-1", "evidence-2"]
+    assert extract_pinned_derived_fact_ref_from_payload(payload) == "state-1"
+    assert extract_pinned_evidence_refs_from_payload(payload) == ("evidence-1", "evidence-2")

@@ -1,12 +1,16 @@
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 from dataclasses import dataclass
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any, Protocol
 
 from runtime.monetization.revenue_advisory_contracts import RevenueDecisionEnvelope, RevenueExperimentSurface
+from storage.evidence_store import EvidenceRecord, EvidenceStore
+from storage.evidence_wiring import build_canonical_evidence_store
 
 CANON_RUNTIME_MONETIZATION_REVENUE_ADVISORY_STORE = True
 
@@ -132,19 +136,167 @@ class FileRevenueExperimentRegistry:
 class RevenueAdvisoryStoreWiring:
     experiment_registry: FileRevenueExperimentRegistry
     audit_store: RevenueAppendOnlyStore
-    evidence_store: RevenueAppendOnlyStore
+    evidence_store: EvidenceStore
     telemetry_store: RevenueAppendOnlyStore
 
 
-def build_revenue_advisory_store_wiring(*, root_dir: str | Path | None = None) -> RevenueAdvisoryStoreWiring:
+def _canonical_revenue_evidence_payload(*, product_id: str, owner: str, envelope: RevenueDecisionEnvelope) -> dict[str, Any]:
+    return {
+        'product_id': str(product_id),
+        'owner': owner,
+        'mode': 'advisory_only',
+        'world_state_patch': dict(envelope.world_state_patch),
+        'candidate_actions': [
+            {
+                'action_type': item.action_type,
+                'kind': item.kind,
+                'confidence': item.confidence,
+                'payload': dict(item.payload),
+                'evidence': dict(item.evidence),
+                'reason_codes': list(item.reason_codes),
+                'blast_radius': item.blast_radius,
+                'requires_approval': item.requires_approval,
+                'owner': item.owner,
+            }
+            for item in envelope.candidate_actions
+        ],
+        'experiments': [
+            {
+                'experiment_id': item.experiment_id,
+                'kind': item.kind,
+                'hypothesis': item.hypothesis,
+                'metric_primary': item.metric_primary,
+                'metric_guardrails': list(item.metric_guardrails),
+                'arms': [dict(arm) for arm in item.arms],
+                'holdout_allocation': item.holdout_allocation,
+                'max_daily_exposure': item.max_daily_exposure,
+                'created_at': item.created_at,
+                'metadata': dict(item.metadata),
+            }
+            for item in envelope.experiments
+        ],
+    }
+
+
+def _legacy_revenue_evidence_payload(row: dict[str, Any]) -> tuple[str, str, str, dict[str, Any]]:
+    tenant_id = str(row.get('tenant_id') or '').strip()
+    product_id = str(row.get('product_id') or '').strip()
+    owner = str(row.get('owner') or '').strip()
+    if not tenant_id or not product_id:
+        raise ValueError('legacy revenue advisory evidence requires tenant_id and product_id')
+    if owner != 'runtime.monetization.revenue_advisory':
+        raise ValueError('legacy revenue advisory evidence owner drift detected')
+    candidate_actions = row.get('candidate_actions')
+    experiments = row.get('experiments')
+    world_state_patch = row.get('world_state_patch')
+    if not isinstance(candidate_actions, list) or not all(isinstance(item, dict) for item in candidate_actions):
+        raise ValueError('legacy revenue advisory candidate_actions must be a list of objects')
+    if not isinstance(experiments, list) or not all(isinstance(item, dict) for item in experiments):
+        raise ValueError('legacy revenue advisory experiments must be a list of objects')
+    if not isinstance(world_state_patch, dict):
+        raise ValueError('legacy revenue advisory world_state_patch must be an object')
+    payload = {
+        'product_id': product_id,
+        'owner': owner,
+        'mode': 'advisory_only',
+        'world_state_patch': dict(world_state_patch),
+        'candidate_actions': [dict(item) for item in candidate_actions],
+        'experiments': [dict(item) for item in experiments],
+    }
+    return tenant_id, product_id, owner, payload
+
+
+def _revenue_evidence_record(
+    *, tenant_id: str, product_id: str, owner: str, evidence_payload: dict[str, Any], created_at: datetime | None = None
+) -> EvidenceRecord:
+    digest_input = json.dumps(
+        {'tenant_id': str(tenant_id), **evidence_payload},
+        ensure_ascii=False, sort_keys=True, separators=(',', ':'),
+    ).encode('utf-8')
+    digest = hashlib.sha256(digest_input).hexdigest()
+    kwargs: dict[str, Any] = {
+        'evidence_id': f'revenue-advisory:{digest}',
+        'tenant_id': str(tenant_id),
+        'scope': 'revenue_advisory',
+        'run_id': f'revenue-advisory:{digest[:24]}',
+        'action_type': 'revenue_advisory_envelope',
+        'verification_status': 'recorded',
+        'source': owner,
+        'source_type': 'revenue_advisory',
+        'business_id': 'unknown',
+        'observed_at': None,
+        'confidence': None,
+        'privacy_class': 'internal',
+        'retention_policy': 'revenue_advisory_evidence',
+        'lineage': {
+            'source': owner,
+            'normalization': f'revenue-advisory-envelope:{digest}',
+            'derived_fact': f'revenue-advisory:{digest}',
+        },
+        'refs': tuple(
+            str(item.get('experiment_id') or '').strip()
+            for item in evidence_payload.get('experiments') or ()
+            if str(item.get('experiment_id') or '').strip()
+        ),
+        'payload': evidence_payload,
+        'labels': {'product_id': str(product_id), 'owner': owner, 'mode': 'advisory_only'},
+    }
+    if created_at is not None:
+        kwargs['created_at'] = created_at
+    return EvidenceRecord(**kwargs).normalized_for_write()
+
+
+def backfill_legacy_revenue_advisory_evidence(*, legacy_path: Path, evidence_store: EvidenceStore) -> int:
+    if not legacy_path.exists():
+        return 0
+    legacy_created_at = datetime.fromtimestamp(legacy_path.stat().st_mtime, tz=UTC)
+    migrated = 0
+    with legacy_path.open('r', encoding='utf-8') as handle:
+        for line_number, raw_line in enumerate(handle, start=1):
+            line = raw_line.strip()
+            if not line:
+                continue
+            try:
+                decoded = json.loads(line)
+            except json.JSONDecodeError as exc:
+                raise ValueError(f'legacy revenue advisory evidence is invalid JSON at line {line_number}') from exc
+            if not isinstance(decoded, dict):
+                raise ValueError(f'legacy revenue advisory evidence must be an object at line {line_number}')
+            tenant_id, product_id, owner, payload = _legacy_revenue_evidence_payload(decoded)
+            probe = _revenue_evidence_record(
+                tenant_id=tenant_id, product_id=product_id, owner=owner,
+                evidence_payload=payload, created_at=legacy_created_at,
+            )
+            existing = evidence_store.get(tenant_id=tenant_id, evidence_id=probe.evidence_id)
+            record = probe if existing is None else _revenue_evidence_record(
+                tenant_id=tenant_id, product_id=product_id, owner=owner,
+                evidence_payload=payload, created_at=existing.created_at,
+            )
+            if existing is not None:
+                if existing != record:
+                    raise ValueError(
+                        f'legacy revenue advisory evidence conflicts with canonical evidence at line {line_number}'
+                    )
+                continue
+            evidence_store.append(record)
+            migrated += 1
+    return migrated
+
+
+def build_revenue_advisory_store_wiring(
+    *, root_dir: str | Path | None = None, evidence_store: EvidenceStore | None = None
+) -> RevenueAdvisoryStoreWiring:
     root = Path(root_dir) if root_dir is not None else Path('.runtime_data/revenue_os')
+    canonical_evidence = evidence_store or build_canonical_evidence_store()
+    backfill_legacy_revenue_advisory_evidence(
+        legacy_path=root / 'evidence.jsonl', evidence_store=canonical_evidence
+    )
     return RevenueAdvisoryStoreWiring(
         experiment_registry=FileRevenueExperimentRegistry(path=root / 'experiments.json'),
         audit_store=JsonlAppendOnlyStore(path=root / 'audit.jsonl'),
-        evidence_store=JsonlAppendOnlyStore(path=root / 'evidence.jsonl'),
+        evidence_store=canonical_evidence,
         telemetry_store=JsonlAppendOnlyStore(path=root / 'telemetry.jsonl'),
     )
-
 
 
 def _dedup_key(*, tenant_id: str, product_id: str, experiment_id: str) -> str:
@@ -188,43 +340,22 @@ def persist_revenue_advisory_envelope(
         'experiments_count': len(envelope.experiments),
         'candidate_actions_count': len(envelope.candidate_actions),
     }
-    wiring.evidence_store.append(
-        {
-            'tenant_id': str(tenant_id),
-            'product_id': str(product_id),
-            'owner': owner,
-            'world_state_patch': dict(envelope.world_state_patch),
-            'candidate_actions': [
-                {
-                    'action_type': item.action_type,
-                    'kind': item.kind,
-                    'confidence': item.confidence,
-                    'payload': dict(item.payload),
-                    'evidence': dict(item.evidence),
-                    'reason_codes': list(item.reason_codes),
-                    'blast_radius': item.blast_radius,
-                    'requires_approval': item.requires_approval,
-                    'owner': item.owner,
-                }
-                for item in envelope.candidate_actions
-            ],
-            'experiments': [
-                {
-                    'experiment_id': item.experiment_id,
-                    'kind': item.kind,
-                    'hypothesis': item.hypothesis,
-                    'metric_primary': item.metric_primary,
-                    'metric_guardrails': list(item.metric_guardrails),
-                    'arms': [dict(arm) for arm in item.arms],
-                    'holdout_allocation': item.holdout_allocation,
-                    'max_daily_exposure': item.max_daily_exposure,
-                    'created_at': item.created_at,
-                    'metadata': dict(item.metadata),
-                }
-                for item in envelope.experiments
-            ],
-        }
+    evidence_payload = _canonical_revenue_evidence_payload(
+        product_id=product_id, owner=owner, envelope=envelope
     )
+    probe = _revenue_evidence_record(
+        tenant_id=str(tenant_id), product_id=str(product_id), owner=owner, evidence_payload=evidence_payload
+    )
+    existing = wiring.evidence_store.get(tenant_id=str(tenant_id), evidence_id=probe.evidence_id)
+    record = probe if existing is None else _revenue_evidence_record(
+        tenant_id=str(tenant_id), product_id=str(product_id), owner=owner,
+        evidence_payload=evidence_payload, created_at=existing.created_at,
+    )
+    if existing is not None:
+        if existing != record:
+            raise ValueError('revenue advisory evidence replay conflicts with persisted evidence')
+    else:
+        wiring.evidence_store.append(record)
     wiring.telemetry_store.append(telemetry_payload)
     return {
         'audit_records': audit_count,

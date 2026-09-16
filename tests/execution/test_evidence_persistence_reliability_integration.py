@@ -1,10 +1,14 @@
 from __future__ import annotations
 
+from concurrent.futures import ThreadPoolExecutor
+from threading import Barrier
+
 from execution.evidence_persistence import EvidencePersistenceService
 from reliability.execution_checkpoint_store import InMemoryExecutionCheckpointStore
 from reliability.execution_reconciliation import ExecutionReconciliation
 from reliability.idempotency_store import InMemoryIdempotencyStore
 from reliability.outbox_store import InMemoryOutboxStore
+from storage.evidence_store import InMemoryEvidenceStore
 
 
 def _service() -> EvidencePersistenceService:
@@ -181,3 +185,117 @@ def test_evidence_persistence_receipt_exposes_exactly_once_effect_scope() -> Non
     assert receipt['effect_key'] == receipt['persistence_key']
     assert receipt['outbox_topic'] == 'execution.effect.send_email'
     assert receipt['outbox_payload_digest']
+
+
+def test_evidence_persistence_writes_one_canonical_record_and_replays_idempotently() -> None:
+    evidence_store = InMemoryEvidenceStore()
+    service = EvidencePersistenceService(evidence_store=evidence_store)
+    kwargs = dict(
+        tenant_id='tenant-1', business_id='biz-1', run_id='run-canonical', goal='Grow revenue', step_index=1,
+        action={
+            'action_type': 'send_email', 'action_id': 'act-canonical', 'decision_id': 'dec-canonical',
+            'derived_fact_ref': 'semantic-state-canonical',
+            'evidence_refs': ['evidence-world-1', 'evidence-world-2'],
+        },
+        execution_result={'executed': True, 'source_of_truth': 'provider_receipt'},
+        verification_result={
+            'verified': True,
+            'verification': {'status': 'accepted', 'external_refs': ['msg:canonical']},
+            'evidence_bundle': {'action_type': 'send_email', 'action_id': 'act-canonical', 'external_refs': ['msg:canonical']},
+        },
+        world_state_before={}, world_state_after={},
+        final_feedback={
+            'verification_status': 'accepted',
+            'business_outcome': {
+                'outcome_id': 'outcome:act-canonical',
+                'source_of_truth': 'provider_receipt',
+                'derived_fact_ref': 'semantic-state-canonical',
+            },
+        },
+    )
+    first = service.persist(**kwargs)
+    first_rows = evidence_store.list_for_tenant(tenant_id='tenant-1')
+    assert len(first_rows) == 1
+    record = first_rows[0]
+    assert record.business_id == 'biz-1'
+    assert record.refs == ('evidence-world-1', 'evidence-world-2', 'msg:canonical')
+    assert record.lineage['derived_fact'] == 'semantic-state-canonical'
+    assert record.lineage['decision'] == 'dec-canonical'
+    assert record.lineage['action'] == 'act-canonical'
+    assert record.lineage['outcome'] == 'outcome:act-canonical'
+    assert record.lineage['source'] == 'msg:canonical'
+    assert record.lineage_complete is True
+    second = service.persist(**kwargs)
+    second_rows = evidence_store.list_for_tenant(tenant_id='tenant-1')
+    assert len(second_rows) == 1
+    assert second_rows[0] == record
+    assert first.persistence_receipt['persistence_key'] == second.persistence_receipt['persistence_key']
+
+
+def test_evidence_persistence_rejects_conflicting_replay_for_same_persistence_key() -> None:
+    evidence_store = InMemoryEvidenceStore()
+    service = EvidencePersistenceService(evidence_store=evidence_store)
+    base = dict(
+        tenant_id='tenant-1', business_id='biz-1', run_id='run-conflict', goal='Grow revenue', step_index=1,
+        action={'action_type': 'send_email', 'action_id': 'act-conflict', 'decision_id': 'dec-conflict'},
+        execution_result={'executed': True}, world_state_before={}, world_state_after={},
+    )
+    service.persist(
+        **base,
+        verification_result={
+            'verified': True,
+            'verification': {'status': 'accepted', 'external_refs': ['msg:first']},
+            'evidence_bundle': {'action_type': 'send_email', 'action_id': 'act-conflict', 'external_refs': ['msg:first']},
+        },
+    )
+    import pytest
+    with pytest.raises(ValueError, match='canonical evidence replay conflicts'):
+        service.persist(
+            **base,
+            verification_result={
+                'verified': True,
+                'verification': {'status': 'accepted', 'external_refs': ['msg:forged']},
+                'evidence_bundle': {'action_type': 'send_email', 'action_id': 'act-conflict', 'external_refs': ['msg:forged']},
+            },
+        )
+
+
+
+class _RacingEvidenceStore(InMemoryEvidenceStore):
+    def __init__(self) -> None:
+        super().__init__()
+        self._first_read_barrier = Barrier(2)
+
+    def get(self, *, tenant_id: str, evidence_id: str):
+        existing = super().get(tenant_id=tenant_id, evidence_id=evidence_id)
+        if existing is None:
+            self._first_read_barrier.wait(timeout=5)
+        return existing
+
+
+def test_concurrent_identical_evidence_replay_reconciles_to_one_record() -> None:
+    evidence_store = _RacingEvidenceStore()
+    service = EvidencePersistenceService(evidence_store=evidence_store)
+    kwargs = dict(
+        tenant_id='tenant-1', business_id='biz-1', run_id='run-race', goal='Grow revenue', step_index=1,
+        action={'action_type': 'send_email', 'action_id': 'act-race', 'decision_id': 'dec-race'},
+        execution_result={'executed': True, 'source_of_truth': 'provider_receipt'},
+        verification_result={
+            'verified': True,
+            'verification': {'status': 'accepted', 'external_refs': ['msg:race']},
+            'evidence_bundle': {'action_type': 'send_email', 'action_id': 'act-race', 'external_refs': ['msg:race']},
+        },
+        world_state_before={}, world_state_after={},
+        final_feedback={
+            'verification_status': 'accepted',
+            'business_outcome': {'outcome_id': 'outcome:act-race', 'source_of_truth': 'provider_receipt'},
+        },
+    )
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        futures = [pool.submit(service.persist, **kwargs) for _ in range(2)]
+        results = [future.result(timeout=10) for future in futures]
+
+    rows = evidence_store.list_for_tenant(tenant_id='tenant-1')
+    assert len(rows) == 1
+    assert len({result.persistence_receipt['persistence_key'] for result in results}) == 1
+    assert rows[0].lineage['outcome'] == 'outcome:act-race'

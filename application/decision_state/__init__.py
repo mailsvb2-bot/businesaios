@@ -14,6 +14,7 @@ _CANONICAL_EXPORTS: dict[str, tuple[str, str]] = {
     'attach_world_model_explainability': ('application.decision_state.state_world_model_enricher', 'attach_world_model_explainability'),
     'attach_world_model_metadata': ('application.decision_state.world_model_metadata', 'attach_world_model_metadata'),
     'extract_pinned_world_model_meta_from_payload': ('application.decision_state.world_model_metadata', 'extract_pinned_world_model_meta_from_payload'),
+    'extract_pinned_derived_fact_ref_from_payload': ('application.decision_state.world_model_metadata', 'extract_pinned_derived_fact_ref_from_payload'),
     'extract_world_model_metadata': ('application.decision_state.world_model_metadata', 'extract_world_model_metadata'),
     'stable_payload_hash': ('application.decision_state.world_model_metadata', 'stable_payload_hash'),
     'summarize_pricing_world_state': ('application.decision_state.world_model_metadata', 'summarize_pricing_world_state'),

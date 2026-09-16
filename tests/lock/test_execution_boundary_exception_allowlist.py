@@ -3,7 +3,6 @@ from __future__ import annotations
 import ast
 from pathlib import Path
 
-
 ROOTS = (Path('runtime/execution'), Path('execution'))
 ALLOWED = {
     ('runtime/execution/executor_stages.py', 168): 'fail_closed_dispatch_reraise',
@@ -25,7 +24,8 @@ ALLOWED = {
     ('execution/closed_loop_orchestrator.py', 602): 'fail_closed_cycle_audit_reraise',
     ('execution/inference_dispatch_orchestrator.py', 156): 'provider_breaker_record_then_reraise',
     ('execution/inference_dispatch_orchestrator.py', 188): 'bounded_provider_failover',
-    ('execution/market_intelligence_loop.py', 235): 'bounded_provider_retry_and_terminal_failure',
+    ('execution/market_intelligence_loop.py', 250): 'bounded_provider_retry_and_terminal_failure',
+    ('execution/market_intelligence_loop.py', 294): 'fail_closed_evidence_persistence_translation',
 }
 
 

@@ -7,6 +7,7 @@ from runtime.monetization import (
     RevenueExperimentSurface,
     build_revenue_advisory_store_wiring,
 )
+from storage.evidence_store import InMemoryEvidenceStore
 
 
 def test_file_revenue_experiment_registry_roundtrip(tmp_path: Path) -> None:
@@ -34,12 +35,13 @@ def test_file_revenue_experiment_registry_roundtrip(tmp_path: Path) -> None:
 
 
 def test_build_revenue_advisory_store_wiring_uses_runtime_owner_root(tmp_path: Path) -> None:
-    wiring = build_revenue_advisory_store_wiring(root_dir=tmp_path)
+    evidence_store = InMemoryEvidenceStore()
+    wiring = build_revenue_advisory_store_wiring(root_dir=tmp_path, evidence_store=evidence_store)
 
     wiring.audit_store.append({'kind': 'audit', 'value': 1})
-    wiring.evidence_store.append({'kind': 'evidence', 'value': 2})
     wiring.telemetry_store.append({'kind': 'telemetry', 'value': 3})
 
+    assert wiring.evidence_store is evidence_store
     assert (tmp_path / 'audit.jsonl').exists()
-    assert (tmp_path / 'evidence.jsonl').exists()
+    assert not (tmp_path / 'evidence.jsonl').exists()
     assert (tmp_path / 'telemetry.jsonl').exists()

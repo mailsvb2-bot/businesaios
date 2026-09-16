@@ -153,3 +153,16 @@ def test_managed_runtime_plane_declares_no_decision_logic() -> None:
     assert 'CANON_MANAGED_RUNTIME_PLANE_NO_DECISION_LOGIC = True' in text
     assert 'alternate decision path' in text.lower()
     assert 'DecisionCore' not in text
+
+
+def test_market_intelligence_derived_evidence_is_canonical_before_projection() -> None:
+    loop_text = _read(ROOT / 'execution' / 'market_intelligence_loop.py')
+    boot_text = _read(ROOT / 'runtime' / 'boot' / 'market_intelligence_boot.py')
+    observability_text = _read(ROOT / 'execution' / 'market_intelligence_observability_store.py')
+    assert 'persist_market_intelligence_derived_evidence' in loop_text
+    assert loop_text.index('canonical_evidence = self._persist_derived_evidence') < loop_text.index('self.telemetry.emit_provenance_audit')
+    assert loop_text.index('canonical_evidence = self._persist_derived_evidence') < loop_text.index("result['world_state_patch']")
+    assert 'build_canonical_evidence_store' in boot_text
+    assert 'evidence_store=evidence_store' in boot_text
+    assert 'EvidenceRecord' not in observability_text
+    assert 'EvidenceStore' not in observability_text

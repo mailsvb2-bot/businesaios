@@ -67,6 +67,26 @@ def test_persistent_business_autonomy_evidence_store_appends_result(tmp_path, mo
         metadata={"tenant_id": "tenant-a"},
     )
     record = store.append_result(result)
+    replay = store.append_result(result)
+    assert record.evidence_id == "business-autonomy:e1"
+    assert replay == record
     assert record.run_id == "e1"
+    assert record.business_id == "b1"
+    assert record.source == "business_autonomy"
+    assert record.source_type == "business_autonomy_execution"
+    assert record.retention_policy == "business_execution_evidence"
+    assert dict(record.lineage)["action"] == "g1"
+    assert dict(record.lineage)["outcome"] == "e1"
     items = store.list_recent(tenant_id="tenant-a")
     assert len(items) == 1
+
+    conflicting = BusinessExecutionResult(
+        verdict=ExecutionVerdict.COMPLETED,
+        business_id="b1",
+        goal_id="g1",
+        execution_id="e1",
+        message="changed",
+        metadata={"tenant_id": "tenant-a"},
+    )
+    with pytest.raises(ValueError, match="replay conflicts with canonical evidence"):
+        store.append_result(conflicting)

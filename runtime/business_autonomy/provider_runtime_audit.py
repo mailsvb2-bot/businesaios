@@ -4,6 +4,7 @@ from collections.abc import Mapping
 from dataclasses import dataclass
 from typing import Any
 
+from contracts.owner_decision_provenance import normalize_owner_decision_provenance
 from storage.audit_store import AuditRecord, InMemoryAuditStore
 from storage.evidence_store import EvidenceRecord, InMemoryEvidenceStore
 
@@ -32,6 +33,14 @@ class ProviderRuntimeAuditRecorder:
         payload: Mapping[str, Any],
         metadata: Mapping[str, Any],
     ) -> dict[str, str]:
+        provenance = normalize_owner_decision_provenance(
+            dict(metadata or {}).get('decision_provenance')
+        )
+        if provenance and (
+            str(provenance['tenant_id']) != str(tenant_id)
+            or str(provenance['business_id']) != str(business_id)
+        ):
+            raise ValueError('provider evidence decision provenance scope mismatch')
         audit = self.audit_store.append(
             AuditRecord(
                 tenant_id=str(tenant_id),
@@ -51,17 +60,48 @@ class ProviderRuntimeAuditRecorder:
                 labels={'provider_key': provider_key, 'business_id': str(business_id), 'mode': mode},
             )
         )
+        provider_action_ref = f'{business_id}:{provider_key}:{operation}'
+        lineage = {
+            'source': f'provider:{provider_key}',
+            'normalization': audit.event_id,
+            'action': str(provenance.get('action_id') or provider_action_ref),
+            'outcome': f'{business_id}:{provider_key}:{operation}:{status}',
+        }
+        if provenance:
+            lineage['decision'] = str(provenance['decision_id'])
         evidence = self.evidence_store.append(
             EvidenceRecord(
                 tenant_id=str(tenant_id),
                 scope='provider_runtime',
-                run_id=f'{provider_key}:{operation}:{mode}',
+                run_id=str(provenance.get('run_id') or f'{provider_key}:{operation}:{mode}'),
                 action_type='provider_sync',
                 verification_status='accepted' if accepted else 'rejected',
-                action_id=f'{business_id}:{provider_key}:{operation}',
+                action_id=str(provenance.get('action_id') or provider_action_ref),
+                source=str(provider_key),
+                source_type='provider_sync',
+                business_id=str(business_id),
+                observed_at=audit.created_at,
+                privacy_class='internal',
+                retention_policy='provider_runtime_evidence',
+                lineage=lineage,
                 payload={'status': status, 'metadata': dict(metadata or {})},
-                refs=(audit.event_id,),
-                labels={'provider_key': provider_key, 'business_id': str(business_id)},
+                refs=tuple(
+                    dict.fromkeys(
+                        value
+                        for value in (
+                            audit.event_id,
+                            str(provenance.get('run_id') or ''),
+                            str(provenance.get('decision_id') or ''),
+                            str(provenance.get('action_id') or ''),
+                        )
+                        if value
+                    )
+                ),
+                labels={
+                    'provider_key': provider_key,
+                    'business_id': str(business_id),
+                    **({'decision_id': str(provenance['decision_id'])} if provenance else {}),
+                },
             )
         )
         return {'audit_event_id': audit.event_id, 'evidence_id': evidence.evidence_id}
@@ -97,6 +137,18 @@ class ProviderRuntimeAuditRecorder:
                 action_type='provider_webhook',
                 verification_status='accepted' if accepted else 'rejected',
                 action_id=f'{business_id}:{provider_key}:{event_key}',
+                source=str(provider_key),
+                source_type='provider_webhook',
+                business_id=str(business_id),
+                observed_at=audit.created_at,
+                privacy_class='internal',
+                retention_policy='provider_runtime_evidence',
+                lineage={
+                    'source': f'provider:{provider_key}',
+                    'normalization': audit.event_id,
+                    'action': f'{business_id}:{provider_key}:{event_key}',
+                    'outcome': f'{business_id}:{provider_key}:{event_key}:{status}',
+                },
                 payload={'status': status, 'metadata': dict(metadata or {})},
                 refs=(audit.event_id,),
                 labels={'provider_key': provider_key, 'business_id': str(business_id)},

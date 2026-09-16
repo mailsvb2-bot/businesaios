@@ -280,10 +280,19 @@ BUSINESS_ONTOLOGY_OWNERSHIP_AUDIT = (
     ),
     _row(
         "Evidence",
-        OwnershipAuditStatus.DUPLICATE,
-        None,
-        None,
-        "Evidence mechanisms are strong but no single canonical Evidence Store contract/owner exists yet.",
+        OwnershipAuditStatus.DONE,
+        "storage.evidence_store",
+        "storage.evidence_store",
+        "Canonical EvidenceRecord/storage ownership is locked; active durable writers route to it, legacy surfaces are migration/archive or mirror-only, historical backfills are idempotent/fail-closed, and closed-loop lineage preserves all six canonical stages.",
+        writers=(
+            "application.business_autonomy.evidence_projection",
+            "application.evidence.evidence_persistence",
+            "application.evidence.market_intelligence_evidence",
+            "application.process_discovery.canonical_adapters",
+            "runtime.business_autonomy.provider_runtime_audit",
+            "runtime.monetization.revenue_advisory_store",
+        ),
+        readers=("storage.distributed_evidence_audit_backend", "application.business_autonomy.persistence"),
     ),
 )
 

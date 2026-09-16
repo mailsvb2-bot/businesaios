@@ -21,6 +21,46 @@ def stable_payload_hash(payload: Mapping[str, Any]) -> str:
     return hashlib.sha256(encoded).hexdigest()
 
 
+def normalize_decision_evidence_refs(values: object) -> tuple[str, ...]:
+    if not isinstance(values, list | tuple):
+        return ()
+    normalized: list[str] = []
+    seen: set[str] = set()
+    for value in values:
+        ref = str(value or "").strip()
+        if not ref or ref in seen:
+            continue
+        seen.add(ref)
+        normalized.append(ref)
+    return tuple(normalized)
+
+
+def extract_world_model_evidence_refs(*, state: Any) -> tuple[str, ...]:
+    semantic_view = getattr(state, "world_model_semantics", None)
+    records = getattr(semantic_view, "records", None)
+    if records is None and isinstance(semantic_view, Mapping):
+        records = semantic_view.get("records")
+    if not isinstance(records, list | tuple):
+        return ()
+    refs: list[str] = []
+    for record in records:
+        record_refs = getattr(record, "evidence_refs", None)
+        if record_refs is None and isinstance(record, Mapping):
+            record_refs = record.get("evidence_refs")
+        refs.extend(normalize_decision_evidence_refs(record_refs))
+    return normalize_decision_evidence_refs(refs)
+
+
+def extract_pinned_evidence_refs_from_payload(payload: Mapping[str, Any] | None) -> tuple[str, ...]:
+    pinned = extract_pinned_world_model_meta_from_payload(dict(payload or {}))
+    return normalize_decision_evidence_refs(pinned.get("evidence_refs"))
+
+
+def extract_pinned_derived_fact_ref_from_payload(payload: Mapping[str, Any] | None) -> str:
+    pinned = extract_pinned_world_model_meta_from_payload(dict(payload or {}))
+    return str(pinned.get("semantic_state_id") or "").strip()
+
+
 def extract_world_model_metadata(*, state: Any) -> dict[str, Any]:
     meta = getattr(state, "meta", None)
     meta = dict(meta) if isinstance(meta, dict) else {}
@@ -49,6 +89,17 @@ def extract_world_model_metadata(*, state: Any) -> dict[str, Any]:
         out["pricing_world_model_hash"] = str(pricing_model_hash)
     if pricing_model_source is not None:
         out["world_model_source"] = str(pricing_model_source)
+
+    semantic_view = getattr(state, "world_model_semantics", None)
+    semantic_state_id = getattr(semantic_view, "state_id", None)
+    if semantic_state_id is None and isinstance(semantic_view, Mapping):
+        semantic_state_id = semantic_view.get("state_id")
+    if str(semantic_state_id or "").strip():
+        out["semantic_state_id"] = str(semantic_state_id).strip()
+
+    evidence_refs = extract_world_model_evidence_refs(state=state)
+    if evidence_refs:
+        out["evidence_refs"] = list(evidence_refs)
 
     pricing_state = economy.get("pricing_world_state")
     if isinstance(pricing_state, dict) and pricing_state:

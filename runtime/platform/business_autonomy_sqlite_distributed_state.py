@@ -12,7 +12,6 @@ from uuid import uuid4
 
 from runtime.execution.region_ownership_plane import RegionRoute, RegionStatePort
 
-
 CANON_BUSINESS_AUTONOMY_SQLITE_STATE = True
 CANON_PLATFORM_BUSINESS_AUTONOMY_SQLITE_STATE_OWNER = True
 
@@ -389,6 +388,32 @@ class SQLiteDistributedEvidenceAppendPort:
         finally:
             connection.close()
         return tuple(dict(json.loads(str(row["payload_json"]))) for row in rows), None
+
+
+    def read_prefix_batch(
+        self,
+        *,
+        prefix: str,
+        after_sequence_id: int = 0,
+        limit: int = 500,
+    ) -> tuple[tuple[Mapping[str, Any], ...], int | None]:
+        """Read legacy rows in stable sequence order for one-way migrations."""
+        connection = self.database.connect()
+        try:
+            rows = connection.execute(
+                """
+                SELECT sequence_id, payload_json FROM distributed_evidence
+                WHERE partition_key LIKE ? AND sequence_id > ?
+                ORDER BY sequence_id ASC
+                LIMIT ?
+                """,
+                (f"{str(prefix)}%", max(0, int(after_sequence_id)), max(1, int(limit))),
+            ).fetchall()
+        finally:
+            connection.close()
+        payloads = tuple(dict(json.loads(str(row["payload_json"]))) for row in rows)
+        next_sequence_id = None if not rows else int(rows[-1]["sequence_id"])
+        return payloads, next_sequence_id
 
 
 @dataclass(frozen=True)
