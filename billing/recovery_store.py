@@ -2,30 +2,34 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Protocol
 
-from runtime.platform.billing_recovery_store import SCHEMA_VERSION, PlatformSqliteChargebackStore, PlatformSqliteRefundStore
+from runtime.platform.billing_recovery_store import (
+    SCHEMA_VERSION,
+    PlatformSqliteChargebackStore,
+    PlatformSqliteRefundStore,
+)
 
 if TYPE_CHECKING:
     from billing.chargeback_orchestrator import ChargebackCase
-    from billing.refund_orchestrator import RefundResult
+    from billing.recovery_contracts import RefundResult
 
 
 CANON_BILLING_RECOVERY_STORE = True
 
 
 class RefundStoreContract(Protocol):
-    def save(self, result: 'RefundResult', *, idempotency_key: str | None = None) -> 'RefundResult': ...
+    def save(self, result: RefundResult, *, idempotency_key: str | None = None) -> RefundResult: ...
 
-    def get_by_idempotency(self, *, tenant_id: str, invoice_id: str, idempotency_key: str) -> 'RefundResult | None': ...
+    def get_by_idempotency(self, *, tenant_id: str, invoice_id: str, idempotency_key: str) -> RefundResult | None: ...
 
-    def list_for_invoice(self, *, tenant_id: str, invoice_id: str) -> tuple['RefundResult', ...]: ...
+    def list_for_invoice(self, *, tenant_id: str, invoice_id: str) -> tuple[RefundResult, ...]: ...
 
 
 class ChargebackStoreContract(Protocol):
-    def save(self, case: 'ChargebackCase', *, idempotency_key: str | None = None) -> 'ChargebackCase': ...
+    def save(self, case: ChargebackCase, *, idempotency_key: str | None = None) -> ChargebackCase: ...
 
-    def get_by_idempotency(self, *, tenant_id: str, invoice_id: str, idempotency_key: str) -> 'ChargebackCase | None': ...
+    def get_by_idempotency(self, *, tenant_id: str, invoice_id: str, idempotency_key: str) -> ChargebackCase | None: ...
 
-    def list_for_invoice(self, *, tenant_id: str, invoice_id: str) -> tuple['ChargebackCase', ...]: ...
+    def list_for_invoice(self, *, tenant_id: str, invoice_id: str) -> tuple[ChargebackCase, ...]: ...
 
 
 class SqliteRefundStore(PlatformSqliteRefundStore):
@@ -35,7 +39,7 @@ class SqliteRefundStore(PlatformSqliteRefundStore):
     """
 
     def __init__(self, *, sqlite_path: str) -> None:
-        from billing.refund_orchestrator import RefundResult
+        from billing.recovery_contracts import RefundResult
 
         super().__init__(sqlite_path=sqlite_path, result_cls=RefundResult)
 

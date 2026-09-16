@@ -252,10 +252,12 @@ BUSINESS_ONTOLOGY_OWNERSHIP_AUDIT = (
     ),
     _row(
         "Refund",
-        OwnershipAuditStatus.PARTIAL,
-        "billing.refund_orchestrator",
-        None,
-        "Refund flow exists but canonical semantic/storage owner is incomplete.",
+        OwnershipAuditStatus.DONE,
+        "billing.recovery_contracts",
+        "runtime.platform.billing_recovery_store",
+        "RefundResult is the single canonical refund entity contract; RefundOrchestrator is the only domain lifecycle writer and the platform SQLite recovery store is the durable schema-versioned storage owner. In-memory storage remains a test/default adapter, not an alternative durable owner.",
+        writers=("billing.refund_orchestrator",),
+        readers=("billing.recovery_store",),
     ),
     _row(
         "Expense",

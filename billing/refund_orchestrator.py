@@ -1,23 +1,24 @@
 from __future__ import annotations
 
+from collections.abc import Mapping
 from dataclasses import dataclass, field
 from datetime import datetime
-from collections.abc import Mapping
 from uuid import uuid4
 
 from billing.invoice_lifecycle import CommercialInvoiceEnvelope, InvoiceLifecycleService
 from billing.ledger_event import LedgerEntry, LedgerPosting, utc_now
-from billing.lineage import derive_lineage_metadata
 from billing.ledger_store import LedgerStoreContract
-from billing.recovery_store import RefundStoreContract
+from billing.lineage import derive_lineage_metadata
 from billing.payment_provider_contract import PaymentProviderContract
+from billing.recovery_contracts import RefundResult
+from billing.recovery_store import RefundStoreContract
 from core.tenancy.normalization import require_tenant_id
 from observability.tenant_metrics_registry import TenantMetricsRegistry
 from runtime.monetization import MonetizationService, RefundRecord
 from runtime.monetization import utc_now as monetization_utc_now
 
-
 CANON_BILLING_REFUND_ORCHESTRATOR = True
+CANON_BILLING_REFUND_LIFECYCLE_OWNER = True
 
 
 @dataclass(frozen=True)
@@ -51,36 +52,6 @@ class RefundRequest:
             raise ValueError('requested_at must be timezone-aware')
         if self.idempotency_key is not None and not str(self.idempotency_key).strip():
             raise ValueError('idempotency_key cannot be blank')
-
-
-@dataclass(frozen=True)
-class RefundResult:
-    tenant_id: str
-    invoice_id: str
-    refund_id: str
-    amount_minor: int
-    currency: str
-    provider_name: str
-    external_reference: str
-    processed_at: datetime = field(default_factory=utc_now)
-    metadata: Mapping[str, object] = field(default_factory=dict)
-
-    def validate(self) -> None:
-        require_tenant_id(self.tenant_id)
-        if not str(self.invoice_id or '').strip():
-            raise ValueError('invoice_id is required')
-        if not str(self.refund_id or '').strip():
-            raise ValueError('refund_id is required')
-        if int(self.amount_minor) <= 0:
-            raise ValueError('amount_minor must be > 0')
-        if not str(self.currency or '').strip():
-            raise ValueError('currency is required')
-        if not str(self.provider_name or '').strip():
-            raise ValueError('provider_name is required')
-        if not str(self.external_reference or '').strip():
-            raise ValueError('external_reference is required')
-        if self.processed_at.tzinfo is None:
-            raise ValueError('processed_at must be timezone-aware')
 
 
 class InMemoryRefundStore:
@@ -331,6 +302,7 @@ class RefundOrchestrator:
 
 
 __all__ = [
+    'CANON_BILLING_REFUND_LIFECYCLE_OWNER',
     'CANON_BILLING_REFUND_ORCHESTRATOR',
     'InMemoryRefundStore',
     'RefundOrchestrator',
