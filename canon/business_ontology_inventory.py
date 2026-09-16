@@ -294,11 +294,12 @@ BUSINESS_ONTOLOGY_OWNERSHIP_AUDIT = (
     ),
     _row(
         "Revenue",
-        OwnershipAuditStatus.PARTIAL,
-        "core.economics.types",
-        None,
-        "core.economics.types.RevenueSignal is the canonical normalized economics read signal after removing the unused contracts.revenue_signal duplicate. Finance records, monetization snapshots, billing facts, and analytics reports remain scoped projections; universal tenant/business-scoped Revenue lifecycle/storage ownership is still incomplete.",
-        readers=("core.economics.service",),
+        OwnershipAuditStatus.DONE,
+        "core.finance.types",
+        "runtime.platform.event_store",
+        "core.finance.types.Revenue is the canonical PII-free tenant/business-scoped recognition entity. application.revenue.RevenueRegistry is the single durable recognize→reverse lifecycle writer over canonical EventStore facts; amount, currency, source relation, and recognition time are immutable. RevenueRecord, core.economics.types.RevenueSignal, monetization snapshots, billing facts, and analytics reports remain read/scoped projections and do not recognize revenue implicitly.",
+        writers=("application.revenue",),
+        readers=("application.revenue", "core.finance.contracts_readers", "core.economics.service"),
     ),
     _row(
         "Asset",

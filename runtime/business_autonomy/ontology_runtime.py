@@ -18,6 +18,7 @@ from application.opportunity import OpportunityRegistry
 from application.organization import OrganizationRegistry
 from application.partner import PartnerRegistry
 from application.person import PersonRegistry
+from application.revenue import RevenueRegistry
 from application.risk import RiskRegistry
 from application.task import DurableTaskRegistry
 from billing.invoice_registry import InvoiceRegistry
@@ -60,6 +61,7 @@ def wire_business_ontology_runtime(
         "_invoice_registry": None,
         "_expense_registry": None,
         "_risk_registry": None,
+        "_revenue_registry": None,
         "_conversation_registry": None,
         "_message_registry": None,
     }
@@ -90,6 +92,7 @@ def wire_business_ontology_runtime(
             "_invoice_registry": InvoiceRegistry(event_store=event_store, idempotency_store=idempotency_store),
             "_expense_registry": ExpenseRegistry(event_store=event_store, idempotency_store=idempotency_store),
             "_risk_registry": RiskRegistry(event_store=event_store, idempotency_store=idempotency_store),
+            "_revenue_registry": RevenueRegistry(event_store=event_store, idempotency_store=idempotency_store),
             "_conversation_registry": ConversationRegistry(
                 event_store=event_store,
                 idempotency_store=idempotency_store,

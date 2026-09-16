@@ -22,6 +22,10 @@ class ExpenseLifecycleStatus(str, Enum):
     RECORDED = "recorded"
     VOIDED = "voided"
 
+class RevenueLifecycleStatus(str, Enum):
+    RECOGNIZED = "recognized"
+    REVERSED = "reversed"
+
 class FinanceSnapshotStatus(str, Enum):
     OK = "ok"
     WARNING = "warning"

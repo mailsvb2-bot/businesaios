@@ -6,9 +6,31 @@ from dataclasses import dataclass
 from datetime import datetime
 from decimal import Decimal
 
-from .enums import ExpenseCategory, ExpenseLifecycleStatus, FinanceSnapshotStatus, PaymentStatus, PayoutStatus
+from .enums import (
+    ExpenseCategory,
+    ExpenseLifecycleStatus,
+    FinanceSnapshotStatus,
+    PaymentStatus,
+    PayoutStatus,
+    RevenueLifecycleStatus,
+)
 from .ids import FinanceSnapshotId
 
+
+@dataclass(frozen=True)
+class Revenue:
+    revenue_id: str
+    tenant_id: str
+    business_id: str
+    amount: Decimal
+    currency: str
+    source_kind: str
+    source_id: str
+    recognized_at_ms: int
+    lifecycle_status: RevenueLifecycleStatus = RevenueLifecycleStatus.RECOGNIZED
+    created_at_ms: int = 0
+    updated_at_ms: int = 0
+    reversed_at_ms: int | None = None
 
 @dataclass(frozen=True)
 class RevenueRecord:
