@@ -13,7 +13,7 @@ from contracts.person import Person
 ROOT = Path(__file__).resolve().parents[2]
 PRODUCTION_ROOTS = ("application", "runtime", "storage", "core", "adapters", "billing", "crm")
 REGISTRY = Path("application/person/registry.py")
-FACTS = Path("application/person/facts.py")
+FACTS = Path("application/person/projector.py")
 FACT_TYPES = {"person.created", "person.archived"}
 
 

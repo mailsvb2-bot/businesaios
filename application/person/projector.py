@@ -3,9 +3,12 @@ from __future__ import annotations
 from dataclasses import replace
 from typing import Any
 
-from application.person.facts import PERSON_ARCHIVED, PERSON_CREATED, PERSON_FACT_TYPES
 from contracts.event_store import BUSINESS_FACT_EVENT_TYPE
 from contracts.person import Person, PersonNotFound, PersonStatus
+
+PERSON_CREATED = "person.created"
+PERSON_ARCHIVED = "person.archived"
+PERSON_FACT_TYPES = frozenset({PERSON_CREATED, PERSON_ARCHIVED})
 
 CANON_PERSON_PROJECTOR = True
 
@@ -49,4 +52,4 @@ class PersonProjector:
         return tuple(self.get(tenant_id=tenant_id, business_id=business_id, person_id=value) for value in ids)
 
 
-__all__ = ["CANON_PERSON_PROJECTOR", "PersonProjector"]
+__all__ = ["CANON_PERSON_PROJECTOR", "PERSON_ARCHIVED", "PERSON_CREATED", "PERSON_FACT_TYPES", "PersonProjector"]

@@ -4,8 +4,7 @@ import time
 from typing import Any
 
 from application.ontology import EventFactLifecycleWriter
-from application.person.facts import PERSON_ARCHIVED, PERSON_CREATED
-from application.person.projector import PersonProjector
+from application.person.projector import PERSON_ARCHIVED, PERSON_CREATED, PersonProjector
 from contracts.person import Person, PersonStatus
 from reliability.idempotency_contract import IdempotencyStore
 
