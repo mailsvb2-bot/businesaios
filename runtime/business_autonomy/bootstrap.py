@@ -509,6 +509,27 @@ def _build_typed_channel_registry() -> TypedChannelAdapterRegistry:
     return registry
 
 
+def _canonical_ontology_event_store(customer_event_store: Any | None):
+    if customer_event_store is not None:
+        return customer_event_store, None
+    from contextlib import ExitStack
+
+    from application.business_autonomy.persistence import business_autonomy_runtime_dir
+    from runtime.wiring import build_event_store, resolve_storage_config
+
+    stack = ExitStack()
+    try:
+        event_store = build_event_store(
+            stack,
+            base_dir=str(business_autonomy_runtime_dir()),
+            storage=resolve_storage_config(),
+        )
+    except Exception:
+        stack.close()
+        raise
+    return event_store, stack
+
+
 def build_business_autonomy_guarded_service(*, business_id: str = 'external_business', seed_admin_read_model: bool = False, customer_event_store: Any | None = None) -> BusinessAutonomyGuardedService:
     admin_dependencies = build_business_autonomy_admin_dependencies()
     distributed = admin_dependencies['distributed']
@@ -677,12 +698,19 @@ def build_business_autonomy_guarded_service(*, business_id: str = 'external_busi
     service._typed_channel_registry = typed_registry
     service._operator_admin_plane = UnifiedOperatorAdminPlane(BusinessAutonomyFleetReadModel(distributed_registry))
     service._execution_runtime = build_execution_runtime(route_state=distributed['region_state'])
+    ontology_event_store, ontology_event_store_stack = _canonical_ontology_event_store(customer_event_store)
     customer_registry = wire_business_ontology_runtime(
         service=service,
-        event_store=customer_event_store,
+        event_store=ontology_event_store,
         idempotency_store=distributed['idempotency'],
         pii_vault=secret_vault,
     )
+    service._ontology_event_store = ontology_event_store
+    service._ontology_event_store_stack = ontology_event_store_stack
+    if ontology_event_store_stack is not None:
+        import weakref
+
+        service._ontology_event_store_finalizer = weakref.finalize(service, ontology_event_store_stack.close)
     provider_runtime_audit = build_provider_runtime_audit_recorder()
     service._provider_admin_service = ProviderAdminService(
         onboarding_service=onboarding,
@@ -693,6 +721,7 @@ def build_business_autonomy_guarded_service(*, business_id: str = 'external_busi
         idempotency_store=distributed['idempotency'],
         customer_registry=customer_registry,
         conversation_registry=getattr(service, '_conversation_registry', None),
+        message_registry=getattr(service, '_message_registry', None),
         provider_pacing=ProviderPacingCoordinator(distributed['provider_pacing']),
         provider_media=ProviderMediaPreparationCoordinator(distributed['provider_media']),
         audit_recorder=provider_runtime_audit,

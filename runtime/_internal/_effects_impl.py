@@ -358,6 +358,7 @@ class Effects(
     settings_gateway: Any | None = None
     messaging_policy_event_store: Any | None = None
     messaging_policy_read_service: Any | None = None
+    message_registry: Any | None = None
     http_transport: HttpTransport | None = None
     effect_router: EffectRouter | None = None
     _last_sent: dict[str, float] = None  # type: ignore[assignment]

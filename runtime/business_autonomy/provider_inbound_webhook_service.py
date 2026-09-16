@@ -6,6 +6,7 @@ from dataclasses import dataclass, field
 
 from application.business_autonomy.provider_admin_contract import ProviderDefinition
 from application.business_autonomy.provider_runtime_contract import ProviderWebhookIngressResult
+from contracts.messaging_event_identity import MessageDirection, MessageIdentity
 from runtime.business_autonomy.provider_incident_registry import FileProviderIncidentRegistry
 from runtime.business_autonomy.provider_runtime_audit import ProviderRuntimeAuditRecorder
 from runtime.business_autonomy.provider_runtime_export_bridge import ProviderRuntimeExportBridge
@@ -31,6 +32,7 @@ class ProviderInboundWebhookService:
     inbound_processor: ProviderWebhookInboundProcessor | None = None
     customer_registry: object | None = None
     conversation_registry: object | None = None
+    message_registry: object | None = None
     operational_responder: object | None = None
 
     def ingest(
@@ -129,6 +131,29 @@ class ProviderInboundWebhookService:
                 'identity_count': len(customer.identities),
                 **({'conversation_id': conversation_id} if conversation_id else {}),
             }
+        message_result = {}
+        if decision.accepted and self.message_registry is not None and handoff:
+            inbound = dict(handoff.get('inbound_message') or {})
+            source_message_id = str(
+                inbound.get('transport_message_id') or inbound.get('correlation_id') or event_key
+            ).strip()
+            identity = MessageIdentity(
+                message_id=source_message_id,
+                tenant_id=str(tenant_id),
+                business_id=str(business_id),
+                channel=str(inbound.get('channel') or ''),
+                direction=MessageDirection.INBOUND,
+                correlation_id=str(inbound.get('correlation_id') or ''),
+                transport_message_id=str(inbound.get('transport_message_id') or ''),
+            )
+            metadata = dict(inbound.get('metadata') or {})
+            recorded = self.message_registry.record(
+                identity=identity,
+                business_id=str(business_id),
+                customer_id=str(metadata.get('customer_id') or '').strip() or None,
+                conversation_id=str(metadata.get('conversation_id') or '').strip() or None,
+            )
+            message_result = {'message_id': recorded.message_id}
         inbound_result = self.inbound_processor.process(handoff=handoff) if decision.accepted and self.inbound_processor is not None and handoff else {}
         if decision.accepted and (not handoff or inbound_result):
             self.complete(provider=provider, tenant_id=tenant_id, business_id=business_id, event_key=event_key, payload_digest=payload_digest, owner_id=decision.owner_id, topic=topic)
@@ -153,7 +178,7 @@ class ProviderInboundWebhookService:
             provider_ack = {'required': False, 'ok': True}
         inbound_summary = summarize_provider_webhook_inbound_result(handoff=handoff, inbound_result=inbound_result)
         self.observability.record_webhook_inbound_handoff(tenant_id=str(tenant_id), provider_key=provider.provider_key, status=status, inbound_summary=inbound_summary)
-        return ProviderWebhookIngressResult(provider_key=provider.provider_key, event_key=event_key, accepted=decision.accepted, status=status, metadata={'decision': {'resolution': decision.resolution, **dict(decision.metadata)}, 'owner_id': decision.owner_id, 'topic': topic, 'audit_refs': refs, 'export_refs': export_refs, 'route': dict(route), 'messaging_handoff': handoff, 'messaging_inbound_result': inbound_result, 'messaging_inbound_summary': inbound_summary, 'provider_ack': provider_ack, 'customer': customer_result, 'incident': incident})
+        return ProviderWebhookIngressResult(provider_key=provider.provider_key, event_key=event_key, accepted=decision.accepted, status=status, metadata={'decision': {'resolution': decision.resolution, **dict(decision.metadata)}, 'owner_id': decision.owner_id, 'topic': topic, 'audit_refs': refs, 'export_refs': export_refs, 'route': dict(route), 'messaging_handoff': handoff, 'messaging_inbound_result': inbound_result, 'messaging_inbound_summary': inbound_summary, 'provider_ack': provider_ack, 'customer': customer_result, 'message': message_result, 'incident': incident})
 
     @staticmethod
     def transport_ack_safe(result: ProviderWebhookIngressResult) -> bool:

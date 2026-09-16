@@ -23,6 +23,7 @@ from application.task import DurableTaskRegistry
 from billing.invoice_registry import InvoiceRegistry
 from crm import CustomerRegistry
 from runtime.messaging.conversation_registry import ConversationRegistry
+from runtime.messaging.message_registry import MessageRegistry
 
 CANON_BUSINESS_ONTOLOGY_RUNTIME_WIRING = True
 
@@ -60,6 +61,7 @@ def wire_business_ontology_runtime(
         "_expense_registry": None,
         "_risk_registry": None,
         "_conversation_registry": None,
+        "_message_registry": None,
     }
     customer_registry: Any | None = None
     if event_store is not None:
@@ -92,6 +94,10 @@ def wire_business_ontology_runtime(
                 event_store=event_store,
                 idempotency_store=idempotency_store,
                 customer_registry=customer_registry,
+            ),
+            "_message_registry": MessageRegistry(
+                event_store=event_store,
+                idempotency_store=idempotency_store,
             ),
         }
     for attribute, registry in bindings.items():

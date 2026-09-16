@@ -19,6 +19,7 @@ from runtime.execution.effects_factory import build_guarded_effects
 from runtime.execution.executor_warnings import throttled_exec_warn
 from runtime.execution.reliability_runtime import build_runtime_reliability
 from runtime.firewall.import_guard import allow_internal_import
+from runtime.messaging.message_registry import MessageRegistry
 from runtime.runtime_infra import RuntimeInfra
 
 CANON_RUNTIME_EXECUTION_ASSEMBLY = True
@@ -115,6 +116,7 @@ def build_runtime_executor_effects(
     settings_gateway,
     messaging_policy_event_store,
     messaging_policy_read_service,
+    message_registry=None,
     http_transport=None,
     effect_router=None,
 ) -> RuntimeExecutorEffectsBundle:
@@ -132,6 +134,7 @@ def build_runtime_executor_effects(
         settings_gateway=settings_gateway,
         messaging_policy_event_store=messaging_policy_event_store,
         messaging_policy_read_service=messaging_policy_read_service,
+        message_registry=message_registry,
         http_transport=http_transport,
         effect_router=effect_router,
     )
@@ -218,7 +221,7 @@ def build_executor_runtime_infra_from_runtime_infra(*, runtime_infra, delivery_s
     )
 
 
-def build_executor_effects_bundle(*, event_log, policy_registry, infra: RuntimeExecutorInfra):
+def build_executor_effects_bundle(*, event_log, policy_registry, infra: RuntimeExecutorInfra, message_registry=None):
     return build_runtime_executor_effects(
         event_log=event_log,
         policy_registry=policy_registry,
@@ -229,6 +232,7 @@ def build_executor_effects_bundle(*, event_log, policy_registry, infra: RuntimeE
         settings_gateway=infra.settings_store,
         messaging_policy_event_store=infra.messaging_policy_store,
         messaging_policy_read_service=infra.messaging_policy_reader,
+        message_registry=message_registry,
         http_transport=infra.http_transport,
         effect_router=infra.effect_router,
     )
@@ -282,12 +286,18 @@ def build_executor_state(
         delivery_state=delivery_state,
         telegram_outbound_queue=telegram_outbound_queue,
     )
+    reliability = build_runtime_reliability(outbox=infra.effect_outbox, runtime_infra=runtime_infra or infra)
+    message_registry = (
+        MessageRegistry(event_store=infra.event_store, idempotency_store=reliability.idempotency_store)
+        if infra.event_store is not None
+        else None
+    )
     effects_bundle = build_executor_effects_bundle(
         event_log=event_log,
         policy_registry=policy_registry,
         infra=infra,
+        message_registry=message_registry,
     )
-    reliability = build_runtime_reliability(outbox=infra.effect_outbox, runtime_infra=runtime_infra or infra)
     return RuntimeExecutorState(
         ports=ports,
         infra=infra,

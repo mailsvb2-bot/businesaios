@@ -205,11 +205,17 @@ BUSINESS_ONTOLOGY_OWNERSHIP_AUDIT = (
     ),
     _row(
         "Message",
-        OwnershipAuditStatus.PARTIAL,
-        "contracts.messaging_event_identity",
-        None,
-        "MessageIdentity is the single PII-free direction/scope identity projected by canonical inbound and outbound runtime messages. Content, delivery lifecycle, and durable universal Message storage remain scoped to existing messaging/event surfaces.",
-        readers=("runtime.messaging.inbound_message", "runtime.messaging.outbound_message"),
+        OwnershipAuditStatus.DONE,
+        "runtime.messaging.message_registry",
+        "runtime.platform.event_store",
+        "MessageRegistry is the single PII-free tenant/business-scoped record/archive lifecycle owner over canonical EventStore facts. Accepted provider ingress persists Message after Customer/Conversation resolution and before DecisionCore; business-scoped OutboundMessage persists before transport. Message text, arbitrary payloads, and delivery receipts remain transport/evidence projections rather than competing lifecycle truth.",
+        writers=("runtime.messaging.message_registry",),
+        readers=(
+            "runtime.messaging.inbound_message",
+            "runtime.messaging.outbound_message",
+            "runtime.business_autonomy.provider_inbound_webhook_service",
+            "runtime._internal.effects_actions.telegram.messaging_parts.transport",
+        ),
     ),
     _row(
         "Campaign",
