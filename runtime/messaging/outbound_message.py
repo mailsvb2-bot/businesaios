@@ -6,6 +6,8 @@ from collections.abc import Callable
 from dataclasses import dataclass, field
 from typing import Any
 
+from contracts.messaging_event_identity import MessageDirection, MessageIdentity
+
 
 def _stable_json(payload: dict[str, Any]) -> str:
     return json.dumps(payload, sort_keys=True, ensure_ascii=False, separators=(",", ":"))
@@ -61,6 +63,17 @@ class OutboundMessage:
     @property
     def payload_digest(self) -> str:
         return hashlib.sha256(_stable_json(dict(self.payload or {})).encode("utf-8")).hexdigest()
+
+    @property
+    def canonical_identity(self) -> MessageIdentity:
+        return MessageIdentity(
+            message_id=self.delivery_key,
+            tenant_id=self.tenant_id,
+            business_id=self.business_id,
+            channel=self.channel,
+            direction=MessageDirection.OUTBOUND,
+            correlation_id=self.correlation_id,
+        )
 
     @property
     def delivery_key(self) -> str:

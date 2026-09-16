@@ -203,10 +203,11 @@ BUSINESS_ONTOLOGY_OWNERSHIP_AUDIT = (
     ),
     _row(
         "Message",
-        OwnershipAuditStatus.DUPLICATE,
+        OwnershipAuditStatus.PARTIAL,
+        "contracts.messaging_event_identity",
         None,
-        None,
-        "Message semantics remain spread across messaging/runtime/marketing surfaces.",
+        "MessageIdentity is the single PII-free direction/scope identity projected by canonical inbound and outbound runtime messages. Content, delivery lifecycle, and durable universal Message storage remain scoped to existing messaging/event surfaces.",
+        readers=("runtime.messaging.inbound_message", "runtime.messaging.outbound_message"),
     ),
     _row(
         "Campaign",
