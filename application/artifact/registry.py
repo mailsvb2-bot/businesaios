@@ -3,8 +3,7 @@ from __future__ import annotations
 import time
 from typing import Any
 
-from application.artifact.facts import ARTIFACT_ARCHIVED, ARTIFACT_CREATED
-from application.artifact.projector import ArtifactProjector
+from application.artifact.projector import ARTIFACT_ARCHIVED, ARTIFACT_CREATED, ArtifactProjector
 from application.ontology import EventFactLifecycleWriter
 from contracts.artifact import Artifact, ArtifactStatus
 from reliability.idempotency_contract import IdempotencyStore

@@ -12,7 +12,7 @@ from contracts.artifact import Artifact
 ROOT = Path(__file__).resolve().parents[2]
 PRODUCTION_ROOTS = ("application", "runtime", "storage", "core", "adapters", "billing", "crm")
 REGISTRY = Path("application/artifact/registry.py")
-FACTS = Path("application/artifact/facts.py")
+FACTS = Path("application/artifact/projector.py")
 FACT_TYPES = {"artifact.created", "artifact.archived"}
 
 

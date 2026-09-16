@@ -3,9 +3,12 @@ from __future__ import annotations
 from dataclasses import replace
 from typing import Any
 
-from application.artifact.facts import ARTIFACT_ARCHIVED, ARTIFACT_CREATED, ARTIFACT_FACT_TYPES
 from contracts.artifact import Artifact, ArtifactNotFound, ArtifactStatus
 from contracts.event_store import BUSINESS_FACT_EVENT_TYPE
+
+ARTIFACT_CREATED = "artifact.created"
+ARTIFACT_ARCHIVED = "artifact.archived"
+ARTIFACT_FACT_TYPES = frozenset({ARTIFACT_CREATED, ARTIFACT_ARCHIVED})
 
 CANON_ARTIFACT_PROJECTOR = True
 
