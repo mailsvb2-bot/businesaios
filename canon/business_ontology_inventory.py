@@ -254,10 +254,15 @@ BUSINESS_ONTOLOGY_OWNERSHIP_AUDIT = (
     ),
     _row(
         "Payment",
-        OwnershipAuditStatus.DUPLICATE,
-        None,
-        None,
-        "Payment types/contracts exist in several finance/payment surfaces; owner collapse required.",
+        OwnershipAuditStatus.PARTIAL,
+        "core.payments.contracts",
+        "runtime.platform.event_store",
+        "core.payments.contracts.PaymentIdentity and PaymentLifecycleStatus are the canonical PII-free payment identity/lifecycle vocabulary over existing payment EventStore chronology. Finance records, provider checkout/status values, billing collection results, and the payment outbox remain scoped projections/transport state. Payment remains PARTIAL because historical payment events do not uniformly carry universal business_id scope or a complete ontology lifecycle projection.",
+        writers=(
+            "runtime._internal.effects_actions.payments.selection",
+            "runtime._internal.effects_actions.payments.reconciliation",
+        ),
+        readers=("core.payments.read_model",),
     ),
     _row(
         "Refund",

@@ -7,7 +7,6 @@ SECURITY:
 
 from __future__ import annotations
 
-from dataclasses import dataclass
 from typing import Any, Protocol
 
 
@@ -34,12 +33,6 @@ def idempotence_key_for_order(order_id: str) -> str:
     if not oid:
         raise ValueError("EMPTY_ORDER_ID")
     return f"order-{oid}"
-
-
-@dataclass(frozen=True)
-class PaymentStatus:
-    external_id: str
-    status: str
 
 
 class PaymentProviderUnavailable(RuntimeError):
