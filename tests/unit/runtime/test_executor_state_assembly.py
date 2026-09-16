@@ -45,7 +45,7 @@ def test_build_executor_state_reuses_prebuilt_runtime_infra(monkeypatch) -> None
 
     monkeypatch.setattr(
         'runtime.executor_runtime_support.build_executor_effects_bundle',
-        lambda *, event_log, policy_registry, infra: bundle,
+        lambda *, event_log, policy_registry, infra, message_registry=None: bundle,
     )
 
     state = build_executor_state(
