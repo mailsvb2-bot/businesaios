@@ -4,6 +4,7 @@ import uuid
 from datetime import UTC, datetime, timedelta
 from typing import Any
 
+from core.payments.contracts import PAYMENT_SCHEMA_VERSION
 from runtime._internal.effects_actions.payments.reconciliation_ownership import (
     assert_payment_metadata_tenant,
     resolve_payment_user,
@@ -109,6 +110,7 @@ def _emit_payment_captured(
         original_decision_id=str(original_decision_id),
         external_id=str(external_id),
         payload={
+            "schema_version": PAYMENT_SCHEMA_VERSION,
             "external_id": str(external_id),
             "status": str(status),
             "reconciled_by_decision_id": str(reconciliation_decision_id),
@@ -142,6 +144,7 @@ def _emit_payment_status_event(
         original_decision_id=original,
         external_id=str(external_id),
         payload={
+            "schema_version": PAYMENT_SCHEMA_VERSION,
             "external_id": str(external_id),
             "status": str(status),
             "original_decision_id": original,
@@ -477,6 +480,7 @@ def reconcile_payment_effect(
             decision_id=str(decision_id),
             correlation_id=str(correlation_id),
             payload={
+                "schema_version": PAYMENT_SCHEMA_VERSION,
                 "tenant_id": tenant,
                 "external_id": ext_id,
                 "status": "error",
@@ -496,6 +500,7 @@ def reconcile_payment_effect(
         decision_id=str(decision_id),
         correlation_id=str(correlation_id),
         payload={
+            "schema_version": PAYMENT_SCHEMA_VERSION,
             "tenant_id": tenant,
             "external_id": ext_id,
             "status": status,

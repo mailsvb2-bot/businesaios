@@ -84,10 +84,66 @@ class PaymentIdentity:
         object.__setattr__(self, "external_id", validate_payment_external_id(self.external_id))
 
 
+@dataclass(frozen=True, slots=True)
+class Payment:
+    """Canonical PII-free payment entity projected from v2 chronology."""
+
+    identity: PaymentIdentity
+    amount_minor: int
+    currency: str
+    lifecycle_status: PaymentLifecycleStatus = PaymentLifecycleStatus.CREATED
+    created_at_ms: int = 0
+    updated_at_ms: int = 0
+    terminal_at_ms: int | None = None
+    captured_at_ms: int | None = None
+
+    def __post_init__(self) -> None:
+        if not isinstance(self.identity, PaymentIdentity):
+            raise ValueError("payment identity is required")
+        if isinstance(self.amount_minor, bool) or int(self.amount_minor) <= 0:
+            raise ValueError("payment amount_minor must be positive")
+        currency = str(self.currency or "").strip().upper()
+        if len(currency) != 3 or not currency.isalpha():
+            raise ValueError("payment currency must be a three-letter code")
+        status = PaymentLifecycleStatus(self.lifecycle_status)
+        created = int(self.created_at_ms)
+        updated = int(self.updated_at_ms)
+        if created < 0 or updated < created:
+            raise ValueError("payment timestamps are invalid")
+        terminal = None if self.terminal_at_ms is None else int(self.terminal_at_ms)
+        captured = None if self.captured_at_ms is None else int(self.captured_at_ms)
+        if terminal is not None and terminal < created:
+            raise ValueError("payment terminal_at_ms is invalid")
+        if captured is not None and captured < created:
+            raise ValueError("payment captured_at_ms is invalid")
+        if (
+            status in {PaymentLifecycleStatus.CREATED, PaymentLifecycleStatus.CHECKED}
+            and (terminal is not None or captured is not None)
+        ):
+            raise ValueError("non-terminal payment cannot have terminal timestamps")
+        if status is PaymentLifecycleStatus.FAILED and (
+            terminal is None or captured is not None
+        ):
+            raise ValueError("failed payment requires terminal_at_ms only")
+        if status is PaymentLifecycleStatus.SUCCEEDED:
+            if (terminal is None) != (captured is None):
+                raise ValueError("captured payment terminal timestamps must match")
+            if terminal is not None and terminal != captured:
+                raise ValueError("captured payment timestamps conflict")
+        object.__setattr__(self, "amount_minor", int(self.amount_minor))
+        object.__setattr__(self, "currency", currency)
+        object.__setattr__(self, "lifecycle_status", status)
+        object.__setattr__(self, "created_at_ms", created)
+        object.__setattr__(self, "updated_at_ms", updated)
+        object.__setattr__(self, "terminal_at_ms", terminal)
+        object.__setattr__(self, "captured_at_ms", captured)
+
+
 __all__ = [
     "CANON_PAYMENT_SEMANTIC_CONTRACT",
     "PAYMENT_SCHEMA_VERSION",
     "PAYMENT_TERMINAL_EVENT_TYPES",
+    "Payment",
     "PaymentIdentity",
     "PaymentLifecycleStatus",
     "payment_lifecycle_status_for_event",

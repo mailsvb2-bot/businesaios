@@ -8,7 +8,7 @@ from billing.payment_provider_capability import PaymentProviderCapabilities
 from billing.payment_provider_contract import PaymentCheckoutRequest, PaymentCheckoutSession
 from billing.payment_provider_registry import PaymentProviderRegistration, PaymentProviderRegistry
 from billing.payment_provider_router import PaymentProviderRouter
-from core.payments.contracts import PaymentIdentity
+from core.payments.contracts import PAYMENT_SCHEMA_VERSION, PaymentIdentity
 from core.payments.provider import idempotence_key_for_order
 from runtime._internal.effects_tenant import assert_event_log_tenant
 from runtime.observability.error_handling import swallow
@@ -261,7 +261,7 @@ def capture_payment_effect(
             effects.event_log.emit(
                 event_type="payment_created", source="payments", user_id=str(user_id),
                 decision_id=str(decision_id), correlation_id=str(correlation_id),
-                payload={"external_id": external_id, "status": session.status, "provider": identity.provider, "amount": int(amount), "currency": str(currency), "metadata": causal_metadata},
+                payload={"schema_version": PAYMENT_SCHEMA_VERSION, "external_id": external_id, "status": session.status, "provider": identity.provider, "amount": int(amount), "currency": str(currency), "metadata": causal_metadata},
             )
         except Exception as exc:
             external_id = None
