@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from enum import Enum
 
+from contracts.risk import RiskLevel as RiskLevel
+
 
 class ExperimentStatus(str, Enum):
     DRAFT = "draft"
@@ -27,9 +29,3 @@ class RolloutDecision(str, Enum):
     PARTIAL = "partial"
     FULL = "full"
     BLOCK = "block"
-
-
-class RiskLevel(str, Enum):
-    LOW = "low"
-    MEDIUM = "medium"
-    HIGH = "high"

@@ -15,7 +15,7 @@ class ConservativeRolloutPolicy:
         self._policy = policy_defaults
 
     def evaluate(self, *, significant: bool, uplift: float, risk_level: RiskLevel) -> RolloutDecision:
-        if risk_level == RiskLevel.HIGH:
+        if risk_level in {RiskLevel.HIGH, RiskLevel.CRITICAL}:
             return RolloutDecision.BLOCK
         if not significant:
             return RolloutDecision.HOLD

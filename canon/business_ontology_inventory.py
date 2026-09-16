@@ -320,10 +320,11 @@ BUSINESS_ONTOLOGY_OWNERSHIP_AUDIT = (
     ),
     _row(
         "Risk",
-        OwnershipAuditStatus.DUPLICATE,
+        OwnershipAuditStatus.PARTIAL,
+        "contracts.risk",
         None,
-        None,
-        "Risk representations exist across safety/economics/governance without one universal owner.",
+        "contracts.risk.RiskLevel is the single generic risk-severity vocabulary reused by experiments, human governance, and runtime safety compatibility surfaces. Numeric safety scores, economic risks, and domain-specific risk states remain scoped projections; universal tenant/business-scoped Risk identity/lifecycle/storage ownership is still incomplete.",
+        readers=("core.experiments.enums", "core.human_governance.enums", "runtime.platform.support.safety"),
     ),
     _row(
         "Hypothesis",

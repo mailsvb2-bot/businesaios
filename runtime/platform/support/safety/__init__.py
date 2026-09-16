@@ -1,8 +1,9 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from enum import Enum
 from typing import Protocol
+
+from contracts.risk import RiskLevel
 
 
 class Constraints:
@@ -33,12 +34,6 @@ class LimitRegistry:
 
     def get(self, name: str) -> float:
         return self._limits[name]
-
-class RiskLevel(str, Enum):
-    LOW = "low"
-    MEDIUM = "medium"
-    HIGH = "high"
-    CRITICAL = "critical"
 
 class RuleRegistry:
     def __init__(self) -> None:

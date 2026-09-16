@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from enum import Enum
 
+from contracts.risk import RiskLevel as RiskLevel
+
 
 class ReviewStatus(str, Enum):
     REQUESTED = "requested"
@@ -10,13 +12,6 @@ class ReviewStatus(str, Enum):
     PAUSED = "paused"
     ESCALATED = "escalated"
     CLOSED = "closed"
-
-
-class RiskLevel(str, Enum):
-    LOW = "low"
-    MEDIUM = "medium"
-    HIGH = "high"
-    CRITICAL = "critical"
 
 
 class EscalationLevel(str, Enum):
