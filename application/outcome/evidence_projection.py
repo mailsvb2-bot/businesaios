@@ -125,6 +125,7 @@ class BusinessOutcomeEvidenceProjector:
             row for row in self._evidence.list_for_tenant(tenant_id=tenant_id, limit=limit)
             if self._is_outcome_record(row, business_id=business_id)
             and str(row.lineage.get("outcome") or "") == target
+            and bool(_mapping(row.payload.get("business_outcome")))
         ]
         if not matches:
             raise LookupError(f"business outcome not found: {target}")
@@ -143,12 +144,25 @@ class BusinessOutcomeEvidenceProjector:
         )
         projected: dict[str, BusinessOutcomeV1] = {}
         for row in rows:
+            if not _mapping(row.payload.get("business_outcome")):
+                continue
             outcome = self._project_record(row)
             prior = projected.get(outcome.outcome_id)
             if prior is not None and prior != outcome:
                 raise BusinessOutcomeProjectionConflict("multiple canonical evidence rows disagree on outcome body")
             projected[outcome.outcome_id] = outcome
         return tuple(projected[key] for key in sorted(projected))
+
+    def legacy_incomplete_count(
+        self, *, tenant_id: str, business_id: str, limit: int = 1000
+    ) -> int:
+        """Count retained lineage-only rows that predate full BusinessOutcome bodies."""
+        return sum(
+            1
+            for row in self._evidence.list_for_tenant(tenant_id=tenant_id, limit=limit)
+            if self._is_outcome_record(row, business_id=business_id)
+            and not _mapping(row.payload.get("business_outcome"))
+        )
 
 
 __all__ = [

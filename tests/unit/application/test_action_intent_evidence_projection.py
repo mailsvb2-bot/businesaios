@@ -5,7 +5,6 @@ from dataclasses import replace
 import pytest
 
 from application.action import (
-    ActionIntentBodyUnavailable,
     ActionIntentEvidenceProjector,
     ActionIntentProjectionConflict,
 )
@@ -111,7 +110,7 @@ def test_action_intent_projection_is_scope_isolated() -> None:
         )
 
 
-def test_legacy_closed_loop_row_without_intent_body_fails_closed() -> None:
+def test_legacy_closed_loop_row_without_intent_body_is_retained_but_not_canonical() -> None:
     source = InMemoryEvidenceStore()
     expected = _intent()
     _persist(source, expected)
@@ -120,12 +119,19 @@ def test_legacy_closed_loop_row_without_intent_body_fails_closed() -> None:
     payload.pop("action_intent")
     legacy = InMemoryEvidenceStore()
     legacy.append(replace(record, payload=payload))
-    with pytest.raises(ActionIntentBodyUnavailable):
-        ActionIntentEvidenceProjector(legacy).get(
+    projector = ActionIntentEvidenceProjector(legacy)
+    with pytest.raises(LookupError):
+        projector.get(
             tenant_id=expected.tenant_id,
             business_id=expected.business_id,
             intent_id=expected.intent_id,
         )
+    assert projector.list_for_business(
+        tenant_id=expected.tenant_id, business_id=expected.business_id
+    ) == ()
+    assert projector.legacy_incomplete_count(
+        tenant_id=expected.tenant_id, business_id=expected.business_id
+    ) == 1
 
 
 def test_tampered_action_intent_body_conflicts_with_evidence_identity() -> None:

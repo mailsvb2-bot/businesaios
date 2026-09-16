@@ -6,7 +6,6 @@ import pytest
 
 from application.evidence.evidence_persistence import EvidencePersistenceService
 from application.outcome import (
-    BusinessOutcomeBodyUnavailable,
     BusinessOutcomeEvidenceProjector,
     BusinessOutcomeProjectionConflict,
 )
@@ -101,7 +100,7 @@ def test_business_outcome_projection_is_scope_isolated() -> None:
         projector.get(tenant_id=expected.tenant_id, business_id="business-other", outcome_id=expected.outcome_id)
 
 
-def test_legacy_outcome_lineage_without_full_body_fails_closed() -> None:
+def test_legacy_outcome_lineage_without_full_body_is_retained_but_not_canonical() -> None:
     source = InMemoryEvidenceStore()
     expected = _outcome()
     _persist(source, expected)
@@ -110,12 +109,19 @@ def test_legacy_outcome_lineage_without_full_body_fails_closed() -> None:
     payload.pop("business_outcome")
     legacy_store = InMemoryEvidenceStore()
     legacy_store.append(replace(record, payload=payload))
-    with pytest.raises(BusinessOutcomeBodyUnavailable):
-        BusinessOutcomeEvidenceProjector(legacy_store).get(
+    projector = BusinessOutcomeEvidenceProjector(legacy_store)
+    with pytest.raises(LookupError):
+        projector.get(
             tenant_id=expected.tenant_id,
             business_id=expected.business_id,
             outcome_id=expected.outcome_id,
         )
+    assert projector.list_for_business(
+        tenant_id=expected.tenant_id, business_id=expected.business_id
+    ) == ()
+    assert projector.legacy_incomplete_count(
+        tenant_id=expected.tenant_id, business_id=expected.business_id
+    ) == 1
 
 
 def test_tampered_business_outcome_body_conflicts_with_evidence_identity() -> None:

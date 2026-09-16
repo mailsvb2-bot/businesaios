@@ -108,23 +108,15 @@ class ActionIntentEvidenceProjector:
         if not target:
             raise ValueError("intent_id is required")
         matches: list[ActionIntentV1] = []
-        incomplete_history = False
         for record in self._evidence.list_for_tenant(tenant_id=tenant_id, limit=limit):
             if not self._is_closed_loop_record(record, business_id=business_id):
                 continue
             body = _mapping(record.payload.get("action_intent"))
-            if body:
-                if str(body.get("intent_id") or "") == target:
-                    matches.append(self._project_record(record))
+            if not body:
                 continue
-            outcome = _mapping(record.payload.get("business_outcome"))
-            if not outcome or str(outcome.get("intent_id") or "") == target:
-                incomplete_history = True
+            if str(body.get("intent_id") or "") == target:
+                matches.append(self._project_record(record))
         if not matches:
-            if incomplete_history:
-                raise ActionIntentBodyUnavailable(
-                    "historical action intent body unavailable; absence cannot be proven"
-                )
             raise LookupError(f"action intent not found: {target}")
         first = matches[0]
         if any(item != first for item in matches[1:]):
@@ -140,6 +132,8 @@ class ActionIntentEvidenceProjector:
         for record in self._evidence.list_for_tenant(tenant_id=tenant_id, limit=limit):
             if not self._is_closed_loop_record(record, business_id=business_id):
                 continue
+            if not _mapping(record.payload.get("action_intent")):
+                continue
             intent = self._project_record(record)
             prior = projected.get(intent.intent_id)
             if prior is not None and prior != intent:
@@ -148,6 +142,17 @@ class ActionIntentEvidenceProjector:
                 )
             projected[intent.intent_id] = intent
         return tuple(projected[key] for key in sorted(projected))
+
+    def legacy_incomplete_count(
+        self, *, tenant_id: str, business_id: str, limit: int = 1000
+    ) -> int:
+        """Count retained lineage-only rows that predate full ActionIntent bodies."""
+        return sum(
+            1
+            for record in self._evidence.list_for_tenant(tenant_id=tenant_id, limit=limit)
+            if self._is_closed_loop_record(record, business_id=business_id)
+            and not _mapping(record.payload.get("action_intent"))
+        )
 
 
 __all__ = [
