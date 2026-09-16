@@ -3,9 +3,12 @@ from __future__ import annotations
 from dataclasses import replace
 from typing import Any
 
-from application.employee.facts import EMPLOYEE_ARCHIVED, EMPLOYEE_CREATED, EMPLOYEE_FACT_TYPES
 from contracts.employee import Employee, EmployeeNotFound, EmployeeStatus
 from contracts.event_store import BUSINESS_FACT_EVENT_TYPE
+
+EMPLOYEE_CREATED = "employee.created"
+EMPLOYEE_ARCHIVED = "employee.archived"
+EMPLOYEE_FACT_TYPES = frozenset({EMPLOYEE_CREATED, EMPLOYEE_ARCHIVED})
 
 CANON_EMPLOYEE_PROJECTOR = True
 

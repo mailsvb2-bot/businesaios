@@ -12,7 +12,7 @@ from contracts.partner import Partner
 ROOT = Path(__file__).resolve().parents[2]
 PRODUCTION_ROOTS = ("application", "runtime", "storage", "core", "adapters", "billing", "crm")
 REGISTRY = Path("application/partner/registry.py")
-FACTS = Path("application/partner/facts.py")
+FACTS = Path("application/partner/projector.py")
 FACT_TYPES = {"partner.created", "partner.archived"}
 
 

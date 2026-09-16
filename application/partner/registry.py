@@ -5,8 +5,7 @@ from typing import Any
 
 from application.ontology import EventFactLifecycleWriter
 from application.organization.projector import OrganizationProjector
-from application.partner.facts import PARTNER_ARCHIVED, PARTNER_CREATED
-from application.partner.projector import PartnerProjector
+from application.partner.projector import PARTNER_ARCHIVED, PARTNER_CREATED, PartnerProjector
 from application.person.projector import PersonProjector
 from contracts.organization import OrganizationStatus
 from contracts.partner import Partner, PartnerPartyKind, PartnerStatus

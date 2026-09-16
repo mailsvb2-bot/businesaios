@@ -3,8 +3,7 @@ from __future__ import annotations
 import time
 from typing import Any
 
-from application.employee.facts import EMPLOYEE_ARCHIVED, EMPLOYEE_CREATED
-from application.employee.projector import EmployeeProjector
+from application.employee.projector import EMPLOYEE_ARCHIVED, EMPLOYEE_CREATED, EmployeeProjector
 from application.ontology import EventFactLifecycleWriter
 from application.organization.projector import OrganizationProjector
 from application.person.projector import PersonProjector

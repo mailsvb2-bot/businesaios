@@ -3,9 +3,12 @@ from __future__ import annotations
 from dataclasses import replace
 from typing import Any
 
-from application.partner.facts import PARTNER_ARCHIVED, PARTNER_CREATED, PARTNER_FACT_TYPES
 from contracts.event_store import BUSINESS_FACT_EVENT_TYPE
 from contracts.partner import Partner, PartnerNotFound, PartnerPartyKind, PartnerStatus
+
+PARTNER_CREATED = "partner.created"
+PARTNER_ARCHIVED = "partner.archived"
+PARTNER_FACT_TYPES = frozenset({PARTNER_CREATED, PARTNER_ARCHIVED})
 
 CANON_PARTNER_PROJECTOR = True
 
