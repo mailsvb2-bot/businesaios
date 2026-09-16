@@ -24,6 +24,7 @@ from core.policies.types import PolicyRef
 from core.security.call_origin import assert_called_from_bootstrap, assert_called_from_runtime_executor
 
 CANON_CORE_AI_POLICY_REGISTRY_LOCAL_STORE = True
+CANON_POLICY_ENTITY_LIFECYCLE_OWNER = True
 
 
 @dataclass(frozen=True)
@@ -51,18 +52,30 @@ class PolicyRegistry:
         self._rollout_generation: int = 0
         self._rollout_lock = RLock()
 
-    def register(self, policy) -> None:
-        """Register a policy during system wiring.
+    @staticmethod
+    def _policy_ref(policy) -> PolicyRef:
+        policy_id = str(getattr(policy, "id", "") or "").strip()
+        if not policy_id:
+            raise ValueError("EMPTY_POLICY_ID")
+        base, separator, version = policy_id.rpartition("@")
+        if not separator or not base or not version.startswith("v") or len(version) <= 1:
+            raise ValueError("POLICY_ID_MUST_BE_VERSIONED")
+        if not version[1:].replace(".", "").replace("-", "").replace("_", "").isalnum():
+            raise ValueError("INVALID_POLICY_VERSION")
+        return PolicyRef(policy_id=policy_id, version=version)
 
-        Governance:
-          - Runtime/handlers must never register policies.
-          - Production deployment/rollback happens via deploy_policy/rollback_policy actions.
-        """
+    def _registered_ref(self, policy_id: str) -> PolicyRef:
+        policy = self._policies.get(str(policy_id).strip())
+        return self._policy_ref(policy)
+
+    def register(self, policy) -> None:
+        """Register one versioned policy during canonical bootstrap wiring."""
 
         assert_called_from_bootstrap()
-        self._policies.replace(policy.id, policy)
+        ref = self._policy_ref(policy)
+        self._policies.replace(ref.policy_id, policy)
         if self._meta.active() is None:
-            self._meta.promote(PolicyRef(policy_id=policy.id, version="v1"))
+            self._meta.promote(ref)
 
     def activate_bootstrap(self, *, policy_id: str) -> None:
         """Select active policy deterministically during bootstrap wiring."""
@@ -70,9 +83,7 @@ class PolicyRegistry:
         pid = str(policy_id).strip()
         if not pid:
             raise ValueError("EMPTY_POLICY_ID")
-        if self._policies.maybe_get(pid) is None:
-            raise KeyError(pid)
-        self._meta.promote(PolicyRef(policy_id=pid, version="v1"))
+        self._meta.promote(self._registered_ref(pid))
 
     def get(self, pid: str):
         return self._policies.get(pid)
@@ -135,6 +146,13 @@ class PolicyRegistry:
         assert_called_from_runtime_executor()
         if not isinstance(snapshot, PolicyRuntimeStateSnapshot):
             raise TypeError("snapshot must be PolicyRuntimeStateSnapshot")
+        refs = tuple(ref for ref in (snapshot.lifecycle.active, snapshot.lifecycle.canary) if ref is not None)
+        for ref in refs:
+            if ref != self._registered_ref(ref.policy_id):
+                raise ValueError("POLICY_SNAPSHOT_VERSION_MISMATCH")
+        for policy_id in (snapshot.previous_policy_id, snapshot.candidate_policy_id, snapshot.governed_candidate_policy_id):
+            if policy_id is not None:
+                self._registered_ref(policy_id)
         with self._rollout_lock:
             self._meta.restore(snapshot.lifecycle)
             self._previous = snapshot.previous_policy_id
@@ -161,14 +179,15 @@ class PolicyRegistry:
                 self._previous = (
                     self._meta.active().policy_id if self._meta.active() else None
                 )
-                self._meta.promote(PolicyRef(policy_id=pid, version="v1"))
+                self._meta.promote(self._registered_ref(pid))
                 self._candidate = None
                 self._rollout_pct = 0
                 self._rollout_generation += 1
                 return
-            self._meta.register_candidate(PolicyRef(policy_id=pid, version="v1"))
+            candidate_ref = self._registered_ref(pid)
+            self._meta.register_candidate(candidate_ref)
             if pct > 0:
-                self._meta.start_canary(PolicyRef(policy_id=pid, version="v1"))
+                self._meta.start_canary(candidate_ref)
             self._candidate = pid
             self._rollout_pct = pct
             self._rollout_generation += 1
@@ -184,10 +203,10 @@ class PolicyRegistry:
             self._rollout_generation += 1
             if self._previous is None:
                 return
-            self._meta.promote(PolicyRef(policy_id=self._previous, version="v1"))
+            self._meta.promote(self._registered_ref(self._previous))
 
     def canary_ref(self) -> PolicyRef | None:
         return self._meta.canary()
 
 
-__all__ = ["PolicyRegistry", "PolicyRuntimeStateSnapshot"]
+__all__ = ["CANON_POLICY_ENTITY_LIFECYCLE_OWNER", "PolicyRegistry", "PolicyRuntimeStateSnapshot"]

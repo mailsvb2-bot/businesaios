@@ -406,9 +406,11 @@ BUSINESS_ONTOLOGY_OWNERSHIP_AUDIT = (
     _row(
         "Policy",
         OwnershipAuditStatus.PARTIAL,
-        "contracts.policy_decision",
+        "core.ai.policy_registry",
         None,
-        "PolicyDecision is canonical verdict; Policy entity/version ownership remains distributed.",
+        "PolicyDecisionV1 remains the canonical policy verdict contract, while core.ai.policy_registry is the single production runtime Policy entity/version lifecycle owner. Registered policy ids carry their real @vN identity through active/canary/promotion/rollback snapshots; Policy remains PARTIAL until arbitrary runtime deployment state has one durable restart/replay owner.",
+        writers=("core.ai.policy_registry",),
+        readers=("core.policies.selector",),
     ),
     _row(
         "Evidence",
