@@ -20,11 +20,11 @@ def _python_files():
 
 def test_policy_inventory_names_single_runtime_entity_owner() -> None:
     row = ontology_ownership_by_entity()["Policy"]
-    assert row.status.value == "partial"
+    assert row.status.value == "done"
     assert row.authoritative_module == "core.ai.policy_registry"
     assert row.allowed_writers == ("core.ai.policy_registry",)
     assert row.allowed_readers == ("core.policies.selector",)
-    assert row.storage_owner is None
+    assert row.storage_owner == "runtime.boot.phase_policy_registry"
 
 
 def test_policy_runtime_lifecycle_owner_marker_is_unique() -> None:
@@ -46,6 +46,8 @@ def test_canonical_policy_registry_never_hardcodes_v1_refs() -> None:
     assert 'version="v1"' not in text
     assert "POLICY_ID_MUST_BE_VERSIONED" in text
     assert "POLICY_SNAPSHOT_VERSION_MISMATCH" in text
+    assert "POLICY_RUNTIME_STATE_SCHEMA_VERSION" in text
+    assert "expected_generation" in text
 
 
 def test_only_boot_constructs_canonical_policy_registry_in_production() -> None:

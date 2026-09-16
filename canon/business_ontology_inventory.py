@@ -415,10 +415,10 @@ BUSINESS_ONTOLOGY_OWNERSHIP_AUDIT = (
     ),
     _row(
         "Policy",
-        OwnershipAuditStatus.PARTIAL,
+        OwnershipAuditStatus.DONE,
         "core.ai.policy_registry",
-        None,
-        "PolicyDecisionV1 remains the canonical policy verdict contract, while core.ai.policy_registry is the single production runtime Policy entity/version lifecycle owner. Registered policy ids carry their real @vN identity through active/canary/promotion/rollback snapshots; Policy remains PARTIAL until arbitrary runtime deployment state has one durable restart/replay owner.",
+        "runtime.boot.phase_policy_registry",
+        "PolicyDecisionV1 remains the canonical verdict contract while core.ai.policy_registry is the single runtime Policy entity/version lifecycle owner. Runtime active/canary/rollback state is schema-versioned and durably restored from the canonical runtime data root through one CAS-guarded atomic file adapter; registered @vN identity is validated on every restore and concurrent stale writers fail closed.",
         writers=("core.ai.policy_registry",),
         readers=("core.policies.selector",),
     ),

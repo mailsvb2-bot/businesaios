@@ -1,11 +1,52 @@
 from __future__ import annotations
 
+from collections.abc import Mapping
+from pathlib import Path
 from typing import Any
 
 from bootstrap.failure_policy import raise_or_log_boot_failure
+from governance.persistence_codec import atomic_write_json, exclusive_file_lock, read_json_or_default
 from runtime.platform.config.env_flags import env_csv, env_int, env_str
 
 CANON_BOOT_WIRING_ONLY = True
+POLICY_RUNTIME_STATE_FILENAME = "policy_runtime_state.json"
+
+
+class _PolicyRuntimeStateFileStore:
+    def __init__(self, path: Path) -> None:
+        self.path = Path(path)
+
+    @staticmethod
+    def _generation(payload: object) -> int:
+        if payload is None:
+            return 0
+        if not isinstance(payload, Mapping):
+            raise ValueError("POLICY_RUNTIME_STATE_PAYLOAD_INVALID")
+        generation = payload.get("rollout_generation")
+        if isinstance(generation, bool) or not isinstance(generation, int) or generation < 0:
+            raise ValueError("POLICY_RUNTIME_STATE_GENERATION_INVALID")
+        return generation
+
+    def load(self) -> Mapping[str, Any] | None:
+        with exclusive_file_lock(self.path):
+            payload = read_json_or_default(self.path, default=None)
+        if payload is None:
+            return None
+        if not isinstance(payload, Mapping):
+            raise ValueError("POLICY_RUNTIME_STATE_PAYLOAD_INVALID")
+        return dict(payload)
+
+    def save(self, payload: Mapping[str, Any], *, expected_generation: int) -> None:
+        with exclusive_file_lock(self.path):
+            current = read_json_or_default(self.path, default=None)
+            observed_generation = self._generation(current)
+            if observed_generation != int(expected_generation):
+                raise RuntimeError("POLICY_RUNTIME_STATE_GENERATION_CONFLICT")
+            atomic_write_json(self.path, dict(payload))
+
+
+def _policy_runtime_state_path(base: str | Path) -> Path:
+    return Path(base) / "governance" / POLICY_RUNTIME_STATE_FILENAME
 
 
 def build_policy_registry(
@@ -14,10 +55,11 @@ def build_policy_registry(
     pricing: Any,
     retention: Any,
     logging_mod: Any,
+    base: str | Path,
 ):
     from core.ai.policy_registry import PolicyRegistry
 
-    preg = PolicyRegistry()
+    preg = PolicyRegistry(runtime_state_store=_PolicyRuntimeStateFileStore(_policy_runtime_state_path(base)))
     admin_ids = _resolve_admin_ids(settings=settings)
     _register_core_policies(
         preg=preg,
@@ -27,6 +69,7 @@ def build_policy_registry(
         admin_ids=admin_ids,
     )
     _activate_bootstrap_policy(preg=preg, settings=settings)
+    preg.restore_persisted_runtime_state()
     _enforce_pricing_versioning(
         settings=settings,
         pricing=pricing,
