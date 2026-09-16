@@ -4,6 +4,8 @@ from typing import Any
 
 from application.artifact import ArtifactRegistry
 from application.asset import AssetRegistry
+from application.business_constraint import BusinessConstraintRegistry
+from application.business_goal import BusinessGoalRegistry
 from application.business_resource import BusinessResourceRegistry
 from application.business_service import BusinessServiceRegistry
 from application.campaign.registry import CampaignRegistry
@@ -39,6 +41,8 @@ def wire_business_ontology_runtime(
         "_person_registry": None,
         "_employee_registry": None,
         "_partner_registry": None,
+        "_business_constraint_registry": None,
+        "_business_goal_registry": None,
         "_business_resource_registry": None,
         "_business_service_registry": None,
         "_task_registry": None,
@@ -62,6 +66,8 @@ def wire_business_ontology_runtime(
             "_person_registry": PersonRegistry(event_store=event_store, idempotency_store=idempotency_store),
             "_employee_registry": EmployeeRegistry(event_store=event_store, idempotency_store=idempotency_store),
             "_partner_registry": PartnerRegistry(event_store=event_store, idempotency_store=idempotency_store),
+            "_business_constraint_registry": BusinessConstraintRegistry(event_store=event_store, idempotency_store=idempotency_store),
+            "_business_goal_registry": BusinessGoalRegistry(event_store=event_store, idempotency_store=idempotency_store),
             "_business_resource_registry": BusinessResourceRegistry(event_store=event_store, idempotency_store=idempotency_store),
             "_business_service_registry": BusinessServiceRegistry(event_store=event_store, idempotency_store=idempotency_store),
             "_task_registry": DurableTaskRegistry(event_store=event_store, idempotency_store=idempotency_store),
