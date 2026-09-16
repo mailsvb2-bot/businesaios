@@ -279,10 +279,12 @@ BUSINESS_ONTOLOGY_OWNERSHIP_AUDIT = (
     ),
     _row(
         "Expense",
-        OwnershipAuditStatus.PARTIAL,
+        OwnershipAuditStatus.DONE,
         "core.finance.types",
-        None,
-        "Finance type exists without complete ontology ownership contract.",
+        "runtime.platform.event_store",
+        "core.finance.types.Expense is the canonical PII-free tenant/business-scoped financial Expense contract. application.expense.ExpenseRegistry is the single durable record→void lifecycle writer over canonical EventStore facts; ExpenseRecord remains a read DTO and finance summaries remain projections rather than competing owners.",
+        writers=("application.expense",),
+        readers=("application.expense", "core.finance.contracts_readers"),
     ),
     _row(
         "Revenue",

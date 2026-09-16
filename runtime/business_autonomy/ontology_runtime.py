@@ -12,6 +12,7 @@ from application.campaign.registry import CampaignRegistry
 from application.deal import DealRegistry
 from application.document import DocumentRegistry
 from application.employee import EmployeeRegistry
+from application.expense import ExpenseRegistry
 from application.lead import LeadRegistry
 from application.opportunity import OpportunityRegistry
 from application.organization import OrganizationRegistry
@@ -55,6 +56,7 @@ def wire_business_ontology_runtime(
         "_campaign_registry": None,
         "_opportunity_registry": None,
         "_invoice_registry": None,
+        "_expense_registry": None,
         "_conversation_registry": None,
     }
     customer_registry: Any | None = None
@@ -82,6 +84,7 @@ def wire_business_ontology_runtime(
             "_campaign_registry": CampaignRegistry(event_store=event_store, idempotency_store=idempotency_store),
             "_opportunity_registry": OpportunityRegistry(event_store=event_store, idempotency_store=idempotency_store),
             "_invoice_registry": InvoiceRegistry(event_store=event_store, idempotency_store=idempotency_store),
+            "_expense_registry": ExpenseRegistry(event_store=event_store, idempotency_store=idempotency_store),
             "_conversation_registry": ConversationRegistry(
                 event_store=event_store,
                 idempotency_store=idempotency_store,

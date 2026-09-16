@@ -18,6 +18,10 @@ class ExpenseCategory(str, Enum):
     TAX = "tax"
     OPERATIONS = "operations"
     OTHER = "other"
+class ExpenseLifecycleStatus(str, Enum):
+    RECORDED = "recorded"
+    VOIDED = "voided"
+
 class FinanceSnapshotStatus(str, Enum):
     OK = "ok"
     WARNING = "warning"
