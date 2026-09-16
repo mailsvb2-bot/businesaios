@@ -332,11 +332,12 @@ BUSINESS_ONTOLOGY_OWNERSHIP_AUDIT = (
     ),
     _row(
         "Risk",
-        OwnershipAuditStatus.PARTIAL,
+        OwnershipAuditStatus.DONE,
         "contracts.risk",
-        None,
-        "contracts.risk.RiskLevel is the single generic risk-severity vocabulary reused by experiments, human governance, and runtime safety compatibility surfaces. Numeric safety scores, economic risks, and domain-specific risk states remain scoped projections; universal tenant/business-scoped Risk identity/lifecycle/storage ownership is still incomplete.",
-        readers=("core.experiments.enums", "core.human_governance.enums", "runtime.platform.support.safety"),
+        "runtime.platform.event_store",
+        "contracts.risk.Risk is the canonical PII-free tenant/business-scoped business Risk identity with immutable type/subject relation, mutable canonical severity, and terminal close lifecycle. application.risk.RiskRegistry is the single durable EventStore writer; experiment, payback, safety, supply, and admin risk shapes remain scoped projections rather than competing owners.",
+        writers=("application.risk",),
+        readers=("application.risk", "core.experiments.enums", "core.human_governance.enums", "runtime.platform.support.safety"),
     ),
     _row(
         "Hypothesis",
