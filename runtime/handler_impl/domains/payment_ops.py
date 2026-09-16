@@ -4,6 +4,7 @@ from collections.abc import Mapping
 from typing import Any
 
 from execution.verification.evidence_types import evidence_status_is_positive
+from runtime.execution.context import current_execution_business_id
 from runtime.handler_impl.core.payloads import optional_dict, optional_str, require_mapping, required_int, required_str
 from runtime.handlers.delivery_contract import delivery_kwargs
 from runtime.tenancy import normalize_tenant_id
@@ -22,17 +23,26 @@ def _tenant_id(payload: Mapping[str, Any], env) -> str:
     return ""
 
 
+def _business_id(payload: Mapping[str, Any]) -> str:
+    business_id = str(payload.get("business_id") or current_execution_business_id() or "").strip()
+    if not business_id:
+        raise ValueError("BUSINESS_ID_REQUIRED")
+    return business_id
+
+
 def _payment_metadata(payload: Mapping[str, Any], env) -> dict[str, Any]:
     metadata = optional_dict(payload, "metadata") or {}
     tenant_id = _tenant_id(payload, env)
     if not tenant_id:
         raise ValueError("TENANT_ID_REQUIRED")
+    business_id = _business_id(payload)
     product_id = required_str(payload, "product_id")
     order_id = required_str(payload, "order_id")
 
-    # Business identity comes from the signed action payload. Arbitrary provider
-    # metadata may add fields but can never replace tenant/product/order scope.
+    # Business identity comes from the signed action payload or its already-bound
+    # execution scope. Arbitrary provider metadata can never replace causal scope.
     metadata["tenant_id"] = tenant_id
+    metadata["business_id"] = business_id
     metadata["product_id"] = product_id
     metadata["order_id"] = order_id
     return metadata
@@ -143,6 +153,7 @@ def handle_reconcile_payments(payload, effects, env):
         decision_id=env.decision.decision_id,
         correlation_id=env.decision.correlation_id,
         tenant_id=tenant_id,
+        business_id=_business_id(body),
         window_min=window_min,
     )
 
@@ -156,6 +167,7 @@ def handle_reconcile_payment(payload, effects, env):
         decision_id=env.decision.decision_id,
         correlation_id=env.decision.correlation_id,
         tenant_id=tenant_id,
+        business_id=_business_id(body),
         external_payment_id=required_str(body, "external_id"),
         notification_id=optional_str(body, "notification_id"),
         event=body.get("event"),

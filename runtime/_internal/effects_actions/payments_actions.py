@@ -92,6 +92,7 @@ class PaymentsEffectsMixin:
         decision_id: str,
         correlation_id: str,
         tenant_id: str,
+        business_id: str,
         window_min: int = 30,
     ) -> Any:
         return reconcile_payments_effect(
@@ -99,6 +100,7 @@ class PaymentsEffectsMixin:
             decision_id=str(decision_id),
             correlation_id=str(correlation_id),
             tenant_id=str(tenant_id),
+            business_id=str(business_id),
             window_min=int(window_min),
         )
 
@@ -108,6 +110,7 @@ class PaymentsEffectsMixin:
         decision_id: str,
         correlation_id: str,
         tenant_id: str,
+        business_id: str,
         external_payment_id: str,
         notification_id: str | None = None,
         event: str | None = None,
@@ -118,6 +121,7 @@ class PaymentsEffectsMixin:
             decision_id=str(decision_id),
             correlation_id=str(correlation_id),
             tenant_id=str(tenant_id),
+            business_id=str(business_id),
             external_payment_id=str(external_payment_id),
             notification_id=notification_id,
             event=event,

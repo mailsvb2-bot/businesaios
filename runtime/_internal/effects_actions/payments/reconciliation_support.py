@@ -63,7 +63,7 @@ def _business_metadata(payload: object) -> dict[str, Any]:
         return {}
     return {
         key: metadata[key]
-        for key in ("tenant_id", "product_id", "order_id")
+        for key in ("tenant_id", "business_id", "product_id", "order_id")
         if str(metadata.get(key) or "").strip()
     }
 

@@ -240,7 +240,7 @@ def test_yookassa_is_normalized_to_canonical_checkout(monkeypatch: pytest.Monkey
         amount=1500,
         currency="RUB",
         provider="yoo_kassa",
-        metadata={"tenant_id": "business-a", "product_id": "crm-pro", "order_id": "order-42"},
+        metadata={"tenant_id": "business-a", "business_id": "business-a", "product_id": "crm-pro", "order_id": "order-42"},
     )
     assert result["checkout"] == {"provider": "yookassa", "external_id": "payment-42", "status": "pending", "checkout_url": "https://pay.example/42"}
     assert [event["event_type"] for event in effects.event_log.events] == ["payment_create_attempted", "payment_created"]
@@ -282,7 +282,7 @@ def test_injected_provider_uses_same_runtime_payment_flow(monkeypatch: pytest.Mo
         amount=2500,
         currency="EUR",
         provider="stripe",
-        metadata={"tenant_id": "business-a", "product_id": "crm-pro", "order_id": "order-stripe"},
+        metadata={"tenant_id": "business-a", "business_id": "business-a", "product_id": "crm-pro", "order_id": "order-stripe"},
     )
     assert result["ok"] is True
     assert result["checkout"]["provider"] == "stripe"

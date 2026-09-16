@@ -267,7 +267,7 @@ BUSINESS_ONTOLOGY_OWNERSHIP_AUDIT = (
         OwnershipAuditStatus.PARTIAL,
         "core.payments.contracts",
         "runtime.platform.event_store",
-        "core.payments.contracts.PaymentIdentity and PaymentLifecycleStatus are the canonical PII-free payment identity/lifecycle vocabulary over existing payment EventStore chronology. Finance records, provider checkout/status values, billing collection results, and the payment outbox remain scoped projections/transport state. Payment remains PARTIAL because historical payment events do not uniformly carry universal business_id scope or a complete ontology lifecycle projection.",
+        "core.payments.contracts.PaymentIdentity v2 and PaymentLifecycleStatus are the canonical PII-free tenant/business-scoped payment identity/lifecycle vocabulary over the existing payment EventStore chronology. New create/check/success/failure/capture mutations preserve business_id end-to-end, and single-payment reconciliation rejects foreign or legacy-unscoped history before provider access; batch reconciliation skips foreign/legacy rows explicitly. Finance records, provider checkout/status values, billing collection results, and the payment outbox remain scoped projections/transport state. Payment remains PARTIAL because legacy unscoped history has no universally provable business backfill and a complete ontology lifecycle projector is still absent.",
         writers=(
             "runtime._internal.effects_actions.payments.selection",
             "runtime._internal.effects_actions.payments.reconciliation",

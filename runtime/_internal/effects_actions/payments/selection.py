@@ -17,12 +17,12 @@ from runtime.security.runtime_asserts import assert_called_from_executor
 
 def _business_metadata(metadata: dict[str, Any] | None) -> dict[str, Any]:
     data = dict(metadata or {})
-    return {key: data[key] for key in ("tenant_id", "product_id", "order_id") if str(data.get(key) or "").strip()}
+    return {key: data[key] for key in ("tenant_id", "business_id", "product_id", "order_id") if str(data.get(key) or "").strip()}
 
 
 def _required_business_metadata(metadata: dict[str, Any] | None) -> dict[str, str]:
     observed = _business_metadata(metadata)
-    required = {field: str(observed.get(field) or "").strip() for field in ("tenant_id", "product_id", "order_id")}
+    required = {field: str(observed.get(field) or "").strip() for field in ("tenant_id", "business_id", "product_id", "order_id")}
     missing = next((field for field, value in required.items() if not value), None)
     if missing:
         raise RuntimeError(f"{missing.upper()}_REQUIRED")
@@ -251,6 +251,7 @@ def capture_payment_effect(
         try:
             identity = PaymentIdentity(
                 tenant_id=tenant,
+                business_id=causal_metadata["business_id"],
                 product_id=causal_metadata["product_id"],
                 order_id=causal_metadata["order_id"],
                 provider=session.provider_name,

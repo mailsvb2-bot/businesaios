@@ -12,7 +12,7 @@ from core.events.event_types import (
     PAYMENT_SUCCEEDED,
 )
 
-PAYMENT_SCHEMA_VERSION = 1
+PAYMENT_SCHEMA_VERSION = 2
 CANON_PAYMENT_SEMANTIC_CONTRACT = True
 PAYMENT_TERMINAL_EVENT_TYPES = frozenset({PAYMENT_CAPTURED, PAYMENT_FAILED})
 
@@ -51,6 +51,7 @@ def payment_lifecycle_status_for_event(event_type: str) -> PaymentLifecycleStatu
 @dataclass(frozen=True, slots=True)
 class PaymentIdentity:
     tenant_id: str
+    business_id: str
     product_id: str
     order_id: str
     provider: str
@@ -59,11 +60,14 @@ class PaymentIdentity:
 
     def __post_init__(self) -> None:
         tenant = str(self.tenant_id or "").strip()
+        business = str(self.business_id or "").strip()
         product = str(self.product_id or "").strip()
         order = str(self.order_id or "").strip()
         provider = str(self.provider or "").strip().lower()
         if not tenant:
             raise ValueError("payment tenant_id is required")
+        if not business:
+            raise ValueError("payment business_id is required")
         if not product:
             raise ValueError("payment product_id is required")
         if not order:
@@ -73,6 +77,7 @@ class PaymentIdentity:
         if int(self.schema_version) != PAYMENT_SCHEMA_VERSION:
             raise ValueError("unsupported payment schema_version")
         object.__setattr__(self, "tenant_id", tenant)
+        object.__setattr__(self, "business_id", business)
         object.__setattr__(self, "product_id", product)
         object.__setattr__(self, "order_id", order)
         object.__setattr__(self, "provider", provider)

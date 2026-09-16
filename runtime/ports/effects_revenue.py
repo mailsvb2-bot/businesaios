@@ -45,6 +45,7 @@ class EffectsRevenuePort(Protocol):
         decision_id: str,
         correlation_id: str,
         tenant_id: str,
+        business_id: str,
         window_min: int = 30,
     ) -> Any: ...
 
@@ -54,6 +55,7 @@ class EffectsRevenuePort(Protocol):
         decision_id: str,
         correlation_id: str,
         tenant_id: str,
+        business_id: str,
         external_payment_id: str,
         notification_id: str | None = None,
         event: str | None = None,

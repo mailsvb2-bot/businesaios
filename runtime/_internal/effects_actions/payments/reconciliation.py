@@ -81,7 +81,7 @@ def _metadata(value: object) -> dict[str, Any]:
         return {}
     return {
         key: value[key]
-        for key in ("tenant_id", "product_id", "order_id")
+        for key in ("tenant_id", "business_id", "product_id", "order_id")
         if str(value.get(key) or "").strip()
     }
 
@@ -244,6 +244,7 @@ def _created_payment_context(
     effects: Any,
     *,
     tenant_id: str,
+    business_id: str,
     external_id: str,
     user_id_hint: str | None = None,
 ) -> tuple[dict[str, Any], str, dict[str, Any]]:
@@ -258,6 +259,16 @@ def _created_payment_context(
         tenant_id=str(tenant_id),
         external_id=str(external_id),
     )
+    expected_business = str(business_id or "").strip()
+    if not expected_business:
+        raise RuntimeError("PAYMENT_BUSINESS_SCOPE_REQUIRED")
+    observed_business = str(metadata.get("business_id") or "").strip()
+    if not observed_business:
+        raise RuntimeError(f"PAYMENT_BUSINESS_SCOPE_REQUIRED:{external_id}")
+    if observed_business != expected_business:
+        raise RuntimeError(
+            f"PAYMENT_BUSINESS_CONTEXT_MISMATCH:{expected_business}:{observed_business}"
+        )
     user_id = resolve_payment_user(
         context,
         user_id_hint=user_id_hint,
@@ -296,6 +307,7 @@ def reconcile_payments_effect(
     decision_id: str,
     correlation_id: str,
     tenant_id: str,
+    business_id: str,
     window_min: int = 30,
 ) -> dict | bool:
     assert_called_from_executor()
@@ -304,6 +316,9 @@ def reconcile_payments_effect(
         tenant_id=str(tenant_id),
         operation="reconcile_payments",
     )
+    business = str(business_id or "").strip()
+    if not business:
+        raise RuntimeError("PAYMENT_BUSINESS_SCOPE_REQUIRED")
     if effects.ledger is None:
         raise RuntimeError("PAYMENT_LEDGER_REQUIRED")
 
@@ -314,6 +329,8 @@ def reconcile_payments_effect(
         end_ms = int(now.timestamp() * 1000)
         processed_any = 0
         skipped_already = 0
+        skipped_other_business = 0
+        skipped_legacy_unscoped = 0
         for ev in effects.event_log.iter_events():
             try:
                 ts = int(ev.get("timestamp_ms") or 0)
@@ -327,9 +344,18 @@ def reconcile_payments_effect(
             ext_id = str(payload.get("external_id") or "").strip()
             if not ext_id:
                 continue
+            created_metadata = _metadata(payload)
+            observed_business = str(created_metadata.get("business_id") or "").strip()
+            if not observed_business:
+                skipped_legacy_unscoped += 1
+                continue
+            if observed_business != business:
+                skipped_other_business += 1
+                continue
             context, uid, business_metadata = _created_payment_context(
                 effects,
                 tenant_id=tenant,
+                business_id=business,
                 external_id=ext_id,
             )
             if event_already_processed(effects=effects, external_id=ext_id):
@@ -372,9 +398,12 @@ def reconcile_payments_effect(
             correlation_id=str(correlation_id),
             payload={
                 "tenant_id": tenant,
+                "business_id": business,
                 "window_min": int(window_min),
                 "processed": int(processed_any),
                 "skipped_already": int(skipped_already),
+                "skipped_other_business": int(skipped_other_business),
+                "skipped_legacy_unscoped": int(skipped_legacy_unscoped),
             },
         )
         if processed_any == 0 and skipped_already > 0:
@@ -409,6 +438,7 @@ def reconcile_payment_effect(
     decision_id: str,
     correlation_id: str,
     tenant_id: str,
+    business_id: str,
     external_payment_id: str,
     notification_id: str | None = None,
     event: str | None = None,
@@ -420,6 +450,9 @@ def reconcile_payment_effect(
         tenant_id=str(tenant_id),
         operation="reconcile_payment",
     )
+    business = str(business_id or "").strip()
+    if not business:
+        raise RuntimeError("PAYMENT_BUSINESS_SCOPE_REQUIRED")
     ext_id = str(external_payment_id or "").strip()
     if not ext_id:
         raise RuntimeError("EXTERNAL_PAYMENT_ID_REQUIRED")
@@ -427,6 +460,7 @@ def reconcile_payment_effect(
     context, uid, business_metadata = _created_payment_context(
         effects,
         tenant_id=tenant,
+        business_id=business,
         external_id=ext_id,
         user_id_hint=user_id_hint,
     )

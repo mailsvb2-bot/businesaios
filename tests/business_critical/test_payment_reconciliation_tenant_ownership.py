@@ -49,7 +49,7 @@ class FakeEffects:
         return self.provider_status
 
 
-def _created_payment(*, external_id: str = "payment-a") -> dict:
+def _created_payment(*, external_id: str = "payment-a", business_id: str | None = "business-a") -> dict:
     return {
         "event_id": "created-event",
         "event_type": "payment_created",
@@ -62,6 +62,7 @@ def _created_payment(*, external_id: str = "payment-a") -> dict:
             "status": "pending",
             "metadata": {
                 "tenant_id": "business-a",
+                **({"business_id": business_id} if business_id is not None else {}),
                 "product_id": "crm-pro",
                 "order_id": "order-a",
             },
@@ -83,6 +84,7 @@ def test_foreign_or_unknown_external_payment_is_rejected_before_provider_read() 
             decision_id="decision-reconcile",
             correlation_id="correlation-reconcile",
             tenant_id="business-a",
+            business_id="business-a",
             external_payment_id="payment-b",
         )
 
@@ -99,6 +101,7 @@ def test_reconciliation_tenant_mismatch_is_rejected_before_context_or_provider_r
             decision_id="decision-reconcile",
             correlation_id="correlation-reconcile",
             tenant_id="business-b",
+            business_id="business-a",
             external_payment_id="payment-a",
         )
 
@@ -114,6 +117,7 @@ def test_locally_created_payment_reconciles_and_preserves_business_scope() -> No
         decision_id="decision-reconcile",
         correlation_id="correlation-reconcile",
         tenant_id="business-a",
+        business_id="business-a",
         external_payment_id="payment-a",
     )
 
@@ -122,6 +126,7 @@ def test_locally_created_payment_reconciles_and_preserves_business_scope() -> No
     assert result["tenant_id"] == "business-a"
     assert result["metadata"] == {
         "tenant_id": "business-a",
+        "business_id": "business-a",
         "product_id": "crm-pro",
         "order_id": "order-a",
     }
@@ -141,8 +146,44 @@ def test_batch_reconciliation_requires_ledger_before_provider_work() -> None:
             decision_id="decision-batch",
             correlation_id="correlation-batch",
             tenant_id="business-a",
+            business_id="business-a",
             window_min=30,
         )
 
     assert effects.provider_calls == []
     assert effects.event_log.events == [_created_payment()]
+
+
+def test_reconciliation_business_mismatch_is_rejected_before_provider_read() -> None:
+    effects = FakeEffects(events=[_created_payment()])
+
+    with pytest.raises(RuntimeError, match="PAYMENT_BUSINESS_CONTEXT_MISMATCH"):
+        reconciliation.reconcile_payment_effect(
+            effects,
+            decision_id="decision-reconcile",
+            correlation_id="correlation-reconcile",
+            tenant_id="business-a",
+            business_id="business-b",
+            external_payment_id="payment-a",
+        )
+
+    assert effects.provider_calls == []
+    assert effects.event_log.events == [_created_payment()]
+
+
+def test_legacy_unscoped_payment_is_rejected_before_provider_read() -> None:
+    legacy = _created_payment(business_id=None)
+    effects = FakeEffects(events=[legacy])
+
+    with pytest.raises(RuntimeError, match="PAYMENT_BUSINESS_SCOPE_REQUIRED:payment-a"):
+        reconciliation.reconcile_payment_effect(
+            effects,
+            decision_id="decision-reconcile",
+            correlation_id="correlation-reconcile",
+            tenant_id="business-a",
+            business_id="business-a",
+            external_payment_id="payment-a",
+        )
+
+    assert effects.provider_calls == []
+    assert effects.event_log.events == [legacy]
