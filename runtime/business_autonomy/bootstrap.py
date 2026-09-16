@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import weakref
 from collections.abc import Mapping
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
@@ -509,6 +510,14 @@ def _build_typed_channel_registry() -> TypedChannelAdapterRegistry:
     return registry
 
 
+class _OntologyEventStoreLifetime:
+    def __init__(self, stack: Any) -> None:
+        self._finalizer = weakref.finalize(self, stack.close)
+
+    def close(self) -> None:
+        self._finalizer()
+
+
 def _canonical_ontology_event_store(customer_event_store: Any | None):
     if customer_event_store is not None:
         return customer_event_store, None
@@ -708,9 +717,16 @@ def build_business_autonomy_guarded_service(*, business_id: str = 'external_busi
     service._ontology_event_store = ontology_event_store
     service._ontology_event_store_stack = ontology_event_store_stack
     if ontology_event_store_stack is not None:
-        import weakref
-
-        service._ontology_event_store_finalizer = weakref.finalize(service, ontology_event_store_stack.close)
+        lifetime = _OntologyEventStoreLifetime(ontology_event_store_stack)
+        service._ontology_event_store_lifetime = lifetime
+        service._ontology_event_store_finalizer = lifetime.close
+        for registry in (
+            customer_registry,
+            getattr(service, '_conversation_registry', None),
+            getattr(service, '_message_registry', None),
+        ):
+            if registry is not None:
+                registry._ontology_event_store_lifetime = lifetime
     provider_runtime_audit = build_provider_runtime_audit_recorder()
     service._provider_admin_service = ProviderAdminService(
         onboarding_service=onboarding,
