@@ -13,9 +13,9 @@ from billing.client_outcome_package_progress import ClientOutcomePackageProgress
 from billing.client_outcome_refund_projection import ClientOutcomeRefundProjection
 from billing.client_outcome_refund_request_bridge import ClientOutcomeRefundRequestBridge
 from billing.client_outcome_refund_window_policy import ClientOutcomeRefundWindowPolicy
+from billing.client_outcome_revenue_control_service import ClientOutcomeRevenueControlService
 from billing.client_outcome_reversal_ledger_bridge import ClientOutcomeReversalLedgerBridge
 from billing.client_outcome_reversal_posting_service import ClientOutcomeReversalPostingService
-from billing.client_outcome_revenue_control_service import ClientOutcomeRevenueControlService
 from billing.client_outcome_usage_ledger import ClientOutcomeUsageAppender, ClientOutcomeUsageLedger
 from economics.client_outcome_economic_calculator import ClientOutcomeEconomicCalculator
 from entrypoints.api.client_outcome_routes import service as client_service
@@ -23,10 +23,22 @@ from lead_outcomes import OutcomeVerifier
 from lead_outcomes.client_attribution_policy import ClientAttributionPolicy
 from lead_outcomes.client_eligibility_policy import ClientEligibilityPolicy
 from lead_outcomes.client_fraud_policy import ClientFraudPolicy
-from lead_outcomes.client_outcome_commercial_state_store import ClientOutcomeCommercialStateService, ClientOutcomeCommercialStateStore
-from lead_outcomes.client_outcome_corrected_economics_store import ClientOutcomeCorrectedEconomicsService, ClientOutcomeCorrectedEconomicsStore
-from lead_outcomes.client_outcome_cycle_idempotency_store import ClientOutcomeCycleIdempotencyService, ClientOutcomeCycleIdempotencyStore
-from lead_outcomes.client_outcome_lifecycle_store import ClientOutcomeLifecyclePersistenceService, ClientOutcomeLifecycleStore
+from lead_outcomes.client_outcome_commercial_state_store import (
+    ClientOutcomeCommercialStateService,
+    ClientOutcomeCommercialStateStore,
+)
+from lead_outcomes.client_outcome_corrected_economics_store import (
+    ClientOutcomeCorrectedEconomicsService,
+    ClientOutcomeCorrectedEconomicsStore,
+)
+from lead_outcomes.client_outcome_cycle_idempotency_store import (
+    ClientOutcomeCycleIdempotencyService,
+    ClientOutcomeCycleIdempotencyStore,
+)
+from lead_outcomes.client_outcome_lifecycle_store import (
+    ClientOutcomeLifecyclePersistenceService,
+    ClientOutcomeLifecycleStore,
+)
 from lead_outcomes.client_outcome_order_factory import ClientOutcomeOrderFactory
 from lead_outcomes.client_outcome_order_store import ClientOutcomeOrderPersistenceService, ClientOutcomeOrderStore
 from lead_outcomes.client_outcome_package_catalog import ClientOutcomePackageCatalog
@@ -66,7 +78,10 @@ def build_client_outcome_route_handlers(*, headless_handlers: object | None = No
     persistence = ClientOutcomePersistenceOwner.default()
     package_catalog = ClientOutcomePackageCatalog.default_catalog()
     order_factory = ClientOutcomeOrderFactory(package_catalog=package_catalog)
-    order_store = ClientOutcomeOrderStore(backend=persistence.registry('client_outcome_order'))
+    order_store = ClientOutcomeOrderStore(
+        backend=persistence.registry('order'),
+        legacy_backend=persistence.registry('client_outcome_order'),
+    )
     dispute_store = ClientOutcomeDisputeStore(backend=persistence.registry('client_outcome_dispute'))
     reversal_store = ClientOutcomeReversalStore(
         registry=BaseRegistry(

@@ -235,7 +235,15 @@ BUSINESS_ONTOLOGY_OWNERSHIP_AUDIT = (
         writers=("application.deal.registry",),
         readers=("application.deal.registry",),
     ),
-    _row("Order", OwnershipAuditStatus.MISSING, None, None, "No universal Order owner on main."),
+    _row(
+        "Order",
+        OwnershipAuditStatus.DONE,
+        "contracts.order",
+        "runtime.platform.client_outcome_persistence",
+        "Order is the canonical PII-free tenant/business-scoped order identity/lifecycle. OrderStore is the single writer over the canonical order namespace; the existing ClientOutcomeOrder API is a specialization/compatibility alias, and the legacy client_outcome_order namespace is read only as a fingerprinted migration source that fails closed on later divergence.",
+        writers=("lead_outcomes.client_outcome_order_store",),
+        readers=("lead_outcomes.client_outcome_order_store",),
+    ),
     _row(
         "Invoice",
         OwnershipAuditStatus.PARTIAL,
