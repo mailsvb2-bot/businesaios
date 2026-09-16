@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from runtime.messaging_policy_alert_dedup_persistent.settings_prefix import DEDUP_SETTINGS_PREFIX
+DEDUP_SETTINGS_PREFIX = "messaging_policy:alert_dedup:"
 
 
 def build_settings_key(*, dedup_key: str) -> str:
