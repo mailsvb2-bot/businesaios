@@ -5,7 +5,6 @@ from tests.arch.scanners.python_file_loader import read_text
 
 TARGET_FILES = (
     "runtime/decision_input/runtime_state_enrichment.py",
-    "core/decisioning/decision_core_input_bridge.py",
 )
 
 
@@ -19,7 +18,6 @@ def test_no_action_space_keys_in_single_path_packets() -> None:
     # allowed because these files define guards, not payloads
     allowed_literals = {
         'runtime/decision_input/runtime_state_enrichment.py',
-        'core/decisioning/decision_core_input_bridge.py',
     }
     filtered = [v for v in violations if v.split(':',1)[0] not in allowed_literals]
     assert not filtered
