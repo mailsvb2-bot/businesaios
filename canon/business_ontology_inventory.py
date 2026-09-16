@@ -276,10 +276,11 @@ BUSINESS_ONTOLOGY_OWNERSHIP_AUDIT = (
     ),
     _row(
         "Revenue",
-        OwnershipAuditStatus.DUPLICATE,
+        OwnershipAuditStatus.PARTIAL,
+        "core.economics.types",
         None,
-        None,
-        "Revenue semantics exist across finance/economics/revenue surfaces.",
+        "core.economics.types.RevenueSignal is the canonical normalized economics read signal after removing the unused contracts.revenue_signal duplicate. Finance records, monetization snapshots, billing facts, and analytics reports remain scoped projections; universal tenant/business-scoped Revenue lifecycle/storage ownership is still incomplete.",
+        readers=("core.economics.service",),
     ),
     _row(
         "Asset",
