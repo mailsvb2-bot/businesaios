@@ -162,6 +162,7 @@ class RefundOrchestrator:
             updated_invoice = CommercialInvoiceEnvelope(
                 tenant_id=invoice.tenant_id,
                 invoice_id=invoice.invoice_id,
+                business_id=invoice.business_id,
                 subscription_id=invoice.subscription_id,
                 currency=invoice.currency,
                 subtotal_minor=invoice.subtotal_minor,
@@ -236,6 +237,7 @@ class RefundOrchestrator:
         updated_invoice = CommercialInvoiceEnvelope(
             tenant_id=invoice.tenant_id,
             invoice_id=invoice.invoice_id,
+            business_id=invoice.business_id,
             subscription_id=invoice.subscription_id,
             currency=invoice.currency,
             subtotal_minor=invoice.subtotal_minor,

@@ -247,10 +247,12 @@ BUSINESS_ONTOLOGY_OWNERSHIP_AUDIT = (
     ),
     _row(
         "Invoice",
-        OwnershipAuditStatus.PARTIAL,
-        "billing.commercial_cycle_contract",
-        None,
-        "Invoice lifecycle exists in billing but is not a universal ontology owner.",
+        OwnershipAuditStatus.DONE,
+        "billing.invoice_lifecycle",
+        "runtime.platform.event_store",
+        "CommercialInvoiceEnvelope is the canonical tenant/business-scoped invoice contract and InvoiceLifecycleService is its pure state machine. InvoiceRegistry is the single durable lifecycle writer over canonical EventStore facts with schema-versioned, idempotent, fail-closed replay; billing collection/refund/chargeback/scheduler helpers return detached envelope projections and do not own durable invoice state.",
+        writers=("billing.invoice_registry",),
+        readers=("billing.invoice_registry",),
     ),
     _row(
         "Payment",
