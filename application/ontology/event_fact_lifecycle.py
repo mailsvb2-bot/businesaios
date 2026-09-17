@@ -24,19 +24,25 @@ _EVENT_METADATA_FIELDS = frozenset(
 )
 
 
-def _event_metadata(value: dict[str, object] | None) -> dict[str, object]:
-    metadata = dict(value or {})
+def _event_metadata(value: dict[str, object] | None) -> dict[str, Any]:
+    metadata: dict[str, Any] = dict(value or {})
     unknown = sorted(set(metadata) - _EVENT_METADATA_FIELDS)
     if unknown:
         raise ValueError(f"unsupported canonical event metadata: {', '.join(unknown)}")
     if "evidence_ids" in metadata:
         raw = metadata["evidence_ids"]
         if raw is None:
-            metadata["evidence_ids"] = ()
+            items: tuple[object, ...] = ()
         elif isinstance(raw, str):
-            metadata["evidence_ids"] = (raw,)
+            items = (raw,)
         else:
-            metadata["evidence_ids"] = tuple(raw)  # type: ignore[arg-type]
+            try:
+                items = tuple(raw)
+            except TypeError as exc:
+                raise ValueError("evidence_ids must be iterable") from exc
+        metadata["evidence_ids"] = tuple(
+            dict.fromkeys(str(item).strip() for item in items if str(item).strip())
+        )
     return metadata
 
 
