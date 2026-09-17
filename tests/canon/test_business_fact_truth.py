@@ -1,6 +1,11 @@
 import pytest
 
-from contracts.event_store import BUSINESS_FACT_EVENT_TYPE, BusinessFactV1, normalize_append_event
+from contracts.event_store import (
+    BUSINESS_FACT_EVENT_TYPE,
+    BusinessFactV1,
+    canonical_business_event_contract,
+    normalize_append_event,
+)
 from runtime.platform.event_store.memory_event_store import MemoryEventStore
 
 
@@ -75,3 +80,57 @@ def test_business_fact_identity_fails_closed(field: str) -> None:
     values[field] = ""
     with pytest.raises(ValueError, match="identity and source fields are required"):
         BusinessFactV1(**values)
+
+
+def test_canonical_business_event_contract_survives_durable_replay(tmp_path) -> None:
+    from runtime.platform.event_store.sqlite_event_store import SqliteEventStore
+
+    path = tmp_path / "events.sqlite3"
+    fact = _fact(
+        actor_id="owner-1",
+        agent_id="agent-1",
+        causation_id="cause-1",
+        recorded_at_ms=250,
+        evidence_ids=("evidence-1", "evidence-2", "evidence-1"),
+    )
+    with SqliteEventStore(str(path)) as store:
+        store.append_event(fact.as_event())
+    with SqliteEventStore(str(path)) as store:
+        [persisted] = list(store.iter_events(tenant_id="tenant-1", start_ms=0))
+
+    contract = canonical_business_event_contract(persisted)
+    assert contract == {
+        "event_id": "fact-1",
+        "event_type": "customer.status_changed",
+        "schema_version": 1,
+        "business_id": "business-1",
+        "actor_id": "owner-1",
+        "agent_id": "agent-1",
+        "occurred_at": 100,
+        "recorded_at": 250,
+        "correlation_id": "correlation-1",
+        "causation_id": "cause-1",
+        "source": "crm",
+        "payload": {"status": "active"},
+        "evidence_ids": ("evidence-1", "evidence-2"),
+    }
+
+
+def test_canonical_business_event_contract_reads_legacy_v1_without_new_metadata() -> None:
+    legacy = _fact().as_event()
+    for key in ("actor_id", "agent_id", "causation_id", "recorded_at_ms", "evidence_ids"):
+        legacy["payload"].pop(key, None)
+
+    contract = canonical_business_event_contract(legacy)
+    assert contract["actor_id"] is None
+    assert contract["agent_id"] is None
+    assert contract["causation_id"] is None
+    assert contract["recorded_at"] == 200
+    assert contract["evidence_ids"] == ()
+
+
+def test_canonical_business_event_contract_rejects_unknown_schema() -> None:
+    event = _fact().as_event()
+    event["payload"]["schema_version"] = 999
+    with pytest.raises(ValueError, match="unsupported business fact schema_version"):
+        canonical_business_event_contract(event)

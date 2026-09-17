@@ -40,16 +40,68 @@ class BusinessFactV1:
     supersedes_fact_id: str | None = None
     decision_id: str | None = None
     correlation_id: str | None = None
+    actor_id: str | None = None
+    agent_id: str | None = None
+    causation_id: str | None = None
+    recorded_at_ms: int | None = None
+    evidence_ids: tuple[str, ...] = ()
 
     def __post_init__(self) -> None:
         if not all(str(getattr(self, name) or "").strip() for name in ("fact_id", "tenant_id", "business_id", "fact_type", "entity_id", "source")):
             raise ValueError("BusinessFactV1 identity and source fields are required")
         object.__setattr__(self, "payload", deepcopy(self.payload or {}))
         object.__setattr__(self, "provenance", deepcopy(self.provenance or {}))
+        object.__setattr__(self, "recorded_at_ms", int(self.observed_at_ms if self.recorded_at_ms is None else self.recorded_at_ms))
+        object.__setattr__(self, "evidence_ids", tuple(dict.fromkeys(str(item).strip() for item in self.evidence_ids if str(item).strip())))
 
     def as_event(self) -> EventRecord:
-        payload = {"schema_version": 1, "business_id": self.business_id, "fact_type": self.fact_type, "entity_id": self.entity_id, "event_time_ms": int(self.event_time_ms), "observed_at_ms": int(self.observed_at_ms), "payload": deepcopy(self.payload), "provenance": deepcopy(self.provenance), "supersedes_fact_id": self.supersedes_fact_id}
+        payload = {
+            "schema_version": 1,
+            "business_id": self.business_id,
+            "fact_type": self.fact_type,
+            "entity_id": self.entity_id,
+            "event_time_ms": int(self.event_time_ms),
+            "observed_at_ms": int(self.observed_at_ms),
+            "recorded_at_ms": int(self.recorded_at_ms or 0),
+            "actor_id": self.actor_id,
+            "agent_id": self.agent_id,
+            "causation_id": self.causation_id,
+            "evidence_ids": list(self.evidence_ids),
+            "payload": deepcopy(self.payload),
+            "provenance": deepcopy(self.provenance),
+            "supersedes_fact_id": self.supersedes_fact_id,
+        }
         return {"event_id": self.fact_id, "tenant_id": self.tenant_id, "source": self.source, "event_type": BUSINESS_FACT_EVENT_TYPE, "timestamp_ms": int(self.observed_at_ms), "decision_id": self.decision_id, "correlation_id": self.correlation_id, "payload": payload}
+
+
+def canonical_business_event_contract(event: EventRecord) -> dict[str, Any]:
+    envelope = dict(event.get("payload") or {})
+    if str(event.get("event_type") or "") != BUSINESS_FACT_EVENT_TYPE:
+        raise ValueError("canonical business event must be business_fact.v1")
+    schema_version = int(envelope.get("schema_version") or 0)
+    if schema_version != 1:
+        raise ValueError(f"unsupported business fact schema_version: {schema_version}")
+    business_id = str(envelope.get("business_id") or "").strip()
+    if not business_id:
+        raise ValueError("canonical business event business_id is required")
+    occurred_at = int(envelope.get("event_time_ms") if envelope.get("event_time_ms") is not None else event.get("timestamp_ms") or 0)
+    recorded_at = int(envelope.get("recorded_at_ms") if envelope.get("recorded_at_ms") is not None else event.get("timestamp_ms") or 0)
+    evidence_ids = tuple(dict.fromkeys(str(item).strip() for item in (envelope.get("evidence_ids") or ()) if str(item).strip()))
+    return {
+        "event_id": str(event.get("event_id") or ""),
+        "event_type": str(envelope.get("fact_type") or ""),
+        "schema_version": schema_version,
+        "business_id": business_id,
+        "actor_id": envelope.get("actor_id"),
+        "agent_id": envelope.get("agent_id"),
+        "occurred_at": occurred_at,
+        "recorded_at": recorded_at,
+        "correlation_id": event.get("correlation_id"),
+        "causation_id": envelope.get("causation_id"),
+        "source": str(event.get("source") or ""),
+        "payload": deepcopy(envelope.get("payload") or {}),
+        "evidence_ids": evidence_ids,
+    }
 
 def normalize_append_event(event: dict | None) -> AppendEvent:
     e = dict(event or {})
