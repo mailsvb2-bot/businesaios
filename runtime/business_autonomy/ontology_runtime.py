@@ -29,6 +29,25 @@ from runtime.messaging.message_registry import MessageRegistry
 CANON_BUSINESS_ONTOLOGY_RUNTIME_WIRING = True
 
 
+def build_canonical_ontology_event_store(customer_event_store: Any | None):
+    if customer_event_store is not None:
+        return customer_event_store, None
+    from contextlib import ExitStack
+
+    from application.business_autonomy.persistence import business_autonomy_runtime_dir
+    from runtime.wiring import build_event_store, resolve_storage_config
+    stack = ExitStack()
+    try:
+        return build_event_store(
+            stack,
+            base_dir=str(business_autonomy_runtime_dir()),
+            storage=resolve_storage_config(),
+        ), stack
+    except Exception:
+        stack.close()
+        raise
+
+
 def wire_business_ontology_runtime(
     *,
     service: Any,
@@ -110,5 +129,6 @@ def wire_business_ontology_runtime(
 
 __all__ = [
     "CANON_BUSINESS_ONTOLOGY_RUNTIME_WIRING",
+    "build_canonical_ontology_event_store",
     "wire_business_ontology_runtime",
 ]

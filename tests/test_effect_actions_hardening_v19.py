@@ -61,6 +61,7 @@ def test_capture_payment_unsupported_provider_fails_honestly():
             provider="stripe",
             metadata={
                 "tenant_id": "tenant-a",
+                "business_id": "business-a",
                 "product_id": "product-a",
                 "order_id": "order-a",
             },

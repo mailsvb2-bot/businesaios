@@ -75,6 +75,7 @@ from application.planning.distributed_planning_memory_backend import Distributed
 from execution.distributed_operator_override_backend import DistributedOperatorOverrideStore
 from governance.distributed_approval_backend import DistributedApprovalStore
 from reliability.distributed_idempotency_backend import DistributedIdempotencyStore
+from runtime.business_autonomy import ontology_runtime
 from runtime.business_autonomy.canonical_evidence_runtime import (
     build_business_autonomy_evidence_store,
     build_provider_runtime_audit_recorder,
@@ -92,7 +93,6 @@ from runtime.business_autonomy.distributed_state import (
 )
 from runtime.business_autonomy.execution_support import build_execution_runtime, ensure_business_route
 from runtime.business_autonomy.fleet_read_model import BusinessAutonomyFleetReadModel
-from runtime.business_autonomy.ontology_runtime import wire_business_ontology_runtime
 from runtime.business_autonomy.provider_activation_store import FileProviderActivationStore
 from runtime.business_autonomy.provider_media import ProviderMediaPreparationCoordinator
 from runtime.business_autonomy.provider_pacing import ProviderPacingCoordinator
@@ -510,35 +510,6 @@ def _build_typed_channel_registry() -> TypedChannelAdapterRegistry:
     return registry
 
 
-class _OntologyEventStoreLifetime:
-    def __init__(self, stack: Any) -> None:
-        self._finalizer = weakref.finalize(self, stack.close)
-
-    def close(self) -> None:
-        self._finalizer()
-
-
-def _canonical_ontology_event_store(customer_event_store: Any | None):
-    if customer_event_store is not None:
-        return customer_event_store, None
-    from contextlib import ExitStack
-
-    from application.business_autonomy.persistence import business_autonomy_runtime_dir
-    from runtime.wiring import build_event_store, resolve_storage_config
-
-    stack = ExitStack()
-    try:
-        event_store = build_event_store(
-            stack,
-            base_dir=str(business_autonomy_runtime_dir()),
-            storage=resolve_storage_config(),
-        )
-    except Exception:
-        stack.close()
-        raise
-    return event_store, stack
-
-
 def build_business_autonomy_guarded_service(*, business_id: str = 'external_business', seed_admin_read_model: bool = False, customer_event_store: Any | None = None) -> BusinessAutonomyGuardedService:
     admin_dependencies = build_business_autonomy_admin_dependencies()
     distributed = admin_dependencies['distributed']
@@ -707,8 +678,8 @@ def build_business_autonomy_guarded_service(*, business_id: str = 'external_busi
     service._typed_channel_registry = typed_registry
     service._operator_admin_plane = UnifiedOperatorAdminPlane(BusinessAutonomyFleetReadModel(distributed_registry))
     service._execution_runtime = build_execution_runtime(route_state=distributed['region_state'])
-    ontology_event_store, ontology_event_store_stack = _canonical_ontology_event_store(customer_event_store)
-    customer_registry = wire_business_ontology_runtime(
+    ontology_event_store, ontology_event_store_stack = ontology_runtime.build_canonical_ontology_event_store(customer_event_store)
+    customer_registry = ontology_runtime.wire_business_ontology_runtime(
         service=service,
         event_store=ontology_event_store,
         idempotency_store=distributed['idempotency'],
@@ -717,16 +688,9 @@ def build_business_autonomy_guarded_service(*, business_id: str = 'external_busi
     service._ontology_event_store = ontology_event_store
     service._ontology_event_store_stack = ontology_event_store_stack
     if ontology_event_store_stack is not None:
-        lifetime = _OntologyEventStoreLifetime(ontology_event_store_stack)
-        service._ontology_event_store_lifetime = lifetime
-        service._ontology_event_store_finalizer = lifetime.close
-        for registry in (
-            customer_registry,
-            getattr(service, '_conversation_registry', None),
-            getattr(service, '_message_registry', None),
-        ):
-            if registry is not None:
-                registry._ontology_event_store_lifetime = lifetime
+        service._ontology_event_store_finalizer = weakref.finalize(
+            ontology_event_store, ontology_event_store_stack.close
+        )
     provider_runtime_audit = build_provider_runtime_audit_recorder()
     service._provider_admin_service = ProviderAdminService(
         onboarding_service=onboarding,
