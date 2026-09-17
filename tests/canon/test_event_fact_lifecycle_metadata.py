@@ -78,6 +78,43 @@ def test_ontology_writer_replay_fails_closed_on_metadata_change() -> None:
         writer.append_once(**common, event_metadata={"actor_id": "owner-2"})
 
 
+def test_ontology_transition_replay_preserves_metadata_and_rejects_change() -> None:
+    writer, events = _writer()
+    common = {
+        "tenant_id": "tenant-1",
+        "business_id": "business-1",
+        "entity_id": "lead-1",
+        "expected_state_token": "new:v1",
+        "operation": "qualify",
+        "idempotency_key": "request-transition-1",
+        "fact_type": "lead.qualified",
+        "payload": {"status": "qualified"},
+        "occurred_at_ms": 200,
+    }
+    metadata = {
+        "actor_id": "owner-1",
+        "decision_id": "decision-2",
+        "correlation_id": "correlation-2",
+        "causation_id": "cause-2",
+        "recorded_at_ms": 225,
+        "evidence_ids": ("evidence-3",),
+    }
+
+    fact_id = writer.append_transition_once(**common, event_metadata=metadata)
+    assert writer.append_transition_once(**common, event_metadata=metadata) == fact_id
+
+    [persisted] = list(events.iter_events(tenant_id="tenant-1", start_ms=0))
+    assert persisted["event_id"] == fact_id
+    assert persisted["decision_id"] == "decision-2"
+    assert canonical_business_event_contract(persisted)["evidence_ids"] == ("evidence-3",)
+
+    with pytest.raises(ValueError, match="event metadata"):
+        writer.append_transition_once(
+            **common,
+            event_metadata={**metadata, "actor_id": "owner-2"},
+        )
+
+
 def test_ontology_writer_rejects_unknown_event_metadata() -> None:
     writer, _ = _writer()
     with pytest.raises(ValueError, match="unsupported canonical event metadata"):
