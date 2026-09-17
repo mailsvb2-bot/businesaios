@@ -313,6 +313,27 @@ def test_default_business_autonomy_service_wires_canonical_ontology_event_store(
         service._ontology_event_store_finalizer()
 
 
+def test_registry_reference_keeps_owned_ontology_event_store_alive(tmp_path, monkeypatch) -> None:
+    import gc
+    import weakref
+
+    from runtime.business_autonomy.bootstrap import build_business_autonomy_guarded_service
+
+    monkeypatch.setenv("DATA_DIR", str(tmp_path))
+    monkeypatch.setenv("STORAGE_BACKEND", "sqlite")
+    monkeypatch.delenv("EVENTS_SQLITE_PATH", raising=False)
+    service = build_business_autonomy_guarded_service(business_id="message-lifetime")
+    registry = service._message_registry
+    store_ref = weakref.ref(service._ontology_event_store)
+    del service
+    gc.collect()
+
+    store = store_ref()
+    assert registry is not None
+    assert store is not None
+    assert store.ping() is True
+
+
 def test_business_autonomy_service_does_not_own_injected_event_store(tmp_path, monkeypatch) -> None:
     from runtime.business_autonomy.bootstrap import build_business_autonomy_guarded_service
     from runtime.platform.event_store.sqlite_event_store import SqliteEventStore

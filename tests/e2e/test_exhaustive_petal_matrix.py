@@ -14,8 +14,13 @@ from boot.registrations.simple_singletons import ActionBudget, KillSwitch, Rewar
 from boot.runtime_service_specs import RUNTIME_SERVICE_SPECS
 from core.actions.catalog import build_catalog
 from core.autopilot.onboarding.schema import BudgetChoice, Diagnostics, HasClientsChoice
-from core.autopilot.onboarding.state_machine import OnboardingSession, OnboardingStep, advance_with_callback, advance_with_text
-from crm.onboarding.crm_connection_state_machine import CrmConnectionStateMachine, _ALLOWED
+from core.autopilot.onboarding.state_machine import (
+    OnboardingSession,
+    OnboardingStep,
+    advance_with_callback,
+    advance_with_text,
+)
+from crm.onboarding.crm_connection_state_machine import _ALLOWED, CrmConnectionStateMachine
 from execution.action_catalog import get_action_spec, known_action_types
 from runtime.boot.actions_registry import BUILTIN_HANDLER_ACTIONS, INLINE_ALLOWLIST, SPECS
 from runtime.boot.registration_manifest import registered_action_names
@@ -76,7 +81,7 @@ def test_every_declared_action_schema_accepts_only_its_contract() -> None:
             with pytest.raises(ValueError):
                 schema.validate(payload)  # type: ignore[arg-type]
             cases += 1
-    assert cases == 885
+    assert cases == 889
 
 
 def test_every_runtime_handler_and_compatibility_import_door_resolves() -> None:
