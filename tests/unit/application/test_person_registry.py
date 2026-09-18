@@ -4,8 +4,8 @@ from dataclasses import fields
 
 import pytest
 
-from contracts.event_store import canonical_business_event_contract
 from application.person import PersonProjector, PersonRegistry
+from contracts.event_store import canonical_business_event_contract
 from contracts.person import Person, PersonNotFound, PersonStatus
 from reliability.idempotency_store import InMemoryIdempotencyStore
 

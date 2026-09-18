@@ -2,8 +2,8 @@ from __future__ import annotations
 
 import pytest
 
-from contracts.event_store import canonical_business_event_contract
 from application.organization import OrganizationProjector, OrganizationRegistry
+from contracts.event_store import canonical_business_event_contract
 from contracts.organization import OrganizationNotFound, OrganizationStatus
 from reliability.idempotency_contract import IdempotencyState
 from reliability.idempotency_store import InMemoryIdempotencyStore, JsonlIdempotencyStore

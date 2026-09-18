@@ -4,8 +4,8 @@ from dataclasses import fields
 
 import pytest
 
-from contracts.event_store import canonical_business_event_contract
 from application.organization import OrganizationRegistry
+from contracts.event_store import canonical_business_event_contract
 from application.partner import PartnerProjector, PartnerRegistry
 from application.person import PersonRegistry
 from contracts.organization import OrganizationNotFound
