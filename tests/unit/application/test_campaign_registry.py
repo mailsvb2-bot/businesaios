@@ -5,7 +5,7 @@ import pytest
 from application.campaign.projector import CampaignHistoryInvariantViolation, CampaignProjector
 from application.campaign.registry import CampaignRegistry
 from contracts.campaign import Campaign, CampaignLifecycleStatus, CampaignNotFound
-from contracts.event_store import BusinessFactV1
+from contracts.event_store import BusinessFactV1, canonical_business_event_contract
 from reliability.idempotency_store import InMemoryIdempotencyStore
 
 
@@ -65,6 +65,73 @@ def test_campaign_lifecycle_is_scoped_idempotent_and_money_safe() -> None:
     )
     assert archived.lifecycle_status is CampaignLifecycleStatus.ARCHIVED
     assert archived.archived_at_ms == 300
+
+
+def test_campaign_metadata_propagates_and_replay_rejects_change() -> None:
+    registry, events = _registry()
+    create_metadata = {
+        "actor_id": "owner-1",
+        "decision_id": "decision-create",
+        "correlation_id": "campaign-flow-1",
+        "evidence_ids": ("evidence-create",),
+    }
+    created = registry.create(
+        tenant_id="tenant-1", business_id="business-1", campaign_id="campaign-1",
+        idempotency_key="create-meta", channel_key="meta_ads", objective_key="leads",
+        budget_minor=12500, currency="RUB", occurred_at_ms=100,
+        event_metadata=create_metadata,
+    )
+    assert registry.create(
+        tenant_id="tenant-1", business_id="business-1", campaign_id="campaign-1",
+        idempotency_key="create-meta", channel_key="meta_ads", objective_key="leads",
+        budget_minor=12500, currency="RUB", occurred_at_ms=999,
+        event_metadata=create_metadata,
+    ) == created
+    assert len(events.events) == 1
+    contract = canonical_business_event_contract(events.events[0])
+    assert contract["actor_id"] == "owner-1"
+    assert contract["evidence_ids"] == ("evidence-create",)
+    with pytest.raises(ValueError, match="event metadata"):
+        registry.create(
+            tenant_id="tenant-1", business_id="business-1", campaign_id="campaign-1",
+            idempotency_key="create-meta", channel_key="meta_ads", objective_key="leads",
+            budget_minor=12500, currency="RUB", occurred_at_ms=100,
+            event_metadata={**create_metadata, "actor_id": "owner-2"},
+        )
+
+    update_metadata = {"actor_id": "owner-1", "decision_id": "decision-update"}
+    updated = registry.update(
+        tenant_id="tenant-1", business_id="business-1", campaign_id="campaign-1",
+        idempotency_key="update-meta", objective_key="purchases", budget_minor=15000,
+        occurred_at_ms=200, event_metadata=update_metadata,
+    )
+    assert registry.update(
+        tenant_id="tenant-1", business_id="business-1", campaign_id="campaign-1",
+        idempotency_key="update-meta", objective_key="purchases", budget_minor=15000,
+        occurred_at_ms=999, event_metadata=update_metadata,
+    ) == updated
+    with pytest.raises(ValueError, match="event metadata"):
+        registry.update(
+            tenant_id="tenant-1", business_id="business-1", campaign_id="campaign-1",
+            idempotency_key="update-meta", objective_key="purchases", budget_minor=15000,
+            occurred_at_ms=200, event_metadata={**update_metadata, "actor_id": "owner-2"},
+        )
+
+    archive_metadata = {"actor_id": "owner-1", "decision_id": "decision-archive"}
+    archived = registry.archive(
+        tenant_id="tenant-1", business_id="business-1", campaign_id="campaign-1",
+        idempotency_key="archive-meta", occurred_at_ms=300, event_metadata=archive_metadata,
+    )
+    assert registry.archive(
+        tenant_id="tenant-1", business_id="business-1", campaign_id="campaign-1",
+        idempotency_key="archive-meta", occurred_at_ms=999, event_metadata=archive_metadata,
+    ) == archived
+    with pytest.raises(ValueError, match="event metadata"):
+        registry.archive(
+            tenant_id="tenant-1", business_id="business-1", campaign_id="campaign-1",
+            idempotency_key="archive-meta", occurred_at_ms=300,
+            event_metadata={**archive_metadata, "actor_id": "owner-2"},
+        )
 
 
 def test_campaign_channel_currency_and_archive_are_fail_closed() -> None:
