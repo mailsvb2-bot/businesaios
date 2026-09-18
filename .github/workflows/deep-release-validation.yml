@@ -207,7 +207,8 @@ jobs:
           BAIOS_PYTHON_BASE_IMAGE: ${{ env.PYTHON_BASE_IMAGE_LOCAL }}
         run: |
           set -Eeuo pipefail
-          bash scripts/staging/run_staging_runtime_proof.sh
+          timeout --signal=TERM --kill-after=30s 12m \
+            bash scripts/staging/run_staging_runtime_proof.sh
           .venv/bin/python -m scripts.ci.cli --gate staging-runtime
 
       - name: Run canonical release gate

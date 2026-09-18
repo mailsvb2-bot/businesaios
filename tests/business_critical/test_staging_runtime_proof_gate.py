@@ -36,6 +36,10 @@ def test_staging_runner_contains_required_real_proof_steps() -> None:
     assert "run_gate postgres-live" in text
     assert text.index("run_gate postgres-migrations") < text.index("run_gate postgres-contract") < text.index("run_gate postgres-live")
     assert '"$PYTHON_BIN" -m scripts.ci.cli --gate "$gate"' in text
+    assert "STAGING_PHASE:" in text
+    assert 'phase "docker-build:start"' in text
+    assert 'phase "readyz:start"' in text
+    assert 'phase "staging-summary:ok"' in text
     assert "export BUSINESAIOS_ENABLE_POSTGRES_EVENT_STORE=1" in text
     assert '-e BUSINESAIOS_ENABLE_POSTGRES_EVENT_STORE=1 \\' in text
     assert "POSTGRES_EVENT_STORE_ENABLED" not in text
