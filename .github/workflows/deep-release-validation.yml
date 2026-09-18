@@ -104,7 +104,7 @@ jobs:
           echo "DATABASE_URL=$DATABASE_URL" >> "$GITHUB_ENV"
           echo "POSTGRES_DSN=$DATABASE_URL" >> "$GITHUB_ENV"
           echo "POSTGRES_RUNTIME_ENABLED=1" >> "$GITHUB_ENV"
-          echo "POSTGRES_EVENT_STORE_ENABLED=1" >> "$GITHUB_ENV"
+          echo "BUSINESAIOS_ENABLE_POSTGRES_EVENT_STORE=1" >> "$GITHUB_ENV"
           echo "POSTGRES_APPLY_MIGRATIONS=1" >> "$GITHUB_ENV"
           echo "RUN_MIGRATIONS_BEFORE_START=1" >> "$GITHUB_ENV"
           for attempt in $(seq 1 30); do
