@@ -100,6 +100,74 @@ class EventFactLifecycleWriter:
         self._claims.mark_completed(key=scope, owner_id=owner_id, result_ref=fact_id, result_digest=str(scope.scope_hash))
         return True
 
+    def find_existing_for_key(
+        self,
+        *,
+        tenant_id: str,
+        business_id: str,
+        entity_id: str,
+        operation: str,
+        idempotency_key: str,
+        fact_type: str,
+        event_metadata: dict[str, object] | None = None,
+    ) -> dict[str, Any] | None:
+        """Find and repair the durable fact already owned by one user idempotency key.
+
+        The lookup derives the historical fact id from each persisted payload, so
+        callers can resolve a replay even after the entity state has advanced and
+        can no longer reconstruct the original post-transition payload.
+        """
+        metadata = _event_metadata(event_metadata)
+        matched: dict[str, Any] | None = None
+        for raw_event in self._events.iter_events(
+            tenant_id=str(tenant_id),
+            start_ms=0,
+            event_type=BUSINESS_FACT_EVENT_TYPE,
+        ):
+            event = dict(raw_event)
+            envelope = dict(event.get("payload") or {})
+            if str(event.get("source") or "") != self._source:
+                continue
+            if str(envelope.get("business_id") or "") != str(business_id):
+                continue
+            if str(envelope.get("entity_id") or "") != str(entity_id):
+                continue
+            if str(envelope.get("fact_type") or "") != str(fact_type):
+                continue
+            payload = dict(envelope.get("payload") or {})
+            _, _, expected_fact_id = self._scope(
+                tenant_id=tenant_id,
+                business_id=business_id,
+                entity_id=entity_id,
+                operation=operation,
+                idempotency_key=idempotency_key,
+                payload=payload,
+            )
+            if str(event.get("event_id") or "") != expected_fact_id:
+                continue
+            if matched is not None:
+                raise RuntimeError("multiple ontology durable facts match one idempotency key")
+            self._assert_match(
+                event,
+                business_id=business_id,
+                entity_id=entity_id,
+                fact_type=fact_type,
+                payload=payload,
+                event_metadata=metadata,
+            )
+            self.repair_existing(
+                tenant_id=tenant_id,
+                business_id=business_id,
+                entity_id=entity_id,
+                operation=operation,
+                idempotency_key=idempotency_key,
+                fact_type=fact_type,
+                payload=payload,
+                event_metadata=metadata,
+            )
+            matched = event
+        return matched
+
     def append_transition_once(self, *, tenant_id: str, business_id: str, entity_id: str, expected_state_token: str, operation: str, idempotency_key: str, fact_type: str, payload: dict[str, object], occurred_at_ms: int, event_metadata: dict[str, object] | None = None) -> str:
         state_token = str(expected_state_token or "").strip()
         if not state_token:

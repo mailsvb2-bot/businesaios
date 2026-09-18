@@ -129,3 +129,42 @@ def test_ontology_writer_rejects_unknown_event_metadata() -> None:
             occurred_at_ms=100,
             event_metadata={"provider_secret": "must-not-enter-event-contract"},
         )
+
+
+def test_ontology_writer_can_find_existing_fact_by_key_after_state_advance() -> None:
+    writer, events = _writer()
+    metadata = {"actor_id": "owner-1", "decision_id": "decision-transition"}
+    fact_id = writer.append_once(
+        tenant_id="tenant-1",
+        business_id="business-1",
+        entity_id="invoice-1",
+        operation="record_payment",
+        idempotency_key="payment-request-1",
+        fact_type="invoice.payment_recorded",
+        payload={"paid_minor": 400, "status": "partially_paid"},
+        occurred_at_ms=300,
+        event_metadata=metadata,
+    )
+    found = writer.find_existing_for_key(
+        tenant_id="tenant-1",
+        business_id="business-1",
+        entity_id="invoice-1",
+        operation="record_payment",
+        idempotency_key="payment-request-1",
+        fact_type="invoice.payment_recorded",
+        event_metadata=metadata,
+    )
+    assert found is not None
+    assert found["event_id"] == fact_id
+    assert len(list(events.iter_events(tenant_id="tenant-1", start_ms=0))) == 1
+
+    with pytest.raises(ValueError, match="event metadata"):
+        writer.find_existing_for_key(
+            tenant_id="tenant-1",
+            business_id="business-1",
+            entity_id="invoice-1",
+            operation="record_payment",
+            idempotency_key="payment-request-1",
+            fact_type="invoice.payment_recorded",
+            event_metadata={**metadata, "actor_id": "owner-2"},
+        )
