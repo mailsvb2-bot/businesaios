@@ -355,34 +355,14 @@ def test_business_autonomy_service_does_not_own_injected_event_store(tmp_path, m
 def test_message_event_metadata_propagates_and_archive_replay_rejects_change() -> None:
     registry, events = _registry()
     record_metadata = {"actor_id": "owner-1", "decision_id": "message-record", "evidence_ids": ("e-message",)}
-    recorded = registry.record(
-        identity=_identity(message_id="provider-meta"), customer_id="customer-a",
-        occurred_at_ms=10, event_metadata=record_metadata,
-    )
-    assert registry.record(
-        identity=_identity(message_id="provider-meta"), customer_id="customer-a",
-        occurred_at_ms=999, event_metadata=record_metadata,
-    ) == recorded
+    recorded = registry.record( identity=_identity(message_id="provider-meta"), customer_id="customer-a", occurred_at_ms=10, event_metadata=record_metadata, )
+    assert registry.record( identity=_identity(message_id="provider-meta"), customer_id="customer-a", occurred_at_ms=999, event_metadata=record_metadata, ) == recorded
     rows = list(events.iter_events(tenant_id="tenant-a", start_ms=0))
     assert canonical_business_event_contract(rows[0])["actor_id"] == "owner-1"
     with pytest.raises(ValueError, match="event metadata"):
-        registry.record(
-            identity=_identity(message_id="provider-meta"), customer_id="customer-a",
-            occurred_at_ms=10, event_metadata={**record_metadata, "actor_id": "owner-2"},
-        )
-
+        registry.record( identity=_identity(message_id="provider-meta"), customer_id="customer-a", occurred_at_ms=10, event_metadata={**record_metadata, "actor_id": "owner-2"}, )
     archive_metadata = {"actor_id": "owner-1", "decision_id": "message-archive"}
-    archived = registry.archive(
-        tenant_id="tenant-a", business_id="business-a", message_id=recorded.message_id,
-        idempotency_key="archive-meta", occurred_at_ms=20, event_metadata=archive_metadata,
-    )
-    assert registry.archive(
-        tenant_id="tenant-a", business_id="business-a", message_id=recorded.message_id,
-        idempotency_key="archive-meta", occurred_at_ms=999, event_metadata=archive_metadata,
-    ) == archived
+    archived = registry.archive( tenant_id="tenant-a", business_id="business-a", message_id=recorded.message_id, idempotency_key="archive-meta", occurred_at_ms=20, event_metadata=archive_metadata, )
+    assert registry.archive( tenant_id="tenant-a", business_id="business-a", message_id=recorded.message_id, idempotency_key="archive-meta", occurred_at_ms=999, event_metadata=archive_metadata, ) == archived
     with pytest.raises(ValueError, match="event metadata"):
-        registry.archive(
-            tenant_id="tenant-a", business_id="business-a", message_id=recorded.message_id,
-            idempotency_key="archive-meta", occurred_at_ms=20,
-            event_metadata={**archive_metadata, "actor_id": "owner-2"},
-        )
+        registry.archive( tenant_id="tenant-a", business_id="business-a", message_id=recorded.message_id, idempotency_key="archive-meta", occurred_at_ms=20, event_metadata={**archive_metadata, "actor_id": "owner-2"}, )

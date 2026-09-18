@@ -85,62 +85,22 @@ def test_asset_lifecycle_is_idempotent_versioned_and_money_safe() -> None:
 
 def test_asset_metadata_propagates_and_replay_rejects_change() -> None:
     registry, events = _registry()
-    create_metadata = {
-        "actor_id": "owner-1",
-        "decision_id": "decision-create",
-        "evidence_ids": ("asset-evidence-1",),
-    }
-    created = registry.create(
-        tenant_id="t", business_id="b", asset_id="a", idempotency_key="create-meta",
-        asset_kind="equipment", state_key="active", book_value_minor=1000,
-        currency="USD", occurred_at_ms=100, event_metadata=create_metadata,
-    )
-    assert registry.create(
-        tenant_id="t", business_id="b", asset_id="a", idempotency_key="create-meta",
-        asset_kind="equipment", state_key="active", book_value_minor=1000,
-        currency="USD", occurred_at_ms=999, event_metadata=create_metadata,
-    ) == created
+    create_metadata = { "actor_id": "owner-1", "decision_id": "decision-create", "evidence_ids": ("asset-evidence-1",), }
+    created = registry.create( tenant_id="t", business_id="b", asset_id="a", idempotency_key="create-meta", asset_kind="equipment", state_key="active", book_value_minor=1000, currency="USD", occurred_at_ms=100, event_metadata=create_metadata, )
+    assert registry.create( tenant_id="t", business_id="b", asset_id="a", idempotency_key="create-meta", asset_kind="equipment", state_key="active", book_value_minor=1000, currency="USD", occurred_at_ms=999, event_metadata=create_metadata, ) == created
     assert canonical_business_event_contract(events.events[0])["actor_id"] == "owner-1"
     with pytest.raises(ValueError, match="event metadata"):
-        registry.create(
-            tenant_id="t", business_id="b", asset_id="a", idempotency_key="create-meta",
-            asset_kind="equipment", state_key="active", book_value_minor=1000,
-            currency="USD", occurred_at_ms=100,
-            event_metadata={**create_metadata, "actor_id": "owner-2"},
-        )
-
+        registry.create( tenant_id="t", business_id="b", asset_id="a", idempotency_key="create-meta", asset_kind="equipment", state_key="active", book_value_minor=1000, currency="USD", occurred_at_ms=100, event_metadata={**create_metadata, "actor_id": "owner-2"}, )
     update_metadata = {"actor_id": "owner-1", "decision_id": "decision-update"}
-    updated = registry.update(
-        tenant_id="t", business_id="b", asset_id="a", idempotency_key="update-meta",
-        state_key="maintenance", book_value_minor=900, occurred_at_ms=200,
-        event_metadata=update_metadata,
-    )
-    assert registry.update(
-        tenant_id="t", business_id="b", asset_id="a", idempotency_key="update-meta",
-        state_key="maintenance", book_value_minor=900, occurred_at_ms=999,
-        event_metadata=update_metadata,
-    ) == updated
+    updated = registry.update( tenant_id="t", business_id="b", asset_id="a", idempotency_key="update-meta", state_key="maintenance", book_value_minor=900, occurred_at_ms=200, event_metadata=update_metadata, )
+    assert registry.update( tenant_id="t", business_id="b", asset_id="a", idempotency_key="update-meta", state_key="maintenance", book_value_minor=900, occurred_at_ms=999, event_metadata=update_metadata, ) == updated
     with pytest.raises(ValueError, match="event metadata"):
-        registry.update(
-            tenant_id="t", business_id="b", asset_id="a", idempotency_key="update-meta",
-            state_key="maintenance", book_value_minor=900, occurred_at_ms=200,
-            event_metadata={**update_metadata, "actor_id": "owner-2"},
-        )
-
+        registry.update( tenant_id="t", business_id="b", asset_id="a", idempotency_key="update-meta", state_key="maintenance", book_value_minor=900, occurred_at_ms=200, event_metadata={**update_metadata, "actor_id": "owner-2"}, )
     archive_metadata = {"actor_id": "owner-1", "decision_id": "decision-archive"}
-    archived = registry.archive(
-        tenant_id="t", business_id="b", asset_id="a", idempotency_key="archive-meta",
-        occurred_at_ms=300, event_metadata=archive_metadata,
-    )
-    assert registry.archive(
-        tenant_id="t", business_id="b", asset_id="a", idempotency_key="archive-meta",
-        occurred_at_ms=999, event_metadata=archive_metadata,
-    ) == archived
+    archived = registry.archive( tenant_id="t", business_id="b", asset_id="a", idempotency_key="archive-meta", occurred_at_ms=300, event_metadata=archive_metadata, )
+    assert registry.archive( tenant_id="t", business_id="b", asset_id="a", idempotency_key="archive-meta", occurred_at_ms=999, event_metadata=archive_metadata, ) == archived
     with pytest.raises(ValueError, match="event metadata"):
-        registry.archive(
-            tenant_id="t", business_id="b", asset_id="a", idempotency_key="archive-meta",
-            occurred_at_ms=300, event_metadata={**archive_metadata, "actor_id": "owner-2"},
-        )
+        registry.archive( tenant_id="t", business_id="b", asset_id="a", idempotency_key="archive-meta", occurred_at_ms=300, event_metadata={**archive_metadata, "actor_id": "owner-2"}, )
 
 
 def test_asset_identity_currency_and_archive_are_fail_closed() -> None:

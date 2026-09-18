@@ -348,52 +348,18 @@ def test_crash_recovery_survives_real_sqlite_and_idempotency_restart(tmp_path) -
 def test_organization_event_metadata_propagates_and_replay_rejects_change() -> None:
     registry, events = _registry()
     create_metadata = {"actor_id": "owner-1", "decision_id": "org-create", "evidence_ids": ("e-org",)}
-    created = registry.create(
-        tenant_id="tenant-1", business_id="business-1", organization_id="org-meta",
-        idempotency_key="create-meta", name="Meta Org", occurred_at_ms=10, event_metadata=create_metadata,
-    )
-    assert registry.create(
-        tenant_id="tenant-1", business_id="business-1", organization_id="org-meta",
-        idempotency_key="create-meta", name="Meta Org", occurred_at_ms=999, event_metadata=create_metadata,
-    ) == created
+    created = registry.create( tenant_id="tenant-1", business_id="business-1", organization_id="org-meta", idempotency_key="create-meta", name="Meta Org", occurred_at_ms=10, event_metadata=create_metadata, )
+    assert registry.create( tenant_id="tenant-1", business_id="business-1", organization_id="org-meta", idempotency_key="create-meta", name="Meta Org", occurred_at_ms=999, event_metadata=create_metadata, ) == created
     assert canonical_business_event_contract(events.events[0])["actor_id"] == "owner-1"
     with pytest.raises(ValueError, match="event metadata"):
-        registry.create(
-            tenant_id="tenant-1", business_id="business-1", organization_id="org-meta",
-            idempotency_key="create-meta", name="Meta Org", occurred_at_ms=10,
-            event_metadata={**create_metadata, "actor_id": "owner-2"},
-        )
-
+        registry.create( tenant_id="tenant-1", business_id="business-1", organization_id="org-meta", idempotency_key="create-meta", name="Meta Org", occurred_at_ms=10, event_metadata={**create_metadata, "actor_id": "owner-2"}, )
     update_metadata = {"actor_id": "owner-1", "decision_id": "org-update"}
-    updated = registry.update(
-        tenant_id="tenant-1", business_id="business-1", organization_id="org-meta",
-        idempotency_key="update-meta", organization_type="operating_entity",
-        occurred_at_ms=20, event_metadata=update_metadata,
-    )
-    assert registry.update(
-        tenant_id="tenant-1", business_id="business-1", organization_id="org-meta",
-        idempotency_key="update-meta", organization_type="operating_entity",
-        occurred_at_ms=999, event_metadata=update_metadata,
-    ) == updated
+    updated = registry.update( tenant_id="tenant-1", business_id="business-1", organization_id="org-meta", idempotency_key="update-meta", organization_type="operating_entity", occurred_at_ms=20, event_metadata=update_metadata, )
+    assert registry.update( tenant_id="tenant-1", business_id="business-1", organization_id="org-meta", idempotency_key="update-meta", organization_type="operating_entity", occurred_at_ms=999, event_metadata=update_metadata, ) == updated
     with pytest.raises(ValueError, match="event metadata"):
-        registry.update(
-            tenant_id="tenant-1", business_id="business-1", organization_id="org-meta",
-            idempotency_key="update-meta", organization_type="operating_entity",
-            occurred_at_ms=20, event_metadata={**update_metadata, "actor_id": "owner-2"},
-        )
-
+        registry.update( tenant_id="tenant-1", business_id="business-1", organization_id="org-meta", idempotency_key="update-meta", organization_type="operating_entity", occurred_at_ms=20, event_metadata={**update_metadata, "actor_id": "owner-2"}, )
     archive_metadata = {"actor_id": "owner-1", "decision_id": "org-archive"}
-    archived = registry.archive(
-        tenant_id="tenant-1", business_id="business-1", organization_id="org-meta",
-        idempotency_key="archive-meta", occurred_at_ms=30, event_metadata=archive_metadata,
-    )
-    assert registry.archive(
-        tenant_id="tenant-1", business_id="business-1", organization_id="org-meta",
-        idempotency_key="archive-meta", occurred_at_ms=999, event_metadata=archive_metadata,
-    ) == archived
+    archived = registry.archive( tenant_id="tenant-1", business_id="business-1", organization_id="org-meta", idempotency_key="archive-meta", occurred_at_ms=30, event_metadata=archive_metadata, )
+    assert registry.archive( tenant_id="tenant-1", business_id="business-1", organization_id="org-meta", idempotency_key="archive-meta", occurred_at_ms=999, event_metadata=archive_metadata, ) == archived
     with pytest.raises(ValueError, match="event metadata"):
-        registry.archive(
-            tenant_id="tenant-1", business_id="business-1", organization_id="org-meta",
-            idempotency_key="archive-meta", occurred_at_ms=30,
-            event_metadata={**archive_metadata, "actor_id": "owner-2"},
-        )
+        registry.archive( tenant_id="tenant-1", business_id="business-1", organization_id="org-meta", idempotency_key="archive-meta", occurred_at_ms=30, event_metadata={**archive_metadata, "actor_id": "owner-2"}, )

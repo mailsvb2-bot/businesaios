@@ -90,43 +90,17 @@ def test_artifact_create_is_immutable_scoped_metadata_with_exact_replay() -> Non
 
 def test_artifact_metadata_propagates_and_exact_replay_rejects_change() -> None:
     registry, events = _registry()
-    create_metadata = {
-        "actor_id": "owner-1",
-        "decision_id": "decision-create",
-        "evidence_ids": ("artifact-evidence-1",),
-    }
-    created = registry.create(
-        tenant_id="t", business_id="b", artifact_id="a", idempotency_key="create-meta",
-        artifact_kind="report", storage_ref="blob:a", occurred_at_ms=100,
-        event_metadata=create_metadata,
-    )
-    assert registry.create(
-        tenant_id="t", business_id="b", artifact_id="a", idempotency_key="create-meta",
-        artifact_kind="report", storage_ref="blob:a", occurred_at_ms=999,
-        event_metadata=create_metadata,
-    ) == created
+    create_metadata = { "actor_id": "owner-1", "decision_id": "decision-create", "evidence_ids": ("artifact-evidence-1",), }
+    created = registry.create( tenant_id="t", business_id="b", artifact_id="a", idempotency_key="create-meta", artifact_kind="report", storage_ref="blob:a", occurred_at_ms=100, event_metadata=create_metadata, )
+    assert registry.create( tenant_id="t", business_id="b", artifact_id="a", idempotency_key="create-meta", artifact_kind="report", storage_ref="blob:a", occurred_at_ms=999, event_metadata=create_metadata, ) == created
     assert canonical_business_event_contract(events.events[0])["actor_id"] == "owner-1"
     with pytest.raises(ValueError, match="event metadata"):
-        registry.create(
-            tenant_id="t", business_id="b", artifact_id="a", idempotency_key="create-meta",
-            artifact_kind="report", storage_ref="blob:a", occurred_at_ms=100,
-            event_metadata={**create_metadata, "actor_id": "owner-2"},
-        )
-
+        registry.create( tenant_id="t", business_id="b", artifact_id="a", idempotency_key="create-meta", artifact_kind="report", storage_ref="blob:a", occurred_at_ms=100, event_metadata={**create_metadata, "actor_id": "owner-2"}, )
     archive_metadata = {"actor_id": "owner-1", "decision_id": "decision-archive"}
-    archived = registry.archive(
-        tenant_id="t", business_id="b", artifact_id="a", idempotency_key="archive-meta",
-        occurred_at_ms=200, event_metadata=archive_metadata,
-    )
-    assert registry.archive(
-        tenant_id="t", business_id="b", artifact_id="a", idempotency_key="archive-meta",
-        occurred_at_ms=999, event_metadata=archive_metadata,
-    ) == archived
+    archived = registry.archive( tenant_id="t", business_id="b", artifact_id="a", idempotency_key="archive-meta", occurred_at_ms=200, event_metadata=archive_metadata, )
+    assert registry.archive( tenant_id="t", business_id="b", artifact_id="a", idempotency_key="archive-meta", occurred_at_ms=999, event_metadata=archive_metadata, ) == archived
     with pytest.raises(ValueError, match="event metadata"):
-        registry.archive(
-            tenant_id="t", business_id="b", artifact_id="a", idempotency_key="archive-meta",
-            occurred_at_ms=200, event_metadata={**archive_metadata, "actor_id": "owner-2"},
-        )
+        registry.archive( tenant_id="t", business_id="b", artifact_id="a", idempotency_key="archive-meta", occurred_at_ms=200, event_metadata={**archive_metadata, "actor_id": "owner-2"}, )
 
 
 def test_artifact_rejects_silent_overwrite_and_new_create_key() -> None:

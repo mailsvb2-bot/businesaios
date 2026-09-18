@@ -160,37 +160,14 @@ def test_partner_event_metadata_propagates_and_replay_rejects_change() -> None:
     events, organizations, people, partners = _stack()
     _seed(organizations, people)
     create_metadata = {"actor_id": "owner-1", "decision_id": "partner-create", "evidence_ids": ("e-partner",)}
-    created = partners.create(
-        tenant_id="tenant-1", business_id="business-1", partner_id="partner-meta",
-        party_kind="person", party_id="person-1", idempotency_key="create-meta",
-        occurred_at_ms=10, event_metadata=create_metadata,
-    )
-    assert partners.create(
-        tenant_id="tenant-1", business_id="business-1", partner_id="partner-meta",
-        party_kind="person", party_id="person-1", idempotency_key="create-meta",
-        occurred_at_ms=999, event_metadata=create_metadata,
-    ) == created
+    created = partners.create( tenant_id="tenant-1", business_id="business-1", partner_id="partner-meta", party_kind="person", party_id="person-1", idempotency_key="create-meta", occurred_at_ms=10, event_metadata=create_metadata, )
+    assert partners.create( tenant_id="tenant-1", business_id="business-1", partner_id="partner-meta", party_kind="person", party_id="person-1", idempotency_key="create-meta", occurred_at_ms=999, event_metadata=create_metadata, ) == created
     partner_events = [e for e in events.events if str(dict(e.get("payload") or {}).get("fact_type") or "").startswith("partner.")]
     assert canonical_business_event_contract(partner_events[0])["actor_id"] == "owner-1"
     with pytest.raises(ValueError, match="event metadata"):
-        partners.create(
-            tenant_id="tenant-1", business_id="business-1", partner_id="partner-meta",
-            party_kind="person", party_id="person-1", idempotency_key="create-meta",
-            occurred_at_ms=10, event_metadata={**create_metadata, "actor_id": "owner-2"},
-        )
-
+        partners.create( tenant_id="tenant-1", business_id="business-1", partner_id="partner-meta", party_kind="person", party_id="person-1", idempotency_key="create-meta", occurred_at_ms=10, event_metadata={**create_metadata, "actor_id": "owner-2"}, )
     archive_metadata = {"actor_id": "owner-1", "decision_id": "partner-archive"}
-    archived = partners.archive(
-        tenant_id="tenant-1", business_id="business-1", partner_id="partner-meta",
-        idempotency_key="archive-meta", occurred_at_ms=20, event_metadata=archive_metadata,
-    )
-    assert partners.archive(
-        tenant_id="tenant-1", business_id="business-1", partner_id="partner-meta",
-        idempotency_key="archive-meta", occurred_at_ms=999, event_metadata=archive_metadata,
-    ) == archived
+    archived = partners.archive( tenant_id="tenant-1", business_id="business-1", partner_id="partner-meta", idempotency_key="archive-meta", occurred_at_ms=20, event_metadata=archive_metadata, )
+    assert partners.archive( tenant_id="tenant-1", business_id="business-1", partner_id="partner-meta", idempotency_key="archive-meta", occurred_at_ms=999, event_metadata=archive_metadata, ) == archived
     with pytest.raises(ValueError, match="event metadata"):
-        partners.archive(
-            tenant_id="tenant-1", business_id="business-1", partner_id="partner-meta",
-            idempotency_key="archive-meta", occurred_at_ms=20,
-            event_metadata={**archive_metadata, "actor_id": "owner-2"},
-        )
+        partners.archive( tenant_id="tenant-1", business_id="business-1", partner_id="partner-meta", idempotency_key="archive-meta", occurred_at_ms=20, event_metadata={**archive_metadata, "actor_id": "owner-2"}, )

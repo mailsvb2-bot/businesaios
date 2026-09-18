@@ -52,67 +52,25 @@ def test_document_revision_points_to_new_immutable_artifact() -> None:
 
 def test_document_metadata_propagates_and_exact_replay_rejects_change() -> None:
     events, artifacts, documents = _setup()
-    artifacts.create(
-        tenant_id="t", business_id="b", artifact_id="a1", idempotency_key="a1",
-        occurred_at_ms=100,
-    )
-    artifacts.create(
-        tenant_id="t", business_id="b", artifact_id="a2", idempotency_key="a2",
-        occurred_at_ms=110,
-    )
+    artifacts.create( tenant_id="t", business_id="b", artifact_id="a1", idempotency_key="a1", occurred_at_ms=100, )
+    artifacts.create( tenant_id="t", business_id="b", artifact_id="a2", idempotency_key="a2", occurred_at_ms=110, )
     create_metadata = {"actor_id": "owner-1", "decision_id": "decision-create"}
-    created = documents.create(
-        tenant_id="t", business_id="b", document_id="d", artifact_id="a1",
-        idempotency_key="create-meta", title="Policy", occurred_at_ms=120,
-        event_metadata=create_metadata,
-    )
-    assert documents.create(
-        tenant_id="t", business_id="b", document_id="d", artifact_id="a1",
-        idempotency_key="create-meta", title="Policy", occurred_at_ms=999,
-        event_metadata=create_metadata,
-    ) == created
-    document_created = next(
-        event for event in events.events
-        if str(dict(event.get("payload") or {}).get("fact_type") or "") == "document.created"
-    )
+    created = documents.create( tenant_id="t", business_id="b", document_id="d", artifact_id="a1", idempotency_key="create-meta", title="Policy", occurred_at_ms=120, event_metadata=create_metadata, )
+    assert documents.create( tenant_id="t", business_id="b", document_id="d", artifact_id="a1", idempotency_key="create-meta", title="Policy", occurred_at_ms=999, event_metadata=create_metadata, ) == created
+    document_created = next( event for event in events.events if str(dict(event.get("payload") or {}).get("fact_type") or "") == "document.created" )
     assert canonical_business_event_contract(document_created)["actor_id"] == "owner-1"
     with pytest.raises(ValueError, match="event metadata"):
-        documents.create(
-            tenant_id="t", business_id="b", document_id="d", artifact_id="a1",
-            idempotency_key="create-meta", title="Policy", occurred_at_ms=120,
-            event_metadata={**create_metadata, "actor_id": "owner-2"},
-        )
-
+        documents.create( tenant_id="t", business_id="b", document_id="d", artifact_id="a1", idempotency_key="create-meta", title="Policy", occurred_at_ms=120, event_metadata={**create_metadata, "actor_id": "owner-2"}, )
     revise_metadata = {"actor_id": "owner-1", "decision_id": "decision-revise"}
-    revised = documents.revise(
-        tenant_id="t", business_id="b", document_id="d", artifact_id="a2",
-        idempotency_key="revise-meta", occurred_at_ms=200, event_metadata=revise_metadata,
-    )
-    assert documents.revise(
-        tenant_id="t", business_id="b", document_id="d", artifact_id="a2",
-        idempotency_key="revise-meta", occurred_at_ms=999, event_metadata=revise_metadata,
-    ) == revised
+    revised = documents.revise( tenant_id="t", business_id="b", document_id="d", artifact_id="a2", idempotency_key="revise-meta", occurred_at_ms=200, event_metadata=revise_metadata, )
+    assert documents.revise( tenant_id="t", business_id="b", document_id="d", artifact_id="a2", idempotency_key="revise-meta", occurred_at_ms=999, event_metadata=revise_metadata, ) == revised
     with pytest.raises(ValueError, match="event metadata"):
-        documents.revise(
-            tenant_id="t", business_id="b", document_id="d", artifact_id="a2",
-            idempotency_key="revise-meta", occurred_at_ms=200,
-            event_metadata={**revise_metadata, "actor_id": "owner-2"},
-        )
-
+        documents.revise( tenant_id="t", business_id="b", document_id="d", artifact_id="a2", idempotency_key="revise-meta", occurred_at_ms=200, event_metadata={**revise_metadata, "actor_id": "owner-2"}, )
     archive_metadata = {"actor_id": "owner-1", "decision_id": "decision-archive"}
-    archived = documents.archive(
-        tenant_id="t", business_id="b", document_id="d", idempotency_key="archive-meta",
-        occurred_at_ms=300, event_metadata=archive_metadata,
-    )
-    assert documents.archive(
-        tenant_id="t", business_id="b", document_id="d", idempotency_key="archive-meta",
-        occurred_at_ms=999, event_metadata=archive_metadata,
-    ) == archived
+    archived = documents.archive( tenant_id="t", business_id="b", document_id="d", idempotency_key="archive-meta", occurred_at_ms=300, event_metadata=archive_metadata, )
+    assert documents.archive( tenant_id="t", business_id="b", document_id="d", idempotency_key="archive-meta", occurred_at_ms=999, event_metadata=archive_metadata, ) == archived
     with pytest.raises(ValueError, match="event metadata"):
-        documents.archive(
-            tenant_id="t", business_id="b", document_id="d", idempotency_key="archive-meta",
-            occurred_at_ms=300, event_metadata={**archive_metadata, "actor_id": "owner-2"},
-        )
+        documents.archive( tenant_id="t", business_id="b", document_id="d", idempotency_key="archive-meta", occurred_at_ms=300, event_metadata={**archive_metadata, "actor_id": "owner-2"}, )
 
 
 def test_document_rejects_missing_or_archived_artifact() -> None:

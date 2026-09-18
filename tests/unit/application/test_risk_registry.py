@@ -66,61 +66,23 @@ def test_risk_registry_persists_idempotent_lifecycle() -> None:
 
 def test_risk_metadata_propagates_and_same_key_replay_rejects_change() -> None:
     registry, events = _registry()
-    create_metadata = {
-        "actor_id": "owner-1",
-        "decision_id": "decision-create",
-        "evidence_ids": ("risk-evidence-1",),
-    }
-    created = registry.create(
-        tenant_id="t", business_id="b", risk_id="r", idempotency_key="create-meta",
-        risk_type="vendor_dependency", level="high", subject_kind="provider",
-        subject_id="provider-1", occurred_at_ms=100, event_metadata=create_metadata,
-    )
-    assert registry.create(
-        tenant_id="t", business_id="b", risk_id="r", idempotency_key="create-meta",
-        risk_type="vendor_dependency", level="high", subject_kind="provider",
-        subject_id="provider-1", occurred_at_ms=100, event_metadata=create_metadata,
-    ) == created
+    create_metadata = { "actor_id": "owner-1", "decision_id": "decision-create", "evidence_ids": ("risk-evidence-1",), }
+    created = registry.create( tenant_id="t", business_id="b", risk_id="r", idempotency_key="create-meta", risk_type="vendor_dependency", level="high", subject_kind="provider", subject_id="provider-1", occurred_at_ms=100, event_metadata=create_metadata, )
+    assert registry.create( tenant_id="t", business_id="b", risk_id="r", idempotency_key="create-meta", risk_type="vendor_dependency", level="high", subject_kind="provider", subject_id="provider-1", occurred_at_ms=100, event_metadata=create_metadata, ) == created
     rows = list(events.iter_events(tenant_id="t", start_ms=0))
     assert canonical_business_event_contract(rows[0])["actor_id"] == "owner-1"
     with pytest.raises(ValueError, match="event metadata"):
-        registry.create(
-            tenant_id="t", business_id="b", risk_id="r", idempotency_key="create-meta",
-            risk_type="vendor_dependency", level="high", subject_kind="provider",
-            subject_id="provider-1", occurred_at_ms=100,
-            event_metadata={**create_metadata, "actor_id": "owner-2"},
-        )
-
+        registry.create( tenant_id="t", business_id="b", risk_id="r", idempotency_key="create-meta", risk_type="vendor_dependency", level="high", subject_kind="provider", subject_id="provider-1", occurred_at_ms=100, event_metadata={**create_metadata, "actor_id": "owner-2"}, )
     update_metadata = {"actor_id": "owner-1", "decision_id": "decision-update"}
-    updated = registry.update_level(
-        tenant_id="t", business_id="b", risk_id="r", idempotency_key="update-meta",
-        level="critical", occurred_at_ms=110, event_metadata=update_metadata,
-    )
-    assert registry.update_level(
-        tenant_id="t", business_id="b", risk_id="r", idempotency_key="update-meta",
-        level="critical", occurred_at_ms=999, event_metadata=update_metadata,
-    ) == updated
+    updated = registry.update_level( tenant_id="t", business_id="b", risk_id="r", idempotency_key="update-meta", level="critical", occurred_at_ms=110, event_metadata=update_metadata, )
+    assert registry.update_level( tenant_id="t", business_id="b", risk_id="r", idempotency_key="update-meta", level="critical", occurred_at_ms=999, event_metadata=update_metadata, ) == updated
     with pytest.raises(ValueError, match="event metadata"):
-        registry.update_level(
-            tenant_id="t", business_id="b", risk_id="r", idempotency_key="update-meta",
-            level="critical", occurred_at_ms=110,
-            event_metadata={**update_metadata, "actor_id": "owner-2"},
-        )
-
+        registry.update_level( tenant_id="t", business_id="b", risk_id="r", idempotency_key="update-meta", level="critical", occurred_at_ms=110, event_metadata={**update_metadata, "actor_id": "owner-2"}, )
     close_metadata = {"actor_id": "owner-1", "decision_id": "decision-close"}
-    closed = registry.close(
-        tenant_id="t", business_id="b", risk_id="r", idempotency_key="close-meta",
-        occurred_at_ms=120, event_metadata=close_metadata,
-    )
-    assert registry.close(
-        tenant_id="t", business_id="b", risk_id="r", idempotency_key="close-meta",
-        occurred_at_ms=999, event_metadata=close_metadata,
-    ) == closed
+    closed = registry.close( tenant_id="t", business_id="b", risk_id="r", idempotency_key="close-meta", occurred_at_ms=120, event_metadata=close_metadata, )
+    assert registry.close( tenant_id="t", business_id="b", risk_id="r", idempotency_key="close-meta", occurred_at_ms=999, event_metadata=close_metadata, ) == closed
     with pytest.raises(ValueError, match="event metadata"):
-        registry.close(
-            tenant_id="t", business_id="b", risk_id="r", idempotency_key="close-meta",
-            occurred_at_ms=120, event_metadata={**close_metadata, "actor_id": "owner-2"},
-        )
+        registry.close( tenant_id="t", business_id="b", risk_id="r", idempotency_key="close-meta", occurred_at_ms=120, event_metadata={**close_metadata, "actor_id": "owner-2"}, )
 
 
 def test_risk_identity_relation_is_immutable_and_timestamp_is_strict() -> None:
