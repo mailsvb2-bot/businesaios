@@ -3,7 +3,7 @@ from __future__ import annotations
 import pytest
 
 from application.lead import LeadHistoryInvariantViolation, LeadProjector, LeadRegistry
-from contracts.event_store import BusinessFactV1
+from contracts.event_store import BusinessFactV1, canonical_business_event_contract
 from contracts.lead import LeadLifecycleStatus, LeadNotFound
 from reliability.idempotency_store import InMemoryIdempotencyStore
 
@@ -65,6 +65,80 @@ def test_lead_lifecycle_is_pii_minimal_scoped_and_idempotent() -> None:
     assert archived.lifecycle_status is LeadLifecycleStatus.ARCHIVED
     assert archived.archived_at_ms == 300
     assert len(events.events) == 3
+
+
+def test_lead_lifecycle_propagates_canonical_event_metadata_and_replay_fails_closed() -> None:
+    registry, events = _registry()
+    create_metadata = {
+        "actor_id": "owner-1",
+        "decision_id": "decision-create",
+        "correlation_id": "lead-flow-1",
+        "evidence_ids": ("evidence-create",),
+    }
+    created = registry.create(
+        tenant_id="tenant-1", business_id="business-1", lead_id="lead-1",
+        idempotency_key="create-meta", source="website", occurred_at_ms=100,
+        event_metadata=create_metadata,
+    )
+    replay = registry.create(
+        tenant_id="tenant-1", business_id="business-1", lead_id="lead-1",
+        idempotency_key="create-meta", source="website", occurred_at_ms=999,
+        event_metadata=create_metadata,
+    )
+    assert replay == created
+    assert len(events.events) == 1
+    created_event = events.events[0]
+    assert created_event["decision_id"] == "decision-create"
+    assert canonical_business_event_contract(created_event)["actor_id"] == "owner-1"
+    assert canonical_business_event_contract(created_event)["evidence_ids"] == ("evidence-create",)
+    with pytest.raises(ValueError, match="event metadata"):
+        registry.create(
+            tenant_id="tenant-1", business_id="business-1", lead_id="lead-1",
+            idempotency_key="create-meta", source="website", occurred_at_ms=100,
+            event_metadata={**create_metadata, "actor_id": "owner-2"},
+        )
+
+    update_metadata = {
+        "actor_id": "owner-1",
+        "decision_id": "decision-update",
+        "correlation_id": "lead-flow-1",
+    }
+    updated = registry.update(
+        tenant_id="tenant-1", business_id="business-1", lead_id="lead-1",
+        idempotency_key="update-meta", status="qualified", occurred_at_ms=200,
+        event_metadata=update_metadata,
+    )
+    replayed_update = registry.update(
+        tenant_id="tenant-1", business_id="business-1", lead_id="lead-1",
+        idempotency_key="update-meta", status="qualified", occurred_at_ms=999,
+        event_metadata=update_metadata,
+    )
+    assert replayed_update == updated
+    assert len(events.events) == 2
+    with pytest.raises(ValueError, match="event metadata"):
+        registry.update(
+            tenant_id="tenant-1", business_id="business-1", lead_id="lead-1",
+            idempotency_key="update-meta", status="qualified", occurred_at_ms=200,
+            event_metadata={**update_metadata, "actor_id": "owner-2"},
+        )
+
+    archive_metadata = {"actor_id": "owner-1", "decision_id": "decision-archive"}
+    archived = registry.archive(
+        tenant_id="tenant-1", business_id="business-1", lead_id="lead-1",
+        idempotency_key="archive-meta", occurred_at_ms=300, event_metadata=archive_metadata,
+    )
+    replayed_archive = registry.archive(
+        tenant_id="tenant-1", business_id="business-1", lead_id="lead-1",
+        idempotency_key="archive-meta", occurred_at_ms=999, event_metadata=archive_metadata,
+    )
+    assert replayed_archive == archived
+    assert len(events.events) == 3
+    with pytest.raises(ValueError, match="event metadata"):
+        registry.archive(
+            tenant_id="tenant-1", business_id="business-1", lead_id="lead-1",
+            idempotency_key="archive-meta", occurred_at_ms=300,
+            event_metadata={**archive_metadata, "actor_id": "owner-2"},
+        )
 
 
 def test_lead_source_cannot_be_rewritten_and_archived_lead_cannot_update() -> None:
