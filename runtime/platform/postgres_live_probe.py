@@ -11,7 +11,7 @@ from runtime.platform.postgres_contract import (
     PostgresRuntimeProof,
     evaluate_postgres_contract,
 )
-from runtime.platform.postgres_migration_runner import migration_files
+from runtime.platform.postgres_migration_runner import apply_postgres_migrations
 from runtime.platform.postgres_port import PostgresPort
 
 
@@ -22,15 +22,6 @@ class PostgresLiveProbeConfig:
     tenant_id: str = "ci-postgres-live-tenant"
     proof_id: str = "ci-postgres-live-proof"
     backup_evidence_ok: bool = False
-
-
-def _apply_migrations(port: PostgresPort) -> None:
-    files = migration_files()
-    if not files:
-        raise RuntimeError("postgres_migrations_missing")
-    for path in files:
-        port.execute(path.read_text(encoding="utf-8"))
-        port.commit()
 
 
 def _rows_to_names(rows: object) -> tuple[str, ...]:
@@ -258,9 +249,9 @@ def _ledger_chain_verification(port: PostgresPort, *, tenant_id: str, proof_id: 
 
 
 def run_postgres_live_probe(config: PostgresLiveProbeConfig) -> dict[str, object]:
+    if config.apply_migrations:
+        apply_postgres_migrations(config.dsn)
     with PostgresPort(config.dsn, application_name="businesaios-postgres-live") as port:
-        if config.apply_migrations:
-            _apply_migrations(port)
         live_ok = port.ping()
         schema = _schema_objects(port)
         migrations = _migrations(port)
