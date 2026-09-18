@@ -132,6 +132,7 @@ class DealRegistry:
         pipeline_key: str | None = None, stage_key: str | None = None,
         amount_minor: int | None = None, currency: str | None = None,
         occurred_at_ms: int | None = None,
+        event_metadata: dict[str, object] | None = None,
     ) -> Deal:
         when = self._time(occurred_at_ms)
         candidate = Deal(
@@ -150,12 +151,13 @@ class DealRegistry:
             self._writer.repair_existing(
                 tenant_id=tenant_id, business_id=business_id, entity_id=deal_id,
                 operation="create", idempotency_key=idempotency_key, fact_type=DEAL_CREATED, payload=payload,
+                event_metadata=event_metadata,
             )
             return current
         self._writer.append_once(
             tenant_id=tenant_id, business_id=business_id, entity_id=deal_id,
             operation="create", idempotency_key=idempotency_key, fact_type=DEAL_CREATED,
-            payload=payload, occurred_at_ms=when,
+            payload=payload, occurred_at_ms=when, event_metadata=event_metadata,
         )
         return self._projector.get(tenant_id=tenant_id, business_id=business_id, deal_id=deal_id)
 
@@ -164,6 +166,7 @@ class DealRegistry:
         pipeline_key: str | None = None, stage_key: str | None = None,
         amount_minor: int | None = None, currency: str | None = None,
         occurred_at_ms: int | None = None,
+        event_metadata: dict[str, object] | None = None,
     ) -> Deal:
         current = self._projector.get(tenant_id=tenant_id, business_id=business_id, deal_id=deal_id)
         if current.lifecycle_status is DealLifecycleStatus.ARCHIVED:
@@ -183,27 +186,39 @@ class DealRegistry:
             raise ValueError("deal currency cannot be rewritten")
         payload = self._payload(candidate)
         if payload == self._payload(current):
+            self._writer.repair_existing(
+                tenant_id=tenant_id, business_id=business_id, entity_id=deal_id,
+                operation="update", idempotency_key=idempotency_key, fact_type=DEAL_UPDATED,
+                payload=payload, event_metadata=event_metadata,
+            )
             return current
         self._writer.append_transition_once(
             tenant_id=tenant_id, business_id=business_id, entity_id=deal_id,
             expected_state_token=self._state_token(current), operation="update",
             idempotency_key=idempotency_key, fact_type=DEAL_UPDATED, payload=payload,
-            occurred_at_ms=when,
+            occurred_at_ms=when, event_metadata=event_metadata,
         )
         return self._projector.get(tenant_id=tenant_id, business_id=business_id, deal_id=deal_id)
 
     def archive(
         self, *, tenant_id: str, business_id: str, deal_id: str, idempotency_key: str,
         occurred_at_ms: int | None = None,
+        event_metadata: dict[str, object] | None = None,
     ) -> Deal:
         current = self._projector.get(tenant_id=tenant_id, business_id=business_id, deal_id=deal_id)
         if current.lifecycle_status is DealLifecycleStatus.ARCHIVED:
+            self._writer.repair_existing(
+                tenant_id=tenant_id, business_id=business_id, entity_id=deal_id,
+                operation="archive", idempotency_key=idempotency_key, fact_type=DEAL_ARCHIVED,
+                payload={}, event_metadata=event_metadata,
+            )
             return current
         when = max(current.updated_at_ms, self._time(occurred_at_ms))
         self._writer.append_transition_once(
             tenant_id=tenant_id, business_id=business_id, entity_id=deal_id,
             expected_state_token=self._state_token(current), operation="archive",
             idempotency_key=idempotency_key, fact_type=DEAL_ARCHIVED, payload={}, occurred_at_ms=when,
+            event_metadata=event_metadata,
         )
         return self._projector.get(tenant_id=tenant_id, business_id=business_id, deal_id=deal_id)
 

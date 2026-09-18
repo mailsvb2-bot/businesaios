@@ -129,7 +129,8 @@ class OpportunityRegistry:
     def create(self, *, tenant_id: str, business_id: str, opportunity_id: str, idempotency_key: str,
                source_kind: str | None = None, stage_key: str | None = None,
                expected_value_minor: int | None = None, currency: str | None = None,
-               occurred_at_ms: int | None = None) -> Opportunity:
+               occurred_at_ms: int | None = None,
+               event_metadata: dict[str, object] | None = None) -> Opportunity:
         when = self._time(occurred_at_ms)
         candidate = Opportunity(
             opportunity_id=opportunity_id, tenant_id=tenant_id, business_id=business_id,
@@ -147,19 +148,21 @@ class OpportunityRegistry:
             self._writer.repair_existing(
                 tenant_id=tenant_id, business_id=business_id, entity_id=opportunity_id,
                 operation="create", idempotency_key=idempotency_key, fact_type=OPPORTUNITY_CREATED, payload=payload,
+                event_metadata=event_metadata,
             )
             return current
         self._writer.append_once(
             tenant_id=tenant_id, business_id=business_id, entity_id=opportunity_id,
             operation="create", idempotency_key=idempotency_key, fact_type=OPPORTUNITY_CREATED,
-            payload=payload, occurred_at_ms=when,
+            payload=payload, occurred_at_ms=when, event_metadata=event_metadata,
         )
         return self._projector.get(tenant_id=tenant_id, business_id=business_id, opportunity_id=opportunity_id)
 
     def update(self, *, tenant_id: str, business_id: str, opportunity_id: str, idempotency_key: str,
                source_kind: str | None = None, stage_key: str | None = None,
                expected_value_minor: int | None = None, currency: str | None = None,
-               occurred_at_ms: int | None = None) -> Opportunity:
+               occurred_at_ms: int | None = None,
+               event_metadata: dict[str, object] | None = None) -> Opportunity:
         current = self._projector.get(tenant_id=tenant_id, business_id=business_id, opportunity_id=opportunity_id)
         if current.lifecycle_status is OpportunityLifecycleStatus.ARCHIVED:
             raise ValueError("archived opportunity cannot be updated")
@@ -178,24 +181,37 @@ class OpportunityRegistry:
             raise ValueError("opportunity currency cannot be rewritten")
         payload = self._payload(candidate)
         if payload == self._payload(current):
+            self._writer.repair_existing(
+                tenant_id=tenant_id, business_id=business_id, entity_id=opportunity_id,
+                operation="update", idempotency_key=idempotency_key, fact_type=OPPORTUNITY_UPDATED,
+                payload=payload, event_metadata=event_metadata,
+            )
             return current
         self._writer.append_transition_once(
             tenant_id=tenant_id, business_id=business_id, entity_id=opportunity_id,
             expected_state_token=self._state_token(current), operation="update", idempotency_key=idempotency_key,
             fact_type=OPPORTUNITY_UPDATED, payload=payload, occurred_at_ms=when,
+            event_metadata=event_metadata,
         )
         return self._projector.get(tenant_id=tenant_id, business_id=business_id, opportunity_id=opportunity_id)
 
     def archive(self, *, tenant_id: str, business_id: str, opportunity_id: str, idempotency_key: str,
-                occurred_at_ms: int | None = None) -> Opportunity:
+                occurred_at_ms: int | None = None,
+                event_metadata: dict[str, object] | None = None) -> Opportunity:
         current = self._projector.get(tenant_id=tenant_id, business_id=business_id, opportunity_id=opportunity_id)
         if current.lifecycle_status is OpportunityLifecycleStatus.ARCHIVED:
+            self._writer.repair_existing(
+                tenant_id=tenant_id, business_id=business_id, entity_id=opportunity_id,
+                operation="archive", idempotency_key=idempotency_key, fact_type=OPPORTUNITY_ARCHIVED,
+                payload={}, event_metadata=event_metadata,
+            )
             return current
         when = max(current.updated_at_ms, self._time(occurred_at_ms))
         self._writer.append_transition_once(
             tenant_id=tenant_id, business_id=business_id, entity_id=opportunity_id,
             expected_state_token=self._state_token(current), operation="archive", idempotency_key=idempotency_key,
             fact_type=OPPORTUNITY_ARCHIVED, payload={}, occurred_at_ms=when,
+            event_metadata=event_metadata,
         )
         return self._projector.get(tenant_id=tenant_id, business_id=business_id, opportunity_id=opportunity_id)
 

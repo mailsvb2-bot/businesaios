@@ -176,6 +176,7 @@ class BusinessResourceRegistry:
         state_key: str | None = None,
         asset_id: str | None = None,
         occurred_at_ms: int | None = None,
+        event_metadata: dict[str, object] | None = None,
     ) -> BusinessResource:
         when = self._time(occurred_at_ms)
         candidate = BusinessResource(
@@ -200,12 +201,13 @@ class BusinessResourceRegistry:
             self._writer.repair_existing(
                 tenant_id=tenant_id, business_id=business_id, entity_id=resource_id,
                 operation="create", idempotency_key=idempotency_key, fact_type=RESOURCE_CREATED, payload=payload,
+                event_metadata=event_metadata,
             )
             return current
         self._writer.append_once(
             tenant_id=tenant_id, business_id=business_id, entity_id=resource_id,
             operation="create", idempotency_key=idempotency_key, fact_type=RESOURCE_CREATED,
-            payload=payload, occurred_at_ms=when,
+            payload=payload, occurred_at_ms=when, event_metadata=event_metadata,
         )
         return self._projector.get(tenant_id=tenant_id, business_id=business_id, resource_id=resource_id)
 
@@ -219,6 +221,7 @@ class BusinessResourceRegistry:
         resource_kind: str | None = None,
         state_key: str | None = None,
         occurred_at_ms: int | None = None,
+        event_metadata: dict[str, object] | None = None,
     ) -> BusinessResource:
         current = self._projector.get(tenant_id=tenant_id, business_id=business_id, resource_id=resource_id)
         if current.lifecycle_status is ResourceLifecycleStatus.ARCHIVED:
@@ -238,11 +241,17 @@ class BusinessResourceRegistry:
             raise ValueError("business resource kind cannot be rewritten")
         payload = self._payload(candidate)
         if payload == self._payload(current):
+            self._writer.repair_existing(
+                tenant_id=tenant_id, business_id=business_id, entity_id=resource_id,
+                operation="update", idempotency_key=idempotency_key, fact_type=RESOURCE_UPDATED,
+                payload=payload, event_metadata=event_metadata,
+            )
             return current
         self._writer.append_transition_once(
             tenant_id=tenant_id, business_id=business_id, entity_id=resource_id,
             expected_state_token=self._state_token(current), operation="update",
             idempotency_key=idempotency_key, fact_type=RESOURCE_UPDATED, payload=payload, occurred_at_ms=when,
+            event_metadata=event_metadata,
         )
         return self._projector.get(tenant_id=tenant_id, business_id=business_id, resource_id=resource_id)
 
@@ -254,9 +263,15 @@ class BusinessResourceRegistry:
         resource_id: str,
         idempotency_key: str,
         occurred_at_ms: int | None = None,
+        event_metadata: dict[str, object] | None = None,
     ) -> BusinessResource:
         current = self._projector.get(tenant_id=tenant_id, business_id=business_id, resource_id=resource_id)
         if current.lifecycle_status is ResourceLifecycleStatus.ARCHIVED:
+            self._writer.repair_existing(
+                tenant_id=tenant_id, business_id=business_id, entity_id=resource_id,
+                operation="archive", idempotency_key=idempotency_key, fact_type=RESOURCE_ARCHIVED,
+                payload={"schema_version": BUSINESS_RESOURCE_SCHEMA_VERSION}, event_metadata=event_metadata,
+            )
             return current
         when = max(current.updated_at_ms, self._time(occurred_at_ms))
         payload: dict[str, object] = {"schema_version": BUSINESS_RESOURCE_SCHEMA_VERSION}
@@ -264,6 +279,7 @@ class BusinessResourceRegistry:
             tenant_id=tenant_id, business_id=business_id, entity_id=resource_id,
             expected_state_token=self._state_token(current), operation="archive",
             idempotency_key=idempotency_key, fact_type=RESOURCE_ARCHIVED, payload=payload, occurred_at_ms=when,
+            event_metadata=event_metadata,
         )
         return self._projector.get(tenant_id=tenant_id, business_id=business_id, resource_id=resource_id)
 

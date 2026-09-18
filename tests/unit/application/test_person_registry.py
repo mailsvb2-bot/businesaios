@@ -5,6 +5,7 @@ from dataclasses import fields
 import pytest
 
 from application.person import PersonProjector, PersonRegistry
+from contracts.event_store import canonical_business_event_contract
 from contracts.person import Person, PersonNotFound, PersonStatus
 from reliability.idempotency_store import InMemoryIdempotencyStore
 
@@ -92,3 +93,19 @@ def test_archived_person_replay_is_idempotent() -> None:
     second = registry.archive(tenant_id="tenant-1", business_id="business-1", person_id="person-1", idempotency_key="archive", occurred_at_ms=999)
     assert second == first
     assert len(events.events) == 2
+
+
+def test_person_event_metadata_propagates_and_replay_rejects_change() -> None:
+    registry, events = _registry()
+    create_metadata = {"actor_id": "owner-1", "decision_id": "person-create", "evidence_ids": ("e-person",)}
+    created = registry.create( tenant_id="tenant-1", business_id="business-1", person_id="person-meta", idempotency_key="create-meta", occurred_at_ms=10, event_metadata=create_metadata, )
+    assert registry.create( tenant_id="tenant-1", business_id="business-1", person_id="person-meta", idempotency_key="create-meta", occurred_at_ms=999, event_metadata=create_metadata, ) == created
+    person_events = [e for e in events.events if str(dict(e.get("payload") or {}).get("fact_type") or "").startswith("person.")]
+    assert canonical_business_event_contract(person_events[0])["actor_id"] == "owner-1"
+    with pytest.raises(ValueError, match="event metadata"):
+        registry.create( tenant_id="tenant-1", business_id="business-1", person_id="person-meta", idempotency_key="create-meta", occurred_at_ms=10, event_metadata={**create_metadata, "actor_id": "owner-2"}, )
+    archive_metadata = {"actor_id": "owner-1", "decision_id": "person-archive"}
+    archived = registry.archive( tenant_id="tenant-1", business_id="business-1", person_id="person-meta", idempotency_key="archive-meta", occurred_at_ms=20, event_metadata=archive_metadata, )
+    assert registry.archive( tenant_id="tenant-1", business_id="business-1", person_id="person-meta", idempotency_key="archive-meta", occurred_at_ms=999, event_metadata=archive_metadata, ) == archived
+    with pytest.raises(ValueError, match="event metadata"):
+        registry.archive( tenant_id="tenant-1", business_id="business-1", person_id="person-meta", idempotency_key="archive-meta", occurred_at_ms=20, event_metadata={**archive_metadata, "actor_id": "owner-2"}, )

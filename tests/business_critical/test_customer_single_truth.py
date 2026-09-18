@@ -5,7 +5,7 @@ from concurrent.futures import ThreadPoolExecutor
 import pytest
 
 from contracts.customer import CustomerIdentityConflict, CustomerIdentityStatus, CustomerNotFound, CustomerStatus
-from contracts.event_store import BusinessFactV1
+from contracts.event_store import BusinessFactV1, canonical_business_event_contract
 from crm import CustomerRegistry, CustomerTimelineProjector
 from reliability.idempotency_store import InMemoryIdempotencyStore
 from runtime.platform.event_store.memory_event_store import MemoryEventStore
@@ -216,3 +216,32 @@ def test_customer_pii_revocation_deactivates_routing_material_and_projection_fai
     event_text = str(list(events))
     assert "3725559911" not in event_text
     assert "Erase Me" not in event_text
+
+
+def test_customer_business_facts_propagate_metadata_and_fail_closed_on_replay_change() -> None:
+    registry, events = _registry()
+    create_metadata = { "actor_id": "owner-1", "agent_id": "agent-1", "decision_id": "decision-customer", "evidence_ids": ("e-customer",), }
+    record = registry.ensure_customer_identity( tenant_id="t-meta", business_id="b-meta", channel="telegram", external_subject="meta-user", occurred_at_ms=100, correlation_id="correlation-create", event_metadata=create_metadata, )
+    customer_id = record.customer.customer_id
+    raw = list(events.iter_events(tenant_id="t-meta", start_ms=0))
+    assert len(raw) == 2
+    for row in raw:
+        contract = canonical_business_event_contract(row)
+        assert contract["actor_id"] == "owner-1"
+        assert contract["agent_id"] == "agent-1"
+        assert contract["correlation_id"] == "correlation-create"
+        assert contract["evidence_ids"] == ("e-customer",)
+        assert row["decision_id"] == "decision-customer"
+    contact_metadata = {"actor_id": "owner-2", "decision_id": "decision-contact"}
+    registry.record_contact( tenant_id="t-meta", business_id="b-meta", customer_id=customer_id, channel="telegram", external_subject="meta-user", contact_id="contact-1", occurred_at_ms=120, correlation_id="correlation-contact", event_metadata=contact_metadata, )
+    before = len(list(events.iter_events(tenant_id="t-meta", start_ms=0)))
+    registry.record_contact( tenant_id="t-meta", business_id="b-meta", customer_id=customer_id, channel="telegram", external_subject="meta-user", contact_id="contact-1", occurred_at_ms=999, correlation_id="correlation-contact", event_metadata=contact_metadata, )
+    assert len(list(events.iter_events(tenant_id="t-meta", start_ms=0))) == before
+    with pytest.raises(ValueError, match="metadata"):
+        registry.record_contact( tenant_id="t-meta", business_id="b-meta", customer_id=customer_id, channel="telegram", external_subject="meta-user", contact_id="contact-1", occurred_at_ms=999, correlation_id="correlation-contact", event_metadata={**contact_metadata, "actor_id": "owner-changed"}, )
+    archive_metadata = {"actor_id": "owner-3", "decision_id": "decision-archive"}
+    archived = registry.archive_customer( tenant_id="t-meta", business_id="b-meta", customer_id=customer_id, occurred_at_ms=140, correlation_id="correlation-archive", event_metadata=archive_metadata, )
+    assert archived.status is CustomerStatus.ARCHIVED
+    assert registry.archive_customer( tenant_id="t-meta", business_id="b-meta", customer_id=customer_id, occurred_at_ms=999, correlation_id="correlation-archive", event_metadata=archive_metadata, ) == archived
+    with pytest.raises(ValueError, match="metadata"):
+        registry.archive_customer( tenant_id="t-meta", business_id="b-meta", customer_id=customer_id, occurred_at_ms=999, correlation_id="correlation-archive", event_metadata={**archive_metadata, "actor_id": "owner-changed"}, )

@@ -182,6 +182,7 @@ class BusinessGoalRegistry:
         parent_goal_id: str | None = None,
         priority: int = 50,
         occurred_at_ms: int | None = None,
+        event_metadata: dict[str, object] | None = None,
     ) -> BusinessGoal:
         when = self._time(occurred_at_ms)
         candidate = BusinessGoal(
@@ -212,12 +213,13 @@ class BusinessGoalRegistry:
             self._writer.repair_existing(
                 tenant_id=tenant_id, business_id=business_id, entity_id=goal_id,
                 operation="create", idempotency_key=idempotency_key, fact_type=GOAL_CREATED, payload=payload,
+                event_metadata=event_metadata,
             )
             return current
         self._writer.append_once(
             tenant_id=tenant_id, business_id=business_id, entity_id=goal_id,
             operation="create", idempotency_key=idempotency_key, fact_type=GOAL_CREATED,
-            payload=payload, occurred_at_ms=when,
+            payload=payload, occurred_at_ms=when, event_metadata=event_metadata,
         )
         return self._projector.get(tenant_id=tenant_id, business_id=business_id, goal_id=goal_id)
 
@@ -230,6 +232,7 @@ class BusinessGoalRegistry:
         idempotency_key: str,
         priority: int,
         occurred_at_ms: int | None = None,
+        event_metadata: dict[str, object] | None = None,
     ) -> BusinessGoal:
         current = self._projector.get(tenant_id=tenant_id, business_id=business_id, goal_id=goal_id)
         if current.lifecycle_status is not GoalLifecycleStatus.ACTIVE:
@@ -238,11 +241,17 @@ class BusinessGoalRegistry:
         candidate = replace(current, priority=priority, updated_at_ms=when)
         payload = self._payload(candidate)
         if payload == self._payload(current):
+            self._writer.repair_existing(
+                tenant_id=tenant_id, business_id=business_id, entity_id=goal_id,
+                operation="update", idempotency_key=idempotency_key, fact_type=GOAL_UPDATED,
+                payload=payload, event_metadata=event_metadata,
+            )
             return current
         self._writer.append_transition_once(
             tenant_id=tenant_id, business_id=business_id, entity_id=goal_id,
             expected_state_token=self._state_token(current), operation="update",
             idempotency_key=idempotency_key, fact_type=GOAL_UPDATED, payload=payload, occurred_at_ms=when,
+            event_metadata=event_metadata,
         )
         return self._projector.get(tenant_id=tenant_id, business_id=business_id, goal_id=goal_id)
 
@@ -256,6 +265,7 @@ class BusinessGoalRegistry:
         fact_type: str,
         operation: str,
         occurred_at_ms: int | None,
+        event_metadata: dict[str, object] | None,
     ) -> BusinessGoal:
         current = self._projector.get(tenant_id=tenant_id, business_id=business_id, goal_id=goal_id)
         target_status = {
@@ -265,6 +275,12 @@ class BusinessGoalRegistry:
         }[fact_type]
         if current.lifecycle_status is not GoalLifecycleStatus.ACTIVE:
             if current.lifecycle_status is target_status:
+                self._writer.repair_existing(
+                    tenant_id=tenant_id, business_id=business_id, entity_id=goal_id,
+                    operation=operation, idempotency_key=idempotency_key, fact_type=fact_type,
+                    payload={"schema_version": BUSINESS_GOAL_SCHEMA_VERSION},
+                    event_metadata=event_metadata,
+                )
                 return current
             raise ValueError("terminal business goal cannot change terminal status")
         when = max(current.updated_at_ms, self._time(occurred_at_ms))
@@ -273,17 +289,18 @@ class BusinessGoalRegistry:
             expected_state_token=self._state_token(current), operation=operation,
             idempotency_key=idempotency_key, fact_type=fact_type,
             payload={"schema_version": BUSINESS_GOAL_SCHEMA_VERSION}, occurred_at_ms=when,
+            event_metadata=event_metadata,
         )
         return self._projector.get(tenant_id=tenant_id, business_id=business_id, goal_id=goal_id)
 
-    def complete(self, *, tenant_id: str, business_id: str, goal_id: str, idempotency_key: str, occurred_at_ms: int | None = None) -> BusinessGoal:
-        return self._terminal(tenant_id=tenant_id, business_id=business_id, goal_id=goal_id, idempotency_key=idempotency_key, fact_type=GOAL_COMPLETED, operation="complete", occurred_at_ms=occurred_at_ms)
+    def complete(self, *, tenant_id: str, business_id: str, goal_id: str, idempotency_key: str, occurred_at_ms: int | None = None, event_metadata: dict[str, object] | None = None) -> BusinessGoal:
+        return self._terminal(tenant_id=tenant_id, business_id=business_id, goal_id=goal_id, idempotency_key=idempotency_key, fact_type=GOAL_COMPLETED, operation="complete", occurred_at_ms=occurred_at_ms, event_metadata=event_metadata)
 
-    def cancel(self, *, tenant_id: str, business_id: str, goal_id: str, idempotency_key: str, occurred_at_ms: int | None = None) -> BusinessGoal:
-        return self._terminal(tenant_id=tenant_id, business_id=business_id, goal_id=goal_id, idempotency_key=idempotency_key, fact_type=GOAL_CANCELLED, operation="cancel", occurred_at_ms=occurred_at_ms)
+    def cancel(self, *, tenant_id: str, business_id: str, goal_id: str, idempotency_key: str, occurred_at_ms: int | None = None, event_metadata: dict[str, object] | None = None) -> BusinessGoal:
+        return self._terminal(tenant_id=tenant_id, business_id=business_id, goal_id=goal_id, idempotency_key=idempotency_key, fact_type=GOAL_CANCELLED, operation="cancel", occurred_at_ms=occurred_at_ms, event_metadata=event_metadata)
 
-    def archive(self, *, tenant_id: str, business_id: str, goal_id: str, idempotency_key: str, occurred_at_ms: int | None = None) -> BusinessGoal:
-        return self._terminal(tenant_id=tenant_id, business_id=business_id, goal_id=goal_id, idempotency_key=idempotency_key, fact_type=GOAL_ARCHIVED, operation="archive", occurred_at_ms=occurred_at_ms)
+    def archive(self, *, tenant_id: str, business_id: str, goal_id: str, idempotency_key: str, occurred_at_ms: int | None = None, event_metadata: dict[str, object] | None = None) -> BusinessGoal:
+        return self._terminal(tenant_id=tenant_id, business_id=business_id, goal_id=goal_id, idempotency_key=idempotency_key, fact_type=GOAL_ARCHIVED, operation="archive", occurred_at_ms=occurred_at_ms, event_metadata=event_metadata)
 
     def get(self, *, tenant_id: str, business_id: str, goal_id: str) -> BusinessGoal:
         return self._projector.get(tenant_id=tenant_id, business_id=business_id, goal_id=goal_id)

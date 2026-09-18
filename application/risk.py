@@ -214,6 +214,7 @@ class RiskRegistry:
         subject_kind: str | None = None,
         subject_id: str | None = None,
         occurred_at_ms: int | None = None,
+        event_metadata: dict[str, object] | None = None,
     ) -> Risk:
         when = self._time(occurred_at_ms)
         candidate = Risk(
@@ -247,6 +248,7 @@ class RiskRegistry:
                 idempotency_key=idempotency_key,
                 fact_type=RISK_CREATED,
                 payload=payload,
+                event_metadata=event_metadata,
             )
             if not repaired:
                 raise ValueError("risk already exists; create must replay its original durable mutation")
@@ -260,6 +262,7 @@ class RiskRegistry:
             fact_type=RISK_CREATED,
             payload=payload,
             occurred_at_ms=when,
+            event_metadata=event_metadata,
         )
         return self._projector.get(
             tenant_id=tenant_id,
@@ -276,6 +279,7 @@ class RiskRegistry:
         idempotency_key: str,
         level: RiskLevel | str,
         occurred_at_ms: int | None = None,
+        event_metadata: dict[str, object] | None = None,
     ) -> Risk:
         current = self._projector.get(
             tenant_id=tenant_id,
@@ -286,6 +290,16 @@ class RiskRegistry:
             raise ValueError("closed risk cannot be updated")
         next_level = RiskLevel(level)
         if next_level is current.level:
+            self._writer.repair_existing(
+                tenant_id=tenant_id,
+                business_id=business_id,
+                entity_id=risk_id,
+                operation="update_level",
+                idempotency_key=idempotency_key,
+                fact_type=RISK_LEVEL_UPDATED,
+                payload=self._payload(current),
+                event_metadata=event_metadata,
+            )
             return current
         when = self._transition_time(current, occurred_at_ms)
         candidate = replace(current, level=next_level, updated_at_ms=when)
@@ -300,6 +314,7 @@ class RiskRegistry:
             fact_type=RISK_LEVEL_UPDATED,
             payload=payload,
             occurred_at_ms=when,
+            event_metadata=event_metadata,
         )
         return self._projector.get(
             tenant_id=tenant_id,
@@ -315,6 +330,7 @@ class RiskRegistry:
         risk_id: str,
         idempotency_key: str,
         occurred_at_ms: int | None = None,
+        event_metadata: dict[str, object] | None = None,
     ) -> Risk:
         current = self._projector.get(
             tenant_id=tenant_id,
@@ -322,6 +338,16 @@ class RiskRegistry:
             risk_id=risk_id,
         )
         if current.lifecycle_status is RiskLifecycleStatus.CLOSED:
+            self._writer.repair_existing(
+                tenant_id=tenant_id,
+                business_id=business_id,
+                entity_id=risk_id,
+                operation="close",
+                idempotency_key=idempotency_key,
+                fact_type=RISK_CLOSED,
+                payload=self._payload(current),
+                event_metadata=event_metadata,
+            )
             return current
         when = self._transition_time(current, occurred_at_ms)
         self._writer.append_transition_once(
@@ -334,6 +360,7 @@ class RiskRegistry:
             fact_type=RISK_CLOSED,
             payload=self._payload(current),
             occurred_at_ms=when,
+            event_metadata=event_metadata,
         )
         return self._projector.get(
             tenant_id=tenant_id,

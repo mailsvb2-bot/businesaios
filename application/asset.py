@@ -166,6 +166,7 @@ class AssetRegistry:
         book_value_minor: int | None = None,
         currency: str | None = None,
         occurred_at_ms: int | None = None,
+        event_metadata: dict[str, object] | None = None,
     ) -> Asset:
         when = self._time(occurred_at_ms)
         candidate = Asset(
@@ -195,6 +196,7 @@ class AssetRegistry:
                 idempotency_key=idempotency_key,
                 fact_type=ASSET_CREATED,
                 payload=payload,
+                event_metadata=event_metadata,
             )
             return current
         self._writer.append_once(
@@ -206,6 +208,7 @@ class AssetRegistry:
             fact_type=ASSET_CREATED,
             payload=payload,
             occurred_at_ms=when,
+            event_metadata=event_metadata,
         )
         return self._projector.get(tenant_id=tenant_id, business_id=business_id, asset_id=asset_id)
 
@@ -221,6 +224,7 @@ class AssetRegistry:
         book_value_minor: int | None = None,
         currency: str | None = None,
         occurred_at_ms: int | None = None,
+        event_metadata: dict[str, object] | None = None,
     ) -> Asset:
         current = self._projector.get(tenant_id=tenant_id, business_id=business_id, asset_id=asset_id)
         if current.lifecycle_status is AssetLifecycleStatus.ARCHIVED:
@@ -243,6 +247,16 @@ class AssetRegistry:
             raise ValueError("asset currency cannot be rewritten")
         payload = self._payload(candidate)
         if payload == self._payload(current):
+            self._writer.repair_existing(
+                tenant_id=tenant_id,
+                business_id=business_id,
+                entity_id=asset_id,
+                operation="update",
+                idempotency_key=idempotency_key,
+                fact_type=ASSET_UPDATED,
+                payload=payload,
+                event_metadata=event_metadata,
+            )
             return current
         self._writer.append_transition_once(
             tenant_id=tenant_id,
@@ -254,6 +268,7 @@ class AssetRegistry:
             fact_type=ASSET_UPDATED,
             payload=payload,
             occurred_at_ms=when,
+            event_metadata=event_metadata,
         )
         return self._projector.get(tenant_id=tenant_id, business_id=business_id, asset_id=asset_id)
 
@@ -265,9 +280,20 @@ class AssetRegistry:
         asset_id: str,
         idempotency_key: str,
         occurred_at_ms: int | None = None,
+        event_metadata: dict[str, object] | None = None,
     ) -> Asset:
         current = self._projector.get(tenant_id=tenant_id, business_id=business_id, asset_id=asset_id)
         if current.lifecycle_status is AssetLifecycleStatus.ARCHIVED:
+            self._writer.repair_existing(
+                tenant_id=tenant_id,
+                business_id=business_id,
+                entity_id=asset_id,
+                operation="archive",
+                idempotency_key=idempotency_key,
+                fact_type=ASSET_ARCHIVED,
+                payload={"schema_version": ASSET_SCHEMA_VERSION},
+                event_metadata=event_metadata,
+            )
             return current
         when = max(current.updated_at_ms, self._time(occurred_at_ms))
         payload: dict[str, object] = {"schema_version": ASSET_SCHEMA_VERSION}
@@ -281,6 +307,7 @@ class AssetRegistry:
             fact_type=ASSET_ARCHIVED,
             payload=payload,
             occurred_at_ms=when,
+            event_metadata=event_metadata,
         )
         return self._projector.get(tenant_id=tenant_id, business_id=business_id, asset_id=asset_id)
 

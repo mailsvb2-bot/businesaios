@@ -173,6 +173,7 @@ class BusinessConstraintRegistry:
         subject_id: str | None = None,
         state_key: str | None = None,
         occurred_at_ms: int | None = None,
+        event_metadata: dict[str, object] | None = None,
     ) -> BusinessConstraint:
         when = self._time(occurred_at_ms)
         candidate = BusinessConstraint(
@@ -198,12 +199,13 @@ class BusinessConstraintRegistry:
             self._writer.repair_existing(
                 tenant_id=tenant_id, business_id=business_id, entity_id=constraint_id,
                 operation="create", idempotency_key=idempotency_key, fact_type=CONSTRAINT_CREATED, payload=payload,
+                event_metadata=event_metadata,
             )
             return current
         self._writer.append_once(
             tenant_id=tenant_id, business_id=business_id, entity_id=constraint_id,
             operation="create", idempotency_key=idempotency_key, fact_type=CONSTRAINT_CREATED,
-            payload=payload, occurred_at_ms=when,
+            payload=payload, occurred_at_ms=when, event_metadata=event_metadata,
         )
         return self._projector.get(tenant_id=tenant_id, business_id=business_id, constraint_id=constraint_id)
 
@@ -217,6 +219,7 @@ class BusinessConstraintRegistry:
         severity: ConstraintSeverity | str | None = None,
         state_key: str | None = None,
         occurred_at_ms: int | None = None,
+        event_metadata: dict[str, object] | None = None,
     ) -> BusinessConstraint:
         current = self._projector.get(tenant_id=tenant_id, business_id=business_id, constraint_id=constraint_id)
         if current.lifecycle_status is ConstraintLifecycleStatus.ARCHIVED:
@@ -230,11 +233,17 @@ class BusinessConstraintRegistry:
         )
         payload = self._payload(candidate)
         if payload == self._payload(current):
+            self._writer.repair_existing(
+                tenant_id=tenant_id, business_id=business_id, entity_id=constraint_id,
+                operation="update", idempotency_key=idempotency_key, fact_type=CONSTRAINT_UPDATED,
+                payload=payload, event_metadata=event_metadata,
+            )
             return current
         self._writer.append_transition_once(
             tenant_id=tenant_id, business_id=business_id, entity_id=constraint_id,
             expected_state_token=self._state_token(current), operation="update",
             idempotency_key=idempotency_key, fact_type=CONSTRAINT_UPDATED, payload=payload, occurred_at_ms=when,
+            event_metadata=event_metadata,
         )
         return self._projector.get(tenant_id=tenant_id, business_id=business_id, constraint_id=constraint_id)
 
@@ -246,9 +255,15 @@ class BusinessConstraintRegistry:
         constraint_id: str,
         idempotency_key: str,
         occurred_at_ms: int | None = None,
+        event_metadata: dict[str, object] | None = None,
     ) -> BusinessConstraint:
         current = self._projector.get(tenant_id=tenant_id, business_id=business_id, constraint_id=constraint_id)
         if current.lifecycle_status is ConstraintLifecycleStatus.ARCHIVED:
+            self._writer.repair_existing(
+                tenant_id=tenant_id, business_id=business_id, entity_id=constraint_id,
+                operation="archive", idempotency_key=idempotency_key, fact_type=CONSTRAINT_ARCHIVED,
+                payload={"schema_version": BUSINESS_CONSTRAINT_SCHEMA_VERSION}, event_metadata=event_metadata,
+            )
             return current
         when = max(current.updated_at_ms, self._time(occurred_at_ms))
         self._writer.append_transition_once(
@@ -256,6 +271,7 @@ class BusinessConstraintRegistry:
             expected_state_token=self._state_token(current), operation="archive",
             idempotency_key=idempotency_key, fact_type=CONSTRAINT_ARCHIVED,
             payload={"schema_version": BUSINESS_CONSTRAINT_SCHEMA_VERSION}, occurred_at_ms=when,
+            event_metadata=event_metadata,
         )
         return self._projector.get(tenant_id=tenant_id, business_id=business_id, constraint_id=constraint_id)
 

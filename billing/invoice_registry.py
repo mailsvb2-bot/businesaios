@@ -233,6 +233,7 @@ class InvoiceRegistry:
         invoice: CommercialInvoiceEnvelope,
         idempotency_key: str,
         occurred_at_ms: int | None = None,
+        event_metadata: dict[str, object] | None = None,
     ) -> CommercialInvoiceEnvelope:
         invoice.validate()
         business_id = self._business_id(business_id)
@@ -258,6 +259,7 @@ class InvoiceRegistry:
                 idempotency_key=idempotency_key,
                 fact_type=INVOICE_CREATED,
                 payload=payload,
+                event_metadata=event_metadata,
             )
             return current
         self._writer.append_once(
@@ -269,8 +271,67 @@ class InvoiceRegistry:
             fact_type=INVOICE_CREATED,
             payload=payload,
             occurred_at_ms=_time_ms(occurred_at_ms),
+            event_metadata=event_metadata,
         )
         return self.get(tenant_id=invoice.tenant_id, business_id=business_id, invoice_id=invoice.invoice_id)
+
+    def _existing_transition(
+        self,
+        *,
+        tenant_id: str,
+        business_id: str,
+        invoice_id: str,
+        operation: str,
+        idempotency_key: str,
+        fact_type: str,
+        event_metadata: dict[str, object] | None,
+    ) -> tuple[CommercialInvoiceEnvelope, CommercialInvoiceEnvelope] | None:
+        event = self._writer.find_existing_for_key(
+            tenant_id=tenant_id,
+            business_id=business_id,
+            entity_id=invoice_id,
+            operation=operation,
+            idempotency_key=idempotency_key,
+            fact_type=fact_type,
+            event_metadata=event_metadata,
+        )
+        if event is None:
+            return None
+        fact_id = str(event.get("event_id") or "")
+        facts = self._projector._facts(
+            tenant_id=tenant_id,
+            business_id=business_id,
+            invoice_id=invoice_id,
+        )
+        for index, row in enumerate(facts):
+            if str(row["fact_id"]) != fact_id:
+                continue
+            if index == 0:
+                raise InvoiceHistoryInvariantViolation("invoice transition replay has no prior state")
+            before = _from_payload(
+                tenant_id=tenant_id,
+                business_id=business_id,
+                invoice_id=invoice_id,
+                payload=dict(facts[index - 1]["payload"]),
+            )
+            result = _from_payload(
+                tenant_id=tenant_id,
+                business_id=business_id,
+                invoice_id=invoice_id,
+                payload=dict(row["payload"]),
+            )
+            return before, result
+        raise InvoiceHistoryInvariantViolation("invoice durable transition is missing from canonical history")
+
+    @staticmethod
+    def _assert_replay_result(
+        *,
+        expected: CommercialInvoiceEnvelope,
+        durable: CommercialInvoiceEnvelope,
+    ) -> CommercialInvoiceEnvelope:
+        if expected != durable:
+            raise ValueError("invoice replay conflicts with durable transition")
+        return durable
 
     def _transition(
         self,
@@ -282,6 +343,7 @@ class InvoiceRegistry:
         operation: str,
         fact_type: str,
         occurred_at_ms: int | None,
+        event_metadata: dict[str, object] | None,
     ) -> CommercialInvoiceEnvelope:
         if _immutable_key(candidate) != _immutable_key(current):
             raise ValueError("invoice transition cannot rewrite immutable identity or money fields")
@@ -297,38 +359,202 @@ class InvoiceRegistry:
             fact_type=fact_type,
             payload=_payload(candidate),
             occurred_at_ms=_time_ms(occurred_at_ms),
+            event_metadata=event_metadata,
         )
         return self.get(tenant_id=current.tenant_id, business_id=business_id, invoice_id=current.invoice_id)
 
-    def issue(self, *, tenant_id: str, business_id: str, invoice_id: str, idempotency_key: str, issued_at: datetime | None = None, due_at: datetime | None = None, occurred_at_ms: int | None = None) -> CommercialInvoiceEnvelope:
+    def issue(
+        self,
+        *,
+        tenant_id: str,
+        business_id: str,
+        invoice_id: str,
+        idempotency_key: str,
+        issued_at: datetime | None = None,
+        due_at: datetime | None = None,
+        occurred_at_ms: int | None = None,
+        event_metadata: dict[str, object] | None = None,
+    ) -> CommercialInvoiceEnvelope:
         business_id = self._business_id(business_id)
+        replay = self._existing_transition(
+            tenant_id=tenant_id,
+            business_id=business_id,
+            invoice_id=invoice_id,
+            operation="issue",
+            idempotency_key=idempotency_key,
+            fact_type=INVOICE_ISSUED,
+            event_metadata=event_metadata,
+        )
+        if replay is not None:
+            before, durable = replay
+            expected = self._lifecycle.issue(
+                before,
+                issued_at=durable.issued_at if issued_at is None else issued_at,
+                due_at=due_at,
+            )
+            return self._assert_replay_result(expected=expected, durable=durable)
         current = self.get(tenant_id=tenant_id, business_id=business_id, invoice_id=invoice_id)
         candidate = self._lifecycle.issue(current, issued_at=issued_at, due_at=due_at)
-        return self._transition(business_id=business_id, current=current, candidate=candidate, idempotency_key=idempotency_key, operation="issue", fact_type=INVOICE_ISSUED, occurred_at_ms=occurred_at_ms)
+        return self._transition(
+            business_id=business_id,
+            current=current,
+            candidate=candidate,
+            idempotency_key=idempotency_key,
+            operation="issue",
+            fact_type=INVOICE_ISSUED,
+            occurred_at_ms=occurred_at_ms,
+            event_metadata=event_metadata,
+        )
 
-    def record_payment(self, *, tenant_id: str, business_id: str, invoice_id: str, idempotency_key: str, amount_minor: int, paid_at: datetime | None = None, occurred_at_ms: int | None = None) -> CommercialInvoiceEnvelope:
+    def record_payment(
+        self,
+        *,
+        tenant_id: str,
+        business_id: str,
+        invoice_id: str,
+        idempotency_key: str,
+        amount_minor: int,
+        paid_at: datetime | None = None,
+        occurred_at_ms: int | None = None,
+        event_metadata: dict[str, object] | None = None,
+    ) -> CommercialInvoiceEnvelope:
         business_id = self._business_id(business_id)
+        replay = self._existing_transition(
+            tenant_id=tenant_id,
+            business_id=business_id,
+            invoice_id=invoice_id,
+            operation="record_payment",
+            idempotency_key=idempotency_key,
+            fact_type=INVOICE_PAYMENT_RECORDED,
+            event_metadata=event_metadata,
+        )
+        if replay is not None:
+            before, durable = replay
+            expected = self._lifecycle.record_payment(before, amount_minor=amount_minor, paid_at=paid_at)
+            return self._assert_replay_result(expected=expected, durable=durable)
         current = self.get(tenant_id=tenant_id, business_id=business_id, invoice_id=invoice_id)
         candidate = self._lifecycle.record_payment(current, amount_minor=amount_minor, paid_at=paid_at)
-        return self._transition(business_id=business_id, current=current, candidate=candidate, idempotency_key=idempotency_key, operation="record_payment", fact_type=INVOICE_PAYMENT_RECORDED, occurred_at_ms=occurred_at_ms)
+        return self._transition(
+            business_id=business_id,
+            current=current,
+            candidate=candidate,
+            idempotency_key=idempotency_key,
+            operation="record_payment",
+            fact_type=INVOICE_PAYMENT_RECORDED,
+            occurred_at_ms=occurred_at_ms,
+            event_metadata=event_metadata,
+        )
 
-    def void(self, *, tenant_id: str, business_id: str, invoice_id: str, idempotency_key: str, occurred_at_ms: int | None = None) -> CommercialInvoiceEnvelope:
+    def void(
+        self,
+        *,
+        tenant_id: str,
+        business_id: str,
+        invoice_id: str,
+        idempotency_key: str,
+        occurred_at_ms: int | None = None,
+        event_metadata: dict[str, object] | None = None,
+    ) -> CommercialInvoiceEnvelope:
         business_id = self._business_id(business_id)
+        replay = self._existing_transition(
+            tenant_id=tenant_id,
+            business_id=business_id,
+            invoice_id=invoice_id,
+            operation="void",
+            idempotency_key=idempotency_key,
+            fact_type=INVOICE_VOIDED,
+            event_metadata=event_metadata,
+        )
+        if replay is not None:
+            before, durable = replay
+            expected = self._lifecycle.void(before)
+            return self._assert_replay_result(expected=expected, durable=durable)
         current = self.get(tenant_id=tenant_id, business_id=business_id, invoice_id=invoice_id)
         candidate = self._lifecycle.void(current)
-        return self._transition(business_id=business_id, current=current, candidate=candidate, idempotency_key=idempotency_key, operation="void", fact_type=INVOICE_VOIDED, occurred_at_ms=occurred_at_ms)
+        return self._transition(
+            business_id=business_id,
+            current=current,
+            candidate=candidate,
+            idempotency_key=idempotency_key,
+            operation="void",
+            fact_type=INVOICE_VOIDED,
+            occurred_at_ms=occurred_at_ms,
+            event_metadata=event_metadata,
+        )
 
-    def credit(self, *, tenant_id: str, business_id: str, invoice_id: str, idempotency_key: str, occurred_at_ms: int | None = None) -> CommercialInvoiceEnvelope:
+    def credit(
+        self,
+        *,
+        tenant_id: str,
+        business_id: str,
+        invoice_id: str,
+        idempotency_key: str,
+        occurred_at_ms: int | None = None,
+        event_metadata: dict[str, object] | None = None,
+    ) -> CommercialInvoiceEnvelope:
         business_id = self._business_id(business_id)
+        replay = self._existing_transition(
+            tenant_id=tenant_id,
+            business_id=business_id,
+            invoice_id=invoice_id,
+            operation="credit",
+            idempotency_key=idempotency_key,
+            fact_type=INVOICE_CREDITED,
+            event_metadata=event_metadata,
+        )
+        if replay is not None:
+            before, durable = replay
+            expected = self._lifecycle.credit(before)
+            return self._assert_replay_result(expected=expected, durable=durable)
         current = self.get(tenant_id=tenant_id, business_id=business_id, invoice_id=invoice_id)
         candidate = self._lifecycle.credit(current)
-        return self._transition(business_id=business_id, current=current, candidate=candidate, idempotency_key=idempotency_key, operation="credit", fact_type=INVOICE_CREDITED, occurred_at_ms=occurred_at_ms)
+        return self._transition(
+            business_id=business_id,
+            current=current,
+            candidate=candidate,
+            idempotency_key=idempotency_key,
+            operation="credit",
+            fact_type=INVOICE_CREDITED,
+            occurred_at_ms=occurred_at_ms,
+            event_metadata=event_metadata,
+        )
 
-    def mark_uncollectible(self, *, tenant_id: str, business_id: str, invoice_id: str, idempotency_key: str, occurred_at_ms: int | None = None) -> CommercialInvoiceEnvelope:
+    def mark_uncollectible(
+        self,
+        *,
+        tenant_id: str,
+        business_id: str,
+        invoice_id: str,
+        idempotency_key: str,
+        occurred_at_ms: int | None = None,
+        event_metadata: dict[str, object] | None = None,
+    ) -> CommercialInvoiceEnvelope:
         business_id = self._business_id(business_id)
+        replay = self._existing_transition(
+            tenant_id=tenant_id,
+            business_id=business_id,
+            invoice_id=invoice_id,
+            operation="mark_uncollectible",
+            idempotency_key=idempotency_key,
+            fact_type=INVOICE_UNCOLLECTIBLE,
+            event_metadata=event_metadata,
+        )
+        if replay is not None:
+            before, durable = replay
+            expected = self._lifecycle.mark_uncollectible(before)
+            return self._assert_replay_result(expected=expected, durable=durable)
         current = self.get(tenant_id=tenant_id, business_id=business_id, invoice_id=invoice_id)
         candidate = self._lifecycle.mark_uncollectible(current)
-        return self._transition(business_id=business_id, current=current, candidate=candidate, idempotency_key=idempotency_key, operation="mark_uncollectible", fact_type=INVOICE_UNCOLLECTIBLE, occurred_at_ms=occurred_at_ms)
+        return self._transition(
+            business_id=business_id,
+            current=current,
+            candidate=candidate,
+            idempotency_key=idempotency_key,
+            operation="mark_uncollectible",
+            fact_type=INVOICE_UNCOLLECTIBLE,
+            occurred_at_ms=occurred_at_ms,
+            event_metadata=event_metadata,
+        )
 
     def get(self, *, tenant_id: str, business_id: str, invoice_id: str) -> CommercialInvoiceEnvelope:
         return self._projector.get(tenant_id=tenant_id, business_id=business_id, invoice_id=invoice_id)

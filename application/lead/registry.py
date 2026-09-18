@@ -33,6 +33,7 @@ class LeadRegistry:
     def create(
         self, *, tenant_id: str, business_id: str, lead_id: str, idempotency_key: str,
         source: str | None = None, status: str | None = None, occurred_at_ms: int | None = None,
+        event_metadata: dict[str, object] | None = None,
     ) -> Lead:
         when = self._time(occurred_at_ms)
         candidate = Lead(
@@ -50,18 +51,20 @@ class LeadRegistry:
             self._writer.repair_existing(
                 tenant_id=tenant_id, business_id=business_id, entity_id=lead_id,
                 operation="create", idempotency_key=idempotency_key, fact_type=LEAD_CREATED, payload=payload,
+                event_metadata=event_metadata,
             )
             return current
         self._writer.append_once(
             tenant_id=tenant_id, business_id=business_id, entity_id=lead_id,
             operation="create", idempotency_key=idempotency_key, fact_type=LEAD_CREATED,
-            payload=payload, occurred_at_ms=when,
+            payload=payload, occurred_at_ms=when, event_metadata=event_metadata,
         )
         return self._projector.get(tenant_id=tenant_id, business_id=business_id, lead_id=lead_id)
 
     def update(
         self, *, tenant_id: str, business_id: str, lead_id: str, idempotency_key: str,
         source: str | None = None, status: str | None = None, occurred_at_ms: int | None = None,
+        event_metadata: dict[str, object] | None = None,
     ) -> Lead:
         current = self._projector.get(tenant_id=tenant_id, business_id=business_id, lead_id=lead_id)
         if current.lifecycle_status is LeadLifecycleStatus.ARCHIVED:
@@ -77,27 +80,39 @@ class LeadRegistry:
             raise ValueError("lead source cannot be rewritten")
         payload = {"source": candidate.source, "status": candidate.status}
         if candidate.source == current.source and candidate.status == current.status:
+            self._writer.repair_existing(
+                tenant_id=tenant_id, business_id=business_id, entity_id=lead_id,
+                operation="update", idempotency_key=idempotency_key, fact_type=LEAD_UPDATED, payload=payload,
+                event_metadata=event_metadata,
+            )
             return current
         self._writer.append_transition_once(
             tenant_id=tenant_id, business_id=business_id, entity_id=lead_id,
             expected_state_token=self._state_token(current), operation="update",
             idempotency_key=idempotency_key, fact_type=LEAD_UPDATED, payload=payload,
-            occurred_at_ms=when,
+            occurred_at_ms=when, event_metadata=event_metadata,
         )
         return self._projector.get(tenant_id=tenant_id, business_id=business_id, lead_id=lead_id)
 
     def archive(
         self, *, tenant_id: str, business_id: str, lead_id: str, idempotency_key: str,
         occurred_at_ms: int | None = None,
+        event_metadata: dict[str, object] | None = None,
     ) -> Lead:
         current = self._projector.get(tenant_id=tenant_id, business_id=business_id, lead_id=lead_id)
         if current.lifecycle_status is LeadLifecycleStatus.ARCHIVED:
+            self._writer.repair_existing(
+                tenant_id=tenant_id, business_id=business_id, entity_id=lead_id,
+                operation="archive", idempotency_key=idempotency_key, fact_type=LEAD_ARCHIVED, payload={},
+                event_metadata=event_metadata,
+            )
             return current
         when = max(current.updated_at_ms, self._time(occurred_at_ms))
         self._writer.append_transition_once(
             tenant_id=tenant_id, business_id=business_id, entity_id=lead_id,
             expected_state_token=self._state_token(current), operation="archive",
             idempotency_key=idempotency_key, fact_type=LEAD_ARCHIVED, payload={}, occurred_at_ms=when,
+            event_metadata=event_metadata,
         )
         return self._projector.get(tenant_id=tenant_id, business_id=business_id, lead_id=lead_id)
 

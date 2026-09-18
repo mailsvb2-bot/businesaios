@@ -13,7 +13,7 @@ from billing.invoice_registry import (
     InvoiceProjector,
     InvoiceRegistry,
 )
-from contracts.event_store import BusinessFactV1
+from contracts.event_store import BusinessFactV1, canonical_business_event_contract
 from reliability.idempotency_store import InMemoryIdempotencyStore
 
 
@@ -245,3 +245,41 @@ def test_invoice_projection_survives_sqlite_restart(tmp_path) -> None:
     assert restored.status is InvoiceLifecycleStatus.PARTIALLY_PAID
     assert restored.paid_minor == 250
     assert restored.issued_at == issued_at
+
+
+def test_invoice_transition_replays_are_durable_metadata_checked_and_request_safe() -> None:
+    registry, events = _registry()
+    create_metadata = {"actor_id": "owner-1", "decision_id": "invoice-create"}
+    registry.create( business_id="business-a", invoice=_draft(), idempotency_key="create-meta", occurred_at_ms=100, event_metadata=create_metadata, )
+    issued_at = datetime(2026, 9, 18, 10, 0, tzinfo=UTC)
+    issue_metadata = {"actor_id": "owner-1", "decision_id": "invoice-issue", "evidence_ids": ("e-invoice",)}
+    issued = registry.issue( tenant_id="tenant-a", business_id="business-a", invoice_id="inv-1", idempotency_key="issue-meta", issued_at=issued_at, due_at=issued_at + timedelta(days=14), occurred_at_ms=200, event_metadata=issue_metadata, )
+    assert registry.issue( tenant_id="tenant-a", business_id="business-a", invoice_id="inv-1", idempotency_key="issue-meta", issued_at=issued_at, due_at=issued_at + timedelta(days=14), occurred_at_ms=999, event_metadata=issue_metadata, ) == issued
+    payment_metadata = {"actor_id": "owner-1", "decision_id": "invoice-pay"}
+    partial = registry.record_payment( tenant_id="tenant-a", business_id="business-a", invoice_id="inv-1", idempotency_key="pay-meta", amount_minor=400, occurred_at_ms=300, event_metadata=payment_metadata, )
+    before_replay_count = len(events.events)
+    assert registry.record_payment( tenant_id="tenant-a", business_id="business-a", invoice_id="inv-1", idempotency_key="pay-meta", amount_minor=400, occurred_at_ms=999, event_metadata=payment_metadata, ) == partial
+    assert len(events.events) == before_replay_count
+    with pytest.raises(ValueError, match="replay conflicts"):
+        registry.record_payment( tenant_id="tenant-a", business_id="business-a", invoice_id="inv-1", idempotency_key="pay-meta", amount_minor=500, occurred_at_ms=999, event_metadata=payment_metadata, )
+    with pytest.raises(ValueError, match="event metadata"):
+        registry.record_payment( tenant_id="tenant-a", business_id="business-a", invoice_id="inv-1", idempotency_key="pay-meta", amount_minor=400, occurred_at_ms=999, event_metadata={**payment_metadata, "actor_id": "owner-2"}, )
+    credited_metadata = {"actor_id": "owner-1", "decision_id": "invoice-credit"}
+    credited = registry.credit( tenant_id="tenant-a", business_id="business-a", invoice_id="inv-1", idempotency_key="credit-meta", occurred_at_ms=400, event_metadata=credited_metadata, )
+    assert registry.credit( tenant_id="tenant-a", business_id="business-a", invoice_id="inv-1", idempotency_key="credit-meta", occurred_at_ms=999, event_metadata=credited_metadata, ) == credited
+    rows = list(events.iter_events(tenant_id="tenant-a", start_ms=0))
+    payment_event = next( row for row in rows if canonical_business_event_contract(row)["event_type"] == "invoice.payment_recorded" )
+    assert canonical_business_event_contract(payment_event)["actor_id"] == "owner-1"
+    assert payment_event["decision_id"] == "invoice-pay"
+
+
+def test_invoice_void_and_uncollectible_replay_after_terminal_state() -> None:
+    registry, _ = _registry()
+    registry.create( business_id="business-a", invoice=_draft("inv-void"), idempotency_key="create-void", occurred_at_ms=100, )
+    voided = registry.void( tenant_id="tenant-a", business_id="business-a", invoice_id="inv-void", idempotency_key="void-key", occurred_at_ms=200, event_metadata={"actor_id": "owner-1"}, )
+    assert registry.void( tenant_id="tenant-a", business_id="business-a", invoice_id="inv-void", idempotency_key="void-key", occurred_at_ms=999, event_metadata={"actor_id": "owner-1"}, ) == voided
+    registry.create( business_id="business-a", invoice=_draft("inv-uncollectible"), idempotency_key="create-uncollectible", occurred_at_ms=100, )
+    issued_at = datetime(2026, 9, 18, 11, 0, tzinfo=UTC)
+    registry.issue( tenant_id="tenant-a", business_id="business-a", invoice_id="inv-uncollectible", idempotency_key="issue-uncollectible", issued_at=issued_at, occurred_at_ms=200, )
+    uncollectible = registry.mark_uncollectible( tenant_id="tenant-a", business_id="business-a", invoice_id="inv-uncollectible", idempotency_key="uncollectible-key", occurred_at_ms=300, event_metadata={"actor_id": "owner-1"}, )
+    assert registry.mark_uncollectible( tenant_id="tenant-a", business_id="business-a", invoice_id="inv-uncollectible", idempotency_key="uncollectible-key", occurred_at_ms=999, event_metadata={"actor_id": "owner-1"}, ) == uncollectible

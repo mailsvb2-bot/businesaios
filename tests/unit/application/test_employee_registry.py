@@ -5,6 +5,7 @@ from dataclasses import fields
 import pytest
 
 from application.employee import EmployeeProjector, EmployeeRegistry
+from contracts.event_store import canonical_business_event_contract
 from application.organization import OrganizationRegistry
 from application.person import PersonRegistry
 from contracts.employee import Employee, EmployeeNotFound, EmployeeStatus
@@ -168,3 +169,20 @@ def test_employee_projection_is_tenant_business_scoped() -> None:
     assert projector.get(tenant_id="tenant-a", business_id="business-a", employee_id="shared").employee_id == "shared"
     with pytest.raises(EmployeeNotFound):
         projector.get(tenant_id="tenant-a", business_id="business-b", employee_id="shared")
+
+
+def test_employee_event_metadata_propagates_and_replay_rejects_change() -> None:
+    events, organizations, people, employees = _stack()
+    _seed(organizations, people)
+    create_metadata = {"actor_id": "owner-1", "decision_id": "employee-create", "evidence_ids": ("e-employee",)}
+    created = employees.create( tenant_id="tenant-1", business_id="business-1", employee_id="emp-meta", person_id="person-1", organization_id="org-1", idempotency_key="create-meta", occurred_at_ms=10, event_metadata=create_metadata, )
+    assert employees.create( tenant_id="tenant-1", business_id="business-1", employee_id="emp-meta", person_id="person-1", organization_id="org-1", idempotency_key="create-meta", occurred_at_ms=999, event_metadata=create_metadata, ) == created
+    employee_events = [e for e in events.events if str(dict(e.get("payload") or {}).get("fact_type") or "").startswith("employee.")]
+    assert canonical_business_event_contract(employee_events[0])["actor_id"] == "owner-1"
+    with pytest.raises(ValueError, match="event metadata"):
+        employees.create( tenant_id="tenant-1", business_id="business-1", employee_id="emp-meta", person_id="person-1", organization_id="org-1", idempotency_key="create-meta", occurred_at_ms=10, event_metadata={**create_metadata, "actor_id": "owner-2"}, )
+    archive_metadata = {"actor_id": "owner-1", "decision_id": "employee-archive"}
+    archived = employees.archive( tenant_id="tenant-1", business_id="business-1", employee_id="emp-meta", idempotency_key="archive-meta", occurred_at_ms=20, event_metadata=archive_metadata, )
+    assert employees.archive( tenant_id="tenant-1", business_id="business-1", employee_id="emp-meta", idempotency_key="archive-meta", occurred_at_ms=999, event_metadata=archive_metadata, ) == archived
+    with pytest.raises(ValueError, match="event metadata"):
+        employees.archive( tenant_id="tenant-1", business_id="business-1", employee_id="emp-meta", idempotency_key="archive-meta", occurred_at_ms=20, event_metadata={**archive_metadata, "actor_id": "owner-2"}, )

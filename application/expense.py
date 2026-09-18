@@ -198,6 +198,7 @@ class ExpenseRegistry:
         category: ExpenseCategory | str,
         incurred_at_ms: int,
         recorded_at_ms: int | None = None,
+        event_metadata: dict[str, object] | None = None,
     ) -> Expense:
         tenant_id = str(tenant_id or "").strip()
         business_id = str(business_id or "").strip()
@@ -236,6 +237,7 @@ class ExpenseRegistry:
                 idempotency_key=idempotency_key,
                 fact_type=EXPENSE_RECORDED,
                 payload=payload,
+                event_metadata=event_metadata,
             )
             return current
         self._writer.append_once(
@@ -247,6 +249,7 @@ class ExpenseRegistry:
             fact_type=EXPENSE_RECORDED,
             payload=payload,
             occurred_at_ms=when,
+            event_metadata=event_metadata,
         )
         return self.get(tenant_id=tenant_id, business_id=business_id, expense_id=expense_id)
 
@@ -258,9 +261,20 @@ class ExpenseRegistry:
         expense_id: str,
         idempotency_key: str,
         occurred_at_ms: int | None = None,
+        event_metadata: dict[str, object] | None = None,
     ) -> Expense:
         current = self.get(tenant_id=tenant_id, business_id=business_id, expense_id=expense_id)
         if current.lifecycle_status is ExpenseLifecycleStatus.VOIDED:
+            self._writer.repair_existing(
+                tenant_id=tenant_id,
+                business_id=business_id,
+                entity_id=expense_id,
+                operation="void",
+                idempotency_key=idempotency_key,
+                fact_type=EXPENSE_VOIDED,
+                payload={"schema_version": EXPENSE_SCHEMA_VERSION},
+                event_metadata=event_metadata,
+            )
             return current
         when = max(current.updated_at_ms, self._time(occurred_at_ms))
         self._writer.append_transition_once(
@@ -273,6 +287,7 @@ class ExpenseRegistry:
             fact_type=EXPENSE_VOIDED,
             payload={"schema_version": EXPENSE_SCHEMA_VERSION},
             occurred_at_ms=when,
+            event_metadata=event_metadata,
         )
         return self.get(tenant_id=tenant_id, business_id=business_id, expense_id=expense_id)
 

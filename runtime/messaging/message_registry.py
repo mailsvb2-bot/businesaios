@@ -210,6 +210,7 @@ class MessageRegistry:
         customer_id: str | None = None,
         conversation_id: str | None = None,
         occurred_at_ms: int | None = None,
+        event_metadata: dict[str, object] | None = None,
     ) -> Message:
         tenant = _required(identity.tenant_id, "tenant_id")
         business = _required(business_id or identity.business_id, "business_id")
@@ -240,6 +241,7 @@ class MessageRegistry:
                 idempotency_key=f"record:{message_id}",
                 fact_type=MESSAGE_RECORDED,
                 payload=payload,
+                event_metadata=event_metadata,
             )
             return current
         self._writer.append_once(
@@ -251,6 +253,7 @@ class MessageRegistry:
             fact_type=MESSAGE_RECORDED,
             payload=payload,
             occurred_at_ms=self._time(occurred_at_ms),
+            event_metadata=event_metadata,
         )
         return self._projector.get(tenant_id=tenant, business_id=business, message_id=message_id)
 
@@ -262,9 +265,20 @@ class MessageRegistry:
         message_id: str,
         idempotency_key: str,
         occurred_at_ms: int | None = None,
+        event_metadata: dict[str, object] | None = None,
     ) -> Message:
         current = self._projector.get(tenant_id=tenant_id, business_id=business_id, message_id=message_id)
         if current.lifecycle_status is MessageLifecycleStatus.ARCHIVED:
+            self._writer.repair_existing(
+                tenant_id=tenant_id,
+                business_id=business_id,
+                entity_id=message_id,
+                operation="archive",
+                idempotency_key=idempotency_key,
+                fact_type=MESSAGE_ARCHIVED,
+                payload={"schema_version": MESSAGE_SCHEMA_VERSION},
+                event_metadata=event_metadata,
+            )
             return current
         when = max(current.updated_at_ms, self._time(occurred_at_ms))
         self._writer.append_transition_once(
@@ -277,6 +291,7 @@ class MessageRegistry:
             fact_type=MESSAGE_ARCHIVED,
             payload={"schema_version": MESSAGE_SCHEMA_VERSION},
             occurred_at_ms=when,
+            event_metadata=event_metadata,
         )
         return self._projector.get(tenant_id=tenant_id, business_id=business_id, message_id=message_id)
 

@@ -28,7 +28,7 @@ class BusinessServiceRegistry:
     def _time(value: int | None) -> int:
         return int(time.time() * 1000) if value is None else max(0, int(value))
 
-    def create(self, *, tenant_id: str, business_id: str, service_id: str, idempotency_key: str, name: str | None = None, category: str | None = None, occurred_at_ms: int | None = None) -> BusinessService:
+    def create(self, *, tenant_id: str, business_id: str, service_id: str, idempotency_key: str, name: str | None = None, category: str | None = None, occurred_at_ms: int | None = None, event_metadata: dict[str, object] | None = None) -> BusinessService:
         when = self._time(occurred_at_ms)
         candidate = BusinessService(
             service_id=service_id, tenant_id=tenant_id, business_id=business_id,
@@ -45,16 +45,17 @@ class BusinessServiceRegistry:
             self._writer.repair_existing(
                 tenant_id=tenant_id, business_id=business_id, entity_id=service_id,
                 operation="create", idempotency_key=idempotency_key, fact_type=BUSINESS_SERVICE_CREATED, payload=payload,
+                event_metadata=event_metadata,
             )
             return current
         self._writer.append_once(
             tenant_id=tenant_id, business_id=business_id, entity_id=service_id,
             operation="create", idempotency_key=idempotency_key, fact_type=BUSINESS_SERVICE_CREATED,
-            payload=payload, occurred_at_ms=when,
+            payload=payload, occurred_at_ms=when, event_metadata=event_metadata,
         )
         return self._projector.get(tenant_id=tenant_id, business_id=business_id, service_id=service_id)
 
-    def update(self, *, tenant_id: str, business_id: str, service_id: str, idempotency_key: str, name: str | None = None, category: str | None = None, occurred_at_ms: int | None = None) -> BusinessService:
+    def update(self, *, tenant_id: str, business_id: str, service_id: str, idempotency_key: str, name: str | None = None, category: str | None = None, occurred_at_ms: int | None = None, event_metadata: dict[str, object] | None = None) -> BusinessService:
         current = self._projector.get(tenant_id=tenant_id, business_id=business_id, service_id=service_id)
         if current.status is BusinessServiceStatus.ARCHIVED:
             raise ValueError("archived business service cannot be updated")
@@ -69,28 +70,30 @@ class BusinessServiceRegistry:
             self._writer.repair_existing(
                 tenant_id=tenant_id, business_id=business_id, entity_id=service_id,
                 operation="update", idempotency_key=idempotency_key, fact_type=BUSINESS_SERVICE_UPDATED, payload=payload,
+                event_metadata=event_metadata,
             )
             return current
         self._writer.append_once(
             tenant_id=tenant_id, business_id=business_id, entity_id=service_id,
             operation="update", idempotency_key=idempotency_key, fact_type=BUSINESS_SERVICE_UPDATED,
-            payload=payload, occurred_at_ms=when,
+            payload=payload, occurred_at_ms=when, event_metadata=event_metadata,
         )
         return self._projector.get(tenant_id=tenant_id, business_id=business_id, service_id=service_id)
 
-    def archive(self, *, tenant_id: str, business_id: str, service_id: str, idempotency_key: str, occurred_at_ms: int | None = None) -> BusinessService:
+    def archive(self, *, tenant_id: str, business_id: str, service_id: str, idempotency_key: str, occurred_at_ms: int | None = None, event_metadata: dict[str, object] | None = None) -> BusinessService:
         current = self._projector.get(tenant_id=tenant_id, business_id=business_id, service_id=service_id)
         if current.status is BusinessServiceStatus.ARCHIVED:
             self._writer.repair_existing(
                 tenant_id=tenant_id, business_id=business_id, entity_id=service_id,
                 operation="archive", idempotency_key=idempotency_key, fact_type=BUSINESS_SERVICE_ARCHIVED, payload={},
+                event_metadata=event_metadata,
             )
             return current
         when = max(current.updated_at_ms, self._time(occurred_at_ms))
         self._writer.append_once(
             tenant_id=tenant_id, business_id=business_id, entity_id=service_id,
             operation="archive", idempotency_key=idempotency_key, fact_type=BUSINESS_SERVICE_ARCHIVED,
-            payload={}, occurred_at_ms=when,
+            payload={}, occurred_at_ms=when, event_metadata=event_metadata,
         )
         return self._projector.get(tenant_id=tenant_id, business_id=business_id, service_id=service_id)
 

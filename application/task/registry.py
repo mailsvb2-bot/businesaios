@@ -24,7 +24,7 @@ class DurableTaskRegistry:
     def _time(value: int | None) -> int:
         return int(time.time() * 1000) if value is None else max(0, int(value))
 
-    def create(self, *, tenant_id: str, business_id: str, task_id: str, idempotency_key: str, title: str | None = None, occurred_at_ms: int | None = None) -> DurableTask:
+    def create(self, *, tenant_id: str, business_id: str, task_id: str, idempotency_key: str, title: str | None = None, occurred_at_ms: int | None = None, event_metadata: dict[str, object] | None = None) -> DurableTask:
         when = self._time(occurred_at_ms)
         candidate = DurableTask(task_id=task_id, tenant_id=tenant_id, business_id=business_id, title=title, created_at_ms=when, updated_at_ms=when)
         payload = {"title": candidate.title}
@@ -38,6 +38,7 @@ class DurableTaskRegistry:
             repaired = self._writer.repair_existing(
                 tenant_id=tenant_id, business_id=business_id, entity_id=task_id,
                 operation="create", idempotency_key=idempotency_key, fact_type=TASK_CREATED, payload=payload,
+                event_metadata=event_metadata,
             )
             if not repaired:
                 raise ValueError("task already exists and create idempotency key does not match")
@@ -45,7 +46,7 @@ class DurableTaskRegistry:
         self._writer.append_once(
             tenant_id=tenant_id, business_id=business_id, entity_id=task_id,
             operation="create", idempotency_key=idempotency_key, fact_type=TASK_CREATED,
-            payload=payload, occurred_at_ms=when,
+            payload=payload, occurred_at_ms=when, event_metadata=event_metadata,
         )
         return self._projector.get(tenant_id=tenant_id, business_id=business_id, task_id=task_id)
 
@@ -53,12 +54,14 @@ class DurableTaskRegistry:
         self, *, tenant_id: str, business_id: str, task_id: str, idempotency_key: str,
         operation: str, fact_type: str, target_status: DurableTaskStatus,
         allowed_from: frozenset[DurableTaskStatus], occurred_at_ms: int | None,
+        event_metadata: dict[str, object] | None,
     ) -> DurableTask:
         current = self._projector.get(tenant_id=tenant_id, business_id=business_id, task_id=task_id)
         if current.status is target_status:
             repaired = self._writer.repair_existing(
                 tenant_id=tenant_id, business_id=business_id, entity_id=task_id,
                 operation=operation, idempotency_key=idempotency_key, fact_type=fact_type, payload={},
+                event_metadata=event_metadata,
             )
             if repaired:
                 return current
@@ -71,32 +74,37 @@ class DurableTaskRegistry:
             tenant_id=tenant_id, business_id=business_id, entity_id=task_id,
             expected_state_token=state_token, operation=operation,
             idempotency_key=idempotency_key, fact_type=fact_type, payload={}, occurred_at_ms=when,
+            event_metadata=event_metadata,
         )
         return self._projector.get(tenant_id=tenant_id, business_id=business_id, task_id=task_id)
 
-    def start(self, *, tenant_id: str, business_id: str, task_id: str, idempotency_key: str, occurred_at_ms: int | None = None) -> DurableTask:
+    def start(self, *, tenant_id: str, business_id: str, task_id: str, idempotency_key: str, occurred_at_ms: int | None = None, event_metadata: dict[str, object] | None = None) -> DurableTask:
         return self._transition(
             tenant_id=tenant_id, business_id=business_id, task_id=task_id, idempotency_key=idempotency_key,
             operation="start", fact_type=TASK_STARTED, target_status=DurableTaskStatus.RUNNING, allowed_from=frozenset({DurableTaskStatus.PENDING}), occurred_at_ms=occurred_at_ms,
+            event_metadata=event_metadata,
         )
 
-    def complete(self, *, tenant_id: str, business_id: str, task_id: str, idempotency_key: str, occurred_at_ms: int | None = None) -> DurableTask:
+    def complete(self, *, tenant_id: str, business_id: str, task_id: str, idempotency_key: str, occurred_at_ms: int | None = None, event_metadata: dict[str, object] | None = None) -> DurableTask:
         return self._transition(
             tenant_id=tenant_id, business_id=business_id, task_id=task_id, idempotency_key=idempotency_key,
             operation="complete", fact_type=TASK_COMPLETED, target_status=DurableTaskStatus.COMPLETED, allowed_from=frozenset({DurableTaskStatus.RUNNING}), occurred_at_ms=occurred_at_ms,
+            event_metadata=event_metadata,
         )
 
-    def fail(self, *, tenant_id: str, business_id: str, task_id: str, idempotency_key: str, occurred_at_ms: int | None = None) -> DurableTask:
+    def fail(self, *, tenant_id: str, business_id: str, task_id: str, idempotency_key: str, occurred_at_ms: int | None = None, event_metadata: dict[str, object] | None = None) -> DurableTask:
         return self._transition(
             tenant_id=tenant_id, business_id=business_id, task_id=task_id, idempotency_key=idempotency_key,
             operation="fail", fact_type=TASK_FAILED, target_status=DurableTaskStatus.FAILED, allowed_from=frozenset({DurableTaskStatus.RUNNING}), occurred_at_ms=occurred_at_ms,
+            event_metadata=event_metadata,
         )
 
-    def cancel(self, *, tenant_id: str, business_id: str, task_id: str, idempotency_key: str, occurred_at_ms: int | None = None) -> DurableTask:
+    def cancel(self, *, tenant_id: str, business_id: str, task_id: str, idempotency_key: str, occurred_at_ms: int | None = None, event_metadata: dict[str, object] | None = None) -> DurableTask:
         return self._transition(
             tenant_id=tenant_id, business_id=business_id, task_id=task_id, idempotency_key=idempotency_key,
             operation="cancel", fact_type=TASK_CANCELLED, target_status=DurableTaskStatus.CANCELLED,
             allowed_from=frozenset({DurableTaskStatus.PENDING, DurableTaskStatus.RUNNING}), occurred_at_ms=occurred_at_ms,
+            event_metadata=event_metadata,
         )
 
     def get(self, *, tenant_id: str, business_id: str, task_id: str) -> DurableTask:

@@ -9,7 +9,7 @@ from application.business_resource import (
     BusinessResourceRegistry,
 )
 from contracts.business_resource import BusinessResource, BusinessResourceNotFound, ResourceLifecycleStatus
-from contracts.event_store import BusinessFactV1
+from contracts.event_store import BusinessFactV1, canonical_business_event_contract
 from reliability.idempotency_store import InMemoryIdempotencyStore
 
 
@@ -71,6 +71,26 @@ def test_business_resource_lifecycle_is_idempotent_and_asset_scoped() -> None:
         occurred_at_ms=400,
     )
     assert archived.lifecycle_status is ResourceLifecycleStatus.ARCHIVED
+
+
+def test_business_resource_metadata_propagates_and_replay_rejects_change() -> None:
+    _, resources, events = _runtime()
+    create_metadata = { "actor_id": "owner-1", "decision_id": "decision-create", "evidence_ids": ("resource-evidence-1",), }
+    created = resources.create( tenant_id="tenant", business_id="business", resource_id="resource-1", idempotency_key="create-meta", resource_kind="capacity", state_key="available", occurred_at_ms=100, event_metadata=create_metadata, )
+    assert resources.create( tenant_id="tenant", business_id="business", resource_id="resource-1", idempotency_key="create-meta", resource_kind="capacity", state_key="available", occurred_at_ms=999, event_metadata=create_metadata, ) == created
+    assert canonical_business_event_contract(events.events[0])["actor_id"] == "owner-1"
+    with pytest.raises(ValueError, match="event metadata"):
+        resources.create( tenant_id="tenant", business_id="business", resource_id="resource-1", idempotency_key="create-meta", resource_kind="capacity", state_key="available", occurred_at_ms=100, event_metadata={**create_metadata, "actor_id": "owner-2"}, )
+    update_metadata = {"actor_id": "owner-1", "decision_id": "decision-update"}
+    updated = resources.update( tenant_id="tenant", business_id="business", resource_id="resource-1", idempotency_key="update-meta", state_key="reserved", occurred_at_ms=200, event_metadata=update_metadata, )
+    assert resources.update( tenant_id="tenant", business_id="business", resource_id="resource-1", idempotency_key="update-meta", state_key="reserved", occurred_at_ms=999, event_metadata=update_metadata, ) == updated
+    with pytest.raises(ValueError, match="event metadata"):
+        resources.update( tenant_id="tenant", business_id="business", resource_id="resource-1", idempotency_key="update-meta", state_key="reserved", occurred_at_ms=200, event_metadata={**update_metadata, "actor_id": "owner-2"}, )
+    archive_metadata = {"actor_id": "owner-1", "decision_id": "decision-archive"}
+    archived = resources.archive( tenant_id="tenant", business_id="business", resource_id="resource-1", idempotency_key="archive-meta", occurred_at_ms=300, event_metadata=archive_metadata, )
+    assert resources.archive( tenant_id="tenant", business_id="business", resource_id="resource-1", idempotency_key="archive-meta", occurred_at_ms=999, event_metadata=archive_metadata, ) == archived
+    with pytest.raises(ValueError, match="event metadata"):
+        resources.archive( tenant_id="tenant", business_id="business", resource_id="resource-1", idempotency_key="archive-meta", occurred_at_ms=300, event_metadata={**archive_metadata, "actor_id": "owner-2"}, )
 
 
 def test_business_resource_requires_same_scope_active_asset_relation() -> None:
