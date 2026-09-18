@@ -23,7 +23,8 @@ _PLANS = {
     "coverage": ("code-coverage",), "rust-safety": ("rust-safety-core",), "rust-deps": ("rust-supply-chain",),
     "postgres-contract": ("postgres-contract",), PG_MIGRATIONS: (PG_MIGRATIONS,), PG_LIVE: (PG_LIVE,),
     CONTAINER_RUNTIME: (CONTAINER_RUNTIME,), STAGING_RUNTIME: (STAGING_RUNTIME,),
-    # Production boot aggregates already-produced proof artifacts. Release/pre-release own producer ordering.\n    PRODUCTION_BOOT: (PRODUCTION_BOOT,),
+    # Production boot aggregates already-produced proof artifacts. Release/pre-release own producer ordering.
+    PRODUCTION_BOOT: (PRODUCTION_BOOT,),
     "release": (*_RELEASE, "build-artifact"), "pre-push": _FAST, "pre-release": _RELEASE,
 }
 _NO_LOCK = {"doctor", "rust-safety", "rust-deps", "postgres-contract", PG_MIGRATIONS, PG_LIVE, CONTAINER_RUNTIME, STAGING_RUNTIME, PRODUCTION_BOOT}
