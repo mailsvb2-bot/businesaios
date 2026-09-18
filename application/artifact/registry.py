@@ -31,6 +31,7 @@ class ArtifactRegistry:
         artifact_kind: str | None = None, storage_ref: str | None = None,
         content_sha256: str | None = None, media_type: str | None = None,
         occurred_at_ms: int | None = None,
+        event_metadata: dict[str, object] | None = None,
     ) -> Artifact:
         when = self._time(occurred_at_ms)
         candidate = Artifact(
@@ -72,6 +73,7 @@ class ArtifactRegistry:
                 idempotency_key=idempotency_key,
                 fact_type=ARTIFACT_CREATED,
                 payload=payload,
+                event_metadata=event_metadata,
             )
             if not repaired:
                 raise ValueError("artifact already exists and create idempotency key does not match")
@@ -85,6 +87,7 @@ class ArtifactRegistry:
             fact_type=ARTIFACT_CREATED,
             payload=payload,
             occurred_at_ms=when,
+            event_metadata=event_metadata,
         )
         return self._projector.get(
             tenant_id=tenant_id, business_id=business_id, artifact_id=artifact_id
@@ -93,6 +96,7 @@ class ArtifactRegistry:
     def archive(
         self, *, tenant_id: str, business_id: str, artifact_id: str, idempotency_key: str,
         occurred_at_ms: int | None = None,
+        event_metadata: dict[str, object] | None = None,
     ) -> Artifact:
         current = self._projector.get(
             tenant_id=tenant_id, business_id=business_id, artifact_id=artifact_id
@@ -106,6 +110,7 @@ class ArtifactRegistry:
                 idempotency_key=idempotency_key,
                 fact_type=ARTIFACT_ARCHIVED,
                 payload={},
+                event_metadata=event_metadata,
             )
             if not repaired:
                 raise ValueError("artifact already archived with another idempotency key")
@@ -121,6 +126,7 @@ class ArtifactRegistry:
             fact_type=ARTIFACT_ARCHIVED,
             payload={},
             occurred_at_ms=when,
+            event_metadata=event_metadata,
         )
         return self._projector.get(
             tenant_id=tenant_id, business_id=business_id, artifact_id=artifact_id
