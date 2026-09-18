@@ -4,7 +4,7 @@ import pytest
 
 from application.business_goal import BusinessGoalHistoryInvariantViolation, BusinessGoalProjector, BusinessGoalRegistry
 from contracts.business_goal import BusinessGoal, BusinessGoalNotFound, GoalLifecycleStatus
-from contracts.event_store import BusinessFactV1
+from contracts.event_store import BusinessFactV1, canonical_business_event_contract
 from reliability.idempotency_store import InMemoryIdempotencyStore
 
 
@@ -76,6 +76,63 @@ def test_goal_hierarchy_lifecycle_and_idempotency() -> None:
         registry.cancel(
             tenant_id="tenant", business_id="business", goal_id="child", idempotency_key="conflict",
             occurred_at_ms=700,
+        )
+
+
+def test_goal_metadata_propagates_and_same_key_replay_rejects_change() -> None:
+    registry, events = _registry()
+    create_metadata = {
+        "actor_id": "owner-1",
+        "decision_id": "decision-create",
+        "evidence_ids": ("goal-evidence-1",),
+    }
+    created = registry.create(
+        tenant_id="t", business_id="b", goal_id="g", idempotency_key="create-meta",
+        goal_kind="growth", target_key="mrr", priority=50, occurred_at_ms=100,
+        event_metadata=create_metadata,
+    )
+    assert registry.create(
+        tenant_id="t", business_id="b", goal_id="g", idempotency_key="create-meta",
+        goal_kind="growth", target_key="mrr", priority=50, occurred_at_ms=999,
+        event_metadata=create_metadata,
+    ) == created
+    assert canonical_business_event_contract(events.events[0])["actor_id"] == "owner-1"
+    with pytest.raises(ValueError, match="event metadata"):
+        registry.create(
+            tenant_id="t", business_id="b", goal_id="g", idempotency_key="create-meta",
+            goal_kind="growth", target_key="mrr", priority=50, occurred_at_ms=100,
+            event_metadata={**create_metadata, "actor_id": "owner-2"},
+        )
+
+    update_metadata = {"actor_id": "owner-1", "decision_id": "decision-update"}
+    updated = registry.update_priority(
+        tenant_id="t", business_id="b", goal_id="g", idempotency_key="update-meta",
+        priority=80, occurred_at_ms=200, event_metadata=update_metadata,
+    )
+    assert registry.update_priority(
+        tenant_id="t", business_id="b", goal_id="g", idempotency_key="update-meta",
+        priority=80, occurred_at_ms=999, event_metadata=update_metadata,
+    ) == updated
+    with pytest.raises(ValueError, match="event metadata"):
+        registry.update_priority(
+            tenant_id="t", business_id="b", goal_id="g", idempotency_key="update-meta",
+            priority=80, occurred_at_ms=200,
+            event_metadata={**update_metadata, "actor_id": "owner-2"},
+        )
+
+    terminal_metadata = {"actor_id": "owner-1", "decision_id": "decision-complete"}
+    completed = registry.complete(
+        tenant_id="t", business_id="b", goal_id="g", idempotency_key="complete-meta",
+        occurred_at_ms=300, event_metadata=terminal_metadata,
+    )
+    assert registry.complete(
+        tenant_id="t", business_id="b", goal_id="g", idempotency_key="complete-meta",
+        occurred_at_ms=999, event_metadata=terminal_metadata,
+    ) == completed
+    with pytest.raises(ValueError, match="event metadata"):
+        registry.complete(
+            tenant_id="t", business_id="b", goal_id="g", idempotency_key="complete-meta",
+            occurred_at_ms=300, event_metadata={**terminal_metadata, "actor_id": "owner-2"},
         )
 
 
