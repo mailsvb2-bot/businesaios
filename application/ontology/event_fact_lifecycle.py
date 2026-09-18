@@ -31,6 +31,36 @@ def _event_metadata(value: dict[str, object] | None) -> dict[str, Any]:
     return metadata
 
 
+def canonical_event_metadata(value: dict[str, object] | None) -> dict[str, Any]:
+    return _event_metadata(value)
+
+
+def assert_canonical_event_metadata(
+    event: dict[str, Any],
+    expected: dict[str, object] | None,
+) -> None:
+    metadata = _event_metadata(expected)
+    envelope = dict(event.get("payload") or {})
+    actual = {
+        "decision_id": event.get("decision_id"),
+        "correlation_id": event.get("correlation_id"),
+        **{
+            name: envelope.get(name)
+            for name in (
+                "actor_id",
+                "agent_id",
+                "causation_id",
+                "recorded_at_ms",
+                "supersedes_fact_id",
+            )
+        },
+        "evidence_ids": tuple(envelope.get("evidence_ids") or ()),
+        "provenance": dict(envelope.get("provenance") or {}),
+    }
+    if any(actual[name] != value for name, value in metadata.items()):
+        raise ValueError("canonical event metadata conflicts with durable fact")
+
+
 class EventFactLifecycleWriter:
     """Shared durable mutation primitive for canonical ontology entities.
 
@@ -64,10 +94,10 @@ class EventFactLifecycleWriter:
         envelope = dict(event.get("payload") or {})
         if not (str(event.get("source") or "") == self._source and str(envelope.get("business_id") or "") == str(business_id) and str(envelope.get("fact_type") or "") == str(fact_type) and str(envelope.get("entity_id") or "") == str(entity_id) and dict(envelope.get("payload") or {}) == dict(payload)):
             raise ValueError("ontology durable fact conflicts with requested mutation")
-        metadata = _event_metadata(event_metadata)
-        actual = {"decision_id": event.get("decision_id"), "correlation_id": event.get("correlation_id"), **{name: envelope.get(name) for name in ("actor_id", "agent_id", "causation_id", "recorded_at_ms", "supersedes_fact_id")}, "evidence_ids": tuple(envelope.get("evidence_ids") or ()), "provenance": dict(envelope.get("provenance") or {})}
-        if any(actual[name] != expected for name, expected in metadata.items()):
-            raise ValueError("ontology durable fact conflicts with requested event metadata")
+        try:
+            assert_canonical_event_metadata(event, event_metadata)
+        except ValueError as exc:
+            raise ValueError("ontology durable fact conflicts with requested event metadata") from exc
 
     def repair_existing(self, *, tenant_id: str, business_id: str, entity_id: str, operation: str, idempotency_key: str, fact_type: str, payload: dict[str, object], event_metadata: dict[str, object] | None = None) -> bool:
         _, scope, fact_id = self._scope(tenant_id=tenant_id, business_id=business_id, entity_id=entity_id, operation=operation, idempotency_key=idempotency_key, payload=payload)
@@ -216,4 +246,4 @@ class EventFactLifecycleWriter:
         return fact_id
 
 
-__all__ = ["CANON_ONTOLOGY_EVENT_FACT_MUTATION", "EventFactLifecycleWriter"]
+__all__ = ["CANON_ONTOLOGY_EVENT_FACT_MUTATION", "EventFactLifecycleWriter", "assert_canonical_event_metadata", "canonical_event_metadata"]

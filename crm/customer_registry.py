@@ -7,6 +7,7 @@ from dataclasses import replace
 from typing import Any
 from uuid import uuid4
 
+from application.ontology import assert_canonical_event_metadata, canonical_event_metadata
 from contracts.customer import (
     Customer,
     CustomerIdentity,
@@ -135,11 +136,84 @@ class CustomerRegistry:
         rows.sort(key=lambda row: (row["event_time_ms"], row["observed_at_ms"], row["append_order"], row["fact_id"]))
         return rows
 
+    @staticmethod
+    def _metadata_with_correlation(
+        *,
+        event_metadata: dict[str, object] | None,
+        correlation_id: str | None,
+    ) -> dict[str, Any]:
+        metadata = canonical_event_metadata(event_metadata)
+        if correlation_id is not None:
+            normalized = str(correlation_id)
+            existing = metadata.get("correlation_id")
+            if existing is not None and existing != normalized:
+                raise ValueError("correlation_id conflicts with event_metadata")
+            metadata["correlation_id"] = normalized
+        return metadata
+
+    def _fact_event(
+        self,
+        *,
+        tenant_id: str,
+        business_id: str,
+        fact_id: str,
+    ) -> dict[str, Any] | None:
+        for event in self._events.iter_events(
+            tenant_id=tenant_id,
+            start_ms=0,
+            event_type=BUSINESS_FACT_EVENT_TYPE,
+        ):
+            envelope = dict(event.get("payload") or {})
+            if str(envelope.get("business_id") or "") != str(business_id):
+                continue
+            if str(event.get("event_id") or "") == str(fact_id):
+                return dict(event)
+        return None
+
+    @staticmethod
+    def _assert_fact_match(
+        event: dict[str, Any],
+        *,
+        business_id: str,
+        customer_id: str,
+        fact_type: str,
+        payload: dict[str, Any],
+        event_metadata: dict[str, object] | None,
+    ) -> None:
+        envelope = dict(event.get("payload") or {})
+        if not (
+            str(event.get("source") or "") == "customer_registry"
+            and str(envelope.get("business_id") or "") == str(business_id)
+            and str(envelope.get("entity_id") or "") == str(customer_id)
+            and str(envelope.get("fact_type") or "") == str(fact_type)
+            and dict(envelope.get("payload") or {}) == dict(payload)
+        ):
+            raise CustomerIdentityConflict("customer durable fact conflicts with requested mutation")
+        assert_canonical_event_metadata(event, event_metadata)
+
     def _append_fact_once(
         self, *, tenant_id: str, business_id: str, customer_id: str, fact_id: str,
         fact_type: str, payload: dict[str, Any], occurred_at_ms: int, correlation_id: str | None = None,
+        event_metadata: dict[str, object] | None = None,
     ) -> None:
-        if any(row["fact_id"] == fact_id for row in self._facts(tenant_id=tenant_id, business_id=business_id)):
+        metadata = self._metadata_with_correlation(
+            event_metadata=event_metadata,
+            correlation_id=correlation_id,
+        )
+        existing = self._fact_event(
+            tenant_id=tenant_id,
+            business_id=business_id,
+            fact_id=fact_id,
+        )
+        if existing is not None:
+            self._assert_fact_match(
+                existing,
+                business_id=business_id,
+                customer_id=customer_id,
+                fact_type=fact_type,
+                payload=payload,
+                event_metadata=metadata,
+            )
             return
         key = build_idempotency_key(
             tenant_id=tenant_id, namespace="customer_fact", operation="append", key=fact_id,
@@ -148,19 +222,64 @@ class CustomerRegistry:
         owner_id = f"customer-fact:{uuid4()}"
         decision = self._claims.reserve(key=key, owner_id=owner_id, lease_ttl_seconds=300)
         if decision.resolution is IdempotencyResolution.REPLAY_COMPLETED:
+            existing = self._fact_event(
+                tenant_id=tenant_id,
+                business_id=business_id,
+                fact_id=fact_id,
+            )
+            if existing is None:
+                raise CustomerIdentityConflict("customer fact claim completed without durable fact")
+            self._assert_fact_match(
+                existing,
+                business_id=business_id,
+                customer_id=customer_id,
+                fact_type=fact_type,
+                payload=payload,
+                event_metadata=metadata,
+            )
             return
         if decision.resolution is IdempotencyResolution.REJECTED_IN_PROGRESS:
             raise CustomerIdentityBusy("customer fact append is already in progress")
         if decision.resolution is not IdempotencyResolution.ACCEPTED:
             raise CustomerIdentityConflict(f"customer fact append rejected: {decision.resolution.value}")
-        if any(row["fact_id"] == fact_id for row in self._facts(tenant_id=tenant_id, business_id=business_id)):
+        existing = self._fact_event(
+            tenant_id=tenant_id,
+            business_id=business_id,
+            fact_id=fact_id,
+        )
+        if existing is not None:
+            self._assert_fact_match(
+                existing,
+                business_id=business_id,
+                customer_id=customer_id,
+                fact_type=fact_type,
+                payload=payload,
+                event_metadata=metadata,
+            )
             self._claims.mark_completed(key=key, owner_id=owner_id, result_ref=fact_id)
             return
-        self._events.append_event(BusinessFactV1(
-            fact_id=fact_id, tenant_id=tenant_id, business_id=business_id, fact_type=fact_type,
-            entity_id=customer_id, event_time_ms=occurred_at_ms, observed_at_ms=occurred_at_ms,
-            source="customer_registry", payload=payload, correlation_id=correlation_id,
-        ).as_event())
+        try:
+            self._events.append_event(BusinessFactV1(
+                fact_id=fact_id, tenant_id=tenant_id, business_id=business_id, fact_type=fact_type,
+                entity_id=customer_id, event_time_ms=occurred_at_ms, observed_at_ms=occurred_at_ms,
+                source="customer_registry", payload=payload, **metadata,
+            ).as_event())
+        except Exception:
+            existing = self._fact_event(
+                tenant_id=tenant_id,
+                business_id=business_id,
+                fact_id=fact_id,
+            )
+            if existing is None:
+                raise
+            self._assert_fact_match(
+                existing,
+                business_id=business_id,
+                customer_id=customer_id,
+                fact_type=fact_type,
+                payload=payload,
+                event_metadata=metadata,
+            )
         self._claims.mark_completed(key=key, owner_id=owner_id, result_ref=fact_id)
 
     def _project(self, *, tenant_id: str, business_id: str, customer_id: str) -> CustomerRecord:
@@ -292,6 +411,7 @@ class CustomerRegistry:
         self, *, tenant_id: str, business_id: str, channel: str, external_subject: str,
         username: str | None = None, display_name: str | None = None, occurred_at_ms: int | None = None,
         correlation_id: str | None = None,
+        event_metadata: dict[str, object] | None = None,
     ) -> CustomerRecord:
         tenant_id, business_id = str(tenant_id).strip(), str(business_id).strip()
         channel, subject = normalize_customer_subject(channel, external_subject)
@@ -338,6 +458,7 @@ class CustomerRegistry:
             tenant_id=tenant_id, business_id=business_id, customer_id=customer_id,
             fact_id=f"customer:{customer_id}:created", fact_type=_CUSTOMER_CREATED,
             payload={}, occurred_at_ms=now, correlation_id=correlation_id,
+            event_metadata=event_metadata,
         )
         self._append_fact_once(
             tenant_id=tenant_id, business_id=business_id, customer_id=customer_id,
@@ -350,6 +471,7 @@ class CustomerRegistry:
                 "last_contact_at_ms": now,
             },
             occurred_at_ms=now, correlation_id=correlation_id,
+            event_metadata=event_metadata,
         )
         self._claims.mark_completed(
             key=key, owner_id=owner_id, result_ref=customer_id, metadata_patch={"customer_id": customer_id},
@@ -360,6 +482,7 @@ class CustomerRegistry:
         self, *, tenant_id: str, business_id: str, customer_id: str, channel: str, external_subject: str,
         username: str | None = None, display_name: str | None = None, occurred_at_ms: int | None = None,
         correlation_id: str | None = None,
+        event_metadata: dict[str, object] | None = None,
     ) -> CustomerIdentity:
         tenant_id, business_id, customer_id = str(tenant_id).strip(), str(business_id).strip(), str(customer_id).strip()
         record = self.get_customer(tenant_id=tenant_id, business_id=business_id, customer_id=customer_id)
@@ -410,6 +533,7 @@ class CustomerRegistry:
                 "last_contact_at_ms": now,
             },
             occurred_at_ms=now, correlation_id=correlation_id,
+            event_metadata=event_metadata,
         )
         self._claims.mark_completed(
             key=key, owner_id=owner_id, result_ref=customer_id, metadata_patch={"customer_id": customer_id},
@@ -425,6 +549,7 @@ class CustomerRegistry:
         self, *, tenant_id: str, business_id: str, customer_id: str, channel: str, external_subject: str,
         contact_id: str, username: str | None = None, display_name: str | None = None,
         occurred_at_ms: int | None = None, correlation_id: str | None = None,
+        event_metadata: dict[str, object] | None = None,
     ) -> CustomerRecord:
         tenant_id, business_id, customer_id = str(tenant_id).strip(), str(business_id).strip(), str(customer_id).strip()
         record = self.find_by_identity(
@@ -448,6 +573,7 @@ class CustomerRegistry:
             fact_id=f"customer:{customer_id}:contact:{contact_digest}", fact_type=_CONTACT_OBSERVED,
             payload={"identity_id": identity.identity_id, "channel": channel},
             occurred_at_ms=now, correlation_id=correlation_id,
+            event_metadata=event_metadata,
         )
         if username is not None or display_name is not None:
             digest = _identity_digest(
@@ -463,15 +589,29 @@ class CustomerRegistry:
 
     def archive_customer(
         self, *, tenant_id: str, business_id: str, customer_id: str, occurred_at_ms: int | None = None,
+        correlation_id: str | None = None, event_metadata: dict[str, object] | None = None,
     ) -> Customer:
         record = self.get_customer(tenant_id=tenant_id, business_id=business_id, customer_id=customer_id)
+        fact_id = f"customer:{customer_id}:archived"
         if record.customer.status is CustomerStatus.ARCHIVED:
+            self._append_fact_once(
+                tenant_id=tenant_id,
+                business_id=business_id,
+                customer_id=customer_id,
+                fact_id=fact_id,
+                fact_type=_CUSTOMER_ARCHIVED,
+                payload={},
+                occurred_at_ms=int(record.customer.archived_at_ms or 0),
+                correlation_id=correlation_id,
+                event_metadata=event_metadata,
+            )
             return record.customer
         now = _now_ms(occurred_at_ms)
         self._append_fact_once(
             tenant_id=tenant_id, business_id=business_id, customer_id=customer_id,
-            fact_id=f"customer:{customer_id}:archived", fact_type=_CUSTOMER_ARCHIVED,
-            payload={}, occurred_at_ms=now,
+            fact_id=fact_id, fact_type=_CUSTOMER_ARCHIVED,
+            payload={}, occurred_at_ms=now, correlation_id=correlation_id,
+            event_metadata=event_metadata,
         )
         return self.get_customer(
             tenant_id=tenant_id, business_id=business_id, customer_id=customer_id,
