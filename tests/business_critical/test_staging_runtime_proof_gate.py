@@ -46,6 +46,20 @@ def test_staging_runner_contains_required_real_proof_steps() -> None:
     assert "claims_production_ready" in text
 
 
+
+def test_staging_and_deep_release_use_canonical_postgres_event_store_enablement() -> None:
+    staging = Path("scripts/staging/run_staging_runtime_proof.sh").read_text(encoding="utf-8")
+    workflow = Path(".github/workflows/deep-release-validation.yml").read_text(encoding="utf-8")
+
+    canonical_key = "BUSINESAIOS_ENABLE_POSTGRES_EVENT_STORE"
+    legacy_key = "POSTGRES_EVENT_STORE_ENABLED"
+    assert f"export {canonical_key}=1" in staging
+    assert f"-e {canonical_key}=1" in staging
+    assert f'echo "{canonical_key}=1" >> "$GITHUB_ENV"' in workflow
+    assert legacy_key not in staging
+    assert legacy_key not in workflow
+
+
 def _isolate_artifacts(monkeypatch, tmp_path: Path) -> Path:
     monkeypatch.setattr(step_staging_runtime, "repo_root", lambda: tmp_path)
     return tmp_path / "artifacts" / "ci" / "staging_runtime_proof.json"
