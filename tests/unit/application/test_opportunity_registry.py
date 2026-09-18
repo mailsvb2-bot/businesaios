@@ -3,7 +3,7 @@ from __future__ import annotations
 import pytest
 
 from application.opportunity import OpportunityHistoryInvariantViolation, OpportunityProjector, OpportunityRegistry
-from contracts.event_store import BusinessFactV1
+from contracts.event_store import BusinessFactV1, canonical_business_event_contract
 from contracts.opportunity import Opportunity, OpportunityLifecycleStatus, OpportunityNotFound
 from reliability.idempotency_store import InMemoryIdempotencyStore
 
@@ -60,6 +60,61 @@ def test_opportunity_lifecycle_is_idempotent_and_money_safe() -> None:
         idempotency_key="archive", occurred_at_ms=300,
     )
     assert archived.lifecycle_status is OpportunityLifecycleStatus.ARCHIVED
+
+
+def test_opportunity_metadata_propagates_and_replay_rejects_change() -> None:
+    registry, events = _registry()
+    metadata = {"actor_id": "owner-1", "decision_id": "decision-1", "evidence_ids": ("e-1",)}
+    created = registry.create(
+        tenant_id="t", business_id="b", opportunity_id="o", idempotency_key="create-meta",
+        source_kind="crm", stage_key="new", expected_value_minor=1000, currency="USD",
+        occurred_at_ms=100, event_metadata=metadata,
+    )
+    assert registry.create(
+        tenant_id="t", business_id="b", opportunity_id="o", idempotency_key="create-meta",
+        source_kind="crm", stage_key="new", expected_value_minor=1000, currency="USD",
+        occurred_at_ms=999, event_metadata=metadata,
+    ) == created
+    assert len(events.events) == 1
+    assert canonical_business_event_contract(events.events[0])["actor_id"] == "owner-1"
+    assert canonical_business_event_contract(events.events[0])["evidence_ids"] == ("e-1",)
+    with pytest.raises(ValueError, match="event metadata"):
+        registry.create(
+            tenant_id="t", business_id="b", opportunity_id="o", idempotency_key="create-meta",
+            source_kind="crm", stage_key="new", expected_value_minor=1000, currency="USD",
+            occurred_at_ms=100, event_metadata={**metadata, "actor_id": "owner-2"},
+        )
+
+    update_metadata = {"actor_id": "owner-1", "decision_id": "decision-2"}
+    updated = registry.update(
+        tenant_id="t", business_id="b", opportunity_id="o", idempotency_key="update-meta",
+        stage_key="qualified", occurred_at_ms=200, event_metadata=update_metadata,
+    )
+    assert registry.update(
+        tenant_id="t", business_id="b", opportunity_id="o", idempotency_key="update-meta",
+        stage_key="qualified", occurred_at_ms=999, event_metadata=update_metadata,
+    ) == updated
+    with pytest.raises(ValueError, match="event metadata"):
+        registry.update(
+            tenant_id="t", business_id="b", opportunity_id="o", idempotency_key="update-meta",
+            stage_key="qualified", occurred_at_ms=200,
+            event_metadata={**update_metadata, "actor_id": "owner-2"},
+        )
+
+    archive_metadata = {"actor_id": "owner-1", "decision_id": "decision-3"}
+    archived = registry.archive(
+        tenant_id="t", business_id="b", opportunity_id="o", idempotency_key="archive-meta",
+        occurred_at_ms=300, event_metadata=archive_metadata,
+    )
+    assert registry.archive(
+        tenant_id="t", business_id="b", opportunity_id="o", idempotency_key="archive-meta",
+        occurred_at_ms=999, event_metadata=archive_metadata,
+    ) == archived
+    with pytest.raises(ValueError, match="event metadata"):
+        registry.archive(
+            tenant_id="t", business_id="b", opportunity_id="o", idempotency_key="archive-meta",
+            occurred_at_ms=300, event_metadata={**archive_metadata, "actor_id": "owner-2"},
+        )
 
 
 def test_opportunity_source_currency_and_archive_are_fail_closed() -> None:
