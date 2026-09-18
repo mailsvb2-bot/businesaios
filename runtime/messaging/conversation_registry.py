@@ -202,6 +202,7 @@ class ConversationRegistry:
         route_ref: str,
         contact_id: str,
         occurred_at_ms: int | None = None,
+        event_metadata: dict[str, object] | None = None,
     ) -> Conversation:
         tenant = _required(tenant_id, "tenant_id")
         business = _required(business_id, "business_id")
@@ -237,6 +238,7 @@ class ConversationRegistry:
                 fact_type=CONVERSATION_CREATED,
                 payload=create_payload,
                 occurred_at_ms=when,
+                event_metadata=event_metadata,
             )
             current = self._projector.get(
                 tenant_id=tenant, business_id=business, conversation_id=conversation_id
@@ -264,6 +266,7 @@ class ConversationRegistry:
             fact_type=CONVERSATION_ACTIVITY_OBSERVED,
             payload=payload,
             occurred_at_ms=max(current.updated_at_ms, when),
+            event_metadata=event_metadata,
         )
         return self._projector.get(
             tenant_id=tenant, business_id=business, conversation_id=conversation_id
@@ -277,11 +280,22 @@ class ConversationRegistry:
         conversation_id: str,
         idempotency_key: str,
         occurred_at_ms: int | None = None,
+        event_metadata: dict[str, object] | None = None,
     ) -> Conversation:
         current = self._projector.get(
             tenant_id=tenant_id, business_id=business_id, conversation_id=conversation_id
         )
         if current.lifecycle_status is ConversationLifecycleStatus.ARCHIVED:
+            self._writer.repair_existing(
+                tenant_id=tenant_id,
+                business_id=business_id,
+                entity_id=conversation_id,
+                operation="archive",
+                idempotency_key=idempotency_key,
+                fact_type=CONVERSATION_ARCHIVED,
+                payload={"schema_version": CONVERSATION_SCHEMA_VERSION},
+                event_metadata=event_metadata,
+            )
             return current
         when = max(current.updated_at_ms, self._time(occurred_at_ms))
         self._writer.append_transition_once(
@@ -294,6 +308,7 @@ class ConversationRegistry:
             fact_type=CONVERSATION_ARCHIVED,
             payload={"schema_version": CONVERSATION_SCHEMA_VERSION},
             occurred_at_ms=when,
+            event_metadata=event_metadata,
         )
         return self._projector.get(
             tenant_id=tenant_id, business_id=business_id, conversation_id=conversation_id
