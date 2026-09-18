@@ -34,6 +34,7 @@ class EmployeeRegistry:
     def create(
         self, *, tenant_id: str, business_id: str, employee_id: str, person_id: str,
         organization_id: str, idempotency_key: str, occurred_at_ms: int | None = None,
+        event_metadata: dict[str, object] | None = None,
     ) -> Employee:
         person = self._people.get(tenant_id=tenant_id, business_id=business_id, person_id=person_id)
         organization = self._organizations.get(tenant_id=tenant_id, business_id=business_id, organization_id=organization_id)
@@ -58,28 +59,30 @@ class EmployeeRegistry:
             self._writer.repair_existing(
                 tenant_id=tenant_id, business_id=business_id, entity_id=employee_id,
                 operation="create", idempotency_key=idempotency_key, fact_type=EMPLOYEE_CREATED, payload=payload,
+                event_metadata=event_metadata,
             )
             return current
         self._writer.append_once(
             tenant_id=tenant_id, business_id=business_id, entity_id=employee_id,
             operation="create", idempotency_key=idempotency_key, fact_type=EMPLOYEE_CREATED,
-            payload=payload, occurred_at_ms=when,
+            payload=payload, occurred_at_ms=when, event_metadata=event_metadata,
         )
         return self._projector.get(tenant_id=tenant_id, business_id=business_id, employee_id=employee_id)
 
-    def archive(self, *, tenant_id: str, business_id: str, employee_id: str, idempotency_key: str, occurred_at_ms: int | None = None) -> Employee:
+    def archive(self, *, tenant_id: str, business_id: str, employee_id: str, idempotency_key: str, occurred_at_ms: int | None = None, event_metadata: dict[str, object] | None = None) -> Employee:
         current = self._projector.get(tenant_id=tenant_id, business_id=business_id, employee_id=employee_id)
         if current.status is EmployeeStatus.ARCHIVED:
             self._writer.repair_existing(
                 tenant_id=tenant_id, business_id=business_id, entity_id=employee_id,
                 operation="archive", idempotency_key=idempotency_key, fact_type=EMPLOYEE_ARCHIVED, payload={},
+                event_metadata=event_metadata,
             )
             return current
         when = max(current.updated_at_ms, self._time(occurred_at_ms))
         self._writer.append_once(
             tenant_id=tenant_id, business_id=business_id, entity_id=employee_id,
             operation="archive", idempotency_key=idempotency_key, fact_type=EMPLOYEE_ARCHIVED,
-            payload={}, occurred_at_ms=when,
+            payload={}, occurred_at_ms=when, event_metadata=event_metadata,
         )
         return self._projector.get(tenant_id=tenant_id, business_id=business_id, employee_id=employee_id)
 

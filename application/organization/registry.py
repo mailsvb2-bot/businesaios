@@ -39,6 +39,7 @@ class OrganizationRegistry:
         name: str | None = None,
         organization_type: str | None = None,
         occurred_at_ms: int | None = None,
+        event_metadata: dict[str, object] | None = None,
     ) -> Organization:
         when = self._time(occurred_at_ms)
         candidate = Organization(
@@ -70,6 +71,7 @@ class OrganizationRegistry:
                 idempotency_key=idempotency_key,
                 fact_type=ORGANIZATION_CREATED,
                 payload=payload,
+                event_metadata=event_metadata,
             )
             return current
         self._writer.append_once(
@@ -81,6 +83,7 @@ class OrganizationRegistry:
             fact_type=ORGANIZATION_CREATED,
             payload=payload,
             occurred_at_ms=when,
+            event_metadata=event_metadata,
         )
         return self._projector.get(tenant_id=tenant_id, business_id=business_id, organization_id=organization_id)
 
@@ -94,6 +97,7 @@ class OrganizationRegistry:
         name: str | None = None,
         organization_type: str | None = None,
         occurred_at_ms: int | None = None,
+        event_metadata: dict[str, object] | None = None,
     ) -> Organization:
         current = self._projector.get(tenant_id=tenant_id, business_id=business_id, organization_id=organization_id)
         if current.status is OrganizationStatus.ARCHIVED:
@@ -118,6 +122,7 @@ class OrganizationRegistry:
                 idempotency_key=idempotency_key,
                 fact_type=ORGANIZATION_UPDATED,
                 payload=payload,
+                event_metadata=event_metadata,
             )
             return current
         self._writer.append_once(
@@ -129,6 +134,7 @@ class OrganizationRegistry:
             fact_type=ORGANIZATION_UPDATED,
             payload=payload,
             occurred_at_ms=when,
+            event_metadata=event_metadata,
         )
         return self._projector.get(tenant_id=tenant_id, business_id=business_id, organization_id=organization_id)
 
@@ -140,6 +146,7 @@ class OrganizationRegistry:
         organization_id: str,
         idempotency_key: str,
         occurred_at_ms: int | None = None,
+        event_metadata: dict[str, object] | None = None,
     ) -> Organization:
         current = self._projector.get(tenant_id=tenant_id, business_id=business_id, organization_id=organization_id)
         if current.status is OrganizationStatus.ARCHIVED:
@@ -151,6 +158,7 @@ class OrganizationRegistry:
                 idempotency_key=idempotency_key,
                 fact_type=ORGANIZATION_ARCHIVED,
                 payload={},
+                event_metadata=event_metadata,
             )
             return current
         when = max(current.updated_at_ms, self._time(occurred_at_ms))
@@ -163,6 +171,7 @@ class OrganizationRegistry:
             fact_type=ORGANIZATION_ARCHIVED,
             payload={},
             occurred_at_ms=when,
+            event_metadata=event_metadata,
         )
         return self._projector.get(tenant_id=tenant_id, business_id=business_id, organization_id=organization_id)
 

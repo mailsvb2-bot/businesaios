@@ -43,6 +43,7 @@ class PartnerRegistry:
     def create(
         self, *, tenant_id: str, business_id: str, partner_id: str, party_kind: PartnerPartyKind | str,
         party_id: str, idempotency_key: str, occurred_at_ms: int | None = None,
+        event_metadata: dict[str, object] | None = None,
     ) -> Partner:
         kind = PartnerPartyKind(party_kind)
         bound_party_id = self._validate_party(
@@ -64,28 +65,30 @@ class PartnerRegistry:
             self._writer.repair_existing(
                 tenant_id=tenant_id, business_id=business_id, entity_id=partner_id,
                 operation="create", idempotency_key=idempotency_key, fact_type=PARTNER_CREATED, payload=payload,
+                event_metadata=event_metadata,
             )
             return current
         self._writer.append_once(
             tenant_id=tenant_id, business_id=business_id, entity_id=partner_id,
             operation="create", idempotency_key=idempotency_key, fact_type=PARTNER_CREATED,
-            payload=payload, occurred_at_ms=when,
+            payload=payload, occurred_at_ms=when, event_metadata=event_metadata,
         )
         return self._projector.get(tenant_id=tenant_id, business_id=business_id, partner_id=partner_id)
 
-    def archive(self, *, tenant_id: str, business_id: str, partner_id: str, idempotency_key: str, occurred_at_ms: int | None = None) -> Partner:
+    def archive(self, *, tenant_id: str, business_id: str, partner_id: str, idempotency_key: str, occurred_at_ms: int | None = None, event_metadata: dict[str, object] | None = None) -> Partner:
         current = self._projector.get(tenant_id=tenant_id, business_id=business_id, partner_id=partner_id)
         if current.status is PartnerStatus.ARCHIVED:
             self._writer.repair_existing(
                 tenant_id=tenant_id, business_id=business_id, entity_id=partner_id,
                 operation="archive", idempotency_key=idempotency_key, fact_type=PARTNER_ARCHIVED, payload={},
+                event_metadata=event_metadata,
             )
             return current
         when = max(current.updated_at_ms, self._time(occurred_at_ms))
         self._writer.append_once(
             tenant_id=tenant_id, business_id=business_id, entity_id=partner_id,
             operation="archive", idempotency_key=idempotency_key, fact_type=PARTNER_ARCHIVED,
-            payload={}, occurred_at_ms=when,
+            payload={}, occurred_at_ms=when, event_metadata=event_metadata,
         )
         return self._projector.get(tenant_id=tenant_id, business_id=business_id, partner_id=partner_id)
 
