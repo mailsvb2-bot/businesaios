@@ -42,6 +42,7 @@ class DocumentRegistry:
         self, *, tenant_id: str, business_id: str, document_id: str, artifact_id: str,
         idempotency_key: str, document_kind: str | None = None, title: str | None = None,
         occurred_at_ms: int | None = None,
+        event_metadata: dict[str, object] | None = None,
     ) -> Document:
         bound_artifact = self._active_artifact(
             tenant_id=tenant_id, business_id=business_id, artifact_id=artifact_id
@@ -79,6 +80,7 @@ class DocumentRegistry:
                 tenant_id=tenant_id, business_id=business_id, entity_id=document_id,
                 operation="create", idempotency_key=idempotency_key,
                 fact_type=DOCUMENT_CREATED, payload=payload,
+                event_metadata=event_metadata,
             )
             if not repaired:
                 raise ValueError("document already exists and create idempotency key does not match")
@@ -87,6 +89,7 @@ class DocumentRegistry:
             tenant_id=tenant_id, business_id=business_id, entity_id=document_id,
             operation="create", idempotency_key=idempotency_key,
             fact_type=DOCUMENT_CREATED, payload=payload, occurred_at_ms=when,
+            event_metadata=event_metadata,
         )
         return self._projector.get(
             tenant_id=tenant_id, business_id=business_id, document_id=document_id
@@ -95,6 +98,7 @@ class DocumentRegistry:
     def revise(
         self, *, tenant_id: str, business_id: str, document_id: str, artifact_id: str,
         idempotency_key: str, occurred_at_ms: int | None = None,
+        event_metadata: dict[str, object] | None = None,
     ) -> Document:
         current = self._projector.get(
             tenant_id=tenant_id, business_id=business_id, document_id=document_id
@@ -110,6 +114,7 @@ class DocumentRegistry:
                 tenant_id=tenant_id, business_id=business_id, entity_id=document_id,
                 operation="revise", idempotency_key=idempotency_key,
                 fact_type=DOCUMENT_REVISED, payload=payload,
+                event_metadata=event_metadata,
             )
             if repaired:
                 return current
@@ -125,6 +130,7 @@ class DocumentRegistry:
             fact_type=DOCUMENT_REVISED,
             payload=payload,
             occurred_at_ms=when,
+            event_metadata=event_metadata,
         )
         return self._projector.get(
             tenant_id=tenant_id, business_id=business_id, document_id=document_id
@@ -133,6 +139,7 @@ class DocumentRegistry:
     def archive(
         self, *, tenant_id: str, business_id: str, document_id: str, idempotency_key: str,
         occurred_at_ms: int | None = None,
+        event_metadata: dict[str, object] | None = None,
     ) -> Document:
         current = self._projector.get(
             tenant_id=tenant_id, business_id=business_id, document_id=document_id
@@ -142,6 +149,7 @@ class DocumentRegistry:
                 tenant_id=tenant_id, business_id=business_id, entity_id=document_id,
                 operation="archive", idempotency_key=idempotency_key,
                 fact_type=DOCUMENT_ARCHIVED, payload={},
+                event_metadata=event_metadata,
             )
             if not repaired:
                 raise ValueError("document already archived with another idempotency key")
@@ -157,6 +165,7 @@ class DocumentRegistry:
             fact_type=DOCUMENT_ARCHIVED,
             payload={},
             occurred_at_ms=when,
+            event_metadata=event_metadata,
         )
         return self._projector.get(
             tenant_id=tenant_id, business_id=business_id, document_id=document_id
