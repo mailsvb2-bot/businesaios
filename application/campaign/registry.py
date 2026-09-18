@@ -60,6 +60,7 @@ class CampaignRegistry:
         budget_minor: int | None = None,
         currency: str | None = None,
         occurred_at_ms: int | None = None,
+        event_metadata: dict[str, object] | None = None,
     ) -> Campaign:
         when = self._time(occurred_at_ms)
         candidate = Campaign(
@@ -89,6 +90,7 @@ class CampaignRegistry:
                 idempotency_key=idempotency_key,
                 fact_type=CAMPAIGN_CREATED,
                 payload=payload,
+                event_metadata=event_metadata,
             )
             return current
         self._writer.append_once(
@@ -100,6 +102,7 @@ class CampaignRegistry:
             fact_type=CAMPAIGN_CREATED,
             payload=payload,
             occurred_at_ms=when,
+            event_metadata=event_metadata,
         )
         return self._projector.get(tenant_id=tenant_id, business_id=business_id, campaign_id=campaign_id)
 
@@ -115,6 +118,7 @@ class CampaignRegistry:
         budget_minor: int | None = None,
         currency: str | None = None,
         occurred_at_ms: int | None = None,
+        event_metadata: dict[str, object] | None = None,
     ) -> Campaign:
         current = self._projector.get(tenant_id=tenant_id, business_id=business_id, campaign_id=campaign_id)
         if current.lifecycle_status is CampaignLifecycleStatus.ARCHIVED:
@@ -137,6 +141,16 @@ class CampaignRegistry:
             raise ValueError("campaign currency cannot be rewritten")
         payload = self._payload(candidate)
         if payload == self._payload(current):
+            self._writer.repair_existing(
+                tenant_id=tenant_id,
+                business_id=business_id,
+                entity_id=campaign_id,
+                operation="update",
+                idempotency_key=idempotency_key,
+                fact_type=CAMPAIGN_UPDATED,
+                payload=payload,
+                event_metadata=event_metadata,
+            )
             return current
         self._writer.append_transition_once(
             tenant_id=tenant_id,
@@ -148,6 +162,7 @@ class CampaignRegistry:
             fact_type=CAMPAIGN_UPDATED,
             payload=payload,
             occurred_at_ms=when,
+            event_metadata=event_metadata,
         )
         return self._projector.get(tenant_id=tenant_id, business_id=business_id, campaign_id=campaign_id)
 
@@ -159,9 +174,20 @@ class CampaignRegistry:
         campaign_id: str,
         idempotency_key: str,
         occurred_at_ms: int | None = None,
+        event_metadata: dict[str, object] | None = None,
     ) -> Campaign:
         current = self._projector.get(tenant_id=tenant_id, business_id=business_id, campaign_id=campaign_id)
         if current.lifecycle_status is CampaignLifecycleStatus.ARCHIVED:
+            self._writer.repair_existing(
+                tenant_id=tenant_id,
+                business_id=business_id,
+                entity_id=campaign_id,
+                operation="archive",
+                idempotency_key=idempotency_key,
+                fact_type=CAMPAIGN_ARCHIVED,
+                payload={},
+                event_metadata=event_metadata,
+            )
             return current
         when = max(current.updated_at_ms, self._time(occurred_at_ms))
         self._writer.append_transition_once(
@@ -174,6 +200,7 @@ class CampaignRegistry:
             fact_type=CAMPAIGN_ARCHIVED,
             payload={},
             occurred_at_ms=when,
+            event_metadata=event_metadata,
         )
         return self._projector.get(tenant_id=tenant_id, business_id=business_id, campaign_id=campaign_id)
 
