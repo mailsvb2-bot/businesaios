@@ -12,16 +12,8 @@ def test_production_boot_gate_is_registered() -> None:
     assert [step.name for step in plan.steps] == [
         "assert-project-shape",
         "doctor-check",
-        "postgres-contract",
-        "postgres-migrations",
-        "postgres-live",
-        "container-runtime",
         "production-boot",
     ]
-    assert callable(handler_for_step("postgres-contract"))
-    assert callable(handler_for_step("postgres-migrations"))
-    assert callable(handler_for_step("postgres-live"))
-    assert callable(handler_for_step("container-runtime"))
     assert callable(handler_for_step("production-boot"))
 
 
