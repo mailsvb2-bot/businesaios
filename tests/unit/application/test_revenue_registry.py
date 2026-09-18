@@ -10,7 +10,7 @@ from application.revenue import (
     RevenueProjector,
     RevenueRegistry,
 )
-from contracts.event_store import BUSINESS_FACT_EVENT_TYPE, BusinessFactV1
+from contracts.event_store import BUSINESS_FACT_EVENT_TYPE, BusinessFactV1, canonical_business_event_contract
 from core.finance.enums import RevenueLifecycleStatus
 from reliability.idempotency_store import InMemoryIdempotencyStore
 from runtime.platform.event_store.memory_event_store import MemoryEventStore
@@ -52,6 +52,57 @@ def test_revenue_recognition_is_idempotent_and_pii_free() -> None:
     }
     assert "description" not in str(payload).lower()
     assert "customer" not in str(payload).lower()
+
+
+def test_revenue_metadata_propagates_and_same_key_replay_rejects_change() -> None:
+    registry, events = _registry()
+    recognize_metadata = {
+        "actor_id": "owner-1",
+        "decision_id": "decision-recognize",
+        "evidence_ids": ("invoice-evidence-1",),
+    }
+    recognized = registry.recognize(
+        tenant_id="tenant", business_id="business", revenue_id="revenue-1",
+        idempotency_key="recognize-meta", amount="125.50", currency="EUR",
+        source_kind="invoice", source_id="invoice-1", recognized_at_ms=100,
+        recorded_at_ms=120, event_metadata=recognize_metadata,
+    )
+    assert registry.recognize(
+        tenant_id="tenant", business_id="business", revenue_id="revenue-1",
+        idempotency_key="recognize-meta", amount="125.500", currency="eur",
+        source_kind="invoice", source_id="invoice-1", recognized_at_ms=100,
+        recorded_at_ms=999, event_metadata=recognize_metadata,
+    ) == recognized
+    rows = list(events.iter_events(
+        tenant_id="tenant", start_ms=0, event_type=BUSINESS_FACT_EVENT_TYPE
+    ))
+    assert len(rows) == 1
+    contract = canonical_business_event_contract(rows[0])
+    assert contract["actor_id"] == "owner-1"
+    assert contract["evidence_ids"] == ("invoice-evidence-1",)
+    with pytest.raises(ValueError, match="event metadata"):
+        registry.recognize(
+            tenant_id="tenant", business_id="business", revenue_id="revenue-1",
+            idempotency_key="recognize-meta", amount="125.50", currency="EUR",
+            source_kind="invoice", source_id="invoice-1", recognized_at_ms=100,
+            recorded_at_ms=120, event_metadata={**recognize_metadata, "actor_id": "owner-2"},
+        )
+
+    reverse_metadata = {"actor_id": "owner-1", "decision_id": "decision-reverse"}
+    reversed_revenue = registry.reverse(
+        tenant_id="tenant", business_id="business", revenue_id="revenue-1",
+        idempotency_key="reverse-meta", occurred_at_ms=200, event_metadata=reverse_metadata,
+    )
+    assert registry.reverse(
+        tenant_id="tenant", business_id="business", revenue_id="revenue-1",
+        idempotency_key="reverse-meta", occurred_at_ms=999, event_metadata=reverse_metadata,
+    ) == reversed_revenue
+    with pytest.raises(ValueError, match="event metadata"):
+        registry.reverse(
+            tenant_id="tenant", business_id="business", revenue_id="revenue-1",
+            idempotency_key="reverse-meta", occurred_at_ms=200,
+            event_metadata={**reverse_metadata, "actor_id": "owner-2"},
+        )
 
 
 def test_revenue_rejects_conflicting_immutable_recognition() -> None:
