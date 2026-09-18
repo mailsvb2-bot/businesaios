@@ -34,6 +34,8 @@ def test_deep_release_workflow_uses_canonical_gates_and_real_probes() -> None:
     assert "--gate release" in text
     assert "python:3.12-slim@sha256:" in text
     assert "postgres:16@sha256:" in text
+    assert 'echo "BUSINESAIOS_ENABLE_POSTGRES_EVENT_STORE=1"' in text
+    assert "POSTGRES_EVENT_STORE_ENABLED" not in text
     assert "POSTGRES_BACKUP_EVIDENCE_OK=1" not in text
 
 
