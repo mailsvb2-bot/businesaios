@@ -259,6 +259,7 @@ class RevenueRegistry:
         source_id: str,
         recognized_at_ms: int,
         recorded_at_ms: int | None = None,
+        event_metadata: dict[str, object] | None = None,
     ) -> Revenue:
         tenant_id = _token(tenant_id, "tenant_id")
         business_id = _token(business_id, "business_id")
@@ -298,6 +299,7 @@ class RevenueRegistry:
                 idempotency_key=idempotency_key,
                 fact_type=REVENUE_RECOGNIZED,
                 payload=payload,
+                event_metadata=event_metadata,
             )
             return current
         self._writer.append_once(
@@ -309,6 +311,7 @@ class RevenueRegistry:
             fact_type=REVENUE_RECOGNIZED,
             payload=payload,
             occurred_at_ms=when,
+            event_metadata=event_metadata,
         )
         return self.get(tenant_id=tenant_id, business_id=business_id, revenue_id=revenue_id)
 
@@ -320,6 +323,7 @@ class RevenueRegistry:
         revenue_id: str,
         idempotency_key: str,
         occurred_at_ms: int | None = None,
+        event_metadata: dict[str, object] | None = None,
     ) -> Revenue:
         current = self.get(
             tenant_id=tenant_id,
@@ -327,6 +331,16 @@ class RevenueRegistry:
             revenue_id=revenue_id,
         )
         if current.lifecycle_status is RevenueLifecycleStatus.REVERSED:
+            self._writer.repair_existing(
+                tenant_id=tenant_id,
+                business_id=business_id,
+                entity_id=revenue_id,
+                operation="reverse",
+                idempotency_key=idempotency_key,
+                fact_type=REVENUE_REVERSED,
+                payload={"schema_version": REVENUE_SCHEMA_VERSION},
+                event_metadata=event_metadata,
+            )
             return current
         when = max(current.updated_at_ms, self._time(occurred_at_ms))
         self._writer.append_transition_once(
@@ -339,6 +353,7 @@ class RevenueRegistry:
             fact_type=REVENUE_REVERSED,
             payload={"schema_version": REVENUE_SCHEMA_VERSION},
             occurred_at_ms=when,
+            event_metadata=event_metadata,
         )
         return self.get(tenant_id=tenant_id, business_id=business_id, revenue_id=revenue_id)
 
