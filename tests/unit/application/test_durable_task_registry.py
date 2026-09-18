@@ -9,7 +9,7 @@ from application.task import (
     DurableTaskProjector,
     DurableTaskRegistry,
 )
-from contracts.event_store import BusinessFactV1
+from contracts.event_store import BusinessFactV1, canonical_business_event_contract
 from contracts.task import DurableTaskNotFound, DurableTaskStatus
 from reliability.idempotency_store import InMemoryIdempotencyStore
 
@@ -105,6 +105,60 @@ def test_task_lifecycle_and_exact_transition_replay_are_durable() -> None:
     )
     assert replay_completed == completed
     assert len(events.events) == 3
+
+
+def test_task_metadata_propagates_and_exact_replay_rejects_change() -> None:
+    registry, events = _registry()
+    create_metadata = {
+        "actor_id": "owner-1",
+        "decision_id": "decision-create",
+        "evidence_ids": ("task-evidence-1",),
+    }
+    created = registry.create(
+        tenant_id="t", business_id="b", task_id="task", idempotency_key="create-meta",
+        title="Ship", occurred_at_ms=100, event_metadata=create_metadata,
+    )
+    assert registry.create(
+        tenant_id="t", business_id="b", task_id="task", idempotency_key="create-meta",
+        title="Ship", occurred_at_ms=999, event_metadata=create_metadata,
+    ) == created
+    assert canonical_business_event_contract(events.events[0])["actor_id"] == "owner-1"
+    with pytest.raises(ValueError, match="event metadata"):
+        registry.create(
+            tenant_id="t", business_id="b", task_id="task", idempotency_key="create-meta",
+            title="Ship", occurred_at_ms=100,
+            event_metadata={**create_metadata, "actor_id": "owner-2"},
+        )
+
+    start_metadata = {"actor_id": "owner-1", "decision_id": "decision-start"}
+    running = registry.start(
+        tenant_id="t", business_id="b", task_id="task", idempotency_key="start-meta",
+        occurred_at_ms=200, event_metadata=start_metadata,
+    )
+    assert registry.start(
+        tenant_id="t", business_id="b", task_id="task", idempotency_key="start-meta",
+        occurred_at_ms=999, event_metadata=start_metadata,
+    ) == running
+    with pytest.raises(ValueError, match="event metadata"):
+        registry.start(
+            tenant_id="t", business_id="b", task_id="task", idempotency_key="start-meta",
+            occurred_at_ms=200, event_metadata={**start_metadata, "actor_id": "owner-2"},
+        )
+
+    complete_metadata = {"actor_id": "owner-1", "decision_id": "decision-complete"}
+    completed = registry.complete(
+        tenant_id="t", business_id="b", task_id="task", idempotency_key="complete-meta",
+        occurred_at_ms=300, event_metadata=complete_metadata,
+    )
+    assert registry.complete(
+        tenant_id="t", business_id="b", task_id="task", idempotency_key="complete-meta",
+        occurred_at_ms=999, event_metadata=complete_metadata,
+    ) == completed
+    with pytest.raises(ValueError, match="event metadata"):
+        registry.complete(
+            tenant_id="t", business_id="b", task_id="task", idempotency_key="complete-meta",
+            occurred_at_ms=300, event_metadata={**complete_metadata, "actor_id": "owner-2"},
+        )
 
 
 def test_task_rejects_new_key_for_already_applied_transition() -> None:
