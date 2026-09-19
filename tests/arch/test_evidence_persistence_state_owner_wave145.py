@@ -25,3 +25,41 @@ def test_evidence_feedback_state_owns_business_memory_projection() -> None:
     assert "project_business_memory_evidence" in text
     assert "project_business_memory_governance_summary" in text
     assert "def apply_feedback_to_world_state(" in text
+
+
+
+def test_headless_boot_reuses_canonical_event_store_for_outcome_chronology() -> None:
+    boot = Path("execution/headless_boot.py").read_text(encoding="utf-8")
+    contract = Path("application/headless/contract.py").read_text(encoding="utf-8")
+    persistence = Path("application/evidence/evidence_persistence.py").read_text(
+        encoding="utf-8"
+    )
+
+    assert "del event_store" not in boot
+    assert "event_store=event_store" in boot
+    assert "event_store: Any | None = None" in contract
+    assert "event_store=event_store" in contract
+    assert "BusinessOutcomeEventSpineProjector" in persistence
+
+
+
+def test_business_outcome_event_spine_projection_has_one_non_authoritative_owner() -> None:
+    roots = (
+        Path("application"),
+        Path("execution"),
+        Path("runtime"),
+        Path("storage"),
+    )
+    marker = "CANON_BUSINESS_OUTCOME_EVENT_SPINE_PROJECTION = True"
+    owners = [
+        path
+        for root in roots
+        if root.exists()
+        for path in root.rglob("*.py")
+        if marker in path.read_text(encoding="utf-8")
+    ]
+
+    assert owners == [Path("application/outcome/evidence_projection.py")]
+    text = owners[0].read_text(encoding="utf-8")
+    assert "BusinessFactV1(" not in text
+    assert "append_event" in text
