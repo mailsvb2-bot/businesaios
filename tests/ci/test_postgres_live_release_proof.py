@@ -7,6 +7,11 @@ from pathlib import Path
 import pytest
 
 from runtime.platform import postgres_live_probe
+from runtime.platform.postgres_proof_limits import (
+    POSTGRES_PROOF_CONNECT_TIMEOUT_SECONDS,
+    POSTGRES_PROOF_LOCK_TIMEOUT_MS,
+    POSTGRES_PROOF_STATEMENT_TIMEOUT_MS,
+)
 from scripts.ci import step_postgres_live
 
 _EXACT_SHA = "a" * 40
@@ -52,9 +57,14 @@ def _configure_backup_evidence(
 class _RestorePort:
     restored_sha = _EXACT_SHA
 
-    def __init__(self, dsn: str, *, application_name: str) -> None:
+    def __init__(self, dsn: str, *, application_name: str, **kwargs: object) -> None:
         assert dsn == "postgresql://restore-proof"
         assert application_name == "businesaios-postgres-backup-restore-proof"
+        assert kwargs == {
+            "connect_timeout_seconds": POSTGRES_PROOF_CONNECT_TIMEOUT_SECONDS,
+            "statement_timeout_ms": POSTGRES_PROOF_STATEMENT_TIMEOUT_MS,
+            "lock_timeout_ms": POSTGRES_PROOF_LOCK_TIMEOUT_MS,
+        }
 
     def __enter__(self) -> _RestorePort:
         return self
@@ -173,8 +183,13 @@ def test_backup_evidence_accepts_exact_dump_and_restored_sha(
 
 
 class _MainProbePort:
-    def __init__(self, _dsn: str, *, application_name: str) -> None:
+    def __init__(self, _dsn: str, *, application_name: str, **kwargs: object) -> None:
         assert application_name == "businesaios-postgres-live"
+        assert kwargs == {
+            "connect_timeout_seconds": POSTGRES_PROOF_CONNECT_TIMEOUT_SECONDS,
+            "statement_timeout_ms": POSTGRES_PROOF_STATEMENT_TIMEOUT_MS,
+            "lock_timeout_ms": POSTGRES_PROOF_LOCK_TIMEOUT_MS,
+        }
 
     def __enter__(self) -> _MainProbePort:
         return self
@@ -230,12 +245,12 @@ def test_postgres_live_requires_concurrency_for_outbox_proof(
 def test_postgres_live_reuses_canonical_migration_runner(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    calls: list[str] = []
+    calls: list[tuple[str, dict[str, object]]] = []
 
     monkeypatch.setattr(
         postgres_live_probe,
         "apply_postgres_migrations",
-        lambda dsn: calls.append(dsn),
+        lambda dsn, **kwargs: calls.append((dsn, dict(kwargs))),
     )
     monkeypatch.setattr(postgres_live_probe, "PostgresPort", _MainProbePort)
     monkeypatch.setattr(postgres_live_probe, "_schema_objects", lambda _port: ())
@@ -254,4 +269,13 @@ def test_postgres_live_reuses_canonical_migration_runner(
         )
     )
 
-    assert calls == ["postgresql://live-proof"]
+    assert calls == [
+        (
+            "postgresql://live-proof",
+            {
+                "connect_timeout_seconds": POSTGRES_PROOF_CONNECT_TIMEOUT_SECONDS,
+                "statement_timeout_ms": POSTGRES_PROOF_STATEMENT_TIMEOUT_MS,
+                "lock_timeout_ms": POSTGRES_PROOF_LOCK_TIMEOUT_MS,
+            },
+        )
+    ]
