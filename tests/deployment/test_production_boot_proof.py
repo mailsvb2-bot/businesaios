@@ -38,10 +38,24 @@ class _SQLiteCursorWrapper:
         if upper.startswith('SELECT PG_ADVISORY_XACT_LOCK'):
             self.description = None
             return self
-        if "FROM SCHEMA_MIGRATIONS" in upper and "INFORMATION_SCHEMA.COLUMNS" in upper and "TO_REGCLASS('SETTINGS')" in upper:
-            self._synthetic_row = (1, 1, 1)
-            self.description = (("schema_ready",),)
-            return self
+        if "FROM SCHEMA_MIGRATIONS" in upper:
+            if "EVENT_STORE_V2" in upper:
+                self._synthetic_row, names = (1, 1, 1), ("migrated", "append_seq_ready", "settings_ready")
+            elif "PAYMENT_OUTBOX_V2" in upper:
+                self._synthetic_row, names = (1, 1, 1, 1), ("migrated", "id_ready", "run_after_ready", "terminal_ready")
+            elif "DECISION_ARCHIVE_V2" in upper:
+                self._synthetic_row, names = (1, 1), ("migrated", "envelope_ready")
+            elif "DURABLE_RUNTIME_V2" in upper and "EXECUTED_CHAIN" in upper:
+                self._synthetic_row, names = (1, 1, 1, 1), ("migrated", "executed_ready", "chain_ready", "effects_ready")
+            elif "DURABLE_RUNTIME_V2" in upper and "SNAPSHOTS" in upper:
+                self._synthetic_row, names = (1, 1), ("migrated", "table_ready")
+            elif "DURABLE_RUNTIME_V2" in upper and "OUTBOX" in upper:
+                self._synthetic_row, names = (1, 1), ("migrated", "table_ready")
+            else:
+                self._synthetic_row, names = None, ()
+            if self._synthetic_row is not None:
+                self.description = tuple((name,) for name in names)
+                return self
         if (
             upper.startswith('ALTER TABLE EVENTS ADD COLUMN IF NOT EXISTS')
             and 'APPEND_SEQ' in upper
@@ -76,6 +90,62 @@ class _SQLiteCursorWrapper:
 class _SQLiteConnectionWrapper:
     def __init__(self, path: Path):
         self._conn = sqlite3.connect(path, check_same_thread=False)
+        self._conn.executescript("""
+            CREATE TABLE IF NOT EXISTS schema_migrations (migration_id TEXT PRIMARY KEY);
+            CREATE TABLE IF NOT EXISTS events (
+                append_seq INTEGER PRIMARY KEY AUTOINCREMENT,
+                event_id TEXT NOT NULL UNIQUE, tenant_id TEXT NOT NULL, user_id TEXT,
+                source TEXT NOT NULL, event_type TEXT NOT NULL, timestamp_ms INTEGER NOT NULL,
+                decision_id TEXT, correlation_id TEXT, payload_json TEXT NOT NULL
+            );
+            CREATE TABLE IF NOT EXISTS settings (
+                tenant_id TEXT NOT NULL, key TEXT NOT NULL, value_json TEXT NOT NULL,
+                updated_at_ms INTEGER NOT NULL, PRIMARY KEY (tenant_id, key)
+            );
+            CREATE TABLE IF NOT EXISTS executed (
+                decision_id TEXT PRIMARY KEY, executed_at_ms INTEGER NOT NULL, policy_id TEXT,
+                action TEXT, payload_hash TEXT, signature TEXT, snapshot_id TEXT, state_hash TEXT,
+                kid TEXT, correlation_id TEXT, envelope_version INTEGER,
+                state_schema_version INTEGER, action_schema_version INTEGER
+            );
+            CREATE TABLE IF NOT EXISTS executed_chain (
+                seq INTEGER PRIMARY KEY AUTOINCREMENT, decision_id TEXT UNIQUE NOT NULL,
+                prev_hash TEXT NOT NULL, entry_hash TEXT NOT NULL
+            );
+            CREATE TABLE IF NOT EXISTS effect_status (
+                envelope_id TEXT PRIMARY KEY, status TEXT NOT NULL, updated_at_ms INTEGER NOT NULL
+            );
+            CREATE TABLE IF NOT EXISTS snapshots (
+                snapshot_id TEXT PRIMARY KEY, tenant_id TEXT NOT NULL, partition_key TEXT NOT NULL,
+                canonical_bytes BLOB NOT NULL, content_sha256 TEXT NOT NULL, size_bytes INTEGER NOT NULL,
+                created_at TEXT NOT NULL, updated_at TEXT NOT NULL
+            );
+            CREATE TABLE IF NOT EXISTS decision_archive (
+                decision_id TEXT PRIMARY KEY, tenant_id TEXT NOT NULL, partition_key TEXT NOT NULL,
+                envelope_json TEXT NOT NULL, payload_sha256 TEXT NOT NULL, signature_kid TEXT NOT NULL,
+                created_at TEXT NOT NULL, updated_at TEXT NOT NULL
+            );
+            CREATE TABLE IF NOT EXISTS outbox (
+                decision_id TEXT PRIMARY KEY, correlation_id TEXT NOT NULL, action TEXT NOT NULL,
+                payload_json TEXT NOT NULL, created_at_ms INTEGER NOT NULL, delivered_at_ms INTEGER,
+                claimed_at_ms INTEGER, next_attempt_at_ms INTEGER, retry_count INTEGER NOT NULL DEFAULT 0,
+                status TEXT NOT NULL
+            );
+            CREATE TABLE IF NOT EXISTS payment_outbox (
+                id TEXT PRIMARY KEY, dedupe_key TEXT UNIQUE, status TEXT NOT NULL, payload_json TEXT NOT NULL,
+                created_at_ms INTEGER NOT NULL, updated_at_ms INTEGER NOT NULL, run_after_ms INTEGER NOT NULL,
+                attempts INTEGER NOT NULL DEFAULT 0, last_error TEXT
+            );
+            CREATE TABLE IF NOT EXISTS payment_terminal (
+                external_id TEXT PRIMARY KEY, terminal_status TEXT NOT NULL, emitted_at_ms INTEGER NOT NULL,
+                notification_id TEXT, event TEXT
+            );
+        """)
+        self._conn.executemany(
+            "INSERT OR IGNORE INTO schema_migrations(migration_id) VALUES (?)",
+            [("event_store_v2",), ("payment_outbox_v2",), ("durable_runtime_v2",), ("decision_archive_v2",)],
+        )
+        self._conn.commit()
 
     def __enter__(self):
         return self
