@@ -146,40 +146,45 @@ class PostgresEventStore:
             raise RuntimeError("postgres event store is not open")
         return self._port
     def _init_schema(self) -> None:
-        self._db.execute(
-            """
-            CREATE TABLE IF NOT EXISTS events (
-              append_seq BIGSERIAL UNIQUE,
-              event_id TEXT PRIMARY KEY,
-              tenant_id TEXT NOT NULL,
-              user_id TEXT,
-              source TEXT NOT NULL,
-              event_type TEXT NOT NULL,
-              timestamp_ms BIGINT NOT NULL,
-              decision_id TEXT,
-              correlation_id TEXT,
-              payload_json TEXT NOT NULL
-            );
-            """
-        )
-        self._db.execute(
-            "ALTER TABLE events ADD COLUMN IF NOT EXISTS append_seq BIGSERIAL;"
-        )
-        self._db.execute(
-            "CREATE UNIQUE INDEX IF NOT EXISTS idx_events_append_seq "
-            "ON events (append_seq);"
-        )
-        self._db.execute("CREATE INDEX IF NOT EXISTS idx_events_tenant_ts ON events (tenant_id, timestamp_ms DESC);")
-        self._db.execute("CREATE INDEX IF NOT EXISTS idx_events_tenant_type_ts ON events (tenant_id, event_type, timestamp_ms DESC);")
-        self._db.execute(
-            "CREATE INDEX IF NOT EXISTS idx_events_tenant_append_seq "
-            "ON events (tenant_id, append_seq);"
-        )
-        self._db.execute(
-            "CREATE INDEX IF NOT EXISTS idx_events_tenant_decision_type "
-            "ON events (tenant_id, decision_id, event_type);"
-        )
-        self._db.execute("CREATE TABLE IF NOT EXISTS settings (tenant_id TEXT NOT NULL, key TEXT NOT NULL, value_json TEXT NOT NULL, updated_at_ms BIGINT NOT NULL, PRIMARY KEY (tenant_id, key));")
+        try:
+            self._db.execute(
+                """
+                CREATE TABLE IF NOT EXISTS events (
+                  append_seq BIGSERIAL UNIQUE,
+                  event_id TEXT PRIMARY KEY,
+                  tenant_id TEXT NOT NULL,
+                  user_id TEXT,
+                  source TEXT NOT NULL,
+                  event_type TEXT NOT NULL,
+                  timestamp_ms BIGINT NOT NULL,
+                  decision_id TEXT,
+                  correlation_id TEXT,
+                  payload_json TEXT NOT NULL
+                );
+                """
+            )
+            self._db.execute(
+                "ALTER TABLE events ADD COLUMN IF NOT EXISTS append_seq BIGSERIAL;"
+            )
+            self._db.execute(
+                "CREATE UNIQUE INDEX IF NOT EXISTS idx_events_append_seq "
+                "ON events (append_seq);"
+            )
+            self._db.execute("CREATE INDEX IF NOT EXISTS idx_events_tenant_ts ON events (tenant_id, timestamp_ms DESC);")
+            self._db.execute("CREATE INDEX IF NOT EXISTS idx_events_tenant_type_ts ON events (tenant_id, event_type, timestamp_ms DESC);")
+            self._db.execute(
+                "CREATE INDEX IF NOT EXISTS idx_events_tenant_append_seq "
+                "ON events (tenant_id, append_seq);"
+            )
+            self._db.execute(
+                "CREATE INDEX IF NOT EXISTS idx_events_tenant_decision_type "
+                "ON events (tenant_id, decision_id, event_type);"
+            )
+            self._db.execute("CREATE TABLE IF NOT EXISTS settings (tenant_id TEXT NOT NULL, key TEXT NOT NULL, value_json TEXT NOT NULL, updated_at_ms BIGINT NOT NULL, PRIMARY KEY (tenant_id, key));")
+            self._db.commit()
+        except Exception:
+            self._db.rollback()
+            raise
     def append_event(
         self,
         event: Mapping[str, Any] | None = None,
