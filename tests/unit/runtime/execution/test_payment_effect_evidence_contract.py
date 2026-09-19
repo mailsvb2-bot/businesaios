@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import pytest
 
+from contracts.event_store import canonical_business_event_contract
+from core.payments.contracts import PAYMENT_SCHEMA_VERSION
 from runtime._internal.effects_actions.payments import selection as selection_module
 from runtime._internal.effects_actions.payments.selection import (
     _payment_gateway_evidence,
@@ -109,3 +111,19 @@ def test_provider_ok_without_external_id_fails_the_payment_effect(
         "payment_create_attempted",
         "payment_create_failed",
     ]
+    for index, event in enumerate(effects.event_log.events, start=1):
+        assert event["payload"]["schema_version"] == PAYMENT_SCHEMA_VERSION
+        assert event["payload"]["metadata"]["business_id"] == "business-a"
+        canonical = canonical_business_event_contract(
+            {
+                "event_id": f"payment-create-proof-{index}",
+                "event_type": event["event_type"],
+                "source": event["source"],
+                "timestamp_ms": index,
+                "decision_id": event.get("decision_id"),
+                "correlation_id": event.get("correlation_id"),
+                "payload": event["payload"],
+            }
+        )
+        assert canonical["schema_version"] == PAYMENT_SCHEMA_VERSION
+        assert canonical["business_id"] == "business-a"

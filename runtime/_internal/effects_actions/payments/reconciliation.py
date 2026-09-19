@@ -400,7 +400,7 @@ def reconcile_payments_effect(
             decision_id=str(decision_id),
             correlation_id=str(correlation_id),
             payload={
-                "tenant_id": tenant,
+                "schema_version": PAYMENT_SCHEMA_VERSION, "tenant_id": tenant,
                 "business_id": business,
                 "window_min": int(window_min),
                 "processed": int(processed_any),
@@ -410,17 +410,8 @@ def reconcile_payments_effect(
             },
         )
         if processed_any == 0 and skipped_already > 0:
-            return {
-                "ok": True,
-                "status": "already_checked",
-                "tenant_id": tenant,
-            }
-        return {
-            "ok": True,
-            "status": "checked",
-            "tenant_id": tenant,
-            "processed": int(processed_any),
-        }
+            return {"ok": True, "status": "already_checked", "tenant_id": tenant}
+        return {"ok": True, "status": "checked", "tenant_id": tenant, "processed": int(processed_any)}
     except RuntimeError:
         raise
     except Exception as exc:
@@ -430,7 +421,12 @@ def reconcile_payments_effect(
             user_id="system",
             decision_id=str(decision_id),
             correlation_id=str(correlation_id),
-            payload={"tenant_id": tenant, "error": str(exc)},
+            payload={
+                "schema_version": PAYMENT_SCHEMA_VERSION,
+                "tenant_id": tenant,
+                "business_id": business,
+                "error": str(exc),
+            },
         )
         return False
 

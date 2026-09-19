@@ -238,13 +238,13 @@ def capture_payment_effect(
     effects.event_log.emit(
         event_type="payment_create_attempted", source="payments", user_id=str(user_id),
         decision_id=str(decision_id), correlation_id=str(correlation_id),
-        payload={"amount": int(amount), "currency": str(currency), "provider": str(provider), "capture_requested": True, "ok": provider_ok, "metadata": causal_metadata, "meta": meta},
+        payload={"schema_version": PAYMENT_SCHEMA_VERSION, "amount": int(amount), "currency": str(currency), "provider": str(provider), "capture_requested": True, "ok": provider_ok, "metadata": causal_metadata, "meta": meta},
     )
     if session is None:
         effects.event_log.emit(
             event_type="payment_create_failed", source="payments", user_id=str(user_id),
             decision_id=str(decision_id), correlation_id=str(correlation_id),
-            payload={"provider": str(provider), "reason": "checkout_unavailable", "error": str(meta.get("error") or "")[:500], "metadata": causal_metadata},
+            payload={"schema_version": PAYMENT_SCHEMA_VERSION, "provider": str(provider), "reason": "checkout_unavailable", "error": str(meta.get("error") or "")[:500], "metadata": causal_metadata},
         )
     external_id: str | None = None
     if session is not None:
@@ -269,7 +269,7 @@ def capture_payment_effect(
                 effects.event_log.emit(
                     event_type="payment_create_failed", source="payments", user_id=str(user_id),
                     decision_id=str(decision_id), correlation_id=str(correlation_id),
-                    payload={"provider": str(provider), "reason": "missing_or_invalid_external_id", "error": str(exc)[:500], "metadata": causal_metadata},
+                    payload={"schema_version": PAYMENT_SCHEMA_VERSION, "provider": str(provider), "reason": "missing_or_invalid_external_id", "error": str(exc)[:500], "metadata": causal_metadata},
                 )
             except Exception:
                 swallow(__name__, "runtime/_internal/effects_actions/payments/selection.py")
