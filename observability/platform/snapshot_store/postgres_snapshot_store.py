@@ -34,7 +34,7 @@ class PostgresSnapshotStore:
 
     def __enter__(self) -> "PostgresSnapshotStore":
         self._session = self._session_factory.open().__enter__()
-        self._init_schema()
+        self._verify_schema()
         return self
 
     def __exit__(self, exc_type, exc, tb) -> None:
@@ -48,25 +48,17 @@ class PostgresSnapshotStore:
             raise RuntimeError("postgres snapshot store is not open")
         return self._session
 
-    def _init_schema(self) -> None:
-        self._db.execute(
+    def _verify_schema(self) -> None:
+        row = self._db.fetchone(
             """
-            CREATE TABLE IF NOT EXISTS snapshots (
-                snapshot_id TEXT PRIMARY KEY,
-                tenant_id TEXT NOT NULL,
-                partition_key TEXT NOT NULL,
-                canonical_bytes BYTEA NOT NULL,
-                content_sha256 TEXT NOT NULL,
-                size_bytes BIGINT NOT NULL,
-                created_at TIMESTAMPTZ NOT NULL,
-                updated_at TIMESTAMPTZ NOT NULL
-            );
+            SELECT
+              EXISTS (SELECT 1 FROM schema_migrations WHERE migration_id = 'durable_runtime_v2') AS migrated,
+              to_regclass('snapshots') IS NOT NULL AS table_ready;
             """
         )
-        self._db.execute("CREATE INDEX IF NOT EXISTS idx_snapshots_partition_key ON snapshots(partition_key);")
-        self._db.execute("CREATE INDEX IF NOT EXISTS idx_snapshots_tenant_id ON snapshots(tenant_id);")
-        self._db.execute("CREATE INDEX IF NOT EXISTS idx_snapshots_updated_at ON snapshots(updated_at);")
         self._db.commit()
+        if not row or not bool(row.get("migrated")) or not bool(row.get("table_ready")):
+            raise RuntimeError("POSTGRES_SNAPSHOT_SCHEMA_MIGRATION_REQUIRED")
 
     def put(self, snapshot_id: str, canonical_bytes: bytes) -> None:
         data = bytes(canonical_bytes)

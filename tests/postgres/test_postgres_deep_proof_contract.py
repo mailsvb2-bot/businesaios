@@ -23,6 +23,7 @@ _READY_PROOF = dict(
         "event_store_v2",
         "runtime_outbox_v1",
         "payment_outbox_v2",
+        "durable_runtime_v2",
         "decision_archive_v1",
         "decision_archive_v2",
         "evidence_archive_v1",

@@ -69,7 +69,7 @@ class PostgresDecisionArchive:
 
     def __enter__(self) -> "PostgresDecisionArchive":
         self._session = self._session_factory.open().__enter__()
-        self._init_schema()
+        self._verify_schema()
         return self
 
     def __exit__(self, exc_type, exc, tb) -> None:
@@ -83,25 +83,22 @@ class PostgresDecisionArchive:
             raise RuntimeError("postgres decision archive is not open")
         return self._session
 
-    def _init_schema(self) -> None:
-        self._db.execute(
+    def _verify_schema(self) -> None:
+        row = self._db.fetchone(
             """
-            CREATE TABLE IF NOT EXISTS decision_archive (
-                decision_id TEXT PRIMARY KEY,
-                tenant_id TEXT NOT NULL,
-                partition_key TEXT NOT NULL,
-                envelope_json TEXT NOT NULL,
-                payload_sha256 TEXT NOT NULL,
-                signature_kid TEXT NOT NULL,
-                created_at TIMESTAMPTZ NOT NULL,
-                updated_at TIMESTAMPTZ NOT NULL
-            );
+            SELECT
+              EXISTS (SELECT 1 FROM schema_migrations WHERE migration_id = 'decision_archive_v2') AS migrated,
+              EXISTS (
+                SELECT 1 FROM information_schema.columns
+                WHERE table_schema = current_schema()
+                  AND table_name = 'decision_archive'
+                  AND column_name = 'envelope_json'
+              ) AS envelope_ready;
             """
         )
-        self._db.execute("CREATE INDEX IF NOT EXISTS idx_decision_archive_partition_key ON decision_archive(partition_key);")
-        self._db.execute("CREATE INDEX IF NOT EXISTS idx_decision_archive_tenant_id ON decision_archive(tenant_id);")
-        self._db.execute("CREATE INDEX IF NOT EXISTS idx_decision_archive_updated_at ON decision_archive(updated_at);")
         self._db.commit()
+        if not row or not bool(row.get("migrated")) or not bool(row.get("envelope_ready")):
+            raise RuntimeError("POSTGRES_DECISION_ARCHIVE_SCHEMA_MIGRATION_REQUIRED")
 
     def put(self, env: Any) -> None:
         payload = _materialize_archive_payload(env)

@@ -95,7 +95,66 @@ CREATE TABLE IF NOT EXISTS payment_terminal (
 CREATE INDEX IF NOT EXISTS idx_payment_terminal_status
   ON payment_terminal(terminal_status);
 
+CREATE TABLE IF NOT EXISTS outbox (
+  decision_id TEXT PRIMARY KEY,
+  correlation_id TEXT NOT NULL,
+  action TEXT NOT NULL,
+  payload_json TEXT NOT NULL,
+  created_at_ms BIGINT NOT NULL,
+  delivered_at_ms BIGINT,
+  claimed_at_ms BIGINT,
+  next_attempt_at_ms BIGINT,
+  retry_count INT NOT NULL DEFAULT 0,
+  status TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_outbox_status ON outbox(status, created_at_ms);
+CREATE INDEX IF NOT EXISTS idx_outbox_next_attempt ON outbox(status, next_attempt_at_ms);
+
+CREATE TABLE IF NOT EXISTS executed (
+  decision_id TEXT PRIMARY KEY,
+  executed_at_ms BIGINT NOT NULL,
+  policy_id TEXT,
+  action TEXT,
+  payload_hash TEXT,
+  signature TEXT,
+  snapshot_id TEXT,
+  state_hash TEXT,
+  kid TEXT,
+  correlation_id TEXT,
+  envelope_version INT,
+  state_schema_version INT,
+  action_schema_version INT
+);
+CREATE TABLE IF NOT EXISTS executed_chain (
+  seq BIGSERIAL PRIMARY KEY,
+  decision_id TEXT UNIQUE NOT NULL,
+  prev_hash TEXT NOT NULL,
+  entry_hash TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS effect_status (
+  envelope_id TEXT PRIMARY KEY,
+  status TEXT NOT NULL,
+  updated_at_ms BIGINT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_executed_action ON executed(action);
+CREATE INDEX IF NOT EXISTS idx_executed_policy ON executed(policy_id);
+
+CREATE TABLE IF NOT EXISTS snapshots (
+  snapshot_id TEXT PRIMARY KEY,
+  tenant_id TEXT NOT NULL,
+  partition_key TEXT NOT NULL,
+  canonical_bytes BYTEA NOT NULL,
+  content_sha256 TEXT NOT NULL,
+  size_bytes BIGINT NOT NULL,
+  created_at TIMESTAMPTZ NOT NULL,
+  updated_at TIMESTAMPTZ NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_snapshots_partition_key ON snapshots(partition_key);
+CREATE INDEX IF NOT EXISTS idx_snapshots_tenant_id ON snapshots(tenant_id);
+CREATE INDEX IF NOT EXISTS idx_snapshots_updated_at ON snapshots(updated_at);
+
 INSERT INTO schema_migrations (migration_id) VALUES
   ('event_store_v2'),
-  ('payment_outbox_v2')
+  ('payment_outbox_v2'),
+  ('durable_runtime_v2')
 ON CONFLICT (migration_id) DO NOTHING;
