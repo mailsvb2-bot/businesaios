@@ -12,11 +12,11 @@ from runtime.platform.postgres_contract import (
     evaluate_postgres_contract,
 )
 from runtime.platform.postgres_migration_runner import apply_postgres_migrations
-from runtime.platform.postgres_port import PostgresPort
-from runtime.platform.postgres_proof_limits import (
+from runtime.platform.postgres_port import (
     POSTGRES_PROOF_CONNECT_TIMEOUT_SECONDS,
     POSTGRES_PROOF_LOCK_TIMEOUT_MS,
     POSTGRES_PROOF_STATEMENT_TIMEOUT_MS,
+    PostgresPort,
 )
 
 
@@ -27,9 +27,6 @@ class PostgresLiveProbeConfig:
     tenant_id: str = "ci-postgres-live-tenant"
     proof_id: str = "ci-postgres-live-proof"
     backup_evidence_ok: bool = False
-    connect_timeout_seconds: int = POSTGRES_PROOF_CONNECT_TIMEOUT_SECONDS
-    statement_timeout_ms: int = POSTGRES_PROOF_STATEMENT_TIMEOUT_MS
-    lock_timeout_ms: int = POSTGRES_PROOF_LOCK_TIMEOUT_MS
 
 
 def _rows_to_names(rows: object) -> tuple[str, ...]:
@@ -127,9 +124,6 @@ def _outbox_concurrent_idempotency_roundtrip(
     dsn: str,
     tenant_id: str,
     proof_id: str,
-    connect_timeout_seconds: int,
-    statement_timeout_ms: int,
-    lock_timeout_ms: int,
 ) -> bool:
     idempotency_key = f"pg-live-concurrent-idem-{proof_id}"
     outbox_ids = (
@@ -145,9 +139,9 @@ def _outbox_concurrent_idempotency_roundtrip(
         with PostgresPort(
             dsn,
             application_name="businesaios-postgres-live-concurrency",
-            connect_timeout_seconds=connect_timeout_seconds,
-            statement_timeout_ms=statement_timeout_ms,
-            lock_timeout_ms=lock_timeout_ms,
+            connect_timeout_seconds=POSTGRES_PROOF_CONNECT_TIMEOUT_SECONDS,
+            statement_timeout_ms=POSTGRES_PROOF_STATEMENT_TIMEOUT_MS,
+            lock_timeout_ms=POSTGRES_PROOF_LOCK_TIMEOUT_MS,
         ) as candidate:
             barrier.wait(timeout=15)
             candidate.execute(
@@ -269,16 +263,16 @@ def run_postgres_live_probe(config: PostgresLiveProbeConfig) -> dict[str, object
     if config.apply_migrations:
         apply_postgres_migrations(
             config.dsn,
-            connect_timeout_seconds=config.connect_timeout_seconds,
-            statement_timeout_ms=config.statement_timeout_ms,
-            lock_timeout_ms=config.lock_timeout_ms,
+            connect_timeout_seconds=POSTGRES_PROOF_CONNECT_TIMEOUT_SECONDS,
+            statement_timeout_ms=POSTGRES_PROOF_STATEMENT_TIMEOUT_MS,
+            lock_timeout_ms=POSTGRES_PROOF_LOCK_TIMEOUT_MS,
         )
     with PostgresPort(
         config.dsn,
         application_name="businesaios-postgres-live",
-        connect_timeout_seconds=config.connect_timeout_seconds,
-        statement_timeout_ms=config.statement_timeout_ms,
-        lock_timeout_ms=config.lock_timeout_ms,
+        connect_timeout_seconds=POSTGRES_PROOF_CONNECT_TIMEOUT_SECONDS,
+        statement_timeout_ms=POSTGRES_PROOF_STATEMENT_TIMEOUT_MS,
+        lock_timeout_ms=POSTGRES_PROOF_LOCK_TIMEOUT_MS,
     ) as port:
         live_ok = port.ping()
         schema = _schema_objects(port)
@@ -291,9 +285,6 @@ def run_postgres_live_probe(config: PostgresLiveProbeConfig) -> dict[str, object
                 dsn=config.dsn,
                 tenant_id=config.tenant_id,
                 proof_id=config.proof_id,
-                connect_timeout_seconds=config.connect_timeout_seconds,
-                statement_timeout_ms=config.statement_timeout_ms,
-                lock_timeout_ms=config.lock_timeout_ms,
             )
             if "runtime_outbox" in schema
             else False

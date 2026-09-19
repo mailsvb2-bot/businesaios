@@ -14,6 +14,10 @@ from contextlib import contextmanager
 from dataclasses import dataclass
 from typing import Any
 
+POSTGRES_PROOF_CONNECT_TIMEOUT_SECONDS = 10
+POSTGRES_PROOF_STATEMENT_TIMEOUT_MS = 60_000
+POSTGRES_PROOF_LOCK_TIMEOUT_MS = 10_000
+
 
 @dataclass
 class PostgresPort:

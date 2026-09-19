@@ -5,7 +5,7 @@ import json
 import os
 
 from runtime.platform.postgres_migration_runner import apply_postgres_migrations, migration_files
-from runtime.platform.postgres_proof_limits import (
+from runtime.platform.postgres_port import (
     POSTGRES_PROOF_CONNECT_TIMEOUT_SECONDS,
     POSTGRES_PROOF_LOCK_TIMEOUT_MS,
     POSTGRES_PROOF_STATEMENT_TIMEOUT_MS,

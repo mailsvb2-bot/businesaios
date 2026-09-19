@@ -25,11 +25,7 @@ def test_full_gate_keeps_heavy_canon_after_import_smoke() -> None:
 
 
 def test_release_gate_deduplicates_python_suites_via_coverage_superset() -> None:
-    full_names = _names("full")
-    release_names = _names("release")
-
-    assert "unit-tests" in full_names
-    assert "integration-tests" in full_names
-    assert "unit-tests" not in release_names
-    assert "integration-tests" not in release_names
+    full_names, release_names = set(_names("full")), set(_names("release"))
+    assert {"unit-tests", "integration-tests"} <= full_names
+    assert {"unit-tests", "integration-tests"}.isdisjoint(release_names)
     assert "code-coverage" in release_names

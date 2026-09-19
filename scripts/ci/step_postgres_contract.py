@@ -10,11 +10,11 @@ from runtime.platform.postgres_contract import (
     PostgresRuntimeProof,
     evaluate_postgres_contract,
 )
-from runtime.platform.postgres_port import PostgresPort
-from runtime.platform.postgres_proof_limits import (
+from runtime.platform.postgres_port import (
     POSTGRES_PROOF_CONNECT_TIMEOUT_SECONDS,
     POSTGRES_PROOF_LOCK_TIMEOUT_MS,
     POSTGRES_PROOF_STATEMENT_TIMEOUT_MS,
+    PostgresPort,
 )
 from scripts.ci.paths import repo_root
 

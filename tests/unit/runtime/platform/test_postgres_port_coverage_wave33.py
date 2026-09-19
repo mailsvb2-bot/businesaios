@@ -103,16 +103,10 @@ def test_enter_sets_application_name_and_commits(monkeypatch: pytest.MonkeyPatch
 
 
 def test_enter_applies_explicit_fail_closed_database_timeouts(monkeypatch: pytest.MonkeyPatch) -> None:
-    cursor = FakeCursor()
-    conn = FakeConnection([cursor])
+    cursor, conn = FakeCursor(), FakeConnection()
+    conn.cursors.append(cursor)
     driver = install(monkeypatch, conn)
-    port = PostgresPort(
-        "postgres://db",
-        application_name="release-proof",
-        connect_timeout_seconds=7,
-        statement_timeout_ms=9000,
-        lock_timeout_ms=2000,
-    )
+    port = PostgresPort("postgres://db", application_name="release-proof", connect_timeout_seconds=7, statement_timeout_ms=9000, lock_timeout_ms=2000)
     assert port.__enter__() is port
     assert driver.calls == [("postgres://db", False, {"connect_timeout": 7})]
     assert cursor.executions == [

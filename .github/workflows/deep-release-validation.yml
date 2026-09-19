@@ -103,10 +103,6 @@ jobs:
           DATABASE_URL="postgresql://postgres:postgres@${GATEWAY}:5432/businesaios"
           echo "DATABASE_URL=$DATABASE_URL" >> "$GITHUB_ENV"
           echo "POSTGRES_DSN=$DATABASE_URL" >> "$GITHUB_ENV"
-          echo "POSTGRES_RUNTIME_ENABLED=1" >> "$GITHUB_ENV"
-          echo "BUSINESAIOS_ENABLE_POSTGRES_EVENT_STORE=1" >> "$GITHUB_ENV"
-          echo "POSTGRES_APPLY_MIGRATIONS=1" >> "$GITHUB_ENV"
-          echo "RUN_MIGRATIONS_BEFORE_START=1" >> "$GITHUB_ENV"
           for attempt in $(seq 1 30); do
             if pg_isready -d "$DATABASE_URL"; then
               exit 0
@@ -116,6 +112,11 @@ jobs:
           exit 1
 
       - name: Apply migrations and prove backup restore
+        env:
+          POSTGRES_RUNTIME_ENABLED: "1"
+          BUSINESAIOS_ENABLE_POSTGRES_EVENT_STORE: "1"
+          POSTGRES_APPLY_MIGRATIONS: "1"
+          RUN_MIGRATIONS_BEFORE_START: "1"
         run: |
           set -Eeuo pipefail
           mkdir -p artifacts/ci
