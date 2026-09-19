@@ -41,13 +41,9 @@ def test_postgres_live_is_advisory_when_runtime_not_declared(monkeypatch) -> Non
     assert payload["claims_production_ready"] is False
 
 
-def test_production_boot_gate_requires_migrations_live_and_container_before_boot() -> None:
+def test_production_boot_gate_aggregates_existing_release_proofs() -> None:
     assert [step.name for step in plan_for_gate("production-boot").steps] == [
         "assert-project-shape",
         "doctor-check",
-        "postgres-contract",
-        "postgres-migrations",
-        "postgres-live",
-        "container-runtime",
         "production-boot",
     ]

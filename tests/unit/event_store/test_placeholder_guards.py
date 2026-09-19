@@ -52,3 +52,29 @@ def test_event_log_emit_legacy_forbidden_in_prod_strict(monkeypatch) -> None:
     log = EventLog(MemoryEventStore(), tenant="tenant-1")
     with pytest.raises(RuntimeError, match="LEGACY_EVENT_WRITE_FORBIDDEN_IN_PROD"):
         log.emit_legacy(event_type="x", source="s", user_id="u", payload={})
+
+
+class _SchemaPort:
+    def __init__(self, row=(True, True, True)) -> None:
+        self.row, self.commits = row, 0
+
+    def fetchone(self, sql, _params=None):
+        assert "CREATE " not in sql and "ALTER " not in sql
+        return self.row
+
+    def commit(self) -> None:
+        self.commits += 1
+
+
+def test_postgres_event_store_runtime_only_verifies_migrated_schema() -> None:
+    store, port = PostgresEventStore("postgresql://demo", enabled=True), _SchemaPort()
+    store._port = port
+    store._verify_schema()
+    assert port.commits == 1
+
+
+def test_postgres_event_store_runtime_fails_closed_without_v2_migration() -> None:
+    store, port = PostgresEventStore("postgresql://demo", enabled=True), _SchemaPort((False, True, True))
+    store._port = port
+    with pytest.raises(RuntimeError, match="POSTGRES_EVENT_STORE_SCHEMA_MIGRATION_REQUIRED"):
+        store._verify_schema()

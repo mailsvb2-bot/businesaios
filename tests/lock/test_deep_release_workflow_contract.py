@@ -30,10 +30,17 @@ def test_deep_release_workflow_uses_canonical_gates_and_real_probes() -> None:
     assert "--gate postgres-migrations" in text
     assert "pg_dump" in text
     assert "run_staging_runtime_proof.sh" in text
+    assert "timeout --signal=TERM --kill-after=30s 12m" in text
     assert "--gate staging-runtime" in text
     assert "--gate release" in text
     assert "python:3.12-slim@sha256:" in text
     assert "postgres:16@sha256:" in text
+    assert 'echo "BUSINESAIOS_ENABLE_POSTGRES_EVENT_STORE=1" >> "$GITHUB_ENV"' not in text
+    assert 'POSTGRES_RUNTIME_ENABLED: "1"' in text
+    assert 'BUSINESAIOS_ENABLE_POSTGRES_EVENT_STORE: "1"' in text
+    assert 'PGCONNECT_TIMEOUT: "10"' in text
+    assert 'PGOPTIONS: "-c statement_timeout=60000 -c lock_timeout=10000"' in text
+    assert "POSTGRES_EVENT_STORE_ENABLED" not in text
     assert "POSTGRES_BACKUP_EVIDENCE_OK=1" not in text
 
 

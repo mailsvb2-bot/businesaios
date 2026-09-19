@@ -27,9 +27,9 @@ _PROOF_ENV_KEYS = (
 )
 _RELEASE_RUNTIME_DEFAULTS = {
     "ENV": "production", "APP_ENV": "production", "APP_PROFILE": "api", "POSTGRES_RUNTIME_ENABLED": "1",
-    "BUSINESAIOS_ENABLE_POSTGRES_EVENT_STORE": "1", "RUN_MIGRATIONS_BEFORE_START": "1", "POSTGRES_APPLY_MIGRATIONS": "1",
+    "BUSINESAIOS_ENABLE_POSTGRES_EVENT_STORE": "1", "RUN_MIGRATIONS_BEFORE_START": "1", "POSTGRES_APPLY_MIGRATIONS": "1", "PGCONNECT_TIMEOUT": "10", "PGOPTIONS": "-c statement_timeout=60000 -c lock_timeout=10000",
 }
-_RELEASE_RUNTIME_ENV_KEYS = (*_RELEASE_RUNTIME_DEFAULTS, "BAIOS_REQUIRE_TRANSITIVE_DEPENDENCY_LOCK", "BAIOS_CI_ACTIVE_GATE")
+_RELEASE_RUNTIME_ENV_KEYS = (*_RELEASE_RUNTIME_DEFAULTS, "BAIOS_REQUIRE_TRANSITIVE_DEPENDENCY_LOCK", "BAIOS_CI_ACTIVE_GATE", "DATABASE_URL", "POSTGRES_DSN")
 
 
 @contextmanager
@@ -41,6 +41,8 @@ def _step_environment(*, gate: str, step_name: str) -> Iterator[None]:
         os.environ["BAIOS_REQUIRE_TRANSITIVE_DEPENDENCY_LOCK"] = "1"
     if step_name == "quality-check" and gate in {"release", "pre-release"}:
         os.environ[quality_key] = "release"
+    if gate in {"release", "pre-release"} and not requires_release_runtime_environment(gate=gate, step_name=step_name):
+        for key in ("DATABASE_URL", "POSTGRES_DSN"): os.environ.pop(key, None)
     if requires_release_runtime_environment(gate=gate, step_name=step_name):
         for key, value in _RELEASE_RUNTIME_DEFAULTS.items():
             os.environ.setdefault(key, value)

@@ -24,13 +24,16 @@ def test_postgres_runtime_wiring_explicitly_enables_event_store() -> None:
     assert "PostgresEventStore(storage.postgres_dsn)" not in source
 
 
-def test_postgres_event_store_uses_postgres_ddl_and_canonical_event_id() -> None:
-    """Regression lock: postgres adapter must not contain sqlite-only DDL."""
+def test_postgres_event_store_uses_canonical_migration_and_event_id() -> None:
+    """Regression lock: schema DDL lives in migrations, not request-time adapter code."""
     source = _read_repo_file("runtime/platform/event_store/postgres_event_store.py")
+    migration = _read_repo_file("migrations/postgres/0003_runtime_store_schema_v2.sql")
 
-    assert "AUTOINCREMENT" not in source.upper()
-    assert "event_id TEXT PRIMARY KEY" in source
+    assert "AUTOINCREMENT" not in migration.upper()
+    assert "event_store_v2" in migration
+    assert "ALTER TABLE events ADD COLUMN IF NOT EXISTS append_seq BIGSERIAL" in migration
     assert "normalize_append_event" in source
+    assert "POSTGRES_EVENT_STORE_SCHEMA_MIGRATION_REQUIRED" in source
     assert "ORDER BY timestamp_ms DESC, event_id DESC" in source
 
 

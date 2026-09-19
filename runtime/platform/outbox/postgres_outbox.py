@@ -21,34 +21,25 @@ class PostgresOutbox:
 
     def __enter__(self) -> PostgresOutbox:
         self._port = PostgresPort(self._dsn, application_name="businesaios-outbox").__enter__()
-        self._init_schema()
+        self._verify_schema()
         return self
 
     def __exit__(self, exc_type, exc, tb) -> None:
         assert self._port is not None
         self._port.__exit__(exc_type, exc, tb)
 
-    def _init_schema(self) -> None:
+    def _verify_schema(self) -> None:
         assert self._port is not None
-        self._port.execute(
+        row = self._port.fetchone(
             """
-            CREATE TABLE IF NOT EXISTS outbox (
-              decision_id TEXT PRIMARY KEY,
-              correlation_id TEXT NOT NULL,
-              action TEXT NOT NULL,
-              payload_json TEXT NOT NULL,
-              created_at_ms BIGINT NOT NULL,
-              delivered_at_ms BIGINT,
-              claimed_at_ms BIGINT,
-              next_attempt_at_ms BIGINT,
-              retry_count INT NOT NULL DEFAULT 0,
-              status TEXT NOT NULL
-            );
+            SELECT
+              EXISTS (SELECT 1 FROM schema_migrations WHERE migration_id = 'durable_runtime_v2'),
+              to_regclass('outbox') IS NOT NULL;
             """
         )
-        self._port.execute("CREATE INDEX IF NOT EXISTS idx_outbox_status ON outbox(status, created_at_ms);")
-        self._port.execute("CREATE INDEX IF NOT EXISTS idx_outbox_next_attempt ON outbox(status, next_attempt_at_ms);")
         self._port.commit()
+        if not row or not all(bool(item) for item in row):
+            raise RuntimeError("POSTGRES_OUTBOX_SCHEMA_MIGRATION_REQUIRED")
 
     def ping(self) -> bool:
         assert self._port is not None

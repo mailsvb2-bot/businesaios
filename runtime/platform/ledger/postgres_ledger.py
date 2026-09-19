@@ -35,56 +35,27 @@ class PostgresLedger:
 
     def __enter__(self) -> PostgresLedger:
         self._port = PostgresPort(self._dsn, application_name="businesaios-ledger").__enter__()
-        self._init_schema()
+        self._verify_schema()
         return self
 
     def __exit__(self, exc_type, exc, tb) -> None:
         assert self._port is not None
         self._port.__exit__(exc_type, exc, tb)
 
-    def _init_schema(self) -> None:
+    def _verify_schema(self) -> None:
         assert self._port is not None
-        self._port.execute(
+        row = self._port.fetchone(
             """
-            CREATE TABLE IF NOT EXISTS executed (
-              decision_id TEXT PRIMARY KEY,
-              executed_at_ms BIGINT NOT NULL,
-              policy_id TEXT,
-              action TEXT,
-              payload_hash TEXT,
-              signature TEXT,
-              snapshot_id TEXT,
-              state_hash TEXT,
-              kid TEXT,
-              correlation_id TEXT,
-              envelope_version INT,
-              state_schema_version INT,
-              action_schema_version INT
-            );
+            SELECT
+              EXISTS (SELECT 1 FROM schema_migrations WHERE migration_id = 'durable_runtime_v2'),
+              to_regclass('executed') IS NOT NULL,
+              to_regclass('executed_chain') IS NOT NULL,
+              to_regclass('effect_status') IS NOT NULL;
             """
         )
-        self._port.execute(
-            """
-            CREATE TABLE IF NOT EXISTS executed_chain (
-              seq BIGSERIAL PRIMARY KEY,
-              decision_id TEXT UNIQUE NOT NULL,
-              prev_hash TEXT NOT NULL,
-              entry_hash TEXT NOT NULL
-            );
-            """
-        )
-        self._port.execute(
-            """
-            CREATE TABLE IF NOT EXISTS effect_status (
-              envelope_id TEXT PRIMARY KEY,
-              status TEXT NOT NULL,
-              updated_at_ms BIGINT NOT NULL
-            );
-            """
-        )
-        self._port.execute("CREATE INDEX IF NOT EXISTS idx_executed_action ON executed(action);")
-        self._port.execute("CREATE INDEX IF NOT EXISTS idx_executed_policy ON executed(policy_id);")
         self._port.commit()
+        if not row or not all(bool(item) for item in row):
+            raise RuntimeError("POSTGRES_LEDGER_SCHEMA_MIGRATION_REQUIRED")
 
     def ping(self) -> bool:
         assert self._port is not None

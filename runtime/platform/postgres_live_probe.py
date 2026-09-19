@@ -2,16 +2,23 @@ from __future__ import annotations
 
 import json
 from concurrent.futures import ThreadPoolExecutor
+from contextlib import ExitStack
 from dataclasses import dataclass
 from threading import Barrier
 
+from observability.platform.decision_archive.postgres_decision_archive import PostgresDecisionArchive
+from observability.platform.snapshot_store.postgres_snapshot_store import PostgresSnapshotStore
 from runtime.execution.crash_window_recovery_contract import ExecutionCrashWindowState, required_recovery_action
+from runtime.platform.event_store.postgres_event_store import PostgresEventStore
+from runtime.platform.ledger.postgres_ledger import PostgresLedger
+from runtime.platform.outbox.postgres_outbox import PostgresOutbox
+from runtime.platform.outbox.postgres_payment_outbox import PostgresPaymentOutbox
 from runtime.platform.postgres_contract import (
     REQUIRED_SCHEMA_OBJECTS,
     PostgresRuntimeProof,
     evaluate_postgres_contract,
 )
-from runtime.platform.postgres_migration_runner import migration_files
+from runtime.platform.postgres_migration_runner import apply_postgres_migrations
 from runtime.platform.postgres_port import PostgresPort
 
 
@@ -24,13 +31,17 @@ class PostgresLiveProbeConfig:
     backup_evidence_ok: bool = False
 
 
-def _apply_migrations(port: PostgresPort) -> None:
-    files = migration_files()
-    if not files:
-        raise RuntimeError("postgres_migrations_missing")
-    for path in files:
-        port.execute(path.read_text(encoding="utf-8"))
-        port.commit()
+def _runtime_adapters_ready(dsn: str) -> bool:
+    with ExitStack() as stack:
+        adapters = (
+            stack.enter_context(PostgresEventStore(dsn, enabled=True)),
+            stack.enter_context(PostgresLedger(dsn)),
+            stack.enter_context(PostgresSnapshotStore(dsn)),
+            stack.enter_context(PostgresDecisionArchive(dsn)),
+            stack.enter_context(PostgresOutbox(dsn)),
+            stack.enter_context(PostgresPaymentOutbox(dsn)),
+        )
+        return all(bool(adapter.ping()) for adapter in adapters)
 
 
 def _rows_to_names(rows: object) -> tuple[str, ...]:
@@ -258,10 +269,11 @@ def _ledger_chain_verification(port: PostgresPort, *, tenant_id: str, proof_id: 
 
 
 def run_postgres_live_probe(config: PostgresLiveProbeConfig) -> dict[str, object]:
+    if config.apply_migrations:
+        apply_postgres_migrations(config.dsn)
+    runtime_adapters_ok = _runtime_adapters_ready(config.dsn)
     with PostgresPort(config.dsn, application_name="businesaios-postgres-live") as port:
-        if config.apply_migrations:
-            _apply_migrations(port)
-        live_ok = port.ping()
+        live_ok = port.ping() and runtime_adapters_ok
         schema = _schema_objects(port)
         migrations = _migrations(port)
         event_ok = _event_store_roundtrip(port, tenant_id=config.tenant_id, proof_id=config.proof_id) if "events" in schema else False
@@ -294,6 +306,7 @@ def run_postgres_live_probe(config: PostgresLiveProbeConfig) -> dict[str, object
         ledger_chain_verification_ok=ledger_chain_ok,
     )
     payload = evaluate_postgres_contract(proof)
+    payload["runtime_adapters_ok"] = runtime_adapters_ok
     payload["outbox_state_transition_ok"] = outbox_state_ok
     payload["outbox_concurrent_idempotency_ok"] = outbox_concurrency_ok
     return payload

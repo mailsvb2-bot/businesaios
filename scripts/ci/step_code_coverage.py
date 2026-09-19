@@ -22,6 +22,7 @@ COVERAGE_TARGETS = (
     "tests/ads_autopilot",
     "tests/core/product",
     "tests/core/experiments",
+    "tests/external_integrations",
     "tests/integration",
     "tests/runtime",
     "tests/interfaces",
@@ -61,6 +62,7 @@ COVERAGE_SHARDS = (
             "tests/ads_autopilot",
             "tests/core/product",
             "tests/core/experiments",
+            "tests/external_integrations",
         ),
     ),
     CoverageShard(

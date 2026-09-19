@@ -14,7 +14,10 @@ _FULL = (
     INTEGRITY, "architecture-bypass-scan", "async-test-contract", "lock-tests", "unit-tests",
     "integration-tests", USER_SCENARIOS, "business-critical-tests",
 )
-_RELEASE = (*_FULL, "code-coverage", "rust-safety-core", "rust-supply-chain", *_RELEASE_PROOF, BROWSER, "verify-release")
+# Release coverage executes a strict superset of the ordinary unit/integration Python suites.
+# Keep those steps in full CI, but do not execute the same tests twice in the serial release gate.
+_RELEASE_FULL = tuple(step for step in _FULL if step not in {"unit-tests", "integration-tests"})
+_RELEASE = (*_RELEASE_FULL, "code-coverage", "rust-safety-core", "rust-supply-chain", *_RELEASE_PROOF, BROWSER, "verify-release")
 _PLANS = {
     "doctor": (), "fast": _FAST, "full": (*_FULL, "rust-safety-core"), "acceptance": (USER_SCENARIOS,),
     "browser": (BROWSER,), "business-critical": _BUSINESS, "targeted-domain": ("targeted-domain-tests",),
@@ -23,7 +26,8 @@ _PLANS = {
     "coverage": ("code-coverage",), "rust-safety": ("rust-safety-core",), "rust-deps": ("rust-supply-chain",),
     "postgres-contract": ("postgres-contract",), PG_MIGRATIONS: (PG_MIGRATIONS,), PG_LIVE: (PG_LIVE,),
     CONTAINER_RUNTIME: (CONTAINER_RUNTIME,), STAGING_RUNTIME: (STAGING_RUNTIME,),
-    PRODUCTION_BOOT: ("postgres-contract", PG_MIGRATIONS, PG_LIVE, CONTAINER_RUNTIME, PRODUCTION_BOOT),
+    # Production boot aggregates already-produced proof artifacts. Release/pre-release own producer ordering.
+    PRODUCTION_BOOT: (PRODUCTION_BOOT,),
     "release": (*_RELEASE, "build-artifact"), "pre-push": _FAST, "pre-release": _RELEASE,
 }
 _NO_LOCK = {"doctor", "rust-safety", "rust-deps", "postgres-contract", PG_MIGRATIONS, PG_LIVE, CONTAINER_RUNTIME, STAGING_RUNTIME, PRODUCTION_BOOT}

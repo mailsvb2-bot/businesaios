@@ -112,19 +112,30 @@ cleanup() {
 }
 trap cleanup EXIT
 
+CURRENT_PHASE="bootstrap"
+
+phase() {
+  CURRENT_PHASE="$1"
+  printf 'STAGING_PHASE:%s\n' "$CURRENT_PHASE"
+}
+
 run_gate() {
   local gate="$1"
+  phase "gate:${gate}:start"
   "$PYTHON_BIN" -m scripts.ci.cli --gate "$gate"
+  phase "gate:${gate}:ok"
 }
 
 export APP_PROFILE=api
 export ENV=production
 export APP_ENV=production
 export POSTGRES_RUNTIME_ENABLED=1
-export POSTGRES_EVENT_STORE_ENABLED=1
+export BUSINESAIOS_ENABLE_POSTGRES_EVENT_STORE=1
 export POSTGRES_APPLY_MIGRATIONS=1
 export RUN_MIGRATIONS_BEFORE_START=1
 export BAIOS_REQUIRE_QUALITY_TOOLS=release
+export PGCONNECT_TIMEOUT=10
+export PGOPTIONS="-c statement_timeout=60000 -c lock_timeout=10000"
 
 # Real staging order matters: migrations create durable schema first;
 # contract and live proofs must validate the migrated database, not an empty one.
@@ -132,12 +143,17 @@ run_gate postgres-migrations
 run_gate postgres-contract
 run_gate postgres-live
 
+phase "release-manifest:start"
 "$PYTHON_BIN" scripts/staging/write_staging_release_manifest.py >/dev/null
 test -s release/manifest.json
+phase "release-manifest:ok"
 
+phase "docker-build:start"
 docker build --pull=false --build-arg PYTHON_BASE_IMAGE="$PYTHON_BASE_IMAGE" -t "$IMAGE" .
+phase "docker-build:ok"
 cleanup
 
+phase "docker-run:start"
 docker run -d \
   --name "$CONTAINER" \
   --label businesaios.proof=staging-runtime \
@@ -156,10 +172,13 @@ docker run -d \
   -e BUSINESAIOS_KEY_PROVIDER_MASTER_KEY_B64="$KEY_PROVIDER_MASTER_KEY_B64" \
   -e DATABASE_URL="$DATABASE_URL" \
   -e POSTGRES_RUNTIME_ENABLED=1 \
-  -e POSTGRES_EVENT_STORE_ENABLED=1 \
+  -e BUSINESAIOS_ENABLE_POSTGRES_EVENT_STORE=1 \
   -e RUN_MIGRATIONS_BEFORE_START=1 \
+  -e PGCONNECT_TIMEOUT=10 \
+  -e PGOPTIONS="-c statement_timeout=60000 -c lock_timeout=10000" \
   -e BAIOS_REQUIRE_QUALITY_TOOLS=release \
   "$IMAGE" >/dev/null
+phase "docker-run:ok"
 
 probe_url() {
   local path="$1"
@@ -178,10 +197,17 @@ wait_for_readyz() {
   done
 }
 
+phase "readyz:start"
 wait_for_readyz
+phase "readyz:ok"
+phase "storagez:start"
 probe_url /storagez
+phase "storagez:ok"
+phase "executionz:start"
 probe_url /executionz
+phase "executionz:ok"
 
+phase "container-evidence:start"
 "$PYTHON_BIN" - <<'PY'
 from __future__ import annotations
 
@@ -214,6 +240,7 @@ payload = {
 }
 (artifact_dir / "container_runtime_evidence.json").write_text(json.dumps(payload, ensure_ascii=False, sort_keys=True, indent=2) + "\n", encoding="utf-8")
 PY
+phase "container-evidence:ok"
 
 export CONTAINER_RUNTIME_PROOF_REQUIRED=1
 export CONTAINER_RUNTIME_EVIDENCE_REQUIRED=1
@@ -221,6 +248,7 @@ export REAL_RUNTIME_BOOT_EVIDENCE_REQUIRED=1
 
 run_gate container-runtime
 
+phase "runtime-boot-evidence:start"
 "$PYTHON_BIN" - <<'PY'
 from __future__ import annotations
 
@@ -266,9 +294,11 @@ if violations:
 (artifact_dir / "real_runtime_boot_evidence.json").write_text(json.dumps(payload, ensure_ascii=False, sort_keys=True, indent=2) + "\n", encoding="utf-8")
 raise SystemExit(0 if payload["status"] == "ready" else 1)
 PY
+phase "runtime-boot-evidence:ok"
 
 run_gate production-boot
 
+phase "staging-summary:start"
 "$PYTHON_BIN" - <<'PY'
 from __future__ import annotations
 
@@ -315,3 +345,4 @@ if blocked:
 print(json.dumps(summary, ensure_ascii=False, sort_keys=True))
 raise SystemExit(0 if summary["status"] == "ready" else 1)
 PY
+phase "staging-summary:ok"
