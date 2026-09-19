@@ -38,6 +38,8 @@ def test_deep_release_workflow_uses_canonical_gates_and_real_probes() -> None:
     assert 'echo "BUSINESAIOS_ENABLE_POSTGRES_EVENT_STORE=1" >> "$GITHUB_ENV"' not in text
     assert 'POSTGRES_RUNTIME_ENABLED: "1"' in text
     assert 'BUSINESAIOS_ENABLE_POSTGRES_EVENT_STORE: "1"' in text
+    assert 'PGCONNECT_TIMEOUT: "10"' in text
+    assert 'PGOPTIONS: "-c statement_timeout=60000 -c lock_timeout=10000"' in text
     assert "POSTGRES_EVENT_STORE_ENABLED" not in text
     assert "POSTGRES_BACKUP_EVIDENCE_OK=1" not in text
 

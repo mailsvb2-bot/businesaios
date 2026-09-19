@@ -14,38 +14,21 @@ from contextlib import contextmanager
 from dataclasses import dataclass
 from typing import Any
 
-POSTGRES_PROOF_CONNECT_TIMEOUT_SECONDS = 10
-POSTGRES_PROOF_STATEMENT_TIMEOUT_MS = 60_000
-POSTGRES_PROOF_LOCK_TIMEOUT_MS = 10_000
-
 
 @dataclass
 class PostgresPort:
     dsn: str
     application_name: str = "businesaios"
-    connect_timeout_seconds: int | None = None
-    statement_timeout_ms: int | None = None
-    lock_timeout_ms: int | None = None
 
     def __post_init__(self) -> None:
         if not self.dsn or not str(self.dsn).strip():
             raise ValueError("POSTGRES_DSN is empty")
-        for name, value in (
-            ("connect_timeout_seconds", self.connect_timeout_seconds),
-            ("statement_timeout_ms", self.statement_timeout_ms),
-            ("lock_timeout_ms", self.lock_timeout_ms),
-        ):
-            if value is not None and int(value) <= 0:
-                raise ValueError(f"{name} must be > 0")
 
     def __enter__(self) -> PostgresPort:
         import psycopg  # type: ignore
 
         self._psycopg = psycopg
-        connect_kwargs: dict[str, Any] = {"autocommit": False}
-        if self.connect_timeout_seconds is not None:
-            connect_kwargs["connect_timeout"] = int(self.connect_timeout_seconds)
-        self._conn = psycopg.connect(self.dsn, **connect_kwargs)
+        self._conn = psycopg.connect(self.dsn, autocommit=False)
         try:
             with self._conn.cursor() as cur:
                 # PostgreSQL does not accept bind parameters in ``SET name = value``.
@@ -55,15 +38,6 @@ class PostgresPort:
                         "SELECT set_config('application_name', %s, false);",
                         (self.application_name,),
                     )
-                    for setting, value in (
-                        ("statement_timeout", self.statement_timeout_ms),
-                        ("lock_timeout", self.lock_timeout_ms),
-                    ):
-                        if value is not None:
-                            cur.execute(
-                                "SELECT set_config(%s, %s, false);",
-                                (setting, f"{int(value)}ms"),
-                            )
                 except Exception as exc:
                     if "set_config" not in str(exc):
                         raise

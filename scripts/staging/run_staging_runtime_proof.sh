@@ -134,6 +134,8 @@ export BUSINESAIOS_ENABLE_POSTGRES_EVENT_STORE=1
 export POSTGRES_APPLY_MIGRATIONS=1
 export RUN_MIGRATIONS_BEFORE_START=1
 export BAIOS_REQUIRE_QUALITY_TOOLS=release
+export PGCONNECT_TIMEOUT=10
+export PGOPTIONS="-c statement_timeout=60000 -c lock_timeout=10000"
 
 # Real staging order matters: migrations create durable schema first;
 # contract and live proofs must validate the migrated database, not an empty one.
@@ -172,6 +174,8 @@ docker run -d \
   -e POSTGRES_RUNTIME_ENABLED=1 \
   -e BUSINESAIOS_ENABLE_POSTGRES_EVENT_STORE=1 \
   -e RUN_MIGRATIONS_BEFORE_START=1 \
+  -e PGCONNECT_TIMEOUT=10 \
+  -e PGOPTIONS="-c statement_timeout=60000 -c lock_timeout=10000" \
   -e BAIOS_REQUIRE_QUALITY_TOOLS=release \
   "$IMAGE" >/dev/null
 phase "docker-run:ok"

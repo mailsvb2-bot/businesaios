@@ -40,25 +40,12 @@ def _applied_file_migrations(port: PostgresPort) -> set[str]:
     return {str(row[0]) for row in rows or []}
 
 
-def apply_postgres_migrations(
-    dsn: str,
-    *,
-    base: Path | None = None,
-    connect_timeout_seconds: int | None = None,
-    statement_timeout_ms: int | None = None,
-    lock_timeout_ms: int | None = None,
-) -> tuple[PostgresMigrationResult, ...]:
+def apply_postgres_migrations(dsn: str, *, base: Path | None = None) -> tuple[PostgresMigrationResult, ...]:
     files = migration_files(base)
     if not files:
         raise RuntimeError("postgres_migrations_missing")
     results: list[PostgresMigrationResult] = []
-    with PostgresPort(
-        dsn,
-        application_name="businesaios-postgres-migrations",
-        connect_timeout_seconds=connect_timeout_seconds,
-        statement_timeout_ms=statement_timeout_ms,
-        lock_timeout_ms=lock_timeout_ms,
-    ) as port:
+    with PostgresPort(dsn, application_name="businesaios-postgres-migrations") as port:
         _ensure_schema_migrations(port)
         applied = _applied_file_migrations(port)
         for path in files:

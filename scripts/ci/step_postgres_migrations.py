@@ -5,11 +5,6 @@ import json
 import os
 
 from runtime.platform.postgres_migration_runner import apply_postgres_migrations, migration_files
-from runtime.platform.postgres_port import (
-    POSTGRES_PROOF_CONNECT_TIMEOUT_SECONDS,
-    POSTGRES_PROOF_LOCK_TIMEOUT_MS,
-    POSTGRES_PROOF_STATEMENT_TIMEOUT_MS,
-)
 from scripts.ci.paths import repo_root
 
 
@@ -78,12 +73,7 @@ def run() -> tuple[bool, str]:
         _write_artifact(payload)
         return False, "postgres migrations blocked: " + ",".join(violations)
     try:
-        results = apply_postgres_migrations(
-            dsn,
-            connect_timeout_seconds=POSTGRES_PROOF_CONNECT_TIMEOUT_SECONDS,
-            statement_timeout_ms=POSTGRES_PROOF_STATEMENT_TIMEOUT_MS,
-            lock_timeout_ms=POSTGRES_PROOF_LOCK_TIMEOUT_MS,
-        )
+        results = apply_postgres_migrations(dsn)
     except Exception as exc:
         payload = {
             "artifact": "postgres_migrations",

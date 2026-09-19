@@ -117,6 +117,8 @@ jobs:
           BUSINESAIOS_ENABLE_POSTGRES_EVENT_STORE: "1"
           POSTGRES_APPLY_MIGRATIONS: "1"
           RUN_MIGRATIONS_BEFORE_START: "1"
+          PGCONNECT_TIMEOUT: "10"
+          PGOPTIONS: "-c statement_timeout=60000 -c lock_timeout=10000"
         run: |
           set -Eeuo pipefail
           mkdir -p artifacts/ci

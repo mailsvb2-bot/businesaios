@@ -70,10 +70,10 @@ class FakeConnection:
 class FakePsycopg:
     def __init__(self, conn: FakeConnection):
         self.conn = conn
-        self.calls: list[tuple[str, bool, dict[str, object]]] = []
+        self.calls: list[tuple[str, bool]] = []
 
-    def connect(self, dsn: str, *, autocommit: bool, **kwargs):
-        self.calls.append((dsn, autocommit, dict(kwargs)))
+    def connect(self, dsn: str, *, autocommit: bool):
+        self.calls.append((dsn, autocommit))
         return self.conn
 
 
@@ -96,31 +96,10 @@ def test_enter_sets_application_name_and_commits(monkeypatch: pytest.MonkeyPatch
     driver = install(monkeypatch, conn)
     port = PostgresPort("postgres://db", application_name="behavior-graph")
     assert port.__enter__() is port
-    assert driver.calls == [("postgres://db", False, {})]
+    assert driver.calls == [("postgres://db", False)]
     assert cursor.executions == [("SELECT set_config('application_name', %s, false);", ("behavior-graph",))]
     assert conn.commits == 1
     assert port._psycopg is driver
-
-
-def test_enter_applies_explicit_fail_closed_database_timeouts(monkeypatch: pytest.MonkeyPatch) -> None:
-    cursor, conn = FakeCursor(), FakeConnection()
-    conn.cursors.append(cursor)
-    driver = install(monkeypatch, conn)
-    port = PostgresPort("postgres://db", application_name="release-proof", connect_timeout_seconds=7, statement_timeout_ms=9000, lock_timeout_ms=2000)
-    assert port.__enter__() is port
-    assert driver.calls == [("postgres://db", False, {"connect_timeout": 7})]
-    assert cursor.executions == [
-        ("SELECT set_config('application_name', %s, false);", ("release-proof",)),
-        ("SELECT set_config(%s, %s, false);", ("statement_timeout", "9000ms")),
-        ("SELECT set_config(%s, %s, false);", ("lock_timeout", "2000ms")),
-    ]
-    assert conn.commits == 1
-
-
-def test_timeout_validation_rejects_non_positive_values() -> None:
-    for field in ("connect_timeout_seconds", "statement_timeout_ms", "lock_timeout_ms"):
-        with pytest.raises(ValueError, match=f"{field} must be > 0"):
-            PostgresPort("postgres://db", **{field: 0})
 
 
 def test_enter_tolerates_only_set_config_compatibility_failure(

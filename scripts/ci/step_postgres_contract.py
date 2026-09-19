@@ -10,12 +10,7 @@ from runtime.platform.postgres_contract import (
     PostgresRuntimeProof,
     evaluate_postgres_contract,
 )
-from runtime.platform.postgres_port import (
-    POSTGRES_PROOF_CONNECT_TIMEOUT_SECONDS,
-    POSTGRES_PROOF_LOCK_TIMEOUT_MS,
-    POSTGRES_PROOF_STATEMENT_TIMEOUT_MS,
-    PostgresPort,
-)
+from runtime.platform.postgres_port import PostgresPort
 from scripts.ci.paths import repo_root
 
 
@@ -44,13 +39,7 @@ def _rows_to_names(rows: list[Any]) -> tuple[str, ...]:
 
 
 def _live_proof(dsn: str) -> PostgresRuntimeProof:
-    with PostgresPort(
-        dsn,
-        application_name="businesaios-postgres-contract",
-        connect_timeout_seconds=POSTGRES_PROOF_CONNECT_TIMEOUT_SECONDS,
-        statement_timeout_ms=POSTGRES_PROOF_STATEMENT_TIMEOUT_MS,
-        lock_timeout_ms=POSTGRES_PROOF_LOCK_TIMEOUT_MS,
-    ) as port:
+    with PostgresPort(dsn, application_name="businesaios-postgres-contract") as port:
         live = port.ping()
         schema_rows = port.fetchall(
             """

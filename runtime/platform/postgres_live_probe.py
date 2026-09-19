@@ -12,12 +12,7 @@ from runtime.platform.postgres_contract import (
     evaluate_postgres_contract,
 )
 from runtime.platform.postgres_migration_runner import apply_postgres_migrations
-from runtime.platform.postgres_port import (
-    POSTGRES_PROOF_CONNECT_TIMEOUT_SECONDS,
-    POSTGRES_PROOF_LOCK_TIMEOUT_MS,
-    POSTGRES_PROOF_STATEMENT_TIMEOUT_MS,
-    PostgresPort,
-)
+from runtime.platform.postgres_port import PostgresPort
 
 
 @dataclass(frozen=True)
@@ -136,13 +131,7 @@ def _outbox_concurrent_idempotency_roundtrip(
     barrier = Barrier(len(outbox_ids))
 
     def _attempt_insert(outbox_id: str) -> None:
-        with PostgresPort(
-            dsn,
-            application_name="businesaios-postgres-live-concurrency",
-            connect_timeout_seconds=POSTGRES_PROOF_CONNECT_TIMEOUT_SECONDS,
-            statement_timeout_ms=POSTGRES_PROOF_STATEMENT_TIMEOUT_MS,
-            lock_timeout_ms=POSTGRES_PROOF_LOCK_TIMEOUT_MS,
-        ) as candidate:
+        with PostgresPort(dsn, application_name="businesaios-postgres-live-concurrency") as candidate:
             barrier.wait(timeout=15)
             candidate.execute(
                 """
@@ -261,19 +250,8 @@ def _ledger_chain_verification(port: PostgresPort, *, tenant_id: str, proof_id: 
 
 def run_postgres_live_probe(config: PostgresLiveProbeConfig) -> dict[str, object]:
     if config.apply_migrations:
-        apply_postgres_migrations(
-            config.dsn,
-            connect_timeout_seconds=POSTGRES_PROOF_CONNECT_TIMEOUT_SECONDS,
-            statement_timeout_ms=POSTGRES_PROOF_STATEMENT_TIMEOUT_MS,
-            lock_timeout_ms=POSTGRES_PROOF_LOCK_TIMEOUT_MS,
-        )
-    with PostgresPort(
-        config.dsn,
-        application_name="businesaios-postgres-live",
-        connect_timeout_seconds=POSTGRES_PROOF_CONNECT_TIMEOUT_SECONDS,
-        statement_timeout_ms=POSTGRES_PROOF_STATEMENT_TIMEOUT_MS,
-        lock_timeout_ms=POSTGRES_PROOF_LOCK_TIMEOUT_MS,
-    ) as port:
+        apply_postgres_migrations(config.dsn)
+    with PostgresPort(config.dsn, application_name="businesaios-postgres-live") as port:
         live_ok = port.ping()
         schema = _schema_objects(port)
         migrations = _migrations(port)

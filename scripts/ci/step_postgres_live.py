@@ -8,12 +8,7 @@ from pathlib import Path
 
 from runtime.platform.postgres_contract import PostgresRuntimeProof, evaluate_postgres_contract
 from runtime.platform.postgres_live_probe import PostgresLiveProbeConfig, run_postgres_live_probe
-from runtime.platform.postgres_port import (
-    POSTGRES_PROOF_CONNECT_TIMEOUT_SECONDS,
-    POSTGRES_PROOF_LOCK_TIMEOUT_MS,
-    POSTGRES_PROOF_STATEMENT_TIMEOUT_MS,
-    PostgresPort,
-)
+from runtime.platform.postgres_port import PostgresPort
 from scripts.ci.paths import repo_root
 
 _BACKUP_EVIDENCE_CONTRACT = "businesaios.postgres_backup_restore_evidence.v1"
@@ -122,13 +117,7 @@ def _backup_evidence_status() -> tuple[bool, str]:
         return False, "postgres_backup_dump_sha256_mismatch"
 
     try:
-        with PostgresPort(
-            restore_dsn,
-            application_name="businesaios-postgres-backup-restore-proof",
-            connect_timeout_seconds=POSTGRES_PROOF_CONNECT_TIMEOUT_SECONDS,
-            statement_timeout_ms=POSTGRES_PROOF_STATEMENT_TIMEOUT_MS,
-            lock_timeout_ms=POSTGRES_PROOF_LOCK_TIMEOUT_MS,
-        ) as port:
+        with PostgresPort(restore_dsn, application_name="businesaios-postgres-backup-restore-proof") as port:
             row = port.fetchone(_BACKUP_SENTINEL_QUERY, (1,))
     except Exception as exc:
         return False, f"postgres_backup_restore_probe_failed:{type(exc).__name__}"
