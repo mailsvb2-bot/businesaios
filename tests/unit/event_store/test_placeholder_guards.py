@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-from contextlib import contextmanager
-
 import pytest
 
 from core.events.log import EventLog
@@ -57,41 +55,26 @@ def test_event_log_emit_legacy_forbidden_in_prod_strict(monkeypatch) -> None:
 
 
 class _SchemaPort:
-    def __init__(self, *, fail_at: int | None = None) -> None:
-        self.fail_at, self.executes, self.commits, self.rollbacks = fail_at, 0, 0, 0
+    def __init__(self, row=(True, True, True)) -> None:
+        self.row, self.commits = row, 0
 
-    def execute(self, _sql, _params=None) -> None:
-        self.executes += 1
-        if self.fail_at == self.executes:
-            raise RuntimeError("schema failure")
+    def fetchone(self, sql, _params=None):
+        assert "CREATE " not in sql and "ALTER " not in sql
+        return self.row
 
     def commit(self) -> None:
         self.commits += 1
 
-    def rollback(self) -> None:
-        self.rollbacks += 1
 
-    @contextmanager
-    def transaction(self):
-        try:
-            yield self
-        except Exception:
-            self.rollback()
-            raise
-        else:
-            self.commit()
-
-
-def test_postgres_event_store_schema_init_commits_immediately() -> None:
+def test_postgres_event_store_runtime_only_verifies_migrated_schema() -> None:
     store, port = PostgresEventStore("postgresql://demo", enabled=True), _SchemaPort()
     store._port = port
-    store._init_schema()
-    assert port.executes >= 2 and port.commits == 1 and port.rollbacks == 0
+    store._verify_schema()
+    assert port.commits == 1
 
 
-def test_postgres_event_store_schema_init_rolls_back_on_failure() -> None:
-    store, port = PostgresEventStore("postgresql://demo", enabled=True), _SchemaPort(fail_at=2)
+def test_postgres_event_store_runtime_fails_closed_without_v2_migration() -> None:
+    store, port = PostgresEventStore("postgresql://demo", enabled=True), _SchemaPort((False, True, True))
     store._port = port
-    with pytest.raises(RuntimeError, match="schema failure"):
-        store._init_schema()
-    assert port.commits == 0 and port.rollbacks == 1
+    with pytest.raises(RuntimeError, match="POSTGRES_EVENT_STORE_SCHEMA_MIGRATION_REQUIRED"):
+        store._verify_schema()

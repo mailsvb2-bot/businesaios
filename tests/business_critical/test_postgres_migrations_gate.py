@@ -56,3 +56,16 @@ def test_postgres_migrations_fail_closed_when_declared_without_dsn(monkeypatch, 
     assert "database_url_required" in message
     assert payload["status"] == "blocked"
     assert payload["claims_production_ready"] is False
+
+
+def test_runtime_store_schema_is_owned_by_tracked_migration() -> None:
+    migration = Path("migrations/postgres/0003_runtime_store_schema_v2.sql").read_text(encoding="utf-8")
+    event_store = Path("runtime/platform/event_store/postgres_event_store.py").read_text(encoding="utf-8")
+    payment_outbox = Path("runtime/platform/outbox/postgres_payment_outbox.py").read_text(encoding="utf-8")
+
+    assert "event_store_v2" in migration
+    assert "payment_outbox_v2" in migration
+    assert "ADD COLUMN IF NOT EXISTS append_seq" in migration
+    assert "run_after_ms BIGINT NOT NULL" in migration
+    assert "CREATE TABLE" not in event_store and "ALTER TABLE" not in event_store
+    assert "CREATE TABLE" not in payment_outbox and "ALTER TABLE" not in payment_outbox

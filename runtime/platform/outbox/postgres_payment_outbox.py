@@ -22,42 +22,33 @@ class PostgresPaymentOutbox:
 
     def __enter__(self) -> PostgresPaymentOutbox:
         self._port = PostgresPort(self._dsn, application_name="businesaios-payment-outbox").__enter__()
-        self._init_schema()
+        self._verify_schema()
         return self
 
     def __exit__(self, exc_type, exc, tb) -> None:
         assert self._port is not None
         self._port.__exit__(exc_type, exc, tb)
 
-    def _init_schema(self) -> None:
+    def _verify_schema(self) -> None:
         assert self._port is not None
-        self._port.execute(
+        row = self._port.fetchone(
             """
-            CREATE TABLE IF NOT EXISTS payment_outbox (
-              id TEXT PRIMARY KEY,
-              dedupe_key TEXT UNIQUE,
-              status TEXT NOT NULL,
-              payload_json TEXT NOT NULL,
-              created_at_ms BIGINT NOT NULL,
-              updated_at_ms BIGINT NOT NULL,
-              run_after_ms BIGINT NOT NULL,
-              attempts INT NOT NULL DEFAULT 0,
-              last_error TEXT
-            );
+            SELECT
+              EXISTS (SELECT 1 FROM schema_migrations WHERE migration_id = 'payment_outbox_v2'),
+              EXISTS (
+                SELECT 1 FROM information_schema.columns
+                WHERE table_schema = current_schema() AND table_name = 'payment_outbox' AND column_name = 'id'
+              ),
+              EXISTS (
+                SELECT 1 FROM information_schema.columns
+                WHERE table_schema = current_schema() AND table_name = 'payment_outbox' AND column_name = 'run_after_ms'
+              ),
+              to_regclass('payment_terminal') IS NOT NULL;
             """
         )
-        self._port.execute("CREATE INDEX IF NOT EXISTS idx_payment_outbox_status_after ON payment_outbox(status, run_after_ms);")
-        self._port.execute("""
-            CREATE TABLE IF NOT EXISTS payment_terminal (
-              external_id TEXT PRIMARY KEY,
-              terminal_status TEXT NOT NULL,
-              emitted_at_ms BIGINT NOT NULL,
-              notification_id TEXT,
-              event TEXT
-            );
-            """)
-        self._port.execute("CREATE INDEX IF NOT EXISTS idx_payment_terminal_status ON payment_terminal(terminal_status);")
         self._port.commit()
+        if not row or not all(bool(item) for item in row):
+            raise RuntimeError("POSTGRES_PAYMENT_OUTBOX_SCHEMA_MIGRATION_REQUIRED")
 
     def ping(self) -> bool:
         assert self._port is not None
