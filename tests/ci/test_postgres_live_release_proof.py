@@ -205,6 +205,7 @@ def test_postgres_live_requires_concurrency_for_outbox_proof(
         }
 
     monkeypatch.setattr(postgres_live_probe, "PostgresPort", _MainProbePort)
+    monkeypatch.setattr(postgres_live_probe, "_runtime_adapters_ready", lambda _dsn: True)
     monkeypatch.setattr(postgres_live_probe, "_schema_objects", lambda _port: ("runtime_outbox",))
     monkeypatch.setattr(postgres_live_probe, "_migrations", lambda _port: ())
     monkeypatch.setattr(postgres_live_probe, "_outbox_roundtrip", lambda *_args, **_kwargs: True)
@@ -231,6 +232,7 @@ def test_postgres_live_reuses_canonical_migration_runner(monkeypatch: pytest.Mon
     calls: list[str] = []
     monkeypatch.setattr(postgres_live_probe, "apply_postgres_migrations", calls.append)
     monkeypatch.setattr(postgres_live_probe, "PostgresPort", _MainProbePort)
+    monkeypatch.setattr(postgres_live_probe, "_runtime_adapters_ready", lambda _dsn: True)
     monkeypatch.setattr(postgres_live_probe, "_schema_objects", lambda _port: ())
     monkeypatch.setattr(postgres_live_probe, "_migrations", lambda _port: ())
     monkeypatch.setattr(postgres_live_probe, "evaluate_postgres_contract", lambda _proof: {"status": "ready", "violations": []})
