@@ -37,6 +37,7 @@ class _SQLiteCursorWrapper:
             return self
         if upper.startswith('SELECT PG_ADVISORY_XACT_LOCK'):
             self.description = None
+            self._synthetic_row = (1,)
             return self
         if "FROM SCHEMA_MIGRATIONS" in upper:
             if "EVENT_STORE_V2" in upper:
