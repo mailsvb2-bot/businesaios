@@ -27,6 +27,7 @@ class _SQLiteCursorWrapper:
     def __init__(self, cursor):
         self._cursor = cursor
         self.description = None
+        self._synthetic_row = None
 
     def execute(self, sql, params=None):
         statement = str(sql or '').strip()
@@ -36,6 +37,10 @@ class _SQLiteCursorWrapper:
             return self
         if upper.startswith('SELECT PG_ADVISORY_XACT_LOCK'):
             self.description = None
+            return self
+        if "FROM SCHEMA_MIGRATIONS" in upper and "INFORMATION_SCHEMA.COLUMNS" in upper and "TO_REGCLASS('SETTINGS')" in upper:
+            self._synthetic_row = (1, 1, 1)
+            self.description = (("schema_ready",),)
             return self
         if (
             upper.startswith('ALTER TABLE EVENTS ADD COLUMN IF NOT EXISTS')
@@ -52,6 +57,9 @@ class _SQLiteCursorWrapper:
         return self
 
     def fetchone(self):
+        if self._synthetic_row is not None:
+            row, self._synthetic_row = self._synthetic_row, None
+            return row
         return self._cursor.fetchone()
 
     def fetchall(self):
