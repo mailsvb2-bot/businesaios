@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+import os
+
+from scripts.ci.execution import _step_environment
 from scripts.ci.plan_registry import plan_for_gate
 
 
@@ -29,3 +32,16 @@ def test_release_gate_deduplicates_python_suites_via_coverage_superset() -> None
     assert {"unit-tests", "integration-tests"} <= full_names
     assert {"unit-tests", "integration-tests"}.isdisjoint(release_names)
     assert "code-coverage" in release_names
+
+
+def test_release_step_environment_hides_dsn_until_runtime_proof(monkeypatch) -> None:
+    monkeypatch.setenv("DATABASE_URL", "postgresql://proof")
+    monkeypatch.setenv("POSTGRES_DSN", "postgresql://proof")
+    with _step_environment(gate="release", step_name="quality-check"):
+        assert "DATABASE_URL" not in os.environ
+        assert "POSTGRES_DSN" not in os.environ
+    assert os.environ["DATABASE_URL"] == "postgresql://proof"
+    with _step_environment(gate="release", step_name="postgres-live"):
+        assert os.environ["DATABASE_URL"] == "postgresql://proof"
+        assert os.environ["PGCONNECT_TIMEOUT"] == "10"
+        assert "lock_timeout=10000" in os.environ["PGOPTIONS"]
