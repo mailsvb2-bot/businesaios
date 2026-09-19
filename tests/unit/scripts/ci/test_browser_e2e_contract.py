@@ -103,12 +103,15 @@ def test_release_browser_runtime_is_fail_closed(monkeypatch, tmp_path) -> None:
         step_browser_e2e._runtime_env(sha="a" * 40, runtime_dir=str(tmp_path))
     database_url = "postgresql://proof@127.0.0.1:5432/businessaios"
     monkeypatch.setenv("DATABASE_URL", database_url)
+    monkeypatch.setenv("PGCONNECT_TIMEOUT", "10")
+    monkeypatch.setenv("PGOPTIONS", "-c statement_timeout=60000 -c lock_timeout=10000")
     env, mode, storage = step_browser_e2e._runtime_env(sha="a" * 40, runtime_dir=str(tmp_path))
     assert (mode, storage) == ("production", "postgres")
     assert env["DATABASE_URL"] == database_url
     assert env["ENV"] == env["APP_ENV"] == "production" and env["BUSINESAIOS_ENABLE_POSTGRES_EVENT_STORE"] == "1"
     assert env["API_CONTROL_PLANE_ALLOW_DEV_FALLBACKS"] == "0" and env["BUSINESAIOS_API_KEY_STORE_BACKEND"] == "file"
     assert env["BUSINESAIOS_KEY_PROVIDER_BACKEND"] == "file" and env["DECISION_SIGNING_SECRET"] != "dev-secret"
+    assert env["PGCONNECT_TIMEOUT"] == "10" and "lock_timeout=10000" in env["PGOPTIONS"]
     assert len(base64.b64decode(env["BUSINESAIOS_KEY_PROVIDER_MASTER_KEY_B64"])) == 32
 
 
