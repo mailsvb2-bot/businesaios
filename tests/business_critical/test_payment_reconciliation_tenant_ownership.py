@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import pytest
 
+from contracts.event_store import canonical_business_event_contract
+from core.payments.contracts import PAYMENT_SCHEMA_VERSION
 from runtime._internal.effects_actions.payments import reconciliation
 
 
@@ -187,3 +189,77 @@ def test_legacy_unscoped_payment_is_rejected_before_provider_read() -> None:
 
     assert effects.provider_calls == []
     assert effects.event_log.events == [legacy]
+
+
+def _canonical_native_event(event: dict) -> dict:
+    return canonical_business_event_contract(
+        {
+            "event_id": "payment-reconciliation-proof",
+            "event_type": event["event_type"],
+            "source": event["source"],
+            "timestamp_ms": 1,
+            "decision_id": event.get("decision_id"),
+            "correlation_id": event.get("correlation_id"),
+            "payload": event["payload"],
+        }
+    )
+
+
+def test_batch_reconciliation_summary_is_a_canonical_business_event() -> None:
+    effects = FakeEffects(events=[])
+
+    result = reconciliation.reconcile_payments_effect(
+        effects,
+        decision_id="decision-batch",
+        correlation_id="correlation-batch",
+        tenant_id="business-a",
+        business_id="business-a",
+        window_min=30,
+    )
+
+    assert result == {
+        "ok": True,
+        "status": "checked",
+        "tenant_id": "business-a",
+        "processed": 0,
+    }
+    summary = effects.event_log.events[-1]
+    assert summary["event_type"] == "payments_reconciled"
+    assert summary["payload"]["schema_version"] == PAYMENT_SCHEMA_VERSION
+    assert summary["payload"]["business_id"] == "business-a"
+    canonical = _canonical_native_event(summary)
+    assert canonical["schema_version"] == PAYMENT_SCHEMA_VERSION
+    assert canonical["business_id"] == "business-a"
+    assert canonical["correlation_id"] == "correlation-batch"
+
+
+def test_batch_reconciliation_failure_is_a_canonical_business_event(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    effects = FakeEffects(events=[])
+
+    def fail_scan():
+        raise ValueError("event scan failed")
+
+    monkeypatch.setattr(effects.event_log, "iter_events", fail_scan)
+
+    result = reconciliation.reconcile_payments_effect(
+        effects,
+        decision_id="decision-batch-failed",
+        correlation_id="correlation-batch-failed",
+        tenant_id="business-a",
+        business_id="business-a",
+        window_min=30,
+    )
+
+    assert result is False
+    failed = effects.event_log.events[-1]
+    assert failed["event_type"] == "payments_reconcile_failed"
+    assert failed["payload"]["schema_version"] == PAYMENT_SCHEMA_VERSION
+    assert failed["payload"]["tenant_id"] == "business-a"
+    assert failed["payload"]["business_id"] == "business-a"
+    canonical = _canonical_native_event(failed)
+    assert canonical["schema_version"] == PAYMENT_SCHEMA_VERSION
+    assert canonical["business_id"] == "business-a"
+    assert canonical["correlation_id"] == "correlation-batch-failed"
+
