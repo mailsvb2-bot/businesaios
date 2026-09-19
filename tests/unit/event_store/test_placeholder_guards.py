@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from contextlib import contextmanager
+
 import pytest
 
 from core.events.log import EventLog
@@ -68,6 +70,16 @@ class _SchemaPort:
 
     def rollback(self) -> None:
         self.rollbacks += 1
+
+    @contextmanager
+    def transaction(self):
+        try:
+            yield self
+        except Exception:
+            self.rollback()
+            raise
+        else:
+            self.commit()
 
 
 def test_postgres_event_store_schema_init_commits_immediately() -> None:

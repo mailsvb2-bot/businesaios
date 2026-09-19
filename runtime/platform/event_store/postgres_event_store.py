@@ -146,7 +146,7 @@ class PostgresEventStore:
             raise RuntimeError("postgres event store is not open")
         return self._port
     def _init_schema(self) -> None:
-        try:
+        with self._db.transaction():
             self._db.execute(
                 """
                 CREATE TABLE IF NOT EXISTS events (
@@ -181,10 +181,6 @@ class PostgresEventStore:
                 "ON events (tenant_id, decision_id, event_type);"
             )
             self._db.execute("CREATE TABLE IF NOT EXISTS settings (tenant_id TEXT NOT NULL, key TEXT NOT NULL, value_json TEXT NOT NULL, updated_at_ms BIGINT NOT NULL, PRIMARY KEY (tenant_id, key));")
-            self._db.commit()
-        except Exception:
-            self._db.rollback()
-            raise
     def append_event(
         self,
         event: Mapping[str, Any] | None = None,
