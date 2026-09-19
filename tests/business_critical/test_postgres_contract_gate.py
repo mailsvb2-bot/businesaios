@@ -106,7 +106,7 @@ def test_postgres_migration_set_declares_required_schema_and_migrations() -> Non
     files = migration_files()
     text = "\n".join(path.read_text(encoding="utf-8") for path in files)
 
-    assert [path.name for path in files] == ["0001_runtime_core.sql", "0002_decision_archive_v2.sql"]
+    assert [path.name for path in files] == ["0001_runtime_core.sql", "0002_decision_archive_v2.sql", "0003_runtime_store_schema_v2.sql"]
     for table in REQUIRED_SCHEMA_OBJECTS:
         assert f"CREATE TABLE IF NOT EXISTS {table}" in text
     for migration in REQUIRED_MIGRATIONS:
