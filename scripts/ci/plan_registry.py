@@ -14,7 +14,10 @@ _FULL = (
     INTEGRITY, "architecture-bypass-scan", "async-test-contract", "lock-tests", "unit-tests",
     "integration-tests", USER_SCENARIOS, "business-critical-tests",
 )
-_RELEASE = (*_FULL, "code-coverage", "rust-safety-core", "rust-supply-chain", *_RELEASE_PROOF, BROWSER, "verify-release")
+# Release coverage executes a strict superset of the ordinary unit/integration Python suites.
+# Keep those steps in full CI, but do not execute the same tests twice in the serial release gate.
+_RELEASE_FULL = tuple(step for step in _FULL if step not in {"unit-tests", "integration-tests"})
+_RELEASE = (*_RELEASE_FULL, "code-coverage", "rust-safety-core", "rust-supply-chain", *_RELEASE_PROOF, BROWSER, "verify-release")
 _PLANS = {
     "doctor": (), "fast": _FAST, "full": (*_FULL, "rust-safety-core"), "acceptance": (USER_SCENARIOS,),
     "browser": (BROWSER,), "business-critical": _BUSINESS, "targeted-domain": ("targeted-domain-tests",),
