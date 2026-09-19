@@ -14,6 +14,7 @@ from application.effects.effect_outcome_vocabulary import (
 from application.evidence.evidence_feedback_state import (
     apply_feedback_to_world_state as _apply_feedback_world_state,
 )
+from application.outcome.evidence_projection import BusinessOutcomeEventSpineProjector
 from execution.canonical_persistence_vocabulary import (
     canonical_memory_record,
     canonical_persistence_outcome_record,
@@ -84,9 +85,13 @@ class EvidencePersistenceService:
         reliability_operation: str = 'persist_feedback',
         idempotency_owner_id: str = 'evidence-persistence',
         evidence_store: EvidenceStore | None = None,
+        event_store: Any | None = None,
     ) -> None:
         self._business_memory_store = business_memory_store
         self._evidence_store = evidence_store
+        self._outcome_event_projector = (
+            None if event_store is None else BusinessOutcomeEventSpineProjector(event_store)
+        )
         self._business_memory_service = business_memory_service
         self._tenant_default = str(tenant_default or 'system')
         self._reliability = EvidencePersistenceReliabilitySupport(
@@ -361,11 +366,16 @@ class EvidencePersistenceService:
             tenant_id=tenant_id, business_id=business_id, run_id=run_id,
             step_index=step_index, outcome=outcome_record,
         )
-        self._persist_canonical_evidence(
+        canonical_evidence = self._persist_canonical_evidence(
             tenant_id=tenant_id, business_id=business_id, run_id=run_id, step_index=step_index,
             action_payload=action_payload, verification_payload=verification_payload,
             execution_payload=execution_payload, feedback_payload=feedback_payload,
             outcome_record=outcome_record, persistence_key=persistence_key,
+        )
+        outcome_event_id = (
+            None
+            if canonical_evidence is None or self._outcome_event_projector is None
+            else self._outcome_event_projector.project(canonical_evidence)
         )
 
         memory_record: dict[str, Any] | None = None
@@ -403,6 +413,7 @@ class EvidencePersistenceService:
             'persistence_key': persistence_key,
             'persisted_at': _utc_now().isoformat(),
             'evidence_count': len(evidence_records),
+            'outcome_event_id': outcome_event_id,
         }
         receipt = self._attach_reliability_receipt(
             tenant_id=tenant_id,

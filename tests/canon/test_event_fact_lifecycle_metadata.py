@@ -59,3 +59,64 @@ def test_ontology_writer_can_find_existing_fact_by_key_after_state_advance() -> 
     assert len(list(events.iter_events(tenant_id="tenant-1", start_ms=0))) == 1
     with pytest.raises(ValueError, match="event metadata"):
         writer.find_existing_for_key( tenant_id="tenant-1", business_id="business-1", entity_id="invoice-1", operation="record_payment", idempotency_key="payment-request-1", fact_type="invoice.payment_recorded", event_metadata={**metadata, "actor_id": "owner-2"}, )
+
+
+def test_schema_v2_payment_event_uses_the_same_canonical_event_contract() -> None:
+    payment_payload = {
+        "schema_version": 2,
+        "external_id": "payment-1",
+        "status": "pending",
+        "provider": "yookassa",
+        "amount": 1500,
+        "currency": "RUB",
+        "metadata": {
+            "tenant_id": "tenant-1",
+            "business_id": "business-1",
+            "product_id": "product-1",
+            "order_id": "order-1",
+        },
+    }
+    event = {
+        "event_id": "payment-event-1",
+        "tenant_id": "tenant-1",
+        "user_id": "customer-1",
+        "source": "payments",
+        "event_type": "payment_created",
+        "timestamp_ms": 500,
+        "decision_id": "decision-payment-1",
+        "correlation_id": "correlation-payment-1",
+        "payload": payment_payload,
+    }
+
+    assert canonical_business_event_contract(event) == {
+        "event_id": "payment-event-1",
+        "event_type": "payment_created",
+        "schema_version": 2,
+        "business_id": "business-1",
+        "actor_id": None,
+        "agent_id": None,
+        "occurred_at": 500,
+        "recorded_at": 500,
+        "correlation_id": "correlation-payment-1",
+        "causation_id": None,
+        "source": "payments",
+        "payload": payment_payload,
+        "evidence_ids": (),
+    }
+
+
+def test_native_business_event_fails_closed_without_versioned_business_scope() -> None:
+    event = {
+        "event_id": "legacy-payment-event",
+        "tenant_id": "tenant-1",
+        "source": "payments",
+        "event_type": "payment_created",
+        "timestamp_ms": 600,
+        "payload": {"metadata": {"tenant_id": "tenant-1"}},
+    }
+    with pytest.raises(ValueError, match="schema_version"):
+        canonical_business_event_contract(event)
+
+    event["payload"] = {"schema_version": 2, "metadata": {"tenant_id": "tenant-1"}}
+    with pytest.raises(ValueError, match="business_id"):
+        canonical_business_event_contract(event)
