@@ -75,34 +75,37 @@ class BusinessFactV1:
 
 
 def canonical_business_event_contract(event: EventRecord) -> dict[str, Any]:
+    event_type = str(event.get("event_type") or "").strip()
+    if not event_type:
+        raise ValueError("canonical business event_type is required")
     envelope = dict(event.get("payload") or {})
-    if str(event.get("event_type") or "") != BUSINESS_FACT_EVENT_TYPE:
-        raise ValueError("canonical business event must be business_fact.v1")
+    native = event_type != BUSINESS_FACT_EVENT_TYPE
     schema_version = int(envelope.get("schema_version") or 0)
-    if schema_version != 1:
-        raise ValueError(f"unsupported business fact schema_version: {schema_version}")
-    business_id = str(envelope.get("business_id") or "").strip()
-    if not business_id:
-        raise ValueError("canonical business event business_id is required")
-    occurred_at = int(envelope.get("event_time_ms") if envelope.get("event_time_ms") is not None else event.get("timestamp_ms") or 0)
-    recorded_at = int(envelope.get("recorded_at_ms") if envelope.get("recorded_at_ms") is not None else event.get("timestamp_ms") or 0)
+    if native:
+        if schema_version <= 0:
+            raise ValueError("native canonical business event schema_version is required")
+        metadata = envelope.get("metadata")
+        business_id = str(envelope.get("business_id") or (metadata.get("business_id") if isinstance(metadata, dict) else "")).strip()
+        if not business_id:
+            raise ValueError("native canonical business event business_id is required")
+        payload = deepcopy(envelope)
+    else:
+        if schema_version != 1:
+            raise ValueError(f"unsupported business fact schema_version: {schema_version}")
+        business_id = str(envelope.get("business_id") or "").strip()
+        if not business_id:
+            raise ValueError("canonical business event business_id is required")
+        payload = deepcopy(envelope.get("payload") or {})
+    occurred_raw, timestamp_ms = envelope.get("occurred_at_ms" if native else "event_time_ms"), int(event.get("timestamp_ms") or 0)
     evidence_ids = tuple(dict.fromkeys(str(item).strip() for item in (envelope.get("evidence_ids") or ()) if str(item).strip()))
     return {
-        "event_id": str(event.get("event_id") or ""),
-        "event_type": str(envelope.get("fact_type") or ""),
-        "schema_version": schema_version,
-        "business_id": business_id,
-        "actor_id": envelope.get("actor_id"),
-        "agent_id": envelope.get("agent_id"),
-        "occurred_at": occurred_at,
-        "recorded_at": recorded_at,
-        "correlation_id": event.get("correlation_id"),
-        "causation_id": envelope.get("causation_id"),
-        "source": str(event.get("source") or ""),
-        "payload": deepcopy(envelope.get("payload") or {}),
-        "evidence_ids": evidence_ids,
+        "event_id": str(event.get("event_id") or ""), "event_type": event_type if native else str(envelope.get("fact_type") or ""),
+        "schema_version": schema_version, "business_id": business_id, "actor_id": envelope.get("actor_id"), "agent_id": envelope.get("agent_id"),
+        "occurred_at": int(timestamp_ms if occurred_raw is None else occurred_raw),
+        "recorded_at": int(timestamp_ms if envelope.get("recorded_at_ms") is None else envelope["recorded_at_ms"]),
+        "correlation_id": event.get("correlation_id"), "causation_id": envelope.get("causation_id"),
+        "source": str(event.get("source") or ""), "payload": payload, "evidence_ids": evidence_ids,
     }
-
 def normalize_append_event(event: dict | None) -> AppendEvent:
     e = dict(event or {})
     event_id = str(e.get("event_id") or uuid.uuid4())

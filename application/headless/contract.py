@@ -127,6 +127,7 @@ class HeadlessExecutionContract:
         self_healing_retry_engine: SelfHealingRetryEngine | None = None,
         evidence_persistence_service: EvidencePersistenceService | None = None,
         evidence_store: EvidenceStore | None = None,
+        event_store: Any | None = None,
         performance_feedback_learning_service: PerformanceFeedbackLearningService | None = None,
         capability_health_scoring_service: CapabilityHealthScoringService | None = None,
         adaptive_optimization_service: AdaptiveOptimizationService | None = None,
@@ -191,6 +192,7 @@ class HeadlessExecutionContract:
             business_memory_store=business_memory,
             business_memory_service=business_memory_service,
             evidence_store=evidence_store,
+            event_store=event_store,
         )
         self._performance_feedback_learning_service = performance_feedback_learning_service
         self._capability_health_scoring_service = capability_health_scoring_service
