@@ -89,7 +89,7 @@ def build_headless_runtime(*, entrypoint: str = "headless_sdk", root_dir: str | 
         raise ValueError(f"UNKNOWN_BOOTSTRAP_ENTRYPOINT:{name}")
     with bootstrap_entrypoint(name):
         core, executor, event_log, event_store, payment_outbox, stack, learning_job = build_system()
-    del event_store, payment_outbox, stack, learning_job
+    del payment_outbox, stack, learning_job
     paths = build_headless_runtime_paths(root_dir=root_dir)
     evidence_store = build_canonical_evidence_store(root_dir=root_dir)
     ledger = FileHeadlessLedger(root_dir=paths.headless_ledger_dir)
@@ -177,6 +177,7 @@ def build_headless_runtime(*, entrypoint: str = "headless_sdk", root_dir: str | 
         self_healing_retry_engine=self_healing_retry_engine,
         multi_goal_planner_service=multi_goal_planner_service,
         evidence_store=evidence_store,
+        event_store=event_store,
     )
     return HeadlessRuntime(
         decision_core=core,
