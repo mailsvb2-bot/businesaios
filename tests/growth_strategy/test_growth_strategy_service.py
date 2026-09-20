@@ -5,6 +5,7 @@ import time
 from pathlib import Path
 
 from contracts.event_store import canonical_business_event_contract
+from core.growth.strategy import backlog_store as growth_backlog_store
 from core.growth.strategy.contracts import GROWTH_PARTNERSHIP_VISIBILITY_NOTE, GrowthGoalV1
 from core.growth.strategy.service import GrowthStrategyService
 from core.growth.strategy.signals import build_signals
@@ -278,7 +279,8 @@ def test_llm_partnership_cannot_smuggle_executable_authority(tmp_path: Path):
         assert hints["decision_core_required"] is True
 
 
-def test_accept_reject_updates_state(tmp_path: Path):
+def test_accept_reject_updates_state(tmp_path: Path, monkeypatch):
+    monkeypatch.setattr(growth_backlog_store, "now_ms", lambda: 1_700_000_000_000)
     db = tmp_path / "events.db"
     with SqliteEventStore(str(db)) as store:
         svc = GrowthStrategyService(event_store=store, llm=None)
