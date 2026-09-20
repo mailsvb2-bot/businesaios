@@ -430,11 +430,9 @@ def _latest(event_store: Any, *, tenant_id: str, business_id: str, types: tuple[
                 )
                 if _event_business_id(event) == business
             ]
-            # Stable sort preserves canonical append order for timestamp ties.
-            matches.sort(
-                key=lambda event: int(event.get("timestamp_ms") or 0),
-                reverse=True,
-            )
+            # Iterator chronology is oldest-first; reverse makes latest append win ties.
+            matches.sort(key=lambda event: int(event.get("timestamp_ms") or 0))
+            matches.reverse()
             return matches[: max(1, int(limit))]
         except Exception:
             return []
