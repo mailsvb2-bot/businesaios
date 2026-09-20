@@ -430,18 +430,12 @@ def _latest(event_store: Any, *, tenant_id: str, business_id: str, types: tuple[
                 )
                 if _event_business_id(event) == business
             ]
-            # iter_events is the canonical append chronology. Preserve its
-            # relative order when multiple events share the same millisecond;
-            # sorting ties by event_id would invent a false lifecycle order.
-            indexed_matches = list(enumerate(matches))
-            indexed_matches.sort(
-                key=lambda item: (
-                    int(item[1].get("timestamp_ms") or 0),
-                    item[0],
-                ),
+            # Stable sort preserves canonical append order for timestamp ties.
+            matches.sort(
+                key=lambda event: int(event.get("timestamp_ms") or 0),
                 reverse=True,
             )
-            return [event for _index, event in indexed_matches[: max(1, int(limit))]]
+            return matches[: max(1, int(limit))]
         except Exception:
             return []
     latest = getattr(event_store, "latest_events", None)
