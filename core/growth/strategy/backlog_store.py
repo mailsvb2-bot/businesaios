@@ -32,8 +32,23 @@ def now_ms() -> int:
     return int(time.time() * 1000)
 
 
-def _event_id(*, tenant_id: str, decision_id: str, event_type: str, subject: str) -> str:
-    key = f"businesaios:growth:{tenant_id}:{decision_id}:{event_type}:{subject}"
+def _business_id(value: str) -> str:
+    business = str(value or "").strip()
+    if not business:
+        raise ValueError("BUSINESS_ID_REQUIRED")
+    return business
+
+
+def _canonical_payload(business_id: str, **payload: Any) -> dict[str, Any]:
+    return {"schema_version": 1, "business_id": _business_id(business_id), **payload}
+
+
+def _event_business_id(event: dict[str, Any]) -> str:
+    return str((event.get("payload") or {}).get("business_id") or "").strip()
+
+
+def _event_id(*, tenant_id: str, business_id: str, decision_id: str, event_type: str, subject: str) -> str:
+    key = f"businesaios:growth:{tenant_id}:{_business_id(business_id)}:{decision_id}:{event_type}:{subject}"
     return str(uuid.uuid5(_GROWTH_EVENT_NAMESPACE, key))
 
 
@@ -81,6 +96,7 @@ def append_strategy_snapshot(
     event_store: Any,
     *,
     tenant_id: str,
+    business_id: str,
     user_id: str,
     decision_id: str,
     correlation_id: str,
@@ -90,6 +106,7 @@ def append_strategy_snapshot(
     log = EventLog(event_store, tenant=TenantScope(tenant_id))
     event_id = _event_id(
         tenant_id=str(tenant_id),
+        business_id=business_id,
         decision_id=str(decision_id),
         event_type=GROWTH_STRATEGY_SNAPSHOT,
         subject="snapshot",
@@ -100,10 +117,11 @@ def append_strategy_snapshot(
         event_type=GROWTH_STRATEGY_SNAPSHOT,
         source="growth_strategy",
         user_id=str(user_id),
-        payload={
-            "signals": asdict(signals),
-            "goal": asdict(goal or GrowthGoalV1()),
-        },
+        payload=_canonical_payload(
+            business_id,
+            signals=asdict(signals),
+            goal=asdict(goal or GrowthGoalV1()),
+        ),
         decision_id=str(decision_id),
         correlation_id=str(correlation_id),
         timestamp_ms=now_ms(),
@@ -114,6 +132,7 @@ def append_hypothesis(
     event_store: Any,
     *,
     tenant_id: str,
+    business_id: str,
     user_id: str,
     decision_id: str,
     correlation_id: str,
@@ -122,6 +141,7 @@ def append_hypothesis(
     log = EventLog(event_store, tenant=TenantScope(tenant_id))
     event_id = _event_id(
         tenant_id=str(tenant_id),
+        business_id=business_id,
         decision_id=str(decision_id),
         event_type=GROWTH_HYPOTHESIS_CREATED,
         subject=f"hypothesis:{h.hypothesis_id}",
@@ -132,7 +152,7 @@ def append_hypothesis(
         event_type=GROWTH_HYPOTHESIS_CREATED,
         source="growth_strategy",
         user_id=str(user_id),
-        payload={"hypothesis": asdict(h)},
+        payload=_canonical_payload(business_id, hypothesis=asdict(h)),
         decision_id=str(decision_id),
         correlation_id=str(correlation_id),
         timestamp_ms=now_ms(),
@@ -143,6 +163,7 @@ def append_score(
     event_store: Any,
     *,
     tenant_id: str,
+    business_id: str,
     user_id: str,
     decision_id: str,
     correlation_id: str,
@@ -151,6 +172,7 @@ def append_score(
     log = EventLog(event_store, tenant=TenantScope(tenant_id))
     event_id = _event_id(
         tenant_id=str(tenant_id),
+        business_id=business_id,
         decision_id=str(decision_id),
         event_type=GROWTH_HYPOTHESIS_SCORED,
         subject=f"score:{score.hypothesis_id}",
@@ -161,7 +183,7 @@ def append_score(
         event_type=GROWTH_HYPOTHESIS_SCORED,
         source="growth_strategy",
         user_id=str(user_id),
-        payload={"score": asdict(score)},
+        payload=_canonical_payload(business_id, score=asdict(score)),
         decision_id=str(decision_id),
         correlation_id=str(correlation_id),
         timestamp_ms=now_ms(),
@@ -172,6 +194,7 @@ def append_strategy_generated(
     event_store: Any,
     *,
     tenant_id: str,
+    business_id: str,
     user_id: str,
     decision_id: str,
     correlation_id: str,
@@ -183,6 +206,7 @@ def append_strategy_generated(
     log = EventLog(event_store, tenant=TenantScope(tenant_id))
     event_id = _event_id(
         tenant_id=str(tenant_id),
+        business_id=business_id,
         decision_id=str(decision_id),
         event_type=GROWTH_STRATEGY_GENERATED,
         subject="complete",
@@ -193,12 +217,13 @@ def append_strategy_generated(
         event_type=GROWTH_STRATEGY_GENERATED,
         source="growth_strategy",
         user_id=str(user_id),
-        payload={
-            "goal": asdict(goal),
-            "hypothesis_ids": list(hypothesis_ids),
-            "created_ms": int(created_ms),
-            "notes": list(notes),
-        },
+        payload=_canonical_payload(
+            business_id,
+            goal=asdict(goal),
+            hypothesis_ids=list(hypothesis_ids),
+            created_ms=int(created_ms),
+            notes=list(notes),
+        ),
         decision_id=str(decision_id),
         correlation_id=str(correlation_id),
         timestamp_ms=int(created_ms),
@@ -209,18 +234,20 @@ def load_generated_plan_for_decision(
     event_store: Any,
     *,
     tenant_id: str,
+    business_id: str,
     decision_id: str,
 ) -> tuple[StrategyPlanV1, str] | None:
     log = EventLog(event_store, tenant=TenantScope(tenant_id))
-    completed = log.get_events(str(decision_id), GROWTH_STRATEGY_GENERATED)
+    business = _business_id(business_id)
+    completed = [event for event in log.get_events(str(decision_id), GROWTH_STRATEGY_GENERATED) if _event_business_id(event) == business]
     if not completed:
         return None
     completion = completed[-1]
     completion_payload = dict(completion.get("payload") or {})
     ordered_ids = tuple(str(item) for item in completion_payload.get("hypothesis_ids") or () if str(item))
 
-    snapshot_events = log.get_events(str(decision_id), GROWTH_STRATEGY_SNAPSHOT)
-    hypothesis_events = log.get_events(str(decision_id), GROWTH_HYPOTHESIS_CREATED)
+    snapshot_events = [event for event in log.get_events(str(decision_id), GROWTH_STRATEGY_SNAPSHOT) if _event_business_id(event) == business]
+    hypothesis_events = [event for event in log.get_events(str(decision_id), GROWTH_HYPOTHESIS_CREATED) if _event_business_id(event) == business]
     if not snapshot_events:
         return None
 
@@ -263,6 +290,7 @@ def set_hypothesis_state(
     event_store: Any,
     *,
     tenant_id: str,
+    business_id: str,
     user_id: str,
     decision_id: str,
     correlation_id: str,
@@ -275,6 +303,7 @@ def set_hypothesis_state(
     log = EventLog(event_store, tenant=TenantScope(tenant_id))
     event_id = _event_id(
         tenant_id=str(tenant_id),
+        business_id=business_id,
         decision_id=str(decision_id),
         event_type=GROWTH_HYPOTHESIS_STATE,
         subject=f"state:{hypothesis_id}:{state}",
@@ -285,11 +314,12 @@ def set_hypothesis_state(
         event_type=GROWTH_HYPOTHESIS_STATE,
         source="growth_strategy",
         user_id=str(user_id),
-        payload={
-            "hypothesis_id": str(hypothesis_id),
-            "state": str(state),
-            "note": str(note),
-        },
+        payload=_canonical_payload(
+            business_id,
+            hypothesis_id=str(hypothesis_id),
+            state=str(state),
+            note=str(note),
+        ),
         decision_id=str(decision_id),
         correlation_id=str(correlation_id),
         timestamp_ms=now_ms(),
@@ -300,6 +330,7 @@ def append_experiment(
     event_store: Any,
     *,
     tenant_id: str,
+    business_id: str,
     user_id: str,
     decision_id: str,
     correlation_id: str,
@@ -308,6 +339,7 @@ def append_experiment(
     log = EventLog(event_store, tenant=TenantScope(tenant_id))
     event_id = _event_id(
         tenant_id=str(tenant_id),
+        business_id=business_id,
         decision_id=str(decision_id),
         event_type=GROWTH_EXPERIMENT_CREATED,
         subject=f"experiment:{exp.experiment_id}",
@@ -318,15 +350,15 @@ def append_experiment(
         event_type=GROWTH_EXPERIMENT_CREATED,
         source="growth_strategy",
         user_id=str(user_id),
-        payload={"experiment": asdict(exp)},
+        payload=_canonical_payload(business_id, experiment=asdict(exp)),
         decision_id=str(decision_id),
         correlation_id=str(correlation_id),
         timestamp_ms=now_ms(),
     )
 
 
-def list_hypotheses(event_store: Any, *, tenant_id: str, limit: int = 100) -> tuple[GrowthHypothesisV1, ...]:
-    events = _latest(event_store, tenant_id=tenant_id, types=(GROWTH_HYPOTHESIS_CREATED,), limit=int(limit))
+def list_hypotheses(event_store: Any, *, tenant_id: str, business_id: str, limit: int = 100) -> tuple[GrowthHypothesisV1, ...]:
+    events = _latest(event_store, tenant_id=tenant_id, business_id=business_id, types=(GROWTH_HYPOTHESIS_CREATED,), limit=int(limit))
     out: list[GrowthHypothesisV1] = []
     for event in events:
         try:
@@ -337,8 +369,8 @@ def list_hypotheses(event_store: Any, *, tenant_id: str, limit: int = 100) -> tu
     return tuple(out)
 
 
-def latest_scores(event_store: Any, *, tenant_id: str, limit: int = 250) -> dict[str, OpportunityScoreV1]:
-    events = _latest(event_store, tenant_id=tenant_id, types=(GROWTH_HYPOTHESIS_SCORED,), limit=int(limit))
+def latest_scores(event_store: Any, *, tenant_id: str, business_id: str, limit: int = 250) -> dict[str, OpportunityScoreV1]:
+    events = _latest(event_store, tenant_id=tenant_id, business_id=business_id, types=(GROWTH_HYPOTHESIS_SCORED,), limit=int(limit))
     result: dict[str, OpportunityScoreV1] = {}
     for event in events:
         try:
@@ -351,8 +383,8 @@ def latest_scores(event_store: Any, *, tenant_id: str, limit: int = 250) -> dict
     return result
 
 
-def latest_states(event_store: Any, *, tenant_id: str, limit: int = 250) -> dict[str, str]:
-    events = _latest(event_store, tenant_id=tenant_id, types=(GROWTH_HYPOTHESIS_STATE,), limit=int(limit))
+def latest_states(event_store: Any, *, tenant_id: str, business_id: str, limit: int = 250) -> dict[str, str]:
+    events = _latest(event_store, tenant_id=tenant_id, business_id=business_id, types=(GROWTH_HYPOTHESIS_STATE,), limit=int(limit))
     result: dict[str, str] = {}
     for event in events:
         try:
@@ -370,11 +402,12 @@ def list_backlog(
     event_store: Any,
     *,
     tenant_id: str,
+    business_id: str,
     limit: int = 100,
 ) -> tuple[tuple[GrowthHypothesisV1, OpportunityScoreV1 | None, str], ...]:
-    hypotheses = list_hypotheses(event_store, tenant_id=tenant_id, limit=int(limit))
-    scores = latest_scores(event_store, tenant_id=tenant_id, limit=int(limit) * 3)
-    states = latest_states(event_store, tenant_id=tenant_id, limit=int(limit) * 3)
+    hypotheses = list_hypotheses(event_store, tenant_id=tenant_id, business_id=business_id, limit=int(limit))
+    scores = latest_scores(event_store, tenant_id=tenant_id, business_id=business_id, limit=int(limit) * 3)
+    states = latest_states(event_store, tenant_id=tenant_id, business_id=business_id, limit=int(limit) * 3)
 
     return tuple(
         (hypothesis, scores.get(hypothesis.hypothesis_id), states.get(hypothesis.hypothesis_id, "new"))
@@ -382,26 +415,69 @@ def list_backlog(
     )
 
 
-def _latest(event_store: Any, *, tenant_id: str, types: tuple[str, ...], limit: int) -> list[dict[str, Any]]:
-    latest = getattr(event_store, "latest_events", None)
-    if callable(latest):
-        try:
-            return list(latest(tenant_id=tenant_id, event_types=types, limit=int(limit)) or [])
-        except Exception:
-            return []
+def _latest(event_store: Any, *, tenant_id: str, business_id: str, types: tuple[str, ...], limit: int) -> list[dict[str, Any]]:
+    business = _business_id(business_id)
     iterator = getattr(event_store, "iter_events", None)
     if callable(iterator):
         try:
-            return list(
-                iterator(
+            matches = [
+                dict(event)
+                for event in iterator(
                     tenant_id=tenant_id,
                     event_types=types,
                     start_ms=0,
                     end_ms=None,
-                    limit=int(limit),
                 )
-                or []
+                if _event_business_id(event) == business
+            ]
+            matches.sort(
+                key=lambda event: (
+                    int(event.get("timestamp_ms") or 0),
+                    str(event.get("event_id") or ""),
+                ),
+                reverse=True,
             )
+            return matches[: max(1, int(limit))]
+        except Exception:
+            return []
+    latest = getattr(event_store, "latest_events", None)
+    if callable(latest):
+        try:
+            events = list(latest(tenant_id=tenant_id, event_types=types, limit=max(1, int(limit))) or [])
+            return [event for event in events if _event_business_id(event) == business][: max(1, int(limit))]
         except Exception:
             return []
     return []
+
+
+def hypothesis_exists(event_store: Any, *, tenant_id: str, business_id: str, hypothesis_id: str) -> bool:
+    business, target = _business_id(business_id), str(hypothesis_id or "").strip()
+    if not target:
+        return False
+    iterator = getattr(event_store, "iter_events", None)
+    if callable(iterator):
+        try:
+            for event in iterator(
+                tenant_id=str(tenant_id),
+                event_types=(GROWTH_HYPOTHESIS_CREATED,),
+                start_ms=0,
+                end_ms=None,
+            ):
+                if _event_business_id(event) != business:
+                    continue
+                payload = event.get("payload") if isinstance(event.get("payload"), dict) else {}
+                hypothesis = payload.get("hypothesis") if isinstance(payload.get("hypothesis"), dict) else {}
+                if str(hypothesis.get("hypothesis_id") or "") == target:
+                    return True
+            return False
+        except Exception:
+            return False
+    return any(
+        item.hypothesis_id == target
+        for item in list_hypotheses(
+            event_store,
+            tenant_id=tenant_id,
+            business_id=business,
+            limit=10_000,
+        )
+    )

@@ -9,6 +9,7 @@ from typing import Any
 from config.strategic_growth_policy import DEFAULT_GROWTH_SIGNALS_POLICY, GrowthSignalsPolicy
 from contracts.event_store import iter_events_strict
 from core.actions.names import ACTION_ADS_APPLY_EXECUTE_V1
+from core.growth.ledger_v2 import _event_business_id
 from core.growth.today_ledger import build_today_kpi
 from core.observability.errors import log_exception_throttled
 
@@ -66,7 +67,7 @@ def _sales_counts(states: dict[str, tuple[int, str, str]]) -> dict[str, int | fl
             "win_percent": 0.0 if not discovered else round(won / discovered * 100.0, 1)}
 
 
-def _sales_funnel(event_store: Any, *, tenant_id: str, now_ms: int, policy: GrowthSignalsPolicy) -> dict[str, Any]:
+def _sales_funnel(event_store: Any, *, tenant_id: str, business_id: str, now_ms: int, policy: GrowthSignalsPolicy) -> dict[str, Any]:
     start_ms = now_ms - max(1, int(policy.sales_funnel_window_days)) * int(policy.day_ms)
     empty = {"schema_version": 1, "tenant_id": tenant_id, "start_ms": start_ms, "end_ms": now_ms, "total": _sales_counts({}), "by_source": []}
     if not callable(getattr(event_store, "iter_events", None)):
@@ -79,6 +80,7 @@ def _sales_funnel(event_store: Any, *, tenant_id: str, now_ms: int, policy: Grow
             if transition is None:
                 continue
             payload = row.get("payload") if isinstance(row.get("payload"), dict) else {}
+            if _event_business_id(row) != business_id: continue
             subject = str(payload.get("subject_id") or payload.get("customer_id") or payload.get("lead_id") or row.get("user_id") or "").strip()
             if not subject:
                 continue
@@ -98,11 +100,11 @@ def _sales_funnel(event_store: Any, *, tenant_id: str, now_ms: int, policy: Grow
     return {**empty, "total": _sales_counts(states), "by_source": [{"source": source, "counts": _sales_counts(rows)} for source, rows in sorted(grouped.items())]}
 
 
-def build_signals(event_store: Any, *, tenant_id: str, limit: int | None = None, policy: GrowthSignalsPolicy = DEFAULT_GROWTH_SIGNALS_POLICY) -> GrowthSignalV1:
+def build_signals(event_store: Any, *, tenant_id: str, business_id: str, limit: int | None = None, policy: GrowthSignalsPolicy = DEFAULT_GROWTH_SIGNALS_POLICY) -> GrowthSignalV1:
     now_ms = int(time.time() * 1000)
-    kpi = build_today_kpi(event_store, tenant_id=tenant_id)
+    kpi = build_today_kpi(event_store, tenant_id=tenant_id, business_id=business_id)
     scan_limit = policy.event_scan_limit if limit is None else int(limit)
-    events = list(_latest_any_events(event_store, tenant_id=tenant_id, limit=scan_limit, policy=policy))
+    events = [event for event in _latest_any_events(event_store, tenant_id=tenant_id, limit=scan_limit, policy=policy) if _event_business_id(event) == business_id]
     d1 = _compute_retention(events, window_days=policy.retention_window_days, return_days=policy.retention_d1_days, policy=policy) * policy.percentage_multiplier
     d7 = _compute_retention(events, window_days=policy.retention_window_days, return_days=policy.retention_d7_days, policy=policy) * policy.percentage_multiplier
     leads = int(kpi.leads)
@@ -115,12 +117,10 @@ def build_signals(event_store: Any, *, tenant_id: str, limit: int | None = None,
         spend_today_minor=int(kpi.spend_minor),
         revenue_today_minor=int(kpi.revenue_minor),
         profit_today_minor=int(kpi.profit_minor),
-        retention_d1_pct=float(round(d1, 2)),
-        retention_d7_pct=float(round(d7, 2)),
+        retention_d1_pct=float(round(d1, 2)), retention_d7_pct=float(round(d7, 2)),
         conversion_lead_to_purchase_pct=float(round(conv, 2)),
-        top_channels=tuple(_top_channels(events, top_n=policy.top_channels_limit)),
-        notes=tuple(_notes(events)),
-        sales_funnel=_sales_funnel(event_store, tenant_id=str(tenant_id), now_ms=now_ms, policy=policy),
+        top_channels=tuple(_top_channels(events, top_n=policy.top_channels_limit)), notes=tuple(_notes(events)),
+        sales_funnel=_sales_funnel(event_store, tenant_id=str(tenant_id), business_id=str(business_id), now_ms=now_ms, policy=policy),
     )
 
 

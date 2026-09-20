@@ -21,6 +21,7 @@ class GrowthHypothesisV1:
     hypothesis_id: str = ""
     created_ms: int = 0
     tenant_id: str = ""
+    business_id: str = ""
     stage: FunnelStage = "acquisition"
     channel: Channel = "organic"
     title: str = ""

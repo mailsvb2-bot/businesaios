@@ -118,6 +118,7 @@ def test_growth_channel_contract_covers_every_runtime_messenger() -> None:
 def test_growth_fallback_uses_observed_messenger_and_preserves_telegram_default() -> None:
     observed = _fallback_hypotheses(
         tenant_id="business-a",
+        business_id="business-a",
         decision_id="decision-observed",
         signals=GrowthSignalV1(
             tenant_id="business-a",
@@ -127,6 +128,7 @@ def test_growth_fallback_uses_observed_messenger_and_preserves_telegram_default(
     )
     defaulted = _fallback_hypotheses(
         tenant_id="business-a",
+        business_id="business-a",
         decision_id="decision-default",
         signals=GrowthSignalV1(tenant_id="business-a"),
         goal=GrowthGoalV1(),

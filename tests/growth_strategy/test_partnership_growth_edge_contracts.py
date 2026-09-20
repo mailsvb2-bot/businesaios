@@ -89,6 +89,7 @@ def test_partner_dedup_happens_before_llm_result_limit(tmp_path: Path) -> None:
     with SqliteEventStore(str(tmp_path / "dedupe.db")) as store:
         plan = GrowthStrategyService(event_store=store, llm=_DuplicatePartnerLLM()).generate_backlog(
             tenant_id="t1",
+            business_id="business-a",
             user_id="u1",
             decision_id="dedupe-d",
             correlation_id="dedupe-c",
@@ -105,6 +106,7 @@ def test_singular_partner_alias_is_canonicalized_before_safety_and_exclusion(tmp
         svc = GrowthStrategyService(event_store=store, llm=_SingularPartnerLLM())
         allowed = svc.generate_backlog(
             tenant_id="t1",
+            business_id="business-a",
             user_id="u1",
             decision_id="alias-allowed-d",
             correlation_id="alias-allowed-c",
@@ -118,6 +120,7 @@ def test_singular_partner_alias_is_canonicalized_before_safety_and_exclusion(tmp
 
         excluded = svc.generate_backlog(
             tenant_id="t1",
+            business_id="business-a",
             user_id="u1",
             decision_id="alias-excluded-d",
             correlation_id="alias-excluded-c",
@@ -131,6 +134,7 @@ def test_partner_exclusion_refills_partner_only_llm_with_existing_fallback(tmp_p
     with SqliteEventStore(str(tmp_path / "refill.db")) as store:
         plan = GrowthStrategyService(event_store=store, llm=_PartnersOnlyLLM()).generate_backlog(
             tenant_id="t1",
+            business_id="business-a",
             user_id="u1",
             decision_id="refill-d",
             correlation_id="refill-c",
