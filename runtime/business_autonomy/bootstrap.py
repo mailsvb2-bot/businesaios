@@ -395,7 +395,7 @@ def _business_autonomy_state_path() -> Path:
     return business_autonomy_runtime_dir() / 'business_autonomy_state.sqlite3'
 
 
-def _build_distributed_state() -> dict[str, object]:
+def _build_distributed_state(*, event_store: Any | None = None, require_business_event_spine: bool = False) -> dict[str, object]:
     from os import getenv
 
     backend = str(getenv('BUSINESAIOS_BUSINESS_AUTONOMY_STATE_BACKEND', 'sqlite') or 'sqlite').strip().lower()
@@ -424,7 +424,11 @@ def _build_distributed_state() -> dict[str, object]:
         'audit': DistributedGovernanceAuditLog(evidence_port, partition_prefix='business_autonomy_audit'),
         'evidence': canonical_evidence,
         'planning_memory': DistributedPlanningMemoryBackend(FilePlanningMemoryDocumentPort(documents)),
-        'registry': DistributedBusinessRegistry(documents=documents),
+        'registry': DistributedBusinessRegistry(
+            documents=documents,
+            event_store=event_store,
+            require_event_spine=require_business_event_spine,
+        ),
         'region_state': SQLiteRegionRouteState(database),
     }
 
@@ -458,8 +462,11 @@ def _channel_defaults_for(business_id: str) -> tuple[ChannelKind, str, str, str,
     }
 
 
-def build_business_autonomy_admin_dependencies() -> dict[str, object]:
-    distributed = _build_distributed_state()
+def build_business_autonomy_admin_dependencies(*, event_store: Any | None = None, require_business_event_spine: bool = False) -> dict[str, object]:
+    distributed = _build_distributed_state(
+        event_store=event_store,
+        require_business_event_spine=require_business_event_spine,
+    )
     typed_registry = _build_typed_channel_registry()
     onboarding = ConnectorOnboardingService(
         adapter_registry=typed_registry,
@@ -511,7 +518,16 @@ def _build_typed_channel_registry() -> TypedChannelAdapterRegistry:
 
 
 def build_business_autonomy_guarded_service(*, business_id: str = 'external_business', seed_admin_read_model: bool = False, customer_event_store: Any | None = None) -> BusinessAutonomyGuardedService:
-    admin_dependencies = build_business_autonomy_admin_dependencies()
+    ontology_event_store, ontology_event_store_stack = ontology_runtime.build_canonical_ontology_event_store(customer_event_store)
+    try:
+        admin_dependencies = build_business_autonomy_admin_dependencies(
+            event_store=ontology_event_store,
+            require_business_event_spine=True,
+        )
+    except Exception:
+        if ontology_event_store_stack is not None:
+            ontology_event_store_stack.close()
+        raise
     distributed = admin_dependencies['distributed']
     typed_registry = admin_dependencies['typed_registry']
     onboarding = admin_dependencies['onboarding']
@@ -678,7 +694,6 @@ def build_business_autonomy_guarded_service(*, business_id: str = 'external_busi
     service._typed_channel_registry = typed_registry
     service._operator_admin_plane = UnifiedOperatorAdminPlane(BusinessAutonomyFleetReadModel(distributed_registry))
     service._execution_runtime = build_execution_runtime(route_state=distributed['region_state'])
-    ontology_event_store, ontology_event_store_stack = ontology_runtime.build_canonical_ontology_event_store(customer_event_store)
     customer_registry = ontology_runtime.wire_business_ontology_runtime(
         service=service,
         event_store=ontology_event_store,

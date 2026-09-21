@@ -1,4 +1,5 @@
 from runtime.business_autonomy.distributed_state import FileDistributedDocumentStore, FileRegionRouteState
+from runtime.business_autonomy import ontology_runtime
 from runtime.business_autonomy.execution_support import build_execution_runtime, ensure_business_route
 from runtime.execution.distributed_execution_plane import QueueSlice
 from runtime.execution.region_ownership_plane import StaleReaderError
@@ -39,3 +40,18 @@ def test_execution_runtime_builds_plan_and_region_failover(tmp_path) -> None:
         pass
     else:
         raise AssertionError('expected stale-reader protection to trigger')
+
+def test_canonical_ontology_event_store_creates_runtime_directory(tmp_path, monkeypatch) -> None:
+    data_dir = tmp_path / 'nested' / 'data'
+    monkeypatch.setenv('DATA_DIR', str(data_dir))
+    monkeypatch.setenv('STORAGE_BACKEND', 'sqlite')
+    monkeypatch.delenv('EVENTS_SQLITE_PATH', raising=False)
+
+    event_store, stack = ontology_runtime.build_canonical_ontology_event_store(None)
+    try:
+        assert event_store.ping() is True
+        assert (data_dir / 'runtime' / 'events.db').is_file()
+    finally:
+        assert stack is not None
+        stack.close()
+
