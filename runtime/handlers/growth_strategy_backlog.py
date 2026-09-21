@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from typing import Any
 
+from runtime.execution.context import current_execution_business_id
 from runtime.growth import GrowthStrategyService
 from runtime.handlers.delivery_contract import delivery_kwargs
 from runtime.ports.effects import EffectsPort
@@ -17,9 +18,17 @@ def _required_text(payload: dict[str, Any], key: str) -> str:
     return value
 
 
+def _business_id(payload: dict[str, Any]) -> str:
+    business = str(payload.get("business_id") or current_execution_business_id() or "").strip()
+    if not business:
+        raise RuntimeError("BUSINESS_ID_REQUIRED")
+    return business
+
+
 def handle_growth_strategy_backlog(payload: dict[str, Any], effects: EffectsPort, env: Any, *, event_store: Any) -> Any:
     body = dict(payload or {})
     tenant_id = _required_text(body, "tenant_id")
+    business_id = _business_id(body)
     user_id = _required_text(body, "user_id")
     decision_id = str(env.decision.decision_id)
     correlation_id = str(env.decision.correlation_id)
@@ -27,6 +36,7 @@ def handle_growth_strategy_backlog(payload: dict[str, Any], effects: EffectsPort
     service = GrowthStrategyService(event_store=event_store, llm=None)
     backlog = service.backlog(
         tenant_id=tenant_id,
+        business_id=business_id,
         limit=int(body.get("limit") or 30),
     )
 
@@ -35,13 +45,14 @@ def handle_growth_strategy_backlog(payload: dict[str, Any], effects: EffectsPort
         decision_id=decision_id,
         correlation_id=correlation_id,
         tenant_id=tenant_id,
+        business_id=business_id,
         user_id=user_id,
         text=text,
         reply_markup=markup,
         callback_query_id=body.get("callback_query_id"),
         critical=False,
         track_event_type=ACTION_NAME,
-        track_payload={"tenant_id": tenant_id},
+        track_payload={"tenant_id": tenant_id, "business_id": business_id},
         **delivery_kwargs(body),
     )
 

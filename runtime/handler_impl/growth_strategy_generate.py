@@ -4,6 +4,7 @@ from collections.abc import Mapping
 from typing import Any
 
 from execution.verification.evidence_types import evidence_status_is_positive
+from runtime.execution.context import current_execution_business_id
 from runtime.growth import GROWTH_PARTNERSHIP_VISIBILITY_NOTE, GrowthGoalV1, GrowthStrategyService
 from runtime.ports.effects import EffectsPort
 
@@ -16,6 +17,13 @@ def _required_text(payload: dict[str, Any], key: str) -> str:
     if not value:
         raise RuntimeError(f"{key.upper()}_REQUIRED")
     return value
+
+
+def _business_id(payload: Mapping[str, Any]) -> str:
+    business = str(payload.get("business_id") or current_execution_business_id() or "").strip()
+    if not business:
+        raise RuntimeError("BUSINESS_ID_REQUIRED")
+    return business
 
 
 def _delivery_evidence(delivery: object) -> dict[str, Any] | None:
@@ -34,7 +42,7 @@ def _proof_is_positive(proof: Mapping[str, Any] | None) -> bool:
     return evidence_status_is_positive(proof.get("status")) or proof.get("verified") is True
 
 
-def _generation_evidence(*, event_id: str, tenant_id: str, plan) -> dict[str, Any]:
+def _generation_evidence(*, event_id: str, tenant_id: str, business_id: str, plan) -> dict[str, Any]:
     return {
         "source": "ledger",
         "verified": True,
@@ -44,6 +52,7 @@ def _generation_evidence(*, event_id: str, tenant_id: str, plan) -> dict[str, An
         "confidence": 1.0,
         "payload": {
             "tenant_id": str(tenant_id),
+            "business_id": str(business_id),
             "hypothesis_ids": [
                 str(hypothesis.hypothesis_id)
                 for hypothesis in plan.top_hypotheses
@@ -63,6 +72,7 @@ def handle_growth_strategy_generate(
 ) -> Any:
     body = dict(payload or {})
     tenant_id = _required_text(body, "tenant_id")
+    business_id = _business_id(body)
     user_id = _required_text(body, "user_id")
     decision_id = str(env.decision.decision_id)
     correlation_id = str(env.decision.correlation_id)
@@ -75,6 +85,7 @@ def handle_growth_strategy_generate(
     service = GrowthStrategyService(event_store=event_store, llm=llm)
     plan, completion_event_id = service.generate_backlog_with_proof(
         tenant_id=tenant_id,
+        business_id=business_id,
         user_id=user_id,
         decision_id=decision_id,
         correlation_id=correlation_id,
@@ -85,6 +96,7 @@ def handle_growth_strategy_generate(
     generation_evidence = _generation_evidence(
         event_id=completion_event_id,
         tenant_id=tenant_id,
+        business_id=business_id,
         plan=plan,
     )
 
@@ -92,6 +104,7 @@ def handle_growth_strategy_generate(
         decision_id=decision_id,
         correlation_id=correlation_id,
         tenant_id=tenant_id,
+        business_id=business_id,
         user_id=user_id,
         text=_render_plan(plan, limit=max(0, min(8, n))),
         reply_markup=_menu_markup(),
@@ -106,6 +119,7 @@ def handle_growth_strategy_generate(
         track_event_type=event_type,
         track_payload={
             "tenant_id": tenant_id,
+            "business_id": business_id,
             "completion_event_id": completion_event_id,
             "hypothesis_count": len(plan.top_hypotheses),
             "canonical_action": ACTION_NAME,

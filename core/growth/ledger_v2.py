@@ -41,16 +41,16 @@ class GrowthSnapshot:
     cashflow_minor: int
 
 
-def snapshot_today(*, event_store: Any, tenant_id: str) -> GrowthSnapshot:
+def snapshot_today(*, event_store: Any, tenant_id: str, business_id: str | None = None) -> GrowthSnapshot:
     now_ms = int(time.time() * 1000)
     start = _day_start_ms(now_ms)
-    return snapshot_range(event_store=event_store, tenant_id=str(tenant_id), start_ms=int(start), end_ms=int(now_ms))
+    return snapshot_range(event_store=event_store, tenant_id=str(tenant_id), business_id=business_id, start_ms=int(start), end_ms=int(now_ms))
 
 
-def snapshot_7d(*, event_store: Any, tenant_id: str) -> GrowthSnapshot:
+def snapshot_7d(*, event_store: Any, tenant_id: str, business_id: str | None = None) -> GrowthSnapshot:
     now_ms = int(time.time() * 1000)
     start = int(now_ms) - 7 * 86_400_000
-    return snapshot_range(event_store=event_store, tenant_id=str(tenant_id), start_ms=start, end_ms=now_ms)
+    return snapshot_range(event_store=event_store, tenant_id=str(tenant_id), business_id=business_id, start_ms=start, end_ms=now_ms)
 
 
 def snapshot_range(
@@ -59,17 +59,18 @@ def snapshot_range(
     tenant_id: str,
     start_ms: int,
     end_ms: int,
+    business_id: str | None = None,
     lead_event_type: str = "lead_created@v1",
     purchase_event_type: str = "purchase_completed@v1",
     refund_event_type: str = "refund_completed@v1",
     cogs_event_type: str = "cogs_recorded@v1",
 ) -> GrowthSnapshot:
-    leads = _count_events(event_store, tenant_id=tenant_id, event_type=lead_event_type, start_ms=start_ms, end_ms=end_ms)
-    revenue = _sum_minor(event_store, tenant_id=tenant_id, event_type=purchase_event_type, start_ms=start_ms, end_ms=end_ms, key="amount_minor")
-    refunds = _sum_minor(event_store, tenant_id=tenant_id, event_type=refund_event_type, start_ms=start_ms, end_ms=end_ms, key="amount_minor")
-    cogs = _sum_minor(event_store, tenant_id=tenant_id, event_type=cogs_event_type, start_ms=start_ms, end_ms=end_ms, key="amount_minor")
+    leads = _count_events(event_store, tenant_id=tenant_id, business_id=business_id, event_type=lead_event_type, start_ms=start_ms, end_ms=end_ms)
+    revenue = _sum_minor(event_store, tenant_id=tenant_id, business_id=business_id, event_type=purchase_event_type, start_ms=start_ms, end_ms=end_ms, key="amount_minor")
+    refunds = _sum_minor(event_store, tenant_id=tenant_id, business_id=business_id, event_type=refund_event_type, start_ms=start_ms, end_ms=end_ms, key="amount_minor")
+    cogs = _sum_minor(event_store, tenant_id=tenant_id, business_id=business_id, event_type=cogs_event_type, start_ms=start_ms, end_ms=end_ms, key="amount_minor")
 
-    spend = EventStoreSpendLedger(event_store).spend_minor_range(tenant_id=tenant_id, start_ms=start_ms, end_ms=end_ms)
+    spend = EventStoreSpendLedger(event_store).spend_minor_range(tenant_id=tenant_id, business_id=business_id, start_ms=start_ms, end_ms=end_ms)
 
     profit = int(revenue) - int(refunds) - int(spend) - int(cogs)
     margin = int(revenue) - int(refunds) - int(cogs)
@@ -118,6 +119,17 @@ def _iter_events(
         ) or []
 
 
+def _event_business_id(event: dict[str, Any]) -> str:
+    payload = event.get("payload") if isinstance(event.get("payload"), dict) else {}
+    metadata = payload.get("metadata") if isinstance(payload.get("metadata"), dict) else {}
+    return str(payload.get("business_id") or metadata.get("business_id") or "").strip()
+
+
+def _matches_business(event: dict[str, Any], business_id: str | None) -> bool:
+    business = str(business_id or "").strip()
+    return not business or _event_business_id(event) == business
+
+
 def _event_ts_ms(e: dict[str, Any]) -> int:
     try:
         return int(e.get("timestamp_ms") or 0)
@@ -125,22 +137,23 @@ def _event_ts_ms(e: dict[str, Any]) -> int:
         return 0
 
 
-def _count_events(event_store: Any, *, tenant_id: str, event_type: str, start_ms: int, end_ms: int) -> int:
+def _count_events(event_store: Any, *, tenant_id: str, business_id: str | None, event_type: str, start_ms: int, end_ms: int) -> int:
     n = 0
     for e in _iter_events(event_store, tenant_id=tenant_id, event_type=event_type, start_ms=start_ms, end_ms=end_ms):
-        ts = _event_ts_ms(e if isinstance(e, dict) else {})
-        if int(start_ms) <= ts <= int(end_ms):
+        row = e if isinstance(e, dict) else {}
+        ts = _event_ts_ms(row)
+        if int(start_ms) <= ts <= int(end_ms) and _matches_business(row, business_id):
             n += 1
     return int(n)
 
 
-def _sum_minor(event_store: Any, *, tenant_id: str, event_type: str, start_ms: int, end_ms: int, key: str) -> int:
+def _sum_minor(event_store: Any, *, tenant_id: str, business_id: str | None, event_type: str, start_ms: int, end_ms: int, key: str) -> int:
     total = 0
     for e in _iter_events(event_store, tenant_id=tenant_id, event_type=event_type, start_ms=start_ms, end_ms=end_ms):
         if not isinstance(e, dict):
             continue
         ts = _event_ts_ms(e)
-        if ts < int(start_ms) or ts > int(end_ms):
+        if ts < int(start_ms) or ts > int(end_ms) or not _matches_business(e, business_id):
             continue
         payload = e.get("payload")
         if not isinstance(payload, dict):

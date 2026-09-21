@@ -16,8 +16,8 @@ class TodayGrowthKPI:
     profit_minor: int
 
 
-def build_today_kpi(event_store: Any, *, tenant_id: str, **_: Any) -> TodayGrowthKPI:
-    snap = snapshot_today(event_store=event_store, tenant_id=str(tenant_id))
+def build_today_kpi(event_store: Any, *, tenant_id: str, business_id: str | None = None, **_: Any) -> TodayGrowthKPI:
+    snap = snapshot_today(event_store=event_store, tenant_id=str(tenant_id), business_id=business_id)
     return TodayGrowthKPI(
         leads=int(snap.leads),
         spend_minor=int(snap.spend_minor),

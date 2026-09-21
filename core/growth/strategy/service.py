@@ -13,6 +13,7 @@ from .backlog_store import (
     append_score,
     append_strategy_generated,
     append_strategy_snapshot,
+    hypothesis_exists,
     list_backlog,
     load_generated_plan_for_decision,
     now_ms,
@@ -42,15 +43,17 @@ class GrowthStrategyService:
         self._llm = llm
         self._policy = policy or DEFAULT_GROWTH_STRATEGY_SERVICE_POLICY
 
-    def generate_backlog(self, *, tenant_id: str, user_id: str, decision_id: str, correlation_id: str, goal: GrowthGoalV1 | None = None, n: int | None = None, model: str = "") -> StrategyPlanV1:
-        plan, _proof_event_id = self.generate_backlog_with_proof(tenant_id=tenant_id, user_id=user_id, decision_id=decision_id, correlation_id=correlation_id, goal=goal, n=n, model=model)
+    def generate_backlog(self, *, tenant_id: str, business_id: str, user_id: str, decision_id: str, correlation_id: str, goal: GrowthGoalV1 | None = None, n: int | None = None, model: str = "") -> StrategyPlanV1:
+        plan, _proof_event_id = self.generate_backlog_with_proof(tenant_id=tenant_id, business_id=business_id, user_id=user_id, decision_id=decision_id, correlation_id=correlation_id, goal=goal, n=n, model=model)
         return plan
 
-    def generate_backlog_with_proof(self, *, tenant_id: str, user_id: str, decision_id: str, correlation_id: str, goal: GrowthGoalV1 | None = None, n: int | None = None, model: str = "") -> tuple[StrategyPlanV1, str]:
-        tenant, user = str(tenant_id).strip(), str(user_id).strip()
+    def generate_backlog_with_proof(self, *, tenant_id: str, business_id: str, user_id: str, decision_id: str, correlation_id: str, goal: GrowthGoalV1 | None = None, n: int | None = None, model: str = "") -> tuple[StrategyPlanV1, str]:
+        tenant, business, user = str(tenant_id).strip(), str(business_id).strip(), str(user_id).strip()
         decision, correlation = str(decision_id).strip(), str(correlation_id).strip()
         if not tenant:
             raise RuntimeError("TENANT_ID_REQUIRED")
+        if not business:
+            raise RuntimeError("BUSINESS_ID_REQUIRED")
         if not user:
             raise RuntimeError("USER_ID_REQUIRED")
         if not decision:
@@ -58,22 +61,23 @@ class GrowthStrategyService:
         if not correlation:
             raise RuntimeError("CORRELATION_ID_REQUIRED")
 
-        completed = load_generated_plan_for_decision(self._event_store, tenant_id=tenant, decision_id=decision)
+        completed = load_generated_plan_for_decision(self._event_store, tenant_id=tenant, business_id=business, decision_id=decision)
         if completed is not None:
-            manifest = load_plan_manifest(self._event_store, tenant_id=tenant, decision_id=decision)
+            manifest = load_plan_manifest(self._event_store, tenant_id=tenant, business_id=business, decision_id=decision)
             return (manifest[0], completed[1]) if manifest is not None else completed
 
-        manifest = load_plan_manifest(self._event_store, tenant_id=tenant, decision_id=decision)
+        manifest = load_plan_manifest(self._event_store, tenant_id=tenant, business_id=business, decision_id=decision)
         if manifest is not None:
             plan = manifest[0]
         else:
-            plan = self._build_plan(tenant_id=tenant, decision_id=decision, goal=goal or GrowthGoalV1(), n=n, model=model)
-            persist_plan_manifest(self._event_store, tenant_id=tenant, user_id=user, decision_id=decision, correlation_id=correlation, plan=plan)
+            plan = self._build_plan(tenant_id=tenant, business_id=business, decision_id=decision, goal=goal or GrowthGoalV1(), n=n, model=model)
+            persist_plan_manifest(self._event_store, tenant_id=tenant, business_id=business, user_id=user, decision_id=decision, correlation_id=correlation, plan=plan)
 
-        self._persist_plan_details(plan=plan, tenant_id=tenant, user_id=user, decision_id=decision, correlation_id=correlation)
+        self._persist_plan_details(plan=plan, tenant_id=tenant, business_id=business, user_id=user, decision_id=decision, correlation_id=correlation)
         completion_event_id = append_strategy_generated(
             self._event_store,
             tenant_id=tenant,
+            business_id=business,
             user_id=user,
             decision_id=decision,
             correlation_id=correlation,
@@ -82,25 +86,25 @@ class GrowthStrategyService:
             created_ms=int(plan.created_ms),
             notes=tuple(plan.notes),
         )
-        durable = load_generated_plan_for_decision(self._event_store, tenant_id=tenant, decision_id=decision)
+        durable = load_generated_plan_for_decision(self._event_store, tenant_id=tenant, business_id=business, decision_id=decision)
         if durable is not None:
-            normalized = load_plan_manifest(self._event_store, tenant_id=tenant, decision_id=decision)
+            normalized = load_plan_manifest(self._event_store, tenant_id=tenant, business_id=business, decision_id=decision)
             return (normalized[0], durable[1]) if normalized is not None else durable
         return plan, completion_event_id
 
-    def _build_plan(self, *, tenant_id: str, decision_id: str, goal: GrowthGoalV1, n: int | None, model: str) -> StrategyPlanV1:
-        signals = build_signals(self._event_store, tenant_id=tenant_id)
+    def _build_plan(self, *, tenant_id: str, business_id: str, decision_id: str, goal: GrowthGoalV1, n: int | None, model: str) -> StrategyPlanV1:
+        signals = build_signals(self._event_store, tenant_id=tenant_id, business_id=business_id)
         hypothesis_count = self._policy.default_hypothesis_count if n is None else int(n)
         hypotheses: tuple[GrowthHypothesisV1, ...] = ()
         if self._llm is not None:
             excluded_channels = ("partnerships",) if self._policy.partnership_constraints_exclude(goal.constraints) else ()
             hypotheses = tuple(generate_hypotheses(self._llm, tenant_id=tenant_id, goal=goal, signals=signals, n=hypothesis_count, model=str(model or ""), excluded_channels=excluded_channels))
         if not hypotheses:
-            hypotheses = _fallback_hypotheses(tenant_id=tenant_id, decision_id=decision_id, signals=signals, goal=goal)
+            hypotheses = _fallback_hypotheses(tenant_id=tenant_id, business_id=business_id, decision_id=decision_id, signals=signals, goal=goal)
         hypotheses = _ensure_canonical_partnership_hypothesis(hypotheses, goal=goal, policy=self._policy)
         if not hypotheses:
-            hypotheses = _ensure_canonical_partnership_hypothesis(_fallback_hypotheses(tenant_id=tenant_id, decision_id=decision_id, signals=signals, goal=goal), goal=goal, policy=self._policy)
-        hypotheses = _stabilize_hypotheses(hypotheses, tenant_id=tenant_id, decision_id=decision_id)
+            hypotheses = _ensure_canonical_partnership_hypothesis(_fallback_hypotheses(tenant_id=tenant_id, business_id=business_id, decision_id=decision_id, signals=signals, goal=goal), goal=goal, policy=self._policy)
+        hypotheses = _stabilize_hypotheses(hypotheses, tenant_id=tenant_id, business_id=business_id, decision_id=decision_id)
         score_by_id = {item.hypothesis_id: item.score for item in rank_hypotheses(hypotheses)}
         ranked = tuple(sorted(hypotheses, key=lambda h: score_by_id.get(h.hypothesis_id, self._policy.zero_rank_score), reverse=True))
         visibility_notes = (GROWTH_PARTNERSHIP_VISIBILITY_NOTE,) if _partnership_relevant(goal, policy=self._policy) else ()
@@ -113,23 +117,27 @@ class GrowthStrategyService:
             notes=("llm" if self._llm is not None else "no_llm", "advisory_ranking_only", "decision_idempotent", "manifest_sealed", *visibility_notes),
         )
 
-    def _persist_plan_details(self, *, plan: StrategyPlanV1, tenant_id: str, user_id: str, decision_id: str, correlation_id: str) -> None:
-        append_strategy_snapshot(self._event_store, tenant_id=tenant_id, user_id=user_id, decision_id=decision_id, correlation_id=correlation_id, signals=plan.signals, goal=plan.goal)
+    def _persist_plan_details(self, *, plan: StrategyPlanV1, tenant_id: str, business_id: str, user_id: str, decision_id: str, correlation_id: str) -> None:
+        append_strategy_snapshot(self._event_store, tenant_id=tenant_id, business_id=business_id, user_id=user_id, decision_id=decision_id, correlation_id=correlation_id, signals=plan.signals, goal=plan.goal)
         for hypothesis in plan.top_hypotheses:
-            append_hypothesis(self._event_store, tenant_id=tenant_id, user_id=user_id, decision_id=decision_id, correlation_id=correlation_id, h=hypothesis)
-            append_score(self._event_store, tenant_id=tenant_id, user_id=user_id, decision_id=decision_id, correlation_id=correlation_id, score=score_hypothesis(hypothesis))
+            append_hypothesis(self._event_store, tenant_id=tenant_id, business_id=business_id, user_id=user_id, decision_id=decision_id, correlation_id=correlation_id, h=hypothesis)
+            append_score(self._event_store, tenant_id=tenant_id, business_id=business_id, user_id=user_id, decision_id=decision_id, correlation_id=correlation_id, score=score_hypothesis(hypothesis))
 
-    def backlog(self, *, tenant_id: str, limit: int | None = None):
-        return list_backlog(self._event_store, tenant_id=str(tenant_id), limit=self._policy.default_backlog_limit if limit is None else int(limit))
+    def backlog(self, *, tenant_id: str, business_id: str, limit: int | None = None):
+        return list_backlog(self._event_store, tenant_id=str(tenant_id), business_id=str(business_id), limit=self._policy.default_backlog_limit if limit is None else int(limit))
 
-    def accept_hypothesis(self, *, tenant_id: str, user_id: str, decision_id: str, correlation_id: str, hypothesis_id: str, note: str = "") -> str:
-        return set_hypothesis_state(self._event_store, tenant_id=str(tenant_id), user_id=str(user_id), decision_id=str(decision_id), correlation_id=str(correlation_id), hypothesis_id=str(hypothesis_id), state="accepted", note=str(note or ""))
+    def accept_hypothesis(self, *, tenant_id: str, business_id: str, user_id: str, decision_id: str, correlation_id: str, hypothesis_id: str, note: str = "") -> str:
+        if not hypothesis_exists(self._event_store, tenant_id=str(tenant_id), business_id=str(business_id), hypothesis_id=str(hypothesis_id)):
+            raise RuntimeError("GROWTH_HYPOTHESIS_NOT_FOUND_OR_FOREIGN")
+        return set_hypothesis_state(self._event_store, tenant_id=str(tenant_id), business_id=str(business_id), user_id=str(user_id), decision_id=str(decision_id), correlation_id=str(correlation_id), hypothesis_id=str(hypothesis_id), state="accepted", note=str(note or ""))
 
-    def reject_hypothesis(self, *, tenant_id: str, user_id: str, decision_id: str, correlation_id: str, hypothesis_id: str, note: str = "") -> str:
-        return set_hypothesis_state(self._event_store, tenant_id=str(tenant_id), user_id=str(user_id), decision_id=str(decision_id), correlation_id=str(correlation_id), hypothesis_id=str(hypothesis_id), state="rejected", note=str(note or ""))
+    def reject_hypothesis(self, *, tenant_id: str, business_id: str, user_id: str, decision_id: str, correlation_id: str, hypothesis_id: str, note: str = "") -> str:
+        if not hypothesis_exists(self._event_store, tenant_id=str(tenant_id), business_id=str(business_id), hypothesis_id=str(hypothesis_id)):
+            raise RuntimeError("GROWTH_HYPOTHESIS_NOT_FOUND_OR_FOREIGN")
+        return set_hypothesis_state(self._event_store, tenant_id=str(tenant_id), business_id=str(business_id), user_id=str(user_id), decision_id=str(decision_id), correlation_id=str(correlation_id), hypothesis_id=str(hypothesis_id), state="rejected", note=str(note or ""))
 
-    def create_experiment_from_hypothesis(self, *, tenant_id: str, user_id: str, decision_id: str, correlation_id: str, h: GrowthHypothesisV1) -> ExperimentSpecV1:
-        experiment_id = str(uuid.uuid5(_GROWTH_ID_NAMESPACE, f"experiment:{tenant_id}:{decision_id}:{h.hypothesis_id}"))
+    def create_experiment_from_hypothesis(self, *, tenant_id: str, business_id: str, user_id: str, decision_id: str, correlation_id: str, h: GrowthHypothesisV1) -> ExperimentSpecV1:
+        experiment_id = str(uuid.uuid5(_GROWTH_ID_NAMESPACE, f"experiment:{tenant_id}:{business_id}:{decision_id}:{h.hypothesis_id}"))
         experiment = ExperimentSpecV1(
             experiment_id=experiment_id,
             tenant_id=str(tenant_id),
@@ -143,18 +151,18 @@ class GrowthStrategyService:
             steps=_default_steps(h, policy=self._policy),
             payload=dict(h.action_hints or {}),
         )
-        append_experiment(self._event_store, tenant_id=str(tenant_id), user_id=str(user_id), decision_id=str(decision_id), correlation_id=str(correlation_id), exp=experiment)
+        append_experiment(self._event_store, tenant_id=str(tenant_id), business_id=str(business_id), user_id=str(user_id), decision_id=str(decision_id), correlation_id=str(correlation_id), exp=experiment)
         return experiment
 
 
-def _stable_hypothesis_id(*, tenant_id: str, decision_id: str, index: int) -> str:
-    return str(uuid.uuid5(_GROWTH_ID_NAMESPACE, f"hypothesis:{tenant_id}:{decision_id}:{int(index)}"))
+def _stable_hypothesis_id(*, tenant_id: str, business_id: str, decision_id: str, index: int) -> str:
+    return str(uuid.uuid5(_GROWTH_ID_NAMESPACE, f"hypothesis:{tenant_id}:{business_id}:{decision_id}:{int(index)}"))
 
 
-def _stabilize_hypotheses(hypotheses: tuple[GrowthHypothesisV1, ...], *, tenant_id: str, decision_id: str) -> tuple[GrowthHypothesisV1, ...]:
+def _stabilize_hypotheses(hypotheses: tuple[GrowthHypothesisV1, ...], *, tenant_id: str, business_id: str, decision_id: str) -> tuple[GrowthHypothesisV1, ...]:
     created_ms = now_ms()
     return tuple(
-        replace(h, hypothesis_id=_stable_hypothesis_id(tenant_id=str(tenant_id), decision_id=str(decision_id), index=index), tenant_id=str(tenant_id), created_ms=int(h.created_ms or created_ms))
+        replace(h, hypothesis_id=_stable_hypothesis_id(tenant_id=str(tenant_id), business_id=str(business_id), decision_id=str(decision_id), index=index), tenant_id=str(tenant_id), business_id=str(business_id), created_ms=int(h.created_ms or created_ms))
         for index, h in enumerate(hypotheses)
     )
 
@@ -218,14 +226,14 @@ def _ensure_canonical_partnership_hypothesis(hypotheses: tuple[GrowthHypothesisV
     )
 
 
-def _fallback_hypotheses(*, tenant_id: str, decision_id: str, signals: GrowthSignalV1, goal: GrowthGoalV1) -> tuple[GrowthHypothesisV1, ...]:
+def _fallback_hypotheses(*, tenant_id: str, business_id: str, decision_id: str, signals: GrowthSignalV1, goal: GrowthGoalV1) -> tuple[GrowthHypothesisV1, ...]:
     now = int(time.time() * 1000)
     messaging_channel = _preferred_messaging_channel(signals)
     flow_type = "telegram_flow" if messaging_channel == "telegram" else "messaging_flow"
     followup_type = "telegram_followup" if messaging_channel == "telegram" else "messaging_followup"
     hypotheses: list[GrowthHypothesisV1] = [
         GrowthHypothesisV1(
-            hypothesis_id=_stable_hypothesis_id(tenant_id=tenant_id, decision_id=decision_id, index=0),
+            hypothesis_id=_stable_hypothesis_id(tenant_id=tenant_id, business_id=business_id, decision_id=decision_id, index=0),
             created_ms=now,
             tenant_id=str(tenant_id),
             stage="activation",
@@ -240,7 +248,7 @@ def _fallback_hypotheses(*, tenant_id: str, decision_id: str, signals: GrowthSig
             action_hints={"type": flow_type, "flow": "offer_to_pay"},
         ),
         GrowthHypothesisV1(
-            hypothesis_id=_stable_hypothesis_id(tenant_id=tenant_id, decision_id=decision_id, index=1),
+            hypothesis_id=_stable_hypothesis_id(tenant_id=tenant_id, business_id=business_id, decision_id=decision_id, index=1),
             created_ms=now,
             tenant_id=str(tenant_id),
             stage="retention",
@@ -258,7 +266,7 @@ def _fallback_hypotheses(*, tenant_id: str, decision_id: str, signals: GrowthSig
     if "ads_apply_used" in set(signals.notes):
         hypotheses.append(
             GrowthHypothesisV1(
-                hypothesis_id=_stable_hypothesis_id(tenant_id=tenant_id, decision_id=decision_id, index=len(hypotheses)),
+                hypothesis_id=_stable_hypothesis_id(tenant_id=tenant_id, business_id=business_id, decision_id=decision_id, index=len(hypotheses)),
                 created_ms=now,
                 tenant_id=str(tenant_id),
                 stage="acquisition",
@@ -275,7 +283,7 @@ def _fallback_hypotheses(*, tenant_id: str, decision_id: str, signals: GrowthSig
         )
     hypotheses.append(
         GrowthHypothesisV1(
-            hypothesis_id=_stable_hypothesis_id(tenant_id=tenant_id, decision_id=decision_id, index=len(hypotheses)),
+            hypothesis_id=_stable_hypothesis_id(tenant_id=tenant_id, business_id=business_id, decision_id=decision_id, index=len(hypotheses)),
             created_ms=now,
             tenant_id=str(tenant_id),
             stage="revenue",

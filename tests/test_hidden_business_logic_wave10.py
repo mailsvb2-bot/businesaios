@@ -102,17 +102,18 @@ def test_default_steps_uses_growth_strategy_policy() -> None:
 def test_build_signals_uses_percentage_policy(monkeypatch) -> None:
     monkeypatch.setattr(
         "core.growth.strategy.signals.build_today_kpi",
-        lambda store, tenant_id: _KPI(leads=2, spend_minor=100, revenue_minor=200, profit_minor=100),
+        lambda store, *, tenant_id, business_id: _KPI(leads=2, spend_minor=100, revenue_minor=200, profit_minor=100),
     )
     now_ms = int(time.time() * 1000)
     events = [
-        {"tenant_id": "t1", "user_id": "u1", "timestamp_ms": now_ms, "event_type": "lead_created@v1", "payload": {"channel": "telegram"}},
-        {"tenant_id": "t1", "user_id": "u1", "timestamp_ms": now_ms, "event_type": "purchase_completed@v1", "payload": {"channel": "telegram"}},
-        {"tenant_id": "t1", "user_id": "u1", "timestamp_ms": now_ms, "event_type": "telegram_message_in@v1", "payload": {"channel": "telegram"}},
+        {"tenant_id": "t1", "user_id": "u1", "timestamp_ms": now_ms, "event_type": "lead_created@v1", "payload": {"business_id": "business-a", "channel": "telegram"}},
+        {"tenant_id": "t1", "user_id": "u1", "timestamp_ms": now_ms, "event_type": "purchase_completed@v1", "payload": {"business_id": "business-a", "channel": "telegram"}},
+        {"tenant_id": "t1", "user_id": "u1", "timestamp_ms": now_ms, "event_type": "telegram_message_in@v1", "payload": {"business_id": "business-a", "channel": "telegram"}},
     ]
     signals = build_signals(
         _SignalsStore(events),
         tenant_id="t1",
+        business_id="business-a",
         policy=GrowthSignalsPolicy(percentage_multiplier=10.0, top_channels_limit=1),
     )
     assert isinstance(signals, GrowthSignalV1)

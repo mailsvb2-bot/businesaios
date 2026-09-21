@@ -13,11 +13,14 @@ from .event_types import GROWTH_STRATEGY_PLAN_MANIFEST
 _MANIFEST_NAMESPACE = uuid.UUID("8095423c-7bcf-4a5c-987d-8cc27a721137")
 
 
-def _manifest_event_id(*, tenant_id: str, decision_id: str) -> str:
+def _manifest_event_id(*, tenant_id: str, business_id: str, decision_id: str) -> str:
+    business = str(business_id or "").strip()
+    if not business:
+        raise ValueError("BUSINESS_ID_REQUIRED")
     return str(
         uuid.uuid5(
             _MANIFEST_NAMESPACE,
-            f"businesaios:growth-plan:{tenant_id}:{decision_id}",
+            f"businesaios:growth-plan:{tenant_id}:{business}:{decision_id}",
         )
     )
 
@@ -67,11 +70,17 @@ def load_plan_manifest(
     event_store: Any,
     *,
     tenant_id: str,
+    business_id: str,
     decision_id: str,
 ) -> tuple[StrategyPlanV1, str] | None:
     log = EventLog(event_store, tenant=TenantScope(str(tenant_id)))
+    business = str(business_id or "").strip()
+    if not business:
+        raise ValueError("BUSINESS_ID_REQUIRED")
     events = log.get_events(str(decision_id), GROWTH_STRATEGY_PLAN_MANIFEST)
     for event in reversed(events):
+        if str((event.get("payload") or {}).get("business_id") or "").strip() != business:
+            continue
         plan = _decode_plan(dict(event.get("payload") or {}))
         if plan is not None:
             return plan, str(event.get("event_id") or "")
@@ -82,6 +91,7 @@ def persist_plan_manifest(
     event_store: Any,
     *,
     tenant_id: str,
+    business_id: str,
     user_id: str,
     decision_id: str,
     correlation_id: str,
@@ -90,6 +100,7 @@ def persist_plan_manifest(
     existing = load_plan_manifest(
         event_store,
         tenant_id=str(tenant_id),
+        business_id=str(business_id),
         decision_id=str(decision_id),
     )
     if existing is not None:
@@ -100,6 +111,7 @@ def persist_plan_manifest(
 
     event_id = _manifest_event_id(
         tenant_id=str(tenant_id),
+        business_id=str(business_id),
         decision_id=str(decision_id),
     )
     log = EventLog(event_store, tenant=TenantScope(str(tenant_id)))
@@ -114,6 +126,7 @@ def persist_plan_manifest(
             timestamp_ms=int(plan.created_ms),
             payload={
                 "schema_version": 1,
+                "business_id": str(business_id),
                 "plan": asdict(plan),
             },
         )
@@ -121,6 +134,7 @@ def persist_plan_manifest(
         raced = load_plan_manifest(
             event_store,
             tenant_id=str(tenant_id),
+            business_id=str(business_id),
             decision_id=str(decision_id),
         )
         if raced is None or raced[0] != plan:

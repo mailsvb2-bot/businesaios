@@ -4,6 +4,8 @@ import json
 import time
 from pathlib import Path
 
+from contracts.event_store import canonical_business_event_contract
+from core.growth.strategy import backlog_store as growth_backlog_store
 from core.growth.strategy.contracts import GROWTH_PARTNERSHIP_VISIBILITY_NOTE, GrowthGoalV1
 from core.growth.strategy.service import GrowthStrategyService
 from core.growth.strategy.signals import build_signals
@@ -88,12 +90,12 @@ def test_generate_backlog_fallback_creates_hypotheses(tmp_path: Path):
     db = tmp_path / "events.db"
     with SqliteEventStore(str(db)) as store:
         svc = GrowthStrategyService(event_store=store, llm=None)
-        plan = svc.generate_backlog(tenant_id="t1", user_id="u1", decision_id="d1", correlation_id="c1", n=4)
+        plan = svc.generate_backlog(tenant_id="t1", business_id="business-a", user_id="u1", decision_id="d1", correlation_id="c1", n=4)
         assert plan.tenant_id == "t1"
         assert len(plan.top_hypotheses) >= 2
         assert all(h.channel != "partnerships" for h in plan.top_hypotheses)
 
-        backlog = svc.backlog(tenant_id="t1", limit=20)
+        backlog = svc.backlog(tenant_id="t1", business_id="business-a", limit=20)
         assert len(backlog) >= 2
         h, s, state = backlog[0]
         assert h.hypothesis_id
@@ -115,6 +117,7 @@ def test_zero_budget_goal_adds_partnership_through_canonical_growth_owner(tmp_pa
         for index, constraint in enumerate(zero_budget_constraints):
             plan = svc.generate_backlog(
                 tenant_id="t1",
+                business_id="business-a",
                 user_id="u1",
                 decision_id=f"partner-d{index}",
                 correlation_id=f"partner-c{index}",
@@ -140,6 +143,7 @@ def test_zero_budget_goal_adds_partnership_through_canonical_growth_owner(tmp_pa
 
         paid_plan = svc.generate_backlog(
             tenant_id="t1",
+            business_id="business-a",
             user_id="u1",
             decision_id="partner-paid",
             correlation_id="partner-paid-c",
@@ -160,6 +164,7 @@ def test_explicit_partnership_exclusion_overrides_referral_and_zero_budget(tmp_p
         for index, goal in enumerate(goals):
             plan = svc.generate_backlog(
                 tenant_id="t1",
+                business_id="business-a",
                 user_id="u1",
                 decision_id=f"excluded-d{index}",
                 correlation_id=f"excluded-c{index}",
@@ -169,6 +174,7 @@ def test_explicit_partnership_exclusion_overrides_referral_and_zero_budget(tmp_p
 
         llm_plan = GrowthStrategyService(event_store=store, llm=_UnsafePartnerLLM()).generate_backlog(
             tenant_id="t1",
+            business_id="business-a",
             user_id="u1",
             decision_id="excluded-llm-d",
             correlation_id="excluded-llm-c",
@@ -182,6 +188,7 @@ def test_llm_cannot_drop_relevant_partnership_hypothesis(tmp_path: Path):
         svc = GrowthStrategyService(event_store=store, llm=_UnrelatedGrowthLLM())
         plan = svc.generate_backlog(
             tenant_id="t1",
+            business_id="business-a",
             user_id="u1",
             decision_id="partner-d2",
             correlation_id="partner-c2",
@@ -203,6 +210,7 @@ def test_required_partnership_visibility_is_a_render_projection_not_ranking_over
         svc = GrowthStrategyService(event_store=store, llm=_FullHighScoreLLM())
         plan = svc.generate_backlog(
             tenant_id="t1",
+            business_id="business-a",
             user_id="u1",
             decision_id="partner-visible-d",
             correlation_id="partner-visible-c",
@@ -227,6 +235,7 @@ def test_required_partnership_visibility_is_a_render_projection_not_ranking_over
 
         limited = svc.generate_backlog(
             tenant_id="t1",
+            business_id="business-a",
             user_id="u1",
             decision_id="partner-visible-limited-d",
             correlation_id="partner-visible-limited-c",
@@ -246,6 +255,7 @@ def test_llm_partnership_cannot_smuggle_executable_authority(tmp_path: Path):
         svc = GrowthStrategyService(event_store=store, llm=_UnsafePartnerLLM())
         plan = svc.generate_backlog(
             tenant_id="t1",
+            business_id="business-a",
             user_id="u1",
             decision_id="partner-safe-d",
             correlation_id="partner-safe-c",
@@ -269,20 +279,21 @@ def test_llm_partnership_cannot_smuggle_executable_authority(tmp_path: Path):
         assert hints["decision_core_required"] is True
 
 
-def test_accept_reject_updates_state(tmp_path: Path):
+def test_accept_reject_updates_state(tmp_path: Path, monkeypatch):
+    monkeypatch.setattr(growth_backlog_store, "now_ms", lambda: 1_700_000_000_000)
     db = tmp_path / "events.db"
     with SqliteEventStore(str(db)) as store:
         svc = GrowthStrategyService(event_store=store, llm=None)
-        plan = svc.generate_backlog(tenant_id="t1", user_id="u1", decision_id="d1", correlation_id="c1", n=3)
+        plan = svc.generate_backlog(tenant_id="t1", business_id="business-a", user_id="u1", decision_id="d1", correlation_id="c1", n=3)
         hid = plan.top_hypotheses[0].hypothesis_id
 
-        svc.accept_hypothesis(tenant_id="t1", user_id="u1", decision_id="d2", correlation_id="c2", hypothesis_id=hid)
-        backlog = svc.backlog(tenant_id="t1", limit=10)
+        svc.accept_hypothesis(tenant_id="t1", business_id="business-a", user_id="u1", decision_id="d2", correlation_id="c2", hypothesis_id=hid)
+        backlog = svc.backlog(tenant_id="t1", business_id="business-a", limit=10)
         states = {h.hypothesis_id: st for (h, _, st) in backlog}
         assert states.get(hid) == "accepted"
 
-        svc.reject_hypothesis(tenant_id="t1", user_id="u1", decision_id="d3", correlation_id="c3", hypothesis_id=hid)
-        backlog2 = svc.backlog(tenant_id="t1", limit=10)
+        svc.reject_hypothesis(tenant_id="t1", business_id="business-a", user_id="u1", decision_id="d3", correlation_id="c3", hypothesis_id=hid)
+        backlog2 = svc.backlog(tenant_id="t1", business_id="business-a", limit=10)
         states2 = {h.hypothesis_id: st for (h, _, st) in backlog2}
         assert states2.get(hid) == "rejected"
 
@@ -291,13 +302,72 @@ def test_sales_funnel_replays_hard_tenant_evidence(tmp_path: Path):
     now = int(time.time() * 1000)
     with SqliteEventStore(str(tmp_path / "sales.db")) as store:
         rows = (
-            ("t1", "lead-1", "sales_qualified", {"source": "telegram"}),
-            ("t1", "lead-1", "sales_declined", {"source": "telegram"}),
-            ("t1", "lead-1", "purchase_completed@v1", {"source": "telegram"}),
-            ("t1", "operator", "sales_qualification_failed", {"subject_id": "lead-2", "source": "website"}),
-            ("t2", "other", "purchase_completed@v1", {"source": "telegram"}),
+            ("t1", "lead-1", "sales_qualified", {"business_id": "business-a", "source": "telegram"}),
+            ("t1", "lead-1", "sales_declined", {"business_id": "business-a", "source": "telegram"}),
+            ("t1", "lead-1", "purchase_completed@v1", {"business_id": "business-a", "source": "telegram"}),
+            ("t1", "operator", "sales_qualification_failed", {"business_id": "business-a", "subject_id": "lead-2", "source": "website"}),
+            ("t1", "foreign", "purchase_completed@v1", {"business_id": "business-b", "source": "telegram"}),
+            ("t2", "other", "purchase_completed@v1", {"business_id": "business-a", "source": "telegram"}),
         )
         for index, (tenant, user, kind, payload) in enumerate(rows):
             store.append_event({"tenant_id": tenant, "timestamp_ms": now - 5000 + index, "user_id": user, "event_type": kind, "payload": payload})
-        total = build_signals(store, tenant_id="t1").sales_funnel["total"]
+        total = build_signals(store, tenant_id="t1", business_id="business-a").sales_funnel["total"]
         assert total["discovered"] == 2 and total["qualified"] == 1 and total["won"] == 1 and total["lost"] == 1
+
+
+def test_growth_backlog_is_isolated_by_business_within_one_tenant(tmp_path: Path) -> None:
+    with SqliteEventStore(str(tmp_path / "business-isolation.db")) as store:
+        svc = GrowthStrategyService(event_store=store, llm=None)
+        plan_a = svc.generate_backlog(tenant_id="t1", business_id="business-a", user_id="u1", decision_id="isolation-a", correlation_id="isolation-ca", n=3)
+        plan_b = svc.generate_backlog(tenant_id="t1", business_id="business-b", user_id="u1", decision_id="isolation-b", correlation_id="isolation-cb", n=3)
+
+        ids_a = {hypothesis.hypothesis_id for hypothesis, _score, _state in svc.backlog(tenant_id="t1", business_id="business-a", limit=20)}
+        ids_b = {hypothesis.hypothesis_id for hypothesis, _score, _state in svc.backlog(tenant_id="t1", business_id="business-b", limit=20)}
+        assert ids_a == {item.hypothesis_id for item in plan_a.top_hypotheses}
+        assert ids_b == {item.hypothesis_id for item in plan_b.top_hypotheses}
+        assert ids_a.isdisjoint(ids_b)
+        assert all(item.business_id == "business-a" for item in plan_a.top_hypotheses)
+        assert all(item.business_id == "business-b" for item in plan_b.top_hypotheses)
+
+
+def test_growth_chronology_uses_canonical_business_event_contract(tmp_path: Path) -> None:
+    with SqliteEventStore(str(tmp_path / "canonical-growth-events.db")) as store:
+        svc = GrowthStrategyService(event_store=store, llm=None)
+        plan = svc.generate_backlog(tenant_id="t1", business_id="business-a", user_id="u1", decision_id="canonical-d1", correlation_id="canonical-c1", n=3)
+        svc.accept_hypothesis(tenant_id="t1", business_id="business-a", user_id="u1", decision_id="canonical-d2", correlation_id="canonical-c2", hypothesis_id=plan.top_hypotheses[0].hypothesis_id)
+
+        events = list(store.iter_events(tenant_id="t1", start_ms=0))
+        growth_events = [event for event in events if str(event.get("source") or "") == "growth_strategy"]
+        assert growth_events
+        for event in growth_events:
+            contract = canonical_business_event_contract(event)
+            assert contract["schema_version"] == 1
+            assert contract["business_id"] == "business-a"
+
+
+def test_growth_backlog_limit_is_applied_after_business_filter(tmp_path: Path) -> None:
+    with SqliteEventStore(str(tmp_path / "business-limit-isolation.db")) as store:
+        svc = GrowthStrategyService(event_store=store, llm=None)
+        plan_a = svc.generate_backlog(
+            tenant_id="t1",
+            business_id="business-a",
+            user_id="u1",
+            decision_id="limit-a",
+            correlation_id="limit-ca",
+            n=3,
+        )
+        for index in range(6):
+            svc.generate_backlog(
+                tenant_id="t1",
+                business_id="business-b",
+                user_id="u1",
+                decision_id=f"limit-b-{index}",
+                correlation_id=f"limit-cb-{index}",
+                n=3,
+            )
+
+        backlog_a = svc.backlog(tenant_id="t1", business_id="business-a", limit=3)
+        assert {item.hypothesis_id for item, _score, _state in backlog_a} == {
+            item.hypothesis_id for item in plan_a.top_hypotheses[:3]
+        }
+

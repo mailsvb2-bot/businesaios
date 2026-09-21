@@ -141,12 +141,14 @@ def test_completed_growth_decision_is_resumed_without_second_llm_generation(monk
 
     first_plan, first_proof = service.generate_backlog_with_proof(
         tenant_id="business-a",
+        business_id="business-a",
         user_id="owner-1",
         decision_id="decision-growth-1",
         correlation_id="correlation-growth-1",
     )
     second_plan, second_proof = service.generate_backlog_with_proof(
         tenant_id="business-a",
+        business_id="business-a",
         user_id="owner-1",
         decision_id="decision-growth-1",
         correlation_id="correlation-growth-1",
@@ -188,6 +190,7 @@ def test_partial_growth_write_resumes_manifest_without_second_llm_call_or_duplic
     with pytest.raises(RuntimeError, match="simulated crash"):
         service.generate_backlog_with_proof(
             tenant_id="business-a",
+            business_id="business-a",
             user_id="owner-1",
             decision_id="decision-growth-partial",
             correlation_id="correlation-growth-partial",
@@ -200,6 +203,7 @@ def test_partial_growth_write_resumes_manifest_without_second_llm_call_or_duplic
 
     plan, completion_event_id = service.generate_backlog_with_proof(
         tenant_id="business-a",
+        business_id="business-a",
         user_id="owner-1",
         decision_id="decision-growth-partial",
         correlation_id="correlation-growth-partial",
@@ -239,6 +243,7 @@ def test_growth_manifest_preserves_tuple_contracts_across_json_storage(monkeypat
 
     first_plan, first_proof = service.generate_backlog_with_proof(
         tenant_id="business-a",
+        business_id="business-a",
         user_id="owner-1",
         decision_id="decision-growth-json",
         correlation_id="correlation-growth-json",
@@ -246,6 +251,7 @@ def test_growth_manifest_preserves_tuple_contracts_across_json_storage(monkeypat
     )
     second_plan, second_proof = service.generate_backlog_with_proof(
         tenant_id="business-a",
+        business_id="business-a",
         user_id="owner-1",
         decision_id="decision-growth-json",
         correlation_id="correlation-growth-json",

@@ -12,6 +12,12 @@ def _day_start_ms(ts_ms: int) -> int:
     return ts_ms - (ts_ms % 86_400_000)
 
 
+def _event_business_id(event: dict[str, Any]) -> str:
+    payload = event.get("payload") if isinstance(event.get("payload"), dict) else {}
+    metadata = payload.get("metadata") if isinstance(payload.get("metadata"), dict) else {}
+    return str(payload.get("business_id") or metadata.get("business_id") or "").strip()
+
+
 @dataclass
 class EventStoreSpendLedger:
     """Best-effort spend ledger based on imported ads metrics events.
@@ -119,7 +125,7 @@ class EventStoreSpendLedger:
 
 
 
-    def spend_minor_range(self, *, tenant_id: str, start_ms: int, end_ms: int) -> int:
+    def spend_minor_range(self, *, tenant_id: str, start_ms: int, end_ms: int, business_id: str | None = None) -> int:
         """Return spend in minor units for an arbitrary time range.
 
         Uses the canonical latest_events read API when available and falls back to
@@ -131,6 +137,7 @@ class EventStoreSpendLedger:
             raise ValueError("tenant_id is required")
         start_ms = int(start_ms)
         end_ms = int(end_ms)
+        business = str(business_id or "").strip()
         try:
             if hasattr(self.event_store, "latest_events"):
                 events = call_latest_events(
@@ -163,7 +170,10 @@ class EventStoreSpendLedger:
                 ts = 0
             if ts < start_ms or ts > end_ms:
                 continue
-            payload = (e or {}).get("payload") or {}
+            row = e or {}
+            if business and _event_business_id(row) != business:
+                continue
+            payload = row.get("payload") or {}
             metrics = payload.get("metrics") or {}
             try:
                 total_major += float(metrics.get("spend") or self.policy.zero_value)
