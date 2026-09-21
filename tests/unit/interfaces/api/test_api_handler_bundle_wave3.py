@@ -8,6 +8,7 @@ from interfaces.api.action_models import ExecuteActionRequest
 from interfaces.api.api_handler_bundle import build_api_handler_bundle
 from interfaces.api.headless_models import ExecuteGoalRequest
 from observability.action_audit_log import ActionAuditLog
+from runtime.platform.event_store.memory_event_store import MemoryEventStore
 
 
 class _Service:
@@ -91,6 +92,9 @@ class _DependencyContainer:
 
     def decision_command_binding(self):
         return _Binding()
+
+    def canonical_business_event_store(self):
+        return MemoryEventStore()
 
 
 def test_api_handler_bundle_reuses_one_runtime_provider_and_executes_action_stack() -> None:

@@ -16,7 +16,7 @@ from observability.platform.observability.silent import swallow
 from runtime.platform.config.env_flags import env_int, env_str
 
 
-def configure_sqlite(conn: sqlite3.Connection, *, prod: bool) -> None:
+def configure_sqlite(conn: sqlite3.Connection, *, prod: bool, configure_journal_mode: bool = True) -> None:
     """Apply canonical pragmas.
 
     NOTE:
@@ -24,11 +24,18 @@ def configure_sqlite(conn: sqlite3.Connection, *, prod: bool) -> None:
     - busy_timeout prevents immediate 'database is locked' under bursts.
     - synchronous=NORMAL is the standard WAL setting for durability vs throughput.
     """
-    # Keep journal_mode=WAL explicit even if caller already set it.
-    try:
-        conn.execute("PRAGMA journal_mode=WAL;")
-    except Exception:
-        swallow(__name__, 'runtime/platform/outbox/sqlite_pragmas.py')
+    # Switching journal mode is a database-level operation. Do not renegotiate it
+    # on every short-lived connection: under multiprocess load that creates
+    # avoidable WAL/SHM contention. Callers may opt out once bootstrap has
+    # established WAL, and even bootstrap only changes the mode when necessary.
+    if configure_journal_mode:
+        try:
+            row = conn.execute("PRAGMA journal_mode;").fetchone()
+            current = str(row[0] if row else "").strip().lower()
+            if current != "wal":
+                conn.execute("PRAGMA journal_mode=WAL;")
+        except Exception:
+            swallow(__name__, 'runtime/platform/outbox/sqlite_pragmas.py')
 
     # Busy timeout (milliseconds). Higher in prod.
     busy_ms = env_int("SQLITE_BUSY_TIMEOUT_MS", 5000 if prod else 1000)

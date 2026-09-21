@@ -59,15 +59,32 @@ def build_system_boot_surface(
         resolved_shared = runtime_surface.shared_runtime_payload() | resolved_shared
     else:
         resolved_shared = resolved_security_surface.shared_runtime_payload() | resolved_shared
-    dependency_container = FastAPIDependencyContainer(
-        boot_result=app_boot_surface.result,
-        config_surface=resolved_config_surface,
-        shared_observability=resolved_shared,
-    )
-    http_app = create_fastapi_app(
-        application_service=app_boot_surface.result.decision_application,
-        dependency_container=dependency_container,
-    )
+
+    owned_event_store_stack = None
+    if resolved_shared.get("canonical_business_event_store") is None:
+        from runtime.business_autonomy.ontology_runtime import build_canonical_ontology_event_store
+
+        canonical_event_store, owned_event_store_stack = build_canonical_ontology_event_store(None)
+        resolved_shared["canonical_business_event_store"] = canonical_event_store
+        if owned_event_store_stack is not None:
+            resolved_shared["canonical_business_event_store_stack"] = (
+                owned_event_store_stack
+            )
+
+    try:
+        dependency_container = FastAPIDependencyContainer(
+            boot_result=app_boot_surface.result,
+            config_surface=resolved_config_surface,
+            shared_observability=resolved_shared,
+        )
+        http_app = create_fastapi_app(
+            application_service=app_boot_surface.result.decision_application,
+            dependency_container=dependency_container,
+        )
+    except Exception:
+        if owned_event_store_stack is not None:
+            owned_event_store_stack.close()
+        raise
     return SystemBootSurface(
         app_boot_surface=app_boot_surface,
         dependency_container=dependency_container,

@@ -6,14 +6,25 @@ from collections.abc import Mapping
 from dataclasses import dataclass, replace
 from datetime import UTC, datetime
 from typing import Any
+from uuid import UUID, uuid5
 
+from contracts.event_store import canonical_business_event_contract
 from contracts.order import ORDER_SCHEMA_VERSION, Order, OrderLifecycleStatus, OrderNotFound
+from core.events.event_types import (
+    ORDER_ARCHIVED,
+    ORDER_CANCELLED,
+    ORDER_CREATED,
+    ORDER_FULFILLED,
+    ORDER_UPDATED,
+)
 from core.finance.money import legacy_float, money_decimal
 from lead_outcomes.client_outcome_contract import ClientOutcomeOrder, ClientOutcomePackage
 from registry.base_registry import BaseRegistry, RegistryBackend
 
 CANON_ORDER_LIFECYCLE_OWNER = True
+CANON_ORDER_EVENT_SPINE_PROJECTION = True
 CANON_CLIENT_OUTCOME_ORDER_STORE = True
+_ORDER_EVENT_NAMESPACE = UUID("1bedb24f-71ad-46f4-94fc-748543bcd789")
 CLIENT_OUTCOME_ORDER_KIND = "client_outcome"
 LEGACY_CLIENT_OUTCOME_ORDER_NAMESPACE = "client_outcome_order"
 
@@ -50,6 +61,176 @@ def _legacy_fingerprint(payload: Mapping[str, Any]) -> str:
     return hashlib.sha256(encoded).hexdigest()
 
 
+class _OrderEventSpineProjection:
+    _TERMINAL_TYPES = {
+        OrderLifecycleStatus.FULFILLED: ORDER_FULFILLED,
+        OrderLifecycleStatus.CANCELLED: ORDER_CANCELLED,
+        OrderLifecycleStatus.ARCHIVED: ORDER_ARCHIVED,
+    }
+
+    def __init__(self, event_store: Any) -> None:
+        self._events = event_store
+
+    @staticmethod
+    def _specialization_projection(specialization: Mapping[str, Any]) -> dict[str, Any]:
+        row = dict(specialization or {})
+        package = _as_mapping(row.get("package", {}), field_name="order specialization package")
+        return {
+            "kind": str(row.get("kind") or "").strip() or None,
+            "package_id": str(package.get("package_id") or "").strip() or None,
+            "requested_clients": package.get("requested_clients"),
+            "currency": str(package.get("currency") or "").strip() or None,
+            "attribution_window_days": package.get("attribution_window_days"),
+            "new_client_window_days": package.get("new_client_window_days"),
+            "allow_returning_clients": package.get("allow_returning_clients"),
+            "require_payment_proof": package.get("require_payment_proof"),
+            "require_crm_proof": package.get("require_crm_proof"),
+            "trust_tier": str(package.get("trust_tier") or "").strip() or None,
+        }
+
+    @classmethod
+    def _event_id(
+        cls,
+        *,
+        order: Order,
+        event_type: str,
+        occurred_at_ms: int,
+        specialization: Mapping[str, Any],
+    ) -> str:
+        specialization_key = ""
+        if event_type == ORDER_UPDATED:
+            specialization_key = _legacy_fingerprint(cls._specialization_projection(specialization))
+        semantic = ":".join(
+            (
+                order.tenant_id,
+                order.business_id,
+                order.order_id,
+                event_type,
+                str(int(occurred_at_ms)),
+                specialization_key,
+            )
+        )
+        return str(uuid5(_ORDER_EVENT_NAMESPACE, semantic))
+
+    def _matches(
+        self,
+        *,
+        order: Order,
+        event_type: str,
+        event_id: str,
+    ) -> list[dict[str, Any]]:
+        return [
+            dict(raw)
+            for raw in self._events.iter_events(
+                tenant_id=order.tenant_id,
+                start_ms=0,
+                event_type=event_type,
+            )
+            if str(raw.get("event_id") or "") == event_id
+        ]
+
+    def _append(
+        self,
+        *,
+        order: Order,
+        specialization: Mapping[str, Any],
+        event_type: str,
+        occurred_at_ms: int,
+        lifecycle_status: OrderLifecycleStatus,
+        updated_at_ms: int,
+        terminal_at_ms: int | None,
+    ) -> str:
+        event_id = self._event_id(
+            order=order,
+            event_type=event_type,
+            occurred_at_ms=occurred_at_ms,
+            specialization=specialization,
+        )
+        payload: dict[str, Any] = {
+            "schema_version": 1,
+            "business_id": order.business_id,
+            "occurred_at_ms": int(occurred_at_ms),
+            "recorded_at_ms": int(occurred_at_ms),
+            "order_id": order.order_id,
+            "order_schema_version": order.schema_version,
+            "order_kind": order.order_kind,
+            "state_key": order.state_key,
+            "lifecycle_status": lifecycle_status.value,
+            "created_at_ms": order.created_at_ms,
+            "updated_at_ms": int(updated_at_ms),
+            "terminal_at_ms": terminal_at_ms,
+        }
+        if event_type == ORDER_UPDATED:
+            payload["specialization"] = self._specialization_projection(specialization)
+        event = {
+            "event_id": event_id,
+            "tenant_id": order.tenant_id,
+            "source": "lead_outcomes.order_store",
+            "event_type": event_type,
+            "timestamp_ms": int(occurred_at_ms),
+            "decision_id": None,
+            "correlation_id": None,
+            "payload": payload,
+        }
+        matches = self._matches(order=order, event_type=event_type, event_id=event_id)
+        if len(matches) > 1:
+            raise RuntimeError("ORDER_EVENT_SPINE_DUPLICATE")
+        if matches:
+            if canonical_business_event_contract(matches[0]) != canonical_business_event_contract(event):
+                raise RuntimeError("ORDER_EVENT_SPINE_CONFLICT")
+            return event_id
+        try:
+            self._events.append_event(event)
+        except Exception:
+            matches = self._matches(order=order, event_type=event_type, event_id=event_id)
+            if (
+                len(matches) != 1
+                or canonical_business_event_contract(matches[0])
+                != canonical_business_event_contract(event)
+            ):
+                raise
+            return event_id
+        matches = self._matches(order=order, event_type=event_type, event_id=event_id)
+        if len(matches) != 1:
+            raise RuntimeError("ORDER_EVENT_SPINE_APPEND_NOT_DURABLE")
+        if canonical_business_event_contract(matches[0]) != canonical_business_event_contract(event):
+            raise RuntimeError("ORDER_EVENT_SPINE_CONFLICT")
+        return event_id
+
+    def project_current(self, *, order: Order, specialization: Mapping[str, Any]) -> None:
+        self._append(
+            order=order,
+            specialization={},
+            event_type=ORDER_CREATED,
+            occurred_at_ms=order.created_at_ms,
+            lifecycle_status=OrderLifecycleStatus.ACTIVE,
+            updated_at_ms=order.created_at_ms,
+            terminal_at_ms=None,
+        )
+        if order.lifecycle_status is OrderLifecycleStatus.ACTIVE:
+            if order.updated_at_ms > order.created_at_ms:
+                self._append(
+                    order=order,
+                    specialization=specialization,
+                    event_type=ORDER_UPDATED,
+                    occurred_at_ms=order.updated_at_ms,
+                    lifecycle_status=OrderLifecycleStatus.ACTIVE,
+                    updated_at_ms=order.updated_at_ms,
+                    terminal_at_ms=None,
+                )
+            return
+        event_type = self._TERMINAL_TYPES[order.lifecycle_status]
+        self._append(
+            order=order,
+            specialization={},
+            event_type=event_type,
+            occurred_at_ms=order.updated_at_ms,
+            lifecycle_status=order.lifecycle_status,
+            updated_at_ms=order.updated_at_ms,
+            terminal_at_ms=order.terminal_at_ms,
+        )
+
+
 class OrderStore(BaseRegistry):
     """Single canonical Order owner with client-outcome compatibility projection."""
 
@@ -58,11 +239,29 @@ class OrderStore(BaseRegistry):
         *,
         backend: RegistryBackend | None = None,
         legacy_backend: RegistryBackend | None = None,
+        event_store: Any | None = None,
+        require_event_spine: bool = False,
     ) -> None:
         super().__init__(kind="order", backend=backend)
+        if require_event_spine and event_store is None:
+            raise RuntimeError("ORDER_EVENT_STORE_REQUIRED")
+        self._event_spine = None if event_store is None else _OrderEventSpineProjection(event_store)
         self._legacy_backend = legacy_backend
         if legacy_backend is not None:
             self._migrate_legacy_orders()
+
+    def repair_event_spine(self, order_id: str) -> Order:
+        payload = self.maybe_get(str(order_id))
+        if payload is None:
+            raise OrderNotFound(f"order not found: {order_id}")
+        order, specialization, _ = self._decode_envelope(payload)
+        if self._event_spine is not None:
+            self._event_spine.project_current(order=order, specialization=specialization)
+        return order
+
+    def _project(self, *, order: Order, specialization: Mapping[str, Any]) -> None:
+        if self._event_spine is not None:
+            self._event_spine.project_current(order=order, specialization=specialization)
 
     @staticmethod
     def _serialize_order(order: Order) -> dict[str, Any]:
@@ -138,10 +337,12 @@ class OrderStore(BaseRegistry):
         existing = self.maybe_get(order.order_id)
         if existing is not None:
             current, current_specialization, _ = self._decode_envelope(existing)
+            self._project(order=current, specialization=current_specialization)
             if current != order or current_specialization != dict(specialization or {}):
                 raise ValueError("order_id already exists with different identity or state")
             return current
         self.register_unique(order.order_id, candidate, error_prefix="order")
+        self._project(order=order, specialization=dict(specialization or {}))
         return order
 
     def get_canonical_order(
@@ -186,6 +387,7 @@ class OrderStore(BaseRegistry):
         current, specialization, migration = self._decode_envelope(payload)
         if current.tenant_id != str(tenant_id).strip() or current.business_id != str(business_id).strip():
             raise OrderNotFound(f"order not found: {order_id}")
+        self._project(order=current, specialization=specialization)
         target = OrderLifecycleStatus(lifecycle_status)
         if target is current.lifecycle_status:
             return current
@@ -210,6 +412,7 @@ class OrderStore(BaseRegistry):
                 migration=migration,
             ),
         )
+        self._project(order=updated, specialization=specialization)
         return updated
 
     @staticmethod
@@ -379,6 +582,7 @@ class OrderStore(BaseRegistry):
                     ),
                     error_prefix="order",
                 )
+                self._project(order=canonical, specialization=self._specialization_payload(legacy_order))
                 continue
 
             canonical, specialization, current_migration = self._decode_envelope(existing)
@@ -389,6 +593,7 @@ class OrderStore(BaseRegistry):
             if recorded:
                 if source != LEGACY_CLIENT_OUTCOME_ORDER_NAMESPACE or recorded != fingerprint:
                     raise RuntimeError("legacy client outcome order diverged after canonical migration")
+                self._project(order=canonical, specialization=specialization)
                 continue
             projected = self._client_order_from_specialization(
                 canonical_order=canonical,
@@ -404,6 +609,7 @@ class OrderStore(BaseRegistry):
                     migration=migration,
                 ),
             )
+            self._project(order=canonical, specialization=specialization)
 
     def save(self, order: ClientOutcomeOrder) -> None:
         canonical = self._canonical_from_client_order(order)
@@ -414,6 +620,7 @@ class OrderStore(BaseRegistry):
             return
 
         current, current_specialization, migration = self._decode_envelope(existing)
+        self._project(order=current, specialization=current_specialization)
         if current.order_kind != CLIENT_OUTCOME_ORDER_KIND:
             raise ValueError("order_id is owned by a different order kind")
         immutable_identity = (
@@ -442,6 +649,8 @@ class OrderStore(BaseRegistry):
             current,
             updated_at_ms=max(current.updated_at_ms, canonical.updated_at_ms),
         )
+        if updated == current and specialization == current_specialization:
+            return
         self.register(
             current.order_id,
             self._envelope(
@@ -450,6 +659,7 @@ class OrderStore(BaseRegistry):
                 migration=migration,
             ),
         )
+        self._project(order=updated, specialization=specialization)
 
     def get_order(self, order_id: str) -> ClientOutcomeOrder | None:
         payload = self.maybe_get(str(order_id))
@@ -528,6 +738,9 @@ ClientOutcomeOrderStore = OrderStore
 class ClientOutcomeOrderPersistenceService:
     store: OrderStore
 
+    def repair_event_spine(self, order_id: str) -> Order:
+        return self.store.repair_event_spine(order_id)
+
     def persist(self, order: ClientOutcomeOrder) -> ClientOutcomeOrder:
         self.store.save(order)
         return order
@@ -553,6 +766,7 @@ class ClientOutcomeOrderPersistenceService:
 
 __all__ = [
     "CANON_CLIENT_OUTCOME_ORDER_STORE",
+    "CANON_ORDER_EVENT_SPINE_PROJECTION",
     "CANON_ORDER_LIFECYCLE_OWNER",
     "CLIENT_OUTCOME_ORDER_KIND",
     "ClientOutcomeOrderPersistenceService",

@@ -7,6 +7,7 @@ from fastapi.routing import APIRoute
 from interfaces.api.fastapi_dependencies import FastAPIDependencyContainer
 from interfaces.api.fastapi_router_adapter import create_api_router
 from observability.metrics import InMemoryMetrics
+from runtime.platform.event_store.memory_event_store import MemoryEventStore
 from tenancy.tenant_policy_store import InMemoryTenantPolicyStore
 from tenancy.tenant_quota_guard import TenantQuotaGuard
 from tenancy.tenant_registry import InMemoryTenantRegistry
@@ -23,6 +24,9 @@ class _BootResultStub:
 @dataclass(frozen=True)
 class _RuntimeStub:
     metrics: InMemoryMetrics = field(default_factory=InMemoryMetrics)
+    runtime_infra: object = field(
+        default_factory=lambda: type("Infra", (), {"event_store": MemoryEventStore()})()
+    )
 
 
 def test_create_api_router_uses_dependency_container_instead_of_private_inmemory_graph() -> None:

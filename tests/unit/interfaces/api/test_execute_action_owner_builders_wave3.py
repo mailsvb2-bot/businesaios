@@ -9,6 +9,7 @@ from interfaces.api.execute_action_handler import build_execute_action_handler
 from interfaces.api.execute_action_port_provider import build_execute_action_port_provider
 from entrypoints.api.request_context import RequestContext
 from observability.action_audit_log import ActionAuditLog
+from runtime.platform.event_store.memory_event_store import MemoryEventStore
 from runtime.execution.decision_execution_service import build_decision_execution_service
 
 
@@ -57,6 +58,9 @@ class _DependencyContainer:
 
     def decision_command_binding(self):
         return _Binding()
+
+    def canonical_business_event_store(self):
+        return MemoryEventStore()
 
 
 class _Executor:

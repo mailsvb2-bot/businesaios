@@ -107,6 +107,11 @@ PAYMENTS_RECONCILE_FAILED = "payments_reconcile_failed"
 REFUND_CREATED = "refund.created"
 BUSINESS_CREATED = "business.created"
 BUSINESS_UPDATED = "business.updated"
+ORDER_CREATED = "order.created"
+ORDER_UPDATED = "order.updated"
+ORDER_FULFILLED = "order.fulfilled"
+ORDER_CANCELLED = "order.cancelled"
+ORDER_ARCHIVED = "order.archived"
 
 DECISION_ISSUED = "decision_issued"
 DECISION_EXECUTED = "decision_executed"
@@ -258,6 +263,11 @@ KNOWN_EVENT_TYPES: set[str] = {
     REFUND_CREATED,
     BUSINESS_CREATED,
     BUSINESS_UPDATED,
+    ORDER_CREATED,
+    ORDER_UPDATED,
+    ORDER_FULFILLED,
+    ORDER_CANCELLED,
+    ORDER_ARCHIVED,
     DECISION_ISSUED,
     DECISION_EXECUTED,
     DECISION_BLOCKED,

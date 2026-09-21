@@ -29,3 +29,31 @@ def test_http_boot_surface_reuses_explicit_system_surface() -> None:
     assert http_surface.app_boot_surface is system_surface.app_boot_surface
     assert http_surface.dependency_container is system_surface.dependency_container
     assert http_surface.config_surface is config
+
+
+class _ClosableBusinessEventStoreStack:
+    def __init__(self) -> None:
+        self.closed = False
+
+    def close(self) -> None:
+        self.closed = True
+
+
+def test_system_boot_surface_wires_and_owns_canonical_business_event_store(monkeypatch) -> None:
+    from runtime.business_autonomy import ontology_runtime
+
+    event_store = object()
+    stack = _ClosableBusinessEventStoreStack()
+    monkeypatch.setattr(
+        ontology_runtime,
+        "build_canonical_ontology_event_store",
+        lambda _existing: (event_store, stack),
+    )
+
+    surface = build_system_boot_surface()
+
+    assert surface.dependency_container.canonical_business_event_store() is event_store
+    assert stack.closed is False
+
+    surface.dependency_container.shutdown()
+    assert stack.closed is True

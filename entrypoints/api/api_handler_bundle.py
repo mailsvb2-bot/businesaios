@@ -43,6 +43,11 @@ def build_api_handler_bundle(
     )
     resolved_execute_action_port = execute_action_port if execute_action_port is not None else execute_action_port_provider.build_port()
     headless_handlers = build_headless_route_handlers(runtime_provider=runtime_provider)
+    event_store = None
+    if dependency_container is not None:
+        resolver = getattr(dependency_container, 'canonical_business_event_store', None)
+        if callable(resolver):
+            event_store = resolver()
     return ApiHandlerBundle(
         route_handlers=build_route_handlers(
             application_service=application_service,
@@ -50,7 +55,11 @@ def build_api_handler_bundle(
         ),
         headless_handlers=headless_handlers,
         business_memory_handlers=build_business_memory_route_handlers(runtime_provider=runtime_provider),
-        client_outcome_handlers=build_client_outcome_route_handlers(headless_handlers=headless_handlers),
+        client_outcome_handlers=build_client_outcome_route_handlers(
+            headless_handlers=headless_handlers,
+            event_store=event_store,
+            require_order_event_spine=dependency_container is not None,
+        ),
         execute_action_port_provider=execute_action_port_provider,
     )
 
