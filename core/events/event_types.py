@@ -104,6 +104,7 @@ PAYMENT_SUCCEEDED = "payment_succeeded"
 PAYMENT_FAILED = "payment_failed"
 PAYMENTS_RECONCILED = "payments_reconciled"
 PAYMENTS_RECONCILE_FAILED = "payments_reconcile_failed"
+REFUND_CREATED = "refund.created"
 
 DECISION_ISSUED = "decision_issued"
 DECISION_EXECUTED = "decision_executed"
@@ -252,6 +253,7 @@ KNOWN_EVENT_TYPES: set[str] = {
     PAYMENT_FAILED,
     PAYMENTS_RECONCILED,
     PAYMENTS_RECONCILE_FAILED,
+    REFUND_CREATED,
     DECISION_ISSUED,
     DECISION_EXECUTED,
     DECISION_BLOCKED,

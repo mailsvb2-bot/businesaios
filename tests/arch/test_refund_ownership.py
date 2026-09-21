@@ -4,7 +4,10 @@ import ast
 from pathlib import Path
 
 from billing.recovery_contracts import CANON_BILLING_REFUND_CONTRACT, RefundResult
-from billing.refund_orchestrator import CANON_BILLING_REFUND_LIFECYCLE_OWNER
+from billing.refund_orchestrator import (
+    CANON_BILLING_REFUND_EVENT_SPINE_PROJECTION,
+    CANON_BILLING_REFUND_LIFECYCLE_OWNER,
+)
 from canon.business_ontology_inventory import OwnershipAuditStatus, ontology_ownership_by_entity
 from runtime.platform.billing_recovery_store import CANON_PLATFORM_BILLING_RECOVERY_STORE, SCHEMA_VERSION
 
@@ -24,6 +27,7 @@ def test_refund_inventory_names_single_contract_writer_and_durable_store() -> No
     row = ontology_ownership_by_entity()["Refund"]
     assert CANON_BILLING_REFUND_CONTRACT is True
     assert CANON_BILLING_REFUND_LIFECYCLE_OWNER is True
+    assert CANON_BILLING_REFUND_EVENT_SPINE_PROJECTION is True
     assert CANON_PLATFORM_BILLING_RECOVERY_STORE is True
     assert SCHEMA_VERSION == 1
     assert row.status is OwnershipAuditStatus.DONE
@@ -59,3 +63,12 @@ def test_refund_orchestrator_reexports_canonical_contract_for_compatibility() ->
     from billing import refund_orchestrator
 
     assert refund_orchestrator.RefundResult is RefundResult
+
+def test_refund_event_spine_projection_stays_inside_the_canonical_lifecycle_owner() -> None:
+    text = (ROOT / WRITER).read_text(encoding="utf-8")
+    assert 'REFUND_CREATED = "refund.created"' in (ROOT / "core/events/event_types.py").read_text(encoding="utf-8")
+    assert "class _RefundEventSpineProjection:" in text
+    assert "canonical_business_event_contract" in text
+    assert "append_event(event)" in text
+    assert "event_store: Any | None = None" in text
+
