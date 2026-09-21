@@ -38,9 +38,11 @@ def build_canonical_ontology_event_store(customer_event_store: Any | None):
     from runtime.wiring import build_event_store, resolve_storage_config
     stack = ExitStack()
     try:
+        base_dir = business_autonomy_runtime_dir()
+        base_dir.mkdir(parents=True, exist_ok=True)
         return build_event_store(
             stack,
-            base_dir=str(business_autonomy_runtime_dir()),
+            base_dir=str(base_dir),
             storage=resolve_storage_config(),
         ), stack
     except Exception:

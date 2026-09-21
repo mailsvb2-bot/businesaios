@@ -86,7 +86,7 @@ BUSINESS_ONTOLOGY_OWNERSHIP_AUDIT = (
         OwnershipAuditStatus.DONE,
         "contracts.business_profile",
         "application.business_autonomy.distributed_capability_trust_registry",
-        "BusinessProfile is the canonical semantic projection; DistributedBusinessRegistry is the single durable tenant/business lifecycle owner and all production mutations route through its versioned register_or_update boundary.",
+        "BusinessProfile is the canonical semantic projection; DistributedBusinessRegistry remains the single durable tenant/business lifecycle owner, while versioned mutations project into the canonical EventStore without moving Business truth out of the registry.",
         writers=(
             "application.business_autonomy.business_connector_framework",
             "runtime.business_autonomy.bootstrap",

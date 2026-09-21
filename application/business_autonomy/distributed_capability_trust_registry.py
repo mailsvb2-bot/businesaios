@@ -4,16 +4,21 @@ from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import Any, Protocol
+from uuid import UUID, uuid5
 
 from application.business_autonomy.channel_contracts import ChannelIdentity, ChannelKind
 from application.business_autonomy.contracts import BusinessCapability, CapabilityKind
 from application.business_autonomy.registry import RegisteredBusinessCapabilities
 from application.business_autonomy.trust import BusinessTrustSnapshot, BusinessTrustTier
 from contracts.business_profile import BusinessProfile
+from contracts.event_store import canonical_business_event_contract
+from core.events.event_types import BUSINESS_CREATED, BUSINESS_UPDATED
 from core.tenancy.normalization import require_tenant_id
 
 CANON_DISTRIBUTED_BUSINESS_REGISTRY = True
 CANON_BUSINESS_LIFECYCLE_OWNER = True
+CANON_BUSINESS_LIFECYCLE_EVENT_SPINE_PROJECTION = True
+_BUSINESS_EVENT_NAMESPACE = UUID("2f6e88e6-6d8a-4690-9b8c-b9f28fe2b7ab")
 
 
 class DistributedDocumentPort(Protocol):
@@ -128,10 +133,150 @@ class BusinessRegistryRecord:
         return record
 
 
+class _BusinessRegistryEventSpineProjection:
+    def __init__(self, event_store: Any) -> None:
+        self._events = event_store
+
+    @staticmethod
+    def _event_id(record: BusinessRegistryRecord) -> str:
+        return str(
+            uuid5(
+                _BUSINESS_EVENT_NAMESPACE,
+                f"{record.tenant_id}:{record.business_id}:{int(record.version)}",
+            )
+        )
+
+    @staticmethod
+    def _timestamp_ms(record: BusinessRegistryRecord) -> int | None:
+        raw = str(record.updated_at_utc or "").strip()
+        if not raw:
+            return None
+        parsed = datetime.fromisoformat(raw)
+        if parsed.tzinfo is None:
+            parsed = parsed.replace(tzinfo=UTC)
+        return int(parsed.timestamp() * 1000)
+
+    def _matches(
+        self,
+        *,
+        tenant_id: str,
+        event_type: str,
+        event_id: str,
+    ) -> list[dict[str, Any]]:
+        return [
+            dict(raw)
+            for raw in self._events.iter_events(
+                tenant_id=str(tenant_id),
+                start_ms=0,
+                event_type=str(event_type),
+            )
+            if str(raw.get("event_id") or "") == str(event_id)
+        ]
+
+    def project(self, record: BusinessRegistryRecord) -> str | None:
+        if int(record.version) <= 0:
+            raise ValueError("business registry version must be positive before Event Spine projection")
+        timestamp_ms = self._timestamp_ms(record)
+        if timestamp_ms is None:
+            return None
+        event_type = BUSINESS_CREATED if int(record.version) == 1 else BUSINESS_UPDATED
+        event_id = self._event_id(record)
+        event = {
+            "event_id": event_id,
+            "tenant_id": record.tenant_id,
+            "source": "application.business_autonomy.distributed_business_registry",
+            "event_type": event_type,
+            "timestamp_ms": timestamp_ms,
+            "decision_id": None,
+            "correlation_id": None,
+            "payload": {
+                "schema_version": 1,
+                "business_id": record.business_id,
+                "occurred_at_ms": timestamp_ms,
+                "recorded_at_ms": timestamp_ms,
+                "registry_version": int(record.version),
+                "region": record.region,
+                "channel_kind": record.channel_kind,
+                "capabilities": [
+                    {
+                        "kind": item.kind.value,
+                        "enabled": bool(item.enabled),
+                        "confidence": float(item.confidence),
+                    }
+                    for item in record.capabilities
+                ],
+                "trust": {
+                    "trust_tier": record.trust.trust_tier.value,
+                    "score": float(record.trust.score),
+                },
+                "governance_enabled": bool(record.governance_enabled),
+                "persistent_surfaces": list(record.persistent_surfaces),
+                "channel_identity_bound": bool(
+                    record.channel_adapter_key and record.channel_external_ref
+                ),
+            },
+        }
+        matches = self._matches(
+            tenant_id=record.tenant_id,
+            event_type=event_type,
+            event_id=event_id,
+        )
+        if len(matches) > 1:
+            raise RuntimeError("BUSINESS_EVENT_SPINE_DUPLICATE")
+        if matches:
+            if canonical_business_event_contract(matches[0]) != canonical_business_event_contract(event):
+                raise RuntimeError("BUSINESS_EVENT_SPINE_CONFLICT")
+            return event_id
+        try:
+            self._events.append_event(event)
+        except Exception:
+            matches = self._matches(
+                tenant_id=record.tenant_id,
+                event_type=event_type,
+                event_id=event_id,
+            )
+            if (
+                len(matches) != 1
+                or canonical_business_event_contract(matches[0])
+                != canonical_business_event_contract(event)
+            ):
+                raise
+            return event_id
+        matches = self._matches(
+            tenant_id=record.tenant_id,
+            event_type=event_type,
+            event_id=event_id,
+        )
+        if len(matches) != 1:
+            raise RuntimeError("BUSINESS_EVENT_SPINE_APPEND_NOT_DURABLE")
+        if canonical_business_event_contract(matches[0]) != canonical_business_event_contract(event):
+            raise RuntimeError("BUSINESS_EVENT_SPINE_CONFLICT")
+        return event_id
+
+
 class DistributedBusinessRegistry:
-    def __init__(self, *, documents: DistributedDocumentPort, collection: str = "business_registry") -> None:
+    def __init__(
+        self,
+        *,
+        documents: DistributedDocumentPort,
+        collection: str = "business_registry",
+        event_store: Any | None = None,
+        require_event_spine: bool = False,
+    ) -> None:
         self._documents = documents
         self._collection = str(collection).strip() or "business_registry"
+        if require_event_spine and event_store is None:
+            raise RuntimeError("BUSINESS_EVENT_STORE_REQUIRED")
+        self._event_spine = (
+            None if event_store is None else _BusinessRegistryEventSpineProjection(event_store)
+        )
+
+    @staticmethod
+    def _semantic_payload(record: BusinessRegistryRecord) -> dict[str, Any]:
+        payload = record.to_dict()
+        payload.pop("version", None)
+        payload.pop("updated_at_utc", None)
+        return payload
 
     def register_or_update(self, record: BusinessRegistryRecord) -> BusinessRegistryRecord:
         record.validate()
@@ -150,12 +295,14 @@ class DistributedBusinessRegistry:
                 and record.channel_kind != existing.channel_kind
             ):
                 raise ValueError("channel_kind reassignment requires explicit channel identity")
+            if self._event_spine is not None:
+                self._event_spine.project(existing)
         adapter_key = str(record.channel_adapter_key or "").strip()
         external_ref = str(record.channel_external_ref or "").strip()
         if existing is not None and not adapter_key and not external_ref:
             adapter_key = existing.channel_adapter_key
             external_ref = existing.channel_external_ref
-        stamped = BusinessRegistryRecord(
+        candidate = BusinessRegistryRecord(
             business_id=record.business_id,
             tenant_id=record.tenant_id,
             ownership_key=record.ownership_key,
@@ -167,8 +314,17 @@ class DistributedBusinessRegistry:
             persistent_surfaces=tuple(sorted({str(item) for item in record.persistent_surfaces if str(item).strip()})),
             channel_adapter_key=adapter_key,
             channel_external_ref=external_ref,
-            version=existing_version + 1,
-            updated_at_utc=datetime.now(UTC).isoformat(),
+            version=existing_version,
+            updated_at_utc="" if existing is None else existing.updated_at_utc,
+        )
+        if existing is not None and self._semantic_payload(existing) == self._semantic_payload(candidate):
+            return existing
+        stamped = BusinessRegistryRecord.from_dict(
+            {
+                **candidate.to_dict(),
+                "version": existing_version + 1,
+                "updated_at_utc": datetime.now(UTC).isoformat(),
+            }
         )
         persisted_version = self._documents.put(
             collection=self._collection,
@@ -176,7 +332,12 @@ class DistributedBusinessRegistry:
             payload=stamped.to_dict(),
             expected_version=None if existing_payload is None else existing_version,
         )
-        return BusinessRegistryRecord.from_dict({**stamped.to_dict(), "version": persisted_version})
+        persisted = BusinessRegistryRecord.from_dict(
+            {**stamped.to_dict(), "version": persisted_version}
+        )
+        if self._event_spine is not None:
+            self._event_spine.project(persisted)
+        return persisted
 
     def get(self, tenant_id: str, business_id: str) -> BusinessRegistryRecord | None:
         payload = self._documents.get(
@@ -271,6 +432,7 @@ class DistributedBusinessRegistry:
 
 __all__ = [
     "BusinessRegistryRecord",
+    "CANON_BUSINESS_LIFECYCLE_EVENT_SPINE_PROJECTION",
     "CANON_BUSINESS_LIFECYCLE_OWNER",
     "CANON_DISTRIBUTED_BUSINESS_REGISTRY",
     "DistributedBusinessRegistry",
