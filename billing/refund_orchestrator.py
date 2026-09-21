@@ -3,7 +3,8 @@ from __future__ import annotations
 from collections.abc import Mapping
 from dataclasses import dataclass, field
 from datetime import datetime
-from uuid import uuid4
+from typing import Any
+from uuid import UUID, uuid4, uuid5
 
 from billing.invoice_lifecycle import CommercialInvoiceEnvelope, InvoiceLifecycleService
 from billing.ledger_event import LedgerEntry, LedgerPosting, utc_now
@@ -12,6 +13,8 @@ from billing.lineage import derive_lineage_metadata
 from billing.payment_provider_contract import PaymentProviderContract
 from billing.recovery_contracts import RefundResult
 from billing.recovery_store import RefundStoreContract
+from contracts.event_store import canonical_business_event_contract
+from core.events.event_types import REFUND_CREATED
 from core.tenancy.normalization import require_tenant_id
 from observability.tenant_metrics_registry import TenantMetricsRegistry
 from runtime.monetization import MonetizationService, RefundRecord
@@ -19,6 +22,8 @@ from runtime.monetization import utc_now as monetization_utc_now
 
 CANON_BILLING_REFUND_ORCHESTRATOR = True
 CANON_BILLING_REFUND_LIFECYCLE_OWNER = True
+CANON_BILLING_REFUND_EVENT_SPINE_PROJECTION = True
+_REFUND_EVENT_NAMESPACE = UUID("1632b3d5-3a8f-4e2f-9382-23fb30e8218f")
 
 
 @dataclass(frozen=True)
@@ -90,6 +95,96 @@ class InMemoryRefundStore:
         return tuple(self._by_invoice.get((str(tenant_id), str(invoice_id)), ()))
 
 
+class _RefundEventSpineProjection:
+    def __init__(self, event_store: Any) -> None:
+        self._events = event_store
+
+    @staticmethod
+    def _event_id(*, tenant_id: str, business_id: str, refund_id: str) -> str:
+        return str(uuid5(_REFUND_EVENT_NAMESPACE, f"{tenant_id}:{business_id}:{refund_id}"))
+
+    def _existing(self, *, tenant_id: str, event_id: str) -> dict[str, Any] | None:
+        for event in self._events.iter_events(
+            tenant_id=str(tenant_id), start_ms=0, event_type=REFUND_CREATED
+        ):
+            if str(event.get("event_id") or "") == str(event_id):
+                return dict(event)
+        return None
+
+    def project(
+        self,
+        *,
+        invoice: CommercialInvoiceEnvelope,
+        result: RefundResult,
+    ) -> str:
+        meta = dict(result.metadata)
+        business_id = str(meta.get("business_id") or "").strip()
+        if not business_id:
+            raise RuntimeError("REFUND_DURABLE_BUSINESS_SCOPE_REQUIRED")
+        if business_id != str(invoice.business_id or "").strip():
+            raise RuntimeError("REFUND_BUSINESS_SCOPE_CONFLICT")
+        actor_id = str(meta.get("actor_id") or "system").strip() or "system"
+        event_id = self._event_id(
+            tenant_id=result.tenant_id,
+            business_id=business_id,
+            refund_id=result.refund_id,
+        )
+        timestamp_ms = int(result.processed_at.timestamp() * 1000)
+        raw_evidence = meta.get("evidence_ids")
+        evidence_ids = [
+            str(item).strip()
+            for item in (raw_evidence if isinstance(raw_evidence, (list, tuple, set)) else ())
+            if str(item).strip()
+        ]
+        event = {
+            "event_id": event_id,
+            "tenant_id": result.tenant_id,
+            "user_id": actor_id,
+            "source": "billing.refund_orchestrator",
+            "event_type": REFUND_CREATED,
+            "timestamp_ms": timestamp_ms,
+            "decision_id": str(meta.get("decision_id") or "").strip() or None,
+            "correlation_id": str(meta.get("correlation_id") or "").strip() or None,
+            "payload": {
+                "schema_version": 1,
+                "business_id": business_id,
+                "actor_id": actor_id,
+                "agent_id": str(meta.get("agent_id") or "").strip() or None,
+                "occurred_at_ms": timestamp_ms,
+                "recorded_at_ms": timestamp_ms,
+                "causation_id": str(
+                    meta.get("causation_id") or meta.get("action_intent_id") or ""
+                ).strip()
+                or None,
+                "evidence_ids": evidence_ids,
+                "refund_id": result.refund_id,
+                "invoice_id": result.invoice_id,
+                "amount_minor": int(result.amount_minor),
+                "currency": str(result.currency).upper(),
+                "provider_name": result.provider_name,
+                "external_reference": result.external_reference,
+            },
+        }
+        existing = self._existing(tenant_id=result.tenant_id, event_id=event_id)
+        if existing is not None:
+            if canonical_business_event_contract(existing) != canonical_business_event_contract(event):
+                raise RuntimeError("REFUND_EVENT_SPINE_CONFLICT")
+            return event_id
+        try:
+            self._events.append_event(event)
+        except Exception:
+            existing = self._existing(tenant_id=result.tenant_id, event_id=event_id)
+            if existing is None or canonical_business_event_contract(existing) != canonical_business_event_contract(event):
+                raise
+            return event_id
+        existing = self._existing(tenant_id=result.tenant_id, event_id=event_id)
+        if existing is None:
+            raise RuntimeError("REFUND_EVENT_SPINE_APPEND_NOT_DURABLE")
+        if canonical_business_event_contract(existing) != canonical_business_event_contract(event):
+            raise RuntimeError("REFUND_EVENT_SPINE_CONFLICT")
+        return event_id
+
+
 class RefundOrchestrator:
     def __init__(
         self,
@@ -99,6 +194,7 @@ class RefundOrchestrator:
         monetization_service: MonetizationService,
         invoice_lifecycle: InvoiceLifecycleService | None = None,
         refund_store: RefundStoreContract | None = None,
+        event_store: Any | None = None,
         metrics: TenantMetricsRegistry | None = None,
         clearing_account: str = 'billing.accounts.cash',
         contra_revenue_account: str = 'billing.accounts.refunds',
@@ -108,6 +204,7 @@ class RefundOrchestrator:
         self._monetization_service = monetization_service
         self._invoice_lifecycle = invoice_lifecycle or InvoiceLifecycleService()
         self._refund_store = refund_store or InMemoryRefundStore()
+        self._refund_events = None if event_store is None else _RefundEventSpineProjection(event_store)
         self._metrics = metrics
         self._clearing_account = str(clearing_account).strip() or 'billing.accounts.cash'
         self._contra_revenue_account = str(contra_revenue_account).strip() or 'billing.accounts.refunds'
@@ -123,6 +220,11 @@ class RefundOrchestrator:
         metadata: Mapping[str, object] | None = None,
     ) -> tuple[CommercialInvoiceEnvelope, RefundResult, RefundRecord, LedgerPosting]:
         invoice.validate()
+        business_id = str(invoice.business_id or "").strip()
+        if self._refund_events is not None and not business_id:
+            raise RuntimeError("REFUND_BUSINESS_SCOPE_REQUIRED")
+        if business_id and self._refund_events is None:
+            raise RuntimeError("REFUND_EVENT_STORE_REQUIRED")
         if invoice.status not in {invoice.status.ISSUED, invoice.status.PARTIALLY_PAID, invoice.status.PAID, invoice.status.UNCOLLECTIBLE}:
             raise ValueError('invoice is not eligible for refund')
         provider_affinity = self._extract_provider_affinity(invoice=invoice, metadata=metadata)
@@ -144,6 +246,7 @@ class RefundOrchestrator:
         if existing is None and requested.amount_minor > int(invoice.paid_minor):
             raise ValueError('refund amount cannot exceed paid_minor')
         if existing is not None:
+            self._project_refund_event(invoice=invoice, result=existing)
             stored_posting = self._ledger_store.append(self._build_posting(result=existing))
             if str(dict(invoice.metadata).get('last_refund_id') or '') == str(existing.refund_id):
                 replay_refund_record = RefundRecord(
@@ -214,11 +317,13 @@ class RefundOrchestrator:
                 idempotency_key=requested.idempotency_key,
                 provider_name=requested.provider_name,
                 extra={
-                    'owner': 'billing.refund_orchestrator',
-                    'reason': requested.reason,
-                    'idempotency_key': requested.idempotency_key,
                     **dict(requested.metadata),
                     **provider_payload,
+                    'owner': 'billing.refund_orchestrator',
+                    'business_id': business_id,
+                    'actor_id': requested.user_id,
+                    'reason': requested.reason,
+                    'idempotency_key': requested.idempotency_key,
                 },
             ),
         )
@@ -252,7 +357,24 @@ class RefundOrchestrator:
         updated_invoice.validate()
         if self._metrics is not None:
             self._metrics.inc(tenant_id=requested.tenant_id, metric_name='billing_refunds_total', amount=1.0, labels={'provider': requested.provider_name, 'currency': requested.currency.upper()})
+        self._project_refund_event(
+            invoice=invoice,
+            result=stored_result,
+        )
         return updated_invoice, stored_result, refund_record, posting
+
+    def _project_refund_event(
+        self,
+        *,
+        invoice: CommercialInvoiceEnvelope,
+        result: RefundResult,
+    ) -> str | None:
+        if self._refund_events is None:
+            return None
+        return self._refund_events.project(
+            invoice=invoice,
+            result=result,
+        )
 
     def _build_posting(self, *, result: RefundResult) -> LedgerPosting:
         result.validate()
@@ -304,6 +426,7 @@ class RefundOrchestrator:
 
 
 __all__ = [
+    'CANON_BILLING_REFUND_EVENT_SPINE_PROJECTION',
     'CANON_BILLING_REFUND_LIFECYCLE_OWNER',
     'CANON_BILLING_REFUND_ORCHESTRATOR',
     'InMemoryRefundStore',

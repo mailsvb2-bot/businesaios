@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import UTC, datetime
 
 import pytest
@@ -14,7 +14,10 @@ from billing.payment_provider_contract import PaymentCustomerProfile, PaymentPro
 from billing.payment_provider_health_registry import PaymentProviderHealthRegistry
 from billing.reconciliation_service import BillingReconciliationService
 from billing.refund_orchestrator import RefundOrchestrator
+from contracts.event_store import canonical_business_event_contract
+from core.events.event_types import REFUND_CREATED
 from runtime.monetization import MonetizationService
+from runtime.platform.event_store.memory_event_store import MemoryEventStore
 
 
 @dataclass(frozen=True)
@@ -34,6 +37,27 @@ class _Provider(PaymentProviderContract):
             'external_reference': f'ext-{invoice_id}-{amount_minor}',
             'status': 'processed',
         }
+
+
+class _SpoofingProvider(_Provider):
+    def refund(self, *, invoice_id: str, tenant_id: str, amount_minor: int, currency: str, reason: str, metadata=None):
+        return {
+            **super().refund(
+                invoice_id=invoice_id,
+                tenant_id=tenant_id,
+                amount_minor=amount_minor,
+                currency=currency,
+                reason=reason,
+                metadata=metadata,
+            ),
+            "actor_id": "provider-spoof",
+            "business_id": "provider-spoof-business",
+        }
+
+
+class _MustNotRefundProvider(_Provider):
+    def refund(self, **_kwargs):
+        raise AssertionError("provider refund must not be called")
 
 
 def _paid_invoice() -> CommercialInvoiceEnvelope:
@@ -166,3 +190,133 @@ def test_refund_orchestrator_replay_on_updated_invoice_does_not_double_subtract(
     assert replayed == updated
     assert posting == replay_posting
     assert len(ledger.list_postings(tenant_id='tenant-a')) == 1
+
+
+def test_business_scoped_refund_requires_event_spine() -> None:
+    invoice = replace(_paid_invoice(), business_id="business-a")
+    orchestrator = RefundOrchestrator(
+        provider=_Provider(),
+        ledger_store=InMemoryLedgerStore(),
+        monetization_service=MonetizationService(),
+    )
+    with pytest.raises(RuntimeError, match="REFUND_EVENT_STORE_REQUIRED"):
+        orchestrator.refund(
+            invoice=invoice,
+            user_id="user-1",
+            amount_minor=200,
+            reason="goodwill",
+            idempotency_key="idem-no-event-spine",
+        )
+
+
+def test_refund_projects_one_canonical_event_and_repairs_on_replay() -> None:
+    invoice = replace(_paid_invoice(), business_id="business-a")
+    events = MemoryEventStore()
+    ledger = InMemoryLedgerStore()
+    orchestrator = RefundOrchestrator(
+        provider=_SpoofingProvider(),
+        ledger_store=ledger,
+        monetization_service=MonetizationService(),
+        event_store=events,
+    )
+    metadata = {
+        "actor_id": "caller-spoof",
+        "business_id": "caller-spoof-business",
+        "decision_id": "decision-refund-1",
+        "correlation_id": "correlation-refund-1",
+        "causation_id": "intent-refund-1",
+        "evidence_ids": ["provider-refund-proof-1"],
+    }
+
+    updated, result, _, _ = orchestrator.refund(
+        invoice=invoice,
+        user_id="user-1",
+        amount_minor=200,
+        reason="goodwill",
+        idempotency_key="idem-event-1",
+        metadata=metadata,
+    )
+    replayed, replay_result, _, _ = orchestrator.refund(
+        invoice=updated,
+        user_id="different-replay-user",
+        amount_minor=200,
+        reason="different replay reason",
+        idempotency_key="idem-event-1",
+        metadata=None,
+    )
+
+    assert replay_result == result
+    assert replayed == updated
+    rows = list(events.iter_events(
+        tenant_id="tenant-a",
+        start_ms=0,
+        event_type=REFUND_CREATED,
+    ))
+    assert len(rows) == 1
+    contract = canonical_business_event_contract(rows[0])
+    assert contract["business_id"] == "business-a"
+    assert contract["actor_id"] == "user-1"
+    assert result.metadata["actor_id"] == "user-1"
+    assert result.metadata["business_id"] == "business-a"
+    assert contract["schema_version"] == 1
+    assert contract["correlation_id"] == "correlation-refund-1"
+    assert contract["causation_id"] == "intent-refund-1"
+    assert contract["evidence_ids"] == ("provider-refund-proof-1",)
+    assert contract["payload"]["refund_id"] == result.refund_id
+    assert contract["payload"]["invoice_id"] == "inv-1"
+    assert contract["payload"]["amount_minor"] == 200
+
+
+
+def test_refund_event_spine_rejects_missing_business_before_provider_call() -> None:
+    orchestrator = RefundOrchestrator(
+        provider=_MustNotRefundProvider(),
+        ledger_store=InMemoryLedgerStore(),
+        monetization_service=MonetizationService(),
+        event_store=MemoryEventStore(),
+    )
+
+    with pytest.raises(RuntimeError, match="REFUND_BUSINESS_SCOPE_REQUIRED"):
+        orchestrator.refund(
+            invoice=_paid_invoice(),
+            user_id="user-1",
+            amount_minor=200,
+            reason="goodwill",
+            idempotency_key="idem-missing-business",
+        )
+
+
+def test_refund_replay_rejects_business_rebinding_from_durable_result() -> None:
+    invoice = replace(_paid_invoice(), business_id="business-a")
+    events = MemoryEventStore()
+    orchestrator = RefundOrchestrator(
+        provider=_Provider(),
+        ledger_store=InMemoryLedgerStore(),
+        monetization_service=MonetizationService(),
+        event_store=events,
+    )
+    updated, result, _, _ = orchestrator.refund(
+        invoice=invoice,
+        user_id="user-1",
+        amount_minor=200,
+        reason="goodwill",
+        idempotency_key="idem-business-scope",
+    )
+    assert result.metadata["business_id"] == "business-a"
+
+    with pytest.raises(RuntimeError, match="REFUND_BUSINESS_SCOPE_CONFLICT"):
+        orchestrator.refund(
+            invoice=replace(updated, business_id="business-b"),
+            user_id="user-1",
+            amount_minor=200,
+            reason="goodwill",
+            idempotency_key="idem-business-scope",
+        )
+
+    rows = list(events.iter_events(
+        tenant_id="tenant-a",
+        start_ms=0,
+        event_type=REFUND_CREATED,
+    ))
+    assert len(rows) == 1
+    assert canonical_business_event_contract(rows[0])["business_id"] == "business-a"
