@@ -426,7 +426,7 @@ BUSINESS_ONTOLOGY_OWNERSHIP_AUDIT = (
         OwnershipAuditStatus.DONE,
         "application.business_autonomy.provider_catalog",
         "runtime.business_autonomy.provider_activation_store",
-        "ProviderDefinition catalog is the single static semantic owner and FileProviderActivationStore is the single durable tenant/business/provider activation lifecycle owner; ProviderAdminService is the only production mutation boundary.",
+        "ProviderDefinition catalog is the single static semantic owner and FileProviderActivationStore is the single durable tenant/business/provider activation lifecycle owner; ProviderAdminService is the only production mutation boundary, while versioned activation mutations project into the canonical EventStore without moving Provider truth out of the activation store.",
         writers=("application.business_autonomy.provider_admin_service",),
         readers=("application.business_autonomy.provider_admin_service",),
     ),
