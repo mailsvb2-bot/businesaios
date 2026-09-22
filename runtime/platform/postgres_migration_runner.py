@@ -25,12 +25,8 @@ def migration_files(base: Path | None = None) -> tuple[Path, ...]:
 
 def _ensure_schema_migrations(port: PostgresPort) -> None:
     port.execute(
-        """
-        CREATE TABLE IF NOT EXISTS schema_migrations (
-          migration_id TEXT PRIMARY KEY,
-          applied_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-        );
-        """
+        "CREATE TABLE IF NOT EXISTS schema_migrations ("
+        "migration_id TEXT PRIMARY KEY, applied_at TIMESTAMPTZ NOT NULL DEFAULT NOW());"
     )
     port.commit()
 
@@ -46,6 +42,7 @@ def apply_postgres_migrations(dsn: str, *, base: Path | None = None) -> tuple[Po
         raise RuntimeError("postgres_migrations_missing")
     results: list[PostgresMigrationResult] = []
     with PostgresPort(dsn, application_name="businesaios-postgres-migrations") as port:
+        port.execute("SELECT pg_advisory_lock(hashtext(%s));", ("businesaios:postgres-migrations:v1",))
         _ensure_schema_migrations(port)
         applied = _applied_file_migrations(port)
         for path in files:
@@ -54,10 +51,8 @@ def apply_postgres_migrations(dsn: str, *, base: Path | None = None) -> tuple[Po
                 results.append(PostgresMigrationResult(migration_file=path.name, applied=False))
                 continue
             port.execute(path.read_text(encoding="utf-8"))
-            port.execute(
-                "INSERT INTO schema_migrations (migration_id) VALUES (%s) ON CONFLICT (migration_id) DO NOTHING;",
-                (file_id,),
-            )
+            port.execute("INSERT INTO schema_migrations (migration_id) VALUES (%s) "
+                         "ON CONFLICT (migration_id) DO NOTHING;", (file_id,))
             port.commit()
             applied.add(file_id)
             results.append(PostgresMigrationResult(migration_file=path.name, applied=True))
