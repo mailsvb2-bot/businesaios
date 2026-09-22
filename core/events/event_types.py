@@ -116,6 +116,10 @@ PROVIDER_CREATED = "provider.created"
 PROVIDER_UPDATED = "provider.updated"
 OFFER_CREATED = "offer.created"
 OFFER_UPDATED = "offer.updated"
+ACTION_AUTHORIZED = "action.authorized"
+ACTION_EXECUTED = "action.executed"
+ACTION_FAILED = "action.failed"
+ACTION_AMBIGUOUS = "action.ambiguous"
 
 DECISION_ISSUED = "decision_issued"
 DECISION_EXECUTED = "decision_executed"
@@ -276,6 +280,10 @@ KNOWN_EVENT_TYPES: set[str] = {
     PROVIDER_UPDATED,
     OFFER_CREATED,
     OFFER_UPDATED,
+    ACTION_AUTHORIZED,
+    ACTION_EXECUTED,
+    ACTION_FAILED,
+    ACTION_AMBIGUOUS,
     DECISION_ISSUED,
     DECISION_EXECUTED,
     DECISION_BLOCKED,
