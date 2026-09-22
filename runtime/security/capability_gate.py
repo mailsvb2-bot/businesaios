@@ -79,5 +79,14 @@ class GuardedEffectsPort(EffectsPort):
     def poll_visual_creative(self, **kwargs):  # type: ignore[override]
         return self._forward("poll_visual_creative", **kwargs)
 
+    def enqueue_evolution_job(self, **kwargs):  # type: ignore[override]
+        return self._forward("enqueue_evolution_job", **kwargs)
+
+    def suggest_offer_patch(self, **kwargs):  # type: ignore[override]
+        return self._forward("suggest_offer_patch", **kwargs)
+
+    def apply_offer_patch(self, **kwargs):  # type: ignore[override]
+        return self._forward("apply_offer_patch", **kwargs)
+
 
 __all__ = ["GuardedEffectsPort", "set_effect_capability", "clear_effect_capability"]

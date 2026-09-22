@@ -351,6 +351,7 @@ class Effects(
 ):
     event_log: Any
     policy_registry: Any
+    event_store: Any | None = None
     delivery_state: DeliveryState | None = None
     payment_outbox: Any | None = None
     ledger: Any | None = None

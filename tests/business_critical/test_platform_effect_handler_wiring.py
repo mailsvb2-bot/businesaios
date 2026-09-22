@@ -8,10 +8,16 @@ from core.actions.catalog import build_catalog
 from runtime.boot.actions_registry import INLINE_ALLOWLIST, get_spec
 from runtime.boot.handler_groups.ops import register_ops_handlers
 from runtime.effects import registry as legacy_effect_registry
+from runtime.execution import executor_state as executor_state_module
 from runtime.handlers import ActionHandlerRegistry
 from runtime.handlers.platform_effects import (
     handle_apply_offer_patch,
     handle_suggest_offer_patch,
+)
+from runtime.security.capability_gate import (
+    GuardedEffectsPort,
+    clear_effect_capability,
+    set_effect_capability,
 )
 
 
@@ -199,3 +205,68 @@ def test_legacy_parallel_effect_registry_is_removed_fail_closed() -> None:
         match="LEGACY_EFFECT_ACTION_REGISTRY_REMOVED",
     ):
         legacy_effect_registry.build_registry(object())
+
+
+@pytest.mark.lock
+def test_guarded_platform_effects_forward_to_real_implementation() -> None:
+    class Impl:
+        def __init__(self) -> None:
+            self.calls: list[tuple[str, dict]] = []
+
+        def enqueue_evolution_job(self, **kwargs):
+            self.calls.append(("enqueue_evolution_job", dict(kwargs)))
+            return {"ok": True}
+
+        def suggest_offer_patch(self, **kwargs):
+            self.calls.append(("suggest_offer_patch", dict(kwargs)))
+            return {"ok": True}
+
+        def apply_offer_patch(self, **kwargs):
+            self.calls.append(("apply_offer_patch", dict(kwargs)))
+            return {"ok": True}
+
+    impl = Impl()
+    guarded = GuardedEffectsPort("platform-token", impl)
+    set_effect_capability("platform-token")
+    try:
+        assert guarded.enqueue_evolution_job(job_kind="audit") == {"ok": True}
+        assert guarded.suggest_offer_patch(offer_id="offer-1") == {"ok": True}
+        assert guarded.apply_offer_patch(offer_id="offer-1") == {"ok": True}
+    finally:
+        clear_effect_capability()
+
+    assert [name for name, _ in impl.calls] == [
+        "enqueue_evolution_job",
+        "suggest_offer_patch",
+        "apply_offer_patch",
+    ]
+
+
+@pytest.mark.lock
+def test_executor_effects_bundle_carries_canonical_event_store(monkeypatch) -> None:
+    class Impl:
+        def __init__(self, **kwargs) -> None:
+            self.kwargs = dict(kwargs)
+
+    canonical_event_store = object()
+    monkeypatch.setattr(executor_state_module, "load_effects_impl", lambda: Impl)
+    infra = SimpleNamespace(
+        delivery_state=object(),
+        decision_ledger=object(),
+        payments_outbox=object(),
+        telegram_outbound_queue=object(),
+        settings_store=object(),
+        messaging_policy_store=object(),
+        messaging_policy_reader=object(),
+        http_transport=object(),
+        effect_router=object(),
+        event_store=canonical_event_store,
+    )
+
+    bundle = executor_state_module.build_executor_effects_bundle(
+        event_log=object(),
+        policy_registry=object(),
+        infra=infra,
+    )
+
+    assert bundle.effects.impl.kwargs["event_store"] is canonical_event_store
