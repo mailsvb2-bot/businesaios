@@ -181,6 +181,13 @@ def create_fastapi_app(*, application_service: object, dependency_container: obj
         try:
             yield
         finally:
+            container_shutdown = (
+                getattr(dependency_container, "shutdown", None)
+                if dependency_container is not None
+                else None
+            )
+            if callable(container_shutdown):
+                container_shutdown()
             boot_result = (getattr(dependency_container, 'boot_result', None)
                            if dependency_container is not None else None)
             runtime_infra = getattr(boot_result, 'runtime_infra', None) if boot_result is not None else None

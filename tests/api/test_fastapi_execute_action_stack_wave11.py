@@ -14,6 +14,7 @@ from interfaces.api.fastapi_router_adapter import create_api_router
 from observability.action_audit_log import ActionAuditLog
 from observability.decision_audit_log import DecisionAuditLog
 from observability.metrics import InMemoryMetrics
+from runtime.platform.event_store.memory_event_store import MemoryEventStore
 from tenancy.tenant_policy_store import InMemoryTenantPolicyStore
 from tenancy.tenant_quota_guard import TenantQuotaGuard
 from tenancy.tenant_registry import InMemoryTenantRegistry
@@ -62,6 +63,7 @@ def _secure_headers(raw_key: str, *, idempotency_key: str, action_id: str) -> di
 class _Service:
     def __init__(self) -> None:
         self.calls = 0
+        self.event_store = MemoryEventStore()
 
     def execute_action(self, action, **kwargs):
         self.calls += 1
@@ -193,6 +195,7 @@ def test_fastapi_execute_action_replay_does_not_fail_when_quota_is_exhausted_aft
 class _RuntimeInfraStub:
     action_audit_log: ActionAuditLog = field(default_factory=ActionAuditLog)
     decision_audit_log: DecisionAuditLog = field(default_factory=DecisionAuditLog)
+    event_store: object = field(default_factory=MemoryEventStore)
 
 
 @dataclass(frozen=True)

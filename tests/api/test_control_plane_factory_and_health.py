@@ -8,6 +8,7 @@ from interfaces.api.fastapi_app_factory import create_fastapi_app
 from interfaces.api.fastapi_dependencies import FastAPIDependencyContainer
 from interfaces.api.health_handler import HealthHandler
 from observability.metrics import InMemoryMetrics
+from runtime.platform.event_store.memory_event_store import MemoryEventStore
 from tests.api._authenticated_command_fixture import build_authenticated_command_binding
 
 
@@ -24,6 +25,9 @@ class _BootResultStub:
 
 
 class _AppService:
+    def __init__(self) -> None:
+        self.event_store = MemoryEventStore()
+
     def startup_audit_events(self):
         return ('boot:ok',)
 

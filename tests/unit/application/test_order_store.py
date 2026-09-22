@@ -4,12 +4,22 @@ from datetime import UTC, datetime, timedelta
 
 import pytest
 
+from contracts.event_store import canonical_business_event_contract
 from contracts.order import Order, OrderLifecycleStatus, OrderNotFound
+from core.events.event_types import ORDER_CANCELLED, ORDER_CREATED, ORDER_UPDATED
 from lead_outcomes.client_outcome_contract import ClientOutcomeOrder, ClientOutcomePackage
+from lead_outcomes.client_outcome_order_factory import ClientOutcomeOrderFactory
 from lead_outcomes.client_outcome_order_store import (
+    ClientOutcomeOrderPersistenceService,
     ClientOutcomeOrderStore,
     OrderStore,
 )
+from lead_outcomes.client_outcome_package_catalog import ClientOutcomePackageCatalog
+from lead_outcomes.client_outcome_selection_service import (
+    ClientOutcomeSelectionInput,
+    ClientOutcomeSelectionService,
+)
+from runtime.platform.event_store.memory_event_store import MemoryEventStore
 
 
 class MemoryBackend:
@@ -183,3 +193,203 @@ def test_legacy_namespace_migrates_once_and_detects_later_divergence() -> None:
             backend=canonical_backend,
             legacy_backend=legacy_backend,
         )
+
+def test_legacy_order_migration_backfills_event_spine_idempotently() -> None:
+    canonical_backend = MemoryBackend()
+    legacy_backend = MemoryBackend()
+    events = MemoryEventStore()
+    legacy_order = _client_order(order_id="legacy-event-order")
+    legacy_backend.replace(legacy_order.order_id, _legacy_payload(legacy_order))
+
+    ClientOutcomeOrderStore(
+        backend=canonical_backend,
+        legacy_backend=legacy_backend,
+        event_store=events,
+    )
+    rows = list(
+        events.iter_events(
+            tenant_id=legacy_order.tenant_id,
+            start_ms=0,
+            event_type=ORDER_CREATED,
+        )
+    )
+    assert len(rows) == 1
+
+    ClientOutcomeOrderStore(
+        backend=canonical_backend,
+        legacy_backend=legacy_backend,
+        event_store=events,
+    )
+    rows = list(
+        events.iter_events(
+            tenant_id=legacy_order.tenant_id,
+            start_ms=0,
+            event_type=ORDER_CREATED,
+        )
+    )
+    assert len(rows) == 1
+
+
+def test_existing_canonical_order_gets_event_when_legacy_migration_is_attached() -> None:
+    canonical_backend = MemoryBackend()
+    legacy_backend = MemoryBackend()
+    events = MemoryEventStore()
+    legacy_order = _client_order(order_id="precanonical-event-order")
+    ClientOutcomeOrderStore(backend=canonical_backend).save(legacy_order)
+    legacy_backend.replace(legacy_order.order_id, _legacy_payload(legacy_order))
+
+    ClientOutcomeOrderStore(
+        backend=canonical_backend,
+        legacy_backend=legacy_backend,
+        event_store=events,
+    )
+    rows = list(
+        events.iter_events(
+            tenant_id=legacy_order.tenant_id,
+            start_ms=0,
+            event_type=ORDER_CREATED,
+        )
+    )
+    assert len(rows) == 1
+
+
+class _FailEventTypeStore:
+    def __init__(self, event_type: str) -> None:
+        self.inner = MemoryEventStore()
+        self.event_type = event_type
+        self.fail_once = True
+
+    def append_event(self, event) -> None:
+        if self.fail_once and str(event.get("event_type") or "") == self.event_type:
+            self.fail_once = False
+            raise RuntimeError("simulated order event append failure")
+        self.inner.append_event(event)
+
+    def iter_events(self, **kwargs):
+        return self.inner.iter_events(**kwargs)
+
+
+def test_order_event_spine_projects_create_update_and_terminal_without_pii_metadata() -> None:
+    events = MemoryEventStore()
+    store = OrderStore(backend=MemoryBackend(), event_store=events)
+    order = _client_order(order_id="spine-order")
+    store.save(order)
+
+    created_rows = list(
+        events.iter_events(tenant_id=order.tenant_id, start_ms=0, event_type=ORDER_CREATED)
+    )
+    assert len(created_rows) == 1
+    created = canonical_business_event_contract(created_rows[0])
+    assert created["business_id"] == order.business_id
+    assert created["payload"]["order_id"] == order.order_id
+    assert "metadata" not in created["payload"]
+    assert "specialization" not in created["payload"]
+
+    amended_at = order.created_at + timedelta(days=1)
+    amended = store.amend_order(
+        now=amended_at,
+        order_id=order.order_id,
+        package=_package("clients-10"),
+        metadata={"amendment_fingerprint": "event-spine-amend"},
+    )
+    assert amended is not None
+    updated_rows = list(
+        events.iter_events(tenant_id=order.tenant_id, start_ms=0, event_type=ORDER_UPDATED)
+    )
+    assert len(updated_rows) == 1
+    updated = canonical_business_event_contract(updated_rows[0])
+    assert updated["payload"]["specialization"]["package_id"] == "clients-10"
+    assert "price_per_verified_client" not in updated["payload"]["specialization"]
+    assert "metadata" not in updated["payload"]["specialization"]
+
+    canonical = store.get_canonical_order(order.order_id)
+    store.transition_order(
+        order_id=order.order_id,
+        tenant_id=order.tenant_id,
+        business_id=order.business_id,
+        lifecycle_status=OrderLifecycleStatus.CANCELLED,
+        occurred_at_ms=canonical.updated_at_ms + 1,
+    )
+    cancelled_rows = list(
+        events.iter_events(tenant_id=order.tenant_id, start_ms=0, event_type=ORDER_CANCELLED)
+    )
+    assert len(cancelled_rows) == 1
+    cancelled = canonical_business_event_contract(cancelled_rows[0])
+    assert cancelled["payload"]["lifecycle_status"] == OrderLifecycleStatus.CANCELLED.value
+
+
+def test_order_event_spine_create_retry_repairs_store_to_event_crash_window() -> None:
+    backend = MemoryBackend()
+    events = _FailEventTypeStore(ORDER_CREATED)
+    store = OrderStore(backend=backend, event_store=events)
+    order = Order(
+        order_id="repair-create",
+        tenant_id="tenant-1",
+        business_id="business-1",
+        order_kind="generic",
+        created_at_ms=100,
+        updated_at_ms=100,
+    )
+
+    with pytest.raises(RuntimeError, match="simulated order event append failure"):
+        store.create_order(order)
+    assert store.get_canonical_order(order.order_id) == order
+
+    assert store.create_order(order) == order
+    rows = list(
+        events.iter_events(tenant_id=order.tenant_id, start_ms=0, event_type=ORDER_CREATED)
+    )
+    assert len(rows) == 1
+
+
+def test_duplicate_amendment_retry_repairs_missing_order_update_event() -> None:
+    events = _FailEventTypeStore(ORDER_UPDATED)
+    store = OrderStore(backend=MemoryBackend(), event_store=events)
+    catalog = ClientOutcomePackageCatalog.default_catalog()
+    service = ClientOutcomeSelectionService(
+        package_catalog=catalog,
+        order_factory=ClientOutcomeOrderFactory(package_catalog=catalog),
+        persistence_service=ClientOutcomeOrderPersistenceService(store=store),
+    )
+    created = service.create_order(
+        now=datetime(2026, 9, 1, 12, 0, tzinfo=UTC),
+        request=ClientOutcomeSelectionInput(
+            tenant_id="tenant-1",
+            business_id="business-1",
+            package_id="clients-1",
+        ),
+    )
+    request = ClientOutcomeSelectionInput(
+        tenant_id="tenant-1",
+        business_id="business-1",
+        package_id="clients-5",
+    )
+
+    with pytest.raises(RuntimeError, match="simulated order event append failure"):
+        service.amend(
+            now=datetime(2026, 9, 2, 12, 0, tzinfo=UTC),
+            order_id=created.order.order_id,
+            request=request,
+        )
+
+    repaired = service.amend(
+        now=datetime(2026, 9, 2, 12, 0, tzinfo=UTC),
+        order_id=created.order.order_id,
+        request=request,
+    )
+    assert repaired is not None
+    assert repaired.order.package.package_id == "clients-5"
+    rows = list(
+        events.iter_events(
+            tenant_id="tenant-1",
+            start_ms=0,
+            event_type=ORDER_UPDATED,
+        )
+    )
+    assert len(rows) == 1
+
+
+def test_order_store_can_fail_closed_when_event_spine_is_required() -> None:
+    with pytest.raises(RuntimeError, match="ORDER_EVENT_STORE_REQUIRED"):
+        OrderStore(require_event_spine=True)
+

@@ -5,6 +5,7 @@ from types import SimpleNamespace
 
 from interfaces.api.runtime_api_bundle import build_runtime_api_bundle
 from observability.action_audit_log import ActionAuditLog
+from runtime.platform.event_store.memory_event_store import MemoryEventStore
 from observability.decision_audit_log import DecisionAuditLog
 from observability.metrics import InMemoryMetrics
 
@@ -55,9 +56,13 @@ class _ContainerStub:
     boot_result: object
     tenant_quota_guard: object | None = None
     api_idempotency_store: object | None = None
+    event_store: object = field(default_factory=MemoryEventStore)
 
     def decision_command_binding(self):
         return _Binding()
+
+    def canonical_business_event_store(self):
+        return self.event_store
 
 
 def test_runtime_api_bundle_builds_shared_runtime_adapter_and_handlers() -> None:

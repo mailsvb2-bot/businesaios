@@ -74,13 +74,20 @@ class ClientOutcomeRouteHandlers:
     tenant_metrics_registry: TenantMetricsRegistry
 
 
-def build_client_outcome_route_handlers(*, headless_handlers: object | None = None) -> ClientOutcomeRouteHandlers:
+def build_client_outcome_route_handlers(
+    *,
+    headless_handlers: object | None = None,
+    event_store: object | None = None,
+    require_order_event_spine: bool = False,
+) -> ClientOutcomeRouteHandlers:
     persistence = ClientOutcomePersistenceOwner.default()
     package_catalog = ClientOutcomePackageCatalog.default_catalog()
     order_factory = ClientOutcomeOrderFactory(package_catalog=package_catalog)
     order_store = ClientOutcomeOrderStore(
         backend=persistence.registry('order'),
         legacy_backend=persistence.registry('client_outcome_order'),
+        event_store=event_store,
+        require_event_spine=require_order_event_spine,
     )
     dispute_store = ClientOutcomeDisputeStore(backend=persistence.registry('client_outcome_dispute'))
     reversal_store = ClientOutcomeReversalStore(

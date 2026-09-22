@@ -7,6 +7,7 @@ from pathlib import Path
 from canon.business_ontology_inventory import OwnershipAuditStatus, ontology_ownership_by_entity
 from contracts.order import CANON_ORDER_CONTRACT, Order
 from lead_outcomes.client_outcome_order_store import (
+    CANON_ORDER_EVENT_SPINE_PROJECTION,
     CANON_ORDER_LIFECYCLE_OWNER,
     ClientOutcomeOrderStore,
     OrderStore,
@@ -37,6 +38,7 @@ def test_order_inventory_names_one_owner_and_storage() -> None:
     row = ontology_ownership_by_entity()["Order"]
     assert CANON_ORDER_CONTRACT is True
     assert CANON_ORDER_LIFECYCLE_OWNER is True
+    assert CANON_ORDER_EVENT_SPINE_PROJECTION is True
     assert row.status is OwnershipAuditStatus.DONE
     assert row.authoritative_module == "contracts.order"
     assert row.storage_owner == "runtime.platform.client_outcome_persistence"
@@ -86,6 +88,8 @@ def test_client_outcome_runtime_wires_canonical_and_legacy_namespaces() -> None:
     )
     assert "backend=persistence.registry('order')" in wiring
     assert "legacy_backend=persistence.registry('client_outcome_order')" in wiring
+    assert "event_store=event_store" in wiring
+    assert "require_event_spine=require_order_event_spine" in wiring
 
 
 def test_legacy_backend_is_read_only_migration_source() -> None:

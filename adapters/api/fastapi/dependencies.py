@@ -139,6 +139,18 @@ class FastAPIDependencyContainer:
         report = getattr(self.boot_result, 'startup_report', ()) or ()
         return tuple(str(item) for item in report)
 
+    def canonical_business_event_store(self) -> object | None:
+        shared = self._shared("canonical_business_event_store")
+        if shared is not None:
+            return shared
+        store = getattr(_resolve_runtime_infra(self.boot_result), "event_store", None)
+        return store if store is not None else getattr(self.boot_result.decision_application, "event_store", None)
+
+    def shutdown(self) -> None:
+        close = getattr(self._shared("canonical_business_event_store_stack"), "close", None)
+        if callable(close):
+            close()
+
     def request_context(
         self,
         headers: Mapping[str, Any] | None = None,

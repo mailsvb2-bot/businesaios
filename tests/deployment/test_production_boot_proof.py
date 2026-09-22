@@ -199,6 +199,10 @@ class _ProofApplicationService:
         self._outbox = outbox
         self._payment_outbox = payment_outbox
 
+    @property
+    def event_store(self):
+        return self._event_store
+
     def startup_audit_events(self) -> tuple[str, ...]:
         return ('boot:prod', 'storage:postgres', 'migrations:ready')
 

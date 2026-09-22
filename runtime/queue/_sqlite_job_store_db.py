@@ -21,10 +21,19 @@ TERMINAL_REPLACEABLE_DEDUPE_STATES = {
 }
 
 
-def connect_sqlite_job_store(*, path: Path, busy_timeout_ms: int) -> sqlite3.Connection:
+def connect_sqlite_job_store(
+    *,
+    path: Path,
+    busy_timeout_ms: int,
+    configure_journal_mode: bool = False,
+) -> sqlite3.Connection:
     db = sqlite3.connect(path, timeout=max(0.1, busy_timeout_ms / 1000.0), check_same_thread=False)
     db.row_factory = sqlite3.Row
-    configure_sqlite(db, prod=is_prod_env())
+    configure_sqlite(
+        db,
+        prod=is_prod_env(),
+        configure_journal_mode=bool(configure_journal_mode),
+    )
     db.execute(f"PRAGMA busy_timeout={busy_timeout_ms};")
     return db
 
@@ -50,8 +59,38 @@ def sqlite_job_store_tx(*, path: Path, busy_timeout_ms: int):
         db.close()
 
 
+def _schema_is_current(db: sqlite3.Connection) -> bool:
+    try:
+        row = db.execute(
+            "SELECT value FROM runtime_queue_meta WHERE key = 'schema_version' LIMIT 1"
+        ).fetchone()
+        if row is None or str(row[0]) != str(SCHEMA_VERSION):
+            return False
+        existing = {
+            item[1]
+            for item in db.execute("PRAGMA table_info(runtime_queue_jobs)").fetchall()
+        }
+    except sqlite3.DatabaseError:
+        return False
+    required = {
+        "lease_fencing_token",
+        "claim_token_counter",
+        "claim_expiry_policy",
+    }
+    return required.issubset(existing)
+
+
 def init_sqlite_job_store_schema(*, path: Path, busy_timeout_ms: int) -> None:
-    with connect_sqlite_job_store(path=path, busy_timeout_ms=busy_timeout_ms) as db:
+    with connect_sqlite_job_store(
+        path=path,
+        busy_timeout_ms=busy_timeout_ms,
+        configure_journal_mode=True,
+    ) as db:
+        # Worker processes open the same durable queue repeatedly. Once schema v3
+        # and WAL are established, keep startup read-only instead of taking
+        # needless schema/meta write locks in every process.
+        if _schema_is_current(db):
+            return
         db.executescript(
             """
             CREATE TABLE IF NOT EXISTS runtime_queue_meta (key TEXT PRIMARY KEY, value TEXT NOT NULL);

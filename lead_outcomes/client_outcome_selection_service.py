@@ -79,6 +79,7 @@ class ClientOutcomeSelectionService:
         fingerprint = amendment_fingerprint(order_id=order_id, package_id=package.package_id, requested_clients=package.requested_clients)
         existing_fingerprints = tuple(str(item) for item in (current.metadata.get('amendment_fingerprints') or ()))
         if fingerprint in existing_fingerprints:
+            self.persistence_service.repair_event_spine(order_id)
             return ClientOutcomeSelectionResult(order=current, selection_mode=selection_mode, requested_clients=current.package.requested_clients, package_id=current.package.package_id)
 
         metadata = _safe_dict(request.metadata)
