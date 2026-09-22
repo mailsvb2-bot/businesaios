@@ -481,7 +481,11 @@ def build_business_autonomy_admin_dependencies(*, event_store: Any | None = None
         'onboarding': onboarding,
         'connector_secret_scope': ConnectorSecretScope(),
         'secret_vault': build_default_secret_vault(),
-        'activation_store': FileProviderActivationStore(distributed['documents']),
+        'activation_store': FileProviderActivationStore(
+            distributed['documents'],
+            event_store=event_store,
+            require_event_spine=require_business_event_spine,
+        ),
     }
 
 

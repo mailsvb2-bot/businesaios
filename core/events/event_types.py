@@ -112,6 +112,8 @@ ORDER_UPDATED = "order.updated"
 ORDER_FULFILLED = "order.fulfilled"
 ORDER_CANCELLED = "order.cancelled"
 ORDER_ARCHIVED = "order.archived"
+PROVIDER_CREATED = "provider.created"
+PROVIDER_UPDATED = "provider.updated"
 
 DECISION_ISSUED = "decision_issued"
 DECISION_EXECUTED = "decision_executed"
@@ -268,6 +270,8 @@ KNOWN_EVENT_TYPES: set[str] = {
     ORDER_FULFILLED,
     ORDER_CANCELLED,
     ORDER_ARCHIVED,
+    PROVIDER_CREATED,
+    PROVIDER_UPDATED,
     DECISION_ISSUED,
     DECISION_EXECUTED,
     DECISION_BLOCKED,
