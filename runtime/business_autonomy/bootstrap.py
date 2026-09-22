@@ -13,9 +13,11 @@ from application.business_autonomy.adapters.ads_production_adapters import (
     MetaAdsProductionAdapter,
     TiktokAdsProductionAdapter,
 )
-from application.business_autonomy.adapters.api_business_adapter import ApiBusinessChannelAdapter
-from application.business_autonomy.adapters.backoffice_adapter import BackofficeChannelAdapter
-from application.business_autonomy.adapters.campaign_ads_adapter import CampaignAdsChannelAdapter
+from application.business_autonomy.adapters import (
+    api_business_adapter,
+    backoffice_adapter,
+    campaign_ads_adapter,
+)
 from application.business_autonomy.adapters.chatbot_adapter import ChatbotChannelAdapter
 from application.business_autonomy.adapters.commerce_adapter import CommerceChannelAdapter
 from application.business_autonomy.adapters.commerce_production_adapters import (
@@ -48,7 +50,7 @@ from application.business_autonomy.business_connector_framework import (
 )
 from application.business_autonomy.channel_adapter_registry import TypedChannelAdapterRegistry
 from application.business_autonomy.channel_backed_adapter import ChannelBackedBusinessAdapter
-from application.business_autonomy.channel_contracts import ChannelIdentity, ChannelKind
+from application.business_autonomy.channel_contracts import ChannelExecutionEnvelope, ChannelIdentity, ChannelKind
 from application.business_autonomy.contracts import (
     BusinessExecutionRequest,
     BusinessExecutionResult,
@@ -56,11 +58,13 @@ from application.business_autonomy.contracts import (
     IntegrationMode,
 )
 from application.business_autonomy.distributed_capability_trust_registry import DistributedBusinessRegistry
+from application.business_autonomy.evidence_projection import ExternalBusinessFactIngress
 from application.business_autonomy.guarded_service import BusinessAutonomyGuardedService
 from application.business_autonomy.non_ai_onboarding_mode import NonAiOperatingMode
 from application.business_autonomy.onboarding_contract import BusinessOnboardingRequest
 from application.business_autonomy.operator_admin_plane import UnifiedOperatorAdminPlane
 from application.business_autonomy.persistence import (
+    business_autonomy_runtime_dir,
     PersistentBusinessApprovalGate,
     PersistentBusinessAutonomyIdempotencyStore,
     PersistentBusinessOperatorOverridePolicy,
@@ -104,6 +108,7 @@ from runtime.business_autonomy.sqlite_distributed_state import (
     SQLiteRegionRouteState,
     SQLiteStateDatabase,
 )
+from runtime.state import FileStateSnapshotStore, StateSynthesisEngine
 from security.connector_secret_scope import ConnectorSecretScope
 from security.secret_vault import build_default_secret_vault
 from storage.distributed_evidence_audit_backend import DistributedGovernanceAuditLog
@@ -359,9 +364,63 @@ class CompositePlanningMemorySink:
 
 
 class RequestScopedBusinessAutonomyGuardedService(BusinessAutonomyGuardedService):
-    def __init__(self, *, ensure_scope, **kwargs: Any) -> None:
+    def __init__(self, *, ensure_scope, ensure_scope_for=None, **kwargs: Any) -> None:
         super().__init__(**kwargs)
         self._ensure_scope = ensure_scope
+        self._ensure_scope_for = ensure_scope_for
+        self._external_business_fact_ingress = None
+
+    async def read_external_business_fact(
+        self,
+        *,
+        transport: Any,
+        tenant_id: str,
+        business_id: str,
+        route_key: str = "external-business-read",
+        payload: Mapping[str, Any] | None = None,
+        correlation_id: str | None = None,
+        recorded_at_ms: int | None = None,
+    ):
+        if self._ensure_scope_for is None or self._external_business_fact_ingress is None:
+            raise RuntimeError("external business read ingress is not configured")
+        tenant = str(tenant_id or "").strip()
+        scoped_business_id = str(business_id or "").strip()
+        if not tenant or not scoped_business_id:
+            raise ValueError("tenant_id and business_id are required")
+        self._ensure_scope_for(
+            tenant_id=tenant,
+            scoped_business_id=scoped_business_id,
+            requested_by="external-business-read",
+            envelope_metadata={"tenant_id": tenant, "read_only": True},
+        )
+        identity = self._distributed_business_registry.channel_identity_snapshot(
+            tenant_id=tenant,
+            business_id=scoped_business_id,
+        )
+        resolved = self._typed_channel_registry.resolve(identity)
+        read_capabilities = tuple(
+            item
+            for item in resolved.adapter.discover_capabilities(identity=identity)
+            if item.capability_key == "api.read_model"
+            and "api_read" in item.action_types
+            and not item.write_enabled
+        )
+        if not read_capabilities:
+            raise ValueError("registered external business adapter has no read-only api.read_model capability")
+        envelope = ChannelExecutionEnvelope(
+            identity=identity,
+            route_key=str(route_key or "").strip() or "external-business-read",
+            operation="api_read",
+            payload=dict(payload or {}),
+            metadata={"read_only": True},
+        )
+        return await self._external_business_fact_ingress.read_and_ingest(
+            transport=transport,
+            identity=identity,
+            envelope=envelope,
+            correlation_id=correlation_id,
+            recorded_at_ms=recorded_at_ms,
+        )
 
     async def execute(self, request: BusinessExecutionRequest):
         try:
@@ -500,7 +559,7 @@ def _build_typed_channel_registry() -> TypedChannelAdapterRegistry:
         WebsiteChannelAdapter(),
         WebflowProductionAdapter(),
         WordpressProductionAdapter(),
-        ApiBusinessChannelAdapter(),
+        api_business_adapter.ApiBusinessChannelAdapter(),
         CommerceChannelAdapter(),
         ShopifyProductionAdapter(),
         WooCommerceProductionAdapter(),
@@ -509,10 +568,10 @@ def _build_typed_channel_registry() -> TypedChannelAdapterRegistry:
         EtsyMarketplaceProductionAdapter(),
         WildberriesMarketplaceProductionAdapter(),
         OzonMarketplaceProductionAdapter(),
-        BackofficeChannelAdapter(),
+        backoffice_adapter.BackofficeChannelAdapter(),
         CallTrackingProductionAdapter(),
         HubSpotProductionAdapter(),
-        CampaignAdsChannelAdapter(),
+        campaign_ads_adapter.CampaignAdsChannelAdapter(),
         MetaAdsProductionAdapter(),
         GoogleAdsProductionAdapter(),
         TiktokAdsProductionAdapter(),
@@ -676,6 +735,7 @@ def build_business_autonomy_guarded_service(*, business_id: str = 'external_busi
 
     service = RequestScopedBusinessAutonomyGuardedService(
         ensure_scope=ensure_scope,
+        ensure_scope_for=ensure_scope_for,
         business_id=business_id,
         autonomy_service=autonomy_service,
         trust_policy=BusinessTrustPolicy(trust_registry),
@@ -706,6 +766,14 @@ def build_business_autonomy_guarded_service(*, business_id: str = 'external_busi
     )
     service._ontology_event_store = ontology_event_store
     service._ontology_event_store_stack = ontology_event_store_stack
+    service._external_business_fact_ingress = ExternalBusinessFactIngress(
+        event_store=ontology_event_store,
+        evidence_store=distributed['evidence'],
+        state_engine=StateSynthesisEngine(
+            snapshot_store=FileStateSnapshotStore(business_autonomy_runtime_dir() / 'state')
+        ),
+        idempotency_store=distributed['idempotency'],
+    )
     if ontology_event_store_stack is not None:
         service._ontology_event_store_finalizer = weakref.finalize(
             ontology_event_store, ontology_event_store_stack.close

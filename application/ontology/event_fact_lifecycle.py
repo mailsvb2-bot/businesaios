@@ -61,6 +61,38 @@ def assert_canonical_event_metadata(
         raise ValueError("canonical event metadata conflicts with durable fact")
 
 
+def business_fact_from_event(event: dict[str, Any]) -> BusinessFactV1:
+    envelope = dict(event.get("payload") or {})
+    if (
+        str(event.get("event_type") or "") != BUSINESS_FACT_EVENT_TYPE
+        or int(envelope.get("schema_version") or 0) != 1
+    ):
+        raise ValueError("durable event is not BusinessFactV1")
+    def optional(value: object) -> str | None:
+        return None if value in (None, "") else str(value)
+
+    return BusinessFactV1(
+        fact_id=str(event.get("event_id") or ""),
+        tenant_id=str(event.get("tenant_id") or ""),
+        business_id=str(envelope.get("business_id") or ""),
+        fact_type=str(envelope.get("fact_type") or ""),
+        entity_id=str(envelope.get("entity_id") or ""),
+        event_time_ms=int(envelope.get("event_time_ms") or 0),
+        observed_at_ms=int(envelope.get("observed_at_ms") or 0),
+        recorded_at_ms=int(envelope.get("recorded_at_ms") or 0),
+        source=str(event.get("source") or ""),
+        payload=dict(envelope.get("payload") or {}),
+        provenance=dict(envelope.get("provenance") or {}),
+        supersedes_fact_id=optional(envelope.get("supersedes_fact_id")),
+        decision_id=optional(event.get("decision_id")),
+        correlation_id=optional(event.get("correlation_id")),
+        actor_id=optional(envelope.get("actor_id")),
+        agent_id=optional(envelope.get("agent_id")),
+        causation_id=optional(envelope.get("causation_id")),
+        evidence_ids=tuple(envelope.get("evidence_ids") or ()),
+    )
+
+
 class EventFactLifecycleWriter:
     """Shared durable mutation primitive for canonical ontology entities.
 
@@ -83,6 +115,25 @@ class EventFactLifecycleWriter:
         scope = build_idempotency_key(tenant_id=str(tenant_id), namespace=self._namespace, operation=str(operation), key=key, semantic_scope={"business_id": str(business_id), "entity_id": str(entity_id), "payload": dict(payload)})
         raw = "\0".join((str(tenant_id), str(business_id), str(entity_id), str(operation), key, str(scope.scope_hash))).encode("utf-8")
         return key, scope, f"{self._id_prefix}:{hashlib.sha256(raw).hexdigest()}"
+
+    def fact_id_for(
+        self,
+        *,
+        tenant_id: str,
+        business_id: str,
+        entity_id: str,
+        operation: str,
+        idempotency_key: str,
+        payload: dict[str, object],
+    ) -> str:
+        return self._scope(
+            tenant_id=tenant_id,
+            business_id=business_id,
+            entity_id=entity_id,
+            operation=operation,
+            idempotency_key=idempotency_key,
+            payload=payload,
+        )[2]
 
     def _find(self, *, tenant_id: str, fact_id: str) -> dict[str, Any] | None:
         for event in self._events.iter_events(tenant_id=str(tenant_id), start_ms=0, event_type=BUSINESS_FACT_EVENT_TYPE):
@@ -198,7 +249,7 @@ class EventFactLifecycleWriter:
             matched = event
         return matched
 
-    def append_transition_once(self, *, tenant_id: str, business_id: str, entity_id: str, expected_state_token: str, operation: str, idempotency_key: str, fact_type: str, payload: dict[str, object], occurred_at_ms: int, event_metadata: dict[str, object] | None = None) -> str:
+    def append_transition_once(self, *, tenant_id: str, business_id: str, entity_id: str, expected_state_token: str, operation: str, idempotency_key: str, fact_type: str, payload: dict[str, object], occurred_at_ms: int, observed_at_ms: int | None = None, event_metadata: dict[str, object] | None = None) -> str:
         state_token = str(expected_state_token or "").strip()
         if not state_token:
             raise ValueError("expected_state_token is required")
@@ -209,17 +260,17 @@ class EventFactLifecycleWriter:
         owner_id = f"ontology-transition:{self._id_prefix}:{guard.scope_hash}"
         decision = self._claims.reserve(key=guard, owner_id=owner_id, lease_ttl_seconds=300)
         if decision.resolution is IdempotencyResolution.REPLAY_COMPLETED:
-            fact_id = self.append_once(tenant_id=tenant_id, business_id=business_id, entity_id=entity_id, operation=operation, idempotency_key=user_key, fact_type=fact_type, payload=payload, occurred_at_ms=occurred_at_ms, event_metadata=event_metadata)
+            fact_id = self.append_once(tenant_id=tenant_id, business_id=business_id, entity_id=entity_id, operation=operation, idempotency_key=user_key, fact_type=fact_type, payload=payload, occurred_at_ms=occurred_at_ms, observed_at_ms=observed_at_ms, event_metadata=event_metadata)
             if decision.replay_result_ref not in {None, fact_id}:
                 raise RuntimeError("ontology transition guard points to a different durable fact")
             return fact_id
         if decision.resolution is not IdempotencyResolution.ACCEPTED:
             raise RuntimeError(f"ontology transition rejected: {decision.resolution.value}")
-        fact_id = self.append_once(tenant_id=tenant_id, business_id=business_id, entity_id=entity_id, operation=operation, idempotency_key=user_key, fact_type=fact_type, payload=payload, occurred_at_ms=occurred_at_ms, event_metadata=event_metadata)
+        fact_id = self.append_once(tenant_id=tenant_id, business_id=business_id, entity_id=entity_id, operation=operation, idempotency_key=user_key, fact_type=fact_type, payload=payload, occurred_at_ms=occurred_at_ms, observed_at_ms=observed_at_ms, event_metadata=event_metadata)
         self._claims.mark_completed(key=guard, owner_id=owner_id, result_ref=fact_id, result_digest=str(guard.scope_hash))
         return fact_id
 
-    def append_once(self, *, tenant_id: str, business_id: str, entity_id: str, operation: str, idempotency_key: str, fact_type: str, payload: dict[str, object], occurred_at_ms: int, event_metadata: dict[str, object] | None = None) -> str:
+    def append_once(self, *, tenant_id: str, business_id: str, entity_id: str, operation: str, idempotency_key: str, fact_type: str, payload: dict[str, object], occurred_at_ms: int, observed_at_ms: int | None = None, event_metadata: dict[str, object] | None = None) -> str:
         metadata = _event_metadata(event_metadata)
         _, scope, fact_id = self._scope(tenant_id=tenant_id, business_id=business_id, entity_id=entity_id, operation=operation, idempotency_key=idempotency_key, payload=payload)
         if self.repair_existing(tenant_id=tenant_id, business_id=business_id, entity_id=entity_id, operation=operation, idempotency_key=idempotency_key, fact_type=fact_type, payload=payload, event_metadata=metadata):
@@ -230,7 +281,8 @@ class EventFactLifecycleWriter:
             raise RuntimeError("ontology idempotency claim completed without durable fact")
         if decision.resolution is not IdempotencyResolution.ACCEPTED:
             raise RuntimeError(f"ontology mutation rejected: {decision.resolution.value}")
-        event = BusinessFactV1(fact_id=fact_id, tenant_id=str(tenant_id), business_id=str(business_id), fact_type=str(fact_type), entity_id=str(entity_id), event_time_ms=int(occurred_at_ms), observed_at_ms=int(occurred_at_ms), source=self._source, payload=dict(payload), **metadata).as_event()
+        observed = int(occurred_at_ms if observed_at_ms is None else observed_at_ms)
+        event = BusinessFactV1(fact_id=fact_id, tenant_id=str(tenant_id), business_id=str(business_id), fact_type=str(fact_type), entity_id=str(entity_id), event_time_ms=int(occurred_at_ms), observed_at_ms=observed, source=self._source, payload=dict(payload), **metadata).as_event()
         try:
             self._events.append_event(event)
         except Exception:
@@ -246,4 +298,10 @@ class EventFactLifecycleWriter:
         return fact_id
 
 
-__all__ = ["CANON_ONTOLOGY_EVENT_FACT_MUTATION", "EventFactLifecycleWriter", "assert_canonical_event_metadata", "canonical_event_metadata"]
+__all__ = [
+    "CANON_ONTOLOGY_EVENT_FACT_MUTATION",
+    "EventFactLifecycleWriter",
+    "assert_canonical_event_metadata",
+    "business_fact_from_event",
+    "canonical_event_metadata",
+]
