@@ -38,7 +38,8 @@ def test_headless_boot_reuses_canonical_event_store_for_outcome_chronology() -> 
     assert "del event_store" not in boot
     assert "event_store=event_store" in boot
     assert "event_store: Any | None = None" in contract
-    assert "event_store=event_store" in contract
+    assert "resolved_event_store = event_store" in contract
+    assert "event_store=resolved_event_store" in contract
     assert "BusinessOutcomeEventSpineProjector" in persistence
 
 

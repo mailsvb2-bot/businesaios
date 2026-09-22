@@ -188,11 +188,15 @@ class HeadlessExecutionContract:
         self._goal_evaluator = goal_evaluator or GoalEvaluator()
         self._goal_plan_memory_service = goal_plan_memory_service
         self._self_healing_retry_engine = self_healing_retry_engine or SelfHealingRetryEngine()
+        resolved_event_store = event_store
+        if resolved_event_store is None:
+            resolved_event_store = getattr(getattr(executor, "_runtime_infra", None), "event_store", None)
+        self._event_store = resolved_event_store
         self._evidence_persistence_service = evidence_persistence_service or EvidencePersistenceService(
             business_memory_store=business_memory,
             business_memory_service=business_memory_service,
             evidence_store=evidence_store,
-            event_store=event_store,
+            event_store=resolved_event_store,
         )
         self._performance_feedback_learning_service = performance_feedback_learning_service
         self._capability_health_scoring_service = capability_health_scoring_service
