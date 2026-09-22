@@ -4,17 +4,57 @@ from typing import Any
 
 import yaml
 
-from runtime._internal.effects_actions.offer_patch_helpers import append_line, resolve_catalog_path
+from runtime._internal.effects_actions.offer_patch_helpers import (
+    append_line,
+    business_catalog_paths,
+    resolve_catalog_paths,
+)
 from runtime.platform.config.yaml_loader import load_yaml
 from runtime.tenancy import require_tenant_id
 
 
-def resolve_offer_catalog(*, tenant_id: str, product: str, env: str) -> tuple[str, Any]:
+def resolve_offer_catalog(
+    *,
+    tenant_id: str,
+    business_id: str,
+    product: str,
+    env: str,
+) -> tuple[str, Any]:
     tenant = require_tenant_id(tenant_id)
+    business = str(business_id or "").strip()
+    if not business:
+        raise RuntimeError("BUSINESS_ID_REQUIRED")
     prod = str(product).strip() or "organization_platform"
     envv = str(env).strip() or "prod"
-    _base, cat_path = resolve_catalog_path(tenant_id=tenant, product=prod, env=envv)
-    return f"{tenant}:{prod}:{envv}", cat_path
+    read_path, _business_path, _legacy_path = resolve_catalog_paths(
+        tenant_id=tenant,
+        business_id=business,
+        product=prod,
+        env=envv,
+    )
+    return f"{tenant}:{business}:{prod}:{envv}", read_path
+
+
+def resolve_offer_catalog_write(
+    *,
+    tenant_id: str,
+    business_id: str,
+    product: str,
+    env: str,
+) -> tuple[str, Any, Any]:
+    tenant = require_tenant_id(tenant_id)
+    business = str(business_id or "").strip()
+    if not business:
+        raise RuntimeError("BUSINESS_ID_REQUIRED")
+    prod = str(product).strip() or "organization_platform"
+    envv = str(env).strip() or "prod"
+    business_path, legacy_path = business_catalog_paths(
+        tenant_id=tenant,
+        business_id=business,
+        product=prod,
+        env=envv,
+    )
+    return f"{tenant}:{business}:{prod}:{envv}", business_path, legacy_path
 
 
 def load_offer_catalog(path: Any) -> dict[str, Any]:

@@ -46,3 +46,52 @@ def test_offer_catalog_resolver_prefers_tenant_specific(tmp_path, monkeypatch):
     raw = getattr(cat, "_offers", {})
     assert "tenant_offer" in raw
     assert "default_offer" not in raw
+
+
+def test_offer_catalog_resolver_prefers_business_specific(tmp_path, monkeypatch):
+    data_dir = tmp_path / "data" / "offer_catalogs"
+    _write_yaml(
+        data_dir / "tenantA" / "organization_platform" / "prod.yaml",
+        "offers:\n  - offer_id: tenant_offer\n    base_price_rub: 2\n    variants:\n      a:\n        title: 'T'\n        body: 'T'\n",
+    )
+    _write_yaml(
+        data_dir / "tenantA" / "businessA" / "organization_platform" / "prod.yaml",
+        "offers:\n  - offer_id: business_offer\n    base_price_rub: 3\n    variants:\n      a:\n        title: 'B'\n        body: 'B'\n",
+    )
+    monkeypatch.setenv("OFFER_CATALOGS_DATA_DIR", str(data_dir))
+
+    resolver = OfferCatalogResolver()
+    cat = resolver.resolve(
+        key=OfferCatalogKey(
+            tenant_id="tenantA",
+            business_id="businessA",
+            product_id="organization_platform",
+            environment="prod",
+        )
+    )
+
+    raw = getattr(cat, "_offers", {})
+    assert "business_offer" in raw
+    assert "tenant_offer" not in raw
+
+
+def test_offer_catalog_resolver_business_scope_can_read_legacy_tenant_fallback(tmp_path, monkeypatch):
+    data_dir = tmp_path / "data" / "offer_catalogs"
+    _write_yaml(
+        data_dir / "tenantA" / "organization_platform" / "prod.yaml",
+        "offers:\n  - offer_id: legacy_tenant_offer\n    base_price_rub: 4\n    variants:\n      a:\n        title: 'L'\n        body: 'L'\n",
+    )
+    monkeypatch.setenv("OFFER_CATALOGS_DATA_DIR", str(data_dir))
+
+    resolver = OfferCatalogResolver()
+    cat = resolver.resolve(
+        key=OfferCatalogKey(
+            tenant_id="tenantA",
+            business_id="businessA",
+            product_id="organization_platform",
+            environment="prod",
+        )
+    )
+
+    raw = getattr(cat, "_offers", {})
+    assert "legacy_tenant_offer" in raw

@@ -175,7 +175,7 @@ BUSINESS_ONTOLOGY_OWNERSHIP_AUDIT = (
         OwnershipAuditStatus.DONE,
         "contracts.product_contract",
         "runtime._internal.offer_catalog_mutation",
-        "ProductOffer is the single canonical sellable definition. Offer is its compatibility alias; runtime OfferSummary/OfferRender/OfferEligibility are read projections, retention Offer is a legacy alias, and unused BusinessOffer/MarketplaceOffer contracts are explicitly legacy. Live tenant catalog mutations share one lock/digest/atomic-commit owner.",
+        "ProductOffer is the single canonical sellable definition. Offer is its compatibility alias; runtime OfferSummary/OfferRender/OfferEligibility are read projections, retention Offer is a legacy alias, and unused BusinessOffer/MarketplaceOffer contracts are explicitly legacy. Live tenant/business catalog mutations share one lock/digest/atomic-commit owner, legacy tenant catalogs are read-only fallback/copy-on-write sources, and successful governed mutations project deterministic Offer chronology into the canonical EventStore.",
         writers=(
             "runtime._internal.effects_domains.admin_pricing",
             "runtime._internal.effects_actions.offer_patch_actions",

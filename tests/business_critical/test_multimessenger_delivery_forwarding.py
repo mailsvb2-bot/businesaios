@@ -288,6 +288,7 @@ def test_effect_ports_expose_the_same_multimessenger_contract() -> None:
             handle_suggest_offer_patch,
             {
                 "tenant_id": "business-a",
+                "business_id": "business-a",
                 "product": "crm-pro",
                 "env": "test",
                 "offer_id": "offer-1",
@@ -299,6 +300,7 @@ def test_effect_ports_expose_the_same_multimessenger_contract() -> None:
             handle_apply_offer_patch,
             {
                 "tenant_id": "business-a",
+                "business_id": "business-a",
                 "product": "crm-pro",
                 "env": "test",
                 "offer_id": "offer-1",

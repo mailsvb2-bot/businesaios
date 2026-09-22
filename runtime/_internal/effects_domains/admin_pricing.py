@@ -18,6 +18,8 @@ from runtime._internal.offer_catalog_mutation import (
     digest_bytes,
     dump_yaml,
     file_digest,
+    materialize_business_catalog_locked,
+    restore_optional_bytes,
     runtime_environment,
     scope_segment,
 )
@@ -34,6 +36,7 @@ def canonical_catalog_path(
     tenant_id: str,
     product_id: str,
     environment: str | None = None,
+    business_id: str | None = None,
     catalog_root: Path | None = None,
 ) -> Path:
     """Compatibility seam over the canonical mutation owner's path resolver."""
@@ -47,6 +50,7 @@ def canonical_catalog_path(
         )
     return _canonical_catalog_path(
         tenant_id=tenant_id,
+        business_id=business_id,
         product_id=product_id,
         environment=environment,
         catalog_root=root,
@@ -99,6 +103,7 @@ def prepare_offer_price_update(
     tenant_id: str,
     product_id: str,
     new_price: int,
+    business_id: str | None = None,
     pricing_version: str,
     environment: str | None = None,
     offer_id: str | None = None,
@@ -107,6 +112,11 @@ def prepare_offer_price_update(
     lock_timeout_s: float | None = None,
 ) -> PricingChangeTransaction:
     tenant = scope_segment(tenant_id, field="tenant_id")
+    business = (
+        scope_segment(business_id, field="business_id")
+        if business_id is not None
+        else None
+    )
     product = scope_segment(product_id, field="product_id")
     env = runtime_environment(environment)
     price = int(new_price)
@@ -120,8 +130,20 @@ def prepare_offer_price_update(
     if selected_offer_id is None and selected_plan_id is None:
         raise RuntimeError("OFFER_ID_OR_PLAN_ID_REQUIRED")
 
+    if catalog_path is None and business is None:
+        raise RuntimeError("BUSINESS_ID_REQUIRED")
     path = (
         catalog_path.expanduser().resolve()
+        if catalog_path is not None
+        else canonical_catalog_path(
+            tenant_id=tenant,
+            business_id=business,
+            product_id=product,
+            environment=env,
+        )
+    )
+    legacy_path = (
+        path
         if catalog_path is not None
         else canonical_catalog_path(
             tenant_id=tenant,
@@ -134,8 +156,15 @@ def prepare_offer_price_update(
         timeout_s=lock_timeout_s,
     )
     tmp = path.with_suffix(path.suffix + ".pricing.tmp")
+    catalog_materialized = False
     try:
-        if not path.exists():
+        if catalog_path is None:
+            catalog_materialized = materialize_business_catalog_locked(
+                catalog_path=path,
+                legacy_catalog_path=legacy_path,
+                mutation_lock=mutation_lock,
+            )
+        elif not path.exists():
             raise RuntimeError(f"OFFER_CATALOG_NOT_FOUND:{path}")
 
         original_catalog = path.read_bytes()
@@ -147,11 +176,15 @@ def prepare_offer_price_update(
 
         catalog_id = catalog_registry_key(
             tenant_id=tenant,
+            business_id=business,
             product_id=product,
             environment=env,
         )
         spec = dict(spec)
-        spec.setdefault("catalog_id", catalog_id)
+        if business is not None:
+            spec["catalog_id"] = catalog_id
+        else:
+            spec.setdefault("catalog_id", catalog_id)
         validate_yaml_offer_catalog_spec(spec)
 
         offers = spec.get("offers")
@@ -203,10 +236,12 @@ def prepare_offer_price_update(
             original_catalog=original_catalog,
             original_digest=original_digest,
             prepared_digest=prepared_digest,
+            original_exists=not catalog_materialized,
             mutation_lock=mutation_lock,
             error_prefix="PRICING",
             result={
                 "tenant_id": tenant,
+                "business_id": business,
                 "product_id": product,
                 "environment": env,
                 "catalog_id": str(
@@ -224,6 +259,8 @@ def prepare_offer_price_update(
         )
     except Exception:
         tmp.unlink(missing_ok=True)
+        if catalog_materialized:
+            restore_optional_bytes(path, None)
         mutation_lock.release()
         raise
 

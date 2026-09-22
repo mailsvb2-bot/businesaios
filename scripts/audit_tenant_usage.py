@@ -13,6 +13,7 @@ EXCLUDE_DIRS = {
 
 # Low-level modules that are allowed to touch the raw EventStore contract directly.
 RAW_EVENTSTORE_APPEND_ALLOWLIST = {
+    'contracts/event_store.py',
     'core/events/log_store.py',
     'core/knowledge/repositories/event_store_codec.py',
     'runtime/boot/boot_observability.py',

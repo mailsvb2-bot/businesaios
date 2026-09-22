@@ -1,4 +1,4 @@
-"""Canonical durable mutation boundary for tenant/product offer catalogs."""
+"""Canonical durable mutation boundary for tenant/business/product offer catalogs."""
 
 from __future__ import annotations
 
@@ -110,8 +110,14 @@ def canonical_catalog_path(
     product_id: str,
     environment: str | None = None,
     catalog_root: Path | None = None,
+    business_id: str | None = None,
 ) -> Path:
     tenant = scope_segment(tenant_id, field="tenant_id")
+    business = (
+        scope_segment(business_id, field="business_id")
+        if business_id is not None
+        else None
+    )
     product = scope_segment(product_id, field="product_id")
     env = scope_segment(runtime_environment(environment), field="environment")
     repo_root = Path(__file__).resolve().parents[2]
@@ -119,12 +125,54 @@ def canonical_catalog_path(
         catalog_root
         or env_path("OFFER_CATALOGS_DATA_DIR", str(repo_root / "data" / "offer_catalogs"))
     ).expanduser().resolve()
-    path = (root / tenant / product / f"{env}.yaml").resolve()
+    if business is None:
+        path = (root / tenant / product / f"{env}.yaml").resolve()
+    else:
+        path = (root / tenant / business / product / f"{env}.yaml").resolve()
     try:
         path.relative_to(root)
     except ValueError as exc:
         raise RuntimeError("CATALOG_PATH_ESCAPES_ROOT") from exc
     return path
+
+
+def resolve_catalog_read_path(
+    *,
+    business_catalog_path: Path,
+    legacy_catalog_path: Path,
+) -> Path:
+    business = business_catalog_path.expanduser().resolve()
+    legacy = legacy_catalog_path.expanduser().resolve()
+    if business.exists():
+        return business
+    if legacy.exists():
+        return legacy
+    raise RuntimeError(f"OFFER_CATALOG_NOT_FOUND:{business}")
+
+
+def materialize_business_catalog_locked(
+    *,
+    catalog_path: Path,
+    legacy_catalog_path: Path,
+    mutation_lock: CatalogMutationLock,
+) -> bool:
+    path = catalog_path.expanduser().resolve()
+    legacy = legacy_catalog_path.expanduser().resolve()
+    expected_lock_path = path.with_suffix(path.suffix + ".mutation.lock")
+    if mutation_lock.released:
+        raise RuntimeError("CATALOG_MUTATION_LOCK_RELEASED")
+    if mutation_lock.lock_path.expanduser().resolve() != expected_lock_path:
+        raise RuntimeError("CATALOG_MUTATION_LOCK_SCOPE_MISMATCH")
+    if path.exists():
+        return False
+    if not legacy.exists():
+        raise RuntimeError(f"OFFER_CATALOG_NOT_FOUND:{path}")
+    atomic_replace_bytes(
+        path,
+        legacy.read_bytes(),
+        suffix=".business-migration.tmp",
+    )
+    return True
 
 
 def dump_yaml(path: Path, data: dict[str, Any]) -> None:
@@ -165,6 +213,7 @@ class CatalogMutationTransaction:
     original_digest: str
     prepared_digest: str
     mutation_lock: CatalogMutationLock
+    original_exists: bool = True
     result: dict[str, Any] = field(default_factory=dict)
     error_prefix: str = "OFFER_CATALOG"
     applied: bool = False
@@ -205,13 +254,17 @@ class CatalogMutationTransaction:
         if self.applied:
             if file_digest(self.catalog_path) != self.prepared_digest:
                 raise RuntimeError(self._code("ROLLBACK_CONFLICT"))
-            atomic_replace_bytes(
-                self.catalog_path,
-                self.original_catalog,
-                suffix=".rollback.tmp",
-            )
-            if file_digest(self.catalog_path) != self.original_digest:
-                raise RuntimeError(self._code("ROLLBACK_DIGEST_MISMATCH"))
+            if self.original_exists:
+                atomic_replace_bytes(
+                    self.catalog_path,
+                    self.original_catalog,
+                    suffix=".rollback.tmp",
+                )
+                if file_digest(self.catalog_path) != self.original_digest:
+                    raise RuntimeError(self._code("ROLLBACK_DIGEST_MISMATCH"))
+            else:
+                self.catalog_path.unlink(missing_ok=True)
+                invalidate_yaml_cache(self.catalog_path)
             self.applied = False
         self._cleanup_temps()
 
@@ -236,6 +289,7 @@ def build_locked_transaction(
     original_catalog: bytes,
     mutation_lock: CatalogMutationLock,
     tmp_suffix: str,
+    original_exists: bool = True,
     error_prefix: str,
     result: dict[str, Any] | None = None,
 ) -> CatalogMutationTransaction:
@@ -252,6 +306,7 @@ def build_locked_transaction(
             original_catalog=bytes(original_catalog),
             original_digest=digest_bytes(original_catalog),
             prepared_digest=file_digest(tmp),
+            original_exists=bool(original_exists),
             mutation_lock=mutation_lock,
             result=dict(result or {}),
             error_prefix=str(error_prefix or "OFFER_CATALOG").strip() or "OFFER_CATALOG",
@@ -287,6 +342,7 @@ def prepare_bytes_transaction(
             original_catalog=original,
             original_digest=original_digest,
             prepared_digest=file_digest(tmp),
+            original_exists=True,
             mutation_lock=mutation_lock,
             result=dict(result or {}),
             error_prefix=str(error_prefix or "OFFER_CATALOG").strip() or "OFFER_CATALOG",
@@ -305,6 +361,8 @@ __all__ = [
     "atomic_replace_bytes",
     "build_locked_transaction",
     "canonical_catalog_path",
+    "resolve_catalog_read_path",
+    "materialize_business_catalog_locked",
     "digest_bytes",
     "dump_yaml",
     "file_digest",

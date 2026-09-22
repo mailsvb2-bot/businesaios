@@ -81,9 +81,9 @@ def test_every_declared_action_schema_accepts_only_its_contract() -> None:
             with pytest.raises(ValueError):
                 schema.validate(payload)  # type: ignore[arg-type]
             cases += 1
-    # Four Growth actions gained a typed optional business_id contract field.
-    # Each field adds one wrong-type rejection case to the exhaustive matrix.
-    assert cases == 893
+    # Five pricing/Offer mutations gained a required typed business_id field.
+    # Each adds one missing-key and one wrong-type rejection case: +10 total.
+    assert cases == 903
 
 
 def test_every_runtime_handler_and_compatibility_import_door_resolves() -> None:

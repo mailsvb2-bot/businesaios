@@ -26,6 +26,7 @@ def _request_event(*, price: int = 900) -> dict[str, Any]:
         "user_id": "requester-admin",
         "payload": {
             "tenant_id": "business-a",
+            "business_id": "business-1",
             "product_id": "crm-pro",
             "environment": "test",
             "offer_id": "crm-pro-monthly",
@@ -44,6 +45,7 @@ def test_existing_request_id_cannot_be_registered_again() -> None:
         assert_pricing_request_id_available(
             event_log,
             tenant_id="business-a",
+            business_id="business-1",
             request_id="request-immutable",
         )
 
@@ -55,6 +57,7 @@ def test_duplicated_historical_request_id_fails_closed_during_resolution() -> No
         resolve_pricing_change_request(
             event_log,
             tenant_id="business-a",
+            business_id="business-1",
             request_id="request-immutable",
         )
 
@@ -81,6 +84,7 @@ def test_admin_mixin_rejects_conflicting_request_before_effect_write(
             correlation_id="correlation-request",
             admin_id="requester-admin",
             tenant_id="business-a",
+            business_id="business-1",
             product_id="crm-pro",
             environment="test",
             offer_id="crm-pro-monthly",

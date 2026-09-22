@@ -59,6 +59,7 @@ def _env() -> SimpleNamespace:
 def _suggest_payload(*, notify_user_id: str | None = None) -> dict[str, str]:
     payload = {
         "tenant_id": "business-a",
+        "business_id": "business-a",
         "product": "crm-pro",
         "env": "test",
         "offer_id": "offer-1",
@@ -94,6 +95,7 @@ def test_offer_patch_schema_allows_rollback_without_dummy_patch() -> None:
     schema.validate(
         {
             "tenant_id": "business-a",
+            "business_id": "business-a",
             "product": "crm-pro",
             "env": "test",
             "offer_id": "offer-1",
@@ -107,6 +109,7 @@ def test_offer_patch_handler_requires_patch_only_for_preview_and_apply() -> None
     effects = FakePlatformEffects()
     base = {
         "tenant_id": "business-a",
+        "business_id": "business-a",
         "product": "crm-pro",
         "env": "test",
         "offer_id": "offer-1",
