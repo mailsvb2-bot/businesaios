@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+from types import SimpleNamespace
 from pathlib import Path
 
 import scripts.ci.step_postgres_migrations as step_postgres_migrations
@@ -77,3 +78,29 @@ def test_runtime_store_schema_is_owned_by_tracked_migration() -> None:
     assert "ADD COLUMN IF NOT EXISTS append_seq" in migration
     assert "run_after_ms BIGINT NOT NULL" in migration
     assert all("CREATE TABLE" not in text and "ALTER TABLE" not in text for text in runtime_adapters)
+
+
+def test_postgres_migration_runner_serializes_concurrent_service_prestarts() -> None:
+    text = Path("runtime/platform/postgres_migration_runner.py").read_text(encoding="utf-8")
+
+    assert '"businesaios:postgres-migrations:v1"' in text
+    assert "SELECT pg_advisory_lock(hashtext(%s));" in text
+
+
+def test_migrate_before_start_executes_postgres_migration_before_store_open(monkeypatch) -> None:
+    import scripts.server.migrate_before_start as migrate_before_start
+
+    order: list[str] = []
+    storage = SimpleNamespace(backend="postgres", postgres_dsn="postgresql://example")
+    store = SimpleNamespace(ping=lambda: True)
+    monkeypatch.setattr(migrate_before_start, "resolve_storage_config", lambda: storage)
+    monkeypatch.setattr(migrate_before_start, "apply_postgres_migrations", lambda dsn: order.append(f"migrate:{dsn}"))
+
+    def _stores(*args, **kwargs):
+        order.append("stores")
+        return (store,) * 6
+
+    monkeypatch.setattr(migrate_before_start, "build_durable_stores", _stores)
+    monkeypatch.setattr(migrate_before_start, "build_behavior_graph_store", lambda *args, **kwargs: store)
+    assert migrate_before_start.main() == 0
+    assert order == ["migrate:postgresql://example", "stores"]
