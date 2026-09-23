@@ -116,6 +116,7 @@ class AutonomyExecutionStep:
             request=request,
             original_envelope=envelope,
             executable_action=executable_action,
+            autonomy_decision=autonomy_decision,
         )
         try:
             result = execute_headless_envelope(executor=self._contract._executor, envelope=envelope)
@@ -147,7 +148,14 @@ class AutonomyExecutionStep:
             result.output.setdefault("blast_radius_guard", dict(details.get("blast_radius_guard") or {}))
         return result
 
-    def _finalize_execution_envelope(self, *, request: Any, original_envelope: Any, executable_action: Any) -> Any:
+    def _finalize_execution_envelope(
+        self,
+        *,
+        request: Any,
+        original_envelope: Any,
+        executable_action: Any,
+        autonomy_decision: Any,
+    ) -> Any:
         final_payload = dict(getattr(original_envelope.decision, "payload", {}) or {})
         final_payload.update(dict(executable_action.payload or {}))
         final_payload["autonomy_tier"] = str(getattr(request, "autonomy_tier", "supervised") or "supervised")
@@ -155,6 +163,26 @@ class AutonomyExecutionStep:
         final_payload.setdefault("constraints", dict(getattr(request, "constraints", {}) or {}))
         final_payload.setdefault("economy", dict(getattr(request, "economy", {}) or {}))
         final_payload.setdefault("autonomy_policy_snapshot", self._contract._autonomy_safety_bundle.build_policy_snapshot(request=request, safety_verdict=final_payload.get("autonomy_safety") or {}))
+        final_payload["intent_id"] = str(getattr(executable_action, "intent_id", "") or "")
+        final_payload["action_id"] = str(getattr(executable_action, "action_id", "") or "")
+        final_payload["action_channel"] = str(getattr(executable_action, "channel", "") or "")
+        final_payload["evidence_refs"] = list(getattr(executable_action, "evidence_refs", ()) or ())
+        final_payload["derived_fact_ref"] = str(getattr(executable_action, "derived_fact_ref", "") or "")
+        final_payload["policy_decision"] = {
+            "schema_version": int(getattr(autonomy_decision, "schema_version", 1) or 1),
+            "intent_id": str(getattr(autonomy_decision, "intent_id", "") or ""),
+            "decision_id": str(getattr(autonomy_decision, "decision_id", "") or ""),
+            "tenant_id": str(getattr(autonomy_decision, "tenant_id", "") or ""),
+            "business_id": str(getattr(autonomy_decision, "business_id", "") or ""),
+            "tier": str(getattr(autonomy_decision, "tier", "") or ""),
+            "action_type": str(getattr(autonomy_decision, "action_type", "") or ""),
+            "action_class": str(getattr(autonomy_decision, "action_class", "") or ""),
+            "verdict": str(getattr(autonomy_decision, "verdict", "") or ""),
+            "allowed": bool(getattr(autonomy_decision, "allowed", False)),
+            "approval_required": bool(getattr(autonomy_decision, "approval_required", False)),
+            "blocked_by_policy": bool(getattr(autonomy_decision, "blocked_by_policy", False)),
+            "handoff_reason": getattr(autonomy_decision, "handoff_reason", None),
+        }
 
         final_decision = replace(
             original_envelope.decision,

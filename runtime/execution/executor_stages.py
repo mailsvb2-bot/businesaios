@@ -4,8 +4,20 @@ from typing import Any
 
 from governance.time_scale import TimeScale
 from runtime.execution.dispatcher import effect_succeeded
-from runtime.execution.execution_contract_lock import commit_verified_execution, verify_execution_contract
-from runtime.execution.executor_audit import emit_deployment_proposed, emit_effect_window, emit_reward_observed
+from runtime.execution.execution_contract_lock import (
+    ExecutionContractLockError,
+    commit_verified_execution,
+    verify_execution_contract,
+)
+from runtime.execution.executor_audit import (
+    emit_deployment_proposed,
+    emit_effect_window,
+    emit_reward_observed,
+    project_action_ambiguous_event,
+    project_action_authorized_event,
+    project_action_executed_event,
+    project_action_failed_event,
+)
 from runtime.execution.executor_commit import build_delivery_metadata, enqueue_once
 from runtime.execution.executor_core import assert_timescale_allowed, enforce_safe_mode, load_world
 from runtime.execution.governance_runtime import review_governance_execution
@@ -76,6 +88,10 @@ def preflight_and_verify(*, executor: Any, env: Any, timescale: TimeScale) -> No
     _review_product_capability(executor=executor, env=env)
     review_operational_budget(executor=executor, env=env)
     review_governance_execution(executor=executor, env=env)
+    project_action_authorized_event(
+        event_store=getattr(getattr(executor, "_runtime_infra", None), "event_store", None),
+        decision=env.decision,
+    )
     executor._guard.execute_once(env)
     _checkpoint(executor=executor, env=env, stage="executable_action", payload={"action": str(env.decision.action)})
     _emit_operational_event(executor=executor, env=env, event_type="runtime_executor_preflight_passed", payload={"action": str(env.decision.action), "timescale": str(timescale.value if hasattr(timescale, 'value') else timescale)})
@@ -166,6 +182,12 @@ def dispatch_effects(*, executor: Any, env: Any, depth: int, enqueue: bool):
         ):
             out = executor._handlers.dispatch(env.decision.action, env.decision.payload, executor._effects, env)
     except Exception as exc:  # top-level dispatch boundary: record failure, then re-raise unchanged
+        project_action_ambiguous_event(
+            event_store=getattr(getattr(executor, "_runtime_infra", None), "event_store", None),
+            decision=env.decision,
+            reason="dispatch_outcome_unknown",
+            error_type=type(exc).__name__,
+        )
         _mark_execution_failed(executor=executor, env=env, reason=f"dispatch_exception:{type(exc).__name__}")
         _emit_operational_event(executor=executor, env=env, event_type="runtime_executor_dispatch_failed", payload={"error_type": type(exc).__name__})
         raise
@@ -173,10 +195,32 @@ def dispatch_effects(*, executor: Any, env: Any, depth: int, enqueue: bool):
         clear_effect_capability()
         emit_effect_window(executor._events, opened=False, decision=env.decision)
     if not effect_succeeded(out):
+        project_action_failed_event(
+            event_store=getattr(getattr(executor, "_runtime_infra", None), "event_store", None),
+            decision=env.decision,
+            reason="effect_failed",
+        )
         _mark_execution_failed(executor=executor, env=env, reason="effect_failed")
         _emit_operational_event(executor=executor, env=env, event_type="runtime_executor_effect_failed", payload={"action": str(env.decision.action)})
         raise RuntimeError("EFFECT_FAILED")
-    verification_result = verify_execution_contract(executor=executor, env=env, output=out)
+    try:
+        verification_result = verify_execution_contract(executor=executor, env=env, output=out)
+    except ExecutionContractLockError as exc:
+        project_action_ambiguous_event(
+            event_store=getattr(getattr(executor, "_runtime_infra", None), "event_store", None),
+            decision=env.decision,
+            reason="verification_outcome_unknown",
+            error_type=type(exc).__name__,
+        )
+        _mark_execution_failed(executor=executor, env=env, reason=f"verification_failed:{type(exc).__name__}")
+        _emit_operational_event(executor=executor, env=env, event_type="runtime_executor_verification_failed", payload={"error_type": type(exc).__name__})
+        raise
+    project_action_executed_event(
+        event_store=getattr(getattr(executor, "_runtime_infra", None), "event_store", None),
+        decision=env.decision,
+        verification=verification_result.verification,
+        output=out if isinstance(out, dict) else {},
+    )
     committed_output = commit_verified_execution(executor=executor, env=env, output=out, verification_result=verification_result)
     _observe_reward_and_learning(executor=executor, env=env, out=committed_output, depth=depth)
     _mark_execution_completed(executor=executor, env=env)

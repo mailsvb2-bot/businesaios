@@ -5,7 +5,8 @@ from pathlib import Path
 
 ROOTS = (Path('runtime/execution'), Path('execution'))
 ALLOWED = {
-    ('runtime/execution/executor_stages.py', 168): 'fail_closed_dispatch_reraise',
+    ('runtime/execution/executor_audit.py', 271): 'retry_reconcile_or_reraise',
+    ('runtime/execution/executor_stages.py', 184): 'fail_closed_dispatch_reraise',
     ('runtime/execution/executor_observability.py', 53): 'best_effort_decision_trace',
     ('runtime/execution/executor_observability.py', 80): 'best_effort_action_audit',
     ('runtime/execution/executor_observability.py', 109): 'best_effort_inference_trace',

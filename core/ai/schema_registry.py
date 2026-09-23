@@ -49,6 +49,12 @@ class DecisionSchema:
             "execution_verdict",
             "policy_verdict",
             "capability_diagnostics",
+            "intent_id",
+            "action_id",
+            "action_channel",
+            "evidence_refs",
+            "derived_fact_ref",
+            "policy_decision",
             RuntimeServiceName.ACTION_BUDGET,
         }
         if not self.allow_additional and not keys.issubset(self.required | self.optional | reserved_optional):
