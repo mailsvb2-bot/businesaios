@@ -119,6 +119,7 @@ def build_runtime_executor_effects(
     message_registry=None,
     http_transport=None,
     effect_router=None,
+    event_store=None,
 ) -> RuntimeExecutorEffectsBundle:
     """Build guarded effects exactly once for RuntimeExecutor."""
 
@@ -137,6 +138,7 @@ def build_runtime_executor_effects(
         message_registry=message_registry,
         http_transport=http_transport,
         effect_router=effect_router,
+        event_store=event_store,
     )
     return RuntimeExecutorEffectsBundle(cap_token=cap_token, effects=effects)
 
@@ -235,6 +237,7 @@ def build_executor_effects_bundle(*, event_log, policy_registry, infra: RuntimeE
         message_registry=message_registry,
         http_transport=infra.http_transport,
         effect_router=infra.effect_router,
+        event_store=infra.event_store,
     )
 
 

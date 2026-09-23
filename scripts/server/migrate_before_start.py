@@ -2,7 +2,6 @@ from __future__ import annotations
 
 from contextlib import ExitStack
 
-from runtime.platform.postgres_migration_runner import apply_postgres_migrations
 from runtime.wiring import build_behavior_graph_store, build_durable_stores, resolve_storage_config
 
 CANON_MIGRATION_BEFORE_START = True
@@ -10,10 +9,6 @@ CANON_MIGRATION_BEFORE_START = True
 
 def main() -> int:
     storage = resolve_storage_config()
-    if storage.backend == 'postgres':
-        if not storage.postgres_dsn:
-            raise RuntimeError('POSTGRES_BACKEND_REQUIRES_DSN')
-        apply_postgres_migrations(storage.postgres_dsn)
     with ExitStack() as stack:
         event_store, ledger, snapshot_store, decision_archive, outbox, payment_outbox = build_durable_stores(
             stack,
