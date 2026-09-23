@@ -34,6 +34,7 @@ def _request_submission_matches(
     request = lifecycle.request
     expected = {
         "tenant_id": request.tenant_id,
+        "business_id": request.business_id,
         "product_id": request.product_id,
         "environment": request.environment,
         "offer_id": request.offer_id,
@@ -57,6 +58,7 @@ def _replayed_request_result(lifecycle: PricingRequestLifecycle) -> dict[str, An
             event=lifecycle.request_event,
             fallback_ref=(
                 f"pricing-request:{lifecycle.request.tenant_id}:"
+                f"{lifecycle.request.business_id}:"
                 f"{lifecycle.request.product_id}:{lifecycle.request_id}"
             ),
         ),
@@ -75,7 +77,10 @@ def _replayed_apply_result(lifecycle: PricingRequestLifecycle) -> dict[str, Any]
         "router_evidence": pricing_event_evidence(
             code="pricing_change_recorded",
             event=event,
-            fallback_ref=f"pricing-apply:{lifecycle.request.tenant_id}:{lifecycle.request_id}",
+            fallback_ref=(
+                f"pricing-apply:{lifecycle.request.tenant_id}:"
+                f"{lifecycle.request.business_id}:{lifecycle.request_id}"
+            ),
         ),
     }
 
@@ -92,7 +97,10 @@ def _replayed_rejection_result(lifecycle: PricingRequestLifecycle) -> dict[str, 
         "router_evidence": pricing_event_evidence(
             code="pricing_change_rejection_recorded",
             event=event,
-            fallback_ref=f"pricing-rejection:{lifecycle.request.tenant_id}:{lifecycle.request_id}",
+            fallback_ref=(
+                f"pricing-rejection:{lifecycle.request.tenant_id}:"
+                f"{lifecycle.request.business_id}:{lifecycle.request_id}"
+            ),
         ),
     }
 
@@ -179,6 +187,7 @@ class AdminStateEffectsMixin:
         correlation_id: str,
         admin_id: str,
         tenant_id: str,
+        business_id: str,
         product_id: str,
         new_price: int,
         pricing_version: str,
@@ -202,10 +211,12 @@ class AdminStateEffectsMixin:
         lifecycle = resolve_pricing_request_lifecycle(
             self.event_log,
             tenant_id=tenant,
+            business_id=str(business_id),
             request_id=normalized_request_id,
         )
         assert_pricing_request_matches(
             lifecycle,
+            business_id=str(business_id),
             product_id=str(product_id),
             environment=environment,
             offer_id=offer_id,
@@ -226,6 +237,7 @@ class AdminStateEffectsMixin:
             correlation_id=str(correlation_id),
             admin_id=str(admin_id),
             tenant_id=tenant,
+            business_id=str(business_id),
             product_id=str(product_id),
             environment=environment,
             offer_id=offer_id,
@@ -244,6 +256,7 @@ class AdminStateEffectsMixin:
         correlation_id: str,
         admin_id: str,
         tenant_id: str,
+        business_id: str,
         product_id: str,
         new_price: int,
         request_id: str,
@@ -263,6 +276,7 @@ class AdminStateEffectsMixin:
         )
         proposed = build_pricing_request_payload(
             tenant_id=tenant,
+            business_id=str(business_id),
             product_id=str(product_id),
             environment=environment,
             offer_id=offer_id,
@@ -276,6 +290,7 @@ class AdminStateEffectsMixin:
             lifecycle = resolve_pricing_request_lifecycle(
                 self.event_log,
                 tenant_id=tenant,
+                business_id=str(business_id),
                 request_id=str(request_id),
             )
         except RuntimeError as exc:
@@ -298,6 +313,7 @@ class AdminStateEffectsMixin:
             correlation_id=str(correlation_id),
             admin_id=str(admin_id),
             tenant_id=tenant,
+            business_id=str(business_id),
             product_id=str(product_id),
             environment=environment,
             offer_id=offer_id,
@@ -315,6 +331,7 @@ class AdminStateEffectsMixin:
         correlation_id: str,
         admin_id: str,
         tenant_id: str,
+        business_id: str,
         request_id: str,
         product_id: str | None = None,
         reason: str | None = None,
@@ -328,6 +345,7 @@ class AdminStateEffectsMixin:
         lifecycle = resolve_pricing_request_lifecycle(
             self.event_log,
             tenant_id=tenant,
+            business_id=str(business_id),
             request_id=str(request_id),
         )
         if product_id and str(product_id).strip() != lifecycle.request.product_id:
@@ -354,6 +372,7 @@ class AdminStateEffectsMixin:
             correlation_id=str(correlation_id),
             admin_id=str(admin_id),
             tenant_id=tenant,
+            business_id=lifecycle.request.business_id,
             product_id=lifecycle.request.product_id,
             request_id=lifecycle.request_id,
             reason=reason,

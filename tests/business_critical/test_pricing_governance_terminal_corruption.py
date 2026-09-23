@@ -34,6 +34,7 @@ def _request() -> dict:
         user_id="requester-1",
         payload={
             "tenant_id": "business-a",
+            "business_id": "business-1",
             "product_id": "crm-pro",
             "environment": "test",
             "offer_id": "crm-pro-monthly",
@@ -53,6 +54,7 @@ def _rejected(*, event_id: str = "reject-event", user_id: str = "approver-1", re
         user_id=user_id,
         payload={
             "tenant_id": "business-a",
+            "business_id": "business-1",
             "product_id": "crm-pro",
             "request_id": "request-1",
             "reason": reason,
@@ -67,9 +69,10 @@ def _applied(*, event_id: str = "apply-event", user_id: str = "approver-1", new_
         user_id=user_id,
         payload={
             "tenant_id": "business-a",
+            "business_id": "business-1",
             "product_id": "crm-pro",
             "environment": "test",
-            "catalog_id": "business-a:crm-pro:test",
+            "catalog_id": "business-a:business-1:crm-pro:test",
             "offer_id": "crm-pro-monthly",
             "plan_id": None,
             "old_price": 100,
@@ -86,6 +89,7 @@ def _resolve(event_log: FakeEventLog):
     return resolve_pricing_request_lifecycle(
         event_log,
         tenant_id="business-a",
+        business_id="business-1",
         request_id="request-1",
     )
 

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from typing import Any
 
+from core.offers.offer_events import project_offer_catalog_event
 from runtime._internal.effects_tenant import assert_event_log_tenant
 from runtime.observability.error_handling import swallow
 
@@ -243,6 +244,7 @@ def apply_pricing_change_effect(
     correlation_id: str,
     admin_id: str,
     tenant_id: str,
+    business_id: str,
     product_id: str,
     new_price: int,
     pricing_version: str,
@@ -274,6 +276,7 @@ def apply_pricing_change_effect(
 
     transaction = prepare_offer_price_update(
         tenant_id=tenant,
+        business_id=str(business_id),
         product_id=str(product_id),
         environment=environment,
         offer_id=offer_id,
@@ -282,8 +285,22 @@ def apply_pricing_change_effect(
         pricing_version=str(pricing_version),
     )
     event: Any = None
+    event_spine_committed = False
     try:
         result = transaction.apply()
+        project_offer_catalog_event(
+            getattr(owner, "event_store", None),
+            tenant_id=tenant,
+            business_id=str(business_id),
+            product_id=str(result.get("product_id") or product_id),
+            environment=str(result.get("environment") or environment or "prod"),
+            offer_id=str(result.get("offer_id") or offer_id or ""),
+            catalog_revision=str(result.get("catalog_revision_after") or ""),
+            mutation_kind="pricing_change",
+            decision_id=str(decision_id),
+            correlation_id=str(correlation_id),
+        )
+        event_spine_committed = True
         payload = {
             **dict(result),
             "request_id": str(request_id or ""),
@@ -299,7 +316,7 @@ def apply_pricing_change_effect(
             payload=payload,
         )
     except Exception:
-        if transaction.applied:
+        if transaction.applied and not event_spine_committed:
             transaction.rollback()
         transaction.finalize()
         raise
@@ -329,6 +346,7 @@ def request_pricing_change_effect(
     correlation_id: str,
     admin_id: str,
     tenant_id: str,
+    business_id: str,
     product_id: str,
     new_price: int,
     request_id: str,
@@ -348,6 +366,7 @@ def request_pricing_change_effect(
     )
     payload = {
         "tenant_id": tenant,
+        "business_id": str(business_id),
         "product_id": str(product_id),
         "environment": str(environment or ""),
         "offer_id": str(offer_id or ""),
@@ -365,7 +384,7 @@ def request_pricing_change_effect(
         correlation_id=str(correlation_id),
         payload=payload,
     )
-    fallback_ref = f"pricing-request:{tenant}:{product_id}:{request_id}"
+    fallback_ref = f"pricing-request:{tenant}:{business_id}:{product_id}:{request_id}"
     return {
         "ok": True,
         "status": "verified",
@@ -385,6 +404,7 @@ def reject_pricing_change_effect(
     correlation_id: str,
     admin_id: str,
     tenant_id: str,
+    business_id: str,
     request_id: str,
     product_id: str | None = None,
     reason: str | None = None,
@@ -399,6 +419,7 @@ def reject_pricing_change_effect(
     )
     payload = {
         "tenant_id": tenant,
+        "business_id": str(business_id),
         "product_id": str(product_id or ""),
         "request_id": str(request_id),
         "reason": str(reason or ""),
@@ -412,7 +433,7 @@ def reject_pricing_change_effect(
         payload=payload,
     )
     fallback_ref = (
-        f"pricing-rejection:{tenant}:{product_id or '-'}:{request_id}"
+        f"pricing-rejection:{tenant}:{business_id}:{product_id or '-'}:{request_id}"
     )
     return {
         "ok": True,

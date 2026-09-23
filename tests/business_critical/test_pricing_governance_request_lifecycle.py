@@ -51,6 +51,7 @@ def _request_event(
         "timestamp_ms": 1,
         "payload": {
             "tenant_id": "business-a",
+            "business_id": "business-1",
             "product_id": product_id,
             "environment": "test",
             "offer_id": "crm-pro-monthly",
@@ -75,6 +76,7 @@ def _rejection_event(*, request_id: str = "request-1") -> dict:
         "timestamp_ms": 2,
         "payload": {
             "tenant_id": "business-a",
+            "business_id": "business-1",
             "product_id": "crm-pro",
             "request_id": request_id,
             "reason": "bad economics",
@@ -94,9 +96,10 @@ def _applied_event(*, request_id: str = "request-1") -> dict:
         "timestamp_ms": 2,
         "payload": {
             "tenant_id": "business-a",
+            "business_id": "business-1",
             "product_id": "crm-pro",
             "environment": "test",
-            "catalog_id": "business-a:crm-pro:test",
+            "catalog_id": "business-a:business-1:crm-pro:test",
             "offer_id": "crm-pro-monthly",
             "plan_id": None,
             "old_price": 100,
@@ -115,6 +118,7 @@ def _apply(effects: FakeEffects, *, admin_id: str = "approver-1", product_id: st
         correlation_id="correlation-apply-new",
         admin_id=admin_id,
         tenant_id="business-a",
+        business_id="business-1",
         product_id=product_id,
         environment="test",
         offer_id="crm-pro-monthly",
@@ -141,7 +145,7 @@ def test_apply_without_durable_request_is_rejected_before_catalog_mutation(monke
 
     monkeypatch.setattr(admin_state, "apply_pricing_change_effect", fake_apply)
 
-    with pytest.raises(RuntimeError, match="PRICING_CHANGE_REQUEST_NOT_FOUND:business-a:request-1"):
+    with pytest.raises(RuntimeError, match="PRICING_CHANGE_REQUEST_NOT_FOUND:business-a:business-1:request-1"):
         _apply(effects)
 
     assert mutation_calls == 0
@@ -230,6 +234,7 @@ def test_same_request_id_cannot_be_reused_for_different_price() -> None:
             correlation_id="correlation-request-2",
             admin_id="requester-1",
             tenant_id="business-a",
+            business_id="business-1",
             product_id="crm-pro",
             environment="test",
             offer_id="crm-pro-monthly",
@@ -248,6 +253,7 @@ def test_exact_request_retry_reuses_existing_request_event() -> None:
         correlation_id="correlation-request-2",
         admin_id="requester-1",
         tenant_id="business-a",
+        business_id="business-1",
         product_id="crm-pro",
         environment="test",
         offer_id="crm-pro-monthly",
@@ -271,7 +277,30 @@ def test_already_applied_request_cannot_be_rejected() -> None:
             correlation_id="correlation-reject-new",
             admin_id="approver-2",
             tenant_id="business-a",
+            business_id="business-1",
             product_id="crm-pro",
             request_id="request-1",
             reason="too late",
         )
+
+
+def test_same_request_id_is_isolated_between_businesses() -> None:
+    effects = FakeEffects(events=[_request_event()])
+
+    result = effects.request_pricing_change(
+        decision_id="decision-request-business-2",
+        correlation_id="correlation-request-business-2",
+        admin_id="requester-2",
+        tenant_id="business-a",
+        business_id="business-2",
+        product_id="crm-pro",
+        environment="test",
+        offer_id="crm-pro-monthly",
+        new_price=900,
+        request_id="request-1",
+        suggested_pricing_version="version-new",
+        reason="independent business",
+    )
+
+    assert result["status"] == "verified"
+    assert effects.event_log.events[-1]["payload"]["business_id"] == "business-2"

@@ -19,6 +19,7 @@ class OfferCatalogKey:
     tenant_id: str
     product_id: str
     environment: str = "prod"
+    business_id: str = ""
 
 
 @dataclass(frozen=True)
@@ -31,6 +32,7 @@ class OfferCatalogDirectives:
     """
 
     tenant_id: str
+    business_id: str
     product_id: str
     environment: str
     catalog_id: str
@@ -54,8 +56,20 @@ class OfferCatalogResolver:
     def __init__(self, *, catalogs: OfferCatalogRegistry | None = None) -> None:
         self._catalogs = catalogs or default_offer_catalog_registry()
 
-    def _candidate_catalog_ids(self, *, tenant: str, product: str, environment: str) -> list[str]:
-        return product_catalog_candidates(tenant_id=tenant, product_id=product, environment=environment)
+    def _candidate_catalog_ids(
+        self,
+        *,
+        tenant: str,
+        business: str,
+        product: str,
+        environment: str,
+    ) -> list[str]:
+        return product_catalog_candidates(
+            tenant_id=tenant,
+            business_id=business or None,
+            product_id=product,
+            environment=environment,
+        )
 
     def resolve(self, *, key: OfferCatalogKey) -> OfferCatalog:
         tenant = normalize_tenant_id(key.tenant_id)
@@ -65,14 +79,20 @@ class OfferCatalogResolver:
             raise ValueError("product_id is required")
 
         last_err: Exception | None = None
-        candidates = self._candidate_catalog_ids(tenant=tenant, product=product, environment=env)
+        business = str(key.business_id or "").strip()
+        candidates = self._candidate_catalog_ids(
+            tenant=tenant,
+            business=business,
+            product=product,
+            environment=env,
+        )
         for catalog_id in candidates:
             try:
                 return self._catalogs.get(catalog_id)
             except Exception as exc:
                 last_err = exc
         raise KeyError(
-            f"Offer catalog not found for tenant={tenant or '<none>'}, product={product}, env={env}. "
+            f"Offer catalog not found for tenant={tenant or '<none>'}, business={business or '<legacy>'}, product={product}, env={env}. "
             f"Tried: {candidates}. Last error: {type(last_err).__name__ if last_err is not None else None}"
         )
 
@@ -108,6 +128,7 @@ class OfferCatalogResolver:
         params = offer_catalog.get("params") if isinstance(offer_catalog.get("params"), dict) else {}
         return OfferCatalogDirectives(
             tenant_id=normalize_tenant_id(tenant_id or ctx.get("tenant_id")),
+            business_id=str(ctx.get("business_id") or prod.get("business_id") or "").strip(),
             product_id=str(prod.get("product_id") or prod.get("id") or "").strip(),
             environment=str(prod.get("environment") or ctx.get("environment") or "prod").strip() or "prod",
             catalog_id=normalize_catalog_id(offer_catalog.get("id")),
@@ -134,6 +155,7 @@ class OfferCatalogResolver:
                 return self.resolve(
                     key=OfferCatalogKey(
                         tenant_id=directives.tenant_id,
+                        business_id=directives.business_id,
                         product_id=directives.product_id,
                         environment=directives.environment,
                     )

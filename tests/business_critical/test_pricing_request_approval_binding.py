@@ -22,12 +22,18 @@ class FakeEventLog:
         return iter(self.events)
 
 
-def _request_event(*, tenant: str = "business-a", request_id: str = "request-1") -> dict[str, Any]:
+def _request_event(
+    *,
+    tenant: str = "business-a",
+    business: str = "business-1",
+    request_id: str = "request-1",
+) -> dict[str, Any]:
     return {
         "event_type": "admin_pricing_change_requested",
         "user_id": "requester-admin",
         "payload": {
             "tenant_id": tenant,
+            "business_id": business,
             "product_id": "crm-pro",
             "environment": "test",
             "offer_id": "crm-pro-monthly",
@@ -46,6 +52,7 @@ def _applied_event(*, request_id: str = "request-1") -> dict[str, Any]:
         "user_id": "approver-admin",
         "payload": {
             "tenant_id": "business-a",
+            "business_id": "business-1",
             "product_id": "crm-pro",
             "environment": "test",
             "offer_id": "crm-pro-monthly",
@@ -62,6 +69,7 @@ def _applied_event(*, request_id: str = "request-1") -> dict[str, Any]:
 def _validate(event_log: FakeEventLog, **overrides: Any):
     kwargs = {
         "tenant_id": "business-a",
+        "business_id": "business-1",
         "request_id": "request-1",
         "product_id": "crm-pro",
         "environment": "test",
@@ -110,6 +118,19 @@ def test_same_request_id_from_another_tenant_is_not_visible() -> None:
         resolve_pricing_change_request(
             event_log,
             tenant_id="business-a",
+            business_id="business-1",
+            request_id="request-1",
+        )
+
+
+def test_same_request_id_from_another_business_is_not_visible() -> None:
+    event_log = FakeEventLog([_request_event(business="business-2")])
+
+    with pytest.raises(RuntimeError, match="PRICING_CHANGE_REQUEST_NOT_FOUND"):
+        resolve_pricing_change_request(
+            event_log,
+            tenant_id="business-a",
+            business_id="business-1",
             request_id="request-1",
         )
 
@@ -121,6 +142,7 @@ def test_already_resolved_pricing_request_cannot_be_applied_twice() -> None:
         assert_pricing_request_open(
             event_log,
             tenant_id="business-a",
+            business_id="business-1",
             request_id="request-1",
         )
 
@@ -146,6 +168,7 @@ def test_mixin_derives_requester_and_exposes_no_spoofable_requested_by_argument(
         correlation_id="correlation-apply",
         admin_id="approver-admin",
         tenant_id="business-a",
+        business_id="business-1",
         product_id="crm-pro",
         environment="test",
         offer_id="crm-pro-monthly",

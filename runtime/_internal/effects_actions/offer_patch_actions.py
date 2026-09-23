@@ -7,16 +7,23 @@ from typing import Any
 
 import yaml
 
+from core.offers.offer_events import (
+    find_offer_catalog_event,
+    project_offer_catalog_event,
+)
 from runtime._internal.effects_actions.offer_patch_apply_support import (
     load_offer_catalog,
     locate_offer,
     resolve_offer_catalog,
+    resolve_offer_catalog_write,
     suggest_patch_for_action,
     summarize_patch_application,
 )
 from runtime._internal.effects_tenant import assert_event_log_tenant
 from runtime._internal.offer_catalog_mutation import (
     acquire_catalog_lock,
+    digest_bytes,
+    materialize_business_catalog_locked,
     atomic_replace_bytes,
     build_locked_transaction,
     restore_optional_bytes,
@@ -95,6 +102,7 @@ class OfferPatchEffectsMixin:
         decision_id: str,
         correlation_id: str,
         tenant_id: str,
+        business_id: str,
         product: str,
         env: str,
         offer_id: str,
@@ -110,8 +118,12 @@ class OfferPatchEffectsMixin:
             tenant_id=str(tenant_id),
             operation="suggest_offer_patch",
         )
+        business = str(business_id or "").strip()
+        if not business:
+            raise RuntimeError("BUSINESS_ID_REQUIRED")
         scope, catalog_path = resolve_offer_catalog(
             tenant_id=tenant,
+            business_id=business,
             product=product,
             env=env,
         )
@@ -123,6 +135,7 @@ class OfferPatchEffectsMixin:
             "ok": True,
             "status": "advisory",
             "tenant_id": tenant,
+            "business_id": business,
             "scope": scope,
             "offer_id": str(offer_id).strip(),
             "action": str(action).strip(),
@@ -155,6 +168,7 @@ class OfferPatchEffectsMixin:
         decision_id: str,
         correlation_id: str,
         tenant_id: str,
+        business_id: str,
         product: str,
         env: str,
         offer_id: str,
@@ -175,12 +189,26 @@ class OfferPatchEffectsMixin:
         if normalized_mode not in {"dry_run", "apply", "rollback"}:
             raise ValueError("INVALID_OFFER_PATCH_MODE")
 
-        scope, catalog_path = resolve_offer_catalog(
-            tenant_id=tenant,
-            product=product,
-            env=env,
-        )
+        business = str(business_id or "").strip()
+        if not business:
+            raise RuntimeError("BUSINESS_ID_REQUIRED")
+        if normalized_mode == "dry_run":
+            scope, catalog_path = resolve_offer_catalog(
+                tenant_id=tenant,
+                business_id=business,
+                product=product,
+                env=env,
+            )
+            legacy_catalog_path = Path(catalog_path)
+        else:
+            scope, catalog_path, legacy_catalog_path = resolve_offer_catalog_write(
+                tenant_id=tenant,
+                business_id=business,
+                product=product,
+                env=env,
+            )
         catalog_path = Path(catalog_path)
+        legacy_catalog_path = Path(legacy_catalog_path)
         backup_path = catalog_path.with_suffix(catalog_path.suffix + ".bak")
         offer = str(offer_id or "").strip()
         if not offer:
@@ -202,20 +230,40 @@ class OfferPatchEffectsMixin:
                 raise RuntimeError("OFFER_PATCH_BACKUP_INVALID")
             mutation_lock = acquire_catalog_lock(catalog_path)
             transaction = None
+            event_spine_committed = False
+            catalog_materialized = False
             try:
-                if not catalog_path.exists():
-                    raise RuntimeError(f"OFFER_CATALOG_NOT_FOUND:{catalog_path}")
+                catalog_materialized = materialize_business_catalog_locked(
+                    catalog_path=catalog_path,
+                    legacy_catalog_path=legacy_catalog_path,
+                    mutation_lock=mutation_lock,
+                )
                 transaction = build_locked_transaction(
                     catalog_path=catalog_path,
                     prepared_bytes=backup_raw,
                     original_catalog=catalog_path.read_bytes(),
                     mutation_lock=mutation_lock,
                     tmp_suffix=".offerpatch.rollback.tmp",
+                    original_exists=not catalog_materialized,
                     error_prefix="OFFER_PATCH",
                 )
                 transaction.apply()
+                project_offer_catalog_event(
+                    self.event_store,
+                    tenant_id=tenant,
+                    business_id=business,
+                    product_id=str(product),
+                    environment=str(env),
+                    offer_id=offer,
+                    catalog_revision=transaction.prepared_digest,
+                    mutation_kind="patch_rollback",
+                    decision_id=str(decision_id),
+                    correlation_id=str(correlation_id),
+                )
+                event_spine_committed = True
                 event_payload = {
                     "tenant_id": tenant,
+                    "business_id": business,
                     "product_id": str(product),
                     "environment": str(env),
                     "scope": scope,
@@ -231,8 +279,18 @@ class OfferPatchEffectsMixin:
                     payload=event_payload,
                 )
             except Exception:
-                if transaction is not None and transaction.applied:
+                if (
+                    transaction is not None
+                    and transaction.applied
+                    and not event_spine_committed
+                ):
                     transaction.rollback()
+                elif (
+                    transaction is None
+                    and catalog_materialized
+                    and not event_spine_committed
+                ):
+                    restore_optional_bytes(catalog_path, None)
                 raise
             finally:
                 if transaction is not None:
@@ -299,62 +357,137 @@ class OfferPatchEffectsMixin:
 
         mutation_lock = acquire_catalog_lock(catalog_path)
         transaction = None
+        event_spine_committed = False
+        catalog_materialized = False
         original_backup = backup_path.read_bytes() if backup_path.exists() else None
         try:
-            if not catalog_path.exists():
-                raise RuntimeError(f"OFFER_CATALOG_NOT_FOUND:{catalog_path}")
+            catalog_materialized = materialize_business_catalog_locked(
+                catalog_path=catalog_path,
+                legacy_catalog_path=legacy_catalog_path,
+                mutation_lock=mutation_lock,
+            )
             original_catalog = catalog_path.read_bytes()
             raw = load_offer_catalog(catalog_path)
             offers = raw.get("offers") if isinstance(raw.get("offers"), list) else []
+            offer_existed = any(
+                isinstance(item, dict)
+                and str(item.get("offer_id") or "").strip() == offer
+                for item in offers
+            )
             target = locate_offer(offers=offers, offer_id=offer)
             before, after, changed = summarize_patch_application(
                 target=target,
                 patch=patch if isinstance(patch, dict) else {},
             )
-            raw["offers"] = offers
-            serialized = yaml.safe_dump(raw, sort_keys=False, allow_unicode=True)
-            if not isinstance(yaml.safe_load(serialized), dict):
-                raise RuntimeError("OFFER_PATCH_RESULT_INVALID")
-            transaction = build_locked_transaction(
-                catalog_path=catalog_path,
-                prepared_bytes=serialized.encode("utf-8"),
-                original_catalog=original_catalog,
-                mutation_lock=mutation_lock,
-                tmp_suffix=".offerpatch.apply.tmp",
-                error_prefix="OFFER_PATCH",
-            )
-            atomic_replace_bytes(
-                backup_path,
-                original_catalog,
-                suffix=".backup.tmp",
-                invalidate=False,
-            )
-            transaction.apply()
-            event_payload = {
-                "tenant_id": tenant,
-                "product_id": str(product),
-                "environment": str(env),
-                "scope": scope,
-                "offer_id": offer,
-                "mode": "apply",
-                "changed": bool(changed),
-            }
-            event = self.event_log.emit(
-                event_type="offer_patch_applied@v1",
-                source="offer_catalog",
-                user_id=str(notify_user_id or "system"),
-                decision_id=str(decision_id),
-                correlation_id=str(correlation_id),
-                payload=event_payload,
-            )
+            if not changed:
+                replayed_event_id = None
+                if catalog_materialized:
+                    restore_optional_bytes(catalog_path, None)
+                    catalog_materialized = False
+                else:
+                    replayed_event_id = find_offer_catalog_event(
+                        self.event_store,
+                        tenant_id=tenant,
+                        business_id=business,
+                        product_id=str(product),
+                        environment=str(env),
+                        offer_id=offer,
+                        catalog_revision=digest_bytes(original_catalog),
+                        mutation_kind="patch_apply",
+                    )
+                    event_spine_committed = replayed_event_id is not None
+                event_payload = {
+                    "tenant_id": tenant,
+                    "business_id": business,
+                    "product_id": str(product),
+                    "environment": str(env),
+                    "scope": scope,
+                    "offer_id": offer,
+                    "mode": "apply",
+                    "changed": False,
+                    "replayed_event_spine": bool(replayed_event_id),
+                }
+                event = self.event_log.emit(
+                    event_type="offer_patch_applied@v1",
+                    source="offer_catalog",
+                    user_id=str(notify_user_id or "system"),
+                    decision_id=str(decision_id),
+                    correlation_id=str(correlation_id),
+                    payload=event_payload,
+                )
+            else:
+                raw["offers"] = offers
+                serialized = yaml.safe_dump(raw, sort_keys=False, allow_unicode=True)
+                if not isinstance(yaml.safe_load(serialized), dict):
+                    raise RuntimeError("OFFER_PATCH_RESULT_INVALID")
+                transaction = build_locked_transaction(
+                    catalog_path=catalog_path,
+                    prepared_bytes=serialized.encode("utf-8"),
+                    original_catalog=original_catalog,
+                    mutation_lock=mutation_lock,
+                    tmp_suffix=".offerpatch.apply.tmp",
+                    original_exists=not catalog_materialized,
+                    error_prefix="OFFER_PATCH",
+                )
+                atomic_replace_bytes(
+                    backup_path,
+                    original_catalog,
+                    suffix=".backup.tmp",
+                    invalidate=False,
+                )
+                transaction.apply()
+                project_offer_catalog_event(
+                    self.event_store,
+                    tenant_id=tenant,
+                    business_id=business,
+                    product_id=str(product),
+                    environment=str(env),
+                    offer_id=offer,
+                    catalog_revision=transaction.prepared_digest,
+                    mutation_kind="patch_apply",
+                    created=not offer_existed,
+                    decision_id=str(decision_id),
+                    correlation_id=str(correlation_id),
+                )
+                event_spine_committed = True
+                event_payload = {
+                    "tenant_id": tenant,
+                    "business_id": business,
+                    "product_id": str(product),
+                    "environment": str(env),
+                    "scope": scope,
+                    "offer_id": offer,
+                    "mode": "apply",
+                    "changed": True,
+                    "replayed_event_spine": False,
+                }
+                event = self.event_log.emit(
+                    event_type="offer_patch_applied@v1",
+                    source="offer_catalog",
+                    user_id=str(notify_user_id or "system"),
+                    decision_id=str(decision_id),
+                    correlation_id=str(correlation_id),
+                    payload=event_payload,
+                )
         except Exception:
-            if transaction is not None and transaction.applied:
+            if (
+                transaction is not None
+                and transaction.applied
+                and not event_spine_committed
+            ):
                 transaction.rollback()
-            restore_optional_bytes(
-                backup_path,
-                original_backup,
-                suffix=".backup.restore.tmp",
-            )
+            elif (
+                transaction is None
+                and catalog_materialized
+                and not event_spine_committed
+            ):
+                restore_optional_bytes(catalog_path, None)
+            if not event_spine_committed:
+                restore_optional_bytes(
+                    backup_path,
+                    original_backup,
+                    suffix=".backup.restore.tmp",
+                )
             raise
         finally:
             if transaction is not None:

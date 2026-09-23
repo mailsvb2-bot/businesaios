@@ -8,6 +8,7 @@ import pytest
 import yaml
 
 from config.yaml_loader_shared import load_yaml
+from core.events.event_types import OFFER_UPDATED
 from runtime._internal.effects_actions import telegram_actions
 from runtime._internal.effects_actions.payments import access
 from runtime._internal.effects_domains import admin_pricing, marketing, user_state
@@ -15,6 +16,7 @@ from runtime._internal.effects_domains.admin_state_support import (
     apply_pricing_change_effect,
     perform_admin_toggle,
 )
+from runtime.platform.event_store.memory_event_store import MemoryEventStore
 
 
 class FakeEventLog:
@@ -266,14 +268,16 @@ def test_entitlement_grant_emits_canonical_event_and_ledger_proof(monkeypatch: p
     ]
 
 
-def test_pricing_change_rolls_back_catalog_when_audit_event_cannot_persist(
+def test_pricing_change_keeps_canonical_catalog_when_audit_fails_after_event_spine_commit(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
 ) -> None:
-    catalog_path = _write_catalog(tmp_path)
-    original_catalog = load_yaml(catalog_path, allow_empty=False, cache=False)
+    legacy_path = _write_catalog(tmp_path)
+    original_legacy = load_yaml(legacy_path, allow_empty=False, cache=False)
     _patch_catalog_root(monkeypatch, tmp_path)
-    owner = SimpleNamespace(event_log=FakeEventLog(fail_event="admin_pricing_change_applied"))
+    event_store = MemoryEventStore()
+    event_log = FakeEventLog(fail_event="admin_pricing_change_applied")
+    owner = SimpleNamespace(event_log=event_log, event_store=event_store)
 
     with pytest.raises(RuntimeError, match="event-store-down"):
         apply_pricing_change_effect(
@@ -282,6 +286,7 @@ def test_pricing_change_rolls_back_catalog_when_audit_event_cannot_persist(
             correlation_id="correlation-pricing",
             admin_id="admin-1",
             tenant_id="business-a",
+            business_id="business-a",
             product_id="crm-pro",
             environment="test",
             offer_id="crm-pro-monthly",
@@ -290,7 +295,32 @@ def test_pricing_change_rolls_back_catalog_when_audit_event_cannot_persist(
             requested_by="admin-2",
         )
 
-    assert load_yaml(catalog_path, allow_empty=False, cache=False) == original_catalog
+    business_path = tmp_path / "business-a" / "business-a" / "crm-pro" / "test.yaml"
+    assert load_yaml(legacy_path, allow_empty=False, cache=False) == original_legacy
+    assert load_yaml(business_path, allow_empty=False, cache=False)["offers"][0]["base_price_rub"] == 900
+    assert len(list(event_store.iter_events(
+        tenant_id="business-a", start_ms=0, event_type=OFFER_UPDATED
+    ))) == 1
+
+    event_log.fail_event = None
+    result = apply_pricing_change_effect(
+        owner,
+        decision_id="decision-pricing",
+        correlation_id="correlation-pricing",
+        admin_id="admin-1",
+        tenant_id="business-a",
+        business_id="business-a",
+        product_id="crm-pro",
+        environment="test",
+        offer_id="crm-pro-monthly",
+        new_price=900,
+        pricing_version="version-new",
+        requested_by="admin-2",
+    )
+    assert result["status"] == "verified"
+    assert len(list(event_store.iter_events(
+        tenant_id="business-a", start_ms=0, event_type=OFFER_UPDATED
+    ))) == 1
 
 
 def test_pricing_change_returns_ledger_proof_only_after_catalog_and_event_commit(
@@ -300,7 +330,7 @@ def test_pricing_change_returns_ledger_proof_only_after_catalog_and_event_commit
     catalog_path = _write_catalog(tmp_path)
     _patch_catalog_root(monkeypatch, tmp_path)
     event_log = FakeEventLog()
-    owner = SimpleNamespace(event_log=event_log)
+    owner = SimpleNamespace(event_log=event_log, event_store=MemoryEventStore())
 
     result = apply_pricing_change_effect(
         owner,
@@ -308,6 +338,7 @@ def test_pricing_change_returns_ledger_proof_only_after_catalog_and_event_commit
         correlation_id="correlation-pricing",
         admin_id="admin-1",
         tenant_id="business-a",
+        business_id="business-a",
         product_id="crm-pro",
         environment="test",
         offer_id="crm-pro-monthly",
@@ -316,15 +347,16 @@ def test_pricing_change_returns_ledger_proof_only_after_catalog_and_event_commit
         requested_by="admin-2",
     )
 
-    catalog = load_yaml(catalog_path, allow_empty=False, cache=False)
+    catalog = load_yaml(Path(result["result"]["catalog_path"]), allow_empty=False, cache=False)
     assert catalog["offers"][0]["base_price_rub"] == 900
     assert catalog["pricing_version"] == "version-new"
     assert event_log.events[-1]["event_type"] == "admin_pricing_change_applied"
     assert event_log.events[-1]["payload"]["tenant_id"] == "business-a"
+    assert event_log.events[-1]["payload"]["business_id"] == "business-a"
     assert event_log.events[-1]["payload"]["product_id"] == "crm-pro"
     assert event_log.events[-1]["payload"]["offer_id"] == "crm-pro-monthly"
     assert result["router_evidence"]["source"] == "ledger"
     assert result["router_evidence"]["verified"] is True
     assert result["router_evidence"]["external_refs"] == [
-        "pricing:business-a:crm-pro:test:offer:crm-pro-monthly:version:version-new"
+        "pricing:business-a:business-a:crm-pro:test:offer:crm-pro-monthly:version:version-new"
     ]

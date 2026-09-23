@@ -138,6 +138,21 @@ def default_offer_catalog_registry() -> OfferCatalogRegistry:
     try:
         data_dir = env_path("OFFER_CATALOGS_DATA_DIR", str(repo_root / "data" / "offer_catalogs")).resolve()
         if data_dir.exists() and data_dir.is_dir():
+            def _mk_factory(path: Path, catalog_id: str):
+                def _factory() -> OfferCatalog:
+                    raw = load_yaml(path, allow_empty=False, cache=False)
+                    if not isinstance(raw, dict):
+                        raise ValueError("BAD_OFFER_CATALOG")
+                    spec = dict(raw)
+                    spec.setdefault("catalog_id", catalog_id)
+
+                    if env_bool("OFFER_CATALOGS_STRICT", False) or env_bool("CI", False):
+                        validate_yaml_offer_catalog_spec(spec)
+
+                    return YamlOfferCatalogV1.from_spec(spec)
+
+                return _factory
+
             for tenant_dir in sorted([path for path in data_dir.iterdir() if path.is_dir()]):
                 tenant = tenant_dir.name
                 for product_dir in sorted([path for path in tenant_dir.iterdir() if path.is_dir()]):
@@ -158,26 +173,35 @@ def default_offer_catalog_registry() -> OfferCatalogRegistry:
                         if cid in reg._by_id:
                             continue
 
-                        def _mk_factory(path: Path, catalog_id: str):
-                            def _factory() -> OfferCatalog:
-                                raw = load_yaml(path, allow_empty=False, cache=False)
-                                if not isinstance(raw, dict):
-                                    raise ValueError("BAD_OFFER_CATALOG")
-                                spec = dict(raw)
-                                spec.setdefault("catalog_id", catalog_id)
-
-                                if env_bool("OFFER_CATALOGS_STRICT", False) or env_bool("CI", False):
-                                    validate_yaml_offer_catalog_spec(spec)
-
-                                return YamlOfferCatalogV1.from_spec(spec)
-
-                            return _factory
-
                         reg.register_yaml_factory(
                             cid,
                             path=yaml_path,
                             factory=_mk_factory(yaml_path, cid),
                         )
+
+                if tenant.lower() == "default":
+                    continue
+                for business_dir in sorted([path for path in tenant_dir.iterdir() if path.is_dir()]):
+                    business = str(business_dir.name or "").strip()
+                    if not business:
+                        continue
+                    for product_dir in sorted([path for path in business_dir.iterdir() if path.is_dir()]):
+                        product = product_dir.name
+                        for yaml_path in sorted(product_dir.glob("*.y*ml")):
+                            environment = yaml_path.stem
+                            cid = catalog_registry_key(
+                                tenant_id=tenant,
+                                business_id=business,
+                                product_id=product,
+                                environment=environment,
+                            )
+                            if cid in reg._by_id:
+                                continue
+                            reg.register_yaml_factory(
+                                cid,
+                                path=yaml_path,
+                                factory=_mk_factory(yaml_path, cid),
+                            )
     except Exception as exc:
         if strict_mode:
             raise

@@ -15,6 +15,7 @@ TERMINAL_EVENTS = {APPLIED_EVENT, REJECTED_EVENT}
 class PricingChangeRequest:
     request_id: str
     tenant_id: str
+    business_id: str
     product_id: str
     environment: str
     offer_id: str
@@ -76,6 +77,7 @@ def _required(value: object, *, field: str) -> str:
 def build_pricing_request_payload(
     *,
     tenant_id: str,
+    business_id: str,
     product_id: str,
     environment: str | None,
     offer_id: str | None,
@@ -87,6 +89,7 @@ def build_pricing_request_payload(
 ) -> dict[str, Any]:
     return {
         "tenant_id": _required(tenant_id, field="tenant_id"),
+        "business_id": _required(business_id, field="business_id"),
         "product_id": _required(product_id, field="product_id"),
         "environment": str(environment or "").strip(),
         "offer_id": str(offer_id or "").strip(),
@@ -104,6 +107,7 @@ def _request_from_event(event: dict[str, Any]) -> PricingChangeRequest:
     return PricingChangeRequest(
         request_id=_required(payload.get("request_id"), field="request_id"),
         tenant_id=_required(payload.get("tenant_id"), field="tenant_id"),
+        business_id=_required(payload.get("business_id"), field="business_id"),
         product_id=_required(payload.get("product_id"), field="product_id"),
         environment=str(payload.get("environment") or "").strip(),
         offer_id=str(payload.get("offer_id") or "").strip(),
@@ -151,6 +155,7 @@ def _assert_terminal_scope_matches_request(
         observed_plan_id = int(raw_plan_id) if raw_plan_id is not None else None
         if (
             str(payload.get("tenant_id") or "").strip() != request.tenant_id
+            or str(payload.get("business_id") or "").strip() != request.business_id
             or str(payload.get("product_id") or "").strip() != request.product_id
             or str(payload.get("environment") or "").strip() != request.environment
             or str(payload.get("offer_id") or "").strip() != request.offer_id
@@ -168,6 +173,7 @@ def _assert_terminal_scope_matches_request(
         payload = _payload(rejected_event)
         if (
             str(payload.get("tenant_id") or "").strip() != request.tenant_id
+            or str(payload.get("business_id") or "").strip() != request.business_id
             or str(payload.get("product_id") or "").strip() != request.product_id
             or str(payload.get("request_id") or "").strip() != request.request_id
         ):
@@ -178,9 +184,11 @@ def resolve_pricing_request_lifecycle(
     event_log: Any,
     *,
     tenant_id: str,
+    business_id: str,
     request_id: str,
 ) -> PricingRequestLifecycle:
     tenant = _required(tenant_id, field="tenant_id")
+    business = _required(business_id, field="business_id")
     request_id_text = _required(request_id, field="request_id")
 
     request_events: list[dict[str, Any]] = []
@@ -189,6 +197,8 @@ def resolve_pricing_request_lifecycle(
     for event in _events(event_log):
         payload = _payload(event)
         if str(payload.get("tenant_id") or "").strip() != tenant:
+            continue
+        if str(payload.get("business_id") or "").strip() != business:
             continue
         if str(payload.get("request_id") or "").strip() != request_id_text:
             continue
@@ -203,12 +213,12 @@ def resolve_pricing_request_lifecycle(
     request_event = _coalesce_identical_events(
         request_events,
         conflict_code=(
-            f"PRICING_CHANGE_REQUEST_ID_NOT_UNIQUE:{tenant}:{request_id_text}"
+            f"PRICING_CHANGE_REQUEST_ID_NOT_UNIQUE:{tenant}:{business}:{request_id_text}"
         ),
     )
     if request_event is None:
         raise RuntimeError(
-            f"PRICING_CHANGE_REQUEST_NOT_FOUND:{tenant}:{request_id_text}"
+            f"PRICING_CHANGE_REQUEST_NOT_FOUND:{tenant}:{business}:{request_id_text}"
         )
 
     terminal_conflict = f"PRICING_REQUEST_TERMINAL_CONFLICT:{request_id_text}"
@@ -241,11 +251,13 @@ def resolve_pricing_change_request(
     event_log: Any,
     *,
     tenant_id: str,
+    business_id: str,
     request_id: str,
 ) -> PricingChangeRequest:
     return resolve_pricing_request_lifecycle(
         event_log,
         tenant_id=tenant_id,
+        business_id=business_id,
         request_id=request_id,
     ).request
 
@@ -254,9 +266,11 @@ def assert_pricing_request_id_available(
     event_log: Any,
     *,
     tenant_id: str,
+    business_id: str,
     request_id: str,
 ) -> None:
     tenant = _required(tenant_id, field="tenant_id")
+    business = _required(business_id, field="business_id")
     request = _required(request_id, field="request_id")
     for event in _events(event_log):
         if _event_type(event) != REQUEST_EVENT:
@@ -264,9 +278,11 @@ def assert_pricing_request_id_available(
         payload = _payload(event)
         if str(payload.get("tenant_id") or "").strip() != tenant:
             continue
+        if str(payload.get("business_id") or "").strip() != business:
+            continue
         if str(payload.get("request_id") or "").strip() == request:
             raise RuntimeError(
-                f"PRICING_CHANGE_REQUEST_ID_ALREADY_EXISTS:{tenant}:{request}"
+                f"PRICING_CHANGE_REQUEST_ID_ALREADY_EXISTS:{tenant}:{business}:{request}"
             )
 
 
@@ -274,11 +290,13 @@ def assert_pricing_request_open(
     event_log: Any,
     *,
     tenant_id: str,
+    business_id: str,
     request_id: str,
 ) -> None:
     lifecycle = resolve_pricing_request_lifecycle(
         event_log,
         tenant_id=tenant_id,
+        business_id=business_id,
         request_id=request_id,
     )
     if lifecycle.applied_event is not None or lifecycle.rejected_event is not None:
@@ -290,6 +308,7 @@ def assert_pricing_request_open(
 def assert_pricing_request_matches(
     lifecycle: PricingRequestLifecycle,
     *,
+    business_id: str,
     product_id: str,
     environment: str | None,
     offer_id: str | None,
@@ -299,6 +318,8 @@ def assert_pricing_request_matches(
 ) -> None:
     request = lifecycle.request
     mismatches: list[str] = []
+    if str(business_id).strip() != request.business_id:
+        mismatches.append("business_id")
     if str(product_id).strip() != request.product_id:
         mismatches.append("product_id")
     if str(environment or "").strip() != request.environment:
@@ -328,6 +349,7 @@ def validate_pricing_apply_against_request(
     event_log: Any,
     *,
     tenant_id: str,
+    business_id: str,
     request_id: str,
     product_id: str,
     environment: str | None,
@@ -339,6 +361,7 @@ def validate_pricing_apply_against_request(
     lifecycle = resolve_pricing_request_lifecycle(
         event_log,
         tenant_id=tenant_id,
+        business_id=business_id,
         request_id=request_id,
     )
     if lifecycle.applied_event is not None or lifecycle.rejected_event is not None:
@@ -347,6 +370,7 @@ def validate_pricing_apply_against_request(
         )
     assert_pricing_request_matches(
         lifecycle,
+        business_id=business_id,
         product_id=product_id,
         environment=environment,
         offer_id=offer_id,

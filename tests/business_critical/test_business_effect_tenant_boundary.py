@@ -183,6 +183,7 @@ def test_pricing_mismatch_stops_before_catalog_prepare(monkeypatch: pytest.Monke
             correlation_id="correlation-pricing",
             admin_id="admin-1",
             tenant_id="business-b",
+            business_id="business-a",
             product_id="crm-pro",
             environment="test",
             offer_id="crm-pro-monthly",
