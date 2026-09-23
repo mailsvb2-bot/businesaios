@@ -4,6 +4,7 @@ from dataclasses import dataclass
 from typing import Any
 
 from application.autonomy.autonomy_tiers import evaluate_autonomy_transition
+from application.decision_runtime.emission import project_decision_proposed_event
 from application.headless.decision_gateway import issue_headless_decision
 from contracts import executable_action as executable_action_contract
 from core.ai.decision_core import project_action_intent, project_executable_action
@@ -43,6 +44,7 @@ class AutonomyDecisionStep:
         envelope = issue_headless_decision(decision_core=self._contract._decision_core, state=state)
         explanation = self._contract._policy_explainer.explain(state=state, envelope=envelope)
         action_intent = self._project_action_intent(request=request, envelope=envelope)
+        self._project_decision_event(envelope=envelope, action_intent=action_intent)
         trace.record(
             event_type="decision_issued",
             step_index=step_index,
@@ -76,6 +78,20 @@ class AutonomyDecisionStep:
         )
 
     decide = evaluate
+
+    def _project_decision_event(self, *, envelope: Any, action_intent: Any) -> str | None:
+        event_store = getattr(self._contract, "_event_store", None)
+        if event_store is None:
+            executor = getattr(self._contract, "_executor", None)
+            module_name = str(getattr(type(executor), "__module__", "") or "")
+            if module_name.startswith("runtime."):
+                raise RuntimeError("DECISION_EVENT_STORE_REQUIRED")
+            return None
+        return project_decision_proposed_event(
+            event_store=event_store,
+            envelope=envelope,
+            action_intent=action_intent,
+        )
 
     def _project_action_intent(self, *, request: Any, envelope: Any) -> Any:
         payload = self._intent_payload(request=request, envelope=envelope)

@@ -120,6 +120,7 @@ ACTION_AUTHORIZED = "action.authorized"
 ACTION_EXECUTED = "action.executed"
 ACTION_FAILED = "action.failed"
 ACTION_AMBIGUOUS = "action.ambiguous"
+DECISION_PROPOSED = "decision.proposed"
 
 DECISION_ISSUED = "decision_issued"
 DECISION_EXECUTED = "decision_executed"
@@ -284,6 +285,7 @@ KNOWN_EVENT_TYPES: set[str] = {
     ACTION_EXECUTED,
     ACTION_FAILED,
     ACTION_AMBIGUOUS,
+    DECISION_PROPOSED,
     DECISION_ISSUED,
     DECISION_EXECUTED,
     DECISION_BLOCKED,
