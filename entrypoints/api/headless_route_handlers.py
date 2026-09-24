@@ -45,6 +45,7 @@ class HeadlessRouteHandlers:
             GoalExecutionRequest(
                 goal=request.goal,
                 business_id=request.business_id,
+                goal_id=request.goal_id,
                 tenant_id=request.tenant_id,
                 user_id=request.user_id,
                 region=request.region,
