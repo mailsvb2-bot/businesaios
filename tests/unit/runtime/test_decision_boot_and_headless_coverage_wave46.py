@@ -301,6 +301,7 @@ def test_execute_autopilot_always_persists_evidence_and_optionally_ledger():
     assert report.canonical_run_artifact["steps_count"] == 1
     assert report.goal_id == "goal-canonical"
     assert report.canonical_run_artifact["goal_id"] == "goal-canonical"
+    assert evidence.persist.call_args.kwargs["goal_id"] == "goal-canonical"
     assert evidence.persist.call_args.kwargs["step_index"] == 2
     assert evidence.persist.call_args.kwargs["action"] == {
         "action_type": "notify_owner",
