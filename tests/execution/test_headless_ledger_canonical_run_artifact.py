@@ -15,8 +15,10 @@ def test_ledger_persists_canonical_run_artifact(tmp_path) -> None:
             steps_count=1,
             final_feedback={'goal_score': 1.0},
             trace={'events': []},
-            canonical_run_artifact={'verification_status': 'verified', 'steps_count': 1},
+            canonical_run_artifact={'verification_status': 'verified', 'steps_count': 1, 'goal_id': 'goal-1'},
+            goal_id='goal-1',
         )
     )
     payload = ledger.read('run-1')
     assert payload['canonical_run_artifact']['verification_status'] == 'verified'
+    assert payload['goal_id'] == 'goal-1'
