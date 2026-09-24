@@ -7,7 +7,11 @@ from application.autonomy.autonomy_tiers import evaluate_autonomy_transition
 from application.decision_runtime.emission import project_decision_proposed_event
 from application.headless.decision_gateway import issue_headless_decision
 from contracts import executable_action as executable_action_contract
-from core.ai.decision_core import project_action_intent, project_executable_action
+from core.ai.decision_core import (
+    project_action_intent,
+    project_action_intent_v2,
+    project_executable_action,
+)
 from execution.headless_trace import HeadlessTrace
 
 CANON_AUTONOMY_DECISION_STEP = True
@@ -115,6 +119,18 @@ class AutonomyDecisionStep:
 
     def _project_action_intent(self, *, request: Any, envelope: Any) -> Any:
         payload = self._intent_payload(request=request, envelope=envelope)
+        envelope_version = int(
+            getattr(envelope, "envelope_version", getattr(envelope.decision, "envelope_version", 1))
+            or 1
+        )
+        if envelope_version >= 2:
+            return project_action_intent_v2(
+                decision=envelope.decision,
+                payload_hash=str(getattr(envelope, "payload_hash", "") or ""),
+                channel=str(request.channel),
+                tenant_id=str(getattr(request, "tenant_id", "") or ""),
+                business_id=str(getattr(request, "business_id", "") or ""),
+            )
         return project_action_intent(
             decision_id=str(envelope.decision.decision_id),
             correlation_id=str(envelope.decision.correlation_id or ""),
