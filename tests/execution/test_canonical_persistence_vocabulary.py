@@ -37,10 +37,12 @@ def test_canonical_run_persistence_vocabulary_prefers_run_artifact_execution_fee
 
 def test_canonical_persistence_outcome_record_embeds_vocabulary() -> None:
     record = canonical_persistence_outcome_record(
-        base_record={'tenant_id': 'tenant-1', 'business_id': 'biz-1', 'run_id': 'run-1', 'goal': 'grow'},
+        base_record={'tenant_id': 'tenant-1', 'business_id': 'biz-1', 'run_id': 'run-1', 'goal': 'grow', 'goal_id': 'goal-1'},
         outcome_record={'verification_status': 'accepted', 'executed': True, 'external_refs': ['ref-1']},
     )
     assert record['verification_status'] == 'verified'
+    assert record['goal_id'] == 'goal-1'
+    assert record['persistence_vocabulary']['goal_id'] == 'goal-1'
     assert record['persistence_vocabulary']['verification_status'] == 'verified'
     assert record['external_refs'] == ['ref-1']
 
