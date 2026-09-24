@@ -34,12 +34,14 @@ class BusinesAIOSHeadlessClient:
         ceo_enabled: bool = False,
         ceo_horizon: str = "30d",
         ceo_risk_level: str = "conservative",
+        goal_id: str | None = None,
     ) -> GoalExecutionReport:
         runtime = build_headless_runtime(entrypoint="headless_sdk")
         request = GoalExecutionRequest(
             goal=goal,
             business_id=business_id,
             tenant_id=tenant_id,
+            goal_id=goal_id,
             user_id=user_id,
             region=region,
             max_steps=max_steps,
