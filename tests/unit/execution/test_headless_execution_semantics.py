@@ -110,6 +110,31 @@ def _make_contract(executor):
     )
 
 
+def test_execute_once_preserves_canonical_goal_id(monkeypatch) -> None:
+    contract = _make_contract(VerifiedExecutor())
+    captured = {}
+    sentinel = object()
+
+    def fake_execute_autopilot(request):
+        captured["request"] = request
+        return sentinel
+
+    monkeypatch.setattr(contract, "execute_autopilot", fake_execute_autopilot)
+    result = contract.execute_once(
+        GoalExecutionRequest(
+            goal="grow profit",
+            business_id="biz-1",
+            tenant_id="tenant-1",
+            goal_id="goal-profit",
+            max_steps=5,
+        )
+    )
+
+    assert result is sentinel
+    assert captured["request"].goal_id == "goal-profit"
+    assert captured["request"].max_steps == 1
+
+
 def test_headless_step_exposes_attempted_executed_verified_semantics() -> None:
     report = _make_contract(VerifiedExecutor()).execute_autopilot(
         GoalExecutionRequest(
