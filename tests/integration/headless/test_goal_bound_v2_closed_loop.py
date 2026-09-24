@@ -26,6 +26,7 @@ def test_goal_bound_headless_closed_loop_uses_v2_and_preserves_goal_lineage(
         metric="profit",
         baseline=100.0,
         target=120.0,
+        deadline_at_ms=5000,
         priority=90,
         occurred_at_ms=1000,
     )
@@ -48,6 +49,8 @@ def test_goal_bound_headless_closed_loop_uses_v2_and_preserves_goal_lineage(
     assert intent["schema_version"] == 2
     assert intent["goal_id"] == "goal-profit"
     assert intent["business_id"] == "business-phase6"
+    assert intent["requested_autonomy"] == "supervised"
+    assert intent["deadline"] == 5000
     assert intent["decision_id"] == step.decision_id
     assert outcome["decision_id"] == step.decision_id
     assert outcome["intent_id"] == intent["intent_id"]
