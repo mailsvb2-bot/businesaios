@@ -42,9 +42,11 @@ def test_canonical_step_and_report_artifacts_share_execution_feedback() -> None:
         stop_reason='goal_reached',
         steps=(step,),
         final_feedback={'execution_feedback': dict(step.execution_feedback)},
+        goal_id='goal-1',
     )
     assert step_artifact['execution_feedback']['action_id'] == 'act-1'
     assert report_artifact['execution_feedback']['verification_status'] == 'verified'
+    assert report_artifact['goal_id'] == 'goal-1'
     assert report_artifact['step_artifacts'][0]['external_ref'] == 'proof://1'
 
 
