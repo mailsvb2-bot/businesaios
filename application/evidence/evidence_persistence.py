@@ -228,8 +228,15 @@ class EvidencePersistenceService:
             or _safe_dict(verification.get('verification')).get('source_of_truth')
             or execution.get('source_of_truth')
         ) or 'unknown'
+        intent_payload = _safe_dict(action_intent.get('payload'))
+        intent_meta = _safe_dict(intent_payload.get('meta'))
+        signed_goal_id = _text(intent_meta.get('canonical_goal_id'))
+        persisted_goal_id = _text(outcome.get('goal_id'))
+        if signed_goal_id and persisted_goal_id and signed_goal_id != persisted_goal_id:
+            raise ValueError('canonical goal lineage conflicts with signed ActionIntent')
         lineage = {
             'normalization': str(persistence_key),
+            'goal': persisted_goal_id or signed_goal_id,
             'derived_fact': _text(action_intent.get('derived_fact_ref') or action.get('derived_fact_ref') or business_outcome.get('derived_fact_ref')),
             'decision': _text(action_intent.get('decision_id') or action.get('decision_id') or business_outcome.get('decision_id')),
             'action': _text(outcome.get('action_id')),
