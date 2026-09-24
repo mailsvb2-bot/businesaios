@@ -224,7 +224,8 @@ def test_v2_builder_uses_real_ranked_alternatives_and_explicit_economics() -> No
     assert contract["risk"] == {"level": "low"}
     assert contract["do_nothing_baseline"] == {"profit": 100}
     assert contract["rationale"]["evidence"] == ["evidence-1"]
-    assert contract["rationale"]["uncertainties"] == []
+    assert contract["rationale"]["objective_projection"] is None
+    assert contract["rationale"]["uncertainties"] == ["objective_vector:UNKNOWN"]
 
 
 def test_v2_builder_preserves_unknowns_when_no_real_alternatives_or_forecast_exist() -> None:
@@ -258,9 +259,11 @@ def test_v2_builder_preserves_unknowns_when_no_real_alternatives_or_forecast_exi
         "alternatives:UNKNOWN",
         "confidence:UNKNOWN",
         "expected_value:UNKNOWN",
+        "objective_vector:UNKNOWN",
         "risk:UNKNOWN",
         "do_nothing_baseline:UNKNOWN",
     }
+    assert contract["rationale"]["objective_projection"] is None
 
 
 def test_v1_builder_does_not_materialize_v2_contract() -> None:
@@ -358,3 +361,60 @@ def test_decision_core_selects_v2_only_for_formal_canonical_goal_binding() -> No
     assert _decision_envelope_version(
         type("_State", (), {"meta": {"goal_id": "goal-1"}})()
     ) == 1
+
+
+
+def test_v2_preserves_real_complete_objective_projection_without_surrogates() -> None:
+    objective = {
+        "business_value": 0.7,
+        "revenue": 0.8,
+        "margin": 0.6,
+        "cash_flow": 0.5,
+        "risk": 0.9,
+        "customer_impact": 0.4,
+        "cost": 0.3,
+        "strategic_value": 0.75,
+    }
+    ranking = {
+        **{f"objective:{name}": value for name, value in objective.items()},
+        "_decision_alternatives": [
+            {"option_id": "send_message@v1", "score": 0.61, "reason": "multi_objective"}
+        ],
+        "_decision_selection": {
+            "option_id": "send_message@v1",
+            "score": 0.61,
+            "reason": "multi_objective",
+        },
+    }
+    state = _EnvelopeState(
+        meta={"model_profile": "model-profile-1"},
+        product={"business_id": "business-1"},
+    )
+    out = type(
+        "_Out",
+        (),
+        {"action": "send_message@v1", "ranking": ranking},
+    )()
+    keyring = Keyring({"k1": {"secret": b"secret", "revoked": False}}, "k1")
+    built = build_envelope(
+        state=state,
+        out=out,
+        payload={
+            "business_id": "business-1",
+            "goal_id": "goal-1",
+            "confidence": 0.8,
+            "expected_value": 25.0,
+            "risk": {"level": "low"},
+            "meta": {"canonical_goal_id": "goal-1"},
+        },
+        policy_id="policy-1",
+        keyring=keyring,
+        issuer_id="businesaios-core",
+        ttl_ms=1000,
+        action_schema_version=1,
+        envelope_version=2,
+    )
+
+    contract = dict(built.decision.contract_v2 or {})
+    assert contract["rationale"]["objective_projection"] == objective
+    assert "objective_vector:UNKNOWN" not in contract["rationale"]["uncertainties"]
