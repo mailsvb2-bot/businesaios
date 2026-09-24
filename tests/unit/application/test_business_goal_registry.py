@@ -335,6 +335,71 @@ def test_goal_constraint_links_are_scope_validated_projected_and_replay_safe() -
     assert replayed == goal
     assert events.events == before
 
+    with pytest.raises(ValueError, match="same business"):
+        registry.update_objective(
+            tenant_id="tenant",
+            business_id="business",
+            goal_id="linked",
+            idempotency_key="missing-update",
+            constraint_ids=("missing",),
+            occurred_at_ms=210,
+        )
+    with pytest.raises(ValueError, match="same business"):
+        registry.update_objective(
+            tenant_id="tenant",
+            business_id="business",
+            goal_id="linked",
+            idempotency_key="foreign-update",
+            constraint_ids=("foreign",),
+            occurred_at_ms=210,
+        )
+    with pytest.raises(ValueError, match="archived constraints"):
+        registry.update_objective(
+            tenant_id="tenant",
+            business_id="business",
+            goal_id="linked",
+            idempotency_key="archived-update",
+            constraint_ids=("archived",),
+            occurred_at_ms=210,
+        )
+
+    constraints.create(
+        tenant_id="tenant",
+        business_id="business",
+        constraint_id="replacement",
+        idempotency_key="replacement-create",
+        constraint_kind="approval",
+        severity="hard",
+        state_key="required",
+        occurred_at_ms=220,
+    )
+    updated = registry.update_objective(
+        tenant_id="tenant",
+        business_id="business",
+        goal_id="linked",
+        idempotency_key="replacement-link",
+        constraint_ids=("replacement",),
+        occurred_at_ms=230,
+    )
+    assert updated.constraint_ids == ("replacement",)
+    constraints.archive(
+        tenant_id="tenant",
+        business_id="business",
+        constraint_id="replacement",
+        idempotency_key="replacement-archive",
+        occurred_at_ms=240,
+    )
+    before_update_replay = list(events.events)
+    assert registry.update_objective(
+        tenant_id="tenant",
+        business_id="business",
+        goal_id="linked",
+        idempotency_key="replacement-link",
+        constraint_ids=("replacement",),
+        occurred_at_ms=999,
+    ) == updated
+    assert events.events == before_update_replay
+
 
 def test_goal_context_keeps_historical_unresolved_constraint_as_evidence() -> None:
     events = MemoryEventStore()
