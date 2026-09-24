@@ -5,6 +5,7 @@ from dataclasses import dataclass
 import pytest
 
 from application.decision_policy.policy_stage import propose_action
+from core.policies.telegram.helpers import normalize_proposed_action
 
 
 @dataclass
@@ -84,3 +85,44 @@ def test_rank_stage_preserves_mutable_legacy_proposal_type_and_guard_metadata():
     out = propose_action(policy=MutableRankedPolicy(), state={}, trace=Trace())
     assert isinstance(out, Proposal)
     assert out.ranking["guard_value:spend-cap"] == 30_000.0
+
+
+@dataclass(frozen=True)
+class FrozenRankedProposal:
+    action: str
+    payload: dict
+    ranking: dict
+
+
+class MixedProposalTypesPolicy:
+    def propose_many(self, state):
+        return [
+            Proposal(action="noop@v1", payload={}),
+            FrozenRankedProposal(
+                action="noop@v1",
+                payload={},
+                ranking={
+                    "expected_profit_delta_minor": 100.0,
+                    "guard_value:spend-cap": 25_000.0,
+                },
+            ),
+        ]
+
+
+def test_rank_stage_materializes_the_actual_selected_candidate_type():
+    out = propose_action(policy=MixedProposalTypesPolicy(), state={}, trace=Trace())
+    assert isinstance(out, FrozenRankedProposal)
+    assert out.ranking["guard_value:spend-cap"] == 25_000.0
+
+
+def test_mapping_proposal_normalization_preserves_decision_only_ranking():
+    out = normalize_proposed_action({
+        "action": "noop@v1",
+        "payload": {},
+        "ranking": {
+            "expected_profit_delta_minor": 5.0,
+            "guard_value:spend-cap": 20_000,
+        },
+    })
+    assert out.payload == {}
+    assert out.ranking["guard_value:spend-cap"] == 20_000.0

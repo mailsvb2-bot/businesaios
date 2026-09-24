@@ -17,6 +17,7 @@ class RankedProposal:
     score: float
     reason: str
     ranking: dict[str, Any] = field(default_factory=dict)
+    source_index: int = 0
 
 
 def _mapping(value: Any) -> dict[str, Any]:
@@ -102,6 +103,7 @@ def rank_proposals(
                         score=float(score),
                         reason=str(reason),
                         ranking=dict(ranking),
+                        source_index=int(index),
                     ),
                 )
             )

@@ -75,7 +75,7 @@ def propose_action(*, policy: Any, state: Any, trace: Any) -> Any:
         )
     selected = ranked[0]
     output = _materialize_ranked(
-        prototype=candidates[0],
+        prototype=candidates[selected.source_index],
         action=selected.action,
         payload=selected.payload,
         ranking=selected.ranking,
