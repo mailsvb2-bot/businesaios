@@ -252,6 +252,7 @@ class HeadlessExecutionContract:
                 max_steps=1,
                 autonomy_tier=request.autonomy_tier,
                 approval_policy=dict(request.approval_policy),
+                goal_id=request.goal_id,
             )
         )
 
