@@ -31,7 +31,6 @@ class CEOParticipation:
 class GoalExecutionRequest:
     goal: str
     business_id: str
-    goal_id: str | None = None
     tenant_id: str = "default"
     user_id: str | None = None
     product_name: str = "BusinesAIOS"
@@ -46,6 +45,7 @@ class GoalExecutionRequest:
     max_steps: int = 1
     autonomy_tier: str = 'supervised'
     approval_policy: dict[str, Any] = field(default_factory=dict)
+    goal_id: str | None = None
 
     def validate(self) -> tuple[bool, tuple[str, ...]]:
         issues: list[str] = []
