@@ -113,6 +113,7 @@ class GoalExecutionReport:
     run_id: str = ""
     trace_id: str = ""
     canonical_run_artifact: dict[str, Any] = field(default_factory=dict)
+    goal_id: str | None = None
 
     @property
     def attempted(self) -> bool:
