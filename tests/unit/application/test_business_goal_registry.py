@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import pytest
 
+from application.business_constraint import BusinessConstraintRegistry
 from application.business_goal import BusinessGoalHistoryInvariantViolation, BusinessGoalProjector, BusinessGoalRegistry
 from application.headless.goal_mapper import HeadlessGoalStateMapper
 from application.headless.models import GoalExecutionRequest
@@ -105,6 +106,30 @@ def test_goal_hierarchy_lifecycle_and_idempotency() -> None:
 
 def test_goal_objective_fields_are_first_class_and_mutate_through_same_lifecycle() -> None:
     registry, events = _registry()
+    constraints = BusinessConstraintRegistry(
+        event_store=events,
+        idempotency_store=InMemoryIdempotencyStore(),
+    )
+    constraints.create(
+        tenant_id="tenant",
+        business_id="business",
+        constraint_id="budget-cap",
+        idempotency_key="constraint-budget-cap",
+        constraint_kind="budget_guard",
+        severity="hard",
+        state_key="enforced",
+        occurred_at_ms=10,
+    )
+    constraints.create(
+        tenant_id="tenant",
+        business_id="business",
+        constraint_id="no-cold-calls",
+        idempotency_key="constraint-no-cold-calls",
+        constraint_kind="channel_guard",
+        severity="hard",
+        state_key="enforced",
+        occurred_at_ms=20,
+    )
     created = registry.create(
         tenant_id="tenant",
         business_id="business",
@@ -162,6 +187,190 @@ def test_goal_objective_fields_are_first_class_and_mutate_through_same_lifecycle
         occurred_at_ms=999,
     ) == updated
     assert len(events.events) == count
+
+
+def test_goal_constraint_links_are_scope_validated_projected_and_replay_safe() -> None:
+    registry, events = _registry()
+    constraints = BusinessConstraintRegistry(
+        event_store=events,
+        idempotency_store=InMemoryIdempotencyStore(),
+    )
+    constraints.create(
+        tenant_id="tenant",
+        business_id="business",
+        constraint_id="active",
+        idempotency_key="active-create",
+        constraint_kind="budget_guard",
+        severity="hard",
+        state_key="enforced",
+        occurred_at_ms=10,
+    )
+    constraints.create(
+        tenant_id="tenant",
+        business_id="other",
+        constraint_id="foreign",
+        idempotency_key="foreign-create",
+        constraint_kind="approval",
+        severity="hard",
+        state_key="required",
+        occurred_at_ms=20,
+    )
+    constraints.create(
+        tenant_id="tenant",
+        business_id="business",
+        constraint_id="archived",
+        idempotency_key="archived-create",
+        constraint_kind="channel_guard",
+        severity="soft",
+        state_key="advisory",
+        occurred_at_ms=30,
+    )
+    constraints.archive(
+        tenant_id="tenant",
+        business_id="business",
+        constraint_id="archived",
+        idempotency_key="archived-archive",
+        occurred_at_ms=40,
+    )
+
+    with pytest.raises(ValueError, match="same business"):
+        registry.create(
+            tenant_id="tenant",
+            business_id="business",
+            goal_id="missing-link",
+            idempotency_key="missing-link-create",
+            goal_kind="growth",
+            constraint_ids=("missing",),
+            occurred_at_ms=100,
+        )
+    with pytest.raises(ValueError, match="same business"):
+        registry.create(
+            tenant_id="tenant",
+            business_id="business",
+            goal_id="foreign-link",
+            idempotency_key="foreign-link-create",
+            goal_kind="growth",
+            constraint_ids=("foreign",),
+            occurred_at_ms=100,
+        )
+    with pytest.raises(ValueError, match="archived constraints"):
+        registry.create(
+            tenant_id="tenant",
+            business_id="business",
+            goal_id="archived-link",
+            idempotency_key="archived-link-create",
+            goal_kind="growth",
+            constraint_ids=("archived",),
+            occurred_at_ms=100,
+        )
+
+    goal = registry.create(
+        tenant_id="tenant",
+        business_id="business",
+        goal_id="linked",
+        idempotency_key="linked-create",
+        goal_kind="growth",
+        metric="mrr",
+        constraint_ids=("active",),
+        occurred_at_ms=100,
+    )
+    projector = BusinessGoalProjector(events)
+    context = projector.load_context(
+        tenant_id="tenant",
+        business_id="business",
+        goal_id="linked",
+    )
+    assert context["constraints"]["unresolved_ids"] == []
+    assert context["constraints"]["evidence_only"] is True
+    assert context["constraints"]["linked"] == [
+        {
+            "constraint_id": "active",
+            "constraint_kind": "budget_guard",
+            "severity": "hard",
+            "subject_type": None,
+            "subject_id": None,
+            "state_key": "enforced",
+            "lifecycle_status": "active",
+            "updated_at_ms": 10,
+        }
+    ]
+
+    state = HeadlessGoalStateMapper(canonical_goal_reader=projector).to_world_state(
+        request=GoalExecutionRequest(
+            goal="Grow recurring revenue within the canonical guard",
+            goal_id="linked",
+            tenant_id="tenant",
+            business_id="business",
+        ),
+        step_index=0,
+        previous_feedback={},
+    )
+    assert state.meta["canonical_goal"]["constraints"]["linked"][0]["constraint_id"] == "active"
+
+    constraints.archive(
+        tenant_id="tenant",
+        business_id="business",
+        constraint_id="active",
+        idempotency_key="active-archive",
+        occurred_at_ms=200,
+    )
+    archived_context = projector.load_context(
+        tenant_id="tenant",
+        business_id="business",
+        goal_id="linked",
+    )
+    assert archived_context["constraints"]["linked"][0]["lifecycle_status"] == "archived"
+
+    before = list(events.events)
+    replayed = registry.create(
+        tenant_id="tenant",
+        business_id="business",
+        goal_id="linked",
+        idempotency_key="linked-create",
+        goal_kind="growth",
+        metric="mrr",
+        constraint_ids=("active",),
+        occurred_at_ms=999,
+    )
+    assert replayed == goal
+    assert events.events == before
+
+
+def test_goal_context_keeps_historical_unresolved_constraint_as_evidence() -> None:
+    events = MemoryEventStore()
+    writer = EventFactLifecycleWriter(
+        event_store=events,
+        idempotency_store=InMemoryIdempotencyStore(),
+        namespace="business_goal_fact",
+        source="business_goal_registry",
+        id_prefix="business-goal",
+    )
+    writer.append_once(
+        tenant_id="tenant",
+        business_id="business",
+        entity_id="legacy-goal",
+        operation="create",
+        idempotency_key="legacy-linked-create",
+        fact_type="goal.created",
+        payload={
+            "schema_version": 1,
+            "goal_kind": "growth",
+            "target_key": "mrr",
+            "metric": "mrr",
+            "constraint_ids": ["retired-or-missing"],
+            "parent_goal_id": None,
+            "priority": 50,
+        },
+        occurred_at_ms=100,
+    )
+    context = BusinessGoalProjector(events).load_context(
+        tenant_id="tenant",
+        business_id="business",
+        goal_id="legacy-goal",
+    )
+    assert context["constraints"]["linked"] == []
+    assert context["constraints"]["unresolved_ids"] == ["retired-or-missing"]
+    assert context["constraints"]["evidence_only"] is True
 
 
 def test_goal_hierarchy_reaches_canonical_headless_world_state() -> None:
