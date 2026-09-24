@@ -1,10 +1,13 @@
 from __future__ import annotations
 
 from application.action import ActionIntentEvidenceProjector
+from application.autonomy.autonomy_decision_step import AutonomyDecisionStep
 from application.evidence.evidence_persistence import EvidencePersistenceService
-from contracts.action_intent import ActionIntentV2
+from contracts.action_intent import ActionIntentV1, ActionIntentV2
 from contracts.decisioning.sovereign_decision_contract import Decision, DecisionContractV2
+from core.security.keyring import Keyring
 from core.utils.canonical import payload_hash
+from kernel.decision_crypto import signed_envelope_from_decision
 from storage.evidence_store import InMemoryEvidenceStore
 
 
@@ -196,3 +199,48 @@ def test_action_intent_v2_evidence_rejects_goal_identity_conflict() -> None:
         assert "canonical goal lineage conflicts" in str(exc)
     else:
         raise AssertionError("persisted Goal must match ActionIntent v2 goal_id")
+
+
+
+class _Request:
+    tenant_id = "tenant-1"
+    business_id = "business-1"
+    user_id = "user-1"
+    autonomy_tier = "supervised"
+    channel = "headless"
+    approval_policy: dict = {}
+    constraints: dict = {}
+    economy: dict = {}
+    meta: dict = {}
+
+
+def test_autonomy_step_projects_v2_only_for_envelope_v2() -> None:
+    keyring = Keyring({"k1": {"secret": b"secret", "revoked": False}}, "k1")
+    decision_v2 = _decision()
+    envelope_v2 = signed_envelope_from_decision(decision=decision_v2, keyring=keyring)
+    step = AutonomyDecisionStep(contract=object())
+
+    intent_v2 = step._project_action_intent(request=_Request(), envelope=envelope_v2)
+    assert isinstance(intent_v2, ActionIntentV2)
+    assert intent_v2.goal_id == "goal-1"
+    assert intent_v2.business_id == "business-1"
+
+    decision_v1 = Decision(
+        decision_id="decision-v1",
+        issuer_id="businesaios-core",
+        issued_at_ms=1000,
+        expires_at_ms=2000,
+        policy_id="policy-1",
+        action="send_message@v1",
+        payload={"tenant_id": "tenant-1", "business_id": "business-1"},
+        snapshot_id="snapshot-v1",
+        state_hash="state-v1",
+        correlation_id="correlation-v1",
+        state_schema_version=1,
+        action_schema_version=1,
+        envelope_version=1,
+    )
+    envelope_v1 = signed_envelope_from_decision(decision=decision_v1, keyring=keyring)
+    intent_v1 = step._project_action_intent(request=_Request(), envelope=envelope_v1)
+    assert isinstance(intent_v1, ActionIntentV1)
+    assert intent_v1.schema_version == 1
