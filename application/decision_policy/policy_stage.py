@@ -39,9 +39,11 @@ def _materialize_ranked(
             output = type(prototype)(action=str(action), payload=dict(payload))
         except TypeError:
             return SimpleNamespace(action=str(action), payload=dict(payload), ranking=dict(ranking))
-        if hasattr(output, "ranking"):
+        try:
+            setattr(output, "ranking", dict(ranking))
             return output
-        return SimpleNamespace(action=str(action), payload=dict(payload), ranking=dict(ranking))
+        except (AttributeError, TypeError):
+            return SimpleNamespace(action=str(action), payload=dict(payload), ranking=dict(ranking))
 
 
 def propose_action(*, policy: Any, state: Any, trace: Any) -> Any:

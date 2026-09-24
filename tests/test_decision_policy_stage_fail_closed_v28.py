@@ -68,3 +68,19 @@ def test_rank_stage_preserves_decision_only_guard_metadata():
     assert out.action == "noop@v1"
     assert out.payload == {}
     assert out.ranking["guard_value:spend-cap"] == 40_000.0
+
+
+class MutableRankedPolicy:
+    def propose_many(self, state):
+        proposal = Proposal(action="noop@v1", payload={})
+        proposal.ranking = {
+            "expected_profit_delta_minor": 1.0,
+            "guard_value:spend-cap": 30_000.0,
+        }
+        return [proposal]
+
+
+def test_rank_stage_preserves_mutable_legacy_proposal_type_and_guard_metadata():
+    out = propose_action(policy=MutableRankedPolicy(), state={}, trace=Trace())
+    assert isinstance(out, Proposal)
+    assert out.ranking["guard_value:spend-cap"] == 30_000.0
