@@ -5,9 +5,9 @@ from datetime import UTC, datetime
 import pytest
 
 from application.outcome.evidence_projection import (
+    OUTCOME_OBSERVED_EVENT_TYPE,
     BusinessOutcomeEventProjectionConflict,
     BusinessOutcomeEventSpineProjector,
-    OUTCOME_OBSERVED_EVENT_TYPE,
 )
 from contracts.action_intent import ActionIntentV1
 from contracts.business_outcome import BusinessOutcomeV1
