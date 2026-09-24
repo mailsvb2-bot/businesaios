@@ -13,6 +13,28 @@ CANON_AUTONOMY_EXECUTION_STEP = True
 CANON_AUTONOMY_EXECUTION_STEP_GATEWAY_EXECUTION_OWNER = True
 
 
+def _envelope_version(envelope: Any) -> int:
+    try:
+        return int(
+            getattr(
+                envelope,
+                "envelope_version",
+                getattr(getattr(envelope, "decision", None), "envelope_version", 1),
+            )
+            or 1
+        )
+    except (TypeError, ValueError):
+        return 1
+
+
+def _v2_intent_action_mutated(*, envelope: Any, executable_action: Any) -> bool:
+    if _envelope_version(envelope) < 2:
+        return False
+    decided = str(getattr(getattr(envelope, "decision", None), "action", "") or "").strip()
+    executable = str(getattr(executable_action, "action_type", "") or "").strip()
+    return bool(decided and executable and decided != executable)
+
+
 class AutonomyExecutionStep:
     def __init__(self, *, contract: Any) -> None:
         self._contract = contract
@@ -40,6 +62,37 @@ class AutonomyExecutionStep:
                     "capability_planning": capability_plan,
                 },
                 error=error_code,
+                decision_id=envelope.decision.decision_id,
+                correlation_id=envelope.decision.correlation_id,
+            )
+
+        if _v2_intent_action_mutated(
+            envelope=envelope,
+            executable_action=executable_action,
+        ):
+            decided_action = str(getattr(envelope.decision, "action", "") or "")
+            executable_type = str(getattr(executable_action, "action_type", "") or "")
+            return ExecutionResult(
+                ok=False,
+                output={
+                    "attempted": False,
+                    "executed": False,
+                    "verified": False,
+                    "operator_required": True,
+                    "blocked_by_policy": False,
+                    "approval_required": True,
+                    "immutable_action_intent": {
+                        "schema_version": 2,
+                        "decision_id": str(getattr(envelope.decision, "decision_id", "") or ""),
+                        "intent_id": str(getattr(executable_action, "intent_id", "") or ""),
+                        "decided_action_type": decided_action,
+                        "requested_action_type": executable_type,
+                        "reason": "action_type_changed_after_decision",
+                        "requires_new_intent": True,
+                    },
+                    "capability_planning": capability_plan,
+                },
+                error="immutable_action_intent_changed",
                 decision_id=envelope.decision.decision_id,
                 correlation_id=envelope.decision.correlation_id,
             )
