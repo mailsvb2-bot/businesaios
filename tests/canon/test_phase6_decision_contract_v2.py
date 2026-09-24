@@ -10,13 +10,13 @@ from application.decision_runtime.flow import build_envelope
 from contracts.decisioning.sovereign_decision_contract import Decision, DecisionContractV2
 from core.security.keyring import Keyring
 from core.utils.canonical import canonical_json_bytes, payload_hash
-from observability.platform.decision_archive.sqlite_decision_archive import SqliteDecisionArchive
 from kernel.decision_crypto import (
     canonical_signed_payload,
     sign_decision,
     signed_envelope_from_decision,
     verify_signed_material,
 )
+from observability.platform.decision_archive.sqlite_decision_archive import SqliteDecisionArchive
 
 
 def _decision(*, envelope_version: int, contract_v2: dict | None = None) -> Decision:
