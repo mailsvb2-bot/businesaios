@@ -135,6 +135,64 @@ class BusinessGoalProjector:
         ids = sorted({str(row["entity_id"]) for row in self._facts(tenant_id=tenant_id, business_id=business_id)})
         return tuple(self.get(tenant_id=tenant_id, business_id=business_id, goal_id=value) for value in ids)
 
+    @staticmethod
+    def _decision_view(goal: BusinessGoal) -> dict[str, object]:
+        return {
+            "goal_id": goal.goal_id,
+            "goal_kind": goal.goal_kind,
+            "metric": goal.metric,
+            "baseline": goal.baseline,
+            "target": goal.target,
+            "deadline_at_ms": goal.deadline_at_ms,
+            "priority": goal.priority,
+            "owner_id": goal.owner_id,
+            "constraint_ids": list(goal.constraint_ids),
+            "parent_goal_id": goal.parent_goal_id,
+            "lifecycle_status": goal.lifecycle_status.value,
+            "updated_at_ms": goal.updated_at_ms,
+        }
+
+    def load_context(self, *, tenant_id: str, business_id: str, goal_id: str) -> dict[str, object]:
+        goals = {
+            goal.goal_id: goal
+            for goal in self.list_for_business(tenant_id=tenant_id, business_id=business_id)
+        }
+        try:
+            current = goals[str(goal_id)]
+        except KeyError as exc:
+            raise BusinessGoalNotFound(f"business goal not found: {goal_id}") from exc
+
+        ancestors: list[BusinessGoal] = []
+        seen = {current.goal_id}
+        cursor = current.parent_goal_id
+        while cursor is not None:
+            if cursor in seen:
+                raise BusinessGoalHistoryInvariantViolation("business goal hierarchy contains a cycle")
+            seen.add(cursor)
+            parent = goals.get(cursor)
+            if parent is None:
+                raise BusinessGoalHistoryInvariantViolation(
+                    "business goal hierarchy references a missing canonical parent"
+                )
+            ancestors.append(parent)
+            cursor = parent.parent_goal_id
+        ancestors.reverse()
+
+        children = sorted(
+            (goal for goal in goals.values() if goal.parent_goal_id == current.goal_id),
+            key=lambda goal: (-goal.priority, goal.goal_id),
+        )
+        return {
+            "goal": self._decision_view(current),
+            "hierarchy": {
+                "depth": len(ancestors),
+                "ancestors": [self._decision_view(goal) for goal in ancestors],
+                "children": [self._decision_view(goal) for goal in children],
+            },
+            "evidence_only": True,
+            "must_not_issue_decision": True,
+        }
+
 
 class BusinessGoalRegistry:
     def __init__(self, *, event_store: Any, idempotency_store: IdempotencyStore) -> None:
