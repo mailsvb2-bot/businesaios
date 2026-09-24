@@ -5,6 +5,7 @@ from functools import lru_cache
 from pathlib import Path
 
 from application.autonomy.autonomy_safety_bundle import AutonomySafetyBundle
+from application.business_goal import BusinessGoalProjector
 from application.effects.effect_journal import FileEffectJournal
 from application.headless.contract import HeadlessExecutionContract
 from application.headless.feedback import SimpleHeadlessFeedbackReader
@@ -161,6 +162,7 @@ def build_headless_runtime(*, entrypoint: str = "headless_sdk", root_dir: str | 
                 policy=memory_policy,
             ),
             semantic_snapshot_reader=state_synthesis_engine.snapshot_store,
+            canonical_goal_reader=BusinessGoalProjector(event_store),
         ),
         feedback_reader=SimpleHeadlessFeedbackReader.default(),
         stop_policy=HeadlessStopPolicy(max_failures=1),
