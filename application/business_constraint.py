@@ -207,6 +207,26 @@ class BusinessConstraintRegistry:
             updated_at_ms=when,
         )
         payload = self._payload(candidate)
+        replay = self._writer.find_existing_for_key(
+            tenant_id=tenant_id,
+            business_id=business_id,
+            entity_id=constraint_id,
+            operation="create",
+            idempotency_key=idempotency_key,
+            fact_type=CONSTRAINT_CREATED,
+            event_metadata=event_metadata,
+        )
+        if replay is not None:
+            persisted = dict(dict(replay.get("payload") or {}).get("payload") or {})
+            if persisted != payload:
+                raise ValueError(
+                    "constraint create idempotency key was already used with different constraint data"
+                )
+            return self._projector.get(
+                tenant_id=tenant_id,
+                business_id=business_id,
+                constraint_id=constraint_id,
+            )
         try:
             current = self._projector.get(tenant_id=tenant_id, business_id=business_id, constraint_id=constraint_id)
         except LookupError:
@@ -240,8 +260,6 @@ class BusinessConstraintRegistry:
         event_metadata: dict[str, object] | None = None,
     ) -> BusinessConstraint:
         current = self._projector.get(tenant_id=tenant_id, business_id=business_id, constraint_id=constraint_id)
-        if current.lifecycle_status is ConstraintLifecycleStatus.ARCHIVED:
-            raise ValueError("archived business constraint cannot be updated")
         when = max(current.updated_at_ms, self._time(occurred_at_ms))
         candidate = replace(
             current,
@@ -249,6 +267,28 @@ class BusinessConstraintRegistry:
             state_key=current.state_key if state_key is None else state_key,
             updated_at_ms=when,
         )
+        replay = self._writer.find_existing_for_key(
+            tenant_id=tenant_id,
+            business_id=business_id,
+            entity_id=constraint_id,
+            operation="update",
+            idempotency_key=idempotency_key,
+            fact_type=CONSTRAINT_UPDATED,
+            event_metadata=event_metadata,
+        )
+        if replay is not None:
+            persisted = dict(dict(replay.get("payload") or {}).get("payload") or {})
+            if severity is not None and persisted.get("severity") != candidate.severity.value:
+                raise ValueError(
+                    "constraint update idempotency key was already used with different constraint data"
+                )
+            if state_key is not None and persisted.get("state_key") != candidate.state_key:
+                raise ValueError(
+                    "constraint update idempotency key was already used with different constraint data"
+                )
+            return current
+        if current.lifecycle_status is ConstraintLifecycleStatus.ARCHIVED:
+            raise ValueError("archived business constraint cannot be updated")
         payload = self._payload(candidate)
         if payload == self._payload(current):
             self._writer.repair_existing(

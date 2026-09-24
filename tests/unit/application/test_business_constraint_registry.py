@@ -76,6 +76,96 @@ def test_constraint_lifecycle_is_idempotent_and_subject_is_stable() -> None:
         )
 
 
+def test_constraint_create_and_update_replay_are_state_independent_after_archive() -> None:
+    registry, events = _registry()
+    registry.create(
+        tenant_id="tenant",
+        business_id="business",
+        constraint_id="spend-cap",
+        idempotency_key="create-spend-cap",
+        constraint_kind="budget_guard",
+        severity="hard",
+        subject_type="metric",
+        subject_id="spend_rub",
+        state_key="bounded",
+        comparison="lte",
+        threshold=50_000,
+        occurred_at_ms=100,
+    )
+    registry.update(
+        tenant_id="tenant",
+        business_id="business",
+        constraint_id="spend-cap",
+        idempotency_key="soften-spend-cap",
+        severity="soft",
+        state_key="warning",
+        occurred_at_ms=200,
+    )
+    archived = registry.archive(
+        tenant_id="tenant",
+        business_id="business",
+        constraint_id="spend-cap",
+        idempotency_key="archive-spend-cap",
+        occurred_at_ms=300,
+    )
+    before = list(events.events)
+
+    replayed_create = registry.create(
+        tenant_id="tenant",
+        business_id="business",
+        constraint_id="spend-cap",
+        idempotency_key="create-spend-cap",
+        constraint_kind="budget_guard",
+        severity="hard",
+        subject_type="metric",
+        subject_id="spend_rub",
+        state_key="bounded",
+        comparison="lte",
+        threshold=50_000,
+        occurred_at_ms=999,
+    )
+    replayed_update = registry.update(
+        tenant_id="tenant",
+        business_id="business",
+        constraint_id="spend-cap",
+        idempotency_key="soften-spend-cap",
+        severity="soft",
+        state_key="warning",
+        occurred_at_ms=999,
+    )
+
+    assert replayed_create == archived
+    assert replayed_update == archived
+    assert events.events == before
+
+    with pytest.raises(ValueError, match="different constraint data"):
+        registry.create(
+            tenant_id="tenant",
+            business_id="business",
+            constraint_id="spend-cap",
+            idempotency_key="create-spend-cap",
+            constraint_kind="budget_guard",
+            severity="hard",
+            subject_type="metric",
+            subject_id="spend_rub",
+            state_key="bounded",
+            comparison="lte",
+            threshold=60_000,
+            occurred_at_ms=999,
+        )
+    with pytest.raises(ValueError, match="different constraint data"):
+        registry.update(
+            tenant_id="tenant",
+            business_id="business",
+            constraint_id="spend-cap",
+            idempotency_key="soften-spend-cap",
+            severity="hard",
+            state_key="warning",
+            occurred_at_ms=999,
+        )
+    assert events.events == before
+
+
 def test_structured_metric_bound_is_optional_durable_and_immutable() -> None:
     registry, events = _registry()
     created = registry.create(
