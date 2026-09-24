@@ -42,12 +42,6 @@ class BusinessGoal:
     business_id: str
     goal_kind: str
     target_key: str | None = None
-    metric: str | None = None
-    baseline: float | None = None
-    target: float | None = None
-    deadline_at_ms: int | None = None
-    owner_id: str | None = None
-    constraint_ids: tuple[str, ...] = ()
     parent_goal_id: str | None = None
     priority: int = 50
     schema_version: int = BUSINESS_GOAL_SCHEMA_VERSION
@@ -55,6 +49,12 @@ class BusinessGoal:
     created_at_ms: int = 0
     updated_at_ms: int = 0
     terminal_at_ms: int | None = None
+    metric: str | None = None
+    baseline: float | None = None
+    target: float | None = None
+    deadline_at_ms: int | None = None
+    owner_id: str | None = None
+    constraint_ids: tuple[str, ...] = ()
 
     def __post_init__(self) -> None:
         for field_name in ("goal_id", "tenant_id", "business_id", "goal_kind"):
