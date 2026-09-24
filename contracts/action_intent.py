@@ -71,6 +71,12 @@ class ActionIntentV1:
     def payload_copy(self) -> dict[str, Any]:
         return _thaw(self.payload)
 
+    @property
+    def goal_id(self) -> str | None:
+        meta = self.payload.get("meta") if isinstance(self.payload, Mapping) else None
+        meta_goal_id = str(meta.get("canonical_goal_id") or "").strip() if isinstance(meta, Mapping) else ""
+        return meta_goal_id or None
+
     def as_dict(self) -> dict[str, Any]:
         return {
             "intent_id": self.intent_id,
