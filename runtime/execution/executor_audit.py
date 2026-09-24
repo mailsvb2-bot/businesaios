@@ -182,6 +182,7 @@ def _lineage(*, decision: Any) -> dict[str, Any] | None:
         "payload": payload,
         "tenant_id": tenant_id,
         "business_id": business_id,
+        "goal_id": str(payload.get("goal_id") or "").strip() or None,
         "decision_id": decision_id,
         "intent_id": intent_id,
         "action_id": action_id,
@@ -216,6 +217,27 @@ def _build_event(
         decision_id=lineage["decision_id"],
         event_type=event_type,
     )
+    event_payload = {
+        "schema_version": 1,
+        "business_id": lineage["business_id"],
+        "actor_id": lineage["actor_id"],
+        "agent_id": lineage["agent_id"],
+        "occurred_at_ms": lineage["issued_at_ms"],
+        "recorded_at_ms": lineage["issued_at_ms"],
+        "causation_id": causation_id,
+        "evidence_ids": list(lineage["evidence_ids"]),
+        "action": {
+            "intent_id": lineage["intent_id"],
+            "action_id": lineage["action_id"],
+            "action_type": lineage["action_type"],
+            "channel": lineage["channel"],
+            "derived_fact_ref": str(payload.get("derived_fact_ref") or "").strip() or None,
+        },
+        "policy_decision": dict(lineage["policy"]),
+        "lifecycle": dict(lifecycle),
+    }
+    if lineage["goal_id"] is not None:
+        event_payload["goal_id"] = lineage["goal_id"]
     return {
         "event_id": event_id,
         "tenant_id": lineage["tenant_id"],
@@ -224,25 +246,7 @@ def _build_event(
         "timestamp_ms": lineage["issued_at_ms"],
         "decision_id": lineage["decision_id"],
         "correlation_id": lineage["correlation_id"],
-        "payload": {
-            "schema_version": 1,
-            "business_id": lineage["business_id"],
-            "actor_id": lineage["actor_id"],
-            "agent_id": lineage["agent_id"],
-            "occurred_at_ms": lineage["issued_at_ms"],
-            "recorded_at_ms": lineage["issued_at_ms"],
-            "causation_id": causation_id,
-            "evidence_ids": list(lineage["evidence_ids"]),
-            "action": {
-                "intent_id": lineage["intent_id"],
-                "action_id": lineage["action_id"],
-                "action_type": lineage["action_type"],
-                "channel": lineage["channel"],
-                "derived_fact_ref": str(payload.get("derived_fact_ref") or "").strip() or None,
-            },
-            "policy_decision": dict(lineage["policy"]),
-            "lifecycle": dict(lifecycle),
-        },
+        "payload": event_payload,
     }
 
 
