@@ -8,6 +8,7 @@ import pytest
 
 from application.decision_runtime.flow import build_envelope
 from contracts.decisioning.sovereign_decision_contract import Decision, DecisionContractV2
+from core.ai.decision_core import _decision_envelope_version
 from core.security.keyring import Keyring
 from core.utils.canonical import canonical_json_bytes, payload_hash
 from kernel.decision_crypto import (
@@ -331,3 +332,29 @@ def test_v2_rejects_selected_option_or_identity_drift_before_signing() -> None:
     decision.payload["goal_id"] = "goal-1"
     with pytest.raises(RuntimeError, match="DECISION_V2_GOAL_ID_MISMATCH"):
         sign_decision(decision=decision, secret=b"secret", kid="k1")
+
+
+
+def test_decision_core_selects_v2_only_for_formal_canonical_goal_binding() -> None:
+    assert _decision_envelope_version(
+        type(
+            "_State",
+            (),
+            {
+                "meta": {
+                    "goal_id": "goal-1",
+                    "canonical_goal": {"goal": {"goal_id": "goal-1"}},
+                }
+            },
+        )()
+    ) == 2
+    assert _decision_envelope_version(
+        type(
+            "_State",
+            (),
+            {"meta": {"canonical_goal": {"goal": {"goal_id": "goal-1"}}}},
+        )()
+    ) == 1
+    assert _decision_envelope_version(
+        type("_State", (), {"meta": {"goal_id": "goal-1"}})()
+    ) == 1
