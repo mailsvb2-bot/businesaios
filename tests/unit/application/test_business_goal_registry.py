@@ -438,6 +438,123 @@ def test_goal_context_keeps_historical_unresolved_constraint_as_evidence() -> No
     assert context["constraints"]["evidence_only"] is True
 
 
+def test_goal_context_projects_deterministic_cross_goal_conflicts_without_ranking() -> None:
+    registry, events = _registry()
+    registry.create(
+        tenant_id="tenant", business_id="business", goal_id="increase", idempotency_key="increase",
+        goal_kind="growth", metric="mrr", baseline=100.0, target=120.0, priority=90, occurred_at_ms=100,
+    )
+    registry.create(
+        tenant_id="tenant", business_id="business", goal_id="decrease", idempotency_key="decrease",
+        goal_kind="efficiency", metric="mrr", baseline=100.0, target=80.0, priority=80, occurred_at_ms=110,
+    )
+    registry.create(
+        tenant_id="tenant", business_id="business", goal_id="increase-more", idempotency_key="increase-more",
+        goal_kind="growth", metric="mrr", baseline=100.0, target=140.0, priority=70, occurred_at_ms=120,
+    )
+    projector = BusinessGoalProjector(events)
+    context = projector.load_context(tenant_id="tenant", business_id="business", goal_id="increase")
+
+    assert context["conflicts"]["goal_goal"] == [
+        {
+            "conflict_kind": "opposing_goal_direction",
+            "metric": "mrr",
+            "goal_id": "increase",
+            "other_goal_id": "decrease",
+            "goal_direction": "increase",
+            "other_direction": "decrease",
+            "goal_target": 120.0,
+            "other_target": 80.0,
+        }
+    ]
+    assert context["conflicts"]["goal_constraint"] == []
+    assert context["conflicts"]["has_conflicts"] is True
+    assert context["conflicts"]["deterministic_only"] is True
+    assert "selected_goal_id" not in context["conflicts"]
+
+    state = HeadlessGoalStateMapper(canonical_goal_reader=projector).to_world_state(
+        request=GoalExecutionRequest(
+            goal="Increase MRR without silently overriding conflicting objectives",
+            goal_id="increase",
+            tenant_id="tenant",
+            business_id="business",
+        ),
+        step_index=0,
+        previous_feedback={},
+    )
+    assert state.meta["canonical_goal"]["conflicts"]["goal_goal"][0]["other_goal_id"] == "decrease"
+
+
+def test_constraint_subject_mismatch_fails_closed_for_new_links_but_legacy_remains_visible() -> None:
+    registry, events = _registry()
+    constraints = BusinessConstraintRegistry(
+        event_store=events,
+        idempotency_store=InMemoryIdempotencyStore(),
+    )
+    constraints.create(
+        tenant_id="tenant",
+        business_id="business",
+        constraint_id="cac-only",
+        idempotency_key="cac-only-create",
+        constraint_kind="metric_guard",
+        severity="hard",
+        subject_type="metric",
+        subject_id="cac",
+        state_key="enforced",
+        occurred_at_ms=10,
+    )
+    with pytest.raises(ValueError, match="constraint subject does not match linked goal"):
+        registry.create(
+            tenant_id="tenant",
+            business_id="business",
+            goal_id="mrr-new",
+            idempotency_key="mrr-new-create",
+            goal_kind="growth",
+            metric="mrr",
+            constraint_ids=("cac-only",),
+            occurred_at_ms=100,
+        )
+
+    writer = EventFactLifecycleWriter(
+        event_store=events,
+        idempotency_store=InMemoryIdempotencyStore(),
+        namespace="business_goal_fact",
+        source="business_goal_registry",
+        id_prefix="business-goal",
+    )
+    writer.append_once(
+        tenant_id="tenant",
+        business_id="business",
+        entity_id="mrr-legacy",
+        operation="create",
+        idempotency_key="mrr-legacy-create",
+        fact_type="goal.created",
+        payload={
+            "schema_version": 1,
+            "goal_kind": "growth",
+            "target_key": "mrr",
+            "metric": "mrr",
+            "constraint_ids": ["cac-only"],
+            "parent_goal_id": None,
+            "priority": 50,
+        },
+        occurred_at_ms=200,
+    )
+    context = BusinessGoalProjector(events).load_context(
+        tenant_id="tenant", business_id="business", goal_id="mrr-legacy"
+    )
+    assert context["conflicts"]["goal_constraint"] == [
+        {
+            "conflict_kind": "constraint_subject_metric_mismatch",
+            "constraint_id": "cac-only",
+            "subject_type": "metric",
+            "subject_id": "cac",
+            "goal_metric": "mrr",
+        }
+    ]
+    assert context["constraints"]["linked"][0]["state_key"] == "enforced"
+
+
 def test_goal_hierarchy_reaches_canonical_headless_world_state() -> None:
     registry, events = _registry()
     registry.create(

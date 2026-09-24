@@ -27,6 +27,30 @@ CANON_BUSINESS_GOAL_LIFECYCLE_OWNER = True
 _UNSET = object()
 
 
+def _goal_direction(goal: BusinessGoal) -> str | None:
+    if goal.metric is None or goal.baseline is None or goal.target is None:
+        return None
+    if goal.target > goal.baseline:
+        return "increase"
+    if goal.target < goal.baseline:
+        return "decrease"
+    return None
+
+
+def _constraint_subject_conflict(
+    *,
+    goal_id: str,
+    metric: str | None,
+    constraint: Any,
+) -> str | None:
+    subject_type = str(constraint.subject_type or "").strip().lower()
+    if subject_type == "goal" and str(constraint.subject_id or "") != str(goal_id):
+        return "constraint_subject_goal_mismatch"
+    if subject_type == "metric" and str(constraint.subject_id or "") != str(metric or ""):
+        return "constraint_subject_metric_mismatch"
+    return None
+
+
 class BusinessGoalHistoryInvariantViolation(RuntimeError):
     pass
 
@@ -198,8 +222,31 @@ class BusinessGoalProjector:
             (goal for goal in goals.values() if goal.parent_goal_id == current.goal_id),
             key=lambda goal: (-goal.priority, goal.goal_id),
         )
+        goal_goal_conflicts: list[dict[str, object]] = []
+        current_direction = _goal_direction(current)
+        if current.lifecycle_status is GoalLifecycleStatus.ACTIVE and current.metric and current_direction:
+            for other in sorted(goals.values(), key=lambda goal: goal.goal_id):
+                if other.goal_id == current.goal_id or other.lifecycle_status is not GoalLifecycleStatus.ACTIVE:
+                    continue
+                other_direction = _goal_direction(other)
+                if other.metric != current.metric or other_direction is None or other_direction == current_direction:
+                    continue
+                goal_goal_conflicts.append(
+                    {
+                        "conflict_kind": "opposing_goal_direction",
+                        "metric": current.metric,
+                        "goal_id": current.goal_id,
+                        "other_goal_id": other.goal_id,
+                        "goal_direction": current_direction,
+                        "other_direction": other_direction,
+                        "goal_target": current.target,
+                        "other_target": other.target,
+                    }
+                )
+
         linked_constraints: list[dict[str, object]] = []
         unresolved_constraint_ids: list[str] = []
+        goal_constraint_conflicts: list[dict[str, object]] = []
         for constraint_id in current.constraint_ids:
             try:
                 constraint = self._constraints.get(
@@ -209,8 +256,37 @@ class BusinessGoalProjector:
                 )
             except BusinessConstraintNotFound:
                 unresolved_constraint_ids.append(constraint_id)
+                goal_constraint_conflicts.append(
+                    {
+                        "conflict_kind": "unresolved_constraint_reference",
+                        "constraint_id": constraint_id,
+                    }
+                )
                 continue
             linked_constraints.append(self._constraint_decision_view(constraint))
+            if constraint.lifecycle_status is ConstraintLifecycleStatus.ARCHIVED:
+                goal_constraint_conflicts.append(
+                    {
+                        "conflict_kind": "archived_constraint_reference",
+                        "constraint_id": constraint.constraint_id,
+                        "severity": constraint.severity.value,
+                    }
+                )
+            subject_conflict = _constraint_subject_conflict(
+                goal_id=current.goal_id,
+                metric=current.metric,
+                constraint=constraint,
+            )
+            if subject_conflict is not None:
+                goal_constraint_conflicts.append(
+                    {
+                        "conflict_kind": subject_conflict,
+                        "constraint_id": constraint.constraint_id,
+                        "subject_type": constraint.subject_type,
+                        "subject_id": constraint.subject_id,
+                        "goal_metric": current.metric,
+                    }
+                )
         return {
             "goal": self._decision_view(current),
             "hierarchy": {
@@ -221,6 +297,14 @@ class BusinessGoalProjector:
             "constraints": {
                 "linked": linked_constraints,
                 "unresolved_ids": unresolved_constraint_ids,
+                "evidence_only": True,
+                "must_not_issue_decision": True,
+            },
+            "conflicts": {
+                "goal_goal": goal_goal_conflicts,
+                "goal_constraint": goal_constraint_conflicts,
+                "has_conflicts": bool(goal_goal_conflicts or goal_constraint_conflicts),
+                "deterministic_only": True,
                 "evidence_only": True,
                 "must_not_issue_decision": True,
             },
@@ -297,6 +381,8 @@ class BusinessGoalRegistry:
         *,
         tenant_id: str,
         business_id: str,
+        goal_id: str,
+        metric: str | None,
         constraint_ids: tuple[str, ...],
     ) -> None:
         for constraint_id in constraint_ids:
@@ -312,6 +398,13 @@ class BusinessGoalRegistry:
                 ) from exc
             if constraint.lifecycle_status is ConstraintLifecycleStatus.ARCHIVED:
                 raise ValueError("constraint_ids cannot reference archived constraints")
+            subject_conflict = _constraint_subject_conflict(
+                goal_id=goal_id,
+                metric=metric,
+                constraint=constraint,
+            )
+            if subject_conflict is not None:
+                raise ValueError(f"constraint subject does not match linked goal: {subject_conflict}")
 
     def create(
         self,
@@ -415,6 +508,8 @@ class BusinessGoalRegistry:
         self._validate_constraint_links(
             tenant_id=candidate.tenant_id,
             business_id=candidate.business_id,
+            goal_id=candidate.goal_id,
+            metric=candidate.metric,
             constraint_ids=candidate.constraint_ids,
         )
         self._writer.append_once(
@@ -495,6 +590,8 @@ class BusinessGoalRegistry:
             self._validate_constraint_links(
                 tenant_id=tenant_id,
                 business_id=business_id,
+                goal_id=candidate.goal_id,
+                metric=candidate.metric,
                 constraint_ids=candidate.constraint_ids,
             )
         payload = self._payload(candidate)
