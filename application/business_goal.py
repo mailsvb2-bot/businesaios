@@ -301,6 +301,45 @@ class BusinessGoalRegistry:
             parent_goal_id=candidate.parent_goal_id,
         )
         payload = self._payload(candidate)
+        replay = self._writer.find_existing_for_key(
+            tenant_id=tenant_id,
+            business_id=business_id,
+            entity_id=goal_id,
+            operation="create",
+            idempotency_key=idempotency_key,
+            fact_type=GOAL_CREATED,
+            event_metadata=event_metadata,
+        )
+        if replay is not None:
+            envelope = dict(replay.get("payload") or {})
+            persisted_payload = dict(envelope.get("payload") or {})
+            persisted = BusinessGoal(
+                goal_id=goal_id,
+                tenant_id=tenant_id,
+                business_id=business_id,
+                goal_kind=persisted_payload.get("goal_kind"),
+                target_key=persisted_payload.get("target_key"),
+                parent_goal_id=persisted_payload.get("parent_goal_id"),
+                priority=persisted_payload.get("priority", 50),
+                schema_version=persisted_payload.get("schema_version", BUSINESS_GOAL_SCHEMA_VERSION),
+                created_at_ms=int(envelope.get("event_time_ms") or replay.get("timestamp_ms") or 0),
+                updated_at_ms=int(envelope.get("event_time_ms") or replay.get("timestamp_ms") or 0),
+                metric=persisted_payload.get("metric"),
+                baseline=persisted_payload.get("baseline"),
+                target=persisted_payload.get("target"),
+                deadline_at_ms=persisted_payload.get("deadline_at_ms"),
+                owner_id=persisted_payload.get("owner_id"),
+                constraint_ids=tuple(persisted_payload.get("constraint_ids") or ()),
+            )
+            if self._payload(persisted) != payload:
+                raise ValueError(
+                    "goal create idempotency key was already used with different objective data"
+                )
+            return self._projector.get(
+                tenant_id=tenant_id,
+                business_id=business_id,
+                goal_id=goal_id,
+            )
         try:
             current = self._projector.get(tenant_id=tenant_id, business_id=business_id, goal_id=goal_id)
         except LookupError:
