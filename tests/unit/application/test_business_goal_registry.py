@@ -3,6 +3,8 @@ from __future__ import annotations
 import pytest
 
 from application.business_goal import BusinessGoalHistoryInvariantViolation, BusinessGoalProjector, BusinessGoalRegistry
+from application.headless.goal_mapper import HeadlessGoalStateMapper
+from application.headless.models import GoalExecutionRequest
 from contracts.business_goal import BusinessGoal, BusinessGoalNotFound, GoalLifecycleStatus
 from contracts.event_store import BusinessFactV1, canonical_business_event_contract
 from reliability.idempotency_store import InMemoryIdempotencyStore
@@ -138,6 +140,62 @@ def test_goal_objective_fields_are_first_class_and_mutate_through_same_lifecycle
         occurred_at_ms=999,
     ) == updated
     assert len(events.events) == count
+
+
+def test_goal_hierarchy_reaches_canonical_headless_world_state() -> None:
+    registry, events = _registry()
+    registry.create(
+        tenant_id="tenant",
+        business_id="business",
+        goal_id="profit",
+        idempotency_key="profit",
+        goal_kind="profitability",
+        metric="net_profit",
+        baseline=100_000,
+        target=120_000,
+        priority=90,
+        occurred_at_ms=100,
+    )
+    registry.create(
+        tenant_id="tenant",
+        business_id="business",
+        goal_id="conversion",
+        idempotency_key="conversion",
+        goal_kind="conversion",
+        metric="conversion_rate",
+        baseline=0.20,
+        target=0.25,
+        parent_goal_id="profit",
+        priority=80,
+        occurred_at_ms=200,
+    )
+    projector = BusinessGoalProjector(events)
+    context = projector.load_context(
+        tenant_id="tenant",
+        business_id="business",
+        goal_id="conversion",
+    )
+    assert context["goal"]["goal_id"] == "conversion"
+    assert context["hierarchy"]["depth"] == 1
+    assert [row["goal_id"] for row in context["hierarchy"]["ancestors"]] == ["profit"]
+
+    state = HeadlessGoalStateMapper(canonical_goal_reader=projector).to_world_state(
+        request=GoalExecutionRequest(
+            goal="Increase conversion without losing profit",
+            goal_id="conversion",
+            tenant_id="tenant",
+            business_id="business",
+        ),
+        step_index=0,
+        previous_feedback={},
+    )
+    assert state.meta["goal_id"] == "conversion"
+    assert state.meta["canonical_goal"]["goal"]["metric"] == "conversion_rate"
+    assert (
+        state.meta["canonical_goal"]["hierarchy"]["ancestors"][0]["goal_id"]
+        == "profit"
+    )
+    assert state.behavior["goal_id"] == "conversion"
 
 
 def test_goal_objective_contract_rejects_conflicting_metric_and_invalid_values() -> None:
