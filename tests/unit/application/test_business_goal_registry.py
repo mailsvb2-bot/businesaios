@@ -80,6 +80,27 @@ def test_goal_hierarchy_lifecycle_and_idempotency() -> None:
             tenant_id="tenant", business_id="business", goal_id="child", idempotency_key="conflict",
             occurred_at_ms=700,
         )
+    registry.archive(
+        tenant_id="tenant",
+        business_id="business",
+        goal_id="parent",
+        idempotency_key="parent-archive",
+        occurred_at_ms=800,
+    )
+    count = len(events.events)
+    replayed_child_create = registry.create(
+        tenant_id="tenant",
+        business_id="business",
+        goal_id="child",
+        idempotency_key="child-create",
+        goal_kind="acquisition",
+        target_key="qualified_demand",
+        parent_goal_id="parent",
+        priority=60,
+        occurred_at_ms=999,
+    )
+    assert replayed_child_create.lifecycle_status is GoalLifecycleStatus.COMPLETED
+    assert len(events.events) == count
 
 
 def test_goal_objective_fields_are_first_class_and_mutate_through_same_lifecycle() -> None:
