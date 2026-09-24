@@ -14,7 +14,10 @@ from application.effects.effect_outcome_vocabulary import (
 from application.evidence.evidence_feedback_state import (
     apply_feedback_to_world_state as _apply_feedback_world_state,
 )
-from application.outcome.evidence_projection import BusinessOutcomeEventSpineProjector
+from application.outcome.evidence_projection import (
+    OUTCOME_OBSERVED_EVENT_TYPE,
+    BusinessOutcomeEventSpineProjector,
+)
 from execution.canonical_persistence_vocabulary import (
     canonical_memory_record,
     canonical_persistence_outcome_record,
@@ -86,9 +89,12 @@ class EvidencePersistenceService:
         idempotency_owner_id: str = 'evidence-persistence',
         evidence_store: EvidenceStore | None = None,
         event_store: Any | None = None,
+        world_model_event_projector: Any | None = None,
     ) -> None:
         self._business_memory_store = business_memory_store
         self._evidence_store = evidence_store
+        self._event_store = event_store
+        self._world_model_event_projector = world_model_event_projector
         self._outcome_event_projector = (
             None if event_store is None else BusinessOutcomeEventSpineProjector(event_store)
         )
@@ -287,6 +293,91 @@ class EvidencePersistenceService:
                     return current
             raise ValueError('canonical evidence replay conflicts with persisted evidence') from exc
 
+    def _project_outcome_event_to_world_model(
+        self,
+        *,
+        tenant_id: str,
+        business_id: str,
+        outcome_event_id: str,
+    ) -> str | None:
+        if self._world_model_event_projector is None:
+            return None
+        if self._event_store is None:
+            raise RuntimeError("canonical EventStore is required for World Model outcome projection")
+        matches = [
+            dict(event)
+            for event in self._event_store.iter_events(
+                tenant_id=str(tenant_id),
+                start_ms=0,
+                event_type=OUTCOME_OBSERVED_EVENT_TYPE,
+            )
+            if str(event.get("event_id") or "") == str(outcome_event_id)
+        ]
+        if len(matches) != 1:
+            raise RuntimeError("canonical outcome event must exist exactly once before World Model projection")
+        snapshot = self._world_model_event_projector.project(matches[0])
+        if (
+            str(getattr(snapshot, "tenant_id", "") or "") != str(tenant_id)
+            or str(getattr(snapshot, "business_id", "") or "") != str(business_id)
+        ):
+            raise RuntimeError("World Model outcome projection scope mismatch")
+        state_id = str(getattr(snapshot, "state_id", "") or "").strip()
+        if not state_id:
+            raise RuntimeError("World Model outcome projection did not produce state_id")
+        return state_id
+
+    def persist_step_outcome(
+        self,
+        *,
+        tenant_id: str,
+        business_id: str,
+        run_id: str,
+        step_index: int,
+        goal: str,
+        feedback: Mapping[str, Any],
+        world_state_before: Any,
+        request_meta: Mapping[str, Any] | None = None,
+        request_profile: Mapping[str, Any] | None = None,
+        request_constraints: Mapping[str, Any] | None = None,
+        request_signals: list[dict[str, Any]] | None = None,
+        request_channel: str = "headless",
+        request_region: str = "global",
+        request_product_name: str = "BusinesAIOS",
+    ) -> PersistenceArtifacts | None:
+        if self._world_model_event_projector is None:
+            return None
+        body = _safe_dict(feedback.get("business_outcome"))
+        if not body or not _safe_dict(feedback.get("action_intent")):
+            raise RuntimeError("canonical step outcome requires ActionIntentV1 and BusinessOutcomeV1 bodies")
+        action = {
+            "action_type": str(body.get("action_type") or ""),
+            "action_id": str(body.get("action_id") or ""),
+        }
+        return self.persist(
+            tenant_id=tenant_id,
+            business_id=business_id,
+            run_id=run_id,
+            goal=goal,
+            step_index=step_index,
+            action=action,
+            execution_result=feedback,
+            verification_result=feedback,
+            world_state_before=world_state_before,
+            world_state_after=None,
+            request_meta=request_meta,
+            request_profile=request_profile,
+            request_constraints=request_constraints,
+            request_signals=request_signals,
+            request_channel=request_channel,
+            request_region=request_region,
+            request_product_name=request_product_name,
+            completed=bool(body.get("goal_achieved") and body.get("goal_terminal")),
+            stop_reason="",
+            final_feedback=feedback,
+            step_count=step_index + 1,
+            remember_execution=False,
+        )
+
     def persist(
         self,
         *,
@@ -311,6 +402,7 @@ class EvidencePersistenceService:
         stop_reason: str = '',
         final_feedback: Mapping[str, Any] | None = None,
         step_count: int | None = None,
+        remember_execution: bool = True,
     ) -> PersistenceArtifacts:
         action_payload = _safe_dict(action)
         verification_payload = _safe_dict(verification_result)
@@ -377,9 +469,18 @@ class EvidencePersistenceService:
             if canonical_evidence is None or self._outcome_event_projector is None
             else self._outcome_event_projector.project(canonical_evidence)
         )
+        world_model_state_id = (
+            None
+            if outcome_event_id is None
+            else self._project_outcome_event_to_world_model(
+                tenant_id=tenant_id,
+                business_id=business_id,
+                outcome_event_id=outcome_event_id,
+            )
+        )
 
         memory_record: dict[str, Any] | None = None
-        if self._business_memory_store is not None:
+        if remember_execution and self._business_memory_store is not None:
             self._business_memory_store.remember_execution(
                 tenant_id=tenant_id,
                 business_id=business_id,
@@ -413,7 +514,11 @@ class EvidencePersistenceService:
             'persistence_key': persistence_key,
             'persisted_at': _utc_now().isoformat(),
             'evidence_count': len(evidence_records),
+            'canonical_evidence_id': (
+                None if canonical_evidence is None else canonical_evidence.evidence_id
+            ),
             'outcome_event_id': outcome_event_id,
+            'world_model_state_id': world_model_state_id,
         }
         receipt = self._attach_reliability_receipt(
             tenant_id=tenant_id,

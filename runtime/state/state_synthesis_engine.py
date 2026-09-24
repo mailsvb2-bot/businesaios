@@ -161,7 +161,14 @@ class StateSynthesisEngine:
         )
 
         if self.snapshot_store is not None:
-            self.snapshot_store.save_snapshot(snapshot)
+            compare_and_save = getattr(self.snapshot_store, "save_snapshot_if_current", None)
+            if callable(compare_and_save):
+                compare_and_save(
+                    snapshot,
+                    expected_state_id=None if base_snapshot is None else base_snapshot.state_id,
+                )
+            else:
+                self.snapshot_store.save_snapshot(snapshot)
         if self.delta_log is not None:
             self.delta_log.append(previous=base_snapshot, current=snapshot)
         if self.audit_trail is not None:

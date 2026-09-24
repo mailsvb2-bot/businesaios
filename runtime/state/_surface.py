@@ -36,6 +36,8 @@ from runtime.state.state_provenance import (
 )
 from runtime.state.state_snapshot_store import (
     FileStateSnapshotStore,
+    build_canonical_state_synthesis_engine,
+    canonical_state_snapshot_root,
     migrate_legacy_snapshot_from_dict,
     snapshot_from_dict,
 )
@@ -50,7 +52,10 @@ from runtime.state.state_unknown_semantics import classify_value_kind, is_unknow
 from runtime.state.world_model_semantic_projector import (
     CANON_WORLD_MODEL_SEMANTIC_PROJECTOR,
     WORLD_MODEL_SEMANTIC_PROJECTOR_DOES_NOT_OWN_STATE,
+    CanonicalBusinessEventStateProjector,
     business_fact_to_state_observation,
+    canonical_business_event_field_path,
+    canonical_business_event_to_state_observation,
     project_world_model_semantics,
     semantic_observation,
 )
@@ -59,6 +64,7 @@ __all__ = [
     "CANON_RUNTIME_STATE_NAMESPACE",
     "CANON_STATE_SYNTHESIS_ENGINE",
     "CANON_WORLD_MODEL_SEMANTIC_PROJECTOR",
+    "CanonicalBusinessEventStateProjector",
     "RUNTIME_STATE_PUBLIC_API",
     "STATE_SYNTHESIS_CANON",
     "STATE_SYNTHESIS_DOES_NOT_OWN_DECISIONS",
@@ -93,6 +99,10 @@ __all__ = [
     "StateSynthesizedSnapshot",
     "apply_synthesized_world_view",
     "business_fact_to_state_observation",
+    "build_canonical_state_synthesis_engine",
+    "canonical_business_event_field_path",
+    "canonical_business_event_to_state_observation",
+    "canonical_state_snapshot_root",
     "build_world_state_observations",
     "classify_value_kind",
     "is_unknown_marker",

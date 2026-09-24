@@ -5,6 +5,9 @@ from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import Any
 
+from governance.persistence_codec import atomic_write_json, exclusive_file_lock
+from shared.runtime_paths import shared_runtime_root
+
 from runtime.state.business_fact_lifecycle import apply_business_fact_supersession
 from runtime.state.state_contract import (
     StateConflictRecord,
@@ -21,6 +24,23 @@ from runtime.state.state_value_projection import materialize_state_values
 from runtime.state.world_model_semantic_projector import project_world_model_semantics
 
 CANON_STATE_SNAPSHOT_STORE = True
+
+
+def canonical_state_snapshot_root(*, root_dir: str | Path | None = None) -> Path:
+    """Return the one durable semantic-state root shared by runtime surfaces."""
+
+    root = Path(root_dir) if root_dir is not None else (shared_runtime_root() or Path(".runtime"))
+    return root / "runtime" / "state"
+
+
+def build_canonical_state_synthesis_engine(*, root_dir: str | Path | None = None):
+    """Build the existing StateSynthesisEngine over the canonical snapshot store."""
+
+    from runtime.state.state_synthesis_engine import StateSynthesisEngine
+
+    return StateSynthesisEngine(
+        snapshot_store=FileStateSnapshotStore(canonical_state_snapshot_root(root_dir=root_dir))
+    )
 
 
 def _recompute_current_record_freshness(
@@ -122,8 +142,27 @@ class FileStateSnapshotStore:
 
     def save_snapshot(self, snapshot: StateSynthesizedSnapshot) -> None:
         path = self._path(tenant_id=snapshot.tenant_id, business_id=snapshot.business_id)
-        path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_text(json.dumps(snapshot.to_dict(), ensure_ascii=False, indent=2, sort_keys=True), encoding="utf-8")
+        with exclusive_file_lock(path):
+            atomic_write_json(path, snapshot.to_dict())
+
+    def save_snapshot_if_current(
+        self,
+        snapshot: StateSynthesizedSnapshot,
+        *,
+        expected_state_id: str | None,
+    ) -> None:
+        path = self._path(tenant_id=snapshot.tenant_id, business_id=snapshot.business_id)
+        with exclusive_file_lock(path):
+            current = (
+                snapshot_from_dict(json.loads(path.read_text(encoding="utf-8")))
+                if path.exists()
+                else None
+            )
+            current_state_id = None if current is None else current.state_id
+            expected = None if expected_state_id is None else str(expected_state_id)
+            if current_state_id != expected:
+                raise RuntimeError("STATE_SNAPSHOT_CONCURRENT_UPDATE")
+            atomic_write_json(path, snapshot.to_dict())
 
     def _path(self, *, tenant_id: str, business_id: str) -> Path:
         return self.root_dir / str(tenant_id) / f"{business_id}.json"
