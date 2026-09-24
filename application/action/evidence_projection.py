@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from collections.abc import Mapping
 
-from contracts.action_intent import ActionIntentV1
+from contracts.action_intent import ActionIntentV1, ActionIntentV2
 from storage.evidence_store import EvidenceRecord, EvidenceStore
 
 CANON_ACTION_INTENT_EVIDENCE_PROJECTION = True
@@ -20,40 +20,72 @@ def _mapping(value: object) -> dict[str, object]:
     return dict(value) if isinstance(value, Mapping) else {}
 
 
-def _project_body(body: Mapping[str, object]) -> ActionIntentV1:
-    required = (
-        "intent_id", "tenant_id", "business_id", "decision_id",
-        "correlation_id", "action_type", "channel", "requested_by",
-    )
-    if any(not str(body.get(name) or "").strip() for name in required):
-        raise ActionIntentProjectionConflict("action intent body is incomplete")
-    intent = ActionIntentV1.from_projection(
-        intent_id=str(body["intent_id"]),
-        tenant_id=str(body["tenant_id"]),
-        business_id=str(body["business_id"]),
-        decision_id=str(body["decision_id"]),
-        correlation_id=str(body["correlation_id"]),
-        action_type=str(body["action_type"]),
-        channel=str(body["channel"]),
-        payload=_mapping(body.get("payload")),
-        payload_hash=str(body.get("payload_hash") or ""),
-        requested_by=str(body.get("requested_by") or "sovereign_decision"),
-        agent_id=str(body.get("agent_id") or body.get("requested_by") or "sovereign_decision"),
-        evidence_refs=tuple(str(item) for item in body.get("evidence_refs") or ()),
-        derived_fact_ref=str(body.get("derived_fact_ref") or ""),
-    )
-    if int(body.get("schema_version") or 0) != intent.schema_version:
+def _project_body(body: Mapping[str, object]) -> ActionIntentV1 | ActionIntentV2:
+    schema_version = int(body.get("schema_version") or 0)
+    if schema_version == 1:
+        required = (
+            "intent_id", "tenant_id", "business_id", "decision_id",
+            "correlation_id", "action_type", "channel", "requested_by",
+        )
+        if any(not str(body.get(name) or "").strip() for name in required):
+            raise ActionIntentProjectionConflict("action intent body is incomplete")
+        intent: ActionIntentV1 | ActionIntentV2 = ActionIntentV1.from_projection(
+            intent_id=str(body["intent_id"]),
+            tenant_id=str(body["tenant_id"]),
+            business_id=str(body["business_id"]),
+            decision_id=str(body["decision_id"]),
+            correlation_id=str(body["correlation_id"]),
+            action_type=str(body["action_type"]),
+            channel=str(body["channel"]),
+            payload=_mapping(body.get("payload")),
+            payload_hash=str(body.get("payload_hash") or ""),
+            requested_by=str(body.get("requested_by") or "sovereign_decision"),
+            agent_id=str(body.get("agent_id") or body.get("requested_by") or "sovereign_decision"),
+            evidence_refs=tuple(str(item) for item in body.get("evidence_refs") or ()),
+            derived_fact_ref=str(body.get("derived_fact_ref") or ""),
+        )
+    elif schema_version == 2:
+        required = (
+            "action_id", "intent_id", "tenant_id", "business_id", "decision_id",
+            "correlation_id", "goal_id", "agent_id", "capability_target", "channel",
+        )
+        if any(not str(body.get(name) or "").strip() for name in required):
+            raise ActionIntentProjectionConflict("action intent v2 body is incomplete")
+        intent = ActionIntentV2.from_projection(
+            action_id=str(body["action_id"]),
+            intent_id=str(body["intent_id"]),
+            tenant_id=str(body["tenant_id"]),
+            business_id=str(body["business_id"]),
+            decision_id=str(body["decision_id"]),
+            correlation_id=str(body["correlation_id"]),
+            goal_id=str(body["goal_id"]),
+            agent_id=str(body["agent_id"]),
+            capability_target=str(body["capability_target"]),
+            parameters=_mapping(body.get("parameters")),
+            payload_hash=str(body.get("payload_hash") or ""),
+            expected_value=body.get("expected_value"),
+            estimated_cost=body.get("estimated_cost"),
+            confidence=body.get("confidence"),
+            risk=body.get("risk"),
+            reversibility=body.get("reversibility") if isinstance(body.get("reversibility"), bool) else None,
+            requested_autonomy=(
+                str(body.get("requested_autonomy"))
+                if body.get("requested_autonomy") is not None
+                else None
+            ),
+            deadline=body.get("deadline"),
+            channel=str(body.get("channel") or ""),
+            evidence_refs=tuple(str(item) for item in body.get("evidence_refs") or ()),
+            derived_fact_ref=str(body.get("derived_fact_ref") or ""),
+        )
+    else:
         raise ActionIntentProjectionConflict("action intent schema version conflicts")
-    projected = intent.as_dict()
-    persisted = dict(body)
-    if "agent_id" not in persisted:
-        projected.pop("agent_id", None)
-    if projected != persisted:
+    if intent.as_dict() != dict(body):
         raise ActionIntentProjectionConflict("action intent body conflicts with canonical contract")
     return intent
 
 
-def _validate_record(record: EvidenceRecord, intent: ActionIntentV1) -> None:
+def _validate_record(record: EvidenceRecord, intent: ActionIntentV1 | ActionIntentV2) -> None:
     lineage = dict(record.lineage)
     checks = (
         (record.tenant_id, intent.tenant_id, "tenant"),
@@ -96,7 +128,7 @@ class ActionIntentEvidenceProjector:
             and bool(str(record.lineage.get("decision") or ""))
         )
 
-    def _project_record(self, record: EvidenceRecord) -> ActionIntentV1:
+    def _project_record(self, record: EvidenceRecord) -> ActionIntentV1 | ActionIntentV2:
         body = _mapping(record.payload.get("action_intent"))
         if not body:
             raise ActionIntentBodyUnavailable(
@@ -108,7 +140,7 @@ class ActionIntentEvidenceProjector:
 
     def get(
         self, *, tenant_id: str, business_id: str, intent_id: str, limit: int = 1000
-    ) -> ActionIntentV1:
+    ) -> ActionIntentV1 | ActionIntentV2:
         target = str(intent_id or "").strip()
         if not target:
             raise ValueError("intent_id is required")
@@ -132,8 +164,8 @@ class ActionIntentEvidenceProjector:
 
     def list_for_business(
         self, *, tenant_id: str, business_id: str, limit: int = 1000
-    ) -> tuple[ActionIntentV1, ...]:
-        projected: dict[str, ActionIntentV1] = {}
+    ) -> tuple[ActionIntentV1 | ActionIntentV2, ...]:
+        projected: dict[str, ActionIntentV1 | ActionIntentV2] = {}
         for record in self._evidence.list_for_tenant(tenant_id=tenant_id, limit=limit):
             if not self._is_closed_loop_record(record, business_id=business_id):
                 continue
