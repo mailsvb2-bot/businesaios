@@ -137,9 +137,9 @@ def test_goal_lineage_reaches_canonical_evidence_without_rewriting_intent_v1() -
     )
 
     record = store.list_for_tenant(tenant_id=intent.tenant_id)[0]
-    assert record.lineage["goal"] == "goal-1"
     assert record.lineage["decision"] == intent.decision_id
     assert record.labels["goal_id"] == "goal-1"
+    assert record.payload["action_intent"]["payload"]["meta"]["canonical_goal_id"] == "goal-1"
 
 
 def test_evidence_rejects_conflicting_persisted_goal_vs_signed_intent_goal() -> None:
