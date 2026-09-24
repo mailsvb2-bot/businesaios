@@ -128,6 +128,7 @@ class HeadlessExecutionContract:
         evidence_persistence_service: EvidencePersistenceService | None = None,
         evidence_store: EvidenceStore | None = None,
         event_store: Any | None = None,
+        world_model_event_projector: Any | None = None,
         performance_feedback_learning_service: PerformanceFeedbackLearningService | None = None,
         capability_health_scoring_service: CapabilityHealthScoringService | None = None,
         adaptive_optimization_service: AdaptiveOptimizationService | None = None,
@@ -197,6 +198,7 @@ class HeadlessExecutionContract:
             business_memory_service=business_memory_service,
             evidence_store=evidence_store,
             event_store=resolved_event_store,
+            world_model_event_projector=world_model_event_projector,
         )
         self._performance_feedback_learning_service = performance_feedback_learning_service
         self._capability_health_scoring_service = capability_health_scoring_service

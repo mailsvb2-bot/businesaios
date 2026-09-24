@@ -249,6 +249,37 @@ class AutonomyFeedbackStep:
                 evidence_refs=tuple(getattr(executable_action, "evidence_refs", ()) or ()),
                 derived_fact_ref=str(getattr(executable_action, "derived_fact_ref", "") or ""),
             ).as_dict()
+            persist_step_outcome = getattr(
+                self._contract._evidence_persistence_service,
+                "persist_step_outcome",
+                None,
+            )
+            if callable(persist_step_outcome):
+                persisted_step = persist_step_outcome(
+                    tenant_id=tenant_id,
+                    business_id=business_id,
+                    run_id=str(trace.run_id),
+                    step_index=int(step_index),
+                    goal=str(getattr(request, "goal", "") or ""),
+                    feedback=feedback,
+                    world_state_before=state,
+                    request_meta=dict(getattr(request, "meta", {}) or {}),
+                    request_profile=dict(getattr(request, "profile", {}) or {}),
+                    request_constraints=dict(getattr(request, "constraints", {}) or {}),
+                    request_signals=list(getattr(request, "signals", ()) or ()),
+                    request_channel=str(getattr(request, "channel", "headless") or "headless"),
+                    request_region=str(getattr(request, "region", "global") or "global"),
+                    request_product_name=str(
+                        getattr(request, "product_name", "BusinesAIOS") or "BusinesAIOS"
+                    ),
+                )
+                if (
+                    persisted_step is not None
+                    and persisted_step.persistence_receipt is not None
+                ):
+                    feedback["canonical_step_persistence"] = dict(
+                        persisted_step.persistence_receipt
+                    )
         step = self._contract._step_builder.build(
             step_index=step_index,
             action=executable_action,

@@ -48,6 +48,10 @@ from execution.self_healing_retry import SelfHealingRetryEngine
 from runtime.boot.system_builder import build_system
 from runtime.platform.business_memory.service import BusinessMemoryService
 from runtime.platform.business_memory.store import FileBusinessMemoryStore
+from runtime.state import (
+    CanonicalBusinessEventStateProjector,
+    build_canonical_state_synthesis_engine,
+)
 from storage.evidence_wiring import build_canonical_evidence_store
 
 CANON_HEADLESS_BOOT = True
@@ -80,6 +84,7 @@ class HeadlessRuntime:
     self_healing_retry_engine: object | None = None
     multi_goal_planner_service: object | None = None
     evidence_store: object | None = None
+    state_synthesis_engine: object | None = None
 
 
 @lru_cache(maxsize=8)
@@ -92,6 +97,8 @@ def build_headless_runtime(*, entrypoint: str = "headless_sdk", root_dir: str | 
     del payment_outbox, stack, learning_job
     paths = build_headless_runtime_paths(root_dir=root_dir)
     evidence_store = build_canonical_evidence_store(root_dir=root_dir)
+    state_synthesis_engine = build_canonical_state_synthesis_engine(root_dir=paths.root_dir)
+    world_model_event_projector = CanonicalBusinessEventStateProjector(state_synthesis_engine)
     ledger = FileHeadlessLedger(root_dir=paths.headless_ledger_dir)
     memory_policy = BusinessMemoryPolicy()
     business_memory = FileBusinessOperatingMemoryStore(
@@ -148,7 +155,13 @@ def build_headless_runtime(*, entrypoint: str = "headless_sdk", root_dir: str | 
     contract = HeadlessExecutionContract(
         decision_core=core,
         executor=executor,
-        state_mapper=HeadlessGoalStateMapper(business_memory_state_adapter=BusinessMemoryStateAdapter(store=business_memory, policy=memory_policy)),
+        state_mapper=HeadlessGoalStateMapper(
+            business_memory_state_adapter=BusinessMemoryStateAdapter(
+                store=business_memory,
+                policy=memory_policy,
+            ),
+            semantic_snapshot_reader=state_synthesis_engine.snapshot_store,
+        ),
         feedback_reader=SimpleHeadlessFeedbackReader.default(),
         stop_policy=HeadlessStopPolicy(max_failures=1),
         ledger=ledger,
@@ -178,6 +191,7 @@ def build_headless_runtime(*, entrypoint: str = "headless_sdk", root_dir: str | 
         multi_goal_planner_service=multi_goal_planner_service,
         evidence_store=evidence_store,
         event_store=event_store,
+        world_model_event_projector=world_model_event_projector,
     )
     return HeadlessRuntime(
         decision_core=core,
@@ -204,6 +218,7 @@ def build_headless_runtime(*, entrypoint: str = "headless_sdk", root_dir: str | 
         self_healing_retry_engine=self_healing_retry_engine,
         multi_goal_planner_service=multi_goal_planner_service,
         evidence_store=evidence_store,
+        state_synthesis_engine=state_synthesis_engine,
     )
 
 

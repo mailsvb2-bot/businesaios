@@ -8,15 +8,15 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
-from application.business_autonomy.adapters.ads_production_adapters import (
-    GoogleAdsProductionAdapter,
-    MetaAdsProductionAdapter,
-    TiktokAdsProductionAdapter,
-)
 from application.business_autonomy.adapters import (
     api_business_adapter,
     backoffice_adapter,
     campaign_ads_adapter,
+)
+from application.business_autonomy.adapters.ads_production_adapters import (
+    GoogleAdsProductionAdapter,
+    MetaAdsProductionAdapter,
+    TiktokAdsProductionAdapter,
 )
 from application.business_autonomy.adapters.chatbot_adapter import ChatbotChannelAdapter
 from application.business_autonomy.adapters.commerce_adapter import CommerceChannelAdapter
@@ -64,7 +64,6 @@ from application.business_autonomy.non_ai_onboarding_mode import NonAiOperatingM
 from application.business_autonomy.onboarding_contract import BusinessOnboardingRequest
 from application.business_autonomy.operator_admin_plane import UnifiedOperatorAdminPlane
 from application.business_autonomy.persistence import (
-    business_autonomy_runtime_dir,
     PersistentBusinessApprovalGate,
     PersistentBusinessAutonomyIdempotencyStore,
     PersistentBusinessOperatorOverridePolicy,
@@ -108,7 +107,7 @@ from runtime.business_autonomy.sqlite_distributed_state import (
     SQLiteRegionRouteState,
     SQLiteStateDatabase,
 )
-from runtime.state import FileStateSnapshotStore, StateSynthesisEngine
+from runtime.state import build_canonical_state_synthesis_engine
 from security.connector_secret_scope import ConnectorSecretScope
 from security.secret_vault import build_default_secret_vault
 from storage.distributed_evidence_audit_backend import DistributedGovernanceAuditLog
@@ -769,9 +768,7 @@ def build_business_autonomy_guarded_service(*, business_id: str = 'external_busi
     service._external_business_fact_ingress = ExternalBusinessFactIngress(
         event_store=ontology_event_store,
         evidence_store=distributed['evidence'],
-        state_engine=StateSynthesisEngine(
-            snapshot_store=FileStateSnapshotStore(business_autonomy_runtime_dir() / 'state')
-        ),
+        state_engine=build_canonical_state_synthesis_engine(),
         idempotency_store=distributed['idempotency'],
     )
     if ontology_event_store_stack is not None:

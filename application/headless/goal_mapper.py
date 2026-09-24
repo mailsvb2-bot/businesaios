@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import time
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from typing import Any
 
 from application.headless.models import GoalExecutionRequest
@@ -27,6 +27,7 @@ class HeadlessGoalStateMapper:
     """
 
     business_memory_state_adapter: BusinessMemoryStateAdapter = field(default_factory=BusinessMemoryStateAdapter)
+    semantic_snapshot_reader: Any | None = None
 
     def to_world_state(
         self,
@@ -95,13 +96,29 @@ class HeadlessGoalStateMapper:
             },
             price_constraints=dict(request.constraints or {}) or None,
         )
-        if getattr(self.business_memory_state_adapter, "store", None) is None:
+        if getattr(self.business_memory_state_adapter, "store", None) is not None:
+            state = self.business_memory_state_adapter.inject(
+                world_state=state,
+                tenant_id=request.tenant_id,
+                business_id=request.business_id,
+            )
+        reader = self.semantic_snapshot_reader
+        if reader is None:
             return state
-        return self.business_memory_state_adapter.inject(
-            world_state=state,
+        snapshot = reader.load_latest(
             tenant_id=request.tenant_id,
             business_id=request.business_id,
         )
+        if snapshot is None:
+            return state
+        if (
+            str(snapshot.tenant_id) != str(request.tenant_id)
+            or str(snapshot.business_id) != str(request.business_id)
+        ):
+            raise ValueError("semantic World Model snapshot scope mismatch")
+        if snapshot.semantic_view is None:
+            raise ValueError("semantic World Model snapshot is missing semantic_view")
+        return replace(state, world_model_semantics=snapshot.semantic_view)
 
 
 __all__ = ["CANON_HEADLESS_GOAL_MAPPER", "HeadlessGoalStateMapper"]
