@@ -25,8 +25,7 @@ def _canonical_goal_identity(state: Any) -> str | None:
     canonical_goal_id = str(canonical_goal.get("goal_id") or "").strip()
     if requested_goal_id and canonical_goal_id and requested_goal_id != canonical_goal_id:
         raise RuntimeError("DECISION_GOAL_ID_MISMATCH")
-    resolved = canonical_goal_id or requested_goal_id
-    return resolved or None
+    return requested_goal_id or None
 
 
 def _finite_number(value: object) -> float | None:
