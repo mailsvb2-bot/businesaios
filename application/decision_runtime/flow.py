@@ -174,6 +174,17 @@ def build_payload(
             raise RuntimeError("DECISION_GOAL_ID_MISMATCH")
         payload["goal_id"] = canonical_goal_id
         meta_block["canonical_goal_id"] = canonical_goal_id
+        product = _mapping(
+            state.get("product") if isinstance(state, Mapping) else getattr(state, "product", {})
+        )
+        canonical_business_id = str(
+            product.get("business_id") or state_meta.get("business_id") or ""
+        ).strip()
+        if canonical_business_id:
+            payload_business_id = str(payload.get("business_id") or "").strip()
+            if payload_business_id and payload_business_id != canonical_business_id:
+                raise RuntimeError("DECISION_BUSINESS_ID_MISMATCH")
+            payload["business_id"] = canonical_business_id
     if pinned_world_model_meta:
         meta_block["world_model_meta"] = dict(pinned_world_model_meta)
     if "world_model_explainability" in state_meta:
