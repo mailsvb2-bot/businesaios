@@ -13,6 +13,7 @@ class CEORequest(BaseModel):
 class ExecuteGoalRequest(BaseModel):
     goal: str = Field(min_length=1)
     business_id: str = Field(min_length=1)
+    goal_id: str | None = Field(default=None, min_length=1)
     tenant_id: str = Field(default="default", min_length=1)
     user_id: str | None = None
     region: str = Field(default="global", min_length=1)
@@ -46,6 +47,7 @@ class ExecuteGoalStepResponse(BaseModel):
 class ExecuteGoalResponse(BaseModel):
     goal: str
     business_id: str
+    goal_id: str | None = None
     tenant_id: str
     completed: bool
     stop_reason: str

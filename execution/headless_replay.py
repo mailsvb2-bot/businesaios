@@ -32,6 +32,7 @@ class HeadlessReplayEngine:
         request = GoalExecutionRequest(
             goal=str(started["goal"]),
             business_id=str(started["business_id"]),
+            goal_id=started.get("goal_id"),
             tenant_id=str(started["tenant_id"]),
             user_id=started.get("user_id"),
             region=str(started.get("region") or "global"),

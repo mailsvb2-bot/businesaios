@@ -74,6 +74,7 @@ def canonical_goal_execution_report(
     stop_reason: str,
     steps: tuple[Any, ...] | list[Any],
     final_feedback: Mapping[str, Any] | None = None,
+    goal_id: str | None = None,
 ) -> dict[str, Any]:
     final_feedback_payload = _safe_dict(final_feedback)
     execution_feedback = dict(
@@ -83,6 +84,7 @@ def canonical_goal_execution_report(
     step_artifacts = [canonical_goal_execution_step(step) for step in tuple(steps or ())]
     return {
         'goal': _text(goal),
+        'goal_id': _text(goal_id) or None,
         'business_id': _text(business_id),
         'tenant_id': _text(tenant_id),
         'completed': bool(completed),
@@ -110,6 +112,7 @@ def canonical_ledger_record(*, run_id: str, trace_id: str, report_artifact: Mapp
         'run_id': _text(run_id),
         'trace_id': _text(trace_id),
         'goal': _text(payload.get('goal')),
+        'goal_id': _text(payload.get('goal_id')) or None,
         'business_id': _text(payload.get('business_id')),
         'tenant_id': _text(payload.get('tenant_id')),
         'completed': bool(payload.get('completed', False)),

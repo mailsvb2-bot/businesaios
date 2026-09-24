@@ -319,6 +319,7 @@ class AutonomyStateAssembly:
                     "tenant_id": request.tenant_id,
                     "business_id": request.business_id,
                     "goal": request.goal,
+                    "goal_id": request.goal_id,
                     "meta": dict(getattr(state, "meta", {}) or {}),
                     "business_memory": dict(project_business_memory_contract_bundle(dict(business_memory_context or {})).get("evidence") or {}),
                     "business_memory_summary": dict(project_business_memory_contract_bundle(dict(business_memory_context or {})).get("governance_summary") or {}),
@@ -336,6 +337,7 @@ class AutonomyStateAssembly:
                 "tenant_id": request.tenant_id,
                 "business_id": request.business_id,
                 "goal": request.goal,
+                "goal_id": request.goal_id,
             },
         )
         return state

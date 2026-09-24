@@ -45,6 +45,7 @@ class GoalExecutionRequest:
     max_steps: int = 1
     autonomy_tier: str = 'supervised'
     approval_policy: dict[str, Any] = field(default_factory=dict)
+    goal_id: str | None = None
 
     def validate(self) -> tuple[bool, tuple[str, ...]]:
         issues: list[str] = []
@@ -52,6 +53,8 @@ class GoalExecutionRequest:
             issues.append("missing:goal")
         if not str(self.business_id or "").strip():
             issues.append("missing:business_id")
+        if self.goal_id is not None and not str(self.goal_id or "").strip():
+            issues.append("invalid:goal_id")
         if not str(self.tenant_id or "").strip():
             issues.append("missing:tenant_id")
         if not str(self.channel or "").strip():
@@ -110,6 +113,7 @@ class GoalExecutionReport:
     run_id: str = ""
     trace_id: str = ""
     canonical_run_artifact: dict[str, Any] = field(default_factory=dict)
+    goal_id: str | None = None
 
     @property
     def attempted(self) -> bool:

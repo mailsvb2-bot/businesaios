@@ -89,6 +89,44 @@ def test_canonical_evidence_round_trips_full_business_outcome() -> None:
     ) == (expected,)
 
 
+def test_goal_id_is_bound_to_evidence_without_rewriting_business_outcome_schema() -> None:
+    store = InMemoryEvidenceStore()
+    expected = _outcome()
+    artifacts = EvidencePersistenceService(evidence_store=store).persist(
+        tenant_id=expected.tenant_id,
+        business_id=expected.business_id,
+        run_id=expected.run_id,
+        goal=expected.goal,
+        goal_id="goal-canonical",
+        step_index=0,
+        action={
+            "action_type": expected.action_type,
+            "action_id": expected.action_id,
+            "decision_id": expected.decision_id,
+            "derived_fact_ref": expected.derived_fact_ref,
+            "evidence_refs": list(expected.evidence_refs),
+        },
+        execution_result={"executed": True, "source_of_truth": expected.source_of_truth},
+        verification_result={
+            "verified": True,
+            "verification": {
+                "status": "verified",
+                "external_refs": list(expected.external_refs),
+            },
+        },
+        world_state_before={},
+        world_state_after={},
+        final_feedback={"business_outcome": expected.as_dict()},
+    )
+
+    assert artifacts.outcome_record is not None
+    assert artifacts.outcome_record["goal_id"] == "goal-canonical"
+    record = store.list_for_tenant(tenant_id=expected.tenant_id)[0]
+    assert record.labels["goal_id"] == "goal-canonical"
+    assert record.payload["business_outcome"] == expected.as_dict()
+    assert "goal_id" not in expected.as_dict()
+
+
 def test_business_outcome_projection_is_scope_isolated() -> None:
     store = InMemoryEvidenceStore()
     expected = _outcome()

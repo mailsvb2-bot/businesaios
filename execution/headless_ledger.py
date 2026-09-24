@@ -25,6 +25,7 @@ class LedgerRecord:
     trace: dict[str, Any]
     canonical_run_artifact: dict[str, Any] = field(default_factory=dict)
     canonical_persistence_vocabulary: dict[str, Any] = field(default_factory=dict)
+    goal_id: str | None = None
 
 
 @dataclass
@@ -42,6 +43,7 @@ class FileHeadlessLedger:
             "business_id": record.business_id,
             "tenant_id": record.tenant_id,
             "goal": record.goal,
+            "goal_id": record.goal_id,
             "completed": bool(record.completed),
             "stop_reason": record.stop_reason,
             "steps_count": int(record.steps_count),
@@ -54,6 +56,7 @@ class FileHeadlessLedger:
                 "business_id": record.business_id,
                 "tenant_id": record.tenant_id,
                 "goal": record.goal,
+                "goal_id": record.goal_id,
                 "completed": bool(record.completed),
                 "stop_reason": record.stop_reason,
                 "steps_count": int(record.steps_count),

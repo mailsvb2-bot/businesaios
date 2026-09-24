@@ -12,6 +12,7 @@ def test_canonical_run_persistence_vocabulary_prefers_run_artifact_execution_fee
             'tenant_id': 'tenant-1',
             'business_id': 'biz-1',
             'goal': 'grow revenue',
+            'goal_id': 'goal-1',
             'steps_count': 2,
             'final_feedback': {'goal_score': 0.2, 'retry_classification': {'kind': 'operator_required'}},
             'canonical_run_artifact': {
@@ -28,6 +29,7 @@ def test_canonical_run_persistence_vocabulary_prefers_run_artifact_execution_fee
         }
     )
     assert payload['verification_status'] == 'verified'
+    assert payload['goal_id'] == 'goal-1'
     assert payload['verified'] is True
     assert payload['goal_score'] == 0.2
     assert payload['external_refs'] == ['proof://1']
@@ -35,10 +37,12 @@ def test_canonical_run_persistence_vocabulary_prefers_run_artifact_execution_fee
 
 def test_canonical_persistence_outcome_record_embeds_vocabulary() -> None:
     record = canonical_persistence_outcome_record(
-        base_record={'tenant_id': 'tenant-1', 'business_id': 'biz-1', 'run_id': 'run-1', 'goal': 'grow'},
+        base_record={'tenant_id': 'tenant-1', 'business_id': 'biz-1', 'run_id': 'run-1', 'goal': 'grow', 'goal_id': 'goal-1'},
         outcome_record={'verification_status': 'accepted', 'executed': True, 'external_refs': ['ref-1']},
     )
     assert record['verification_status'] == 'verified'
+    assert record['goal_id'] == 'goal-1'
+    assert record['persistence_vocabulary']['goal_id'] == 'goal-1'
     assert record['persistence_vocabulary']['verification_status'] == 'verified'
     assert record['external_refs'] == ['ref-1']
 

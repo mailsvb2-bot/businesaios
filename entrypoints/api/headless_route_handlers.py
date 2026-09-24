@@ -45,6 +45,7 @@ class HeadlessRouteHandlers:
             GoalExecutionRequest(
                 goal=request.goal,
                 business_id=request.business_id,
+                goal_id=getattr(request, "goal_id", None),
                 tenant_id=request.tenant_id,
                 user_id=request.user_id,
                 region=request.region,
@@ -66,6 +67,7 @@ class HeadlessRouteHandlers:
         return ExecuteGoalResponse(
             goal=report.goal,
             business_id=report.business_id,
+            goal_id=getattr(report, "goal_id", None),
             tenant_id=report.tenant_id,
             completed=report.completed,
             stop_reason=report.stop_reason,

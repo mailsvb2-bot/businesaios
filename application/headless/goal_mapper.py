@@ -4,6 +4,7 @@ import time
 from dataclasses import dataclass, field, replace
 from typing import Any
 
+from application.business_goal import BusinessGoalProjector
 from application.headless.models import GoalExecutionRequest
 from application.memory.business_memory_state_adapter import BusinessMemoryStateAdapter
 from application.memory.business_operating_memory import (
@@ -28,6 +29,11 @@ class HeadlessGoalStateMapper:
 
     business_memory_state_adapter: BusinessMemoryStateAdapter = field(default_factory=BusinessMemoryStateAdapter)
     semantic_snapshot_reader: Any | None = None
+    canonical_goal_reader: Any | None = None
+
+    @staticmethod
+    def build_canonical_goal_reader(event_store: Any) -> BusinessGoalProjector:
+        return BusinessGoalProjector(event_store)
 
     def to_world_state(
         self,
@@ -59,6 +65,17 @@ class HeadlessGoalStateMapper:
             "must_not_unlock_effects": True,
         }
         request_meta = dict(request.meta or {})
+        canonical_goal: dict[str, Any] = {}
+        if request.goal_id is not None:
+            if self.canonical_goal_reader is None:
+                raise RuntimeError("canonical Goal reader is required when goal_id is provided")
+            canonical_goal = dict(
+                self.canonical_goal_reader.load_context(
+                    tenant_id=request.tenant_id,
+                    business_id=request.business_id,
+                    goal_id=request.goal_id,
+                )
+            )
         raw_memory = project_business_memory_evidence(dict(request_meta.get('business_memory') or {}))
         memory_profile = project_business_memory_profile(raw_memory)
         memory_evidence = self.business_memory_state_adapter.to_state_context(raw_memory)
@@ -67,6 +84,8 @@ class HeadlessGoalStateMapper:
             **request_meta,
             "headless": True,
             "goal": request.goal,
+            "goal_id": request.goal_id,
+            "canonical_goal": canonical_goal,
             "profile": merged_profile,
             "signals": list(request.signals or []),
             "constraints": dict(request.constraints or {}),
@@ -91,6 +110,7 @@ class HeadlessGoalStateMapper:
             meta=meta,
             behavior={
                 "goal": request.goal,
+                "goal_id": request.goal_id,
                 "step_index": int(step_index),
                 "strategic_objective": str(request.ceo.objective or request.goal),
             },

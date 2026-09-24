@@ -161,6 +161,7 @@ def build_headless_runtime(*, entrypoint: str = "headless_sdk", root_dir: str | 
                 policy=memory_policy,
             ),
             semantic_snapshot_reader=state_synthesis_engine.snapshot_store,
+            canonical_goal_reader=HeadlessGoalStateMapper.build_canonical_goal_reader(event_store),
         ),
         feedback_reader=SimpleHeadlessFeedbackReader.default(),
         stop_policy=HeadlessStopPolicy(max_failures=1),

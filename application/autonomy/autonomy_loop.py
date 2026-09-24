@@ -63,6 +63,7 @@ class AutonomyLoop:
             step_index=0,
             payload={
                 "goal": request.goal,
+                "goal_id": request.goal_id,
                 "business_id": request.business_id,
                 "tenant_id": request.tenant_id,
                 "user_id": request.user_id,

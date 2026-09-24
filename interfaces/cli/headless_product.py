@@ -26,6 +26,7 @@ def _build_parser() -> argparse.ArgumentParser:
     run_cmd.add_argument("goal", type=str)
     run_cmd.add_argument("--business-id", required=True, type=str)
     run_cmd.add_argument("--tenant-id", default="default", type=str)
+    run_cmd.add_argument("--goal-id", default=None, type=str)
     run_cmd.add_argument("--user-id", default=None, type=str)
     run_cmd.add_argument("--region", default="global", type=str)
     run_cmd.add_argument("--max-steps", default=1, type=int)
@@ -88,6 +89,7 @@ def main(argv: list[str] | None = None) -> int:
             goal=args.goal,
             business_id=args.business_id,
             tenant_id=args.tenant_id,
+            goal_id=args.goal_id,
             user_id=args.user_id,
             region=args.region,
             max_steps=args.max_steps,

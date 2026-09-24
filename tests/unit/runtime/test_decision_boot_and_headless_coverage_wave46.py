@@ -13,6 +13,7 @@ from application.capability.capability_aware_planning import CapabilityAwarePlan
 from application.capability.capability_health_registry import CapabilityHealthRegistry
 from application.capability.capability_matrix import CapabilityMatrix
 from application.capability.capability_router import ExecutionCapabilityRouter
+from execution.headless_replay import HeadlessReplayEngine
 
 
 class OptimizeCore:
@@ -180,6 +181,7 @@ def test_headless_contract_normalizes_registry_and_preserves_shared_planner(
 def _execution_request():
     return SimpleNamespace(
         goal="grow",
+        goal_id="goal-canonical",
         business_id="business",
         tenant_id="tenant",
         user_id="user",
@@ -205,12 +207,44 @@ def test_execute_once_preserves_every_request_field_and_bounds_steps():
     assert contract.execute_once(request) == "report"
     bounded = contract.execute_autopilot.call_args.args[0]
     assert bounded.goal == request.goal
+    assert bounded.goal_id == request.goal_id
     assert bounded.profile == request.profile
     assert bounded.signals == request.signals
     assert bounded.constraints == request.constraints
     assert bounded.economy == request.economy
     assert bounded.meta == request.meta
     assert bounded.max_steps == 1
+
+
+def test_headless_replay_restores_canonical_goal_id():
+    captured = {}
+
+    class ReplayContract:
+        def execute_autopilot(self, request):
+            captured["request"] = request
+            return "report"
+
+    result = HeadlessReplayEngine(contract=ReplayContract()).replay(
+        {
+            "trace": {
+                "events": [
+                    {
+                        "event_type": "request_received",
+                        "payload": {
+                            "goal": "grow",
+                            "goal_id": "goal-canonical",
+                            "business_id": "business",
+                            "tenant_id": "tenant",
+                            "max_steps": 1,
+                        },
+                    }
+                ]
+            }
+        }
+    )
+
+    assert result == "report"
+    assert captured["request"].goal_id == "goal-canonical"
 
 
 def test_execute_autopilot_always_persists_evidence_and_optionally_ledger():
@@ -265,6 +299,9 @@ def test_execute_autopilot_always_persists_evidence_and_optionally_ledger():
 
     assert report.completed is True
     assert report.canonical_run_artifact["steps_count"] == 1
+    assert report.goal_id == "goal-canonical"
+    assert report.canonical_run_artifact["goal_id"] == "goal-canonical"
+    assert evidence.persist.call_args.kwargs["goal_id"] == "goal-canonical"
     assert evidence.persist.call_args.kwargs["step_index"] == 2
     assert evidence.persist.call_args.kwargs["action"] == {
         "action_type": "notify_owner",
