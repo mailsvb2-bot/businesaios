@@ -67,6 +67,7 @@ def canonical_run_persistence_vocabulary(record: Mapping[str, Any] | None = None
         'run_id': _text(payload.get('run_id')),
         'trace_id': _text(payload.get('trace_id')),
         'goal': _text(payload.get('goal') or persisted.get('goal') or run_artifact.get('goal')),
+        'goal_id': _text(payload.get('goal_id') or persisted.get('goal_id') or run_artifact.get('goal_id')) or None,
         'channel': _text(payload.get('channel') or persisted.get('channel') or final_feedback.get('channel')),
         'region': _text(payload.get('region') or persisted.get('region') or final_feedback.get('region')),
         'completed': bool(payload.get('completed', persisted.get('completed', run_artifact.get('completed', False)))),
@@ -107,6 +108,7 @@ def canonical_persistence_outcome_record(*, base_record: Mapping[str, Any] | Non
         'business_id': _text(outcome.get('business_id') or base.get('business_id')),
         'run_id': _text(outcome.get('run_id') or base.get('run_id')),
         'goal': _text(outcome.get('goal') or base.get('goal')),
+        'goal_id': _text(outcome.get('goal_id') or base.get('goal_id')) or None,
         'step_index': int(outcome.get('step_index') or 0),
         'action_type': _text(outcome.get('action_type')),
         'action_id': _text(outcome.get('action_id')),
@@ -121,6 +123,7 @@ def canonical_persistence_outcome_record(*, base_record: Mapping[str, Any] | Non
         'persistence_vocabulary': {
             'verification_status': verification_status,
             'goal': _text(outcome.get('goal') or base.get('goal')),
+            'goal_id': _text(outcome.get('goal_id') or base.get('goal_id')) or None,
             'run_id': _text(outcome.get('run_id') or base.get('run_id')),
             'retryable': bool(outcome.get('retryable', base.get('retryable', False))),
             'external_refs': refs,
