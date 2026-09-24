@@ -236,7 +236,6 @@ class EvidencePersistenceService:
             raise ValueError('canonical goal lineage conflicts with signed ActionIntent')
         lineage = {
             'normalization': str(persistence_key),
-            'goal': persisted_goal_id or signed_goal_id,
             'derived_fact': _text(action_intent.get('derived_fact_ref') or action.get('derived_fact_ref') or business_outcome.get('derived_fact_ref')),
             'decision': _text(action_intent.get('decision_id') or action.get('decision_id') or business_outcome.get('decision_id')),
             'action': _text(outcome.get('action_id')),
