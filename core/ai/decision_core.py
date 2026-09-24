@@ -11,7 +11,7 @@ from application.decision_state.world_model_metadata import (
     extract_pinned_derived_fact_ref_from_payload,
     extract_pinned_evidence_refs_from_payload,
 )
-from contracts.action_intent import ActionIntentV1
+from contracts.action_intent import ActionIntentV1, ActionIntentV2
 from contracts.executable_action import ExecutableAction
 from core.decision_core_contract import CANONICAL_DECISION_CORE_IMPORT_PATH
 from core.utils.canonical import payload_hash as canonical_payload_hash
@@ -62,6 +62,28 @@ def project_action_intent(
         derived_fact_ref=extract_pinned_derived_fact_ref_from_payload(payload),
     )
 
+def project_action_intent_v2(
+    *,
+    decision: Any,
+    payload_hash: str,
+    channel: str,
+    tenant_id: str,
+    business_id: str,
+) -> ActionIntentV2:
+    payload = dict(getattr(decision, "payload", {}) or {})
+    intent = ActionIntentV2.from_decision(
+        decision=decision,
+        tenant_id=str(tenant_id or "").strip(),
+        channel=str(channel or "").strip(),
+        payload_hash=str(payload_hash or "").strip(),
+        evidence_refs=extract_pinned_evidence_refs_from_payload(payload),
+        derived_fact_ref=extract_pinned_derived_fact_ref_from_payload(payload),
+    )
+    if intent.business_id != str(business_id or "").strip():
+        raise ValueError("ActionIntent v2 business identity mismatch")
+    return intent
+
+
 def project_executable_action(
     *,
     decision_id: str,
@@ -71,7 +93,7 @@ def project_executable_action(
     payload: Mapping[str, Any],
     capability_plan: Any,
     enforce_capability_plan: bool,
-    action_intent: ActionIntentV1 | None = None,
+    action_intent: ActionIntentV1 | ActionIntentV2 | None = None,
 ) -> ExecutableAction:
     """Project the signed decision into the sole executable-action contract.
 
@@ -239,5 +261,6 @@ __all__ = [
     "ENVELOPE_VERSION",
     "SOVEREIGN_DECISION_CORE",
     "project_action_intent",
+    "project_action_intent_v2",
     "project_executable_action",
 ]
