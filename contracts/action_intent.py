@@ -306,7 +306,11 @@ class ActionIntentV2:
                 if str(payload.get("autonomy_tier") or "").strip()
                 else None
             ),
-            deadline=payload.get("deadline"),
+            deadline=(
+                payload.get("deadline")
+                if "deadline" in payload
+                else contract.get("deadline")
+            ),
             channel=str(channel or "").strip(),
             payload_hash=str(payload_hash or "").strip(),
             evidence_refs=evidence_refs,
