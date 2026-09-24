@@ -37,20 +37,6 @@ def _goal_direction(goal: BusinessGoal) -> str | None:
     return None
 
 
-def _constraint_subject_conflict(
-    *,
-    goal_id: str,
-    metric: str | None,
-    constraint: Any,
-) -> str | None:
-    subject_type = str(constraint.subject_type or "").strip().lower()
-    if subject_type == "goal" and str(constraint.subject_id or "") != str(goal_id):
-        return "constraint_subject_goal_mismatch"
-    if subject_type == "metric" and str(constraint.subject_id or "") != str(metric or ""):
-        return "constraint_subject_metric_mismatch"
-    return None
-
-
 class BusinessGoalHistoryInvariantViolation(RuntimeError):
     pass
 
@@ -245,6 +231,7 @@ class BusinessGoalProjector:
                 )
 
         linked_constraints: list[dict[str, object]] = []
+        guard_metrics: list[dict[str, object]] = []
         unresolved_constraint_ids: list[str] = []
         goal_constraint_conflicts: list[dict[str, object]] = []
         for constraint_id in current.constraint_ids:
@@ -272,19 +259,19 @@ class BusinessGoalProjector:
                         "severity": constraint.severity.value,
                     }
                 )
-            subject_conflict = _constraint_subject_conflict(
-                goal_id=current.goal_id,
-                metric=current.metric,
-                constraint=constraint,
-            )
-            if subject_conflict is not None:
-                goal_constraint_conflicts.append(
+            if (
+                constraint.lifecycle_status is ConstraintLifecycleStatus.ACTIVE
+                and str(constraint.subject_type or "").strip().lower() == "metric"
+                and constraint.subject_id
+            ):
+                guard_metrics.append(
                     {
-                        "conflict_kind": subject_conflict,
+                        "metric": constraint.subject_id,
                         "constraint_id": constraint.constraint_id,
-                        "subject_type": constraint.subject_type,
-                        "subject_id": constraint.subject_id,
-                        "goal_metric": current.metric,
+                        "constraint_kind": constraint.constraint_kind,
+                        "severity": constraint.severity.value,
+                        "state_key": constraint.state_key,
+                        "lifecycle_status": constraint.lifecycle_status.value,
                     }
                 )
         return {
@@ -296,6 +283,7 @@ class BusinessGoalProjector:
             },
             "constraints": {
                 "linked": linked_constraints,
+                "guard_metrics": guard_metrics,
                 "unresolved_ids": unresolved_constraint_ids,
                 "evidence_only": True,
                 "must_not_issue_decision": True,
@@ -381,8 +369,6 @@ class BusinessGoalRegistry:
         *,
         tenant_id: str,
         business_id: str,
-        goal_id: str,
-        metric: str | None,
         constraint_ids: tuple[str, ...],
     ) -> None:
         for constraint_id in constraint_ids:
@@ -398,13 +384,6 @@ class BusinessGoalRegistry:
                 ) from exc
             if constraint.lifecycle_status is ConstraintLifecycleStatus.ARCHIVED:
                 raise ValueError("constraint_ids cannot reference archived constraints")
-            subject_conflict = _constraint_subject_conflict(
-                goal_id=goal_id,
-                metric=metric,
-                constraint=constraint,
-            )
-            if subject_conflict is not None:
-                raise ValueError(f"constraint subject does not match linked goal: {subject_conflict}")
 
     def create(
         self,
@@ -508,8 +487,6 @@ class BusinessGoalRegistry:
         self._validate_constraint_links(
             tenant_id=candidate.tenant_id,
             business_id=candidate.business_id,
-            goal_id=candidate.goal_id,
-            metric=candidate.metric,
             constraint_ids=candidate.constraint_ids,
         )
         self._writer.append_once(
@@ -590,8 +567,6 @@ class BusinessGoalRegistry:
             self._validate_constraint_links(
                 tenant_id=tenant_id,
                 business_id=business_id,
-                goal_id=candidate.goal_id,
-                metric=candidate.metric,
                 constraint_ids=candidate.constraint_ids,
             )
         payload = self._payload(candidate)
