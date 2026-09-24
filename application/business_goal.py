@@ -4,6 +4,7 @@ import time
 from dataclasses import replace
 from typing import Any
 
+from application.business_constraint import BusinessConstraintProjector
 from application.ontology import EventFactLifecycleWriter
 from contracts.business_goal import (
     BUSINESS_GOAL_SCHEMA_VERSION,
@@ -11,6 +12,7 @@ from contracts.business_goal import (
     BusinessGoalNotFound,
     GoalLifecycleStatus,
 )
+from contracts.business_constraints import BusinessConstraintNotFound, ConstraintLifecycleStatus
 from contracts.event_store import BUSINESS_FACT_EVENT_TYPE
 from reliability.idempotency_contract import IdempotencyStore
 
@@ -32,6 +34,7 @@ class BusinessGoalHistoryInvariantViolation(RuntimeError):
 class BusinessGoalProjector:
     def __init__(self, event_store: Any) -> None:
         self._events = event_store
+        self._constraints = BusinessConstraintProjector(event_store)
 
     def _facts(self, *, tenant_id: str, business_id: str, goal_id: str | None = None) -> list[dict[str, object]]:
         rows: list[dict[str, object]] = []
@@ -152,6 +155,19 @@ class BusinessGoalProjector:
             "updated_at_ms": goal.updated_at_ms,
         }
 
+    @staticmethod
+    def _constraint_decision_view(constraint: Any) -> dict[str, object]:
+        return {
+            "constraint_id": constraint.constraint_id,
+            "constraint_kind": constraint.constraint_kind,
+            "severity": constraint.severity.value,
+            "subject_type": constraint.subject_type,
+            "subject_id": constraint.subject_id,
+            "state_key": constraint.state_key,
+            "lifecycle_status": constraint.lifecycle_status.value,
+            "updated_at_ms": constraint.updated_at_ms,
+        }
+
     def load_context(self, *, tenant_id: str, business_id: str, goal_id: str) -> dict[str, object]:
         goals = {
             goal.goal_id: goal
@@ -182,12 +198,31 @@ class BusinessGoalProjector:
             (goal for goal in goals.values() if goal.parent_goal_id == current.goal_id),
             key=lambda goal: (-goal.priority, goal.goal_id),
         )
+        linked_constraints: list[dict[str, object]] = []
+        unresolved_constraint_ids: list[str] = []
+        for constraint_id in current.constraint_ids:
+            try:
+                constraint = self._constraints.get(
+                    tenant_id=tenant_id,
+                    business_id=business_id,
+                    constraint_id=constraint_id,
+                )
+            except BusinessConstraintNotFound:
+                unresolved_constraint_ids.append(constraint_id)
+                continue
+            linked_constraints.append(self._constraint_decision_view(constraint))
         return {
             "goal": self._decision_view(current),
             "hierarchy": {
                 "depth": len(ancestors),
                 "ancestors": [self._decision_view(goal) for goal in ancestors],
                 "children": [self._decision_view(goal) for goal in children],
+            },
+            "constraints": {
+                "linked": linked_constraints,
+                "unresolved_ids": unresolved_constraint_ids,
+                "evidence_only": True,
+                "must_not_issue_decision": True,
             },
             "evidence_only": True,
             "must_not_issue_decision": True,
@@ -197,6 +232,7 @@ class BusinessGoalProjector:
 class BusinessGoalRegistry:
     def __init__(self, *, event_store: Any, idempotency_store: IdempotencyStore) -> None:
         self._projector = BusinessGoalProjector(event_store)
+        self._constraints = BusinessConstraintProjector(event_store)
         self._writer = EventFactLifecycleWriter(
             event_store=event_store,
             idempotency_store=idempotency_store,
@@ -256,6 +292,27 @@ class BusinessGoalRegistry:
         if parent.lifecycle_status in {GoalLifecycleStatus.CANCELLED, GoalLifecycleStatus.ARCHIVED}:
             raise ValueError("parent_goal_id cannot reference cancelled or archived goal")
 
+    def _validate_constraint_links(
+        self,
+        *,
+        tenant_id: str,
+        business_id: str,
+        constraint_ids: tuple[str, ...],
+    ) -> None:
+        for constraint_id in constraint_ids:
+            try:
+                constraint = self._constraints.get(
+                    tenant_id=tenant_id,
+                    business_id=business_id,
+                    constraint_id=constraint_id,
+                )
+            except BusinessConstraintNotFound as exc:
+                raise ValueError(
+                    "constraint_ids must reference canonical constraints in the same business"
+                ) from exc
+            if constraint.lifecycle_status is ConstraintLifecycleStatus.ARCHIVED:
+                raise ValueError("constraint_ids cannot reference archived constraints")
+
     def create(
         self,
         *,
@@ -276,6 +333,8 @@ class BusinessGoalRegistry:
         occurred_at_ms: int | None = None,
         event_metadata: dict[str, object] | None = None,
     ) -> BusinessGoal:
+        if isinstance(constraint_ids, str):
+            raise ValueError("constraint_ids must be a sequence of canonical constraint ids")
         when = self._time(occurred_at_ms)
         candidate = BusinessGoal(
             goal_id=goal_id,
@@ -353,6 +412,11 @@ class BusinessGoalRegistry:
             goal_id=candidate.goal_id,
             parent_goal_id=candidate.parent_goal_id,
         )
+        self._validate_constraint_links(
+            tenant_id=candidate.tenant_id,
+            business_id=candidate.business_id,
+            constraint_ids=candidate.constraint_ids,
+        )
         self._writer.append_once(
             tenant_id=tenant_id, business_id=business_id, entity_id=goal_id,
             operation="create", idempotency_key=idempotency_key, fact_type=GOAL_CREATED,
@@ -427,6 +491,12 @@ class BusinessGoalRegistry:
             return current
         if current.lifecycle_status is not GoalLifecycleStatus.ACTIVE:
             raise ValueError("terminal business goal cannot be updated")
+        if constraint_ids is not _UNSET and candidate.constraint_ids != current.constraint_ids:
+            self._validate_constraint_links(
+                tenant_id=tenant_id,
+                business_id=business_id,
+                constraint_ids=candidate.constraint_ids,
+            )
         payload = self._payload(candidate)
         if payload == self._payload(current):
             self._writer.repair_existing(
