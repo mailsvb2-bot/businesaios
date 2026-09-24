@@ -79,6 +79,108 @@ def test_goal_hierarchy_lifecycle_and_idempotency() -> None:
         )
 
 
+def test_goal_objective_fields_are_first_class_and_mutate_through_same_lifecycle() -> None:
+    registry, events = _registry()
+    created = registry.create(
+        tenant_id="tenant",
+        business_id="business",
+        goal_id="profit",
+        idempotency_key="create-profit",
+        goal_kind="profitability",
+        metric="net_profit",
+        baseline=100_000,
+        target=120_000,
+        deadline_at_ms=1_000,
+        owner_id="owner-1",
+        constraint_ids=("budget-cap", "no-cold-calls"),
+        priority=90,
+        occurred_at_ms=100,
+    )
+    assert created.metric == "net_profit"
+    assert created.target_key == "net_profit"
+    assert created.baseline == 100_000.0
+    assert created.target == 120_000.0
+    assert created.deadline_at_ms == 1_000
+    assert created.owner_id == "owner-1"
+    assert created.constraint_ids == ("budget-cap", "no-cold-calls")
+
+    updated = registry.update_objective(
+        tenant_id="tenant",
+        business_id="business",
+        goal_id="profit",
+        idempotency_key="revise-profit",
+        target=125_000,
+        deadline_at_ms=1_500,
+        owner_id="owner-2",
+        constraint_ids=("budget-cap",),
+        priority=95,
+        occurred_at_ms=200,
+    )
+    assert updated.metric == "net_profit"
+    assert updated.baseline == 100_000.0
+    assert updated.target == 125_000.0
+    assert updated.deadline_at_ms == 1_500
+    assert updated.owner_id == "owner-2"
+    assert updated.constraint_ids == ("budget-cap",)
+    assert updated.priority == 95
+
+    count = len(events.events)
+    assert registry.update_objective(
+        tenant_id="tenant",
+        business_id="business",
+        goal_id="profit",
+        idempotency_key="revise-profit",
+        target=125_000,
+        deadline_at_ms=1_500,
+        owner_id="owner-2",
+        constraint_ids=("budget-cap",),
+        priority=95,
+        occurred_at_ms=999,
+    ) == updated
+    assert len(events.events) == count
+
+
+def test_goal_objective_contract_rejects_conflicting_metric_and_invalid_values() -> None:
+    with pytest.raises(ValueError, match="same canonical metric"):
+        BusinessGoal(
+            goal_id="g",
+            tenant_id="t",
+            business_id="b",
+            goal_kind="growth",
+            target_key="mrr",
+            metric="revenue",
+        )
+    with pytest.raises(ValueError, match="finite number"):
+        BusinessGoal(
+            goal_id="g",
+            tenant_id="t",
+            business_id="b",
+            goal_kind="growth",
+            metric="mrr",
+            target=float("nan"),
+        )
+    with pytest.raises(ValueError, match="deadline_at_ms must be >= created_at_ms"):
+        BusinessGoal(
+            goal_id="g",
+            tenant_id="t",
+            business_id="b",
+            goal_kind="growth",
+            metric="mrr",
+            created_at_ms=100,
+            updated_at_ms=100,
+            deadline_at_ms=99,
+        )
+    with pytest.raises(ValueError, match="constraint_ids must be unique"):
+        BusinessGoal(
+            goal_id="g",
+            tenant_id="t",
+            business_id="b",
+            goal_kind="growth",
+            metric="mrr",
+            constraint_ids=("c1", "c1"),
+        )
+
+
 def test_goal_metadata_propagates_and_same_key_replay_rejects_change() -> None:
     registry, events = _registry()
     create_metadata = { "actor_id": "owner-1", "decision_id": "decision-create", "evidence_ids": ("goal-evidence-1",), }
@@ -170,4 +272,5 @@ def test_goal_projection_is_scoped_and_survives_sqlite_restart(tmp_path) -> None
         with pytest.raises(BusinessGoalNotFound):
             BusinessGoalProjector(events).get(tenant_id="tenant", business_id="other", goal_id="goal")
     assert restored.target_key == "mrr"
+    assert restored.metric == "mrr"
     assert restored.priority == 85
