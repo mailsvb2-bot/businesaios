@@ -77,11 +77,28 @@ def propose_action(*, policy: Any, state: Any, trace: Any) -> Any:
             reason="ranked_candidates_empty",
         )
     selected = ranked[0]
+    decision_alternatives = [
+        {
+            "option_id": str(item.action),
+            "score": float(item.score),
+            "reason": str(item.reason),
+        }
+        for item in ranked
+    ]
+    selected_ranking = {
+        **dict(selected.ranking),
+        "_decision_alternatives": decision_alternatives,
+        "_decision_selection": {
+            "option_id": str(selected.action),
+            "score": float(selected.score),
+            "reason": str(selected.reason),
+        },
+    }
     output = _materialize_ranked(
         prototype=candidates[selected.source_index],
         action=selected.action,
         payload=selected.payload,
-        ranking=selected.ranking,
+        ranking=selected_ranking,
     )
     trace.try_add_step(
         name="rank_candidates",
