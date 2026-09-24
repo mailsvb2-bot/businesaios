@@ -1,8 +1,11 @@
 from __future__ import annotations
 
+from application.action import ActionIntentEvidenceProjector
+from application.evidence.evidence_persistence import EvidencePersistenceService
 from contracts.action_intent import ActionIntentV2
 from contracts.decisioning.sovereign_decision_contract import Decision, DecisionContractV2
 from core.utils.canonical import payload_hash
+from storage.evidence_store import InMemoryEvidenceStore
 
 
 def _decision(*, goal_id: str | None = "goal-1", agent_id: str = "businesaios-core") -> Decision:
@@ -116,3 +119,80 @@ def test_action_intent_v2_requires_goal_identity() -> None:
         assert "invalid:goal_id" in str(exc)
     else:
         raise AssertionError("ActionIntent v2 without goal_id must fail closed")
+
+
+
+def test_action_intent_v2_round_trips_through_canonical_evidence() -> None:
+    decision = _decision()
+    intent = ActionIntentV2.from_decision(
+        decision=decision,
+        tenant_id="tenant-1",
+        channel="headless",
+        payload_hash=payload_hash(decision.payload),
+        evidence_refs=("evidence-1",),
+        derived_fact_ref="semantic-state-1",
+    )
+    store = InMemoryEvidenceStore()
+    EvidencePersistenceService(evidence_store=store).persist(
+        tenant_id=intent.tenant_id,
+        business_id=intent.business_id,
+        run_id="run-v2",
+        goal="increase_profit",
+        goal_id=intent.goal_id,
+        step_index=0,
+        action={
+            "action_type": intent.action_type,
+            "action_id": intent.action_id,
+            "decision_id": intent.decision_id,
+            "derived_fact_ref": intent.derived_fact_ref,
+            "evidence_refs": list(intent.evidence_refs),
+        },
+        execution_result={"executed": True},
+        verification_result={"verified": True, "verification": {"status": "verified"}},
+        world_state_before={},
+        world_state_after={},
+        final_feedback={"action_intent": intent.as_dict()},
+    )
+
+    record = store.list_for_tenant(tenant_id=intent.tenant_id)[0]
+    assert record.labels["goal_id"] == "goal-1"
+    assert record.payload["action_intent"]["schema_version"] == 2
+    assert ActionIntentEvidenceProjector(store).get(
+        tenant_id=intent.tenant_id,
+        business_id=intent.business_id,
+        intent_id=intent.intent_id,
+    ) == intent
+
+
+def test_action_intent_v2_evidence_rejects_goal_identity_conflict() -> None:
+    decision = _decision()
+    intent = ActionIntentV2.from_decision(
+        decision=decision,
+        tenant_id="tenant-1",
+        channel="headless",
+        payload_hash=payload_hash(decision.payload),
+    )
+    store = InMemoryEvidenceStore()
+    try:
+        EvidencePersistenceService(evidence_store=store).persist(
+            tenant_id=intent.tenant_id,
+            business_id=intent.business_id,
+            run_id="run-v2-conflict",
+            goal="increase_profit",
+            goal_id="goal-forged",
+            step_index=0,
+            action={
+                "action_type": intent.action_type,
+                "action_id": intent.action_id,
+                "decision_id": intent.decision_id,
+            },
+            execution_result={"executed": True},
+            verification_result={"verified": True, "verification": {"status": "verified"}},
+            world_state_before={},
+            world_state_after={},
+            final_feedback={"action_intent": intent.as_dict()},
+        )
+    except ValueError as exc:
+        assert "canonical goal lineage conflicts" in str(exc)
+    else:
+        raise AssertionError("persisted Goal must match ActionIntent v2 goal_id")
