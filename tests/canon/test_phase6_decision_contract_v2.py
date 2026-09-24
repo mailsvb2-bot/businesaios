@@ -233,7 +233,11 @@ def test_v2_builder_preserves_unknowns_when_no_real_alternatives_or_forecast_exi
     built = build_envelope(
         state=state,
         out=out,
-        payload={"business_id": "business-2"},
+        payload={
+            "business_id": "business-2",
+            "goal_id": "goal-2",
+            "meta": {"canonical_goal_id": "goal-2"},
+        },
         policy_id="policy-2",
         keyring=keyring,
         issuer_id="businesaios-core",
@@ -298,3 +302,32 @@ def test_v2_archive_roundtrip_preserves_contract_and_signature(tmp_path) -> None
         secret=b"secret",
         kid=loaded.kid,
     )
+
+
+
+def test_v2_rejects_selected_option_or_identity_drift_before_signing() -> None:
+    contract = _contract()
+    forged_selection = dict(contract)
+    forged_selection["selected_option"] = {"option_id": "noop@v1"}
+    with pytest.raises(RuntimeError, match="DECISION_V2_SELECTED_OPTION_MISMATCH"):
+        sign_decision(
+            decision=_decision(envelope_version=2, contract_v2=forged_selection),
+            secret=b"secret",
+            kid="k1",
+        )
+
+    forged_agent = dict(contract)
+    forged_agent["agent_id"] = "other-agent"
+    with pytest.raises(RuntimeError, match="DECISION_V2_AGENT_ID_MISMATCH"):
+        sign_decision(
+            decision=_decision(envelope_version=2, contract_v2=forged_agent),
+            secret=b"secret",
+            kid="k1",
+        )
+
+    forged_goal = dict(contract)
+    forged_goal["goal_id"] = "goal-forged"
+    decision = _decision(envelope_version=2, contract_v2=forged_goal)
+    decision.payload["goal_id"] = "goal-1"
+    with pytest.raises(RuntimeError, match="DECISION_V2_GOAL_ID_MISMATCH"):
+        sign_decision(decision=decision, secret=b"secret", kid="k1")
