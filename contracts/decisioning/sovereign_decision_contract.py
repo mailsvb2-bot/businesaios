@@ -15,7 +15,7 @@ class DecisionContractV2:
     agent_id: str
     model_profile: str
     decision_strategy: str
-    alternatives: tuple[dict[str, Any], ...] = ()
+    alternatives: tuple[dict[str, Any], ...] | None = None
     selected_option: dict[str, Any] = field(default_factory=dict)
     rationale: dict[str, Any] = field(default_factory=dict)
     confidence: float | None = None
@@ -33,7 +33,11 @@ class DecisionContractV2:
             "agent_id": self.agent_id,
             "model_profile": self.model_profile,
             "decision_strategy": self.decision_strategy,
-            "alternatives": [dict(item) for item in self.alternatives],
+            "alternatives": (
+                None
+                if self.alternatives is None
+                else [dict(item) for item in self.alternatives]
+            ),
             "selected_option": dict(self.selected_option),
             "rationale": dict(self.rationale),
             "confidence": self.confidence,
