@@ -338,6 +338,41 @@ class BusinessGoalRegistry:
         event_metadata: dict[str, object] | None = None,
     ) -> BusinessGoal:
         current = self._projector.get(tenant_id=tenant_id, business_id=business_id, goal_id=goal_id)
+        replay = self._writer.find_existing_for_key(
+            tenant_id=tenant_id,
+            business_id=business_id,
+            entity_id=goal_id,
+            operation="update",
+            idempotency_key=idempotency_key,
+            fact_type=GOAL_UPDATED,
+            event_metadata=event_metadata,
+        )
+        if replay is not None:
+            persisted = dict(dict(replay.get("payload") or {}).get("payload") or {})
+            requested = {
+                "baseline": baseline,
+                "target": target,
+                "deadline_at_ms": deadline_at_ms,
+                "owner_id": owner_id,
+                "constraint_ids": constraint_ids,
+                "priority": priority,
+            }
+            for field_name, requested_value in requested.items():
+                if requested_value is _UNSET:
+                    continue
+                persisted_value = persisted.get(field_name)
+                if field_name == "constraint_ids":
+                    persisted_value = tuple(persisted_value or ())
+                    requested_value = tuple(requested_value or ())
+                elif field_name in {"baseline", "target"} and requested_value is not None:
+                    requested_value = float(requested_value)
+                elif field_name == "deadline_at_ms" and requested_value is not None:
+                    requested_value = int(requested_value)
+                if persisted_value != requested_value:
+                    raise ValueError(
+                        "goal update idempotency key was already used with different objective data"
+                    )
+            return current
         if current.lifecycle_status is not GoalLifecycleStatus.ACTIVE:
             raise ValueError("terminal business goal cannot be updated")
         if isinstance(constraint_ids, str):
