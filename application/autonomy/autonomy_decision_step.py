@@ -52,6 +52,7 @@ class AutonomyDecisionStep:
                 agent_id=action_intent.agent_id,
                 capability=action_intent.action_type,
             )
+        self._assert_goal_identity(request=request, action_intent=action_intent)
         self._project_decision_event(envelope=envelope, action_intent=action_intent)
         trace.record(
             event_type="decision_issued",
@@ -62,6 +63,7 @@ class AutonomyDecisionStep:
                 "correlation_id": envelope.decision.correlation_id,
                 "action_intent_id": action_intent.intent_id,
                 "agent_id": action_intent.agent_id,
+                "goal_id": action_intent.goal_id,
                 "evidence_refs": list(action_intent.evidence_refs),
                 "derived_fact_ref": action_intent.derived_fact_ref,
                 "policy_explanation": {
@@ -87,6 +89,15 @@ class AutonomyDecisionStep:
         )
 
     decide = evaluate
+
+    @staticmethod
+    def _assert_goal_identity(*, request: Any, action_intent: Any) -> None:
+        expected = str(getattr(request, "goal_id", "") or "").strip()
+        if not expected:
+            return
+        actual = str(getattr(action_intent, "goal_id", "") or "").strip()
+        if actual != expected:
+            raise ValueError("action intent goal identity does not match canonical request")
 
     def _project_decision_event(self, *, envelope: Any, action_intent: Any) -> str | None:
         event_store = getattr(self._contract, "_event_store", None)
