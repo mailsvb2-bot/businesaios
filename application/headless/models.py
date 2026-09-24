@@ -31,6 +31,7 @@ class CEOParticipation:
 class GoalExecutionRequest:
     goal: str
     business_id: str
+    goal_id: str | None = None
     tenant_id: str = "default"
     user_id: str | None = None
     product_name: str = "BusinesAIOS"
@@ -52,6 +53,8 @@ class GoalExecutionRequest:
             issues.append("missing:goal")
         if not str(self.business_id or "").strip():
             issues.append("missing:business_id")
+        if self.goal_id is not None and not str(self.goal_id or "").strip():
+            issues.append("invalid:goal_id")
         if not str(self.tenant_id or "").strip():
             issues.append("missing:tenant_id")
         if not str(self.channel or "").strip():
