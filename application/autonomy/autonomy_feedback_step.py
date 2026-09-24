@@ -119,6 +119,7 @@ class AutonomyFeedbackStep:
         feedback.setdefault("decision_id", str(getattr(envelope.decision, "decision_id", "") or ""))
         feedback.setdefault("correlation_id", str(getattr(envelope.decision, "correlation_id", "") or getattr(result, "correlation_id", "") or ""))
         feedback.setdefault("normalized_outcome", dict(normalized_outcome))
+        feedback.setdefault("goal_id", getattr(request, "goal_id", None))
         feedback.setdefault("autonomy_tier", request.autonomy_tier)
         feedback.setdefault("approval_required", bool(autonomy_decision.approval_required))
         feedback.setdefault("blocked_by_policy", bool(autonomy_decision.blocked_by_policy))
@@ -261,6 +262,7 @@ class AutonomyFeedbackStep:
                     run_id=str(trace.run_id),
                     step_index=int(step_index),
                     goal=str(getattr(request, "goal", "") or ""),
+                    goal_id=getattr(request, "goal_id", None),
                     feedback=feedback,
                     world_state_before=state,
                     request_meta=dict(getattr(request, "meta", {}) or {}),
