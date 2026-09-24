@@ -5,6 +5,7 @@ import pytest
 from application.business_goal import BusinessGoalHistoryInvariantViolation, BusinessGoalProjector, BusinessGoalRegistry
 from application.headless.goal_mapper import HeadlessGoalStateMapper
 from application.headless.models import GoalExecutionRequest
+from application.ontology import EventFactLifecycleWriter
 from contracts.business_goal import BusinessGoal, BusinessGoalNotFound, GoalLifecycleStatus
 from contracts.event_store import BusinessFactV1, canonical_business_event_contract
 from reliability.idempotency_store import InMemoryIdempotencyStore
@@ -196,6 +197,78 @@ def test_goal_hierarchy_reaches_canonical_headless_world_state() -> None:
         == "profit"
     )
     assert state.behavior["goal_id"] == "conversion"
+
+
+def test_goal_objective_replays_pre_phase6_payload_without_rewriting_history() -> None:
+    events = MemoryEventStore()
+    claims = InMemoryIdempotencyStore()
+    legacy_writer = EventFactLifecycleWriter(
+        event_store=events,
+        idempotency_store=claims,
+        namespace="business_goal_fact",
+        source="business_goal_registry",
+        id_prefix="business-goal",
+    )
+    legacy_writer.append_once(
+        tenant_id="tenant",
+        business_id="business",
+        entity_id="goal",
+        operation="create",
+        idempotency_key="legacy-create",
+        fact_type="goal.created",
+        payload={
+            "schema_version": 1,
+            "goal_kind": "growth",
+            "target_key": "mrr",
+            "parent_goal_id": None,
+            "priority": 50,
+        },
+        occurred_at_ms=100,
+    )
+    legacy_writer.append_once(
+        tenant_id="tenant",
+        business_id="business",
+        entity_id="goal",
+        operation="update",
+        idempotency_key="legacy-update",
+        fact_type="goal.updated",
+        payload={
+            "schema_version": 1,
+            "goal_kind": "growth",
+            "target_key": "mrr",
+            "parent_goal_id": None,
+            "priority": 80,
+        },
+        occurred_at_ms=200,
+    )
+
+    registry = BusinessGoalRegistry(event_store=events, idempotency_store=claims)
+    restored = registry.get(tenant_id="tenant", business_id="business", goal_id="goal")
+    assert restored.metric == "mrr"
+    assert restored.priority == 80
+    before = list(events.events)
+
+    replayed = registry.update_objective(
+        tenant_id="tenant",
+        business_id="business",
+        goal_id="goal",
+        idempotency_key="legacy-update",
+        priority=80,
+        occurred_at_ms=999,
+    )
+    assert replayed == restored
+    assert events.events == before
+
+    with pytest.raises(ValueError, match="different objective data"):
+        registry.update_objective(
+            tenant_id="tenant",
+            business_id="business",
+            goal_id="goal",
+            idempotency_key="legacy-update",
+            priority=70,
+            occurred_at_ms=999,
+        )
+    assert events.events == before
 
 
 def test_goal_objective_contract_rejects_conflicting_metric_and_invalid_values() -> None:
