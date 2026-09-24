@@ -106,6 +106,12 @@ def _validate_record(record: EvidenceRecord, intent: ActionIntentV1 | ActionInte
         raise ActionIntentProjectionConflict(
             "action intent evidence refs conflict with evidence"
         )
+    if isinstance(intent, ActionIntentV2):
+        record_goal_id = str(dict(record.labels).get("goal_id") or "").strip()
+        if record_goal_id and record_goal_id != intent.goal_id:
+            raise ActionIntentProjectionConflict(
+                "action intent goal identity conflicts with evidence"
+            )
     outcome = _mapping(record.payload.get("business_outcome"))
     if outcome and str(outcome.get("intent_id") or "") != intent.intent_id:
         raise ActionIntentProjectionConflict(
