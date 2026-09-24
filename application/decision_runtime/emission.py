@@ -200,6 +200,7 @@ def _build_event(*, envelope: Any, action_intent: Any) -> dict[str, Any]:
         )
     )
     derived_fact_ref = str(getattr(action_intent, "derived_fact_ref", "") or "").strip() or None
+    goal_id = str(getattr(action_intent, "goal_id", "") or "").strip() or None
     event_id = _event_id(
         tenant_id=tenant_id,
         business_id=business_id,
@@ -224,6 +225,7 @@ def _build_event(*, envelope: Any, action_intent: Any) -> dict[str, Any]:
             "evidence_ids": list(evidence_ids),
             "decision": {
                 "decision_id": decision_id,
+                "goal_id": goal_id,
                 "action_type": action_type,
                 "policy_id": str(getattr(decision, "policy_id", "") or "").strip() or None,
                 "snapshot_id": str(getattr(decision, "snapshot_id", "") or "").strip() or None,
