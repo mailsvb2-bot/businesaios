@@ -5,6 +5,7 @@ from application.autonomy.autonomy_decision_step import AutonomyDecisionStep
 from application.evidence.evidence_persistence import EvidencePersistenceService
 from contracts.action_intent import ActionIntentV1, ActionIntentV2
 from contracts.decisioning.sovereign_decision_contract import Decision, DecisionContractV2
+from contracts.policy_decision import PolicyDecisionV1
 from core.security.keyring import Keyring
 from core.utils.canonical import payload_hash
 from kernel.decision_crypto import signed_envelope_from_decision
@@ -244,3 +245,28 @@ def test_autonomy_step_projects_v2_only_for_envelope_v2() -> None:
     intent_v1 = step._project_action_intent(request=_Request(), envelope=envelope_v1)
     assert isinstance(intent_v1, ActionIntentV1)
     assert intent_v1.schema_version == 1
+
+
+
+def test_policy_decision_v1_binds_action_intent_v2_identity_explicitly() -> None:
+    decision = _decision()
+    intent = ActionIntentV2.from_decision(
+        decision=decision,
+        tenant_id="tenant-1",
+        channel="headless",
+        payload_hash=payload_hash(decision.payload),
+    )
+    policy = PolicyDecisionV1(
+        tier="supervised",
+        action_type=intent.action_type,
+        action_class="communications_write",
+        allowed=True,
+        approval_required=False,
+        blocked_by_policy=False,
+    ).bind_intent(intent)
+
+    assert policy.intent_id == intent.intent_id
+    assert policy.decision_id == intent.decision_id
+    assert policy.tenant_id == intent.tenant_id
+    assert policy.business_id == intent.business_id
+    assert policy.verdict == "allowed"
