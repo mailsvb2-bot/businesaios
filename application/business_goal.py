@@ -22,6 +22,7 @@ GOAL_ARCHIVED = "goal.archived"
 GOAL_FACT_TYPES = frozenset({GOAL_CREATED, GOAL_UPDATED, GOAL_COMPLETED, GOAL_CANCELLED, GOAL_ARCHIVED})
 CANON_BUSINESS_GOAL_PROJECTOR = True
 CANON_BUSINESS_GOAL_LIFECYCLE_OWNER = True
+_UNSET = object()
 
 
 class BusinessGoalHistoryInvariantViolation(RuntimeError):
@@ -80,6 +81,12 @@ class BusinessGoalProjector:
             business_id=str(business_id),
             goal_kind=payload.get("goal_kind"),
             target_key=payload.get("target_key"),
+            metric=payload.get("metric"),
+            baseline=payload.get("baseline"),
+            target=payload.get("target"),
+            deadline_at_ms=payload.get("deadline_at_ms"),
+            owner_id=payload.get("owner_id"),
+            constraint_ids=tuple(payload.get("constraint_ids") or ()),
             parent_goal_id=payload.get("parent_goal_id"),
             priority=payload.get("priority", 50),
             schema_version=payload.get("schema_version"),
@@ -100,11 +107,21 @@ class BusinessGoalProjector:
             if row["fact_type"] == GOAL_UPDATED:
                 if update.get("goal_kind", goal.goal_kind) != goal.goal_kind:
                     raise BusinessGoalHistoryInvariantViolation("business goal kind cannot be rewritten")
-                if update.get("target_key", goal.target_key) != goal.target_key:
-                    raise BusinessGoalHistoryInvariantViolation("business goal target cannot be rewritten")
+                update_metric = update.get("metric", update.get("target_key", goal.metric))
+                if update_metric != goal.metric:
+                    raise BusinessGoalHistoryInvariantViolation("business goal metric cannot be rewritten")
                 if update.get("parent_goal_id", goal.parent_goal_id) != goal.parent_goal_id:
                     raise BusinessGoalHistoryInvariantViolation("business goal parent cannot be rewritten")
-                goal = replace(goal, priority=update.get("priority", goal.priority), updated_at_ms=max(goal.updated_at_ms, when))
+                goal = replace(
+                    goal,
+                    priority=update.get("priority", goal.priority),
+                    baseline=update.get("baseline", goal.baseline),
+                    target=update.get("target", goal.target),
+                    deadline_at_ms=update.get("deadline_at_ms", goal.deadline_at_ms),
+                    owner_id=update.get("owner_id", goal.owner_id),
+                    constraint_ids=tuple(update.get("constraint_ids", goal.constraint_ids) or ()),
+                    updated_at_ms=max(goal.updated_at_ms, when),
+                )
             elif row["fact_type"] in terminal_map:
                 goal = replace(
                     goal,
@@ -140,6 +157,12 @@ class BusinessGoalRegistry:
             "schema_version": goal.schema_version,
             "goal_kind": goal.goal_kind,
             "target_key": goal.target_key,
+            "metric": goal.metric,
+            "baseline": goal.baseline,
+            "target": goal.target,
+            "deadline_at_ms": goal.deadline_at_ms,
+            "owner_id": goal.owner_id,
+            "constraint_ids": list(goal.constraint_ids),
             "parent_goal_id": goal.parent_goal_id,
             "priority": goal.priority,
         }
@@ -152,7 +175,12 @@ class BusinessGoalRegistry:
                 str(goal.updated_at_ms),
                 str(goal.schema_version),
                 goal.goal_kind,
-                goal.target_key or "",
+                goal.metric or "",
+                "" if goal.baseline is None else str(goal.baseline),
+                "" if goal.target is None else str(goal.target),
+                "" if goal.deadline_at_ms is None else str(goal.deadline_at_ms),
+                goal.owner_id or "",
+                ",".join(goal.constraint_ids),
                 goal.parent_goal_id or "",
                 str(goal.priority),
             )
@@ -179,6 +207,12 @@ class BusinessGoalRegistry:
         idempotency_key: str,
         goal_kind: str,
         target_key: str | None = None,
+        metric: str | None = None,
+        baseline: float | None = None,
+        target: float | None = None,
+        deadline_at_ms: int | None = None,
+        owner_id: str | None = None,
+        constraint_ids: tuple[str, ...] | list[str] = (),
         parent_goal_id: str | None = None,
         priority: int = 50,
         occurred_at_ms: int | None = None,
@@ -191,6 +225,12 @@ class BusinessGoalRegistry:
             business_id=business_id,
             goal_kind=goal_kind,
             target_key=target_key,
+            metric=metric,
+            baseline=baseline,
+            target=target,
+            deadline_at_ms=deadline_at_ms,
+            owner_id=owner_id,
+            constraint_ids=tuple(constraint_ids),
             parent_goal_id=parent_goal_id,
             priority=priority,
             created_at_ms=when,
@@ -223,22 +263,42 @@ class BusinessGoalRegistry:
         )
         return self._projector.get(tenant_id=tenant_id, business_id=business_id, goal_id=goal_id)
 
-    def update_priority(
+    def update_objective(
         self,
         *,
         tenant_id: str,
         business_id: str,
         goal_id: str,
         idempotency_key: str,
-        priority: int,
+        baseline: object = _UNSET,
+        target: object = _UNSET,
+        deadline_at_ms: object = _UNSET,
+        owner_id: object = _UNSET,
+        constraint_ids: object = _UNSET,
+        priority: object = _UNSET,
         occurred_at_ms: int | None = None,
         event_metadata: dict[str, object] | None = None,
     ) -> BusinessGoal:
         current = self._projector.get(tenant_id=tenant_id, business_id=business_id, goal_id=goal_id)
         if current.lifecycle_status is not GoalLifecycleStatus.ACTIVE:
             raise ValueError("terminal business goal cannot be updated")
+        if isinstance(constraint_ids, str):
+            raise ValueError("constraint_ids must be a sequence of canonical constraint ids")
         when = max(current.updated_at_ms, self._time(occurred_at_ms))
-        candidate = replace(current, priority=priority, updated_at_ms=when)
+        candidate = replace(
+            current,
+            baseline=current.baseline if baseline is _UNSET else baseline,
+            target=current.target if target is _UNSET else target,
+            deadline_at_ms=current.deadline_at_ms if deadline_at_ms is _UNSET else deadline_at_ms,
+            owner_id=current.owner_id if owner_id is _UNSET else owner_id,
+            constraint_ids=(
+                current.constraint_ids
+                if constraint_ids is _UNSET
+                else tuple(constraint_ids or ())
+            ),
+            priority=current.priority if priority is _UNSET else priority,
+            updated_at_ms=when,
+        )
         payload = self._payload(candidate)
         if payload == self._payload(current):
             self._writer.repair_existing(
@@ -254,6 +314,27 @@ class BusinessGoalRegistry:
             event_metadata=event_metadata,
         )
         return self._projector.get(tenant_id=tenant_id, business_id=business_id, goal_id=goal_id)
+
+    def update_priority(
+        self,
+        *,
+        tenant_id: str,
+        business_id: str,
+        goal_id: str,
+        idempotency_key: str,
+        priority: int,
+        occurred_at_ms: int | None = None,
+        event_metadata: dict[str, object] | None = None,
+    ) -> BusinessGoal:
+        return self.update_objective(
+            tenant_id=tenant_id,
+            business_id=business_id,
+            goal_id=goal_id,
+            idempotency_key=idempotency_key,
+            priority=priority,
+            occurred_at_ms=occurred_at_ms,
+            event_metadata=event_metadata,
+        )
 
     def _terminal(
         self,
