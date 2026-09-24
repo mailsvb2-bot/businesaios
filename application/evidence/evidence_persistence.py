@@ -228,9 +228,16 @@ class EvidencePersistenceService:
             or _safe_dict(verification.get('verification')).get('source_of_truth')
             or execution.get('source_of_truth')
         ) or 'unknown'
-        intent_payload = _safe_dict(action_intent.get('payload'))
+        intent_schema = int(action_intent.get('schema_version') or 0)
+        intent_payload = _safe_dict(
+            action_intent.get('parameters') if intent_schema == 2 else action_intent.get('payload')
+        )
         intent_meta = _safe_dict(intent_payload.get('meta'))
-        signed_goal_id = _text(intent_meta.get('canonical_goal_id'))
+        signed_goal_id = (
+            _text(action_intent.get('goal_id'))
+            if intent_schema == 2
+            else _text(intent_meta.get('canonical_goal_id'))
+        )
         persisted_goal_id = _text(outcome.get('goal_id'))
         if signed_goal_id and persisted_goal_id and signed_goal_id != persisted_goal_id:
             raise ValueError('canonical goal lineage conflicts with signed ActionIntent')
