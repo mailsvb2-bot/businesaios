@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from collections.abc import Mapping
 from dataclasses import replace
 from typing import Any
 
@@ -27,12 +28,36 @@ def _envelope_version(envelope: Any) -> int:
         return 1
 
 
-def _v2_intent_action_mutated(*, envelope: Any, executable_action: Any) -> bool:
+def _v2_intent_mutation(*, envelope: Any, executable_action: Any) -> dict[str, Any] | None:
     if _envelope_version(envelope) < 2:
-        return False
-    decided = str(getattr(getattr(envelope, "decision", None), "action", "") or "").strip()
+        return None
+    decision = getattr(envelope, "decision", None)
+    decided = str(getattr(decision, "action", "") or "").strip()
     executable = str(getattr(executable_action, "action_type", "") or "").strip()
-    return bool(decided and executable and decided != executable)
+    original_payload = getattr(decision, "payload", {}) or {}
+    executable_payload = getattr(executable_action, "payload", {}) or {}
+    if not isinstance(original_payload, Mapping) or not isinstance(executable_payload, Mapping):
+        return {
+            "reason": "payload_contract_changed_after_decision",
+            "action_changed": decided != executable,
+            "changed_parameter_keys": ["<payload_contract>"],
+        }
+    changed_keys = sorted(
+        str(key)
+        for key, value in original_payload.items()
+        if key not in executable_payload or executable_payload.get(key) != value
+    )
+    if decided == executable and not changed_keys:
+        return None
+    return {
+        "reason": (
+            "action_type_changed_after_decision"
+            if decided != executable
+            else "signed_parameters_changed_after_decision"
+        ),
+        "action_changed": decided != executable,
+        "changed_parameter_keys": changed_keys,
+    }
 
 
 class AutonomyExecutionStep:
@@ -66,10 +91,11 @@ class AutonomyExecutionStep:
                 correlation_id=envelope.decision.correlation_id,
             )
 
-        if _v2_intent_action_mutated(
+        intent_mutation = _v2_intent_mutation(
             envelope=envelope,
             executable_action=executable_action,
-        ):
+        )
+        if intent_mutation is not None:
             decided_action = str(getattr(envelope.decision, "action", "") or "")
             executable_type = str(getattr(executable_action, "action_type", "") or "")
             return ExecutionResult(
@@ -87,7 +113,7 @@ class AutonomyExecutionStep:
                         "intent_id": str(getattr(executable_action, "intent_id", "") or ""),
                         "decided_action_type": decided_action,
                         "requested_action_type": executable_type,
-                        "reason": "action_type_changed_after_decision",
+                        **dict(intent_mutation),
                         "requires_new_intent": True,
                     },
                     "capability_planning": capability_plan,
