@@ -81,6 +81,7 @@ def _record() -> EvidenceRecord:
             "outcome": "outcome:action-event",
         },
         refs=("world-evidence-1", "provider:message:1"),
+        labels={"goal_id": "goal-event"},
         payload={
             "action_intent": intent.as_dict(),
             "business_outcome": outcome.as_dict(),
@@ -111,6 +112,7 @@ def test_outcome_projection_is_idempotent_and_carries_canonical_lineage() -> Non
     assert contract["correlation_id"] == "correlation-event"
     assert contract["causation_id"] == "intent:decision-event"
     assert contract["evidence_ids"] == ("evidence-event-1",)
+    assert contract["payload"]["goal_id"] == "goal-event"
     assert contract["payload"]["outcome"]["outcome_id"] == "outcome:action-event"
 
 
@@ -146,3 +148,29 @@ def test_legacy_partial_outcome_is_not_promoted_to_canonical_event() -> None:
 
     assert BusinessOutcomeEventSpineProjector(store).project(legacy) is None
     assert list(store.iter_events(tenant_id="tenant-1", start_ms=0)) == []
+
+
+
+def test_outcome_projection_preserves_legacy_payload_shape_without_goal() -> None:
+    record = _record()
+    legacy_shape = EvidenceRecord(
+        **{
+            **record.__dict__,
+            "labels": {},
+        }
+    ).normalized()
+    store = MemoryEventStore()
+    projector = BusinessOutcomeEventSpineProjector(store)
+
+    event_id = projector.project(legacy_shape)
+    events = [
+        dict(row)
+        for row in store.iter_events(
+            tenant_id=legacy_shape.tenant_id,
+            start_ms=0,
+            event_type=OUTCOME_OBSERVED_EVENT_TYPE,
+        )
+        if str(row.get("event_id") or "") == str(event_id)
+    ]
+    assert len(events) == 1
+    assert "goal_id" not in events[0]["payload"]
