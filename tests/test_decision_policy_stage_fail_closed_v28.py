@@ -206,3 +206,49 @@ class MixedLegacyAndObjectivePolicy:
 def test_objective_mode_excludes_legacy_single_kpi_candidate():
     out = propose_action(policy=MixedLegacyAndObjectivePolicy(), state={}, trace=Trace())
     assert out.payload["choice"] == "objective"
+
+
+class GuardOnlyRankingKeepsLegacyScorePolicy:
+    def propose_many(self, state):
+        return [
+            FrozenRankedProposal(
+                action="noop@v1",
+                payload={"choice": "legacy-profit", "expected_profit_delta_minor": 100.0},
+                ranking={"guard_value:spend-cap": 20_000.0},
+            ),
+            FrozenRankedProposal(
+                action="noop@v1",
+                payload={"choice": "small-profit", "expected_profit_delta_minor": 1.0},
+                ranking={},
+            ),
+        ]
+
+
+def test_guard_only_ranking_keeps_historical_payload_score_metadata():
+    out = propose_action(policy=GuardOnlyRankingKeepsLegacyScorePolicy(), state={}, trace=Trace())
+    assert out.payload["choice"] == "legacy-profit"
+    assert out.ranking["guard_value:spend-cap"] == 20_000.0
+
+
+class BrokenMapping(dict):
+    def get(self, key, default=None):
+        if key == "action":
+            raise ValueError("broken proposal")
+        return super().get(key, default)
+
+
+class MixedBrokenAndValidPolicy:
+    def propose_many(self, state):
+        return [
+            BrokenMapping(),
+            FrozenRankedProposal(
+                action="noop@v1",
+                payload={"choice": "valid"},
+                ranking={"expected_profit_delta_minor": 2.0},
+            ),
+        ]
+
+
+def test_one_unparseable_candidate_does_not_abort_other_valid_candidates():
+    out = propose_action(policy=MixedBrokenAndValidPolicy(), state={}, trace=Trace())
+    assert out.payload["choice"] == "valid"

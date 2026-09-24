@@ -49,6 +49,8 @@ def _has_objective_projection(data: Mapping[str, Any]) -> bool:
 
 
 def _objective_vector(data: Mapping[str, Any]) -> dict[str, float]:
+    """Return normalized utility values where higher is better for every dimension."""
+
     values: dict[str, float] = {}
     for dimension in OBJECTIVE_DIMENSIONS:
         key = f"{_OBJECTIVE_PREFIX}{dimension}"
@@ -126,7 +128,8 @@ def score_proposal(
     fallback, but canonical callers use ``ProposedAction.ranking``.
     """
 
-    metadata = dict(ranking or {}) or dict(payload or {})
+    metadata = dict(payload or {})
+    metadata.update(dict(ranking or {}))
     if _has_objective_projection(dict(ranking or {})):
         values = _objective_vector(dict(ranking or {}))
         return (
@@ -151,10 +154,13 @@ def rank_proposals(
     *,
     policy: ActionRankingPolicy = DEFAULT_ACTION_RANKING_POLICY,
 ) -> list[RankedProposal]:
-    parsed = [
-        (index, *_proposal_parts(proposal))
-        for index, proposal in enumerate(list(proposals or []))
-    ]
+    parsed: list[tuple[int, str, dict[str, Any], dict[str, Any]]] = []
+    for index, proposal in enumerate(list(proposals or [])):
+        try:
+            action, payload, ranking = _proposal_parts(proposal)
+        except (TypeError, ValueError, OverflowError):
+            continue
+        parsed.append((index, action, payload, ranking))
     objective_mode = any(_has_objective_projection(ranking) for _, _, _, ranking in parsed)
     ranked: list[tuple[int, RankedProposal]] = []
     objective_errors = 0
