@@ -6,6 +6,7 @@ from typing import Any
 
 from application.decision_runtime.envelope_builder import bind_product_metadata, build_decision_envelope
 from application.decision_state.world_model_metadata import attach_world_model_metadata
+from core.ai.action_ranking import OBJECTIVE_DIMENSIONS
 
 
 def _mapping(value: object) -> dict[str, Any]:
@@ -67,6 +68,15 @@ def _decision_contract_v2_seed(
     world_model_meta = _world_model_meta_from_payload(payload)
     confidence = _finite_number(payload.get("confidence"))
     expected_value = _finite_number(payload.get("expected_value"))
+    objective_projection = {
+        dimension: _finite_number(ranking.get(f"objective:{dimension}"))
+        for dimension in OBJECTIVE_DIMENSIONS
+    }
+    has_complete_objective_projection = all(
+        value is not None for value in objective_projection.values()
+    )
+    if not has_complete_objective_projection:
+        objective_projection = None
     risk: Any = payload.get("risk") if "risk" in payload else None
     if risk is None:
         risk_penalty = _finite_number(ranking.get("risk_penalty"))
@@ -80,6 +90,8 @@ def _decision_contract_v2_seed(
         uncertainties.append("confidence:UNKNOWN")
     if expected_value is None:
         uncertainties.append("expected_value:UNKNOWN")
+    if objective_projection is None:
+        uncertainties.append("objective_vector:UNKNOWN")
     if risk is None:
         uncertainties.append("risk:UNKNOWN")
     baseline = state_meta.get("do_nothing_baseline") if "do_nothing_baseline" in state_meta else None
@@ -136,6 +148,7 @@ def _decision_contract_v2_seed(
             "uncertainties": uncertainties,
             "expected_outcome": payload.get("expected_outcome"),
             "risk": risk,
+            "objective_projection": objective_projection,
         },
         "confidence": confidence,
         "expected_value": expected_value,
