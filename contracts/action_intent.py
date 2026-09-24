@@ -114,6 +114,11 @@ class ActionIntentV1:
             issues.append("invalid:payload_hash")
         if self.objective_name != "profit_adjusted_growth":
             issues.append("invalid:objective_name")
+        payload_goal_id = str(self.payload.get("goal_id") or "").strip()
+        meta = self.payload.get("meta") if isinstance(self.payload, Mapping) else None
+        meta_goal_id = str(meta.get("canonical_goal_id") or "").strip() if isinstance(meta, Mapping) else ""
+        if payload_goal_id and meta_goal_id and payload_goal_id != meta_goal_id:
+            issues.append("invalid:goal_id")
         if self.schema_version != 1:
             issues.append("invalid:schema_version")
         if self.estimated_cost is not None and self.estimated_cost < 0:
