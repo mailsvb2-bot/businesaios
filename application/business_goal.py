@@ -6,13 +6,13 @@ from typing import Any
 
 from application.business_constraint import BusinessConstraintProjector
 from application.ontology import EventFactLifecycleWriter
+from contracts.business_constraints import BusinessConstraintNotFound, ConstraintLifecycleStatus
 from contracts.business_goal import (
     BUSINESS_GOAL_SCHEMA_VERSION,
     BusinessGoal,
     BusinessGoalNotFound,
     GoalLifecycleStatus,
 )
-from contracts.business_constraints import BusinessConstraintNotFound, ConstraintLifecycleStatus
 from contracts.event_store import BUSINESS_FACT_EVENT_TYPE
 from reliability.idempotency_contract import IdempotencyStore
 
