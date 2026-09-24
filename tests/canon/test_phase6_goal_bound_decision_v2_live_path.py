@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import time
 
+import pytest
+
 from core.ai.decision_core import DecisionCore
 from core.ai.policy_registry import PolicyRegistry
 from core.ai.schema_registry import DecisionSchema, SchemaRegistry
@@ -50,7 +52,7 @@ def _core() -> DecisionCore:
     )
 
 
-def _state(*, goal_bound: bool) -> WorldStateV1:
+def _state(*, goal_bound: bool, lifecycle_status: str = "active") -> WorldStateV1:
     meta = {}
     if goal_bound:
         meta = {
@@ -61,6 +63,7 @@ def _state(*, goal_bound: bool) -> WorldStateV1:
                     "metric": "profit",
                     "baseline": 100.0,
                     "target": 120.0,
+                    "lifecycle_status": lifecycle_status,
                 },
                 "constraints": {
                     "guard_metrics": [],
@@ -130,3 +133,25 @@ def test_non_goal_decision_remains_v1(monkeypatch) -> None:
     assert env.decision.envelope_version == 1
     assert env.decision.contract_v2 is None
     assert "goal_id" not in env.decision.payload
+
+
+
+@pytest.mark.parametrize("lifecycle_status", ["completed", "cancelled", "archived"])
+def test_terminal_canonical_goal_cannot_issue_effectful_decision(
+    monkeypatch,
+    lifecycle_status: str,
+) -> None:
+    import application.decision_runtime.runtime as decision_runtime
+
+    monkeypatch.setattr(
+        decision_runtime,
+        "gate_action_or_raise",
+        lambda **kwargs: (True, "ok", {}),
+    )
+    with pytest.raises(RuntimeError, match="DECISION_BLOCKED:canonical_goal_terminal"):
+        _core().issue(
+            _state(
+                goal_bound=True,
+                lifecycle_status=lifecycle_status,
+            )
+        )
