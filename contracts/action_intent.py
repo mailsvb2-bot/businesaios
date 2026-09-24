@@ -159,6 +159,7 @@ class ActionIntentV2:
     tenant_id: str
     business_id: str
     decision_id: str
+    correlation_id: str
     goal_id: str
     agent_id: str
     capability_target: str
@@ -188,8 +189,23 @@ class ActionIntentV2:
         object.__setattr__(self, "evidence_refs", refs)
         object.__setattr__(self, "derived_fact_ref", str(self.derived_fact_ref or "").strip())
 
+    @property
+    def action_type(self) -> str:
+        return self.capability_target
+
+    @property
+    def requested_by(self) -> str:
+        return self.agent_id
+
+    @property
+    def objective_name(self) -> str:
+        return "profit_adjusted_growth"
+
     def parameters_copy(self) -> dict[str, Any]:
         return _thaw(self.parameters)
+
+    def payload_copy(self) -> dict[str, Any]:
+        return self.parameters_copy()
 
     def as_dict(self) -> dict[str, Any]:
         return {
@@ -198,6 +214,7 @@ class ActionIntentV2:
             "tenant_id": self.tenant_id,
             "business_id": self.business_id,
             "decision_id": self.decision_id,
+            "correlation_id": self.correlation_id,
             "goal_id": self.goal_id,
             "agent_id": self.agent_id,
             "capability_target": self.capability_target,
@@ -223,6 +240,7 @@ class ActionIntentV2:
             "tenant_id",
             "business_id",
             "decision_id",
+            "correlation_id",
             "goal_id",
             "agent_id",
             "capability_target",
@@ -272,6 +290,7 @@ class ActionIntentV2:
             tenant_id=str(tenant_id or "").strip(),
             business_id=business_id,
             decision_id=decision_id,
+            correlation_id=str(getattr(decision, "correlation_id", "") or "").strip(),
             goal_id=goal_id,
             agent_id=agent_id,
             capability_target=str(payload.get("capability_target") or action).strip(),
@@ -292,9 +311,72 @@ class ActionIntentV2:
             evidence_refs=evidence_refs,
             derived_fact_ref=derived_fact_ref,
         )
+        selected_option = contract.get("selected_option")
+        selected_option = dict(selected_option) if isinstance(selected_option, Mapping) else {}
+        selected_id = str(selected_option.get("option_id") or "").strip()
+        if selected_id and selected_id != action:
+            raise ValueError("Decision v2 selected option does not match action")
         issues = intent.validate_contract()
         if issues:
             raise ValueError(f"invalid action intent v2: {','.join(issues)}")
+        return intent
+
+    @classmethod
+    def from_projection(
+        cls,
+        *,
+        action_id: str,
+        intent_id: str,
+        tenant_id: str,
+        business_id: str,
+        decision_id: str,
+        correlation_id: str,
+        goal_id: str,
+        agent_id: str,
+        capability_target: str,
+        parameters: Mapping[str, Any],
+        payload_hash: str,
+        expected_value: object = None,
+        estimated_cost: object = None,
+        confidence: object = None,
+        risk: Any = None,
+        reversibility: bool | None = None,
+        requested_autonomy: str | None = None,
+        deadline: Any = None,
+        channel: str = "",
+        evidence_refs: tuple[str, ...] = (),
+        derived_fact_ref: str = "",
+    ) -> ActionIntentV2:
+        intent = cls(
+            action_id=str(action_id or "").strip(),
+            intent_id=str(intent_id or "").strip(),
+            tenant_id=str(tenant_id or "").strip(),
+            business_id=str(business_id or "").strip(),
+            decision_id=str(decision_id or "").strip(),
+            correlation_id=str(correlation_id or "").strip(),
+            goal_id=str(goal_id or "").strip(),
+            agent_id=str(agent_id or "").strip(),
+            capability_target=str(capability_target or "").strip(),
+            parameters=parameters,
+            expected_value=_finite(expected_value, "expected_value"),
+            estimated_cost=_finite(estimated_cost, "estimated_cost"),
+            confidence=_finite(confidence, "confidence"),
+            risk=risk,
+            reversibility=reversibility if isinstance(reversibility, bool) else None,
+            requested_autonomy=(
+                str(requested_autonomy).strip()
+                if str(requested_autonomy or "").strip()
+                else None
+            ),
+            deadline=deadline,
+            channel=str(channel or "").strip(),
+            payload_hash=str(payload_hash or "").strip(),
+            evidence_refs=evidence_refs,
+            derived_fact_ref=derived_fact_ref,
+        )
+        issues = intent.validate_contract()
+        if issues:
+            raise ValueError(f"invalid action intent v2 projection: {','.join(issues)}")
         return intent
 
 
