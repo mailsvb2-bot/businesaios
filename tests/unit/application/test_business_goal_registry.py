@@ -248,6 +248,19 @@ def test_goal_objective_replays_pre_phase6_payload_without_rewriting_history() -
     assert restored.priority == 80
     before = list(events.events)
 
+    replayed_create = registry.create(
+        tenant_id="tenant",
+        business_id="business",
+        goal_id="goal",
+        idempotency_key="legacy-create",
+        goal_kind="growth",
+        target_key="mrr",
+        priority=50,
+        occurred_at_ms=999,
+    )
+    assert replayed_create == restored
+    assert events.events == before
+
     replayed = registry.update_objective(
         tenant_id="tenant",
         business_id="business",
