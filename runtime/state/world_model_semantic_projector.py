@@ -110,6 +110,15 @@ def business_fact_to_state_observation(fact: BusinessFactV1) -> StateObservation
         confidence=confidence,
         source_priority=int(provenance.get("source_priority", 100)),
         authoritative=bool(provenance.get("authoritative", False)),
+        evidence_refs=tuple(
+            StateEvidenceRef(
+                evidence_id=evidence_id,
+                kind="canonical_evidence",
+                observed_at_ms=int(fact.observed_at_ms),
+                meta={"business_fact_id": fact.fact_id},
+            )
+            for evidence_id in fact.evidence_ids
+        ),
         ttl_ms=None if ttl is None else int(ttl),
         semantic_kind="fact",
         meta={
