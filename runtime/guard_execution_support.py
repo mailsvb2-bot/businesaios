@@ -6,7 +6,11 @@ from runtime.enforcement.idempotency_gate import emit_ledger_executed, mark_exec
 from runtime.guard_helpers import verify_production_envelope
 from runtime.guard_init_support import require_production_mode
 from runtime.guard_production import enforce_survival_gate
-from runtime.guard_protocols import MAX_REPLAY_MS, SUPPORTED_ENVELOPE_VERSION
+from runtime.guard_protocols import (
+    MAX_REPLAY_MS,
+    SUPPORTED_ENVELOPE_VERSION,
+    SUPPORTED_ENVELOPE_VERSIONS,
+)
 from runtime.platform.config.env_flags import env_str
 
 
@@ -19,6 +23,7 @@ def verify_production_runtime(*, guard: Any, env: Any) -> None:
         schemas=guard._schemas,
         expected_issuer_id=guard._expected_issuer_id,
         supported_envelope_version=SUPPORTED_ENVELOPE_VERSION,
+        supported_envelope_versions=SUPPORTED_ENVELOPE_VERSIONS,
         max_replay_ms=MAX_REPLAY_MS,
         ttl_skew_ms=guard._ttl_skew_ms,
         now_ms=int(guard._clock.now_ms()),
