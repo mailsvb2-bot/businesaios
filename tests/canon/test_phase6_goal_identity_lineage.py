@@ -4,9 +4,11 @@ from types import SimpleNamespace
 
 import pytest
 
+from application.decision_runtime.emission import project_decision_proposed_event
 from application.decision_runtime.flow import build_payload
 from application.evidence.evidence_persistence import EvidencePersistenceService
 from core.ai.decision_core import project_action_intent
+from runtime.platform.event_store.memory_event_store import MemoryEventStore
 from storage.evidence_store import InMemoryEvidenceStore
 
 
@@ -161,4 +163,78 @@ def test_evidence_rejects_conflicting_persisted_goal_vs_signed_intent_goal() -> 
             world_state_before={},
             world_state_after={},
             final_feedback={"action_intent": intent.as_dict()},
+        )
+
+
+
+def _decision_event(*, intent, issued_at_ms: int = 1000) -> dict:
+    events = MemoryEventStore()
+    decision = SimpleNamespace(
+        decision_id=intent.decision_id,
+        correlation_id=intent.correlation_id,
+        action=intent.action_type,
+        issued_at_ms=issued_at_ms,
+        issuer_id="businesaios-core",
+        policy_id="policy-test",
+        snapshot_id="snapshot-test",
+        state_hash="state-hash",
+    )
+    envelope = SimpleNamespace(decision=decision, payload_hash="decision-payload-hash")
+    event_id = project_decision_proposed_event(
+        event_store=events,
+        envelope=envelope,
+        action_intent=intent,
+    )
+    matches = [
+        dict(row)
+        for row in events.iter_events(
+            tenant_id=intent.tenant_id,
+            start_ms=0,
+            event_type="decision.proposed",
+        )
+        if str(row.get("event_id") or "") == event_id
+    ]
+    assert len(matches) == 1
+    return matches[0]
+
+
+def test_decision_event_includes_goal_only_for_goal_bound_decisions() -> None:
+    bound = _decision_event(intent=_intent())
+    assert bound["payload"]["decision"]["goal_id"] == "goal-1"
+
+    legacy_payload = build_payload(
+        state=_state(goal_id=None),
+        out=SimpleNamespace(payload={}),
+        pinned_world_model_meta={},
+        tenant_id="tenant-1",
+        product_id=None,
+        domain=None,
+        product_version=None,
+        actor_id=None,
+    )[1]
+    legacy_intent = project_action_intent(
+        decision_id="decision-legacy-event",
+        correlation_id="correlation-legacy-event",
+        decided_action_type="send_message",
+        channel="headless",
+        tenant_id="tenant-1",
+        business_id="business-1",
+        payload=legacy_payload,
+    )
+    legacy = _decision_event(intent=legacy_intent, issued_at_ms=1001)
+    assert "goal_id" not in legacy["payload"]["decision"]
+
+
+def test_action_intent_rejects_conflicting_goal_identity_copies() -> None:
+    payload = _payload()
+    payload["goal_id"] = "goal-forged"
+    with pytest.raises(ValueError, match="invalid:goal_id"):
+        project_action_intent(
+            decision_id="decision-conflict",
+            correlation_id="correlation-conflict",
+            decided_action_type="send_message",
+            channel="headless",
+            tenant_id="tenant-1",
+            business_id="business-1",
+            payload=payload,
         )
