@@ -14,6 +14,7 @@ if TYPE_CHECKING:
 
 CANON_DECISION_CRYPTO = True
 DECISION_SIGNATURE_ALGORITHM = "hmac-sha256:v1"
+DECISION_SIGNATURE_ALGORITHM_V2 = "hmac-sha256:v2"
 
 
 @dataclass(frozen=True)
@@ -39,10 +40,10 @@ def canonical_signed_payload(
 ) -> dict[str, Any]:
     """Canonical HMAC surface for DecisionEnvelope signing.
 
-    IMPORTANT:
-    Keep this bit-compatible with the existing runtime verification surface.
+    Envelope v1 remains bit-for-bit compatible with the historical surface.
+    Envelope v2 additionally binds the versioned Decision Contract body.
     """
-    return {
+    surface = {
         "envelope_version": _as_int(getattr(decision, "envelope_version", 1), default=1),
         "decision_id": str(getattr(decision, "decision_id", "") or ""),
         "issuer_id": str(getattr(decision, "issuer_id", "") or ""),
@@ -57,6 +58,12 @@ def canonical_signed_payload(
         "action_schema_version": _as_int(getattr(decision, "action_schema_version", 0)),
         "kid": str(kid or ""),
     }
+    if surface["envelope_version"] >= 2:
+        contract_v2 = getattr(decision, "contract_v2", None)
+        if not isinstance(contract_v2, Mapping):
+            raise RuntimeError("DECISION_V2_CONTRACT_REQUIRED")
+        surface["decision_contract_hash"] = payload_hash(dict(contract_v2))
+    return surface
 
 
 def canonical_signed_bytes(
@@ -88,6 +95,11 @@ def sign_decision(*, decision: "Decision", secret: bytes, kid: str) -> SignedEnv
         payload_hash=ph,
         signature=signature,
         kid=str(kid),
+        algorithm=(
+            DECISION_SIGNATURE_ALGORITHM_V2
+            if _as_int(getattr(decision, "envelope_version", 1), default=1) >= 2
+            else DECISION_SIGNATURE_ALGORITHM
+        ),
     )
 
 
@@ -156,5 +168,9 @@ def signed_material_for_archive(env: "DecisionEnvelope") -> Mapping[str, Any]:
         "payload_hash": str(env.payload_hash),
         "signature": str(env.signature),
         "kid": str(env.kid),
-        "signature_alg": DECISION_SIGNATURE_ALGORITHM,
+        "signature_alg": (
+            DECISION_SIGNATURE_ALGORITHM_V2
+            if _as_int(getattr(env, "envelope_version", getattr(env.decision, "envelope_version", 1)), default=1) >= 2
+            else DECISION_SIGNATURE_ALGORITHM
+        ),
     }
