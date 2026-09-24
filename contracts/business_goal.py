@@ -1,8 +1,8 @@
 from __future__ import annotations
 
+import math
 from dataclasses import dataclass
 from enum import StrEnum
-import math
 
 BUSINESS_GOAL_SCHEMA_VERSION = 1
 CANON_BUSINESS_GOAL_CONTRACT = True
