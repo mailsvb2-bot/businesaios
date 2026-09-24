@@ -287,6 +287,7 @@ class HeadlessExecutionContract:
             business_id=request.business_id,
             run_id=loop_result.trace.run_id,
             goal=request.goal,
+            goal_id=request.goal_id,
             step_index=int(last_step.step_index if last_step is not None else max(len(loop_result.steps) - 1, 0)),
             action={
                 "action_type": str(last_step.action if last_step is not None else ""),
