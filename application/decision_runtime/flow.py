@@ -106,9 +106,12 @@ def _decision_contract_v2_seed(
         if isinstance(model_profile_raw, str) and str(model_profile_raw).strip()
         else "UNKNOWN"
     )
+    canonical_goal_context = _mapping(state_meta.get("canonical_goal"))
+    canonical_goal = _mapping(canonical_goal_context.get("goal"))
     constraint_view: Any = state_meta.get("constraint_explainability")
     if constraint_view is None:
-        constraint_view = _mapping(state_meta.get("canonical_goal")).get("constraints")
+        constraint_view = canonical_goal_context.get("constraints")
+    deadline = canonical_goal.get("deadline_at_ms")
 
     return {
         "business_id": business_id,
@@ -139,6 +142,7 @@ def _decision_contract_v2_seed(
         "risk": risk,
         "created_at": 0,
         "do_nothing_baseline": baseline,
+        "deadline": deadline,
     }
 
 
@@ -185,6 +189,9 @@ def build_payload(
             if payload_business_id and payload_business_id != canonical_business_id:
                 raise RuntimeError("DECISION_BUSINESS_ID_MISMATCH")
             payload["business_id"] = canonical_business_id
+        requested_autonomy = str(state_meta.get("autonomy_tier") or "").strip()
+        if requested_autonomy:
+            payload["autonomy_tier"] = requested_autonomy
     if pinned_world_model_meta:
         meta_block["world_model_meta"] = dict(pinned_world_model_meta)
     if "world_model_explainability" in state_meta:
