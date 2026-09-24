@@ -266,6 +266,7 @@ class HeadlessExecutionContract:
             stop_reason=loop_result.stop_reason,
             steps=tuple(loop_result.steps),
             final_feedback=dict(loop_result.final_feedback),
+            goal_id=request.goal_id,
         )
         report = GoalExecutionReport(
             goal=request.goal,
@@ -278,6 +279,7 @@ class HeadlessExecutionContract:
             run_id=str(loop_result.trace.run_id),
             trace_id=str(loop_result.trace.trace_id),
             canonical_run_artifact=run_artifact,
+            goal_id=request.goal_id,
         )
         last_step = loop_result.steps[-1] if loop_result.steps else None
         self._evidence_persistence_service.persist(
@@ -320,6 +322,7 @@ class HeadlessExecutionContract:
                     final_feedback=dict(loop_result.final_feedback),
                     trace=loop_result.trace.to_dict(),
                     canonical_run_artifact=run_artifact,
+                    goal_id=request.goal_id,
                 )
             )
         return report
