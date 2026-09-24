@@ -10,6 +10,7 @@ from application.decision_runtime.flow import build_envelope
 from contracts.decisioning.sovereign_decision_contract import Decision, DecisionContractV2
 from core.security.keyring import Keyring
 from core.utils.canonical import canonical_json_bytes, payload_hash
+from observability.platform.decision_archive.sqlite_decision_archive import SqliteDecisionArchive
 from kernel.decision_crypto import (
     canonical_signed_payload,
     sign_decision,
@@ -273,3 +274,27 @@ def test_v1_builder_does_not_materialize_v2_contract() -> None:
         envelope_version=1,
     )
     assert built.decision.contract_v2 is None
+
+
+
+def test_v2_archive_roundtrip_preserves_contract_and_signature(tmp_path) -> None:
+    contract = _contract()
+    decision = _decision(envelope_version=2, contract_v2=contract)
+    keyring = Keyring({"k1": {"secret": b"secret", "revoked": False}}, "k1")
+    env = signed_envelope_from_decision(decision=decision, keyring=keyring)
+
+    with SqliteDecisionArchive(str(tmp_path / "decision-v2.sqlite3")) as archive:
+        archive.put(env)
+        loaded = archive.get(decision.decision_id)
+
+    assert loaded is not None
+    assert loaded.decision.contract_v2 == contract
+    assert loaded.signature == env.signature
+    assert loaded.payload_hash == env.payload_hash
+    assert verify_signed_material(
+        decision=loaded.decision,
+        payload_hash_value=loaded.payload_hash,
+        signature=loaded.signature,
+        secret=b"secret",
+        kid=loaded.kid,
+    )
