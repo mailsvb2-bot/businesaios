@@ -12,11 +12,19 @@ from kernel.decision_crypto import (
 from runtime.enforcement import payload_hash
 
 
-def verify_signature_and_integrity(*, env: Any, keyring: Any, schemas: Any, expected_issuer_id: str, supported_envelope_version: int, max_replay_ms: int, ttl_skew_ms: int, now_ms: int) -> None:
+def verify_signature_and_integrity(*, env: Any, keyring: Any, schemas: Any, expected_issuer_id: str, supported_envelope_version: int, max_replay_ms: int, ttl_skew_ms: int, now_ms: int, supported_envelope_versions: tuple[int, ...] | None = None) -> None:
     assert_envelope_signature_surface(env)
 
     env_ver = int(getattr(env, "envelope_version", getattr(env.decision, "envelope_version", 1)))
-    if env_ver != supported_envelope_version:
+    supported = tuple(
+        int(item)
+        for item in (
+            supported_envelope_versions
+            if supported_envelope_versions is not None
+            else (supported_envelope_version,)
+        )
+    )
+    if env_ver not in supported:
         raise RuntimeError("UNSUPPORTED_ENVELOPE_VERSION")
 
     if now_ms - int(env.decision.issued_at_ms) > max_replay_ms:
