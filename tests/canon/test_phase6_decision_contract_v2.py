@@ -6,6 +6,7 @@ import hmac
 
 import pytest
 
+from application.decision_runtime.flow import build_envelope
 from contracts.decisioning.sovereign_decision_contract import Decision, DecisionContractV2
 from core.security.keyring import Keyring
 from core.utils.canonical import canonical_json_bytes, payload_hash
@@ -141,3 +142,134 @@ def test_v2_requires_contract_and_contract_tampering_breaks_signature() -> None:
         secret=b"secret",
         kid="k1",
     )
+
+
+
+class _EnvelopeState:
+    schema_version = 1
+
+    def __init__(self, meta: dict | None = None, product: dict | None = None) -> None:
+        self.meta = dict(meta or {})
+        self.product = dict(product or {})
+
+    def canonical_bytes(self) -> bytes:
+        return b"phase6-decision-v2-state"
+
+
+def test_v2_builder_uses_real_ranked_alternatives_and_explicit_economics() -> None:
+    state = _EnvelopeState(
+        meta={"model_profile": "model-profile-1", "do_nothing_baseline": {"profit": 100}},
+        product={"business_id": "business-1"},
+    )
+    out = type(
+        "_Out",
+        (),
+        {
+            "action": "send_message@v1",
+            "ranking": {
+                "_decision_alternatives": [
+                    {"option_id": "send_message@v1", "score": 5.0, "reason": "ranked"},
+                    {"option_id": "noop@v1", "score": 1.0, "reason": "ranked"},
+                ],
+                "_decision_selection": {
+                    "option_id": "send_message@v1",
+                    "score": 5.0,
+                    "reason": "ranked",
+                },
+            },
+        },
+    )()
+    keyring = Keyring({"k1": {"secret": b"secret", "revoked": False}}, "k1")
+    built = build_envelope(
+        state=state,
+        out=out,
+        payload={
+            "business_id": "business-1",
+            "goal_id": "goal-1",
+            "expected_value": 25.0,
+            "confidence": 0.8,
+            "risk": {"level": "low"},
+            "meta": {
+                "canonical_goal_id": "goal-1",
+                "world_model_meta": {
+                    "semantic_state_id": "semantic-state-9",
+                    "evidence_refs": ["evidence-1"],
+                },
+            },
+        },
+        policy_id="policy-1",
+        keyring=keyring,
+        issuer_id="businesaios-core",
+        ttl_ms=1000,
+        action_schema_version=1,
+        envelope_version=2,
+    )
+    contract = dict(built.decision.contract_v2 or {})
+    assert contract["schema_version"] == 2
+    assert contract["business_id"] == "business-1"
+    assert contract["goal_id"] == "goal-1"
+    assert contract["world_state_version"] == "semantic-state-9"
+    assert contract["agent_id"] == "businesaios-core"
+    assert contract["model_profile"] == "model-profile-1"
+    assert contract["decision_strategy"] == "policy-1"
+    assert [item["option_id"] for item in contract["alternatives"]] == [
+        "send_message@v1",
+        "noop@v1",
+    ]
+    assert contract["selected_option"]["option_id"] == "send_message@v1"
+    assert contract["confidence"] == 0.8
+    assert contract["expected_value"] == 25.0
+    assert contract["risk"] == {"level": "low"}
+    assert contract["do_nothing_baseline"] == {"profit": 100}
+    assert contract["rationale"]["evidence"] == ["evidence-1"]
+    assert contract["rationale"]["uncertainties"] == []
+
+
+def test_v2_builder_preserves_unknowns_when_no_real_alternatives_or_forecast_exist() -> None:
+    state = _EnvelopeState(product={"business_id": "business-2"})
+    out = type("_Out", (), {"action": "notify_owner", "ranking": {}})()
+    keyring = Keyring({"k1": {"secret": b"secret", "revoked": False}}, "k1")
+    built = build_envelope(
+        state=state,
+        out=out,
+        payload={"business_id": "business-2"},
+        policy_id="policy-2",
+        keyring=keyring,
+        issuer_id="businesaios-core",
+        ttl_ms=1000,
+        action_schema_version=1,
+        envelope_version=2,
+    )
+    contract = dict(built.decision.contract_v2 or {})
+    assert contract["alternatives"] is None
+    assert contract["world_state_version"] == "UNKNOWN"
+    assert contract["model_profile"] == "UNKNOWN"
+    assert contract["confidence"] is None
+    assert contract["expected_value"] is None
+    assert contract["risk"] is None
+    assert contract["do_nothing_baseline"] is None
+    assert set(contract["rationale"]["uncertainties"]) == {
+        "alternatives:UNKNOWN",
+        "confidence:UNKNOWN",
+        "expected_value:UNKNOWN",
+        "risk:UNKNOWN",
+        "do_nothing_baseline:UNKNOWN",
+    }
+
+
+def test_v1_builder_does_not_materialize_v2_contract() -> None:
+    state = _EnvelopeState(product={"business_id": "business-legacy"})
+    out = type("_Out", (), {"action": "notify_owner", "ranking": {}})()
+    keyring = Keyring({"k1": {"secret": b"secret", "revoked": False}}, "k1")
+    built = build_envelope(
+        state=state,
+        out=out,
+        payload={"business_id": "business-legacy"},
+        policy_id="policy-legacy",
+        keyring=keyring,
+        issuer_id="businesaios-core",
+        ttl_ms=1000,
+        action_schema_version=1,
+        envelope_version=1,
+    )
+    assert built.decision.contract_v2 is None
