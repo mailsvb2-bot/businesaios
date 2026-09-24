@@ -20,9 +20,27 @@ from ports.world_model import DecisionWorldModelPort
 
 logger = logging.getLogger(__name__)
 ENVELOPE_VERSION = 1
+GOAL_BOUND_ENVELOPE_VERSION = 2
 SOVEREIGN_DECISION_CORE = True
 CANON_EXECUTABLE_ACTION_PROJECTION_OWNER = True
 CANON_SHADOW_OBSERVATION_OWNER = True
+
+
+def _decision_envelope_version(state: Any) -> int:
+    meta = (
+        dict(state.get("meta") or {})
+        if isinstance(state, Mapping)
+        else dict(getattr(state, "meta", {}) or {})
+    )
+    requested_goal_id = str(meta.get("goal_id") or "").strip()
+    canonical_context = meta.get("canonical_goal")
+    canonical_context = dict(canonical_context) if isinstance(canonical_context, Mapping) else {}
+    canonical_goal = canonical_context.get("goal")
+    canonical_goal = dict(canonical_goal) if isinstance(canonical_goal, Mapping) else {}
+    canonical_goal_id = str(canonical_goal.get("goal_id") or "").strip()
+    if requested_goal_id and canonical_goal_id:
+        return GOAL_BOUND_ENVELOPE_VERSION
+    return ENVELOPE_VERSION
 
 
 def _sign_payload(payload: dict, *, secret: bytes) -> str:
@@ -244,7 +262,12 @@ class DecisionCore:
         return {"registered": registered, "promotable": bool(registered and RolloutGuard.allow_promotion(metrics))}
 
     def decide(self, state):
-        return run_decision(core=self, state=state, envelope_version=ENVELOPE_VERSION, logger=logger)
+        return run_decision(
+            core=self,
+            state=state,
+            envelope_version=_decision_envelope_version(state),
+            logger=logger,
+        )
 
     def optimize(self, state):
         """Canonical alias used by runtime and tests. Still routes to the single decision issuer."""
@@ -259,6 +282,7 @@ __all__ = [
     "CANON_EXECUTABLE_ACTION_PROJECTION_OWNER",
     "DecisionCore",
     "ENVELOPE_VERSION",
+    "GOAL_BOUND_ENVELOPE_VERSION",
     "SOVEREIGN_DECISION_CORE",
     "project_action_intent",
     "project_action_intent_v2",
