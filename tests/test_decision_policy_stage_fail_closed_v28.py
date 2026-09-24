@@ -126,3 +126,83 @@ def test_mapping_proposal_normalization_preserves_decision_only_ranking():
     })
     assert out.payload == {}
     assert out.ranking["guard_value:spend-cap"] == 20_000.0
+
+
+_OBJECTIVE_DIMENSIONS = (
+    "business_value",
+    "revenue",
+    "margin",
+    "cash_flow",
+    "risk",
+    "customer_impact",
+    "cost",
+    "strategic_value",
+)
+
+
+def _objective_ranking(value: float, *, expected_profit: float) -> dict[str, float]:
+    return {
+        "expected_profit_delta_minor": expected_profit,
+        **{f"objective:{dimension}": value for dimension in _OBJECTIVE_DIMENSIONS},
+    }
+
+
+class MultiObjectivePolicy:
+    def propose_many(self, state):
+        return [
+            FrozenRankedProposal(
+                action="noop@v1",
+                payload={"choice": "single-kpi"},
+                ranking=_objective_ranking(-0.4, expected_profit=1_000_000.0),
+            ),
+            FrozenRankedProposal(
+                action="noop@v1",
+                payload={"choice": "balanced"},
+                ranking=_objective_ranking(0.6, expected_profit=0.0),
+            ),
+        ]
+
+
+def test_multi_objective_mode_does_not_pick_single_kpi_profit_winner():
+    trace = Trace()
+    out = propose_action(policy=MultiObjectivePolicy(), state={}, trace=trace)
+    assert out.payload["choice"] == "balanced"
+    ranking_step = next(item for item in trace.steps if item["name"] == "rank_candidates")
+    assert ranking_step["output"]["reason"].startswith("multi_objective:")
+
+
+class IncompleteObjectivePolicy:
+    def propose_many(self, state):
+        return [
+            FrozenRankedProposal(
+                action="noop@v1",
+                payload={},
+                ranking={"objective:revenue": 0.5},
+            )
+        ]
+
+
+def test_incomplete_multi_objective_projection_fails_closed():
+    with pytest.raises(RuntimeError, match="DECISION_POLICY_STAGE_FAILED:objective_projection_invalid"):
+        propose_action(policy=IncompleteObjectivePolicy(), state={}, trace=Trace())
+
+
+class MixedLegacyAndObjectivePolicy:
+    def propose_many(self, state):
+        return [
+            FrozenRankedProposal(
+                action="noop@v1",
+                payload={"choice": "legacy"},
+                ranking={"expected_profit_delta_minor": 10_000_000.0},
+            ),
+            FrozenRankedProposal(
+                action="noop@v1",
+                payload={"choice": "objective"},
+                ranking=_objective_ranking(0.2, expected_profit=0.0),
+            ),
+        ]
+
+
+def test_objective_mode_excludes_legacy_single_kpi_candidate():
+    out = propose_action(policy=MixedLegacyAndObjectivePolicy(), state={}, trace=Trace())
+    assert out.payload["choice"] == "objective"

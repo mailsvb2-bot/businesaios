@@ -65,7 +65,10 @@ def propose_action(*, policy: Any, state: Any, trace: Any) -> Any:
             trace=trace,
             reason="empty_candidates",
         )
-    ranked = rank_proposals(candidates)
+    try:
+        ranked = rank_proposals(candidates)
+    except ValueError as exc:
+        raise RuntimeError(f"DECISION_POLICY_STAGE_FAILED:{exc}") from exc
     if not ranked:
         return _fallback_proposal(
             policy=policy,
