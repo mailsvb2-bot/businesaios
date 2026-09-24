@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from enum import StrEnum
+import math
 
 BUSINESS_GOAL_SCHEMA_VERSION = 1
 CANON_BUSINESS_GOAL_CONTRACT = True
@@ -41,6 +42,12 @@ class BusinessGoal:
     business_id: str
     goal_kind: str
     target_key: str | None = None
+    metric: str | None = None
+    baseline: float | None = None
+    target: float | None = None
+    deadline_at_ms: int | None = None
+    owner_id: str | None = None
+    constraint_ids: tuple[str, ...] = ()
     parent_goal_id: str | None = None
     priority: int = 50
     schema_version: int = BUSINESS_GOAL_SCHEMA_VERSION
@@ -52,7 +59,44 @@ class BusinessGoal:
     def __post_init__(self) -> None:
         for field_name in ("goal_id", "tenant_id", "business_id", "goal_kind"):
             object.__setattr__(self, field_name, _required(getattr(self, field_name), field_name))
-        object.__setattr__(self, "target_key", _optional(self.target_key, "target_key"))
+        target_key = _optional(self.target_key, "target_key")
+        metric = _optional(self.metric, "metric")
+        if target_key is not None and metric is not None and target_key != metric:
+            raise ValueError("metric and target_key must describe the same canonical metric")
+        canonical_metric = metric or target_key
+        object.__setattr__(self, "metric", canonical_metric)
+        object.__setattr__(self, "target_key", canonical_metric)
+        object.__setattr__(self, "owner_id", _optional(self.owner_id, "owner_id"))
+        normalized_constraint_ids: list[str] = []
+        seen_constraint_ids: set[str] = set()
+        for value in self.constraint_ids:
+            constraint_id = _required(value, "constraint_id")
+            if constraint_id in seen_constraint_ids:
+                raise ValueError("constraint_ids must be unique")
+            seen_constraint_ids.add(constraint_id)
+            normalized_constraint_ids.append(constraint_id)
+        object.__setattr__(self, "constraint_ids", tuple(normalized_constraint_ids))
+        for field_name in ("baseline", "target"):
+            raw = getattr(self, field_name)
+            if raw is None:
+                continue
+            if isinstance(raw, bool):
+                raise ValueError(f"{field_name} must be a finite number")
+            try:
+                value = float(raw)
+            except (TypeError, ValueError) as exc:
+                raise ValueError(f"{field_name} must be a finite number") from exc
+            if not math.isfinite(value):
+                raise ValueError(f"{field_name} must be a finite number")
+            object.__setattr__(self, field_name, value)
+        deadline = self.deadline_at_ms
+        if deadline is not None:
+            if isinstance(deadline, bool):
+                raise ValueError("deadline_at_ms must be a non-negative integer")
+            deadline = int(deadline)
+            if deadline < 0:
+                raise ValueError("deadline_at_ms must be a non-negative integer")
+            object.__setattr__(self, "deadline_at_ms", deadline)
         object.__setattr__(self, "parent_goal_id", _optional(self.parent_goal_id, "parent_goal_id"))
         if self.parent_goal_id == self.goal_id:
             raise ValueError("goal cannot be its own parent")
@@ -67,6 +111,8 @@ class BusinessGoal:
             raise ValueError("business goal timestamps are invalid")
         object.__setattr__(self, "created_at_ms", created)
         object.__setattr__(self, "updated_at_ms", updated)
+        if self.deadline_at_ms is not None and self.deadline_at_ms < created:
+            raise ValueError("deadline_at_ms must be >= created_at_ms")
         terminal = self.terminal_at_ms
         if terminal is not None:
             terminal = int(terminal)
