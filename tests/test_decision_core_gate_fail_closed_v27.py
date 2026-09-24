@@ -35,8 +35,11 @@ def _build_core():
     return DecisionCore(selector, keyring, schemas, MemorySnapshotStore(), events), events
 
 
-def _state():
-    return WorldStateV1(1, {}, {}, {}, {}, int(time.time() * 1000), tenant_id="default", user_id="u1")
+def _state(*, meta=None):
+    return WorldStateV1(
+        1, {}, {}, {}, {}, int(time.time() * 1000),
+        tenant_id="default", user_id="u1", meta=dict(meta or {}),
+    )
 
 
 def test_decision_core_blocks_when_safety_gate_errors(monkeypatch):
@@ -56,3 +59,40 @@ def test_decision_core_blocks_when_safety_gate_errors(monkeypatch):
     rows = [e for e in event_log.iter_events() if e.get("event_type") == "decision_blocked"]
     assert rows
     assert rows[-1]["payload"]["reason"] == "action_safety_gate_error"
+
+
+def test_decision_core_blocks_effectful_action_on_canonical_goal_conflict():
+    core, events = _build_core()
+    state = _state(
+        meta={
+            "canonical_goal": {
+                "goal": {
+                    "goal_id": "sales",
+                    "metric": "revenue",
+                    "baseline": 100.0,
+                    "target": 120.0,
+                },
+                "constraints": {"guard_metrics": [], "evidence_only": True},
+                "conflicts": {
+                    "has_conflicts": True,
+                    "goal_goal": [
+                        {
+                            "conflict_kind": "opposing_goal_direction",
+                            "other_goal_id": "cost-cut",
+                        }
+                    ],
+                    "goal_constraint": [],
+                    "deterministic_only": True,
+                },
+            }
+        }
+    )
+
+    with pytest.raises(RuntimeError, match="DECISION_BLOCKED:canonical_goal_conflict"):
+        core.issue(state)
+
+    rows = [e for e in events.iter_events() if e.get("event_type") == "decision_blocked"]
+    assert rows
+    assert rows[-1]["payload"]["reason"] == "canonical_goal_conflict"
+    assert rows[-1]["payload"]["goal_id"] == "sales"
+    assert rows[-1]["payload"]["goal_goal_conflict_count"] == 1

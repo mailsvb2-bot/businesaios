@@ -45,6 +45,24 @@ def _extract_decision_agi_payload(state: Any) -> dict[str, Any]:
     return _safe_dict(_safe_dict(getattr(state, "meta", {}) or {}).get("decision_agi"))
 
 
+def _canonical_goal_context(state: Any) -> dict[str, Any]:
+    raw_meta = state.get("meta") if isinstance(state, AbcMapping) else getattr(state, "meta", {})
+    return _safe_dict(_safe_dict(raw_meta or {}).get("canonical_goal"))
+
+
+def _goal_conflict_view(state: Any) -> dict[str, Any]:
+    return _safe_dict(_canonical_goal_context(state).get("conflicts"))
+
+
+def _guard_metric_view(state: Any) -> list[dict[str, Any]]:
+    constraints = _safe_dict(_canonical_goal_context(state).get("constraints"))
+    return [
+        _safe_dict(item)
+        for item in list(constraints.get("guard_metrics") or ())
+        if isinstance(item, AbcMapping)
+    ]
+
+
 def build_trace(*, state: Any, issuer_id: str, envelope_version: int) -> tuple[str, Any, dict[str, Any]]:
     from core.decision.ai_decision_trace import TraceBuilder
     from execution.agi_reasoning_contract import compact_goal_for_trace, compact_strategy_hint_for_trace
@@ -100,6 +118,24 @@ def build_trace(*, state: Any, issuer_id: str, envelope_version: int) -> tuple[s
                 "no_second_brain": True,
             },
         )
+    canonical_goal = _canonical_goal_context(state)
+    if canonical_goal:
+        goal = _safe_dict(canonical_goal.get("goal"))
+        conflicts = _goal_conflict_view(state)
+        trace.try_add_step(
+            name="canonical_goal_objective",
+            input={},
+            output={
+                "goal_id": str(goal.get("goal_id") or ""),
+                "metric": goal.get("metric"),
+                "baseline": goal.get("baseline"),
+                "target": goal.get("target"),
+                "priority": goal.get("priority"),
+                "guard_metrics": _guard_metric_view(state),
+                "has_conflicts": bool(conflicts.get("has_conflicts")),
+                "deterministic_only": True,
+            },
+        )
     return str(user_id), trace, dict(world_model_meta or {})
 
 
@@ -125,6 +161,43 @@ def select_and_propose(*, selector: Any, state: Any, trace: Any) -> tuple[Any, A
     return policy, out
 
 
+def _enforce_canonical_goal_conflict_gate(
+    *,
+    state: Any,
+    action: str,
+    user_id: str,
+    events: Any,
+    trace: Any,
+) -> None:
+    conflicts = _goal_conflict_view(state)
+    if not bool(conflicts.get("has_conflicts")):
+        return
+    allowed = str(action or "") in {"noop", "noop@v1"}
+    goal = _safe_dict(_canonical_goal_context(state).get("goal"))
+    diagnostics = {
+        "goal_id": str(goal.get("goal_id") or ""),
+        "action": str(action or ""),
+        "allowed": allowed,
+        "goal_goal_conflict_count": len(list(conflicts.get("goal_goal") or ())),
+        "goal_constraint_conflict_count": len(list(conflicts.get("goal_constraint") or ())),
+        "reason": "canonical_goal_conflict",
+    }
+    trace.try_add_step(name="canonical_goal_conflict_gate", input={}, output=diagnostics)
+    if allowed:
+        return
+    emit = getattr(events, "emit", None)
+    if callable(emit):
+        emit(
+            event_type="decision_blocked",
+            source="decision_core",
+            user_id=str(user_id),
+            decision_id="",
+            correlation_id="",
+            payload=diagnostics,
+        )
+    raise RuntimeError("DECISION_BLOCKED:canonical_goal_conflict")
+
+
 def validate_and_gate_action(
     *,
     schemas: Any,
@@ -141,6 +214,13 @@ def validate_and_gate_action(
         else (dict(out.payload) if isinstance(out.payload, dict) else {})
     )
     action_schema_version = schemas.validate(out.action, action_payload)
+    _enforce_canonical_goal_conflict_gate(
+        state=state,
+        action=out.action,
+        user_id=str(user_id),
+        events=events,
+        trace=trace,
+    )
     trace.try_add_step(
         name="schema_validate",
         input={"action": getattr(out, "action", "")},
