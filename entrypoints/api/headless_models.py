@@ -47,6 +47,7 @@ class ExecuteGoalStepResponse(BaseModel):
 class ExecuteGoalResponse(BaseModel):
     goal: str
     business_id: str
+    goal_id: str | None = None
     tenant_id: str
     completed: bool
     stop_reason: str
