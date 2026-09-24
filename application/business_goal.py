@@ -294,12 +294,6 @@ class BusinessGoalRegistry:
             created_at_ms=when,
             updated_at_ms=when,
         )
-        self._validate_parent(
-            tenant_id=candidate.tenant_id,
-            business_id=candidate.business_id,
-            goal_id=candidate.goal_id,
-            parent_goal_id=candidate.parent_goal_id,
-        )
         payload = self._payload(candidate)
         replay = self._writer.find_existing_for_key(
             tenant_id=tenant_id,
@@ -353,6 +347,12 @@ class BusinessGoalRegistry:
                 event_metadata=event_metadata,
             )
             return current
+        self._validate_parent(
+            tenant_id=candidate.tenant_id,
+            business_id=candidate.business_id,
+            goal_id=candidate.goal_id,
+            parent_goal_id=candidate.parent_goal_id,
+        )
         self._writer.append_once(
             tenant_id=tenant_id, business_id=business_id, entity_id=goal_id,
             operation="create", idempotency_key=idempotency_key, fact_type=GOAL_CREATED,
