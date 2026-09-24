@@ -244,6 +244,7 @@ class ActionIntentV2:
             "goal_id",
             "agent_id",
             "capability_target",
+            "channel",
         )
         issues = [
             f"invalid:{name}"
