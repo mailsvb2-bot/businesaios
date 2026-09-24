@@ -23,6 +23,7 @@ class DecisionContractV2:
     risk: Any = None
     created_at: int = 0
     do_nothing_baseline: Any = None
+    deadline: Any = None
     schema_version: int = DECISION_CONTRACT_V2_SCHEMA_VERSION
 
     def as_dict(self) -> dict[str, Any]:
@@ -45,6 +46,7 @@ class DecisionContractV2:
             "risk": self.risk,
             "created_at": int(self.created_at),
             "do_nothing_baseline": self.do_nothing_baseline,
+            "deadline": self.deadline,
             "schema_version": int(self.schema_version),
         }
 
