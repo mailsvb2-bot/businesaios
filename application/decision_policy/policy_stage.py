@@ -23,13 +23,25 @@ def _fallback_proposal(*, policy: Any, state: Any, trace: Any, reason: str) -> A
     return policy.propose(state)
 
 
-def _materialize_ranked(*, prototype: Any, action: str, payload: dict[str, Any]) -> Any:
+def _materialize_ranked(
+    *,
+    prototype: Any,
+    action: str,
+    payload: dict[str, Any],
+    ranking: dict[str, Any],
+) -> Any:
     if isinstance(prototype, dict):
-        return SimpleNamespace(action=str(action), payload=dict(payload))
+        return SimpleNamespace(action=str(action), payload=dict(payload), ranking=dict(ranking))
     try:
-        return type(prototype)(action=str(action), payload=dict(payload))
+        return type(prototype)(action=str(action), payload=dict(payload), ranking=dict(ranking))
     except TypeError:
-        return SimpleNamespace(action=str(action), payload=dict(payload))
+        try:
+            output = type(prototype)(action=str(action), payload=dict(payload))
+        except TypeError:
+            return SimpleNamespace(action=str(action), payload=dict(payload), ranking=dict(ranking))
+        if hasattr(output, "ranking"):
+            return output
+        return SimpleNamespace(action=str(action), payload=dict(payload), ranking=dict(ranking))
 
 
 def propose_action(*, policy: Any, state: Any, trace: Any) -> Any:
@@ -64,6 +76,7 @@ def propose_action(*, policy: Any, state: Any, trace: Any) -> Any:
         prototype=candidates[0],
         action=selected.action,
         payload=selected.payload,
+        ranking=selected.ranking,
     )
     trace.try_add_step(
         name="rank_candidates",

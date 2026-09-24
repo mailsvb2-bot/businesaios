@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import math
 from collections.abc import Iterable, Mapping
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Any
 
 from config.scoring_behavior_policy import DEFAULT_ACTION_RANKING_POLICY, ActionRankingPolicy
@@ -16,6 +16,7 @@ class RankedProposal:
     payload: dict[str, Any]
     score: float
     reason: str
+    ranking: dict[str, Any] = field(default_factory=dict)
 
 
 def _mapping(value: Any) -> dict[str, Any]:
@@ -100,6 +101,7 @@ def rank_proposals(
                         payload=payload,
                         score=float(score),
                         reason=str(reason),
+                        ranking=dict(ranking),
                     ),
                 )
             )

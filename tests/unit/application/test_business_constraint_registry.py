@@ -10,6 +10,7 @@ from application.business_constraint import (
 from contracts.business_constraints import (
     BusinessConstraint,
     BusinessConstraintNotFound,
+    ConstraintComparison,
     ConstraintLifecycleStatus,
     ConstraintSeverity,
 )
@@ -72,6 +73,38 @@ def test_constraint_lifecycle_is_idempotent_and_subject_is_stable() -> None:
         registry.update(
             tenant_id="tenant", business_id="business", constraint_id="constraint", idempotency_key="late",
             state_key="enforced", occurred_at_ms=400,
+        )
+
+
+def test_structured_metric_bound_is_optional_durable_and_immutable() -> None:
+    registry, events = _registry()
+    created = registry.create(
+        tenant_id="tenant", business_id="business", constraint_id="spend-cap", idempotency_key="spend-cap-create",
+        constraint_kind="budget_guard", severity="hard", subject_type="metric", subject_id="spend_rub",
+        state_key="bounded", comparison="lte", threshold=50_000, occurred_at_ms=100,
+    )
+    assert created.comparison is ConstraintComparison.LTE
+    assert created.threshold == 50_000.0
+    assert events.events[0]["payload"]["payload"]["comparison"] == "lte"
+    assert events.events[0]["payload"]["payload"]["threshold"] == 50_000.0
+
+    updated = registry.update(
+        tenant_id="tenant", business_id="business", constraint_id="spend-cap",
+        idempotency_key="spend-cap-soften", severity="soft", occurred_at_ms=200,
+    )
+    assert updated.comparison is ConstraintComparison.LTE
+    assert updated.threshold == 50_000.0
+
+    with pytest.raises(ValueError, match="threshold requires comparison"):
+        BusinessConstraint(
+            constraint_id="bad-threshold", tenant_id="tenant", business_id="business",
+            constraint_kind="guard", subject_type="metric", subject_id="spend_rub", threshold=1.0,
+        )
+    with pytest.raises(ValueError, match="subject_type=metric"):
+        BusinessConstraint(
+            constraint_id="bad-subject", tenant_id="tenant", business_id="business",
+            constraint_kind="guard", subject_type="campaign", subject_id="campaign-1",
+            comparison="lte", threshold=1.0,
         )
 
 

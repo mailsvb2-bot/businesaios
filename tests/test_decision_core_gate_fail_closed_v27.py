@@ -20,7 +20,23 @@ class _Policy:
         return type("O", (), {"action": "send_message@v1", "payload": {"user_id": "u1", "text": "hi"}})()
 
 
-def _build_core():
+class _ProjectedGuardPolicy(_Policy):
+    def __init__(self, value):
+        self._value = value
+
+    def propose(self, state):
+        return type(
+            "O",
+            (),
+            {
+                "action": "send_message@v1",
+                "payload": {"user_id": "u1", "text": "hi"},
+                "ranking": {"guard_value:spend-cap": self._value},
+            },
+        )()
+
+
+def _build_core(policy=None):
     schemas = SchemaRegistry()
     schemas.register(
         "send_message@v1",
@@ -28,7 +44,7 @@ def _build_core():
         DecisionSchema(required={"user_id", "text"}, optional=set(), field_types={"user_id": str, "text": str}),
     )
     registry = PolicyRegistry()
-    registry.register(_Policy())
+    registry.register(policy or _Policy())
     selector = PolicySelector(registry)
     keyring = Keyring({"k1": {"secret": b"s1", "revoked": False}}, "k1")
     events = EventLog(MemoryEventStore(), tenant="default")
@@ -96,3 +112,48 @@ def test_decision_core_blocks_effectful_action_on_canonical_goal_conflict():
     assert rows[-1]["payload"]["reason"] == "canonical_goal_conflict"
     assert rows[-1]["payload"]["goal_id"] == "sales"
     assert rows[-1]["payload"]["goal_goal_conflict_count"] == 1
+
+
+def _structured_guard_meta():
+    return {
+        "canonical_goal": {
+            "goal": {"goal_id": "profit-growth", "metric": "profit", "baseline": 100.0, "target": 120.0},
+            "constraints": {
+                "guard_metrics": [{
+                    "metric": "spend_rub", "constraint_id": "spend-cap", "constraint_kind": "budget_guard",
+                    "severity": "hard", "state_key": "bounded", "lifecycle_status": "active",
+                    "comparison": "lte", "threshold": 50_000.0,
+                }],
+                "evidence_only": True,
+            },
+            "conflicts": {"has_conflicts": False, "goal_goal": [], "goal_constraint": [], "deterministic_only": True},
+        }
+    }
+
+
+def test_decision_core_blocks_when_hard_guard_projection_is_missing():
+    core, events = _build_core()
+    with pytest.raises(RuntimeError, match="DECISION_BLOCKED:canonical_guard_metric_projection_missing"):
+        core.issue(_state(meta=_structured_guard_meta()))
+    rows = [e for e in events.iter_events() if e.get("event_type") == "decision_blocked"]
+    assert rows[-1]["payload"]["reason"] == "canonical_guard_metric_projection_missing"
+    assert rows[-1]["payload"]["evaluations"][0]["ranking_key"] == "guard_value:spend-cap"
+
+
+def test_decision_core_blocks_when_hard_guard_projection_violates_bound():
+    core, events = _build_core(_ProjectedGuardPolicy(60_000.0))
+    with pytest.raises(RuntimeError, match="DECISION_BLOCKED:canonical_guard_metric_violation"):
+        core.issue(_state(meta=_structured_guard_meta()))
+    rows = [e for e in events.iter_events() if e.get("event_type") == "decision_blocked"]
+    assert rows[-1]["payload"]["reason"] == "canonical_guard_metric_violation"
+    assert rows[-1]["payload"]["evaluations"][0]["status"] == "violated"
+
+
+def test_decision_only_guard_projection_does_not_enter_signed_action_payload(monkeypatch):
+    import application.decision_runtime.runtime as decision_runtime
+
+    monkeypatch.setattr(decision_runtime, "gate_action_or_raise", lambda **kwargs: (True, "ok", {}))
+    core, _events = _build_core(_ProjectedGuardPolicy(40_000.0))
+    envelope = core.issue(_state(meta=_structured_guard_meta()))
+    assert "guard_value:spend-cap" not in envelope.decision.payload
+    assert envelope.decision.payload["user_id"] == "u1"

@@ -43,3 +43,28 @@ def test_rank_stage_is_fail_closed_by_default():
 def test_rank_stage_can_fallback_when_explicitly_allowed():
     out = propose_action(policy=FallbackPolicy(), state={}, trace=Trace())
     assert out.action == "noop@v1"
+
+
+class RankedPolicy:
+    def propose_many(self, state):
+        return [
+            type(
+                "Ranked",
+                (),
+                {
+                    "action": "noop@v1",
+                    "payload": {},
+                    "ranking": {
+                        "expected_profit_delta_minor": 10.0,
+                        "guard_value:spend-cap": 40_000.0,
+                    },
+                },
+            )()
+        ]
+
+
+def test_rank_stage_preserves_decision_only_guard_metadata():
+    out = propose_action(policy=RankedPolicy(), state={}, trace=Trace())
+    assert out.action == "noop@v1"
+    assert out.payload == {}
+    assert out.ranking["guard_value:spend-cap"] == 40_000.0

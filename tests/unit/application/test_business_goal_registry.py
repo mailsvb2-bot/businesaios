@@ -501,6 +501,8 @@ def test_metric_scoped_constraint_projects_as_guard_metric_without_semantic_gues
         subject_type="metric",
         subject_id="complaints",
         state_key="must_not_increase",
+        comparison="lte",
+        threshold=10.0,
         occurred_at_ms=10,
     )
     registry.create(
@@ -528,9 +530,51 @@ def test_metric_scoped_constraint_projects_as_guard_metric_without_semantic_gues
             "severity": "hard",
             "state_key": "must_not_increase",
             "lifecycle_status": "active",
+            "comparison": "lte",
+            "threshold": 10.0,
         }
     ]
     assert context["constraints"]["evidence_only"] is True
+
+
+def test_hard_metric_bound_rejects_new_goal_target_and_projects_legacy_conflict() -> None:
+    registry, events = _registry()
+    constraints = BusinessConstraintRegistry(event_store=events, idempotency_store=InMemoryIdempotencyStore())
+    constraints.create(
+        tenant_id="tenant", business_id="business", constraint_id="revenue-cap",
+        idempotency_key="revenue-cap-create", constraint_kind="hard_bound", severity="hard",
+        subject_type="metric", subject_id="revenue", comparison="lte", threshold=110.0, occurred_at_ms=10,
+    )
+    with pytest.raises(ValueError, match="goal target violates hard metric constraint"):
+        registry.create(
+            tenant_id="tenant", business_id="business", goal_id="invalid-new",
+            idempotency_key="invalid-new-create", goal_kind="growth", metric="revenue",
+            baseline=100.0, target=120.0, constraint_ids=("revenue-cap",), occurred_at_ms=100,
+        )
+
+    writer = EventFactLifecycleWriter(
+        event_store=events, idempotency_store=InMemoryIdempotencyStore(),
+        namespace="business_goal_fact", source="business_goal_registry", id_prefix="business-goal",
+    )
+    writer.append_once(
+        tenant_id="tenant", business_id="business", entity_id="legacy-invalid",
+        operation="create", idempotency_key="legacy-invalid-create", fact_type="goal.created",
+        payload={
+            "schema_version": 1, "goal_kind": "growth", "target_key": "revenue", "metric": "revenue",
+            "baseline": 100.0, "target": 120.0, "constraint_ids": ["revenue-cap"],
+            "parent_goal_id": None, "priority": 50,
+        },
+        occurred_at_ms=200,
+    )
+    context = BusinessGoalProjector(events).load_context(
+        tenant_id="tenant", business_id="business", goal_id="legacy-invalid"
+    )
+    assert context["conflicts"]["goal_constraint"] == [{
+        "conflict_kind": "hard_metric_bound_violation", "goal_id": "legacy-invalid",
+        "constraint_id": "revenue-cap", "metric": "revenue", "comparison": "lte",
+        "threshold": 110.0, "target": 120.0, "severity": "hard",
+    }]
+    assert context["conflicts"]["has_conflicts"] is True
 
 
 def test_goal_hierarchy_reaches_canonical_headless_world_state() -> None:
