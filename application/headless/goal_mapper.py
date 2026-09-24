@@ -4,6 +4,7 @@ import time
 from dataclasses import dataclass, field, replace
 from typing import Any
 
+from application.business_goal import BusinessGoalProjector
 from application.headless.models import GoalExecutionRequest
 from application.memory.business_memory_state_adapter import BusinessMemoryStateAdapter
 from application.memory.business_operating_memory import (
@@ -29,6 +30,10 @@ class HeadlessGoalStateMapper:
     business_memory_state_adapter: BusinessMemoryStateAdapter = field(default_factory=BusinessMemoryStateAdapter)
     semantic_snapshot_reader: Any | None = None
     canonical_goal_reader: Any | None = None
+
+    @staticmethod
+    def build_canonical_goal_reader(event_store: Any) -> BusinessGoalProjector:
+        return BusinessGoalProjector(event_store)
 
     def to_world_state(
         self,
