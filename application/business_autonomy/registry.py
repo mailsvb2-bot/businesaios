@@ -437,6 +437,47 @@ class AgentIdentityRegistry:
             raise PermissionError("agent identity is revoked")
         return identity
 
+    def assert_execution_authorized(
+        self,
+        *,
+        tenant_id: str,
+        business_id: str,
+        agent_id: str,
+        capability: str,
+    ) -> AgentIdentity:
+        """Re-authorize the complete delegation chain for a new side effect."""
+
+        current = self.assert_active(
+            tenant_id=tenant_id,
+            business_id=business_id,
+            agent_id=agent_id,
+        )
+        required_capability = str(capability or "").strip()
+        if not required_capability:
+            raise PermissionError("execution capability is required")
+        if required_capability not in current.capability_scope:
+            raise PermissionError("agent capability is not delegated")
+
+        seen: set[str] = set()
+        cursor = current
+        while True:
+            if cursor.agent_id in seen:
+                raise PermissionError("agent delegation cycle detected")
+            seen.add(cursor.agent_id)
+            if cursor.lifecycle_status is not AgentLifecycleStatus.ACTIVE:
+                raise PermissionError("agent delegation chain contains revoked identity")
+            if required_capability not in cursor.capability_scope:
+                raise PermissionError("delegation chain no longer authorizes capability")
+            if cursor.delegated_by is None:
+                return current
+            parent = self.assert_active(
+                tenant_id=tenant_id,
+                business_id=business_id,
+                agent_id=cursor.delegated_by,
+            )
+            assert_delegation_within_parent(parent=parent, child=cursor)
+            cursor = parent
+
     def list_for_business(
         self,
         *,
