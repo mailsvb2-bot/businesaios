@@ -2,8 +2,8 @@ from __future__ import annotations
 
 import pytest
 
-from application.business_autonomy.registry import AgentIdentityRegistry
 from application.business_autonomy.contracts import AgentLifecycleStatus
+from application.business_autonomy.registry import AgentIdentityRegistry
 from reliability.idempotency_store import InMemoryIdempotencyStore
 
 
