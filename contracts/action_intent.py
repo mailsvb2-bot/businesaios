@@ -54,12 +54,16 @@ class ActionIntentV1:
     confidence: float | None = None
     reversible: bool | None = None
     requested_by: str = "sovereign_decision"
+    agent_id: str = ""
     schema_version: int = 1
     evidence_refs: tuple[str, ...] = ()
     derived_fact_ref: str = ""
 
     def __post_init__(self) -> None:
         object.__setattr__(self, "payload", _freeze(dict(self.payload or {})))
+        requested_by = str(self.requested_by or "").strip()
+        object.__setattr__(self, "requested_by", requested_by)
+        object.__setattr__(self, "agent_id", str(self.agent_id or requested_by).strip())
         refs = tuple(dict.fromkeys(str(item).strip() for item in self.evidence_refs if str(item).strip()))
         object.__setattr__(self, "evidence_refs", refs)
         object.__setattr__(self, "derived_fact_ref", str(self.derived_fact_ref or "").strip())
@@ -84,6 +88,7 @@ class ActionIntentV1:
             "confidence": self.confidence,
             "reversible": self.reversible,
             "requested_by": self.requested_by,
+            "agent_id": self.agent_id,
             "schema_version": self.schema_version,
             "evidence_refs": list(self.evidence_refs),
             "derived_fact_ref": self.derived_fact_ref,
@@ -92,7 +97,7 @@ class ActionIntentV1:
     def validate_contract(self) -> list[str]:
         identity = (
             "intent_id", "tenant_id", "business_id", "decision_id",
-            "correlation_id", "action_type", "channel", "requested_by",
+            "correlation_id", "action_type", "channel", "requested_by", "agent_id",
         )
         issues = [
             f"invalid:{name}" for name in identity
@@ -115,8 +120,8 @@ class ActionIntentV1:
     def from_projection(
         cls, *, intent_id: str, tenant_id: str, business_id: str, decision_id: str,
         correlation_id: str, action_type: str, channel: str, payload: Mapping[str, Any],
-        payload_hash: str, requested_by: str = "sovereign_decision", evidence_refs: tuple[str, ...] = (),
-        derived_fact_ref: str = "",
+        payload_hash: str, requested_by: str = "sovereign_decision", agent_id: str = "",
+        evidence_refs: tuple[str, ...] = (), derived_fact_ref: str = "",
     ) -> ActionIntentV1:
         data = dict(payload or {})
         intent = cls(
@@ -126,7 +131,8 @@ class ActionIntentV1:
             expected_value=_finite(data.get("expected_value"), "expected_value"),
             confidence=_finite(data.get("confidence"), "confidence"),
             reversible=data.get("reversible") if isinstance(data.get("reversible"), bool) else None,
-            requested_by=requested_by, evidence_refs=evidence_refs, derived_fact_ref=derived_fact_ref,
+            requested_by=requested_by, agent_id=agent_id,
+            evidence_refs=evidence_refs, derived_fact_ref=derived_fact_ref,
         )
         issues = intent.validate_contract()
         if issues:
