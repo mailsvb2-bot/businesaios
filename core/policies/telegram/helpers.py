@@ -50,7 +50,13 @@ def normalize_proposed_action(value: Any) -> ProposedAction:
         if isinstance(raw_payload, dict)
         else {str(k): v for k, v in value.items() if str(k) not in {"action", "ranking"}}
     )
-    return ProposedAction(action=action, payload=payload)
+    raw_ranking = value.get("ranking")
+    ranking = (
+        {str(key): float(item) for key, item in raw_ranking.items()}
+        if isinstance(raw_ranking, dict)
+        else {}
+    )
+    return ProposedAction(action=action, payload=payload, ranking=ranking)
 
 
 def propose_message(

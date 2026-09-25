@@ -126,7 +126,7 @@ class FakeCooldown:
         self.marks += 1
 
 
-def test_canonical_ranking_uses_ephemeral_metadata_and_strips_it() -> None:
+def test_canonical_ranking_preserves_ephemeral_metadata_without_payload_leak() -> None:
     base = propose("send_message@v1", {"user_id": "u", "text": "base"})
     offer = propose(
         "send_message@v1",
@@ -161,14 +161,19 @@ def test_canonical_ranking_uses_ephemeral_metadata_and_strips_it() -> None:
 
     selected = propose_action(policy=Policy(), state=object(), trace=Trace())
     assert selected.payload["text"] == "offer"
-    assert selected.ranking == {}
+    assert selected.ranking == {
+        "expected_profit_delta_minor": 1000.0,
+        "risk_penalty": 0.1,
+    }
+    assert "ranking" not in selected.payload
 
 
-def test_normalize_mapping_never_leaks_ranking_into_payload() -> None:
+def test_normalize_mapping_preserves_ranking_without_payload_leak() -> None:
     normalized = normalize_proposed_action(
         {"action": "send_message@v1", "text": "x", "ranking": {"risk_penalty": 9}}
     )
     assert normalized.payload == {"text": "x"}
+    assert normalized.ranking == {"risk_penalty": 9.0}
 
 
 def test_unified_policy_propose_many_preserves_base_and_exposes_retention(

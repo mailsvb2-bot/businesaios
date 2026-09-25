@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from collections.abc import Mapping as AbcMapping
+from math import isfinite
 from typing import Any
 
 from application.decision_policy.policy_stage import propose_action
@@ -43,6 +44,34 @@ def _extract_decision_agi_summary(state: Any) -> dict[str, Any]:
 
 def _extract_decision_agi_payload(state: Any) -> dict[str, Any]:
     return _safe_dict(_safe_dict(getattr(state, "meta", {}) or {}).get("decision_agi"))
+
+
+def _canonical_goal_context(state: Any) -> dict[str, Any]:
+    raw_meta = state.get("meta") if isinstance(state, AbcMapping) else getattr(state, "meta", {})
+    return _safe_dict(_safe_dict(raw_meta or {}).get("canonical_goal"))
+
+
+def _goal_conflict_view(state: Any) -> dict[str, Any]:
+    return _safe_dict(_canonical_goal_context(state).get("conflicts"))
+
+
+def _guard_metric_view(state: Any) -> list[dict[str, Any]]:
+    constraints = _safe_dict(_canonical_goal_context(state).get("constraints"))
+    return [
+        _safe_dict(item)
+        for item in list(constraints.get("guard_metrics") or ())
+        if isinstance(item, AbcMapping)
+    ]
+
+
+def _finite_number(value: object) -> float | None:
+    if isinstance(value, bool):
+        return None
+    try:
+        number = float(value)
+    except (TypeError, ValueError):
+        return None
+    return number if isfinite(number) else None
 
 
 def build_trace(*, state: Any, issuer_id: str, envelope_version: int) -> tuple[str, Any, dict[str, Any]]:
@@ -100,6 +129,24 @@ def build_trace(*, state: Any, issuer_id: str, envelope_version: int) -> tuple[s
                 "no_second_brain": True,
             },
         )
+    canonical_goal = _canonical_goal_context(state)
+    if canonical_goal:
+        goal = _safe_dict(canonical_goal.get("goal"))
+        conflicts = _goal_conflict_view(state)
+        trace.try_add_step(
+            name="canonical_goal_objective",
+            input={},
+            output={
+                "goal_id": str(goal.get("goal_id") or ""),
+                "metric": goal.get("metric"),
+                "baseline": goal.get("baseline"),
+                "target": goal.get("target"),
+                "priority": goal.get("priority"),
+                "guard_metrics": _guard_metric_view(state),
+                "has_conflicts": bool(conflicts.get("has_conflicts")),
+                "deterministic_only": True,
+            },
+        )
     return str(user_id), trace, dict(world_model_meta or {})
 
 
@@ -125,6 +172,98 @@ def select_and_propose(*, selector: Any, state: Any, trace: Any) -> tuple[Any, A
     return policy, out
 
 
+def _enforce_canonical_goal_conflict_gate(
+    *,
+    state: Any,
+    action: str,
+    user_id: str,
+    events: Any,
+    trace: Any,
+) -> None:
+    conflicts = _goal_conflict_view(state)
+    if not bool(conflicts.get("has_conflicts")):
+        return
+    allowed = str(action or "") in {"noop", "noop@v1"}
+    goal = _safe_dict(_canonical_goal_context(state).get("goal"))
+    diagnostics = {
+        "goal_id": str(goal.get("goal_id") or ""),
+        "action": str(action or ""),
+        "allowed": allowed,
+        "goal_goal_conflict_count": len(list(conflicts.get("goal_goal") or ())),
+        "goal_constraint_conflict_count": len(list(conflicts.get("goal_constraint") or ())),
+        "reason": "canonical_goal_conflict",
+    }
+    trace.try_add_step(name="canonical_goal_conflict_gate", input={}, output=diagnostics)
+    if allowed:
+        return
+    emit = getattr(events, "emit", None)
+    if callable(emit):
+        emit(
+            event_type="decision_blocked",
+            source="decision_core",
+            user_id=str(user_id),
+            decision_id="",
+            correlation_id="",
+            payload=diagnostics,
+        )
+    raise RuntimeError("DECISION_BLOCKED:canonical_goal_conflict")
+
+
+def _enforce_canonical_guard_metrics(
+    *,
+    state: Any,
+    proposal: Any,
+    user_id: str,
+    events: Any,
+    trace: Any,
+) -> None:
+    action = str(getattr(proposal, "action", "") or "")
+    if action in {"noop", "noop@v1"}:
+        return
+    ranking = _safe_dict(getattr(proposal, "ranking", {}) or {})
+    evaluations: list[dict[str, Any]] = []
+    blocking_reason = ""
+    for guard in _guard_metric_view(state):
+        if str(guard.get("severity") or "").lower() != "hard":
+            continue
+        comparison = str(guard.get("comparison") or "").lower()
+        if not comparison:
+            continue
+        constraint_id = str(guard.get("constraint_id") or "")
+        metric = str(guard.get("metric") or "")
+        threshold = _finite_number(guard.get("threshold"))
+        if not constraint_id or not metric or comparison not in {"lte", "gte"} or threshold is None:
+            blocking_reason = blocking_reason or "canonical_guard_metric_contract_invalid"
+            evaluations.append({"constraint_id": constraint_id, "metric": metric, "comparison": comparison, "status": "invalid_contract"})
+            continue
+        ranking_key = f"guard_value:{constraint_id}"
+        predicted = _finite_number(ranking.get(ranking_key))
+        if predicted is None:
+            blocking_reason = blocking_reason or "canonical_guard_metric_projection_missing"
+            evaluations.append({"constraint_id": constraint_id, "metric": metric, "comparison": comparison, "threshold": threshold, "ranking_key": ranking_key, "status": "missing"})
+            continue
+        satisfied = (comparison == "lte" and predicted <= threshold) or (comparison == "gte" and predicted >= threshold)
+        evaluations.append({"constraint_id": constraint_id, "metric": metric, "comparison": comparison, "threshold": threshold, "predicted": predicted, "ranking_key": ranking_key, "status": "satisfied" if satisfied else "violated"})
+        if not satisfied:
+            blocking_reason = "canonical_guard_metric_violation"
+    if not evaluations:
+        return
+    diagnostics = {
+        "goal_id": str(_safe_dict(_canonical_goal_context(state).get("goal")).get("goal_id") or ""),
+        "action": action,
+        "allowed": not bool(blocking_reason),
+        "reason": blocking_reason or "canonical_guard_metrics_satisfied",
+        "evaluations": evaluations,
+    }
+    trace.try_add_step(name="canonical_guard_metric_gate", input={}, output=diagnostics)
+    if not blocking_reason:
+        return
+    emit = getattr(events, "emit", None)
+    if callable(emit):
+        emit(event_type="decision_blocked", source="decision_core", user_id=str(user_id), decision_id="", correlation_id="", payload=diagnostics)
+    raise RuntimeError(f"DECISION_BLOCKED:{blocking_reason}")
+
+
 def validate_and_gate_action(
     *,
     schemas: Any,
@@ -141,6 +280,20 @@ def validate_and_gate_action(
         else (dict(out.payload) if isinstance(out.payload, dict) else {})
     )
     action_schema_version = schemas.validate(out.action, action_payload)
+    _enforce_canonical_goal_conflict_gate(
+        state=state,
+        action=out.action,
+        user_id=str(user_id),
+        events=events,
+        trace=trace,
+    )
+    _enforce_canonical_guard_metrics(
+        state=state,
+        proposal=out,
+        user_id=str(user_id),
+        events=events,
+        trace=trace,
+    )
     trace.try_add_step(
         name="schema_validate",
         input={"action": getattr(out, "action", "")},

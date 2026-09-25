@@ -9,6 +9,7 @@ from contracts.business_constraints import (
     BUSINESS_CONSTRAINT_SCHEMA_VERSION,
     BusinessConstraint,
     BusinessConstraintNotFound,
+    ConstraintComparison,
     ConstraintLifecycleStatus,
     ConstraintSeverity,
 )
@@ -83,6 +84,8 @@ class BusinessConstraintProjector:
             subject_id=payload.get("subject_id"),
             state_key=payload.get("state_key"),
             schema_version=payload.get("schema_version"),
+            comparison=payload.get("comparison"),
+            threshold=payload.get("threshold"),
             created_at_ms=int(created["event_time_ms"]),
             updated_at_ms=int(created["event_time_ms"]),
         )
@@ -99,6 +102,11 @@ class BusinessConstraintProjector:
                     raise BusinessConstraintHistoryInvariantViolation("business constraint subject type cannot be rewritten")
                 if update.get("subject_id", constraint.subject_id) != constraint.subject_id:
                     raise BusinessConstraintHistoryInvariantViolation("business constraint subject id cannot be rewritten")
+                expected_comparison = None if constraint.comparison is None else constraint.comparison.value
+                if update.get("comparison", expected_comparison) != expected_comparison:
+                    raise BusinessConstraintHistoryInvariantViolation("business constraint comparison cannot be rewritten")
+                if update.get("threshold", constraint.threshold) != constraint.threshold:
+                    raise BusinessConstraintHistoryInvariantViolation("business constraint threshold cannot be rewritten")
                 constraint = replace(
                     constraint,
                     severity=update.get("severity", constraint.severity),
@@ -136,7 +144,7 @@ class BusinessConstraintRegistry:
 
     @staticmethod
     def _payload(constraint: BusinessConstraint) -> dict[str, object]:
-        return {
+        payload: dict[str, object] = {
             "schema_version": constraint.schema_version,
             "constraint_kind": constraint.constraint_kind,
             "severity": constraint.severity.value,
@@ -144,6 +152,10 @@ class BusinessConstraintRegistry:
             "subject_id": constraint.subject_id,
             "state_key": constraint.state_key,
         }
+        if constraint.comparison is not None:
+            payload["comparison"] = constraint.comparison.value
+            payload["threshold"] = constraint.threshold
+        return payload
 
     @staticmethod
     def _state_token(constraint: BusinessConstraint) -> str:
@@ -157,6 +169,8 @@ class BusinessConstraintRegistry:
                 constraint.subject_type or "",
                 constraint.subject_id or "",
                 constraint.state_key or "",
+                "" if constraint.comparison is None else constraint.comparison.value,
+                "" if constraint.threshold is None else str(constraint.threshold),
             )
         )
 
@@ -172,6 +186,8 @@ class BusinessConstraintRegistry:
         subject_type: str | None = None,
         subject_id: str | None = None,
         state_key: str | None = None,
+        comparison: ConstraintComparison | str | None = None,
+        threshold: float | None = None,
         occurred_at_ms: int | None = None,
         event_metadata: dict[str, object] | None = None,
     ) -> BusinessConstraint:
@@ -185,10 +201,32 @@ class BusinessConstraintRegistry:
             subject_type=subject_type,
             subject_id=subject_id,
             state_key=state_key,
+            comparison=comparison,
+            threshold=threshold,
             created_at_ms=when,
             updated_at_ms=when,
         )
         payload = self._payload(candidate)
+        replay = self._writer.find_existing_for_key(
+            tenant_id=tenant_id,
+            business_id=business_id,
+            entity_id=constraint_id,
+            operation="create",
+            idempotency_key=idempotency_key,
+            fact_type=CONSTRAINT_CREATED,
+            event_metadata=event_metadata,
+        )
+        if replay is not None:
+            persisted = dict(dict(replay.get("payload") or {}).get("payload") or {})
+            if persisted != payload:
+                raise ValueError(
+                    "constraint create idempotency key was already used with different constraint data"
+                )
+            return self._projector.get(
+                tenant_id=tenant_id,
+                business_id=business_id,
+                constraint_id=constraint_id,
+            )
         try:
             current = self._projector.get(tenant_id=tenant_id, business_id=business_id, constraint_id=constraint_id)
         except LookupError:
@@ -222,8 +260,6 @@ class BusinessConstraintRegistry:
         event_metadata: dict[str, object] | None = None,
     ) -> BusinessConstraint:
         current = self._projector.get(tenant_id=tenant_id, business_id=business_id, constraint_id=constraint_id)
-        if current.lifecycle_status is ConstraintLifecycleStatus.ARCHIVED:
-            raise ValueError("archived business constraint cannot be updated")
         when = max(current.updated_at_ms, self._time(occurred_at_ms))
         candidate = replace(
             current,
@@ -231,6 +267,28 @@ class BusinessConstraintRegistry:
             state_key=current.state_key if state_key is None else state_key,
             updated_at_ms=when,
         )
+        replay = self._writer.find_existing_for_key(
+            tenant_id=tenant_id,
+            business_id=business_id,
+            entity_id=constraint_id,
+            operation="update",
+            idempotency_key=idempotency_key,
+            fact_type=CONSTRAINT_UPDATED,
+            event_metadata=event_metadata,
+        )
+        if replay is not None:
+            persisted = dict(dict(replay.get("payload") or {}).get("payload") or {})
+            if severity is not None and persisted.get("severity") != candidate.severity.value:
+                raise ValueError(
+                    "constraint update idempotency key was already used with different constraint data"
+                )
+            if state_key is not None and persisted.get("state_key") != candidate.state_key:
+                raise ValueError(
+                    "constraint update idempotency key was already used with different constraint data"
+                )
+            return current
+        if current.lifecycle_status is ConstraintLifecycleStatus.ARCHIVED:
+            raise ValueError("archived business constraint cannot be updated")
         payload = self._payload(candidate)
         if payload == self._payload(current):
             self._writer.repair_existing(

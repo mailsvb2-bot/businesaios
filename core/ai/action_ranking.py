@@ -4,10 +4,22 @@ from __future__ import annotations
 
 import math
 from collections.abc import Iterable, Mapping
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Any
 
 from config.scoring_behavior_policy import DEFAULT_ACTION_RANKING_POLICY, ActionRankingPolicy
+
+OBJECTIVE_DIMENSIONS = (
+    "business_value",
+    "revenue",
+    "margin",
+    "cash_flow",
+    "risk",
+    "customer_impact",
+    "cost",
+    "strategic_value",
+)
+_OBJECTIVE_PREFIX = "objective:"
 
 
 @dataclass(frozen=True)
@@ -16,6 +28,8 @@ class RankedProposal:
     payload: dict[str, Any]
     score: float
     reason: str
+    ranking: dict[str, Any] = field(default_factory=dict)
+    source_index: int = 0
 
 
 def _mapping(value: Any) -> dict[str, Any]:
@@ -28,6 +42,59 @@ def _get_num(data: Mapping[str, Any], key: str) -> float:
     except (TypeError, ValueError):
         return 0.0
     return value if math.isfinite(value) else 0.0
+
+
+def _has_objective_projection(data: Mapping[str, Any]) -> bool:
+    return any(str(key).startswith(_OBJECTIVE_PREFIX) for key in data)
+
+
+def _objective_vector(data: Mapping[str, Any]) -> dict[str, float]:
+    """Return normalized utility values where higher is better for every dimension."""
+
+    values: dict[str, float] = {}
+    for dimension in OBJECTIVE_DIMENSIONS:
+        key = f"{_OBJECTIVE_PREFIX}{dimension}"
+        if key not in data:
+            raise ValueError("objective_projection_incomplete")
+        raw = data.get(key)
+        if isinstance(raw, bool):
+            raise ValueError("objective_projection_invalid")
+        try:
+            value = float(raw)
+        except (TypeError, ValueError) as exc:
+            raise ValueError("objective_projection_invalid") from exc
+        if not math.isfinite(value) or not -1.0 <= value <= 1.0:
+            raise ValueError("objective_projection_invalid")
+        values[dimension] = value
+    return values
+
+
+def _objective_score(
+    values: Mapping[str, float],
+    *,
+    policy: ActionRankingPolicy,
+) -> float:
+    weights = {
+        "business_value": policy.objective_business_value_weight,
+        "revenue": policy.objective_revenue_weight,
+        "margin": policy.objective_margin_weight,
+        "cash_flow": policy.objective_cash_flow_weight,
+        "risk": policy.objective_risk_weight,
+        "customer_impact": policy.objective_customer_impact_weight,
+        "cost": policy.objective_cost_weight,
+        "strategic_value": policy.objective_strategic_value_weight,
+    }
+    total_weight = 0.0
+    weighted_sum = 0.0
+    for dimension in OBJECTIVE_DIMENSIONS:
+        weight = float(weights[dimension])
+        if not math.isfinite(weight) or weight < 0.0:
+            raise ValueError("objective_weight_invalid")
+        total_weight += weight
+        weighted_sum += float(values[dimension]) * weight
+    if total_weight <= 0.0:
+        raise ValueError("objective_weight_invalid")
+    return weighted_sum / total_weight
 
 
 def _proposal_parts(proposal: Any) -> tuple[str, dict[str, Any], dict[str, Any]]:
@@ -61,7 +128,14 @@ def score_proposal(
     fallback, but canonical callers use ``ProposedAction.ranking``.
     """
 
-    metadata = dict(ranking or {}) or dict(payload or {})
+    metadata = dict(payload or {})
+    metadata.update(dict(ranking or {}))
+    if _has_objective_projection(dict(ranking or {})):
+        values = _objective_vector(dict(ranking or {}))
+        return (
+            float(_objective_score(values, policy=policy)),
+            "multi_objective:" + "+".join(OBJECTIVE_DIMENSIONS),
+        )
     expected_profit = _get_num(metadata, "expected_profit_delta_minor")
     ope_wis = _get_num(metadata, "ope_wis")
     uplift = _get_num(metadata, "uplift")
@@ -80,10 +154,20 @@ def rank_proposals(
     *,
     policy: ActionRankingPolicy = DEFAULT_ACTION_RANKING_POLICY,
 ) -> list[RankedProposal]:
-    ranked: list[tuple[int, RankedProposal]] = []
+    parsed: list[tuple[int, str, dict[str, Any], dict[str, Any]]] = []
     for index, proposal in enumerate(list(proposals or [])):
         try:
             action, payload, ranking = _proposal_parts(proposal)
+        except (TypeError, ValueError, OverflowError):
+            continue
+        parsed.append((index, action, payload, ranking))
+    objective_mode = any(_has_objective_projection(ranking) for _, _, _, ranking in parsed)
+    ranked: list[tuple[int, RankedProposal]] = []
+    objective_errors = 0
+    for index, action, payload, ranking in parsed:
+        if objective_mode and not _has_objective_projection(ranking):
+            continue
+        try:
             if not action:
                 continue
             score, reason = score_proposal(
@@ -100,10 +184,20 @@ def rank_proposals(
                         payload=payload,
                         score=float(score),
                         reason=str(reason),
+                        ranking=dict(ranking),
+                        source_index=int(index),
                     ),
                 )
             )
         except (TypeError, ValueError, OverflowError):
+            if objective_mode:
+                objective_errors += 1
             continue
+    if objective_mode and not ranked:
+        raise ValueError(
+            "objective_projection_invalid"
+            if objective_errors
+            else "objective_projection_incomplete"
+        )
     ranked.sort(key=lambda item: (-float(item[1].score), int(item[0])))
     return [item for _, item in ranked]

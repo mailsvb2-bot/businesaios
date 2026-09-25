@@ -64,6 +64,14 @@ class ActionRankingPolicy:
     ope_wis_weight: float = 1000.0
     uplift_weight: float = 100.0
     risk_penalty_weight: float = 1000.0
+    objective_business_value_weight: float = 1.0
+    objective_revenue_weight: float = 1.0
+    objective_margin_weight: float = 1.0
+    objective_cash_flow_weight: float = 1.0
+    objective_risk_weight: float = 1.0
+    objective_customer_impact_weight: float = 1.0
+    objective_cost_weight: float = 1.0
+    objective_strategic_value_weight: float = 1.0
 
 
 @dataclass(frozen=True)

@@ -4,7 +4,14 @@ import time
 from dataclasses import replace
 from typing import Any
 
+from application.business_constraint import BusinessConstraintProjector
 from application.ontology import EventFactLifecycleWriter
+from contracts.business_constraints import (
+    BusinessConstraintNotFound,
+    ConstraintComparison,
+    ConstraintLifecycleStatus,
+    ConstraintSeverity,
+)
 from contracts.business_goal import (
     BUSINESS_GOAL_SCHEMA_VERSION,
     BusinessGoal,
@@ -25,6 +32,54 @@ CANON_BUSINESS_GOAL_LIFECYCLE_OWNER = True
 _UNSET = object()
 
 
+def _goal_direction(goal: BusinessGoal) -> str | None:
+    if goal.metric is None or goal.baseline is None or goal.target is None:
+        return None
+    if goal.target > goal.baseline:
+        return "increase"
+    if goal.target < goal.baseline:
+        return "decrease"
+    return None
+
+
+def _hard_metric_bound_violation(
+    *,
+    goal_id: str,
+    metric: str | None,
+    target: float | None,
+    constraint: Any,
+) -> dict[str, object] | None:
+    if (
+        metric is None
+        or target is None
+        or constraint.lifecycle_status is not ConstraintLifecycleStatus.ACTIVE
+        or constraint.severity is not ConstraintSeverity.HARD
+        or constraint.comparison is None
+        or str(constraint.subject_type or "").strip().lower() != "metric"
+        or str(constraint.subject_id or "") != str(metric)
+    ):
+        return None
+    threshold = float(constraint.threshold)
+    comparison = ConstraintComparison(constraint.comparison)
+    violated = (
+        comparison is ConstraintComparison.LTE and float(target) > threshold
+    ) or (
+        comparison is ConstraintComparison.GTE and float(target) < threshold
+    )
+    if not violated:
+        return None
+    return {
+        "conflict_kind": "hard_metric_bound_violation",
+        "goal_id": goal_id,
+        "constraint_id": constraint.constraint_id,
+        "metric": metric,
+        "comparison": comparison.value,
+        "threshold": threshold,
+        "target": float(target),
+        "severity": constraint.severity.value,
+    }
+
+
 class BusinessGoalHistoryInvariantViolation(RuntimeError):
     pass
 
@@ -32,6 +87,7 @@ class BusinessGoalHistoryInvariantViolation(RuntimeError):
 class BusinessGoalProjector:
     def __init__(self, event_store: Any) -> None:
         self._events = event_store
+        self._constraints = BusinessConstraintProjector(event_store)
 
     def _facts(self, *, tenant_id: str, business_id: str, goal_id: str | None = None) -> list[dict[str, object]]:
         rows: list[dict[str, object]] = []
@@ -152,6 +208,23 @@ class BusinessGoalProjector:
             "updated_at_ms": goal.updated_at_ms,
         }
 
+    @staticmethod
+    def _constraint_decision_view(constraint: Any) -> dict[str, object]:
+        view: dict[str, object] = {
+            "constraint_id": constraint.constraint_id,
+            "constraint_kind": constraint.constraint_kind,
+            "severity": constraint.severity.value,
+            "subject_type": constraint.subject_type,
+            "subject_id": constraint.subject_id,
+            "state_key": constraint.state_key,
+            "lifecycle_status": constraint.lifecycle_status.value,
+            "updated_at_ms": constraint.updated_at_ms,
+        }
+        if constraint.comparison is not None:
+            view["comparison"] = constraint.comparison.value
+            view["threshold"] = constraint.threshold
+        return view
+
     def load_context(self, *, tenant_id: str, business_id: str, goal_id: str) -> dict[str, object]:
         goals = {
             goal.goal_id: goal
@@ -182,12 +255,103 @@ class BusinessGoalProjector:
             (goal for goal in goals.values() if goal.parent_goal_id == current.goal_id),
             key=lambda goal: (-goal.priority, goal.goal_id),
         )
+        goal_goal_conflicts: list[dict[str, object]] = []
+        current_direction = _goal_direction(current)
+        if current.lifecycle_status is GoalLifecycleStatus.ACTIVE and current.metric and current_direction:
+            for other in sorted(goals.values(), key=lambda goal: goal.goal_id):
+                if other.goal_id == current.goal_id or other.lifecycle_status is not GoalLifecycleStatus.ACTIVE:
+                    continue
+                other_direction = _goal_direction(other)
+                if other.metric != current.metric or other_direction is None or other_direction == current_direction:
+                    continue
+                goal_goal_conflicts.append(
+                    {
+                        "conflict_kind": "opposing_goal_direction",
+                        "metric": current.metric,
+                        "goal_id": current.goal_id,
+                        "other_goal_id": other.goal_id,
+                        "goal_direction": current_direction,
+                        "other_direction": other_direction,
+                        "goal_target": current.target,
+                        "other_target": other.target,
+                    }
+                )
+
+        linked_constraints: list[dict[str, object]] = []
+        guard_metrics: list[dict[str, object]] = []
+        unresolved_constraint_ids: list[str] = []
+        goal_constraint_conflicts: list[dict[str, object]] = []
+        for constraint_id in current.constraint_ids:
+            try:
+                constraint = self._constraints.get(
+                    tenant_id=tenant_id,
+                    business_id=business_id,
+                    constraint_id=constraint_id,
+                )
+            except BusinessConstraintNotFound:
+                unresolved_constraint_ids.append(constraint_id)
+                goal_constraint_conflicts.append(
+                    {
+                        "conflict_kind": "unresolved_constraint_reference",
+                        "constraint_id": constraint_id,
+                    }
+                )
+                continue
+            linked_constraints.append(self._constraint_decision_view(constraint))
+            if constraint.lifecycle_status is ConstraintLifecycleStatus.ARCHIVED:
+                goal_constraint_conflicts.append(
+                    {
+                        "conflict_kind": "archived_constraint_reference",
+                        "constraint_id": constraint.constraint_id,
+                        "severity": constraint.severity.value,
+                    }
+                )
+            if (
+                constraint.lifecycle_status is ConstraintLifecycleStatus.ACTIVE
+                and str(constraint.subject_type or "").strip().lower() == "metric"
+                and constraint.subject_id
+            ):
+                guard_metric: dict[str, object] = {
+                    "metric": constraint.subject_id,
+                    "constraint_id": constraint.constraint_id,
+                    "constraint_kind": constraint.constraint_kind,
+                    "severity": constraint.severity.value,
+                    "state_key": constraint.state_key,
+                    "lifecycle_status": constraint.lifecycle_status.value,
+                }
+                if constraint.comparison is not None:
+                    guard_metric["comparison"] = constraint.comparison.value
+                    guard_metric["threshold"] = constraint.threshold
+                guard_metrics.append(guard_metric)
+            bound_conflict = _hard_metric_bound_violation(
+                goal_id=current.goal_id,
+                metric=current.metric,
+                target=current.target,
+                constraint=constraint,
+            )
+            if bound_conflict is not None:
+                goal_constraint_conflicts.append(bound_conflict)
         return {
             "goal": self._decision_view(current),
             "hierarchy": {
                 "depth": len(ancestors),
                 "ancestors": [self._decision_view(goal) for goal in ancestors],
                 "children": [self._decision_view(goal) for goal in children],
+            },
+            "constraints": {
+                "linked": linked_constraints,
+                "guard_metrics": guard_metrics,
+                "unresolved_ids": unresolved_constraint_ids,
+                "evidence_only": True,
+                "must_not_issue_decision": True,
+            },
+            "conflicts": {
+                "goal_goal": goal_goal_conflicts,
+                "goal_constraint": goal_constraint_conflicts,
+                "has_conflicts": bool(goal_goal_conflicts or goal_constraint_conflicts),
+                "deterministic_only": True,
+                "evidence_only": True,
+                "must_not_issue_decision": True,
             },
             "evidence_only": True,
             "must_not_issue_decision": True,
@@ -197,6 +361,7 @@ class BusinessGoalProjector:
 class BusinessGoalRegistry:
     def __init__(self, *, event_store: Any, idempotency_store: IdempotencyStore) -> None:
         self._projector = BusinessGoalProjector(event_store)
+        self._constraints = BusinessConstraintProjector(event_store)
         self._writer = EventFactLifecycleWriter(
             event_store=event_store,
             idempotency_store=idempotency_store,
@@ -256,6 +421,37 @@ class BusinessGoalRegistry:
         if parent.lifecycle_status in {GoalLifecycleStatus.CANCELLED, GoalLifecycleStatus.ARCHIVED}:
             raise ValueError("parent_goal_id cannot reference cancelled or archived goal")
 
+    def _validate_constraint_links(
+        self,
+        *,
+        tenant_id: str,
+        business_id: str,
+        goal_id: str,
+        metric: str | None,
+        target: float | None,
+        constraint_ids: tuple[str, ...],
+    ) -> None:
+        for constraint_id in constraint_ids:
+            try:
+                constraint = self._constraints.get(
+                    tenant_id=tenant_id,
+                    business_id=business_id,
+                    constraint_id=constraint_id,
+                )
+            except BusinessConstraintNotFound as exc:
+                raise ValueError(
+                    "constraint_ids must reference canonical constraints in the same business"
+                ) from exc
+            if constraint.lifecycle_status is ConstraintLifecycleStatus.ARCHIVED:
+                raise ValueError("constraint_ids cannot reference archived constraints")
+            if _hard_metric_bound_violation(
+                goal_id=goal_id,
+                metric=metric,
+                target=target,
+                constraint=constraint,
+            ) is not None:
+                raise ValueError("goal target violates hard metric constraint")
+
     def create(
         self,
         *,
@@ -276,6 +472,8 @@ class BusinessGoalRegistry:
         occurred_at_ms: int | None = None,
         event_metadata: dict[str, object] | None = None,
     ) -> BusinessGoal:
+        if isinstance(constraint_ids, str):
+            raise ValueError("constraint_ids must be a sequence of canonical constraint ids")
         when = self._time(occurred_at_ms)
         candidate = BusinessGoal(
             goal_id=goal_id,
@@ -353,6 +551,14 @@ class BusinessGoalRegistry:
             goal_id=candidate.goal_id,
             parent_goal_id=candidate.parent_goal_id,
         )
+        self._validate_constraint_links(
+            tenant_id=candidate.tenant_id,
+            business_id=candidate.business_id,
+            goal_id=candidate.goal_id,
+            metric=candidate.metric,
+            target=candidate.target,
+            constraint_ids=candidate.constraint_ids,
+        )
         self._writer.append_once(
             tenant_id=tenant_id, business_id=business_id, entity_id=goal_id,
             operation="create", idempotency_key=idempotency_key, fact_type=GOAL_CREATED,
@@ -427,6 +633,18 @@ class BusinessGoalRegistry:
             return current
         if current.lifecycle_status is not GoalLifecycleStatus.ACTIVE:
             raise ValueError("terminal business goal cannot be updated")
+        if (
+            candidate.constraint_ids != current.constraint_ids
+            or candidate.target != current.target
+        ):
+            self._validate_constraint_links(
+                tenant_id=tenant_id,
+                business_id=business_id,
+                goal_id=candidate.goal_id,
+                metric=candidate.metric,
+                target=candidate.target,
+                constraint_ids=candidate.constraint_ids,
+            )
         payload = self._payload(candidate)
         if payload == self._payload(current):
             self._writer.repair_existing(

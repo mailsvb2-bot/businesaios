@@ -23,13 +23,27 @@ def _fallback_proposal(*, policy: Any, state: Any, trace: Any, reason: str) -> A
     return policy.propose(state)
 
 
-def _materialize_ranked(*, prototype: Any, action: str, payload: dict[str, Any]) -> Any:
+def _materialize_ranked(
+    *,
+    prototype: Any,
+    action: str,
+    payload: dict[str, Any],
+    ranking: dict[str, Any],
+) -> Any:
     if isinstance(prototype, dict):
-        return SimpleNamespace(action=str(action), payload=dict(payload))
+        return SimpleNamespace(action=str(action), payload=dict(payload), ranking=dict(ranking))
     try:
-        return type(prototype)(action=str(action), payload=dict(payload))
+        return type(prototype)(action=str(action), payload=dict(payload), ranking=dict(ranking))
     except TypeError:
-        return SimpleNamespace(action=str(action), payload=dict(payload))
+        try:
+            output = type(prototype)(action=str(action), payload=dict(payload))
+        except TypeError:
+            return SimpleNamespace(action=str(action), payload=dict(payload), ranking=dict(ranking))
+        try:
+            setattr(output, "ranking", dict(ranking))
+            return output
+        except (AttributeError, TypeError):
+            return SimpleNamespace(action=str(action), payload=dict(payload), ranking=dict(ranking))
 
 
 def propose_action(*, policy: Any, state: Any, trace: Any) -> Any:
@@ -51,7 +65,10 @@ def propose_action(*, policy: Any, state: Any, trace: Any) -> Any:
             trace=trace,
             reason="empty_candidates",
         )
-    ranked = rank_proposals(candidates)
+    try:
+        ranked = rank_proposals(candidates)
+    except ValueError as exc:
+        raise RuntimeError(f"DECISION_POLICY_STAGE_FAILED:{exc}") from exc
     if not ranked:
         return _fallback_proposal(
             policy=policy,
@@ -61,9 +78,10 @@ def propose_action(*, policy: Any, state: Any, trace: Any) -> Any:
         )
     selected = ranked[0]
     output = _materialize_ranked(
-        prototype=candidates[0],
+        prototype=candidates[selected.source_index],
         action=selected.action,
         payload=selected.payload,
+        ranking=selected.ranking,
     )
     trace.try_add_step(
         name="rank_candidates",

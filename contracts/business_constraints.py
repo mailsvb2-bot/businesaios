@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from enum import StrEnum
+from math import isfinite
 
 BUSINESS_CONSTRAINT_SCHEMA_VERSION = 1
 CANON_BUSINESS_CONSTRAINT_CONTRACT = True
@@ -15,6 +16,11 @@ class ConstraintSeverity(StrEnum):
 class ConstraintLifecycleStatus(StrEnum):
     ACTIVE = "active"
     ARCHIVED = "archived"
+
+
+class ConstraintComparison(StrEnum):
+    LTE = "lte"
+    GTE = "gte"
 
 
 def _required(value: object, field_name: str, limit: int = 200) -> str:
@@ -52,6 +58,8 @@ class BusinessConstraint:
     created_at_ms: int = 0
     updated_at_ms: int = 0
     archived_at_ms: int | None = None
+    comparison: ConstraintComparison | None = None
+    threshold: float | None = None
 
     def __post_init__(self) -> None:
         for field_name in ("constraint_id", "tenant_id", "business_id", "constraint_kind"):
@@ -64,6 +72,26 @@ class BusinessConstraint:
         object.__setattr__(self, "subject_id", subject_id)
         object.__setattr__(self, "state_key", _optional(self.state_key, "state_key", 160))
         object.__setattr__(self, "severity", ConstraintSeverity(self.severity))
+        comparison = None if self.comparison is None else ConstraintComparison(self.comparison)
+        threshold = self.threshold
+        if comparison is None:
+            if threshold is not None:
+                raise ValueError("threshold requires comparison")
+            object.__setattr__(self, "comparison", None)
+            object.__setattr__(self, "threshold", None)
+        else:
+            if subject_type != "metric":
+                raise ValueError("structured comparison requires subject_type=metric")
+            if isinstance(threshold, bool) or threshold is None:
+                raise ValueError("structured comparison requires finite threshold")
+            try:
+                threshold_number = float(threshold)
+            except (TypeError, ValueError) as exc:
+                raise ValueError("structured comparison requires finite threshold") from exc
+            if not isfinite(threshold_number):
+                raise ValueError("structured comparison requires finite threshold")
+            object.__setattr__(self, "comparison", comparison)
+            object.__setattr__(self, "threshold", threshold_number)
         if isinstance(self.schema_version, bool) or int(self.schema_version) != BUSINESS_CONSTRAINT_SCHEMA_VERSION:
             raise ValueError(f"unsupported business constraint schema_version: {self.schema_version}")
         object.__setattr__(self, "schema_version", BUSINESS_CONSTRAINT_SCHEMA_VERSION)
@@ -94,6 +122,7 @@ __all__ = [
     "CANON_BUSINESS_CONSTRAINT_CONTRACT",
     "BusinessConstraint",
     "BusinessConstraintNotFound",
+    "ConstraintComparison",
     "ConstraintLifecycleStatus",
     "ConstraintSeverity",
 ]
