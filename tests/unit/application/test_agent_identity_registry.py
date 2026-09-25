@@ -200,3 +200,71 @@ def test_agent_identity_scope_is_tenant_and_business_isolated() -> None:
             business_id="business-a",
             agent_id="root",
         )
+
+def test_execution_authorization_rechecks_complete_delegation_chain() -> None:
+    registry, _ = _registry()
+    registry.register(
+        tenant_id="tenant",
+        business_id="business",
+        agent_id="root",
+        idempotency_key="root-create",
+        agent_type="business",
+        agent_version="v1",
+        capability_scope=("send_email",),
+        occurred_at_ms=100,
+    )
+    registry.register(
+        tenant_id="tenant",
+        business_id="business",
+        agent_id="child",
+        idempotency_key="child-create",
+        agent_type="worker",
+        agent_version="v1",
+        delegated_by="root",
+        capability_scope=("send_email",),
+        occurred_at_ms=110,
+    )
+
+    authorized = registry.assert_execution_authorized(
+        tenant_id="tenant",
+        business_id="business",
+        agent_id="child",
+        capability="send_email",
+    )
+    assert authorized.agent_id == "child"
+
+    registry.revoke(
+        tenant_id="tenant",
+        business_id="business",
+        agent_id="root",
+        idempotency_key="root-revoke",
+        occurred_at_ms=120,
+    )
+    with pytest.raises(PermissionError, match="revoked"):
+        registry.assert_execution_authorized(
+            tenant_id="tenant",
+            business_id="business",
+            agent_id="child",
+            capability="send_email",
+        )
+
+
+def test_execution_authorization_rejects_undelegated_capability() -> None:
+    registry, _ = _registry()
+    registry.register(
+        tenant_id="tenant",
+        business_id="business",
+        agent_id="root",
+        idempotency_key="root-create",
+        agent_type="business",
+        agent_version="v1",
+        capability_scope=("send_email",),
+        occurred_at_ms=100,
+    )
+    with pytest.raises(PermissionError, match="capability"):
+        registry.assert_execution_authorized(
+            tenant_id="tenant",
+            business_id="business",
+            agent_id="root",
+            capability="refund_payment",
+        )
