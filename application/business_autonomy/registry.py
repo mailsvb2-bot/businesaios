@@ -13,10 +13,10 @@ from application.business_autonomy.contracts import (
     CapabilityKind,
     assert_delegation_within_parent,
 )
+from application.business_autonomy.protocol import ExternalBusinessAdapter
 from application.ontology import EventFactLifecycleWriter
 from contracts.event_store import BUSINESS_FACT_EVENT_TYPE
 from reliability.idempotency_contract import IdempotencyStore
-from application.business_autonomy.protocol import ExternalBusinessAdapter
 
 
 @dataclass(frozen=True)
