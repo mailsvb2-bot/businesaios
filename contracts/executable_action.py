@@ -22,7 +22,18 @@ class ExecutableAction:
         refs = tuple(dict.fromkeys(str(item).strip() for item in self.evidence_refs if str(item).strip()))
         object.__setattr__(self, 'evidence_refs', refs)
         object.__setattr__(self, 'derived_fact_ref', str(self.derived_fact_ref or '').strip())
-        object.__setattr__(self, 'agent_id', str(self.agent_id or '').strip())
+        fallback_agent = ""
+        if isinstance(self.payload, dict):
+            fallback_agent = str(
+                self.payload.get("agent_id")
+                or self.payload.get("requested_by")
+                or ""
+            ).strip()
+        object.__setattr__(
+            self,
+            'agent_id',
+            str(self.agent_id or fallback_agent or "sovereign_decision").strip(),
+        )
 
     def validate_contract(self) -> list[str]:
         issues: list[str] = []
