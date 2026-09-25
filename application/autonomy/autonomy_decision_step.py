@@ -44,6 +44,14 @@ class AutonomyDecisionStep:
         envelope = issue_headless_decision(decision_core=self._contract._decision_core, state=state)
         explanation = self._contract._policy_explainer.explain(state=state, envelope=envelope)
         action_intent = self._project_action_intent(request=request, envelope=envelope)
+        registry = getattr(self._contract, "_agent_identity_registry", None)
+        if registry is not None:
+            registry.assert_execution_authorized(
+                tenant_id=action_intent.tenant_id,
+                business_id=action_intent.business_id,
+                agent_id=action_intent.agent_id,
+                capability=action_intent.action_type,
+            )
         self._project_decision_event(envelope=envelope, action_intent=action_intent)
         trace.record(
             event_type="decision_issued",
@@ -53,6 +61,7 @@ class AutonomyDecisionStep:
                 "action": envelope.decision.action,
                 "correlation_id": envelope.decision.correlation_id,
                 "action_intent_id": action_intent.intent_id,
+                "agent_id": action_intent.agent_id,
                 "evidence_refs": list(action_intent.evidence_refs),
                 "derived_fact_ref": action_intent.derived_fact_ref,
                 "policy_explanation": {
@@ -102,6 +111,7 @@ class AutonomyDecisionStep:
             channel=str(request.channel), tenant_id=str(getattr(request, "tenant_id", "") or ""),
             business_id=str(getattr(request, "business_id", "") or ""), payload=payload,
             requested_by=str(getattr(envelope.decision, "issuer_id", "sovereign_decision") or "sovereign_decision"),
+            agent_id=str(getattr(envelope.decision, "issuer_id", "sovereign_decision") or "sovereign_decision"),
         )
 
     @staticmethod
