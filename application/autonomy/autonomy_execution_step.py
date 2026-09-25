@@ -118,8 +118,41 @@ class AutonomyExecutionStep:
             executable_action=executable_action,
             autonomy_decision=autonomy_decision,
         )
+        registry = getattr(self._contract, "_agent_identity_registry", None)
+        authorization_hook = None
+        if registry is not None:
+            def authorization_hook(_locked_envelope: Any) -> None:
+                registry.assert_execution_authorized(
+                    tenant_id=str(getattr(request, "tenant_id", "") or ""),
+                    business_id=str(getattr(request, "business_id", "") or ""),
+                    agent_id=str(getattr(executable_action, "agent_id", "") or ""),
+                    capability=str(getattr(executable_action, "action_type", "") or ""),
+                )
+
         try:
-            result = execute_headless_envelope(executor=self._contract._executor, envelope=envelope)
+            result = execute_headless_envelope(
+                executor=self._contract._executor,
+                envelope=envelope,
+                authorization_hook=authorization_hook,
+            )
+        except (PermissionError, LookupError, ValueError) as exc:
+            error_code = str(exc or "agent_authorization_failed")
+            result = ExecutionResult(
+                ok=False,
+                output={
+                    "attempted": False,
+                    "executed": False,
+                    "verified": False,
+                    "blocked_by_policy": True,
+                    "operator_required": True,
+                    "status": "agent_authorization_denied",
+                    "error_code": error_code,
+                    "agent_id": str(getattr(executable_action, "agent_id", "") or ""),
+                },
+                error=f"agent_authorization:{error_code}",
+                decision_id=envelope.decision.decision_id,
+                correlation_id=envelope.decision.correlation_id,
+            )
         except ExecutionContractLockError as exc:
             error_code = str(exc or "verification_failed")
             result = ExecutionResult(
@@ -164,6 +197,7 @@ class AutonomyExecutionStep:
         final_payload.setdefault("economy", dict(getattr(request, "economy", {}) or {}))
         final_payload.setdefault("autonomy_policy_snapshot", self._contract._autonomy_safety_bundle.build_policy_snapshot(request=request, safety_verdict=final_payload.get("autonomy_safety") or {}))
         final_payload["intent_id"] = str(getattr(executable_action, "intent_id", "") or "")
+        final_payload["agent_id"] = str(getattr(executable_action, "agent_id", "") or "")
         final_payload["action_id"] = str(getattr(executable_action, "action_id", "") or "")
         final_payload["action_channel"] = str(getattr(executable_action, "channel", "") or "")
         final_payload["evidence_refs"] = list(getattr(executable_action, "evidence_refs", ()) or ())
