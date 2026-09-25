@@ -38,12 +38,17 @@ def _project_body(body: Mapping[str, object]) -> ActionIntentV1:
         payload=_mapping(body.get("payload")),
         payload_hash=str(body.get("payload_hash") or ""),
         requested_by=str(body.get("requested_by") or "sovereign_decision"),
+        agent_id=str(body.get("agent_id") or body.get("requested_by") or "sovereign_decision"),
         evidence_refs=tuple(str(item) for item in body.get("evidence_refs") or ()),
         derived_fact_ref=str(body.get("derived_fact_ref") or ""),
     )
     if int(body.get("schema_version") or 0) != intent.schema_version:
         raise ActionIntentProjectionConflict("action intent schema version conflicts")
-    if intent.as_dict() != dict(body):
+    projected = intent.as_dict()
+    persisted = dict(body)
+    if "agent_id" not in persisted:
+        projected.pop("agent_id", None)
+    if projected != persisted:
         raise ActionIntentProjectionConflict("action intent body conflicts with canonical contract")
     return intent
 
