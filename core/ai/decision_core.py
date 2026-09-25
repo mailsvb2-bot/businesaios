@@ -46,6 +46,7 @@ def _non_effectful_capability_patch(payload_patch: Mapping[str, Any]) -> dict[st
 def project_action_intent(
     *, decision_id: str, correlation_id: str, decided_action_type: str, channel: str,
     tenant_id: str, business_id: str, payload: Mapping[str, Any], requested_by: str = "sovereign_decision",
+    agent_id: str = "",
 ) -> ActionIntentV1:
     """Project a signed sovereign decision into the canonical non-effectful intent contract."""
 
@@ -56,6 +57,7 @@ def project_action_intent(
         correlation_id=str(correlation_id or "").strip(), action_type=str(decided_action_type or "").strip(),
         channel=str(channel or "").strip(), payload=payload, payload_hash=canonical_payload_hash(dict(payload)),
         requested_by=str(requested_by or "sovereign_decision").strip(),
+        agent_id=str(agent_id or requested_by or "sovereign_decision").strip(),
         evidence_refs=extract_pinned_evidence_refs_from_payload(payload),
         derived_fact_ref=extract_pinned_derived_fact_ref_from_payload(payload),
     )
@@ -130,6 +132,7 @@ def project_executable_action(
         correlation_id=normalized_correlation_id,
         objective_name="profit_adjusted_growth",
         intent_id="" if action_intent is None else action_intent.intent_id,
+        agent_id="" if action_intent is None else action_intent.agent_id,
         evidence_refs=() if action_intent is None else tuple(action_intent.evidence_refs),
         derived_fact_ref="" if action_intent is None else action_intent.derived_fact_ref,
     )
