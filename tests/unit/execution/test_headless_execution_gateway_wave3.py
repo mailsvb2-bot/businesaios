@@ -53,3 +53,42 @@ def test_execute_headless_envelope_fails_closed_on_invalid_contract() -> None:
         assert 'execution_envelope_missing_decision' in str(exc)
     else:
         raise AssertionError('expected HeadlessExecutionGatewayContractError')
+
+def test_authorization_hook_runs_immediately_before_executor() -> None:
+    calls = []
+    executor = _Executor()
+    envelope = _Envelope()
+
+    def authorize(locked_envelope):
+        calls.append(("authorize", locked_envelope))
+        assert executor.seen == []
+
+    result = execute_headless_envelope(
+        executor=executor,
+        envelope=envelope,
+        authorization_hook=authorize,
+    )
+
+    assert result["ok"] is True
+    assert calls == [("authorize", envelope)]
+    assert executor.seen == [envelope]
+
+
+def test_authorization_denial_prevents_side_effect() -> None:
+    executor = _Executor()
+
+    def deny(_locked_envelope):
+        raise PermissionError("agent identity is revoked")
+
+    try:
+        execute_headless_envelope(
+            executor=executor,
+            envelope=_Envelope(),
+            authorization_hook=deny,
+        )
+    except PermissionError as exc:
+        assert "revoked" in str(exc)
+    else:
+        raise AssertionError("expected PermissionError")
+
+    assert executor.seen == []
