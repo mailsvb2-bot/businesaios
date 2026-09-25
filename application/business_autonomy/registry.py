@@ -73,11 +73,11 @@ CANON_AGENT_DELEGATION_GRAPH = True
 
 
 class AgentIdentityNotFound(LookupError):
-    pass
+    """Canonical agent identity does not exist in the requested business scope."""
 
 
 class AgentIdentityHistoryInvariantViolation(RuntimeError):
-    pass
+    """Persisted AgentIdentity chronology violates canonical lifecycle invariants."""
 
 
 class AgentIdentityProjector:
