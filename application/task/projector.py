@@ -6,8 +6,8 @@ from typing import Any
 from application.task.facts import (
     TASK_BLOCKED,
     TASK_CANCELLED,
-    TASK_COMPLETED,
     TASK_COMPENSATING,
+    TASK_COMPLETED,
     TASK_CREATED,
     TASK_FACT_TYPES,
     TASK_FAILED,
