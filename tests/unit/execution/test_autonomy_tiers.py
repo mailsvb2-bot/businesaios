@@ -4,6 +4,14 @@ from execution.autonomy_tiers import CANONICAL_AUTONOMY_TIERS, evaluate_autonomy
 from execution.headless_contract import GoalExecutionRequest
 
 
+
+
+def test_goal_execution_request_accepts_uppercase_canonical_and_legacy_tiers() -> None:
+    for tier in ("OBSERVE", "ADVISORY", "DRAFT", "APPROVAL_REQUIRED", "SUPERVISED", "AUTONOMOUS_BOUNDED", "bounded_autonomy", "full_autonomy"):
+        ok, issues = GoalExecutionRequest(goal="x", business_id="biz", autonomy_tier=tier).validate()
+        assert ok is True, (tier, issues)
+
+
 def test_goal_execution_request_validates_autonomy_tier() -> None:
     ok, issues = GoalExecutionRequest(goal='x', business_id='biz', autonomy_tier='oops').validate()
     assert ok is False

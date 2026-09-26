@@ -63,7 +63,8 @@ class GoalExecutionRequest:
             issues.append("invalid:max_steps")
         if int(self.max_steps) > 20:
             issues.append("invalid:max_steps_too_large")
-        if str(self.autonomy_tier or '').strip() not in ALLOWED_AUTONOMY_TIERS:
+        autonomy_tier_input = str(self.autonomy_tier or '').strip().lower()
+        if autonomy_tier_input not in ALLOWED_AUTONOMY_TIERS:
             issues.append('invalid:autonomy_tier')
         ceo_ok, ceo_issues = self.ceo.validate()
         if not ceo_ok:
