@@ -21,7 +21,7 @@ def test_business_override_restricts_full_autonomy_and_fails_closed(tmp_path) ->
                 'runtime_capabilities': {'launch_campaign': {'enabled': True, 'healthy': True, 'health_score': 1.0}},
                 'capability_policy': {
                     'business_overrides': {
-                        'biz-1': {'max_autonomy_tier_by_capability_key': {'ads_write': 'bounded_autonomy'}},
+                        'biz-1': {'max_autonomy_tier_by_capability_key': {'ads_write': 'supervised'}},
                     },
                 },
             },
