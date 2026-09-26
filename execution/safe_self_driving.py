@@ -4,15 +4,10 @@ from dataclasses import dataclass
 from typing import Any
 from collections.abc import Mapping
 
+from execution.autonomy_tiers import autonomy_tier_rank, normalize_autonomy_tier
+
 
 CANON_SAFE_SELF_DRIVING = True
-
-_TIER_ORDER = {
-    "advisory": 0,
-    "supervised": 1,
-    "bounded_autonomy": 2,
-    "full_autonomy": 3,
-}
 
 
 def _safe_dict(value: object) -> dict[str, Any]:
@@ -29,19 +24,14 @@ def _safe_int(value: object, *, default: int = 0) -> int:
 
 
 def _tier(value: object, *, default: str = "supervised") -> str:
-    text = str(value or "").strip()
-    return text if text in _TIER_ORDER else default
+    return normalize_autonomy_tier(value, default=default)
 
 
 def _downgrade_tier(value: str) -> str:
     tier = _tier(value)
-    if tier == "full_autonomy":
-        return "bounded_autonomy"
-    if tier == "bounded_autonomy":
-        return "supervised"
-    if tier == "supervised":
-        return "advisory"
-    return "advisory"
+    order = ("observe", "advisory", "draft", "approval_required", "supervised", "autonomous_bounded")
+    index = order.index(tier)
+    return order[max(0, index - 1)]
 
 
 @dataclass(frozen=True)
@@ -114,19 +104,19 @@ class SafeSelfDrivingPolicy:
 
         if consecutive_operator_handoffs >= max_consecutive_operator_handoffs:
             next_tier = _downgrade_tier(current_tier)
-            should_stop = _TIER_ORDER[current_tier] <= _TIER_ORDER["supervised"]
+            should_stop = autonomy_tier_rank(current_tier) <= autonomy_tier_rank("supervised")
             return SafeSelfDrivingDecision(should_stop=should_stop, should_downgrade=not should_stop and next_tier != current_tier, next_tier=next_tier, reason="safe_loop_operator_handoff_limit", details=details)
         if consecutive_policy_denials >= max_consecutive_policy_denials:
             next_tier = _downgrade_tier(current_tier)
-            should_stop = _TIER_ORDER[current_tier] <= _TIER_ORDER["supervised"]
+            should_stop = autonomy_tier_rank(current_tier) <= autonomy_tier_rank("supervised")
             return SafeSelfDrivingDecision(should_stop=should_stop, should_downgrade=not should_stop and next_tier != current_tier, next_tier=next_tier, reason="safe_loop_policy_denial_limit", details=details)
         if consecutive_unverified >= max_consecutive_unverified:
             next_tier = _downgrade_tier(current_tier)
-            should_stop = _TIER_ORDER[current_tier] <= _TIER_ORDER["bounded_autonomy"]
+            should_stop = autonomy_tier_rank(current_tier) <= autonomy_tier_rank("supervised")
             return SafeSelfDrivingDecision(should_stop=should_stop, should_downgrade=not should_stop and next_tier != current_tier, next_tier=next_tier, reason="safe_loop_unverified_limit", details=details)
         if int(consecutive_failures) >= max_consecutive_failures:
             next_tier = _downgrade_tier(current_tier)
-            should_stop = _TIER_ORDER[current_tier] <= _TIER_ORDER["supervised"]
+            should_stop = autonomy_tier_rank(current_tier) <= autonomy_tier_rank("supervised")
             return SafeSelfDrivingDecision(should_stop=should_stop, should_downgrade=not should_stop and next_tier != current_tier, next_tier=next_tier, reason="safe_loop_failure_limit", details=details)
 
         return SafeSelfDrivingDecision(

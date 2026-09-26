@@ -10,6 +10,8 @@ from __future__ import annotations
 from collections.abc import Mapping
 from dataclasses import dataclass, field
 from typing import Any
+
+from execution.autonomy_tiers import normalize_autonomy_tier
 from contracts.action_impact_contract import ActionCategory, ActionExecutionContext, ActionImpact
 from governance.change_control_policy import ChangeControlDecision, ChangeControlPolicy
 from governance.rbac_contract import RoleId
@@ -177,7 +179,7 @@ class ApprovalPolicyEngine:
             min_distinct_approvers = max(2, min_distinct_approvers)
             reasons.append('unknown_action_category_fail_closed')
 
-        if _text(policy_input.autonomy_tier, default='supervised') == 'full_autonomy' and approval_required:
+        if normalize_autonomy_tier(policy_input.autonomy_tier) == 'autonomous_bounded' and approval_required:
             reasons.append('approval_caps_full_autonomy')
 
         dual_control = min_distinct_approvers > 1 or len(required_role_groups) > 1

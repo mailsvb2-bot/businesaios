@@ -191,7 +191,7 @@ class ProviderAdminService:
             "connector_id": provider.connector_id,
             "verified_owner": bool(submission.metadata.get("verified_owner", True)),
             "non_ai_mode": str(submission.metadata.get("non_ai_mode") or provider.default_non_ai_mode),
-            "autonomy_tier": str(submission.metadata.get("autonomy_tier") or ("supervised" if provider.channel_kind.value == "website" else "bounded_autonomy")),
+            "autonomy_tier": str(submission.metadata.get("autonomy_tier") or ("supervised" if provider.channel_kind.value == "website" else "autonomous_bounded")),
             "action_type": str(submission.metadata.get("action_type") or provider.default_action_type),
             "supports_business_onboarding": bool(provider.supports_business_onboarding),
         }

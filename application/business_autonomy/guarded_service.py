@@ -145,7 +145,7 @@ class BusinessAutonomyGuardedService:
                 "allowed": trust.allowed,
                 "reason": trust.reason,
                 "operator_required": trust.requires_approval,
-                "recommended_autonomy_tier": effective_request.envelope.metadata.get("autonomy_tier", "bounded_autonomy"),
+                "recommended_autonomy_tier": effective_request.envelope.metadata.get("autonomy_tier", "autonomous_bounded"),
             },
         )
         if not trust.allowed and override.mode != OperatorOverrideMode.FORCE_ALLOW:

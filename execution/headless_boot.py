@@ -5,6 +5,9 @@ from functools import lru_cache
 from pathlib import Path
 
 from application.autonomy.autonomy_safety_bundle import AutonomySafetyBundle
+from application.capability.capability_health_scoring import (
+    build_capability_health_scoring_service,
+)
 from application.effects.effect_journal import FileEffectJournal
 from application.headless.contract import HeadlessExecutionContract
 from application.headless.feedback import SimpleHeadlessFeedbackReader
@@ -115,6 +118,9 @@ def build_headless_runtime(*, entrypoint: str = "headless_sdk", root_dir: str | 
         store=FileBusinessMemoryStore(root_dir=paths.business_memory_dir),
     )
     autonomy_counter_store = FileAutonomyCounterStore(root_dir=paths.autonomy_counters_dir)
+    capability_health_service = build_capability_health_scoring_service(
+        root_dir=paths.capability_health_dir
+    )
     kill_switch_registry = FileAutonomyKillSwitchRegistry(root_dir=paths.autonomy_kill_switch_dir)
     goal_score_engine = GoalScoreEngine()
     blast_radius_guard = BlastRadiusGuard()
@@ -184,6 +190,7 @@ def build_headless_runtime(*, entrypoint: str = "headless_sdk", root_dir: str | 
         revenue_outcome_projector=revenue_outcome_projector,
         event_log=event_log,
         autonomy_counter_store=autonomy_counter_store,
+        capability_health_scoring_service=capability_health_service,
         kill_switch_registry=kill_switch_registry,
         autonomy_safety_bundle=autonomy_safety_bundle,
         owner_path_service=owner_path_service,
