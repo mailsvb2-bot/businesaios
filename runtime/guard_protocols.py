@@ -9,6 +9,7 @@ from runtime.decision import DecisionEnvelope
 from runtime.platform.config.env_flags import env_int
 
 SUPPORTED_ENVELOPE_VERSION = 1
+SUPPORTED_ENVELOPE_VERSIONS = (1, 2)
 MAX_REPLAY_MS = env_int("MAX_REPLAY_MS", 10 * 60 * 1000, lo=1)
 
 
@@ -47,4 +48,5 @@ __all__ = [
     "MAX_REPLAY_MS",
     "SignatureVerifier",
     "SUPPORTED_ENVELOPE_VERSION",
+    "SUPPORTED_ENVELOPE_VERSIONS",
 ]

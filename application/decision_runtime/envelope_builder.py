@@ -5,6 +5,7 @@ import uuid
 from dataclasses import dataclass
 from typing import Any
 
+from contracts.decisioning.sovereign_decision_contract import DecisionContractV2
 from core.ai.decision import Decision, DecisionEnvelope
 from core.utils.canonical import sha256_hex
 from kernel.decision_crypto import signed_envelope_from_decision
@@ -78,7 +79,7 @@ def bind_product_metadata(
     )
 
 
-def build_decision_envelope(*, state: Any, action: str, payload: dict[str, Any], policy_id: str, keyring: Any, issuer_id: str, ttl_ms: int, action_schema_version: int, envelope_version: int) -> BuiltEnvelope:
+def build_decision_envelope(*, state: Any, action: str, payload: dict[str, Any], policy_id: str, keyring: Any, issuer_id: str, ttl_ms: int, action_schema_version: int, envelope_version: int, decision_contract_v2: dict[str, Any] | None = None) -> BuiltEnvelope:
     state_bytes = state.canonical_bytes()
     state_hash = sha256_hex(state_bytes)
     snapshot_id = str(uuid.uuid4())
@@ -103,6 +104,22 @@ def build_decision_envelope(*, state: Any, action: str, payload: dict[str, Any],
         state_schema_version=state_schema_version,
         action_schema_version=int(action_schema_version),
         envelope_version=int(envelope_version),
+        contract_v2=(
+            None
+            if int(envelope_version) < 2
+            else DecisionContractV2(
+                **{
+                    **dict(decision_contract_v2 or {}),
+                    "agent_id": str(issuer_id),
+                    "decision_strategy": str(
+                        dict(decision_contract_v2 or {}).get("decision_strategy")
+                        or policy_id
+                        or "UNKNOWN"
+                    ),
+                    "created_at": int(issued_at_ms),
+                }
+            ).as_dict()
+        ),
     )
     env = signed_envelope_from_decision(decision=decision, keyring=keyring)
     ph = env.payload_hash

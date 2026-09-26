@@ -172,6 +172,50 @@ def select_and_propose(*, selector: Any, state: Any, trace: Any) -> tuple[Any, A
     return policy, out
 
 
+def _enforce_canonical_goal_lifecycle_gate(
+    *,
+    state: Any,
+    action: str,
+    user_id: str,
+    events: Any,
+    trace: Any,
+) -> None:
+    canonical_goal = _canonical_goal_context(state)
+    if not canonical_goal:
+        return
+    goal = _safe_dict(canonical_goal.get("goal"))
+    goal_id = str(goal.get("goal_id") or "").strip()
+    lifecycle_status = str(goal.get("lifecycle_status") or "").strip().lower()
+    if not goal_id or not lifecycle_status or lifecycle_status == "active":
+        return
+    allowed = str(action or "") in {"noop", "noop@v1"}
+    diagnostics = {
+        "goal_id": goal_id,
+        "lifecycle_status": lifecycle_status,
+        "action": str(action or ""),
+        "allowed": allowed,
+        "reason": "canonical_goal_terminal",
+    }
+    trace.try_add_step(
+        name="canonical_goal_lifecycle_gate",
+        input={},
+        output=diagnostics,
+    )
+    if allowed:
+        return
+    emit = getattr(events, "emit", None)
+    if callable(emit):
+        emit(
+            event_type="decision_blocked",
+            source="decision_core",
+            user_id=str(user_id),
+            decision_id="",
+            correlation_id="",
+            payload=diagnostics,
+        )
+    raise RuntimeError("DECISION_BLOCKED:canonical_goal_terminal")
+
+
 def _enforce_canonical_goal_conflict_gate(
     *,
     state: Any,
@@ -280,6 +324,13 @@ def validate_and_gate_action(
         else (dict(out.payload) if isinstance(out.payload, dict) else {})
     )
     action_schema_version = schemas.validate(out.action, action_payload)
+    _enforce_canonical_goal_lifecycle_gate(
+        state=state,
+        action=out.action,
+        user_id=str(user_id),
+        events=events,
+        trace=trace,
+    )
     _enforce_canonical_goal_conflict_gate(
         state=state,
         action=out.action,

@@ -29,21 +29,40 @@ def _materialize_ranked(
     action: str,
     payload: dict[str, Any],
     ranking: dict[str, Any],
+    decision_context: dict[str, Any],
 ) -> Any:
     if isinstance(prototype, dict):
         return SimpleNamespace(action=str(action), payload=dict(payload), ranking=dict(ranking))
     try:
-        return type(prototype)(action=str(action), payload=dict(payload), ranking=dict(ranking))
+        output = type(prototype)(
+            action=str(action),
+            payload=dict(payload),
+            ranking=dict(ranking),
+        )
     except TypeError:
         try:
             output = type(prototype)(action=str(action), payload=dict(payload))
         except TypeError:
-            return SimpleNamespace(action=str(action), payload=dict(payload), ranking=dict(ranking))
+            return SimpleNamespace(
+                action=str(action),
+                payload=dict(payload),
+                ranking=dict(ranking),
+                _decision_context=dict(decision_context),
+            )
         try:
             setattr(output, "ranking", dict(ranking))
-            return output
         except (AttributeError, TypeError):
-            return SimpleNamespace(action=str(action), payload=dict(payload), ranking=dict(ranking))
+            return SimpleNamespace(
+                action=str(action),
+                payload=dict(payload),
+                ranking=dict(ranking),
+                _decision_context=dict(decision_context),
+            )
+    try:
+        object.__setattr__(output, "_decision_context", dict(decision_context))
+    except (AttributeError, TypeError):
+        pass
+    return output
 
 
 def propose_action(*, policy: Any, state: Any, trace: Any) -> Any:
@@ -77,11 +96,28 @@ def propose_action(*, policy: Any, state: Any, trace: Any) -> Any:
             reason="ranked_candidates_empty",
         )
     selected = ranked[0]
+    decision_alternatives = [
+        {
+            "option_id": str(item.action),
+            "score": float(item.score),
+            "reason": str(item.reason),
+        }
+        for item in ranked
+    ]
+    decision_context = {
+        "alternatives": decision_alternatives,
+        "selection": {
+            "option_id": str(selected.action),
+            "score": float(selected.score),
+            "reason": str(selected.reason),
+        },
+    }
     output = _materialize_ranked(
         prototype=candidates[selected.source_index],
         action=selected.action,
         payload=selected.payload,
-        ranking=selected.ranking,
+        ranking=dict(selected.ranking),
+        decision_context=decision_context,
     )
     trace.try_add_step(
         name="rank_candidates",

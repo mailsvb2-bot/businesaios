@@ -200,11 +200,24 @@ def _build_event(*, envelope: Any, action_intent: Any) -> dict[str, Any]:
         )
     )
     derived_fact_ref = str(getattr(action_intent, "derived_fact_ref", "") or "").strip() or None
+    goal_id = str(getattr(action_intent, "goal_id", "") or "").strip() or None
     event_id = _event_id(
         tenant_id=tenant_id,
         business_id=business_id,
         decision_id=decision_id,
     )
+    decision_payload = {
+        "decision_id": decision_id,
+        "action_type": action_type,
+        "policy_id": str(getattr(decision, "policy_id", "") or "").strip() or None,
+        "snapshot_id": str(getattr(decision, "snapshot_id", "") or "").strip() or None,
+        "state_hash": str(getattr(decision, "state_hash", "") or "").strip() or None,
+        "decision_payload_hash": str(getattr(envelope, "payload_hash", "") or "").strip() or None,
+        "action_intent_id": intent_id,
+        "objective_name": str(getattr(action_intent, "objective_name", "") or "").strip() or None,
+    }
+    if goal_id is not None:
+        decision_payload["goal_id"] = goal_id
     return {
         "event_id": event_id,
         "tenant_id": tenant_id,
@@ -222,16 +235,7 @@ def _build_event(*, envelope: Any, action_intent: Any) -> dict[str, Any]:
             "recorded_at_ms": issued_at_ms,
             "causation_id": derived_fact_ref,
             "evidence_ids": list(evidence_ids),
-            "decision": {
-                "decision_id": decision_id,
-                "action_type": action_type,
-                "policy_id": str(getattr(decision, "policy_id", "") or "").strip() or None,
-                "snapshot_id": str(getattr(decision, "snapshot_id", "") or "").strip() or None,
-                "state_hash": str(getattr(decision, "state_hash", "") or "").strip() or None,
-                "decision_payload_hash": str(getattr(envelope, "payload_hash", "") or "").strip() or None,
-                "action_intent_id": intent_id,
-                "objective_name": str(getattr(action_intent, "objective_name", "") or "").strip() or None,
-            },
+            "decision": decision_payload,
         },
     }
 

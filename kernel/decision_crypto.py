@@ -14,6 +14,7 @@ if TYPE_CHECKING:
 
 CANON_DECISION_CRYPTO = True
 DECISION_SIGNATURE_ALGORITHM = "hmac-sha256:v1"
+DECISION_SIGNATURE_ALGORITHM_V2 = "hmac-sha256:v2"
 
 
 @dataclass(frozen=True)
@@ -31,6 +32,84 @@ def _as_int(value: Any, *, default: int = 0) -> int:
         return int(default)
 
 
+def _mapping(value: object) -> dict[str, Any]:
+    return dict(value) if isinstance(value, Mapping) else {}
+
+
+def _validate_v2_contract(decision: "Decision") -> dict[str, Any]:
+    contract = getattr(decision, "contract_v2", None)
+    if not isinstance(contract, Mapping):
+        raise RuntimeError("DECISION_V2_CONTRACT_REQUIRED")
+    body = dict(contract)
+    required_text = (
+        "business_id",
+        "goal_id",
+        "world_state_version",
+        "agent_id",
+        "model_profile",
+        "decision_strategy",
+    )
+    if int(body.get("schema_version") or 0) != 2:
+        raise RuntimeError("DECISION_V2_CONTRACT_SCHEMA_INVALID")
+    for name in required_text:
+        if not str(body.get(name) or "").strip():
+            raise RuntimeError(f"DECISION_V2_{name.upper()}_REQUIRED")
+
+    agent_id = str(body.get("agent_id") or "").strip()
+    if agent_id != str(getattr(decision, "issuer_id", "") or "").strip():
+        raise RuntimeError("DECISION_V2_AGENT_ID_MISMATCH")
+    if _as_int(body.get("created_at"), default=-1) != _as_int(
+        getattr(decision, "issued_at_ms", 0), default=0
+    ):
+        raise RuntimeError("DECISION_V2_CREATED_AT_MISMATCH")
+
+    selected = _mapping(body.get("selected_option"))
+    selected_id = str(selected.get("option_id") or "").strip()
+    if not selected_id:
+        raise RuntimeError("DECISION_V2_SELECTED_OPTION_REQUIRED")
+    if selected_id != str(getattr(decision, "action", "") or "").strip():
+        raise RuntimeError("DECISION_V2_SELECTED_OPTION_MISMATCH")
+
+    rationale = _mapping(body.get("rationale"))
+    required_rationale = {
+        "evidence",
+        "constraints",
+        "alternatives",
+        "selection_reason",
+        "uncertainties",
+        "expected_outcome",
+        "risk",
+    }
+    if not required_rationale.issubset(set(rationale)):
+        raise RuntimeError("DECISION_V2_RATIONALE_INCOMPLETE")
+
+    payload = _mapping(getattr(decision, "payload", {}) or {})
+    payload_business_id = str(payload.get("business_id") or "").strip()
+    if payload_business_id and payload_business_id != str(body["business_id"]).strip():
+        raise RuntimeError("DECISION_V2_BUSINESS_ID_MISMATCH")
+    payload_meta = _mapping(payload.get("meta"))
+    payload_goal_id = str(
+        payload.get("goal_id") or payload_meta.get("canonical_goal_id") or ""
+    ).strip()
+    if payload_goal_id and payload_goal_id != str(body["goal_id"]).strip():
+        raise RuntimeError("DECISION_V2_GOAL_ID_MISMATCH")
+
+    confidence = body.get("confidence")
+    if confidence is not None:
+        if isinstance(confidence, bool):
+            raise RuntimeError("DECISION_V2_CONFIDENCE_INVALID")
+        try:
+            confidence_value = float(confidence)
+        except (TypeError, ValueError) as exc:
+            raise RuntimeError("DECISION_V2_CONFIDENCE_INVALID") from exc
+        if not 0.0 <= confidence_value <= 1.0:
+            raise RuntimeError("DECISION_V2_CONFIDENCE_INVALID")
+    alternatives = body.get("alternatives")
+    if alternatives is not None and not isinstance(alternatives, list | tuple):
+        raise RuntimeError("DECISION_V2_ALTERNATIVES_INVALID")
+    return body
+
+
 def canonical_signed_payload(
     *,
     decision: "Decision",
@@ -39,10 +118,10 @@ def canonical_signed_payload(
 ) -> dict[str, Any]:
     """Canonical HMAC surface for DecisionEnvelope signing.
 
-    IMPORTANT:
-    Keep this bit-compatible with the existing runtime verification surface.
+    Envelope v1 remains bit-for-bit compatible with the historical surface.
+    Envelope v2 additionally binds the versioned Decision Contract body.
     """
-    return {
+    surface = {
         "envelope_version": _as_int(getattr(decision, "envelope_version", 1), default=1),
         "decision_id": str(getattr(decision, "decision_id", "") or ""),
         "issuer_id": str(getattr(decision, "issuer_id", "") or ""),
@@ -57,6 +136,10 @@ def canonical_signed_payload(
         "action_schema_version": _as_int(getattr(decision, "action_schema_version", 0)),
         "kid": str(kid or ""),
     }
+    if surface["envelope_version"] >= 2:
+        contract_v2 = _validate_v2_contract(decision)
+        surface["decision_contract_hash"] = payload_hash(contract_v2)
+    return surface
 
 
 def canonical_signed_bytes(
@@ -88,6 +171,11 @@ def sign_decision(*, decision: "Decision", secret: bytes, kid: str) -> SignedEnv
         payload_hash=ph,
         signature=signature,
         kid=str(kid),
+        algorithm=(
+            DECISION_SIGNATURE_ALGORITHM_V2
+            if _as_int(getattr(decision, "envelope_version", 1), default=1) >= 2
+            else DECISION_SIGNATURE_ALGORITHM
+        ),
     )
 
 
@@ -156,5 +244,9 @@ def signed_material_for_archive(env: "DecisionEnvelope") -> Mapping[str, Any]:
         "payload_hash": str(env.payload_hash),
         "signature": str(env.signature),
         "kid": str(env.kid),
-        "signature_alg": DECISION_SIGNATURE_ALGORITHM,
+        "signature_alg": (
+            DECISION_SIGNATURE_ALGORITHM_V2
+            if _as_int(getattr(env, "envelope_version", getattr(env.decision, "envelope_version", 1)), default=1) >= 2
+            else DECISION_SIGNATURE_ALGORITHM
+        ),
     }

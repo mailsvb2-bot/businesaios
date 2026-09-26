@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from collections.abc import Mapping
 from dataclasses import replace
 from typing import Any
 
@@ -11,6 +12,52 @@ from runtime.execution.executor_result import ExecutionResult
 
 CANON_AUTONOMY_EXECUTION_STEP = True
 CANON_AUTONOMY_EXECUTION_STEP_GATEWAY_EXECUTION_OWNER = True
+
+
+def _envelope_version(envelope: Any) -> int:
+    try:
+        return int(
+            getattr(
+                envelope,
+                "envelope_version",
+                getattr(getattr(envelope, "decision", None), "envelope_version", 1),
+            )
+            or 1
+        )
+    except (TypeError, ValueError):
+        return 1
+
+
+def _v2_intent_mutation(*, envelope: Any, executable_action: Any) -> dict[str, Any] | None:
+    if _envelope_version(envelope) < 2:
+        return None
+    decision = getattr(envelope, "decision", None)
+    decided = str(getattr(decision, "action", "") or "").strip()
+    executable = str(getattr(executable_action, "action_type", "") or "").strip()
+    original_payload = getattr(decision, "payload", {}) or {}
+    executable_payload = getattr(executable_action, "payload", {}) or {}
+    if not isinstance(original_payload, Mapping) or not isinstance(executable_payload, Mapping):
+        return {
+            "reason": "payload_contract_changed_after_decision",
+            "action_changed": decided != executable,
+            "changed_parameter_keys": ["<payload_contract>"],
+        }
+    changed_keys = sorted(
+        str(key)
+        for key, value in original_payload.items()
+        if key not in executable_payload or executable_payload.get(key) != value
+    )
+    if decided == executable and not changed_keys:
+        return None
+    return {
+        "reason": (
+            "action_type_changed_after_decision"
+            if decided != executable
+            else "signed_parameters_changed_after_decision"
+        ),
+        "action_changed": decided != executable,
+        "changed_parameter_keys": changed_keys,
+    }
 
 
 class AutonomyExecutionStep:
@@ -40,6 +87,38 @@ class AutonomyExecutionStep:
                     "capability_planning": capability_plan,
                 },
                 error=error_code,
+                decision_id=envelope.decision.decision_id,
+                correlation_id=envelope.decision.correlation_id,
+            )
+
+        intent_mutation = _v2_intent_mutation(
+            envelope=envelope,
+            executable_action=executable_action,
+        )
+        if intent_mutation is not None:
+            decided_action = str(getattr(envelope.decision, "action", "") or "")
+            executable_type = str(getattr(executable_action, "action_type", "") or "")
+            return ExecutionResult(
+                ok=False,
+                output={
+                    "attempted": False,
+                    "executed": False,
+                    "verified": False,
+                    "operator_required": True,
+                    "blocked_by_policy": False,
+                    "approval_required": True,
+                    "immutable_action_intent": {
+                        "schema_version": 2,
+                        "decision_id": str(getattr(envelope.decision, "decision_id", "") or ""),
+                        "intent_id": str(getattr(executable_action, "intent_id", "") or ""),
+                        "decided_action_type": decided_action,
+                        "requested_action_type": executable_type,
+                        **dict(intent_mutation),
+                        "requires_new_intent": True,
+                    },
+                    "capability_planning": capability_plan,
+                },
+                error="immutable_action_intent_changed",
                 decision_id=envelope.decision.decision_id,
                 correlation_id=envelope.decision.correlation_id,
             )

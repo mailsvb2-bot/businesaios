@@ -80,7 +80,11 @@ class HeadlessClosedLoopService:
         category = str(payload.get("action_category") or payload.get("effect_category") or payload.get("execution_category") or action_class or ("advisory" if action_class == "advisory" else "effectful"))
         verification_seed = {"action_type": executable_action.action_type, "action_category": category, "external_confirmation_mode": payload.get("external_confirmation_mode")}
         external_confirmation_mode = determine_external_confirmation_mode(verification_seed, default_mode="required")
-        return {**payload, "action_id": executable_action.action_id, "intent_id": str(getattr(executable_action, "intent_id", "") or ""), "action_type": executable_action.action_type, "channel": executable_action.channel, "decision_id": executable_action.decision_id, "correlation_id": executable_action.correlation_id, "objective_name": executable_action.objective_name, "tenant_id": getattr(request, "tenant_id", ""), "business_id": getattr(request, "business_id", ""), "run_id": run_id, "step_index": int(step_index), "action_category": category, "external_confirmation_mode": external_confirmation_mode}
+        action_payload = {**payload, "action_id": executable_action.action_id, "intent_id": str(getattr(executable_action, "intent_id", "") or ""), "action_type": executable_action.action_type, "channel": executable_action.channel, "decision_id": executable_action.decision_id, "correlation_id": executable_action.correlation_id, "objective_name": executable_action.objective_name, "tenant_id": getattr(request, "tenant_id", ""), "business_id": getattr(request, "business_id", ""), "run_id": run_id, "step_index": int(step_index), "action_category": category, "external_confirmation_mode": external_confirmation_mode}
+        goal_id = str(getattr(request, "goal_id", "") or "").strip()
+        if goal_id:
+            action_payload["goal_id"] = goal_id
+        return action_payload
 
     @staticmethod
     def _build_execution_receipt(*, executable_action: ExecutableAction, execution_result: Any, action_result: ActionResult, autonomy_decision: Any, run_id: str, step_index: int) -> dict[str, Any]:

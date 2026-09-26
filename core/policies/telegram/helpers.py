@@ -19,6 +19,7 @@ class ProposedAction:
     action: str
     payload: dict[str, Any]
     ranking: dict[str, float] = field(default_factory=dict)
+    _decision_context: dict[str, Any] = field(default_factory=dict, repr=False, compare=False)
 
 
 def propose(

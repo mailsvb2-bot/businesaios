@@ -4,7 +4,7 @@ from dataclasses import dataclass, replace
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from contracts.action_intent import ActionIntentV1
+    from contracts.action_intent import ActionIntentV1, ActionIntentV2
 
 CANON_POLICY_DECISION_CONTRACT = True
 
@@ -32,7 +32,7 @@ class PolicyDecisionV1:
             return "approval_required"
         return "allowed" if self.allowed else "not_authorized"
 
-    def bind_intent(self, intent: ActionIntentV1) -> PolicyDecisionV1:
+    def bind_intent(self, intent: ActionIntentV1 | ActionIntentV2) -> PolicyDecisionV1:
         return replace(
             self,
             intent_id=intent.intent_id,

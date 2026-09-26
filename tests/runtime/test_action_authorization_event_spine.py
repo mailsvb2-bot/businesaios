@@ -94,6 +94,7 @@ def test_action_authorized_is_canonical_business_event_and_retry_is_idempotent()
         "derived_fact_ref": "semantic-state-1",
     }
     assert "recipient" not in canonical["payload"]
+    assert "goal_id" not in canonical["payload"]
 
 
 def test_action_authorized_repairs_append_ack_loss_without_duplicate() -> None:
@@ -332,3 +333,43 @@ def test_executor_projects_terminal_action_chronology_at_verified_boundaries() -
     outcome_commit = stages.index("committed_output = commit_verified_execution", executed_projection)
     assert dispatch < dispatch_ambiguous < effect_failed < verification
     assert verification < verification_ambiguous < executed_projection < outcome_commit
+
+
+
+def test_goal_bound_action_events_preserve_goal_identity_without_changing_legacy_shape() -> None:
+    store = MemoryEventStore()
+    base = _Decision()
+    payload = dict(base.payload)
+    payload["goal_id"] = "goal-1"
+    decision = _Decision(payload=payload)
+
+    project_action_authorized_event(event_store=store, decision=decision)
+    project_action_executed_event(
+        event_store=store,
+        decision=decision,
+        verification={
+            "verified": True,
+            "status": "verified",
+            "external_refs": ["provider-receipt"],
+        },
+        output={"status": "delivered"},
+    )
+
+    authorized = list(
+        store.iter_events(
+            tenant_id="tenant-1",
+            start_ms=0,
+            event_type=ACTION_AUTHORIZED,
+        )
+    )
+    executed = list(
+        store.iter_events(
+            tenant_id="tenant-1",
+            start_ms=0,
+            event_type=ACTION_EXECUTED,
+        )
+    )
+    assert len(authorized) == 1
+    assert len(executed) == 1
+    assert authorized[0]["payload"]["goal_id"] == "goal-1"
+    assert executed[0]["payload"]["goal_id"] == "goal-1"

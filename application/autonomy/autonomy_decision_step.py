@@ -7,7 +7,11 @@ from application.autonomy.autonomy_tiers import evaluate_autonomy_transition
 from application.decision_runtime.emission import project_decision_proposed_event
 from application.headless.decision_gateway import issue_headless_decision
 from contracts import executable_action as executable_action_contract
-from core.ai.decision_core import project_action_intent, project_executable_action
+from core.ai.decision_core import (
+    project_action_intent,
+    project_action_intent_v2,
+    project_executable_action,
+)
 from execution.headless_trace import HeadlessTrace
 
 CANON_AUTONOMY_DECISION_STEP = True
@@ -52,6 +56,7 @@ class AutonomyDecisionStep:
                 agent_id=action_intent.agent_id,
                 capability=action_intent.action_type,
             )
+        self._assert_goal_identity(request=request, action_intent=action_intent)
         self._project_decision_event(envelope=envelope, action_intent=action_intent)
         trace.record(
             event_type="decision_issued",
@@ -62,6 +67,7 @@ class AutonomyDecisionStep:
                 "correlation_id": envelope.decision.correlation_id,
                 "action_intent_id": action_intent.intent_id,
                 "agent_id": action_intent.agent_id,
+                "goal_id": action_intent.goal_id,
                 "evidence_refs": list(action_intent.evidence_refs),
                 "derived_fact_ref": action_intent.derived_fact_ref,
                 "policy_explanation": {
@@ -88,6 +94,15 @@ class AutonomyDecisionStep:
 
     decide = evaluate
 
+    @staticmethod
+    def _assert_goal_identity(*, request: Any, action_intent: Any) -> None:
+        expected = str(getattr(request, "goal_id", "") or "").strip()
+        if not expected:
+            return
+        actual = str(getattr(action_intent, "goal_id", "") or "").strip()
+        if actual != expected:
+            raise ValueError("action intent goal identity does not match canonical request")
+
     def _project_decision_event(self, *, envelope: Any, action_intent: Any) -> str | None:
         event_store = getattr(self._contract, "_event_store", None)
         if event_store is None:
@@ -104,6 +119,18 @@ class AutonomyDecisionStep:
 
     def _project_action_intent(self, *, request: Any, envelope: Any) -> Any:
         payload = self._intent_payload(request=request, envelope=envelope)
+        envelope_version = int(
+            getattr(envelope, "envelope_version", getattr(envelope.decision, "envelope_version", 1))
+            or 1
+        )
+        if envelope_version >= 2:
+            return project_action_intent_v2(
+                decision=envelope.decision,
+                payload_hash=str(getattr(envelope, "payload_hash", "") or ""),
+                channel=str(request.channel),
+                tenant_id=str(getattr(request, "tenant_id", "") or ""),
+                business_id=str(getattr(request, "business_id", "") or ""),
+            )
         return project_action_intent(
             decision_id=str(envelope.decision.decision_id),
             correlation_id=str(envelope.decision.correlation_id or ""),

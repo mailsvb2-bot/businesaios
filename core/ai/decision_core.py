@@ -11,7 +11,7 @@ from application.decision_state.world_model_metadata import (
     extract_pinned_derived_fact_ref_from_payload,
     extract_pinned_evidence_refs_from_payload,
 )
-from contracts.action_intent import ActionIntentV1
+from contracts.action_intent import ActionIntentV1, ActionIntentV2
 from contracts.executable_action import ExecutableAction
 from core.decision_core_contract import CANONICAL_DECISION_CORE_IMPORT_PATH
 from core.utils.canonical import payload_hash as canonical_payload_hash
@@ -20,9 +20,27 @@ from ports.world_model import DecisionWorldModelPort
 
 logger = logging.getLogger(__name__)
 ENVELOPE_VERSION = 1
+GOAL_BOUND_ENVELOPE_VERSION = 2
 SOVEREIGN_DECISION_CORE = True
 CANON_EXECUTABLE_ACTION_PROJECTION_OWNER = True
 CANON_SHADOW_OBSERVATION_OWNER = True
+
+
+def _decision_envelope_version(state: Any) -> int:
+    meta = (
+        dict(state.get("meta") or {})
+        if isinstance(state, Mapping)
+        else dict(getattr(state, "meta", {}) or {})
+    )
+    requested_goal_id = str(meta.get("goal_id") or "").strip()
+    canonical_context = meta.get("canonical_goal")
+    canonical_context = dict(canonical_context) if isinstance(canonical_context, Mapping) else {}
+    canonical_goal = canonical_context.get("goal")
+    canonical_goal = dict(canonical_goal) if isinstance(canonical_goal, Mapping) else {}
+    canonical_goal_id = str(canonical_goal.get("goal_id") or "").strip()
+    if requested_goal_id and canonical_goal_id:
+        return GOAL_BOUND_ENVELOPE_VERSION
+    return ENVELOPE_VERSION
 
 
 def _sign_payload(payload: dict, *, secret: bytes) -> str:
@@ -62,6 +80,28 @@ def project_action_intent(
         derived_fact_ref=extract_pinned_derived_fact_ref_from_payload(payload),
     )
 
+def project_action_intent_v2(
+    *,
+    decision: Any,
+    payload_hash: str,
+    channel: str,
+    tenant_id: str,
+    business_id: str,
+) -> ActionIntentV2:
+    payload = dict(getattr(decision, "payload", {}) or {})
+    intent = ActionIntentV2.from_decision(
+        decision=decision,
+        tenant_id=str(tenant_id or "").strip(),
+        channel=str(channel or "").strip(),
+        payload_hash=str(payload_hash or "").strip(),
+        evidence_refs=extract_pinned_evidence_refs_from_payload(payload),
+        derived_fact_ref=extract_pinned_derived_fact_ref_from_payload(payload),
+    )
+    if intent.business_id != str(business_id or "").strip():
+        raise ValueError("ActionIntent v2 business identity mismatch")
+    return intent
+
+
 def project_executable_action(
     *,
     decision_id: str,
@@ -71,7 +111,7 @@ def project_executable_action(
     payload: Mapping[str, Any],
     capability_plan: Any,
     enforce_capability_plan: bool,
-    action_intent: ActionIntentV1 | None = None,
+    action_intent: ActionIntentV1 | ActionIntentV2 | None = None,
 ) -> ExecutableAction:
     """Project the signed decision into the sole executable-action contract.
 
@@ -222,7 +262,12 @@ class DecisionCore:
         return {"registered": registered, "promotable": bool(registered and RolloutGuard.allow_promotion(metrics))}
 
     def decide(self, state):
-        return run_decision(core=self, state=state, envelope_version=ENVELOPE_VERSION, logger=logger)
+        return run_decision(
+            core=self,
+            state=state,
+            envelope_version=_decision_envelope_version(state),
+            logger=logger,
+        )
 
     def optimize(self, state):
         """Canonical alias used by runtime and tests. Still routes to the single decision issuer."""
@@ -237,7 +282,9 @@ __all__ = [
     "CANON_EXECUTABLE_ACTION_PROJECTION_OWNER",
     "DecisionCore",
     "ENVELOPE_VERSION",
+    "GOAL_BOUND_ENVELOPE_VERSION",
     "SOVEREIGN_DECISION_CORE",
     "project_action_intent",
+    "project_action_intent_v2",
     "project_executable_action",
 ]

@@ -46,6 +46,7 @@ def verify_production_envelope(
     rate_limiter: Any,
     kill_switch: Any,
     run_mode: str,
+    supported_envelope_versions: tuple[int, ...] | None = None,
 ) -> None:
     verify_signature_and_integrity(
         env=env,
@@ -53,6 +54,7 @@ def verify_production_envelope(
         schemas=schemas,
         expected_issuer_id=expected_issuer_id,
         supported_envelope_version=supported_envelope_version,
+        supported_envelope_versions=supported_envelope_versions,
         max_replay_ms=max_replay_ms,
         ttl_skew_ms=ttl_skew_ms,
         now_ms=now_ms,

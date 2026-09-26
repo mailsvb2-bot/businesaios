@@ -121,14 +121,24 @@ class BusinessOutcomeEventSpineProjector:
         intent, correlation_id = _mapping(normalized.payload.get("action_intent")), None
         if intent:
             checks = ((intent.get("tenant_id"), outcome.tenant_id), (intent.get("business_id"), outcome.business_id), (intent.get("decision_id"), outcome.decision_id), (intent.get("intent_id"), outcome.intent_id))
-            if int(intent.get("schema_version") or 0) != 1 or any(str(a or "") != str(b or "") for a, b in checks):
+            intent_schema = int(intent.get("schema_version") or 0)
+            if intent_schema not in {1, 2} or any(str(a or "") != str(b or "") for a, b in checks):
                 raise BusinessOutcomeEventProjectionConflict("action intent identity conflicts with canonical outcome")
+            if intent_schema == 2:
+                evidence_goal_id = str(dict(normalized.labels).get("goal_id") or "").strip()
+                intent_goal_id = str(intent.get("goal_id") or "").strip()
+                if evidence_goal_id and evidence_goal_id != intent_goal_id:
+                    raise BusinessOutcomeEventProjectionConflict("action intent goal identity conflicts with canonical outcome")
             correlation_id = str(intent.get("correlation_id") or "").strip() or None
         timestamp_ms, event_id = int(normalized.created_at.timestamp() * 1000), f"closed-loop-outcome:{normalized.evidence_id}"
+        event_payload = {"schema_version": 1, "business_id": normalized.business_id, "occurred_at_ms": timestamp_ms, "recorded_at_ms": timestamp_ms, "causation_id": outcome.intent_id, "evidence_ids": [normalized.evidence_id], "outcome": outcome.as_dict()}
+        goal_id = str(dict(normalized.labels).get("goal_id") or "").strip()
+        if goal_id:
+            event_payload["goal_id"] = goal_id
         event = {
             "event_id": event_id, "tenant_id": normalized.tenant_id, "source": _EVENT_SOURCE, "event_type": OUTCOME_OBSERVED_EVENT_TYPE,
             "timestamp_ms": timestamp_ms, "decision_id": outcome.decision_id, "correlation_id": correlation_id,
-            "payload": {"schema_version": 1, "business_id": normalized.business_id, "occurred_at_ms": timestamp_ms, "recorded_at_ms": timestamp_ms, "causation_id": outcome.intent_id, "evidence_ids": [normalized.evidence_id], "outcome": outcome.as_dict()},
+            "payload": event_payload,
         }
         matches = self._matches(normalized, event_id)
         if len(matches) > 1:
