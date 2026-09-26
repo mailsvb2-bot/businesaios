@@ -10,7 +10,7 @@ from application.task import (
     DurableTaskRegistry,
 )
 from contracts.event_store import BusinessFactV1, canonical_business_event_contract
-from contracts.task import DurableTaskNotFound, DurableTaskStatus
+from contracts.task import DurableTaskNotFound, DurableTaskStatus, WaitCondition, WaitConditionKind
 from reliability.idempotency_store import InMemoryIdempotencyStore
 
 
@@ -164,7 +164,7 @@ def test_task_state_machine_rejects_invalid_transitions() -> None:
         tenant_id="tenant-a", business_id="business-a", task_id="task-a",
         idempotency_key="create-a", occurred_at_ms=100,
     )
-    with pytest.raises(ValueError, match="pending -> complete"):
+    with pytest.raises(ValueError, match="created -> complete"):
         registry.complete(
             tenant_id="tenant-a", business_id="business-a", task_id="task-a",
             idempotency_key="complete-a", occurred_at_ms=200,
@@ -300,3 +300,158 @@ def test_task_projector_rejects_events_after_terminal_state() -> None:
         DurableTaskProjector(events).get(
             tenant_id="tenant-a", business_id="business-a", task_id="task-a"
         )
+
+
+
+def test_phase9_canonical_ready_wait_resume_survives_runtime_reconstruction() -> None:
+    events = MemoryEventStore()
+    claims = InMemoryIdempotencyStore()
+    registry = DurableTaskRegistry(event_store=events, idempotency_store=claims)
+
+    created = registry.create(
+        tenant_id="tenant-p9",
+        business_id="business-p9",
+        task_id="task-p9",
+        idempotency_key="create",
+        title="Wait for approval",
+        occurred_at_ms=100,
+    )
+    assert created.status is DurableTaskStatus.CREATED
+    assert created.version == 1
+
+    ready = registry.ready(
+        tenant_id="tenant-p9",
+        business_id="business-p9",
+        task_id="task-p9",
+        idempotency_key="ready",
+        expected_version=1,
+        occurred_at_ms=110,
+    )
+    assert ready.status is DurableTaskStatus.READY
+    assert ready.version == 2
+
+    running = registry.start(
+        tenant_id="tenant-p9",
+        business_id="business-p9",
+        task_id="task-p9",
+        idempotency_key="start",
+        expected_version=2,
+        occurred_at_ms=120,
+    )
+    wait_condition = WaitCondition(
+        condition_id="approval-owner",
+        kind=WaitConditionKind.APPROVAL,
+        correlation_key="approval:task-p9",
+    )
+    waiting = registry.wait(
+        tenant_id="tenant-p9",
+        business_id="business-p9",
+        task_id="task-p9",
+        idempotency_key="wait",
+        wait_condition=wait_condition,
+        expected_version=running.version,
+        occurred_at_ms=130,
+    )
+    assert waiting.status is DurableTaskStatus.WAITING
+    assert waiting.wait_condition == wait_condition
+
+    reconstructed = DurableTaskRegistry(
+        event_store=events,
+        idempotency_store=claims,
+    ).get(
+        tenant_id="tenant-p9",
+        business_id="business-p9",
+        task_id="task-p9",
+    )
+    assert reconstructed == waiting
+
+    resumed = registry.ready(
+        tenant_id="tenant-p9",
+        business_id="business-p9",
+        task_id="task-p9",
+        idempotency_key="resume",
+        expected_version=waiting.version,
+        occurred_at_ms=140,
+    )
+    assert resumed.status is DurableTaskStatus.READY
+    assert resumed.wait_condition is None
+    assert resumed.version == waiting.version + 1
+
+
+def test_phase9_stale_version_fails_closed_without_new_event() -> None:
+    registry, events = _registry()
+    registry.create(
+        tenant_id="tenant-p9",
+        business_id="business-p9",
+        task_id="task-p9",
+        idempotency_key="create",
+        occurred_at_ms=100,
+    )
+    registry.ready(
+        tenant_id="tenant-p9",
+        business_id="business-p9",
+        task_id="task-p9",
+        idempotency_key="ready",
+        expected_version=1,
+        occurred_at_ms=110,
+    )
+    before = len(events.events)
+    with pytest.raises(RuntimeError, match="task version conflict"):
+        registry.start(
+            tenant_id="tenant-p9",
+            business_id="business-p9",
+            task_id="task-p9",
+            idempotency_key="stale-start",
+            expected_version=1,
+            occurred_at_ms=120,
+        )
+    assert len(events.events) == before
+
+
+def test_phase9_date_wait_requires_durable_wakeup_time() -> None:
+    with pytest.raises(ValueError, match="date wait condition requires resume_at_ms"):
+        WaitCondition(
+            condition_id="scheduled",
+            kind=WaitConditionKind.DATE,
+        )
+    condition = WaitCondition(
+        condition_id="scheduled",
+        kind=WaitConditionKind.DATE,
+        resume_at_ms=1_000,
+    )
+    assert WaitCondition.from_dict(condition.to_dict()) == condition
+
+
+def test_phase9_compensation_is_explicit_and_not_fake_rollback() -> None:
+    registry, _ = _registry()
+    registry.create(
+        tenant_id="tenant-p9",
+        business_id="business-p9",
+        task_id="task-p9",
+        idempotency_key="create",
+        occurred_at_ms=100,
+    )
+    registry.start(
+        tenant_id="tenant-p9",
+        business_id="business-p9",
+        task_id="task-p9",
+        idempotency_key="start",
+        occurred_at_ms=110,
+    )
+    compensating = registry.begin_compensation(
+        tenant_id="tenant-p9",
+        business_id="business-p9",
+        task_id="task-p9",
+        idempotency_key="compensate",
+        occurred_at_ms=120,
+    )
+    assert compensating.status is DurableTaskStatus.COMPENSATING
+    failed = registry.fail(
+        tenant_id="tenant-p9",
+        business_id="business-p9",
+        task_id="task-p9",
+        idempotency_key="fail-after-compensation",
+        occurred_at_ms=130,
+    )
+    assert failed.status is DurableTaskStatus.FAILED
+    assert failed.terminal_at_ms == 130
