@@ -123,7 +123,10 @@ def test_autonomy_decision_step_applies_capability_autonomy_ceiling_without_upgr
                 'payload': {
                     'capability_planning': {
                         'capability': {
-                            'runtime': {'recommended_autonomy_tier': 'supervised'}
+                            'runtime': {
+                                'recommended_autonomy_tier': 'supervised',
+                                'risk_budget_exceeded': True,
+                            }
                         }
                     }
                 }
@@ -149,3 +152,27 @@ def test_autonomy_decision_step_applies_capability_autonomy_ceiling_without_upgr
         )(),
     )
     assert unchanged == 'supervised'
+
+
+def test_autonomy_decision_step_does_not_apply_bootstrap_recommendation_without_budget_exhaustion() -> None:
+    effective = AutonomyDecisionStep._effective_autonomy_tier(
+        requested_tier='bounded_autonomy',
+        executable_action=type(
+            'Action',
+            (),
+            {
+                'payload': {
+                    'capability_planning': {
+                        'capability': {
+                            'runtime': {
+                                'recommended_autonomy_tier': 'supervised',
+                                'error_budget_exceeded': False,
+                                'risk_budget_exceeded': False,
+                            }
+                        }
+                    }
+                }
+            },
+        )(),
+    )
+    assert effective == 'bounded_autonomy'

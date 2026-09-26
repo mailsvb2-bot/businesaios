@@ -108,6 +108,14 @@ class AutonomyDecisionStep:
         capability = dict(planning.get("capability") or {})
         runtime = dict(capability.get("runtime") or {})
         patch = dict(planning.get("payload_patch") or {})
+        budget_exceeded = bool(
+            runtime.get("error_budget_exceeded")
+            or runtime.get("risk_budget_exceeded")
+            or patch.get("error_budget_exceeded")
+            or patch.get("risk_budget_exceeded")
+        )
+        if not budget_exceeded:
+            return requested
         recommended = str(
             runtime.get("recommended_autonomy_tier")
             or patch.get("recommended_autonomy_tier")
