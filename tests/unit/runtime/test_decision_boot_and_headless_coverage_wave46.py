@@ -214,6 +214,7 @@ def test_execute_once_preserves_every_request_field_and_bounds_steps():
     assert bounded.economy == request.economy
     assert bounded.meta == request.meta
     assert bounded.max_steps == 1
+    assert bounded.agent_id is None
 
 
 def test_headless_replay_restores_canonical_goal_id():
