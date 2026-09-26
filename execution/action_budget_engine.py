@@ -44,6 +44,8 @@ class ActionBudgetCost:
     irreversible_count: int
     budget_change_amount: float
     reasoning: tuple[str, ...] = ()
+    lead_count: int = 0
+    campaign_count: int = 0
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -54,6 +56,8 @@ class ActionBudgetCost:
             "irreversible_count": int(self.irreversible_count),
             "budget_change_amount": float(self.budget_change_amount),
             "reasoning": list(self.reasoning),
+            "lead_count": int(self.lead_count),
+            "campaign_count": int(self.campaign_count),
         }
 
 
@@ -67,6 +71,8 @@ class ActionBudgetSnapshot:
     budget_change_total: float = 0.0
     step_count: int = 0
     currency: str = "USD"
+    leads_total: int = 0
+    campaigns_total: int = 0
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -78,6 +84,8 @@ class ActionBudgetSnapshot:
             "budget_change_total": float(self.budget_change_total),
             "step_count": int(self.step_count),
             "currency": str(self.currency),
+            "leads_total": int(self.leads_total),
+            "campaigns_total": int(self.campaigns_total),
         }
 
 
@@ -119,6 +127,8 @@ class ActionBudgetEngine:
         publication_count = max(0, _safe_int(body.get("publication_count") or body.get("new_pages") or body.get("new_listings") or body.get("new_assets") or 0))
         irreversible_count = 0 if capability.reversible else 1
         budget_change_amount = max(0.0, _safe_float(body.get("budget_change_amount") or body.get("proposed_budget_delta") or body.get("daily_budget_delta") or 0.0))
+        lead_count = max(0, _safe_int(body.get("lead_count") or body.get("new_leads") or 0))
+        campaign_count = max(0, _safe_int(body.get("campaign_count") or body.get("new_campaigns") or 0))
 
         if explicit_cost > 0.0:
             reasons.append("explicit_cost")
@@ -144,7 +154,17 @@ class ActionBudgetEngine:
             baseline += float(budget_change_amount) * 0.02
             explicit_cost = baseline
 
-        return ActionBudgetCost(float(max(0.0, explicit_cost)), currency, int(outbound), int(publication_count), int(irreversible_count), float(budget_change_amount), tuple(reasons))
+        return ActionBudgetCost(
+            float(max(0.0, explicit_cost)),
+            currency,
+            int(outbound),
+            int(publication_count),
+            int(irreversible_count),
+            float(budget_change_amount),
+            tuple(reasons),
+            int(lead_count),
+            int(campaign_count),
+        )
 
     def snapshot_from_feedback(self, *, request: Any, previous_feedback: Mapping[str, Any] | None) -> ActionBudgetSnapshot:
         feedback = _safe_dict(previous_feedback)
@@ -160,6 +180,8 @@ class ActionBudgetEngine:
             budget_change_total=max(0.0, _safe_float(budget_state.get("budget_change_total"))),
             step_count=max(0, _safe_int(budget_state.get("step_count"))),
             currency=currency,
+            leads_total=max(0, _safe_int(budget_state.get("leads_total"))),
+            campaigns_total=max(0, _safe_int(budget_state.get("campaigns_total"))),
         )
 
     def evaluate(self, *, request: Any, action_type: str, payload: Mapping[str, Any] | None, previous_feedback: Mapping[str, Any] | None) -> ActionBudgetDecision:
@@ -188,6 +210,8 @@ class ActionBudgetEngine:
             budget_change_total=float(snapshot.budget_change_total + cost.budget_change_amount),
             step_count=int(snapshot.step_count + 1),
             currency=str(snapshot.currency or cost.currency or "USD"),
+            leads_total=int(snapshot.leads_total + cost.lead_count),
+            campaigns_total=int(snapshot.campaigns_total + cost.campaign_count),
         )
 
         violations: list[str] = []
