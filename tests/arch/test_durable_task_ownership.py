@@ -12,7 +12,17 @@ PRODUCTION_ROOTS = ("application", "runtime", "storage", "core", "adapters", "bi
 REGISTRY = Path("application/task/registry.py")
 FACTS = Path("application/task/facts.py")
 FACT_TYPES = {
-    "task.created", "task.started", "task.completed", "task.failed", "task.cancelled"
+    "task.created",
+    "task.ready",
+    "task.started",
+    "task.waiting",
+    "task.paused",
+    "task.blocked",
+    "task.succeeded",
+    "task.completed",
+    "task.failed",
+    "task.cancelled",
+    "task.compensating",
 }
 
 
