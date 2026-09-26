@@ -69,13 +69,14 @@ _TIER_POLICY: dict[str, dict[str, set[str]]] = {
             "marketplace_routing", "seo_publish", "profile_publish", "internal_execution", "unknown",
         },
     },
-    # DRAFT may prepare internal artifacts but cannot perform an external effect.
+    # DRAFT may prepare plans/artifacts upstream, but the execution gateway
+    # remains no-effect until a later approval/supervision level.
     "draft": {
-        "allowed": {"read_only", "internal_execution"},
+        "allowed": {"read_only"},
         "approval_required": set(),
         "forbidden": {
             "ads_write", "budget_change", "platform_listing_write", "communications_write",
-            "marketplace_routing", "seo_publish", "profile_publish", "unknown",
+            "marketplace_routing", "seo_publish", "profile_publish", "internal_execution", "unknown",
         },
     },
     # APPROVAL_REQUIRED makes effectful capabilities explicit human handoffs.

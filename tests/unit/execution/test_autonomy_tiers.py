@@ -7,9 +7,21 @@ from execution.headless_contract import GoalExecutionRequest
 
 
 def test_goal_execution_request_accepts_uppercase_canonical_and_legacy_tiers() -> None:
-    for tier in ("OBSERVE", "ADVISORY", "DRAFT", "APPROVAL_REQUIRED", "SUPERVISED", "AUTONOMOUS_BOUNDED", "bounded_autonomy", "full_autonomy"):
-        ok, issues = GoalExecutionRequest(goal="x", business_id="biz", autonomy_tier=tier).validate()
+    expected = {
+        "OBSERVE": "observe",
+        "ADVISORY": "advisory",
+        "DRAFT": "draft",
+        "APPROVAL_REQUIRED": "approval_required",
+        "SUPERVISED": "supervised",
+        "AUTONOMOUS_BOUNDED": "autonomous_bounded",
+        "bounded_autonomy": "autonomous_bounded",
+        "full_autonomy": "autonomous_bounded",
+    }
+    for tier, canonical in expected.items():
+        request = GoalExecutionRequest(goal="x", business_id="biz", autonomy_tier=tier)
+        ok, issues = request.validate()
         assert ok is True, (tier, issues)
+        assert request.autonomy_tier == canonical
 
 
 def test_goal_execution_request_validates_autonomy_tier() -> None:
@@ -55,11 +67,12 @@ def test_observe_and_advisory_never_authorize_effectful_actions() -> None:
         assert decision.blocked_by_policy is True
 
 
-def test_draft_allows_internal_preparation_but_blocks_external_effect() -> None:
+def test_draft_keeps_execution_gateway_no_effect() -> None:
     internal = evaluate_autonomy_tier(action_type="notify_owner", autonomy_tier="draft")
     external = evaluate_autonomy_tier(action_type="reply_to_inquiry", autonomy_tier="draft")
     assert internal.action_class == "internal_execution"
-    assert internal.allowed is True
+    assert internal.allowed is False
+    assert internal.blocked_by_policy is True
     assert external.allowed is False
     assert external.blocked_by_policy is True
 

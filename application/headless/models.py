@@ -3,7 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any
 
-from application.autonomy.autonomy_tiers import ALLOWED_AUTONOMY_TIERS
+from application.autonomy.autonomy_tiers import ALLOWED_AUTONOMY_TIERS, normalize_autonomy_tier
 
 CANON_HEADLESS_MODELS = True
 
@@ -46,6 +46,11 @@ class GoalExecutionRequest:
     autonomy_tier: str = 'supervised'
     approval_policy: dict[str, Any] = field(default_factory=dict)
     goal_id: str | None = None
+
+    def __post_init__(self) -> None:
+        raw = str(self.autonomy_tier or "").strip().lower()
+        if raw in ALLOWED_AUTONOMY_TIERS:
+            object.__setattr__(self, "autonomy_tier", normalize_autonomy_tier(raw))
 
     def validate(self) -> tuple[bool, tuple[str, ...]]:
         issues: list[str] = []
