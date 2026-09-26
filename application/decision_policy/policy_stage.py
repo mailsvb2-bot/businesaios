@@ -34,22 +34,35 @@ def _materialize_ranked(
     if isinstance(prototype, dict):
         return SimpleNamespace(action=str(action), payload=dict(payload), ranking=dict(ranking))
     try:
-        return type(prototype)(
+        output = type(prototype)(
             action=str(action),
             payload=dict(payload),
             ranking=dict(ranking),
-            _decision_context=dict(decision_context),
         )
     except TypeError:
         try:
             output = type(prototype)(action=str(action), payload=dict(payload))
         except TypeError:
-            return SimpleNamespace(action=str(action), payload=dict(payload), ranking=dict(ranking))
+            return SimpleNamespace(
+                action=str(action),
+                payload=dict(payload),
+                ranking=dict(ranking),
+                _decision_context=dict(decision_context),
+            )
         try:
             setattr(output, "ranking", dict(ranking))
-            return output
         except (AttributeError, TypeError):
-            return SimpleNamespace(action=str(action), payload=dict(payload), ranking=dict(ranking))
+            return SimpleNamespace(
+                action=str(action),
+                payload=dict(payload),
+                ranking=dict(ranking),
+                _decision_context=dict(decision_context),
+            )
+    try:
+        object.__setattr__(output, "_decision_context", dict(decision_context))
+    except (AttributeError, TypeError):
+        pass
+    return output
 
 
 def propose_action(*, policy: Any, state: Any, trace: Any) -> Any:
