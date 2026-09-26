@@ -56,3 +56,22 @@ def test_blast_radius_guard_enforces_phase7_campaigns_per_day_budget() -> None:
     )
     assert decision.allowed is False
     assert "autonomy_max_campaigns_per_day" in decision.details["violated_limits"]
+
+
+def test_blast_radius_guard_enforces_phase7_messages_per_day_budget() -> None:
+    guard = BlastRadiusGuard()
+    request = GoalExecutionRequest(
+        goal="grow",
+        business_id="b1",
+        autonomy_tier="bounded_autonomy",
+    )
+    decision = guard.evaluate(
+        request=request,
+        action_type="send_message@v1",
+        payload={
+            "outbound_count": 1,
+            "persistent_counters": {"outbound_total": 100},
+        },
+    )
+    assert decision.allowed is False
+    assert "autonomy_max_messages_per_day" in decision.details["violated_limits"]

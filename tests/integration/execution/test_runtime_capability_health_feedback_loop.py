@@ -75,3 +75,67 @@ def test_capability_health_runtime_snapshot_reports_health_fields(tmp_path) -> N
     assert "health_score" in snapshot["notify_owner"]
     assert "verification_rate" in snapshot["notify_owner"]
     assert "success_rate" in snapshot["notify_owner"]
+
+
+def test_persisted_risk_budget_forces_selected_capability_to_supervised(tmp_path) -> None:
+    from application.autonomy.autonomy_decision_step import AutonomyDecisionStep
+    from application.capability.capability_health_policy import CapabilityHealthPolicy
+    from application.capability.capability_health_registry import CapabilityHealthRegistry
+    from application.capability.capability_matrix import CapabilityMatrix
+
+    store = FileCapabilityHealthStore(root_dir=tmp_path / "cap_health")
+    registry = CapabilityHealthRegistry(
+        store=store,
+        matrix=CapabilityMatrix(),
+        policy=CapabilityHealthPolicy(risk_budget_limit=1.0),
+    )
+    registry.update_after_feedback(
+        tenant_id="tenant-1",
+        action_type="launch_campaign",
+        feedback={"executed": True, "verified": True, "risk_score": 0.6},
+    )
+    registry.update_after_feedback(
+        tenant_id="tenant-1",
+        action_type="launch_campaign",
+        feedback={"executed": True, "verified": True, "risk_score": 0.5},
+    )
+
+    planner = CapabilityAwarePlanner(
+        router=__import__(
+            "application.capability.capability_router",
+            fromlist=["ExecutionCapabilityRouter"],
+        ).ExecutionCapabilityRouter(
+            matrix=CapabilityMatrix(),
+            health_registry=registry,
+        )
+    )
+
+    class _State:
+        meta = {}
+
+    class _Request:
+        tenant_id = "tenant-1"
+        autonomy_tier = "full_autonomy"
+        approval_policy = {}
+        economy = {}
+        constraints = {}
+        meta = {}
+
+    planned = planner.plan_action(
+        request=_Request(),
+        state=_State(),
+        action_type="launch_campaign",
+        payload={"estimated_cost": 1.0},
+    )
+    assert planned.capability["runtime"]["risk_budget_exceeded"] is True
+    assert planned.capability["runtime"]["recommended_autonomy_tier"] == "supervised"
+
+    effective = AutonomyDecisionStep._effective_autonomy_tier(
+        requested_tier="full_autonomy",
+        executable_action=type(
+            "Action",
+            (),
+            {"payload": {"capability_planning": planned.to_dict()}},
+        )(),
+    )
+    assert effective == "supervised"

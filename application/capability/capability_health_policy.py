@@ -194,7 +194,12 @@ class CapabilityHealthPolicy:
             block_rate=block_rate,
             health_score=health_score,
             health_tier=tier,
-            degraded=tier == 'degraded' or staleness_state in {'stale', 'cooling'},
+            degraded=(
+                tier == 'degraded'
+                or staleness_state in {'stale', 'cooling'}
+                or error_budget_exceeded
+                or risk_budget_exceeded
+            ),
             routing_state=routing_state,
             confidence_score=confidence_score,
             staleness_state=staleness_state,

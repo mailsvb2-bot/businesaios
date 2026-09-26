@@ -129,6 +129,12 @@ class RuntimeCapabilitySnapshot:
     observation_count: int = 0
     first_observed_at: str = ''
     last_observed_at: str = ''
+    error_budget_used: float = 0.0
+    error_budget_limit: float = 0.0
+    error_budget_exceeded: bool = False
+    accumulated_risk: float = 0.0
+    risk_budget_limit: float = 0.0
+    risk_budget_exceeded: bool = False
     metadata: dict[str, Any] = field(default_factory=dict)
 
     @classmethod
@@ -143,7 +149,16 @@ class RuntimeCapabilitySnapshot:
             healthy = health_score >= 0.80 and staleness_state != 'stale'
         else:
             healthy = _safe_bool(healthy_raw, default=health_score >= 0.80)
-        degraded = _safe_bool(raw.get('degraded'), default=(enabled and not healthy and health_score >= 0.35))
+        budget_exceeded = bool(
+            raw.get('error_budget_exceeded', False)
+            or raw.get('risk_budget_exceeded', False)
+        )
+        degraded = _safe_bool(
+            raw.get('degraded'),
+            default=((enabled and not healthy and health_score >= 0.35) or budget_exceeded),
+        )
+        if budget_exceeded:
+            degraded = True
         health_tier = _text(raw.get('health_tier') or '')
         if not health_tier or (healthy and health_tier in {'unknown', 'unhealthy'}) or (not healthy and health_tier == 'healthy'):
             if not enabled:
@@ -155,7 +170,11 @@ class RuntimeCapabilitySnapshot:
             else:
                 health_tier = 'unhealthy'
         routing_state = _text(raw.get('routing_state') or '')
-        if not routing_state or (healthy and routing_state in {'observe', 'fallback_preferred'}) or (not enabled and routing_state != 'disabled'):
+        if (
+            not routing_state
+            or (healthy and routing_state in {'observe', 'fallback_preferred'} and not budget_exceeded)
+            or (not enabled and routing_state != 'disabled')
+        ):
             if not enabled:
                 routing_state = 'disabled'
             elif healthy:
@@ -175,8 +194,11 @@ class RuntimeCapabilitySnapshot:
         elif evidence_state == 'unknown' and observation_count == 0 and healthy:
             evidence_state = 'insufficient'
         recommended_autonomy_tier = _text(raw.get('recommended_autonomy_tier') or 'supervised') or 'supervised'
-        if healthy and recommended_autonomy_tier == 'supervised':
+        if healthy and recommended_autonomy_tier == 'supervised' and not budget_exceeded:
             recommended_autonomy_tier = 'bounded_autonomy'
+        if budget_exceeded:
+            recommended_autonomy_tier = 'supervised'
+            routing_state = 'fallback_preferred'
         if evidence_state in {'unknown', 'insufficient'} and recommended_autonomy_tier == 'full_autonomy':
             recommended_autonomy_tier = 'bounded_autonomy'
         return cls(
@@ -205,7 +227,13 @@ class RuntimeCapabilitySnapshot:
             observation_count=observation_count,
             first_observed_at=_text(raw.get('first_observed_at')),
             last_observed_at=_text(raw.get('last_observed_at')),
-            metadata={k: v for k, v in raw.items() if k not in {'enabled','healthy','degraded','health_score','health_tier','routing_state','verification_rate','success_rate','estimated_cost','base_cost','base_latency_ms','base_proofability','source','updated_at','last_feedback_reason','confidence_score','staleness_state','evidence_state','freshness_score','recommended_autonomy_tier','observation_count','first_observed_at','last_observed_at'}},
+            error_budget_used=max(0.0, _safe_float(raw.get('error_budget_used'))),
+            error_budget_limit=max(0.0, _safe_float(raw.get('error_budget_limit'))),
+            error_budget_exceeded=bool(raw.get('error_budget_exceeded')),
+            accumulated_risk=max(0.0, _safe_float(raw.get('accumulated_risk'))),
+            risk_budget_limit=max(0.0, _safe_float(raw.get('risk_budget_limit'))),
+            risk_budget_exceeded=bool(raw.get('risk_budget_exceeded')),
+            metadata={k: v for k, v in raw.items() if k not in {'enabled','healthy','degraded','health_score','health_tier','routing_state','verification_rate','success_rate','estimated_cost','base_cost','base_latency_ms','base_proofability','source','updated_at','last_feedback_reason','confidence_score','staleness_state','evidence_state','freshness_score','recommended_autonomy_tier','observation_count','first_observed_at','last_observed_at','error_budget_used','error_budget_limit','error_budget_exceeded','accumulated_risk','risk_budget_limit','risk_budget_exceeded'}},
         )
 
     def to_dict(self) -> dict[str, Any]:
@@ -235,6 +263,12 @@ class RuntimeCapabilitySnapshot:
             'observation_count': self.observation_count,
             'first_observed_at': self.first_observed_at,
             'last_observed_at': self.last_observed_at,
+            'error_budget_used': self.error_budget_used,
+            'error_budget_limit': self.error_budget_limit,
+            'error_budget_exceeded': self.error_budget_exceeded,
+            'accumulated_risk': self.accumulated_risk,
+            'risk_budget_limit': self.risk_budget_limit,
+            'risk_budget_exceeded': self.risk_budget_exceeded,
             'metadata': dict(self.metadata),
         }
 

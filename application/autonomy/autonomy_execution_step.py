@@ -1,7 +1,8 @@
 from __future__ import annotations
 
 from collections.abc import Mapping
-from dataclasses import replace
+from dataclasses import is_dataclass, replace
+from types import SimpleNamespace
 from typing import Any
 
 from application.headless.execution_gateway import execute_headless_envelope
@@ -74,6 +75,16 @@ class AutonomyExecutionStep:
     ) -> ExecutionResult:
         capability_plan_payload = executable_action.payload.get("capability_planning") if isinstance(executable_action.payload, dict) else None
         capability_plan = dict(capability_plan_payload or {})
+        effective_request = request
+        effective_tier = str(getattr(autonomy_decision, "tier", "") or "").strip()
+        requested_tier = str(getattr(request, "autonomy_tier", "supervised") or "supervised").strip()
+        if effective_tier and effective_tier != requested_tier:
+            if is_dataclass(request):
+                effective_request = replace(request, autonomy_tier=effective_tier)
+            else:
+                values = dict(getattr(request, "__dict__", {}) or {})
+                values["autonomy_tier"] = effective_tier
+                effective_request = SimpleNamespace(**values)
 
         if autonomy_decision.blocked_by_policy or autonomy_decision.approval_required:
             error_code = "policy_blocked" if autonomy_decision.blocked_by_policy else "approval_required"
@@ -154,7 +165,7 @@ class AutonomyExecutionStep:
 
         previous_feedback = dict((request.meta or {}).get("previous_feedback") or {})
         safety_verdict = self._contract._autonomy_safety_bundle.evaluate_pre_execution(
-            request=request,
+            request=effective_request,
             action_type=executable_action.action_type,
             payload=dict(executable_action.payload or {}),
             previous_feedback=previous_feedback,
@@ -163,11 +174,11 @@ class AutonomyExecutionStep:
         )
         executable_action.payload["autonomy_safety"] = safety_verdict.to_dict()
         executable_action.payload["autonomy_policy_snapshot"] = self._contract._autonomy_safety_bundle.build_policy_snapshot(
-            request=request,
+            request=effective_request,
             safety_verdict=safety_verdict.to_dict(),
         )
         audit_record = self._contract._autonomy_safety_bundle.build_audit_record(
-            request=request,
+            request=effective_request,
             verdict=safety_verdict.to_dict(),
             runtime_verdict_matched=None,
         )
@@ -192,7 +203,7 @@ class AutonomyExecutionStep:
             )
 
         envelope = self._finalize_execution_envelope(
-            request=request,
+            request=effective_request,
             original_envelope=envelope,
             executable_action=executable_action,
             autonomy_decision=autonomy_decision,

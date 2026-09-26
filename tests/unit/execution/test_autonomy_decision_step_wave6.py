@@ -111,3 +111,41 @@ def test_autonomy_decision_step_honors_capability_fallback_action_even_without_r
     executable_action = step._project_executable_action(request=_Request(autonomy_tier='bounded_autonomy'), state=_WorldState(), envelope=_Envelope())
     assert executable_action.action_type == 'notify_owner'
     assert executable_action.payload['execution_verdict']['operator_required'] is True
+
+
+def test_autonomy_decision_step_applies_capability_autonomy_ceiling_without_upgrade() -> None:
+    lowered = AutonomyDecisionStep._effective_autonomy_tier(
+        requested_tier='full_autonomy',
+        executable_action=type(
+            'Action',
+            (),
+            {
+                'payload': {
+                    'capability_planning': {
+                        'capability': {
+                            'runtime': {'recommended_autonomy_tier': 'supervised'}
+                        }
+                    }
+                }
+            },
+        )(),
+    )
+    assert lowered == 'supervised'
+
+    unchanged = AutonomyDecisionStep._effective_autonomy_tier(
+        requested_tier='supervised',
+        executable_action=type(
+            'Action',
+            (),
+            {
+                'payload': {
+                    'capability_planning': {
+                        'capability': {
+                            'runtime': {'recommended_autonomy_tier': 'full_autonomy'}
+                        }
+                    }
+                }
+            },
+        )(),
+    )
+    assert unchanged == 'supervised'

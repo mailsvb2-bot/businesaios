@@ -3,7 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any
 
-from application.autonomy.autonomy_tiers import evaluate_autonomy_transition
+from application.autonomy.autonomy_tiers import ALLOWED_AUTONOMY_TIERS, evaluate_autonomy_transition
 from application.decision_runtime.emission import project_decision_proposed_event
 from application.headless.decision_gateway import issue_headless_decision
 from contracts import executable_action as executable_action_contract
@@ -81,10 +81,14 @@ class AutonomyDecisionStep:
         executable_action = self._project_executable_action(
             request=request, state=state, envelope=envelope, action_intent=action_intent,
         )
+        effective_autonomy_tier = self._effective_autonomy_tier(
+            requested_tier=str(request.autonomy_tier or "supervised"),
+            executable_action=executable_action,
+        )
         autonomy_decision = evaluate_autonomy_transition(
             decided_action_type=action_intent.action_type,
             executable_action_type=str(executable_action.action_type),
-            autonomy_tier=request.autonomy_tier,
+            autonomy_tier=effective_autonomy_tier,
             approval_policy=dict(request.approval_policy or {}),
         ).bind_intent(action_intent)
         return DecisionStepArtifacts(
@@ -93,6 +97,27 @@ class AutonomyDecisionStep:
         )
 
     decide = evaluate
+
+    @staticmethod
+    def _effective_autonomy_tier(*, requested_tier: str, executable_action: Any) -> str:
+        requested = str(requested_tier or "supervised").strip() or "supervised"
+        if requested not in ALLOWED_AUTONOMY_TIERS:
+            requested = "supervised"
+        payload = getattr(executable_action, "payload", {}) or {}
+        planning = dict(payload.get("capability_planning") or {}) if isinstance(payload, dict) else {}
+        capability = dict(planning.get("capability") or {})
+        runtime = dict(capability.get("runtime") or {})
+        patch = dict(planning.get("payload_patch") or {})
+        recommended = str(
+            runtime.get("recommended_autonomy_tier")
+            or patch.get("recommended_autonomy_tier")
+            or ""
+        ).strip()
+        if recommended not in ALLOWED_AUTONOMY_TIERS:
+            return requested
+        requested_rank = ALLOWED_AUTONOMY_TIERS.index(requested)
+        recommended_rank = ALLOWED_AUTONOMY_TIERS.index(recommended)
+        return recommended if recommended_rank < requested_rank else requested
 
     @staticmethod
     def _assert_goal_identity(*, request: Any, action_intent: Any) -> None:
