@@ -7,8 +7,8 @@ from application.ontology import EventFactLifecycleWriter
 from application.task.facts import (
     TASK_BLOCKED,
     TASK_CANCELLED,
-    TASK_COMPLETED,
     TASK_COMPENSATING,
+    TASK_COMPLETED,
     TASK_CREATED,
     TASK_FAILED,
     TASK_PAUSED,
