@@ -35,6 +35,7 @@ SHARED_EVENT_FACT_OWNERS = (
     Path("application/document/registry.py"),
 )
 EXTERNAL_FACT_INGRESS = Path("application/business_autonomy/evidence_projection.py")
+AGENT_IDENTITY_EVENT_FACT_OWNER = Path("application/business_autonomy/registry.py")
 DIRECT_BUSINESS_FACT_MUTATION_OWNERS = (OWNER, CUSTOMER_DIRECT_OWNER)
 SPECIAL_EVENT_STORE_WRITER_MODULES = (
     "crm.customer_registry",
@@ -94,8 +95,19 @@ def test_ontology_event_fact_mutation_owner_marker_is_unique() -> None:
 
 def test_shared_event_fact_writer_consumers_are_review_locked() -> None:
     assert _constructor_consumers("EventFactLifecycleWriter") == sorted(
-        (*SHARED_EVENT_FACT_OWNERS, EXTERNAL_FACT_INGRESS)
+        (
+            *SHARED_EVENT_FACT_OWNERS,
+            EXTERNAL_FACT_INGRESS,
+            AGENT_IDENTITY_EVENT_FACT_OWNER,
+        )
     )
+
+
+def test_agent_identity_event_fact_owner_is_review_locked() -> None:
+    source = (ROOT / AGENT_IDENTITY_EVENT_FACT_OWNER).read_text(encoding="utf-8")
+    assert "CANON_AGENT_IDENTITY_LIFECYCLE_OWNER = True" in source
+    assert "EventFactLifecycleWriter" in source
+    assert "BusinessFactV1(" not in source
 
 
 def test_event_store_ontology_writers_are_review_locked() -> None:
