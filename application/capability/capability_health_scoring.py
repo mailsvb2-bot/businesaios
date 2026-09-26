@@ -12,7 +12,7 @@ from application.capability.capability_health_policy import CapabilityHealthPoli
 from application.capability.capability_matrix import CapabilityMatrix
 
 CANON_CAPABILITY_HEALTH_SCORING = True
-CAPABILITY_HEALTH_SCHEMA_VERSION = 2
+CAPABILITY_HEALTH_SCHEMA_VERSION = 3
 
 
 
@@ -57,6 +57,7 @@ class CapabilityHealthCounters:
     transient_failures: int = 0
     terminal_failures: int = 0
     blocked: int = 0
+    accumulated_risk: float = 0.0
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)
@@ -70,6 +71,7 @@ class CapabilityHealthCounters:
             transient_failures=max(0, _safe_int(payload.get('transient_failures'))),
             terminal_failures=max(0, _safe_int(payload.get('terminal_failures'))),
             blocked=max(0, _safe_int(payload.get('blocked'))),
+            accumulated_risk=max(0.0, _safe_float(payload.get('accumulated_risk'))),
         )
 
 
@@ -97,6 +99,12 @@ class CapabilityHealthSnapshot:
     observation_count: int = 0
     first_observed_at: str = ''
     last_observed_at: str = ''
+    error_budget_used: float = 0.0
+    error_budget_limit: float = 0.0
+    error_budget_exceeded: bool = False
+    accumulated_risk: float = 0.0
+    risk_budget_limit: float = 0.0
+    risk_budget_exceeded: bool = False
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -122,6 +130,12 @@ class CapabilityHealthSnapshot:
             'observation_count': int(self.observation_count),
             'first_observed_at': str(self.first_observed_at),
             'last_observed_at': str(self.last_observed_at),
+            'error_budget_used': float(self.error_budget_used),
+            'error_budget_limit': float(self.error_budget_limit),
+            'error_budget_exceeded': bool(self.error_budget_exceeded),
+            'accumulated_risk': float(self.accumulated_risk),
+            'risk_budget_limit': float(self.risk_budget_limit),
+            'risk_budget_exceeded': bool(self.risk_budget_exceeded),
         }
 
     @classmethod
@@ -149,6 +163,12 @@ class CapabilityHealthSnapshot:
             observation_count=max(0, _safe_int(payload.get('observation_count'))),
             first_observed_at=_text(payload.get('first_observed_at')),
             last_observed_at=_text(payload.get('last_observed_at')),
+            error_budget_used=max(0.0, _safe_float(payload.get('error_budget_used'))),
+            error_budget_limit=max(0.0, _safe_float(payload.get('error_budget_limit'))),
+            error_budget_exceeded=bool(payload.get('error_budget_exceeded')),
+            accumulated_risk=max(0.0, _safe_float(payload.get('accumulated_risk'))),
+            risk_budget_limit=max(0.0, _safe_float(payload.get('risk_budget_limit'))),
+            risk_budget_exceeded=bool(payload.get('risk_budget_exceeded')),
         )
 
 
@@ -227,6 +247,12 @@ class CapabilityHealthScoringService:
             'observation_count': snapshot.observation_count,
             'first_observed_at': snapshot.first_observed_at,
             'last_observed_at': snapshot.last_observed_at,
+            'error_budget_used': snapshot.error_budget_used,
+            'error_budget_limit': snapshot.error_budget_limit,
+            'error_budget_exceeded': snapshot.error_budget_exceeded,
+            'accumulated_risk': snapshot.accumulated_risk,
+            'risk_budget_limit': snapshot.risk_budget_limit,
+            'risk_budget_exceeded': snapshot.risk_budget_exceeded,
             'capability_key': capability_key,
             'source': 'capability_health_scoring',
         }
@@ -277,6 +303,10 @@ class CapabilityHealthScoringService:
         verified = bool(payload.get('verified'))
         transient = 'transient' in retry_reason or 'rate_limit' in retry_reason or 'retry' in retry_reason
         terminal_failure = bool(not executed and not blocked and not transient)
+        explicit_risk = payload.get('risk_score')
+        if explicit_risk is None:
+            explicit_risk = payload.get('risk_penalty')
+        risk_delta = max(0.0, min(1.0, _safe_float(explicit_risk))) if explicit_risk is not None else 0.0
         observed_at = _text(payload.get('updated_at') or payload.get('finished_at') or payload.get('recorded_at') or current.updated_at)
         next_counters = CapabilityHealthCounters(
             attempts=counters.attempts + 1,
@@ -285,6 +315,7 @@ class CapabilityHealthScoringService:
             transient_failures=counters.transient_failures + int(transient),
             terminal_failures=counters.terminal_failures + int(terminal_failure),
             blocked=counters.blocked + int(blocked),
+            accumulated_risk=float(counters.accumulated_risk + risk_delta),
         )
         policy_view = self._policy.build_view(counters=next_counters.to_dict(), updated_at=observed_at or current.updated_at)
         first_observed_at = current.first_observed_at or observed_at
@@ -311,6 +342,12 @@ class CapabilityHealthScoringService:
             observation_count=current.observation_count + 1,
             first_observed_at=first_observed_at,
             last_observed_at=observed_at or current.last_observed_at,
+            error_budget_used=policy_view.error_budget_used,
+            error_budget_limit=policy_view.error_budget_limit,
+            error_budget_exceeded=policy_view.error_budget_exceeded,
+            accumulated_risk=policy_view.accumulated_risk,
+            risk_budget_limit=policy_view.risk_budget_limit,
+            risk_budget_exceeded=policy_view.risk_budget_exceeded,
         )
         self._store.save(next_snapshot)
         return next_snapshot.to_dict()
