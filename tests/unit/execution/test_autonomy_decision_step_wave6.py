@@ -175,4 +175,4 @@ def test_autonomy_decision_step_does_not_apply_bootstrap_recommendation_without_
             },
         )(),
     )
-    assert effective == 'bounded_autonomy'
+    assert effective == 'autonomous_bounded'

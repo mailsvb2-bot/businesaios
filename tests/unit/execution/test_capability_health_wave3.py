@@ -15,7 +15,7 @@ def test_capability_policy_marks_stale_and_low_confidence() -> None:
     )
     assert view.staleness_state == 'stale'
     assert view.evidence_state == 'insufficient'
-    assert view.recommended_autonomy_tier == 'bounded_autonomy'
+    assert view.recommended_autonomy_tier == 'autonomous_bounded'
 
 
 def test_capability_registry_exposes_confidence_and_evidence_state(tmp_path) -> None:
@@ -29,7 +29,7 @@ def test_capability_registry_exposes_confidence_and_evidence_state(tmp_path) -> 
     payload = registry.runtime_payload_for_action(tenant_id='tenant-1', action_type='notify_owner')
     assert payload['confidence_score'] > 0.0
     assert payload['evidence_state'] in {'insufficient', 'sufficient'}
-    assert payload['recommended_autonomy_tier'] in {'bounded_autonomy', 'full_autonomy', 'supervised'}
+    assert payload['recommended_autonomy_tier'] in {'autonomous_bounded', 'supervised'}
 
 
 
@@ -47,7 +47,7 @@ def test_runtime_snapshot_keeps_bootstrap_evidence_below_full_autonomy() -> None
         },
     ).runtime
     assert snapshot.evidence_state == 'insufficient'
-    assert snapshot.recommended_autonomy_tier == 'bounded_autonomy'
+    assert snapshot.recommended_autonomy_tier == 'autonomous_bounded'
 
 
 def test_capability_policy_error_budget_forces_supervised_autonomy() -> None:

@@ -4,6 +4,7 @@ from collections.abc import Mapping
 from dataclasses import dataclass
 from typing import Any
 
+from application.autonomy.autonomy_tiers import normalize_autonomy_tier
 from application.capability.capability_diagnostics import CapabilityDiagnosticsBuilder
 from application.capability.capability_execution_verdict import CapabilityExecutionVerdictBuilder
 from application.capability.capability_fallback_contract import CapabilityFallbackDecision
@@ -177,8 +178,6 @@ class ExecutionCapabilityRouter:
             return None
         if runtime.staleness_state == policy.stale_state and capability_key != policy.internal_execution_capability_key:
             return CapabilityFallbackDecision(kind=policy.degraded_execution_kind, public_reason='stale_evidence_notify_owner', internal_reason='stale_evidence', target_action_type=policy.notify_owner_action_type)
-        if runtime.evidence_state in {'unknown', 'insufficient'} and autonomy_tier == policy.full_autonomy_tier and capability_key != policy.internal_execution_capability_key:
-            return CapabilityFallbackDecision(kind=policy.operator_handoff_kind, public_reason='insufficient_evidence_notify_owner', internal_reason='insufficient_evidence_for_full_autonomy', target_action_type=policy.notify_owner_action_type)
         if routing_reason == 'route_disabled' and capability_key == policy.communications_capability_key:
             return CapabilityFallbackDecision(kind=policy.operator_handoff_kind, public_reason='capability_fallback_notify_owner', internal_reason='communications_disabled')
         if routing_reason == 'route_unhealthy':
@@ -299,7 +298,7 @@ class ExecutionCapabilityRouter:
         record = self._stabilize_runtime(self._materialize_record(request=request, state=state, action_type=action_type))
         descriptor = record.descriptor
         runtime = record.runtime
-        autonomy_tier = _text(getattr(request, 'autonomy_tier', 'supervised')) or 'supervised'
+        autonomy_tier = normalize_autonomy_tier(getattr(request, 'autonomy_tier', 'supervised'))
 
         if not descriptor.decisionable:
             return self._blocked(record=record, reason='action_not_decisionable')
@@ -317,18 +316,6 @@ class ExecutionCapabilityRouter:
             if fallback is not None:
                 return self._fallback_action(record=record, payload_dict=payload_dict, fallback=fallback, routing_explanation={'reason': 'route_disabled'}, routing_scores={})
             return self._blocked(record=record, reason='runtime_capability_disabled', extra_payload_patch={'runtime_capability': runtime.to_dict()})
-
-        if runtime.evidence_state in {'unknown', 'insufficient'} and autonomy_tier == 'full_autonomy' and descriptor.capability_key != 'internal_execution':
-            verdict = self._build_execution_verdict(request=request, action_type=record.action_type, payload_dict=payload_dict, capability_allowed=False, policy_verdict=policy_verdict)
-            return self._blocked(
-                record=record,
-                reason='insufficient_evidence_for_full_autonomy',
-                extra_payload_patch={'runtime_capability': runtime.to_dict(), 'recommended_autonomy_tier': runtime.recommended_autonomy_tier, 'execution_verdict': verdict},
-            )
-
-        if not descriptor.prod_ready and autonomy_tier == 'full_autonomy':
-            verdict = self._build_execution_verdict(request=request, action_type=record.action_type, payload_dict=payload_dict, capability_allowed=False, policy_verdict=policy_verdict)
-            return self._blocked(record=record, reason='non_prod_ready_under_full_autonomy', extra_payload_patch={'prod_ready_required': True, 'execution_verdict': verdict})
 
         fallback = self._fallback_decision_for(record, '', autonomy_tier=autonomy_tier)
         execution_verdict = self._build_execution_verdict(request=request, action_type=record.action_type, payload_dict=payload_dict, capability_allowed=True, fallback=fallback, policy_verdict=policy_verdict)

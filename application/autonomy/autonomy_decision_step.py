@@ -3,7 +3,11 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any
 
-from application.autonomy.autonomy_tiers import ALLOWED_AUTONOMY_TIERS, evaluate_autonomy_transition
+from application.autonomy.autonomy_tiers import (
+    autonomy_tier_rank,
+    evaluate_autonomy_transition,
+    normalize_autonomy_tier,
+)
 from application.decision_runtime.emission import project_decision_proposed_event
 from application.headless.decision_gateway import issue_headless_decision
 from contracts import executable_action as executable_action_contract
@@ -100,9 +104,7 @@ class AutonomyDecisionStep:
 
     @staticmethod
     def _effective_autonomy_tier(*, requested_tier: str, executable_action: Any) -> str:
-        requested = str(requested_tier or "supervised").strip() or "supervised"
-        if requested not in ALLOWED_AUTONOMY_TIERS:
-            requested = "supervised"
+        requested = normalize_autonomy_tier(requested_tier)
         payload = getattr(executable_action, "payload", {}) or {}
         planning = dict(payload.get("capability_planning") or {}) if isinstance(payload, dict) else {}
         capability = dict(planning.get("capability") or {})
@@ -121,11 +123,8 @@ class AutonomyDecisionStep:
             or patch.get("recommended_autonomy_tier")
             or ""
         ).strip()
-        if recommended not in ALLOWED_AUTONOMY_TIERS:
-            return requested
-        requested_rank = ALLOWED_AUTONOMY_TIERS.index(requested)
-        recommended_rank = ALLOWED_AUTONOMY_TIERS.index(recommended)
-        return recommended if recommended_rank < requested_rank else requested
+        recommended = normalize_autonomy_tier(recommended, default=requested)
+        return recommended if autonomy_tier_rank(recommended) < autonomy_tier_rank(requested) else requested
 
     @staticmethod
     def _assert_goal_identity(*, request: Any, action_intent: Any) -> None:

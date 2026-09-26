@@ -4,6 +4,7 @@ from collections.abc import Iterable, Mapping
 from dataclasses import dataclass, field
 from typing import Any
 
+from application.autonomy.autonomy_tiers import normalize_autonomy_tier
 from application.capability.action_capability_matrix import (
     ActionCapability,
     build_action_capability_matrix,
@@ -193,14 +194,14 @@ class RuntimeCapabilitySnapshot:
             evidence_state = 'sufficient'
         elif evidence_state == 'unknown' and observation_count == 0 and healthy:
             evidence_state = 'insufficient'
-        recommended_autonomy_tier = _text(raw.get('recommended_autonomy_tier') or 'supervised') or 'supervised'
+        recommended_autonomy_tier = normalize_autonomy_tier(raw.get('recommended_autonomy_tier') or 'supervised')
         if healthy and recommended_autonomy_tier == 'supervised' and not budget_exceeded:
-            recommended_autonomy_tier = 'bounded_autonomy'
+            recommended_autonomy_tier = 'autonomous_bounded'
         if budget_exceeded:
             recommended_autonomy_tier = 'supervised'
             routing_state = 'fallback_preferred'
-        if evidence_state in {'unknown', 'insufficient'} and recommended_autonomy_tier == 'full_autonomy':
-            recommended_autonomy_tier = 'bounded_autonomy'
+        if evidence_state in {'unknown', 'insufficient'} and recommended_autonomy_tier == 'autonomous_bounded':
+            recommended_autonomy_tier = 'autonomous_bounded'
         return cls(
             action_type=_text(action_type),
             capability_key=_text(capability_key),

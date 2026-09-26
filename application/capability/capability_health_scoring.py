@@ -8,6 +8,7 @@ from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import Any
 
+from application.autonomy.autonomy_tiers import normalize_autonomy_tier
 from application.capability.capability_health_policy import CapabilityHealthPolicy
 from application.capability.capability_matrix import CapabilityMatrix
 
@@ -159,7 +160,7 @@ class CapabilityHealthSnapshot:
             staleness_state=_text(payload.get('staleness_state') or 'unknown') or 'unknown',
             evidence_state=_text(payload.get('evidence_state') or 'unknown') or 'unknown',
             freshness_score=max(0.0, min(1.0, _safe_float(payload.get('freshness_score')))),
-            recommended_autonomy_tier=_text(payload.get('recommended_autonomy_tier') or 'supervised') or 'supervised',
+            recommended_autonomy_tier=normalize_autonomy_tier(payload.get('recommended_autonomy_tier') or 'supervised'),
             observation_count=max(0, _safe_int(payload.get('observation_count'))),
             first_observed_at=_text(payload.get('first_observed_at')),
             last_observed_at=_text(payload.get('last_observed_at')),

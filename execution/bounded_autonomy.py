@@ -4,6 +4,7 @@ from dataclasses import dataclass
 from typing import Any
 from collections.abc import Mapping
 
+from execution.autonomy_tiers import normalize_autonomy_tier
 from execution.action_budget_engine import ActionBudgetDecision, ActionBudgetEngine
 from execution.action_catalog import classify_action_type, normalize_action_type
 
@@ -37,41 +38,35 @@ def _text(value: object, *, default: str = "") -> str:
 
 
 _DEFAULT_LIMITS: dict[str, dict[str, float | int]] = {
+    "observe": {
+        "max_step_cost": 0.0, "max_run_cost": 0.0, "max_outbound_total": 0,
+        "max_publications_total": 0, "max_irreversible_total": 0,
+        "max_budget_change_total": 0.0, "max_steps_per_run": 0,
+    },
     "advisory": {
-        "max_step_cost": 0.0,
-        "max_run_cost": 0.0,
-        "max_outbound_total": 0,
-        "max_publications_total": 0,
-        "max_irreversible_total": 0,
-        "max_budget_change_total": 0.0,
-        "max_steps_per_run": 0,
+        "max_step_cost": 0.0, "max_run_cost": 0.0, "max_outbound_total": 0,
+        "max_publications_total": 0, "max_irreversible_total": 0,
+        "max_budget_change_total": 0.0, "max_steps_per_run": 0,
+    },
+    "draft": {
+        "max_step_cost": 0.0, "max_run_cost": 0.0, "max_outbound_total": 0,
+        "max_publications_total": 0, "max_irreversible_total": 0,
+        "max_budget_change_total": 0.0, "max_steps_per_run": 3,
+    },
+    "approval_required": {
+        "max_step_cost": 10.0, "max_run_cost": 50.0, "max_outbound_total": 10,
+        "max_publications_total": 2, "max_irreversible_total": 1,
+        "max_budget_change_total": 25.0, "max_steps_per_run": 5,
     },
     "supervised": {
-        "max_step_cost": 10.0,
-        "max_run_cost": 50.0,
-        "max_outbound_total": 10,
-        "max_publications_total": 2,
-        "max_irreversible_total": 1,
-        "max_budget_change_total": 25.0,
-        "max_steps_per_run": 5,
+        "max_step_cost": 10.0, "max_run_cost": 50.0, "max_outbound_total": 10,
+        "max_publications_total": 2, "max_irreversible_total": 1,
+        "max_budget_change_total": 25.0, "max_steps_per_run": 5,
     },
-    "bounded_autonomy": {
-        "max_step_cost": 25.0,
-        "max_run_cost": 100.0,
-        "max_outbound_total": 25,
-        "max_publications_total": 5,
-        "max_irreversible_total": 1,
-        "max_budget_change_total": 50.0,
-        "max_steps_per_run": 8,
-    },
-    "full_autonomy": {
-        "max_step_cost": 100.0,
-        "max_run_cost": 500.0,
-        "max_outbound_total": 100,
-        "max_publications_total": 20,
-        "max_irreversible_total": 3,
-        "max_budget_change_total": 250.0,
-        "max_steps_per_run": 20,
+    "autonomous_bounded": {
+        "max_step_cost": 25.0, "max_run_cost": 100.0, "max_outbound_total": 25,
+        "max_publications_total": 5, "max_irreversible_total": 1,
+        "max_budget_change_total": 50.0, "max_steps_per_run": 8,
     },
 }
 
@@ -99,10 +94,9 @@ class BoundedAutonomyGuard:
         self._action_budget_engine = action_budget_engine or ActionBudgetEngine()
 
     def _tier(self, request: Any) -> str:
-        tier = _text(getattr(request, "autonomy_tier", "supervised"), default="supervised")
-        if tier not in _DEFAULT_LIMITS:
-            return "supervised"
-        return tier
+        return normalize_autonomy_tier(
+            _text(getattr(request, "autonomy_tier", "supervised"), default="supervised")
+        )
 
     def _resolve_limit(self, *, request: Any, name: str, default: float | int) -> float | int:
         constraints = _safe_dict(getattr(request, "constraints", {}) or {})
@@ -190,14 +184,14 @@ class BoundedAutonomyGuard:
         if operator_on_irreversible and int(cost.irreversible_count) > 0:
             operator_required = True
             operator_reasons.append("irreversible_requires_operator")
-        if tier == "supervised" and action_class in {"ads_write", "budget_change", "profile_publish", "unknown"}:
+        if tier in {"approval_required", "supervised"} and action_class in {"ads_write", "budget_change", "profile_publish", "unknown"}:
             operator_required = True
             operator_reasons.append("supervised_requires_operator")
 
-        allowed = not violations and not operator_required and tier != "advisory"
+        allowed = not violations and not operator_required and tier not in {"observe", "advisory"}
         reason = "within_bounded_autonomy"
-        if tier == "advisory":
-            reason = "advisory_cannot_execute"
+        if tier in {"observe", "advisory"}:
+            reason = f"{tier}_cannot_execute"
         elif violations:
             reason = "bounded_autonomy_exceeded"
         elif operator_required:

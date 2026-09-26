@@ -4,6 +4,7 @@ from dataclasses import dataclass
 from typing import Any
 from collections.abc import Mapping
 
+from execution.autonomy_tiers import normalize_autonomy_tier
 from execution.action_capability_matrix import get_action_capability
 from execution.action_budget_engine import ActionBudgetEngine
 
@@ -40,6 +41,18 @@ def _safe_float(value: object, *, default: float = 0.0) -> float:
 
 
 _TIER_DEFAULTS: dict[str, dict[str, float | int]] = {
+    "observe": {
+        "blast_radius_max_actions_per_hour": 0,
+        "blast_radius_max_actions_per_day": 0,
+        "blast_radius_max_outbound_per_window": 0,
+        "blast_radius_max_budget_change_per_window": 0.0,
+        "blast_radius_max_new_pages_per_day": 0,
+        "blast_radius_max_irreversible_actions_per_window": 0,
+        "blast_radius_max_per_hour": 0,
+        "autonomy_max_messages_per_day": 0,
+        "autonomy_max_new_leads_per_hour": 0,
+        "autonomy_max_campaigns_per_day": 0,
+    },
     "advisory": {
         "blast_radius_max_actions_per_hour": 0,
         "blast_radius_max_actions_per_day": 0,
@@ -51,6 +64,30 @@ _TIER_DEFAULTS: dict[str, dict[str, float | int]] = {
         "autonomy_max_messages_per_day": 0,
         "autonomy_max_new_leads_per_hour": 0,
         "autonomy_max_campaigns_per_day": 0,
+    },
+    "draft": {
+        "blast_radius_max_actions_per_hour": 0,
+        "blast_radius_max_actions_per_day": 0,
+        "blast_radius_max_outbound_per_window": 0,
+        "blast_radius_max_budget_change_per_window": 0.0,
+        "blast_radius_max_new_pages_per_day": 0,
+        "blast_radius_max_irreversible_actions_per_window": 0,
+        "blast_radius_max_per_hour": 0,
+        "autonomy_max_messages_per_day": 0,
+        "autonomy_max_new_leads_per_hour": 0,
+        "autonomy_max_campaigns_per_day": 0,
+    },
+    "approval_required": {
+        "blast_radius_max_actions_per_hour": 5,
+        "blast_radius_max_actions_per_day": 20,
+        "blast_radius_max_outbound_per_window": 25,
+        "blast_radius_max_budget_change_per_window": 25.0,
+        "blast_radius_max_new_pages_per_day": 2,
+        "blast_radius_max_irreversible_actions_per_window": 1,
+        "blast_radius_max_per_hour": 5,
+        "autonomy_max_messages_per_day": 100,
+        "autonomy_max_new_leads_per_hour": 10,
+        "autonomy_max_campaigns_per_day": 3,
     },
     "supervised": {
         "blast_radius_max_actions_per_hour": 5,
@@ -64,7 +101,7 @@ _TIER_DEFAULTS: dict[str, dict[str, float | int]] = {
         "autonomy_max_new_leads_per_hour": 10,
         "autonomy_max_campaigns_per_day": 3,
     },
-    "bounded_autonomy": {
+    "autonomous_bounded": {
         "blast_radius_max_actions_per_hour": 10,
         "blast_radius_max_actions_per_day": 50,
         "blast_radius_max_outbound_per_window": 50,
@@ -72,18 +109,6 @@ _TIER_DEFAULTS: dict[str, dict[str, float | int]] = {
         "blast_radius_max_new_pages_per_day": 5,
         "blast_radius_max_irreversible_actions_per_window": 1,
         "blast_radius_max_per_hour": 10,
-        "autonomy_max_messages_per_day": 100,
-        "autonomy_max_new_leads_per_hour": 10,
-        "autonomy_max_campaigns_per_day": 3,
-    },
-    "full_autonomy": {
-        "blast_radius_max_actions_per_hour": 25,
-        "blast_radius_max_actions_per_day": 150,
-        "blast_radius_max_outbound_per_window": 200,
-        "blast_radius_max_budget_change_per_window": 250.0,
-        "blast_radius_max_new_pages_per_day": 20,
-        "blast_radius_max_irreversible_actions_per_window": 3,
-        "blast_radius_max_per_hour": 25,
         "autonomy_max_messages_per_day": 100,
         "autonomy_max_new_leads_per_hour": 10,
         "autonomy_max_campaigns_per_day": 3,
@@ -104,8 +129,7 @@ class BlastRadiusGuard:
 
     @staticmethod
     def _tier(value: object) -> str:
-        text = str(value or "").strip()
-        return text if text in _TIER_DEFAULTS else "supervised"
+        return normalize_autonomy_tier(value)
 
     @staticmethod
     def _resolve_limit(*, request: Any | None, autonomy_tier: str, name: str) -> float | int:

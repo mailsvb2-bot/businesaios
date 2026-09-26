@@ -95,14 +95,13 @@ class CapabilityBootstrapPolicy:
     bootstrap_health_floor: float = 0.72
     bootstrap_confidence_floor: float = 0.55
     bootstrap_routing_state: str = "enabled"
-    bootstrap_recommended_autonomy_tier: str = "bounded_autonomy"
+    bootstrap_recommended_autonomy_tier: str = "autonomous_bounded"
     bootstrap_mode: str = "first_run_enabled_without_verified_evidence"
 
 
 @dataclass(frozen=True)
 class CapabilityFallbackPolicy:
     low_health_operator_handoff_threshold: float = 0.35
-    full_autonomy_tier: str = "full_autonomy"
     stale_state: str = "stale"
     fallback_preferred_state: str = "fallback_preferred"
     notify_owner_action_type: str = "notify_owner"

@@ -205,7 +205,7 @@ class MultiGoalPlannerService:
             adjustment -= 25.0
         if _text(policy_verdict.get("recommended_autonomy_tier")) == "supervised":
             adjustment -= 8.0
-        elif _text(policy_verdict.get("recommended_autonomy_tier")) == "bounded_autonomy":
+        elif _text(policy_verdict.get("recommended_autonomy_tier")) == "autonomous_bounded":
             adjustment -= 4.0
         if runtime.get("staleness_state") == "stale":
             adjustment -= 14.0

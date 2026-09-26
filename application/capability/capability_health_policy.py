@@ -168,7 +168,7 @@ class CapabilityHealthPolicy:
             evidence_state = 'sufficient'
 
         routing_state = 'enabled'
-        recommended_autonomy_tier = 'full_autonomy'
+        recommended_autonomy_tier = 'autonomous_bounded'
         if error_budget_exceeded or risk_budget_exceeded:
             routing_state = 'fallback_preferred'
             recommended_autonomy_tier = 'supervised'
@@ -180,12 +180,12 @@ class CapabilityHealthPolicy:
             recommended_autonomy_tier = 'supervised'
         elif staleness_state == 'stale':
             routing_state = 'fallback_preferred'
-            recommended_autonomy_tier = 'bounded_autonomy'
+            recommended_autonomy_tier = 'autonomous_bounded'
         elif staleness_state == 'cooling' or evidence_state == 'insufficient':
             routing_state = 'observe'
-            recommended_autonomy_tier = 'bounded_autonomy'
+            recommended_autonomy_tier = 'autonomous_bounded'
         elif tier == 'degraded':
-            recommended_autonomy_tier = 'bounded_autonomy'
+            recommended_autonomy_tier = 'autonomous_bounded'
 
         return CapabilityHealthPolicyView(
             success_rate=success_rate,
