@@ -106,18 +106,18 @@ class AutonomyDecisionStep:
         payload = getattr(executable_action, "payload", {}) or {}
         planning = dict(payload.get("capability_planning") or {}) if isinstance(payload, dict) else {}
         capability = dict(planning.get("capability") or {})
-        runtime = dict(capability.get("runtime") or {})
+        runtime_payload = dict(capability.get("runtime") or {})
         patch = dict(planning.get("payload_patch") or {})
         budget_exceeded = bool(
-            runtime.get("error_budget_exceeded")
-            or runtime.get("risk_budget_exceeded")
+            runtime_payload.get("error_budget_exceeded")
+            or runtime_payload.get("risk_budget_exceeded")
             or patch.get("error_budget_exceeded")
             or patch.get("risk_budget_exceeded")
         )
         if not budget_exceeded:
             return requested
         recommended = str(
-            runtime.get("recommended_autonomy_tier")
+            runtime_payload.get("recommended_autonomy_tier")
             or patch.get("recommended_autonomy_tier")
             or ""
         ).strip()

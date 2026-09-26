@@ -207,6 +207,19 @@ class FileCapabilityHealthStore:
         return path
 
 
+def build_capability_health_scoring_service(
+    *,
+    root_dir: Path,
+    policy: CapabilityHealthPolicy | None = None,
+    matrix: CapabilityMatrix | None = None,
+) -> "CapabilityHealthScoringService":
+    return CapabilityHealthScoringService(
+        store=FileCapabilityHealthStore(root_dir=Path(root_dir)),
+        policy=policy,
+        matrix=matrix,
+    )
+
+
 class CapabilityHealthScoringService:
     def __init__(self, *, store: FileCapabilityHealthStore, policy: CapabilityHealthPolicy | None = None, matrix: CapabilityMatrix | None = None) -> None:
         self._store = store
