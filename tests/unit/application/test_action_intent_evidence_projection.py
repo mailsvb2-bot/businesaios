@@ -151,3 +151,18 @@ def test_tampered_action_intent_body_conflicts_with_evidence_identity() -> None:
             business_id=expected.business_id,
             intent_id=expected.intent_id,
         )
+
+def test_action_intent_carries_canonical_agent_identity() -> None:
+    intent = project_action_intent(
+        decision_id="decision-agent",
+        correlation_id="correlation-agent",
+        decided_action_type="send_message",
+        channel="max",
+        tenant_id="tenant-1",
+        business_id="business-1",
+        payload={},
+        requested_by="business-agent",
+        agent_id="business-agent",
+    )
+    assert intent.agent_id == "business-agent"
+    assert intent.as_dict()["agent_id"] == "business-agent"

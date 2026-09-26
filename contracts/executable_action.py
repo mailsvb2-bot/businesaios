@@ -14,6 +14,7 @@ class ExecutableAction:
     correlation_id: str = ''
     objective_name: str = 'profit_adjusted_growth'
     intent_id: str = ''
+    agent_id: str = ''
     evidence_refs: tuple[str, ...] = ()
     derived_fact_ref: str = ''
 
@@ -21,6 +22,18 @@ class ExecutableAction:
         refs = tuple(dict.fromkeys(str(item).strip() for item in self.evidence_refs if str(item).strip()))
         object.__setattr__(self, 'evidence_refs', refs)
         object.__setattr__(self, 'derived_fact_ref', str(self.derived_fact_ref or '').strip())
+        fallback_agent = ""
+        if isinstance(self.payload, dict):
+            fallback_agent = str(
+                self.payload.get("agent_id")
+                or self.payload.get("requested_by")
+                or ""
+            ).strip()
+        object.__setattr__(
+            self,
+            'agent_id',
+            str(self.agent_id or fallback_agent or "sovereign_decision").strip(),
+        )
 
     def validate_contract(self) -> list[str]:
         issues: list[str] = []
@@ -38,6 +51,8 @@ class ExecutableAction:
             issues.append('missing:correlation_id')
         if self.objective_name != 'profit_adjusted_growth':
             issues.append('invalid:objective_name')
+        if not self.agent_id:
+            issues.append('missing:agent_id')
         return issues
 
     def as_dict(self) -> dict[str, Any]:
@@ -50,6 +65,7 @@ class ExecutableAction:
             'correlation_id': self.correlation_id,
             'objective_name': self.objective_name,
             'intent_id': self.intent_id,
+            'agent_id': self.agent_id,
             'evidence_refs': list(self.evidence_refs),
             'derived_fact_ref': self.derived_fact_ref,
         }

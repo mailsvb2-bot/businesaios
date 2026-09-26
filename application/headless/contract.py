@@ -138,6 +138,7 @@ class HeadlessExecutionContract:
         recent_actions_source: RecentActionsSource | None = None,
         autonomy_safety_bundle: AutonomySafetyBundle | None = None,
         owner_path_service: Any | None = None,
+        agent_identity_registry: Any | None = None,
     ) -> None:
         try:
             validate_headless_decision_core(decision_core)
@@ -148,6 +149,7 @@ class HeadlessExecutionContract:
         self._decision_core = decision_core
         self._executor = executor
         self._state_mapper = state_mapper
+        self._agent_identity_registry = agent_identity_registry
         self._feedback_reader = feedback_reader
         self._stop_policy = stop_policy or HeadlessStopPolicy()
         self._ledger = ledger

@@ -25,12 +25,15 @@ class HeadlessExecutionGatewayContractError(RuntimeError):
 class HeadlessExecutionGateway:
     executor: Any
     execution_path_lock: object | None = None
+    authorization_hook: Callable[[Any], None] | None = None
 
     def execute(self, envelope: Any) -> Any:
         try:
             locked = validate_execution_gateway_path(envelope=envelope)
         except ExecutionPathLockError as exc:
             raise HeadlessExecutionGatewayContractError(str(exc)) from exc
+        if self.authorization_hook is not None:
+            self.authorization_hook(locked.envelope)
         execute_callable = resolve_headless_execute_callable(self.executor)
         return execute_callable(locked.envelope)
 
@@ -46,10 +49,16 @@ def validate_headless_executor(executor: Any) -> None:
     resolve_headless_execute_callable(executor)
 
 
-def execute_headless_envelope(*, executor: Any, envelope: Any) -> Any:
+def execute_headless_envelope(
+    *,
+    executor: Any,
+    envelope: Any,
+    authorization_hook: Callable[[Any], None] | None = None,
+) -> Any:
     return HeadlessExecutionGateway(
         executor=executor,
         execution_path_lock=build_execution_path_lock_spec(),
+        authorization_hook=authorization_hook,
     ).execute(envelope)
 
 
