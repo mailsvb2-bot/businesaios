@@ -92,7 +92,7 @@ class WaitCondition:
         }
 
     @classmethod
-    def from_dict(cls, payload: dict[str, object]) -> "WaitCondition":
+    def from_dict(cls, payload: dict[str, object]) -> WaitCondition:
         return cls(
             condition_id=str(payload.get("condition_id") or ""),
             kind=WaitConditionKind(str(payload.get("kind") or "")),
