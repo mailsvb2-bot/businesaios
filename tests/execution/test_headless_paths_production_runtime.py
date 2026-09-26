@@ -94,3 +94,8 @@ def test_core_systemd_units_expose_shared_runtime_root_without_legacy_env_name(u
     assert "Environment=BUSINESAIOS_DATA_DIR=" not in unit
     assert "Environment=BAIOS_DATA_DIR=/var/lib/businesaios/runtime" in unit
     assert "Environment=DATA_DIR=/var/lib/businesaios/runtime" in unit
+
+
+def test_capability_health_uses_same_canonical_headless_runtime_root(tmp_path) -> None:
+    paths = headless_paths.build_headless_runtime_paths(root_dir=tmp_path)
+    assert paths.capability_health_dir == tmp_path / "capability_health"
