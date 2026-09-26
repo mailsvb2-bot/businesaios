@@ -5,6 +5,7 @@ from functools import lru_cache
 from pathlib import Path
 
 from application.autonomy.autonomy_safety_bundle import AutonomySafetyBundle
+from application.business_autonomy.registry import AgentIdentityRegistry
 from application.capability.capability_health_scoring import (
     build_capability_health_scoring_service,
 )
@@ -88,6 +89,7 @@ class HeadlessRuntime:
     multi_goal_planner_service: object | None = None
     evidence_store: object | None = None
     state_synthesis_engine: object | None = None
+    agent_identity_registry: object | None = None
 
 
 @lru_cache(maxsize=8)
@@ -154,6 +156,14 @@ def build_headless_runtime(*, entrypoint: str = "headless_sdk", root_dir: str | 
         learning_store=retry_learning_store,
         retry_learning_engine=RetryLearningEngine(learning_store=retry_learning_store),
     )
+    reliability = getattr(executor, "_reliability", None)
+    reliability_idempotency = getattr(reliability, "idempotency_store", None)
+    if reliability_idempotency is None:
+        raise RuntimeError("canonical runtime idempotency store is required for AgentIdentity")
+    agent_identity_registry = AgentIdentityRegistry(
+        event_store=event_store,
+        idempotency_store=reliability_idempotency,
+    )
     operational_runtime = resolve_operational_safety_runtime(default_root=paths.root_dir)
     if getattr(executor, "_operational_budget_service", None) is None:
         executor._operational_budget_service = operational_runtime.service
@@ -200,6 +210,7 @@ def build_headless_runtime(*, entrypoint: str = "headless_sdk", root_dir: str | 
         evidence_store=evidence_store,
         event_store=event_store,
         world_model_event_projector=world_model_event_projector,
+        agent_identity_registry=agent_identity_registry,
     )
     return HeadlessRuntime(
         decision_core=core,
@@ -227,6 +238,7 @@ def build_headless_runtime(*, entrypoint: str = "headless_sdk", root_dir: str | 
         multi_goal_planner_service=multi_goal_planner_service,
         evidence_store=evidence_store,
         state_synthesis_engine=state_synthesis_engine,
+        agent_identity_registry=agent_identity_registry,
     )
 
 

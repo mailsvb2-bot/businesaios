@@ -60,6 +60,7 @@ def build_business_autonomy_operationalization() -> dict:
         "audit_log": audit_log,
         "guarded_service": guarded_service,
         "operator_admin_plane": getattr(guarded_service, '_operator_admin_plane', None),
+        "agent_identity_registry": getattr(guarded_service, '_agent_identity_registry', None),
         "workflow_runtime": BusinessWorkflowRuntimeStub(audit_log=audit_log, metrics=metrics),
         "dashboard_service": dashboard_service,
         "observability_report_service": BusinessObservabilityReportService(audit_log=audit_log, metrics=metrics, export_service=export_service, stores=observability_stores),

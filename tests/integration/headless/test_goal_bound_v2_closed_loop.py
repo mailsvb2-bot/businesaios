@@ -122,3 +122,88 @@ def test_headless_boot_persists_phase7_capability_budgets_across_restart(
     assert after["accumulated_risk"] == before["accumulated_risk"]
     assert after["risk_budget_exceeded"] is True
     assert after["recommended_autonomy_tier"] == "supervised"
+
+
+def test_headless_boot_wires_single_agent_identity_registry_without_auto_grant(
+    tmp_path,
+    monkeypatch,
+) -> None:
+    monkeypatch.chdir(tmp_path)
+    build_headless_runtime.cache_clear()
+    _reset_decision_core_singleton_for_tests()
+    runtime = build_headless_runtime(entrypoint="headless_sdk", root_dir=tmp_path)
+
+    assert runtime.agent_identity_registry is runtime.contract._agent_identity_registry
+    assert runtime.agent_identity_registry is not None
+    assert (
+        runtime.agent_identity_registry._writer._claims
+        is runtime.executor._reliability.idempotency_store
+    )
+
+    import pytest
+
+    with pytest.raises(LookupError):
+        runtime.agent_identity_registry.get(
+            tenant_id="tenant-fresh",
+            business_id="business-fresh",
+            agent_id="businesaios-core",
+        )
+
+
+def test_real_headless_agent_identity_is_signed_and_projected_from_trusted_request(
+    tmp_path,
+    monkeypatch,
+) -> None:
+    monkeypatch.chdir(tmp_path)
+    build_headless_runtime.cache_clear()
+    _reset_decision_core_singleton_for_tests()
+    runtime = build_headless_runtime(entrypoint="headless_sdk", root_dir=tmp_path)
+
+    runtime.agent_identity_registry.register(
+        tenant_id="tenant-agent-e2e",
+        business_id="business-agent-e2e",
+        agent_id="marketing-agent",
+        idempotency_key="marketing-agent-create",
+        agent_type="marketing",
+        agent_version="v1",
+        capability_scope=("send_message@v1",),
+        occurred_at_ms=100,
+    )
+
+    report = runtime.contract.execute_once(
+        GoalExecutionRequest(
+            goal="notify owner about current business state",
+            tenant_id="tenant-agent-e2e",
+            business_id="business-agent-e2e",
+            agent_id="marketing-agent",
+            max_steps=1,
+        )
+    )
+    step = report.steps[0]
+    intent = dict(step.feedback.get("action_intent") or {})
+    assert step.action == "send_message@v1"
+    assert intent["agent_id"] == "marketing-agent"
+    assert intent["requested_by"] == "marketing-agent"
+
+
+def test_real_headless_agent_identity_fails_closed_when_not_provisioned(
+    tmp_path,
+    monkeypatch,
+) -> None:
+    import pytest
+
+    monkeypatch.chdir(tmp_path)
+    build_headless_runtime.cache_clear()
+    _reset_decision_core_singleton_for_tests()
+    runtime = build_headless_runtime(entrypoint="headless_sdk", root_dir=tmp_path)
+
+    with pytest.raises(LookupError):
+        runtime.contract.execute_once(
+            GoalExecutionRequest(
+                goal="notify owner about current business state",
+                tenant_id="tenant-agent-e2e",
+                business_id="business-agent-e2e",
+                agent_id="missing-agent",
+                max_steps=1,
+            )
+        )

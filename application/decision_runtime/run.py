@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from collections.abc import Mapping
 from contextlib import contextmanager, nullcontext
 from typing import Any
 
@@ -34,6 +35,12 @@ from core.observability.perf import Span, emit_sla_violation
 from core.observability.throttled_logger import exception_throttled
 
 
+def _decision_issuer_id(*, core: Any, state: Any) -> str:
+    raw_meta = state.get("meta") if isinstance(state, Mapping) else getattr(state, "meta", {})
+    meta = dict(raw_meta or {}) if isinstance(raw_meta, Mapping) else {}
+    bound = str(meta.get("agent_id") or "").strip()
+    return bound or str(getattr(core, "_issuer_id", "") or "businesaios-core").strip() or "businesaios-core"
+
 def run_decision(
     *,
     core: Any,
@@ -46,9 +53,10 @@ def run_decision(
         state=state,
         world_model=core._world_model,
     )
+    issuer_id = _decision_issuer_id(core=core, state=state)
     user_id, trace, pinned_world_model_meta = build_trace(
         state=state,
-        issuer_id=core._issuer_id,
+        issuer_id=issuer_id,
         envelope_version=envelope_version,
     )
     state = apply_state_constraints(
@@ -121,7 +129,7 @@ def run_decision(
             payload=payload,
             policy_id=getattr(policy, "id", "") or "",
             keyring=core._keyring,
-            issuer_id=core._issuer_id,
+            issuer_id=issuer_id,
             ttl_ms=core._ttl_ms,
             action_schema_version=int(action_schema_version),
             envelope_version=envelope_version,
@@ -166,7 +174,7 @@ def run_decision(
             decision_id=str(built.decision.decision_id),
             correlation_id=str(built.decision.correlation_id),
             world_model_meta=pinned_world_model_meta,
-            issuer_id=core._issuer_id,
+            issuer_id=issuer_id,
         )
         emit_trace(
             events=core._events,

@@ -40,12 +40,13 @@ def build_headless_route_handlers(*, runtime_provider: HeadlessRuntimeProvider |
 class HeadlessRouteHandlers:
     runtime_provider: HeadlessRuntimeProvider = field(default_factory=_default_runtime_provider)
 
-    def execute_goal(self, request: ExecuteGoalRequest) -> ExecuteGoalResponse:
+    def execute_goal(self, request: ExecuteGoalRequest, *, agent_id: str | None = None) -> ExecuteGoalResponse:
         report = self.runtime_provider.contract_runtime().execute_autopilot(
             GoalExecutionRequest(
                 goal=request.goal,
                 business_id=request.business_id,
                 goal_id=getattr(request, "goal_id", None),
+                agent_id=(str(agent_id or "").strip() or None),
                 tenant_id=request.tenant_id,
                 user_id=request.user_id,
                 region=request.region,

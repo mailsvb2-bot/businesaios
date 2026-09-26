@@ -110,6 +110,89 @@ def register_control_plane_routes(*, router: APIRouter, auth_bundle, authz_bundl
         RoutePermissionGuard(permission=Permission.MANAGE_TENANT_POLICY, action_name=action_name).enforce(principal=principal, request_context=request_context, authz=authz_bundle)
         enforce_control_plane_security(principal=principal, request_context=request_context, action_name=action_name, tenant_id=tenant_id, resource_id=f'tenant-policy:{tenant_id}')
         return admin_handlers.get_tenant_policy(tenant_id=tenant_id)
+    @router.post('/control-plane/admin/agent-identities/register')
+    async def control_plane_register_agent_identity(request: Request) -> dict[str, Any]:
+        request_context, principal = authorize_request(request=request, auth_bundle=auth_bundle)
+        body = await json_body(request)
+        tenant_id = tenant_guard.enforce(principal=principal, request_context=request_context, body=body)
+        action_name = 'api.control_plane.admin.agent_identity.register'
+        RoutePermissionGuard(permission=Permission.MANAGE_TENANT_POLICY, action_name=action_name).enforce(
+            principal=principal,
+            request_context=request_context,
+            authz=authz_bundle,
+        )
+        business_id = str(body.get('business_id') or '').strip()
+        agent_id = str(body.get('agent_id') or '').strip()
+        enforce_control_plane_security(
+            principal=principal,
+            request_context=request_context,
+            action_name=action_name,
+            tenant_id=tenant_id,
+            resource_id=f'agent-identity:{tenant_id}:{business_id}:{agent_id}',
+            body=body,
+        )
+        return admin_handlers.register_agent_identity(
+            tenant_id=tenant_id,
+            payload=body,
+            requested_by=principal.actor_id or principal.subject,
+        )
+
+    @router.get('/control-plane/admin/agent-identities')
+    async def control_plane_list_agent_identities(
+        request: Request,
+        tenant_id: str,
+        business_id: str,
+        include_revoked: bool = False,
+    ) -> dict[str, Any]:
+        request_context, principal = authorize_request(request=request, auth_bundle=auth_bundle)
+        tenant_guard.enforce(principal=principal, request_context=request_context, tenant_id=tenant_id)
+        action_name = 'api.control_plane.admin.agent_identity.list'
+        RoutePermissionGuard(permission=Permission.MANAGE_TENANT_POLICY, action_name=action_name).enforce(
+            principal=principal,
+            request_context=request_context,
+            authz=authz_bundle,
+        )
+        enforce_control_plane_security(
+            principal=principal,
+            request_context=request_context,
+            action_name=action_name,
+            tenant_id=tenant_id,
+            resource_id=f'agent-identities:{tenant_id}:{business_id}',
+            business_id=business_id,
+        )
+        return admin_handlers.list_agent_identities(
+            tenant_id=tenant_id,
+            business_id=business_id,
+            include_revoked=include_revoked,
+        )
+
+    @router.post('/control-plane/admin/agent-identities/revoke')
+    async def control_plane_revoke_agent_identity(request: Request) -> dict[str, Any]:
+        request_context, principal = authorize_request(request=request, auth_bundle=auth_bundle)
+        body = await json_body(request)
+        tenant_id = tenant_guard.enforce(principal=principal, request_context=request_context, body=body)
+        action_name = 'api.control_plane.admin.agent_identity.revoke'
+        RoutePermissionGuard(permission=Permission.MANAGE_TENANT_POLICY, action_name=action_name).enforce(
+            principal=principal,
+            request_context=request_context,
+            authz=authz_bundle,
+        )
+        business_id = str(body.get('business_id') or '').strip()
+        agent_id = str(body.get('agent_id') or '').strip()
+        enforce_control_plane_security(
+            principal=principal,
+            request_context=request_context,
+            action_name=action_name,
+            tenant_id=tenant_id,
+            resource_id=f'agent-identity-revoke:{tenant_id}:{business_id}:{agent_id}',
+            body=body,
+        )
+        return admin_handlers.revoke_agent_identity(
+            tenant_id=tenant_id,
+            payload=body,
+            requested_by=principal.actor_id or principal.subject,
+        )
+
     @router.get('/control-plane/admin/platform-overview')
     async def control_plane_platform_overview(request: Request, tenant_id: str = 'tenant-demo', business_id: str = 'default-business') -> dict[str, Any]:
         request_context, principal = authorize_request(request=request, auth_bundle=auth_bundle)

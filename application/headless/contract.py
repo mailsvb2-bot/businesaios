@@ -255,6 +255,7 @@ class HeadlessExecutionContract:
                 autonomy_tier=request.autonomy_tier,
                 approval_policy=dict(request.approval_policy),
                 goal_id=request.goal_id,
+                agent_id=request.agent_id,
             )
         )
 

@@ -85,6 +85,7 @@ class HeadlessGoalStateMapper:
             "headless": True,
             "goal": request.goal,
             "goal_id": request.goal_id,
+            "agent_id": request.agent_id,
             "canonical_goal": canonical_goal,
             "profile": merged_profile,
             "signals": list(request.signals or []),

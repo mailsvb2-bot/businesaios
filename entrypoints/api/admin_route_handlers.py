@@ -167,6 +167,67 @@ class AdminRouteHandlers:
     def run_platform_remediation(self, *, file_path: str, risk_type: str = "") -> dict[str, Any]:
         return self.platform_control_center.build_remediation_run(file_path=file_path, risk_type=risk_type)
 
+    def register_agent_identity(
+        self,
+        *,
+        tenant_id: str,
+        payload: Mapping[str, Any],
+        requested_by: str,
+    ) -> dict[str, Any]:
+        business_id = str(payload.get('business_id') or '').strip()
+        agent_id = str(payload.get('agent_id') or '').strip()
+        idempotency_key = str(payload.get('idempotency_key') or '').strip()
+        if not business_id or not agent_id or not idempotency_key:
+            raise ValueError('business_id, agent_id and idempotency_key are required')
+        return self.business_autonomy_routes.register_agent_identity(
+            tenant_id=tenant_id,
+            business_id=business_id,
+            agent_id=agent_id,
+            idempotency_key=idempotency_key,
+            agent_type=str(payload.get('agent_type') or '').strip(),
+            agent_version=str(payload.get('agent_version') or '').strip(),
+            delegated_by=(str(payload.get('delegated_by') or '').strip() or None),
+            policy_profile=str(payload.get('policy_profile') or 'default').strip() or 'default',
+            capability_scope=tuple(str(item) for item in tuple(payload.get('capability_scope') or ())),
+            budget_scope={str(k): float(v) for k, v in dict(payload.get('budget_scope') or {}).items()},
+            risk_scope=tuple(str(item) for item in tuple(payload.get('risk_scope') or ())),
+            data_scope=tuple(str(item) for item in tuple(payload.get('data_scope') or ())),
+            requested_by=requested_by,
+        )
+
+    def list_agent_identities(
+        self,
+        *,
+        tenant_id: str,
+        business_id: str,
+        include_revoked: bool = False,
+    ) -> dict[str, Any]:
+        return self.business_autonomy_routes.list_agent_identities(
+            tenant_id=tenant_id,
+            business_id=business_id,
+            include_revoked=include_revoked,
+        )
+
+    def revoke_agent_identity(
+        self,
+        *,
+        tenant_id: str,
+        payload: Mapping[str, Any],
+        requested_by: str,
+    ) -> dict[str, Any]:
+        business_id = str(payload.get('business_id') or '').strip()
+        agent_id = str(payload.get('agent_id') or '').strip()
+        idempotency_key = str(payload.get('idempotency_key') or '').strip()
+        if not business_id or not agent_id or not idempotency_key:
+            raise ValueError('business_id, agent_id and idempotency_key are required')
+        return self.business_autonomy_routes.revoke_agent_identity(
+            tenant_id=tenant_id,
+            business_id=business_id,
+            agent_id=agent_id,
+            idempotency_key=idempotency_key,
+            requested_by=requested_by,
+        )
+
     def get_business_autonomy_overview(self, *, business_id: str) -> dict[str, Any]:
         handlers = self.business_autonomy_routes
         return {
