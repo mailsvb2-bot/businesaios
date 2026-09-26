@@ -4,6 +4,7 @@ from dataclasses import dataclass
 from typing import Any
 from collections.abc import Mapping
 
+from execution.autonomy_tiers import normalize_autonomy_tier
 from execution.action_capability_matrix import get_action_capability
 from execution.action_budget_engine import ActionBudgetEngine
 
@@ -40,6 +41,18 @@ def _safe_float(value: object, *, default: float = 0.0) -> float:
 
 
 _TIER_DEFAULTS: dict[str, dict[str, float | int]] = {
+    "observe": {
+        "blast_radius_max_actions_per_hour": 0,
+        "blast_radius_max_actions_per_day": 0,
+        "blast_radius_max_outbound_per_window": 0,
+        "blast_radius_max_budget_change_per_window": 0.0,
+        "blast_radius_max_new_pages_per_day": 0,
+        "blast_radius_max_irreversible_actions_per_window": 0,
+        "blast_radius_max_per_hour": 0,
+        "autonomy_max_messages_per_day": 0,
+        "autonomy_max_new_leads_per_hour": 0,
+        "autonomy_max_campaigns_per_day": 0,
+    },
     "advisory": {
         "blast_radius_max_actions_per_hour": 0,
         "blast_radius_max_actions_per_day": 0,
@@ -48,6 +61,33 @@ _TIER_DEFAULTS: dict[str, dict[str, float | int]] = {
         "blast_radius_max_new_pages_per_day": 0,
         "blast_radius_max_irreversible_actions_per_window": 0,
         "blast_radius_max_per_hour": 0,
+        "autonomy_max_messages_per_day": 0,
+        "autonomy_max_new_leads_per_hour": 0,
+        "autonomy_max_campaigns_per_day": 0,
+    },
+    "draft": {
+        "blast_radius_max_actions_per_hour": 0,
+        "blast_radius_max_actions_per_day": 0,
+        "blast_radius_max_outbound_per_window": 0,
+        "blast_radius_max_budget_change_per_window": 0.0,
+        "blast_radius_max_new_pages_per_day": 0,
+        "blast_radius_max_irreversible_actions_per_window": 0,
+        "blast_radius_max_per_hour": 0,
+        "autonomy_max_messages_per_day": 0,
+        "autonomy_max_new_leads_per_hour": 0,
+        "autonomy_max_campaigns_per_day": 0,
+    },
+    "approval_required": {
+        "blast_radius_max_actions_per_hour": 5,
+        "blast_radius_max_actions_per_day": 20,
+        "blast_radius_max_outbound_per_window": 25,
+        "blast_radius_max_budget_change_per_window": 25.0,
+        "blast_radius_max_new_pages_per_day": 2,
+        "blast_radius_max_irreversible_actions_per_window": 1,
+        "blast_radius_max_per_hour": 5,
+        "autonomy_max_messages_per_day": 100,
+        "autonomy_max_new_leads_per_hour": 10,
+        "autonomy_max_campaigns_per_day": 3,
     },
     "supervised": {
         "blast_radius_max_actions_per_hour": 5,
@@ -57,8 +97,11 @@ _TIER_DEFAULTS: dict[str, dict[str, float | int]] = {
         "blast_radius_max_new_pages_per_day": 2,
         "blast_radius_max_irreversible_actions_per_window": 1,
         "blast_radius_max_per_hour": 5,
+        "autonomy_max_messages_per_day": 100,
+        "autonomy_max_new_leads_per_hour": 10,
+        "autonomy_max_campaigns_per_day": 3,
     },
-    "bounded_autonomy": {
+    "autonomous_bounded": {
         "blast_radius_max_actions_per_hour": 10,
         "blast_radius_max_actions_per_day": 50,
         "blast_radius_max_outbound_per_window": 50,
@@ -66,15 +109,9 @@ _TIER_DEFAULTS: dict[str, dict[str, float | int]] = {
         "blast_radius_max_new_pages_per_day": 5,
         "blast_radius_max_irreversible_actions_per_window": 1,
         "blast_radius_max_per_hour": 10,
-    },
-    "full_autonomy": {
-        "blast_radius_max_actions_per_hour": 25,
-        "blast_radius_max_actions_per_day": 150,
-        "blast_radius_max_outbound_per_window": 200,
-        "blast_radius_max_budget_change_per_window": 250.0,
-        "blast_radius_max_new_pages_per_day": 20,
-        "blast_radius_max_irreversible_actions_per_window": 3,
-        "blast_radius_max_per_hour": 25,
+        "autonomy_max_messages_per_day": 100,
+        "autonomy_max_new_leads_per_hour": 10,
+        "autonomy_max_campaigns_per_day": 3,
     },
 }
 
@@ -92,8 +129,7 @@ class BlastRadiusGuard:
 
     @staticmethod
     def _tier(value: object) -> str:
-        text = str(value or "").strip()
-        return text if text in _TIER_DEFAULTS else "supervised"
+        return normalize_autonomy_tier(value)
 
     @staticmethod
     def _resolve_limit(*, request: Any | None, autonomy_tier: str, name: str) -> float | int:
@@ -161,6 +197,14 @@ class BlastRadiusGuard:
         current_budget_change = max(sum(max(0.0, _safe_float(_safe_dict(item).get("budget_change_amount"))) for item in recent), _safe_float(persistent_counters.get("budget_change_total")))
         current_publications = max(sum(max(0, _safe_int(_safe_dict(item).get("publication_count"))) for item in recent), _safe_int(persistent_counters.get("publication_total")))
         current_irreversible = max(sum(max(0, _safe_int(_safe_dict(item).get("irreversible_count"))) for item in recent), _safe_int(persistent_counters.get("irreversible_total")))
+        current_leads_hour = max(
+            sum(max(0, _safe_int(_safe_dict(item).get("lead_count"))) for item in recent),
+            _safe_int(persistent_counters.get("leads_hour")),
+        )
+        current_campaigns_day = max(
+            sum(max(0, _safe_int(_safe_dict(item).get("campaign_count"))) for item in recent),
+            _safe_int(persistent_counters.get("campaigns_day")),
+        )
 
         proposed = {
             "actions_hour": int(current_actions_hour + 1),
@@ -169,6 +213,9 @@ class BlastRadiusGuard:
             "budget_change": float(current_budget_change + cost.budget_change_amount),
             "new_pages": int(current_publications + cost.publication_count),
             "irreversible": int(current_irreversible + cost.irreversible_count),
+            "messages_day": int(current_outbound + cost.outbound_count),
+            "new_leads_hour": int(current_leads_hour + cost.lead_count),
+            "campaigns_day": int(current_campaigns_day + cost.campaign_count),
         }
         limits = {
             "blast_radius_max_actions_per_hour": max(0, _safe_int(self._resolve_limit(request=request, autonomy_tier=resolved_tier, name="blast_radius_max_actions_per_hour"))),
@@ -177,6 +224,9 @@ class BlastRadiusGuard:
             "blast_radius_max_budget_change_per_window": max(0.0, _safe_float(self._resolve_limit(request=request, autonomy_tier=resolved_tier, name="blast_radius_max_budget_change_per_window"))),
             "blast_radius_max_new_pages_per_day": max(0, _safe_int(self._resolve_limit(request=request, autonomy_tier=resolved_tier, name="blast_radius_max_new_pages_per_day"))),
             "blast_radius_max_irreversible_actions_per_window": max(0, _safe_int(self._resolve_limit(request=request, autonomy_tier=resolved_tier, name="blast_radius_max_irreversible_actions_per_window"))),
+            "autonomy_max_messages_per_day": max(0, _safe_int(self._resolve_limit(request=request, autonomy_tier=resolved_tier, name="autonomy_max_messages_per_day"))),
+            "autonomy_max_new_leads_per_hour": max(0, _safe_int(self._resolve_limit(request=request, autonomy_tier=resolved_tier, name="autonomy_max_new_leads_per_hour"))),
+            "autonomy_max_campaigns_per_day": max(0, _safe_int(self._resolve_limit(request=request, autonomy_tier=resolved_tier, name="autonomy_max_campaigns_per_day"))),
         }
 
         violations: list[str] = []
@@ -192,6 +242,12 @@ class BlastRadiusGuard:
             violations.append("blast_radius_max_new_pages_per_day")
         if limits["blast_radius_max_irreversible_actions_per_window"] > 0 and proposed["irreversible"] > limits["blast_radius_max_irreversible_actions_per_window"]:
             violations.append("blast_radius_max_irreversible_actions_per_window")
+        if limits["autonomy_max_messages_per_day"] > 0 and proposed["messages_day"] > limits["autonomy_max_messages_per_day"]:
+            violations.append("autonomy_max_messages_per_day")
+        if limits["autonomy_max_new_leads_per_hour"] > 0 and proposed["new_leads_hour"] > limits["autonomy_max_new_leads_per_hour"]:
+            violations.append("autonomy_max_new_leads_per_hour")
+        if limits["autonomy_max_campaigns_per_day"] > 0 and proposed["campaigns_day"] > limits["autonomy_max_campaigns_per_day"]:
+            violations.append("autonomy_max_campaigns_per_day")
 
         if violations:
             return BlastRadiusDecision(

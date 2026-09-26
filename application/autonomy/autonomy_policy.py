@@ -4,12 +4,10 @@ from collections.abc import Mapping
 from dataclasses import dataclass, field
 from typing import Any
 
-from application.autonomy.autonomy_tiers import ALLOWED_AUTONOMY_TIERS
+from application.autonomy.autonomy_tiers import autonomy_tier_rank, normalize_autonomy_tier
 
 CANON_AUTONOMY_POLICY = True
 
-
-_TIER_RANK = {"advisory": 0, "supervised": 1, "bounded_autonomy": 2, "full_autonomy": 3}
 
 
 def _safe_bool(value: object) -> bool:
@@ -41,12 +39,11 @@ def _safe_dict(value: object) -> dict[str, Any]:
 
 
 def _normalize_tier(value: object, *, default: str = "supervised") -> str:
-    text = str(value or "").strip()
-    return text if text in ALLOWED_AUTONOMY_TIERS else default
+    return normalize_autonomy_tier(value, default=default)
 
 
 def _min_tier(left: str, right: str) -> str:
-    return left if _TIER_RANK[left] <= _TIER_RANK[right] else right
+    return left if autonomy_tier_rank(left) <= autonomy_tier_rank(right) else right
 
 
 @dataclass(frozen=True, slots=True)
@@ -119,14 +116,14 @@ class AutonomyPolicy:
         current = _normalize_tier(policy_input.current_tier)
         notes: list[str] = []
 
-        if requested == "advisory":
+        if requested in {"observe", "advisory", "draft"}:
             return NextTierContext(
                 requested_tier=requested,
                 current_tier=current,
-                ceiling_tier="advisory",
-                suggested_tier="advisory",
+                ceiling_tier=requested,
+                suggested_tier=requested,
                 escalation_allowed=False,
-                notes=("Requested tier is advisory",),
+                notes=(f"Requested tier is {requested}",),
                 input_snapshot=policy_input.to_dict(),
             )
         if not policy_input.budget_allowed:
@@ -145,7 +142,7 @@ class AutonomyPolicy:
             ceiling = _min_tier(ceiling, "supervised")
             notes.append("Survival mode forbids autonomy escalation")
         elif policy_input.survival_mode == "defensive":
-            ceiling = _min_tier(ceiling, "bounded_autonomy")
+            ceiling = _min_tier(ceiling, "supervised")
             notes.append("Defensive survival mode limits autonomy ceiling")
         if policy_input.economic_operator_required:
             ceiling = _min_tier(ceiling, "supervised")
@@ -165,10 +162,10 @@ class AutonomyPolicy:
         if policy_input.revenue_verification_required and not policy_input.revenue_verified:
             ceiling = _min_tier(ceiling, "supervised")
             notes.append("Revenue outcome is not externally verified")
-        if requested == "full_autonomy" and policy_input.verification_success_rate < 0.9:
-            ceiling = _min_tier(ceiling, "bounded_autonomy")
-            notes.append("Full autonomy requires higher verification quality")
-        if requested in {"bounded_autonomy", "full_autonomy"} and policy_input.recent_verified_runs < 3:
+        if requested == "autonomous_bounded" and policy_input.verification_success_rate < 0.9:
+            ceiling = _min_tier(ceiling, "supervised")
+            notes.append("Autonomous bounded execution requires higher verification quality")
+        if requested == "autonomous_bounded" and policy_input.recent_verified_runs < 3:
             ceiling = _min_tier(ceiling, "supervised")
             notes.append("Insufficient verified execution history")
         if policy_input.verification_success_rate >= 0.8 and policy_input.recent_verified_runs >= 3 and policy_input.has_live_connector_evidence:
@@ -179,7 +176,7 @@ class AutonomyPolicy:
             current_tier=current,
             ceiling_tier=ceiling,
             suggested_tier=suggested,
-            escalation_allowed=_TIER_RANK[suggested] > _TIER_RANK[current],
+            escalation_allowed=autonomy_tier_rank(suggested) > autonomy_tier_rank(current),
             notes=tuple(notes),
             input_snapshot=policy_input.to_dict(),
         )

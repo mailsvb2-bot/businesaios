@@ -68,6 +68,10 @@ class HeadlessRuntimePaths:
         return self.root_dir / "autonomy_counters"
 
     @property
+    def capability_health_dir(self) -> Path:
+        return self.root_dir / "capability_health"
+
+    @property
     def autonomy_kill_switch_dir(self) -> Path:
         return self.root_dir / "autonomy_kill_switch"
 

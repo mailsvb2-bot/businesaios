@@ -94,3 +94,90 @@ def test_bounded_autonomy_blocks_ads_launch(tmp_path) -> None:
     assert executor.calls == 0
     assert report.steps[0].status == 'blocked_by_policy'
     assert report.final_feedback['blocked_by_policy'] is True
+
+
+def _execute_for_tier(tmp_path, *, tier: str, action: str):
+    executor = RecordingExecutor()
+    handoff = FileOperatorHandoffStore(root_dir=tmp_path / f"handoff-{tier.lower()}")
+    contract = HeadlessExecutionContract(
+        decision_core=StubDecisionCore(action=action),
+        executor=executor,
+        state_mapper=HeadlessGoalStateMapper(),
+        feedback_reader=SimpleHeadlessFeedbackReader.default(),
+        stop_policy=HeadlessStopPolicy(max_failures=1),
+        operator_handoff_store=handoff,
+    )
+    report = contract.execute_autopilot(
+        GoalExecutionRequest(
+            goal=f"{tier}:{action}",
+            business_id="biz-1",
+            tenant_id="tenant-1",
+            autonomy_tier=tier,
+        )
+    )
+    return executor, handoff, report
+
+
+def test_observe_and_advisory_block_effectful_headless_execution(tmp_path) -> None:
+    for tier in ("OBSERVE", "ADVISORY"):
+        executor, _handoff, report = _execute_for_tier(
+            tmp_path,
+            tier=tier,
+            action="reply_to_inquiry",
+        )
+        assert executor.calls == 0
+        assert report.steps[0].status == "blocked_by_policy"
+        assert report.final_feedback["blocked_by_policy"] is True
+
+
+def test_draft_keeps_headless_execution_gateway_no_effect(tmp_path) -> None:
+    for action in ("notify_owner", "reply_to_inquiry"):
+        executor, _handoff, report = _execute_for_tier(
+            tmp_path,
+            tier="DRAFT",
+            action=action,
+        )
+        assert executor.calls == 0
+        assert report.steps[0].status == "blocked_by_policy"
+        assert report.final_feedback["blocked_by_policy"] is True
+
+
+def test_approval_required_hands_effectful_action_to_operator(tmp_path) -> None:
+    executor, handoff, report = _execute_for_tier(
+        tmp_path,
+        tier="APPROVAL_REQUIRED",
+        action="reply_to_inquiry",
+    )
+    assert executor.calls == 0
+    assert report.steps[0].status == "approval_required"
+    records = handoff.list_records()
+    assert len(records) == 1
+    record = json.loads(records[0].read_text(encoding="utf-8"))
+    assert record["approval_required"] is True
+    assert record["autonomy_tier"] == "approval_required"
+
+
+def test_supervised_and_autonomous_bounded_execute_low_risk_effect_with_canonical_tier(tmp_path) -> None:
+    for tier, expected in (
+        ("SUPERVISED", "supervised"),
+        ("AUTONOMOUS_BOUNDED", "autonomous_bounded"),
+    ):
+        executor, _handoff, report = _execute_for_tier(
+            tmp_path,
+            tier=tier,
+            action="reply_to_inquiry",
+        )
+        assert executor.calls == 1
+        assert report.steps[0].executed is True
+        assert report.steps[0].payload["autonomy_tier"] == expected
+
+
+def test_legacy_full_autonomy_cannot_exceed_autonomous_bounded_authority(tmp_path) -> None:
+    executor, _handoff, report = _execute_for_tier(
+        tmp_path,
+        tier="full_autonomy",
+        action="launch_campaign",
+    )
+    assert executor.calls == 0
+    assert report.steps[0].status == "blocked_by_policy"
+    assert report.final_feedback["blocked_by_policy"] is True

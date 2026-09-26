@@ -19,7 +19,7 @@ class _Step:
     operator_required: bool
 
 
-def test_safe_loop_downgrades_full_autonomy_after_unverified_chain() -> None:
+def test_safe_loop_legacy_full_autonomy_normalizes_and_downgrades_after_unverified_chain() -> None:
     policy = SafeSelfDrivingPolicy()
     req = _Req(
         autonomy_tier="full_autonomy",
@@ -38,7 +38,7 @@ def test_safe_loop_downgrades_full_autonomy_after_unverified_chain() -> None:
     )
     assert decision.should_downgrade is True
     assert decision.should_stop is False
-    assert decision.next_tier == "bounded_autonomy"
+    assert decision.next_tier == "supervised"
 
 
 def test_non_consecutive_operator_handoffs_do_not_force_downgrade() -> None:

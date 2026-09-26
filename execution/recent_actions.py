@@ -26,6 +26,8 @@ class RecentActionSummary:
     action_id: str | None = None
     run_id: str | None = None
     recorded_at: str | None = None
+    lead_count: int = 0
+    campaign_count: int = 0
 
     def dedupe_key(self) -> str:
         if self.action_id:
@@ -51,6 +53,8 @@ class RecentActionSummary:
             "action_id": self.action_id,
             "run_id": self.run_id,
             "recorded_at": self.recorded_at,
+            "lead_count": int(self.lead_count),
+            "campaign_count": int(self.campaign_count),
         }
 
 
@@ -92,6 +96,8 @@ class RecentActionsSource:
             publication_count=max(0, self._safe_int(cost.get("publication_count"))),
             irreversible_count=max(0, self._safe_int(cost.get("irreversible_count"))),
             budget_change_amount=max(0.0, self._safe_float(cost.get("budget_change_amount"))),
+            lead_count=max(0, self._safe_int(cost.get("lead_count"))),
+            campaign_count=max(0, self._safe_int(cost.get("campaign_count"))),
             step_index=getattr(step, "step_index", None),
             decision_id=str(feedback.get("decision_id") or getattr(step, "decision_id", "") or "") or None,
             action_id=str(feedback.get("action_id") or getattr(step, "action_id", "") or "") or None,
@@ -117,6 +123,8 @@ class RecentActionsSource:
                     publication_count=max(0, self._safe_int(item.get("publication_count"))),
                     irreversible_count=max(0, self._safe_int(item.get("irreversible_count"))),
                     budget_change_amount=max(0.0, self._safe_float(item.get("budget_change_amount"))),
+                    lead_count=max(0, self._safe_int(item.get("lead_count"))),
+                    campaign_count=max(0, self._safe_int(item.get("campaign_count"))),
                     step_index=item.get("step_index") if item.get("step_index") is None else self._safe_int(item.get("step_index")),
                     decision_id=str(item.get("decision_id") or "") or None,
                     action_id=str(item.get("action_id") or "") or None,

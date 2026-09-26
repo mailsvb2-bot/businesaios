@@ -53,6 +53,12 @@ class CapabilityHealthRegistryEntry:
             'observation_count': int(self.snapshot.observation_count),
             'first_observed_at': str(self.snapshot.first_observed_at),
             'last_observed_at': str(self.snapshot.last_observed_at),
+            'error_budget_used': float(self.snapshot.error_budget_used),
+            'error_budget_limit': float(self.snapshot.error_budget_limit),
+            'error_budget_exceeded': bool(self.snapshot.error_budget_exceeded),
+            'accumulated_risk': float(self.snapshot.accumulated_risk),
+            'risk_budget_limit': float(self.snapshot.risk_budget_limit),
+            'risk_budget_exceeded': bool(self.snapshot.risk_budget_exceeded),
             'source': 'capability_health_registry',
             'capability_key': self.capability_key,
         }
@@ -123,6 +129,13 @@ class CapabilityHealthRegistry:
         verified = bool(payload.get('verified'))
         transient = 'transient' in retry_reason or 'rate_limit' in retry_reason or 'retry' in retry_reason
         terminal_failure = bool(not executed and not blocked and not transient)
+        explicit_risk = payload.get('risk_score')
+        if explicit_risk is None:
+            explicit_risk = payload.get('risk_penalty')
+        try:
+            risk_delta = max(0.0, min(1.0, float(explicit_risk))) if explicit_risk is not None else 0.0
+        except (TypeError, ValueError):
+            risk_delta = 0.0
         observed_at = _text(payload.get('updated_at') or payload.get('finished_at') or payload.get('recorded_at') or current.updated_at)
         next_counters = CapabilityHealthCounters(
             attempts=counters.attempts + 1,
@@ -131,10 +144,11 @@ class CapabilityHealthRegistry:
             transient_failures=counters.transient_failures + int(transient),
             terminal_failures=counters.terminal_failures + int(terminal_failure),
             blocked=counters.blocked + int(blocked),
+            accumulated_risk=float(counters.accumulated_risk + risk_delta),
         )
         policy_view = self._policy.build_view(counters=next_counters.to_dict(), updated_at=observed_at or current.updated_at)
         next_snapshot = CapabilityHealthSnapshot(
-            schema_version=max(current.schema_version, 2),
+            schema_version=max(current.schema_version, 3),
             tenant_id=normalized_tenant,
             capability_key=descriptor.capability_key,
             counters=next_counters,
@@ -156,6 +170,12 @@ class CapabilityHealthRegistry:
             observation_count=current.observation_count + 1,
             first_observed_at=current.first_observed_at or observed_at,
             last_observed_at=observed_at or current.last_observed_at,
+            error_budget_used=policy_view.error_budget_used,
+            error_budget_limit=policy_view.error_budget_limit,
+            error_budget_exceeded=policy_view.error_budget_exceeded,
+            accumulated_risk=policy_view.accumulated_risk,
+            risk_budget_limit=policy_view.risk_budget_limit,
+            risk_budget_exceeded=policy_view.risk_budget_exceeded,
         )
         self._store.save(next_snapshot)
         return CapabilityHealthRegistryEntry(tenant_id=normalized_tenant, action_type=descriptor.action_type, capability_key=descriptor.capability_key, snapshot=next_snapshot)

@@ -100,7 +100,7 @@ class _CapabilityVerdictRequest:
             constraints["max_actions_per_day"] = request.envelope.metadata.get("max_actions_per_day", 100)
         if "max_actions_per_hour" not in constraints:
             constraints["max_actions_per_hour"] = request.envelope.metadata.get("max_actions_per_hour", 25)
-        autonomy_tier = str(request.envelope.metadata.get("autonomy_tier") or "bounded_autonomy")
+        autonomy_tier = str(request.envelope.metadata.get("autonomy_tier") or "autonomous_bounded")
         return cls(
             tenant_id=tenant_id,
             autonomy_tier=autonomy_tier,

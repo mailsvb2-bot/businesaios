@@ -4,7 +4,7 @@ from collections.abc import Mapping
 from dataclasses import dataclass, field
 from typing import Any
 
-from application.autonomy.autonomy_tiers import ALLOWED_AUTONOMY_TIERS
+from application.autonomy.autonomy_tiers import autonomy_tier_rank, normalize_autonomy_tier
 from application.capability.capability_matrix import CapabilityRecord
 
 CANON_CAPABILITY_TENANT_POLICY = True
@@ -86,17 +86,11 @@ class CapabilityTenantPolicyService:
 
     @staticmethod
     def _normalize_tier(tier: object, *, default: str) -> str:
-        token = _text(tier) or default
-        if token not in ALLOWED_AUTONOMY_TIERS:
-            return default
-        return token
+        return normalize_autonomy_tier(tier, default=default)
 
     @staticmethod
     def _tier_rank(tier: str) -> int:
-        try:
-            return ALLOWED_AUTONOMY_TIERS.index(tier)
-        except ValueError:
-            return 0
+        return autonomy_tier_rank(tier)
 
     def _pick_stricter(self, *, current: CapabilityTenantPolicyVerdict | None, candidate: CapabilityTenantPolicyVerdict) -> CapabilityTenantPolicyVerdict:
         if current is None:
@@ -157,13 +151,13 @@ class CapabilityTenantPolicyService:
 
         supervised_only_action_types = _safe_str_set(policy.get('supervised_only_action_types'))
         supervised_only_capability_keys = _safe_str_set(policy.get('supervised_only_capability_keys'))
-        if autonomy_tier == 'full_autonomy' and (action_type in supervised_only_action_types or capability_key in supervised_only_capability_keys):
+        if autonomy_tier_rank(autonomy_tier) > autonomy_tier_rank('supervised') and (action_type in supervised_only_action_types or capability_key in supervised_only_capability_keys):
             return CapabilityTenantPolicyVerdict(False, 'policy_requires_supervised_autonomy', True, 'supervised', scope, {'action_type': action_type, 'capability_key': capability_key}, ({'code': 'supervised_only', 'action_type': action_type, 'capability_key': capability_key},))
 
         bounded_only_action_types = _safe_str_set(policy.get('bounded_only_action_types'))
         bounded_only_capability_keys = _safe_str_set(policy.get('bounded_only_capability_keys'))
-        if autonomy_tier == 'full_autonomy' and (action_type in bounded_only_action_types or capability_key in bounded_only_capability_keys):
-            return CapabilityTenantPolicyVerdict(False, 'policy_requires_bounded_autonomy', True, 'bounded_autonomy', scope, {'action_type': action_type, 'capability_key': capability_key}, ({'code': 'bounded_only', 'action_type': action_type, 'capability_key': capability_key},))
+        if autonomy_tier_rank(autonomy_tier) > autonomy_tier_rank('autonomous_bounded') and (action_type in bounded_only_action_types or capability_key in bounded_only_capability_keys):
+            return CapabilityTenantPolicyVerdict(False, 'policy_requires_autonomous_bounded', True, 'autonomous_bounded', scope, {'action_type': action_type, 'capability_key': capability_key}, ({'code': 'autonomous_bounded_only', 'action_type': action_type, 'capability_key': capability_key},))
 
         max_tier_by_action = _safe_dict(policy.get('max_autonomy_tier_by_action_type'))
         max_tier_by_capability = _safe_dict(policy.get('max_autonomy_tier_by_capability_key'))

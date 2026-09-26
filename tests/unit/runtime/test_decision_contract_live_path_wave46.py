@@ -164,3 +164,142 @@ def test_live_headless_decision_to_execution_reaches_safety_and_executor():
     executed_envelope = executor.execute.call_args.args[0]
     assert executed_envelope.decision.payload["economy"] == request.economy
     assert executed_envelope.decision.payload["autonomy_safety"]["allowed"] is True
+
+
+def test_budget_exhaustion_downgrades_execution_safety_request_to_supervised():
+    from application.autonomy.autonomy_decision_step import AutonomyDecisionStep
+    from application.autonomy.autonomy_execution_step import AutonomyExecutionStep
+    from runtime.execution.executor_result import ExecutionResult
+
+    @dataclass(frozen=True)
+    class Decision:
+        decision_id: str
+        correlation_id: str
+        action: str
+        payload: dict
+
+    @dataclass(frozen=True)
+    class Envelope:
+        decision: Decision
+
+    class Core:
+        def optimize(self, state):
+            del state
+            return Envelope(
+                Decision(
+                    decision_id="decision-budget",
+                    correlation_id="correlation-budget",
+                    action="notify_owner",
+                    payload={},
+                )
+            )
+
+    class Plan:
+        allowed = True
+        action_type = "notify_owner"
+        payload_patch = {}
+        fallback_used = False
+
+        def to_dict(self):
+            return {
+                "allowed": True,
+                "action_type": "notify_owner",
+                "payload_patch": {},
+                "fallback_used": False,
+                "capability": {
+                    "runtime": {
+                        "risk_budget_exceeded": True,
+                        "recommended_autonomy_tier": "supervised",
+                    }
+                },
+            }
+
+    class SafetyVerdict:
+        allowed = True
+        operator_required = False
+        reason = "allowed"
+        details = {}
+
+        def to_dict(self):
+            return {
+                "allowed": True,
+                "operator_required": False,
+                "reason": "allowed",
+                "details": {},
+                "next_tier": "supervised",
+            }
+
+    class AuditRecord:
+        def to_dict(self):
+            return {}
+
+    class Safety:
+        def __init__(self):
+            self.requests = []
+
+        def evaluate_pre_execution(self, **kwargs):
+            self.requests.append(kwargs["request"])
+            return SafetyVerdict()
+
+        def build_policy_snapshot(self, **kwargs):
+            return {"autonomy_tier": kwargs["request"].autonomy_tier}
+
+        def build_audit_record(self, **kwargs):
+            return AuditRecord()
+
+    safety = Safety()
+    executor = SimpleNamespace(
+        execute=Mock(
+            return_value=ExecutionResult(
+                ok=True,
+                output={"attempted": True, "executed": True, "verified": True},
+                decision_id="decision-budget",
+                correlation_id="correlation-budget",
+            )
+        )
+    )
+    contract = SimpleNamespace(
+        _decision_core=Core(),
+        _policy_explainer=SimpleNamespace(
+            explain=lambda **kwargs: SimpleNamespace(
+                policy_id="policy",
+                summary="ok",
+                factors=(),
+            )
+        ),
+        _capability_aware_planner=SimpleNamespace(plan_action=lambda **kwargs: Plan()),
+        _executor=executor,
+        _autonomy_safety_bundle=safety,
+        _event_log=None,
+        _decision_keyring=None,
+    )
+    request = SimpleNamespace(
+        tenant_id="tenant-1",
+        business_id="business-1",
+        user_id="user-1",
+        autonomy_tier="full_autonomy",
+        approval_policy={},
+        constraints={},
+        economy={},
+        meta={"previous_feedback": {}},
+        channel="headless",
+    )
+    artifacts = AutonomyDecisionStep(contract=contract).evaluate(
+        request=request,
+        state={},
+        trace=SimpleNamespace(record=Mock()),
+        step_index=0,
+        attempt_index=0,
+    )
+    assert artifacts.autonomy_decision.tier == "supervised"
+
+    result = AutonomyExecutionStep(contract=contract).execute(
+        request=request,
+        executable_action=artifacts.executable_action,
+        envelope=artifacts.envelope,
+        autonomy_decision=artifacts.autonomy_decision,
+    )
+    assert result.ok is True
+    assert safety.requests[0].autonomy_tier == "supervised"
+    executed_envelope = executor.execute.call_args.args[0]
+    assert executed_envelope.decision.payload["autonomy_tier"] == "supervised"

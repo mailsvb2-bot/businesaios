@@ -60,6 +60,8 @@ class PersistentAutonomyCounters:
     irreversible_total: int = 0
     budget_change_total: float = 0.0
     publication_total: int = 0
+    leads_hour: int = 0
+    campaigns_day: int = 0
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -69,6 +71,8 @@ class PersistentAutonomyCounters:
             'irreversible_total': int(self.irreversible_total),
             'budget_change_total': float(self.budget_change_total),
             'publication_total': int(self.publication_total),
+            'leads_hour': int(self.leads_hour),
+            'campaigns_day': int(self.campaigns_day),
         }
 
 
@@ -100,6 +104,8 @@ class FileAutonomyCounterStore:
                 irreversible_total=max(0, _safe_int(payload.get('irreversible_total'))),
                 budget_change_total=max(0.0, _safe_float(payload.get('budget_change_total'))),
                 publication_total=max(0, _safe_int(payload.get('publication_total'))),
+                leads_hour=max(0, _safe_int(payload.get('leads_hour'))),
+                campaigns_day=max(0, _safe_int(payload.get('campaigns_day'))),
             )
             now = _utcnow().isoformat()
             records = [{**legacy.to_dict(), 'recorded_at': now, 'action_id': 'legacy-counter-import'}]
@@ -140,6 +146,8 @@ class FileAutonomyCounterStore:
                 'irreversible_count': max(0, _safe_int(item.get('irreversible_count'))),
                 'budget_change_amount': max(0.0, _safe_float(item.get('budget_change_amount'))),
                 'publication_count': max(0, _safe_int(item.get('publication_count'))),
+                'lead_count': max(0, _safe_int(item.get('lead_count'))),
+                'campaign_count': max(0, _safe_int(item.get('campaign_count'))),
                 'recorded_at': recorded_at.isoformat(),
                 'step_index': item.get('step_index') if item.get('step_index') is None else _safe_int(item.get('step_index')),
             })
@@ -161,6 +169,8 @@ class FileAutonomyCounterStore:
             irreversible_total=sum(max(0, _safe_int(item.get('irreversible_count'))) for item in day_records),
             budget_change_total=sum(max(0.0, _safe_float(item.get('budget_change_amount'))) for item in day_records),
             publication_total=sum(max(0, _safe_int(item.get('publication_count'))) for item in day_records),
+            leads_hour=sum(max(0, _safe_int(item.get('lead_count'))) for item in hour_records),
+            campaigns_day=sum(max(0, _safe_int(item.get('campaign_count'))) for item in day_records),
         )
 
     def save(self, *, tenant_id: str, business_id: str, counters: PersistentAutonomyCounters) -> None:
@@ -177,6 +187,8 @@ class FileAutonomyCounterStore:
                 'irreversible_count': max(0, int(counters.irreversible_total)),
                 'budget_change_amount': max(0.0, float(counters.budget_change_total)),
                 'publication_count': max(0, int(counters.publication_total)),
+                'lead_count': max(0, int(counters.leads_hour)),
+                'campaign_count': max(0, int(counters.campaigns_day)),
                 'recorded_at': now,
                 'step_index': None,
             }] * max(1, int(counters.actions_day))
@@ -200,6 +212,8 @@ class FileAutonomyCounterStore:
             'irreversible_count': max(0, _safe_int(item.get('irreversible_count'))),
             'budget_change_amount': max(0.0, _safe_float(item.get('budget_change_amount'))),
             'publication_count': max(0, _safe_int(item.get('publication_count'))),
+            'lead_count': max(0, _safe_int(item.get('lead_count'))),
+            'campaign_count': max(0, _safe_int(item.get('campaign_count'))),
             'recorded_at': _text(item.get('recorded_at')) or _utcnow().isoformat(),
             'step_index': item.get('step_index') if item.get('step_index') is None else _safe_int(item.get('step_index')),
         })
@@ -221,6 +235,8 @@ class AutonomyCounterResolver:
             irreversible_total=sum(max(0, _safe_int(item.get('irreversible_count'))) for item in executed),
             budget_change_total=sum(max(0.0, _safe_float(item.get('budget_change_amount'))) for item in executed),
             publication_total=sum(max(0, _safe_int(item.get('publication_count'))) for item in executed),
+            leads_hour=sum(max(0, _safe_int(item.get('lead_count'))) for item in executed),
+            campaigns_day=sum(max(0, _safe_int(item.get('campaign_count'))) for item in executed),
         )
 
     def resolve(self, *, tenant_id: str, business_id: str, event_log: Any | None, recent_actions: list[dict[str, Any]] | None, action_type: str) -> PersistentAutonomyCounters:
@@ -243,6 +259,8 @@ class AutonomyCounterResolver:
             irreversible_total=max(from_recent.irreversible_total, persisted.irreversible_total),
             budget_change_total=max(from_recent.budget_change_total, persisted.budget_change_total),
             publication_total=max(from_recent.publication_total, persisted.publication_total),
+            leads_hour=max(from_recent.leads_hour, persisted.leads_hour),
+            campaigns_day=max(from_recent.campaigns_day, persisted.campaigns_day),
         )
 
 

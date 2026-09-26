@@ -33,13 +33,15 @@ def _warm_capability(registry: CapabilityHealthRegistry, action_type: str) -> No
         )
 
 
-def test_router_blocks_full_autonomy_on_insufficient_evidence(tmp_path) -> None:
+def test_router_legacy_full_autonomy_normalizes_to_canonical_bounded_bootstrap(tmp_path) -> None:
     matrix = CapabilityMatrix()
     registry = CapabilityHealthRegistry(store=FileCapabilityHealthStore(root_dir=tmp_path / 'health'), matrix=matrix)
     router = ExecutionCapabilityRouter(matrix=matrix, health_registry=registry)
     routed = router.route(request=StubRequest(), state=StubState(), action_type='launch_campaign', payload={'estimated_cost': 10.0})
-    assert routed.allowed is False
-    assert routed.reason == 'insufficient_evidence_for_full_autonomy'
+    assert routed.allowed is True
+    assert routed.reason == 'capability_ok'
+    assert routed.capability is not None
+    assert routed.capability['runtime']['recommended_autonomy_tier'] == 'autonomous_bounded'
 
 
 def test_router_falls_back_on_stale_capability_evidence(tmp_path) -> None:
@@ -73,7 +75,7 @@ def test_router_allows_bounded_autonomy_bootstrap_without_verified_evidence(tmp_
     assert routed.reason == 'capability_ok'
     assert routed.capability is not None
     assert routed.capability['runtime']['evidence_state'] == 'insufficient'
-    assert routed.capability['runtime']['recommended_autonomy_tier'] == 'bounded_autonomy'
+    assert routed.capability['runtime']['recommended_autonomy_tier'] == 'autonomous_bounded'
     assert routed.capability['runtime']['metadata']['bootstrap_mode'] == 'first_run_enabled_without_verified_evidence'
 
 

@@ -3,6 +3,7 @@ from __future__ import annotations
 from application.business_goal import BusinessGoalRegistry
 from application.headless.models import GoalExecutionRequest
 from execution.headless_boot import build_headless_runtime
+from core.ai import _reset_decision_core_singleton_for_tests
 from reliability.idempotency_store import InMemoryIdempotencyStore
 
 
@@ -80,3 +81,44 @@ def test_goal_bound_headless_closed_loop_uses_v2_and_preserves_goal_lineage(
     assert outcomes
     assert decisions[-1]["payload"]["decision"]["goal_id"] == "goal-profit"
     assert outcomes[-1]["payload"]["goal_id"] == "goal-profit"
+
+
+def test_headless_boot_persists_phase7_capability_budgets_across_restart(
+    tmp_path,
+    monkeypatch,
+) -> None:
+    monkeypatch.chdir(tmp_path)
+    build_headless_runtime.cache_clear()
+    first = build_headless_runtime(entrypoint="headless_sdk", root_dir=tmp_path)
+    registry = first.contract._capability_health_registry
+    assert registry._store._root_dir == tmp_path / "capability_health"
+
+    for index in range(4):
+        registry.update_after_feedback(
+            tenant_id="tenant-phase7",
+            action_type="notify_owner",
+            feedback={
+                "executed": True,
+                "verified": True,
+                "risk_score": 1.0,
+                "finished_at": f"2026-09-26T10:0{index}:00Z",
+            },
+        )
+
+    before = registry.runtime_capabilities_for_actions(
+        tenant_id="tenant-phase7",
+        action_types=["notify_owner"],
+    )["notify_owner"]
+    assert before["risk_budget_exceeded"] is True
+    assert before["recommended_autonomy_tier"] == "supervised"
+
+    build_headless_runtime.cache_clear()
+    _reset_decision_core_singleton_for_tests()
+    second = build_headless_runtime(entrypoint="headless_sdk", root_dir=tmp_path)
+    after = second.contract._capability_health_registry.runtime_capabilities_for_actions(
+        tenant_id="tenant-phase7",
+        action_types=["notify_owner"],
+    )["notify_owner"]
+    assert after["accumulated_risk"] == before["accumulated_risk"]
+    assert after["risk_budget_exceeded"] is True
+    assert after["recommended_autonomy_tier"] == "supervised"

@@ -54,6 +54,12 @@ class CapabilityHealthPolicyView:
     evidence_state: str = 'insufficient'
     freshness_score: float = 0.0
     recommended_autonomy_tier: str = 'supervised'
+    error_budget_used: float = 0.0
+    error_budget_limit: float = 0.0
+    error_budget_exceeded: bool = False
+    accumulated_risk: float = 0.0
+    risk_budget_limit: float = 0.0
+    risk_budget_exceeded: bool = False
 
 
 class CapabilityHealthPolicy:
@@ -64,11 +70,17 @@ class CapabilityHealthPolicy:
         cooling_after_hours: float = 24.0,
         low_confidence_threshold: float = 0.35,
         sufficient_evidence_attempts: int = 3,
+        error_budget_limit: float = 3.0,
+        transient_failure_weight: float = 0.25,
+        risk_budget_limit: float = 3.0,
     ) -> None:
         self._stale_after_hours = float(stale_after_hours)
         self._cooling_after_hours = float(cooling_after_hours)
         self._low_confidence_threshold = float(low_confidence_threshold)
         self._sufficient_evidence_attempts = int(max(1, sufficient_evidence_attempts))
+        self._error_budget_limit = max(0.0, float(error_budget_limit))
+        self._transient_failure_weight = max(0.0, float(transient_failure_weight))
+        self._risk_budget_limit = max(0.0, float(risk_budget_limit))
 
     def tier(self, score: float) -> str:
         if score >= 0.80:
@@ -110,6 +122,16 @@ class CapabilityHealthPolicy:
         transient_failure_rate = _ratio(transient_failures, attempts)
         block_rate = _ratio(blocked, attempts)
         terminal_failure_rate = _ratio(terminal_failures, attempts)
+        error_budget_used = terminal_failures + (transient_failures * self._transient_failure_weight)
+        accumulated_risk = max(0.0, _safe_float(counters.get('accumulated_risk')))
+        error_budget_exceeded = (
+            self._error_budget_limit > 0.0
+            and error_budget_used > self._error_budget_limit
+        )
+        risk_budget_exceeded = (
+            self._risk_budget_limit > 0.0
+            and accumulated_risk > self._risk_budget_limit
+        )
 
         staleness_state, freshness_score = self._freshness(updated_at=updated_at, now_utc=now_utc)
         evidence_coverage = min(1.0, attempts / float(self._sufficient_evidence_attempts))
@@ -146,8 +168,11 @@ class CapabilityHealthPolicy:
             evidence_state = 'sufficient'
 
         routing_state = 'enabled'
-        recommended_autonomy_tier = 'full_autonomy'
-        if tier == 'unknown':
+        recommended_autonomy_tier = 'autonomous_bounded'
+        if error_budget_exceeded or risk_budget_exceeded:
+            routing_state = 'fallback_preferred'
+            recommended_autonomy_tier = 'supervised'
+        elif tier == 'unknown':
             routing_state = 'observe'
             recommended_autonomy_tier = 'supervised'
         elif tier == 'unhealthy':
@@ -155,12 +180,12 @@ class CapabilityHealthPolicy:
             recommended_autonomy_tier = 'supervised'
         elif staleness_state == 'stale':
             routing_state = 'fallback_preferred'
-            recommended_autonomy_tier = 'bounded_autonomy'
+            recommended_autonomy_tier = 'autonomous_bounded'
         elif staleness_state == 'cooling' or evidence_state == 'insufficient':
             routing_state = 'observe'
-            recommended_autonomy_tier = 'bounded_autonomy'
+            recommended_autonomy_tier = 'autonomous_bounded'
         elif tier == 'degraded':
-            recommended_autonomy_tier = 'bounded_autonomy'
+            recommended_autonomy_tier = 'autonomous_bounded'
 
         return CapabilityHealthPolicyView(
             success_rate=success_rate,
@@ -169,13 +194,24 @@ class CapabilityHealthPolicy:
             block_rate=block_rate,
             health_score=health_score,
             health_tier=tier,
-            degraded=tier == 'degraded' or staleness_state in {'stale', 'cooling'},
+            degraded=(
+                tier == 'degraded'
+                or staleness_state in {'stale', 'cooling'}
+                or error_budget_exceeded
+                or risk_budget_exceeded
+            ),
             routing_state=routing_state,
             confidence_score=confidence_score,
             staleness_state=staleness_state,
             evidence_state=evidence_state,
             freshness_score=freshness_score,
             recommended_autonomy_tier=recommended_autonomy_tier,
+            error_budget_used=error_budget_used,
+            error_budget_limit=self._error_budget_limit,
+            error_budget_exceeded=error_budget_exceeded,
+            accumulated_risk=accumulated_risk,
+            risk_budget_limit=self._risk_budget_limit,
+            risk_budget_exceeded=risk_budget_exceeded,
         )
 
 

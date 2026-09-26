@@ -121,7 +121,7 @@ class BusinessAutonomyRouteHandlers:
                 goal_id="alignment-preview",
                 goal_type="alignment_preview",
                 goal_payload={"estimated_cost": 0.0, "outbound_count": 0},
-                metadata={"tenant_id": business_id, "autonomy_tier": "bounded_autonomy"},
+                metadata={"tenant_id": business_id, "autonomy_tier": "autonomous_bounded"},
             ),
             integration_mode=IntegrationMode.POLICY_GUARDED_DELEGATED,
             correlation_id="alignment-preview",

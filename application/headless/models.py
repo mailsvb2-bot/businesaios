@@ -3,7 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any
 
-from application.autonomy.autonomy_tiers import ALLOWED_AUTONOMY_TIERS
+from application.autonomy.autonomy_tiers import ALLOWED_AUTONOMY_TIERS, normalize_autonomy_tier
 
 CANON_HEADLESS_MODELS = True
 
@@ -47,6 +47,11 @@ class GoalExecutionRequest:
     approval_policy: dict[str, Any] = field(default_factory=dict)
     goal_id: str | None = None
 
+    def __post_init__(self) -> None:
+        raw = str(self.autonomy_tier or "").strip().lower()
+        if raw in ALLOWED_AUTONOMY_TIERS:
+            object.__setattr__(self, "autonomy_tier", normalize_autonomy_tier(raw))
+
     def validate(self) -> tuple[bool, tuple[str, ...]]:
         issues: list[str] = []
         if not str(self.goal or "").strip():
@@ -63,7 +68,8 @@ class GoalExecutionRequest:
             issues.append("invalid:max_steps")
         if int(self.max_steps) > 20:
             issues.append("invalid:max_steps_too_large")
-        if str(self.autonomy_tier or '').strip() not in ALLOWED_AUTONOMY_TIERS:
+        autonomy_tier_input = str(self.autonomy_tier or '').strip().lower()
+        if autonomy_tier_input not in ALLOWED_AUTONOMY_TIERS:
             issues.append('invalid:autonomy_tier')
         ceo_ok, ceo_issues = self.ceo.validate()
         if not ceo_ok:

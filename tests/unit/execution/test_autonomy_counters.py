@@ -14,3 +14,19 @@ def test_counter_store_persists_counts(tmp_path: Path) -> None:
     assert counters.irreversible_total == 1
     assert counters.budget_change_total == 5.0
     assert counters.publication_total == 3
+
+
+def test_counter_store_persists_non_financial_autonomy_dimensions(tmp_path: Path) -> None:
+    store = FileAutonomyCounterStore(root_dir=tmp_path)
+    store.record_step(
+        tenant_id="t1",
+        business_id="b1",
+        recent_action={
+            "executed": True,
+            "lead_count": 4,
+            "campaign_count": 2,
+        },
+    )
+    counters = store.load(tenant_id="t1", business_id="b1")
+    assert counters.leads_hour == 4
+    assert counters.campaigns_day == 2
