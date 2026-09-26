@@ -55,13 +55,14 @@ def _decision_contract_v2_seed(
 ) -> dict[str, Any]:
     state_meta = _state_meta(state)
     ranking = _mapping(getattr(out, "ranking", {}) or {})
-    alternatives_raw = ranking.get("_decision_alternatives")
+    decision_context = _mapping(getattr(out, "_decision_context", {}) or {})
+    alternatives_raw = decision_context.get("alternatives", ranking.get("_decision_alternatives"))
     alternatives = (
         tuple(dict(item) for item in alternatives_raw if isinstance(item, Mapping))
         if isinstance(alternatives_raw, list | tuple)
         else None
     )
-    selection = _mapping(ranking.get("_decision_selection"))
+    selection = _mapping(decision_context.get("selection", ranking.get("_decision_selection")))
     if not selection:
         selection = {"option_id": str(getattr(out, "action", "") or "")}
 

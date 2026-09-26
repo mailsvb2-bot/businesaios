@@ -29,11 +29,17 @@ def _materialize_ranked(
     action: str,
     payload: dict[str, Any],
     ranking: dict[str, Any],
+    decision_context: dict[str, Any],
 ) -> Any:
     if isinstance(prototype, dict):
         return SimpleNamespace(action=str(action), payload=dict(payload), ranking=dict(ranking))
     try:
-        return type(prototype)(action=str(action), payload=dict(payload), ranking=dict(ranking))
+        return type(prototype)(
+            action=str(action),
+            payload=dict(payload),
+            ranking=dict(ranking),
+            _decision_context=dict(decision_context),
+        )
     except TypeError:
         try:
             output = type(prototype)(action=str(action), payload=dict(payload))
@@ -85,10 +91,9 @@ def propose_action(*, policy: Any, state: Any, trace: Any) -> Any:
         }
         for item in ranked
     ]
-    selected_ranking = {
-        **dict(selected.ranking),
-        "_decision_alternatives": decision_alternatives,
-        "_decision_selection": {
+    decision_context = {
+        "alternatives": decision_alternatives,
+        "selection": {
             "option_id": str(selected.action),
             "score": float(selected.score),
             "reason": str(selected.reason),
@@ -98,7 +103,8 @@ def propose_action(*, policy: Any, state: Any, trace: Any) -> Any:
         prototype=candidates[selected.source_index],
         action=selected.action,
         payload=selected.payload,
-        ranking=selected_ranking,
+        ranking=dict(selected.ranking),
+        decision_context=decision_context,
     )
     trace.try_add_step(
         name="rank_candidates",
