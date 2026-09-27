@@ -199,6 +199,37 @@ def test_runtime_reliability_projects_only_explicit_task_scope_into_checkpoint()
     assert rebuilt == checkpoint
 
 
+def test_runtime_reliability_only_binds_outbox_reference_after_effect_boundary() -> None:
+    runtime = _runtime_reliability_for_checkpoint_test()
+    env = SimpleNamespace(
+        decision=SimpleNamespace(
+            decision_id="decision-boundary",
+            correlation_id="trace-boundary",
+            action="send_message@v1",
+            payload={
+                "tenant_id": "tenant-a",
+                "business_id": "business-a",
+                "task_id": "task-a",
+                "task_run_id": "task-run-a",
+                "step_id": "step-a",
+                "idempotency_key": "idem-a",
+            },
+        )
+    )
+    request_checkpoint = runtime.append_checkpoint(
+        env,
+        stage="request",
+        checkpoint_id="request-boundary",
+    )
+    assert request_checkpoint.outbox_message_id is None
+    execution_checkpoint = runtime.append_checkpoint(
+        env,
+        stage="execution",
+        checkpoint_id="execution-boundary",
+    )
+    assert execution_checkpoint.outbox_message_id == "decision-boundary"
+
+
 def test_runtime_reliability_fails_closed_on_incomplete_task_scope() -> None:
     runtime = _runtime_reliability_for_checkpoint_test()
     env = SimpleNamespace(
