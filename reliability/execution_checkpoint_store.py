@@ -255,7 +255,7 @@ class InMemoryExecutionCheckpointStore(ExecutionCheckpointStore):
             checkpoints.sort(
                 key=lambda item: (item.created_at, item.run_id, item.sequence_no, item.checkpoint_id)
             )
-            first, latest = checkpoints[0], checkpoints[-1]
+            latest = checkpoints[-1]
             steps.append(
                 DurableTaskStep(
                     tenant_id=tenant,
