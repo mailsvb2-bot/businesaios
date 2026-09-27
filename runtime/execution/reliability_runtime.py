@@ -8,8 +8,8 @@ from typing import Any
 
 from reliability.distributed_lock import DistributedLock, build_distributed_lock
 from reliability.execution_checkpoint_store import (
-    ExecutionCheckpoint,
     CANON_CHECKPOINT_STAGE_ORDER,
+    ExecutionCheckpoint,
     ExecutionCheckpointStore,
     JsonlExecutionCheckpointStore,
 )
@@ -222,9 +222,15 @@ class RuntimeReliability:
         tenant_id = self.tenant_id_for_env(env)
         run_id = self.run_id_for_env(env)
         latest = self.checkpoint_store.latest(tenant_id=tenant_id, run_id=run_id)
-        if latest is not None and latest.stage != "failed" and stage in CANON_CHECKPOINT_STAGE_ORDER and latest.stage in CANON_CHECKPOINT_STAGE_ORDER:
-            if CANON_CHECKPOINT_STAGE_ORDER.index(stage) <= CANON_CHECKPOINT_STAGE_ORDER.index(latest.stage):
-                return latest
+        if (
+            latest is not None
+            and latest.stage != "failed"
+            and stage in CANON_CHECKPOINT_STAGE_ORDER
+            and latest.stage in CANON_CHECKPOINT_STAGE_ORDER
+            and CANON_CHECKPOINT_STAGE_ORDER.index(stage)
+            <= CANON_CHECKPOINT_STAGE_ORDER.index(latest.stage)
+        ):
+            return latest
         next_seq = int(sequence_no) if sequence_no is not None else (0 if latest is None else int(latest.sequence_no) + 1)
         decision = getattr(env, "decision", None)
         business_id, task_id, step_id = self.task_scope_for_env(env)
