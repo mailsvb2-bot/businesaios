@@ -149,3 +149,23 @@ def test_phase9_blank_task_binding_is_invalid_without_affecting_legacy_requests(
     legacy_ok, legacy_issues = legacy.validate()
     assert legacy_ok is True
     assert "invalid:task_id" not in legacy_issues
+
+
+
+@pytest.mark.parametrize("status", ["created", "waiting", "paused", "blocked", "compensating"])
+def test_phase9_non_executable_task_states_fail_before_effect(
+    tmp_path: Path,
+    status: str,
+) -> None:
+    contract = _build_contract(tmp_path)
+    registry = _TaskRegistry(status)
+    contract._task_registry = registry
+    request = GoalExecutionRequest(
+        goal="execute durable task",
+        business_id="biz-1",
+        tenant_id="tenant-1",
+        meta={"task_id": "task-1"},
+    )
+    with pytest.raises(ValueError, match="not executable"):
+        contract.execute_autopilot(request)
+    assert registry.calls == [("tenant-1", "biz-1", "task-1")]
