@@ -8,6 +8,7 @@ from typing import Any
 import pytest
 
 from application.headless.models import GoalExecutionRequest
+from application.task.registry import TaskConflictController
 from contracts.task import RetryPolicy, TimeoutPolicy
 from execution.goal_plan_memory import FileGoalPlanMemoryStore, GoalPlanMemoryService
 from execution.headless_contract import HeadlessExecutionContract
