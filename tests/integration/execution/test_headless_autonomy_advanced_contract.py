@@ -244,3 +244,95 @@ def test_phase9_incomplete_running_task_fails_before_duplicate_effect(tmp_path: 
     )
     with pytest.raises(RuntimeError, match="incomplete execution run"):
         contract.execute_autopilot(request)
+
+
+
+def test_phase9_recovery_approved_early_restart_is_allowed(tmp_path: Path) -> None:
+    contract = _build_contract(
+        tmp_path,
+        executor_ok=True,
+        executor_output={"verified": True, "goal_reached": True},
+    )
+    contract._task_registry = _TaskRegistry("running")
+
+    class _CheckpointStore:
+        def list_task_runs(self, **kwargs: Any):
+            del kwargs
+            return (
+                type(
+                    "Run",
+                    (),
+                    {"run_id": "task-run-1", "terminal_stage": None},
+                )(),
+            )
+
+    class _Reliability:
+        checkpoint_store = _CheckpointStore()
+
+        def plan_task_run_recovery(self, **kwargs: Any):
+            assert kwargs == {
+                "tenant_id": "tenant-1",
+                "business_id": "biz-1",
+                "task_id": "task-1",
+                "task_run_id": "task-run-1",
+            }
+            return type(
+                "Plan",
+                (),
+                {
+                    "recovery_action": "restart",
+                    "resume_stage": "world_state",
+                },
+            )()
+
+    contract._executor._reliability = _Reliability()
+    report = contract.execute_autopilot(
+        GoalExecutionRequest(
+            goal="resume durable task",
+            business_id="biz-1",
+            tenant_id="tenant-1",
+            meta={"task_id": "task-1"},
+        )
+    )
+    assert report.completed is True
+
+
+def test_phase9_recovery_does_not_blindly_replay_post_decision_run(tmp_path: Path) -> None:
+    contract = _build_contract(tmp_path)
+    contract._task_registry = _TaskRegistry("running")
+
+    class _CheckpointStore:
+        def list_task_runs(self, **kwargs: Any):
+            del kwargs
+            return (
+                type(
+                    "Run",
+                    (),
+                    {"run_id": "task-run-2", "terminal_stage": None},
+                )(),
+            )
+
+    class _Reliability:
+        checkpoint_store = _CheckpointStore()
+
+        def plan_task_run_recovery(self, **kwargs: Any):
+            del kwargs
+            return type(
+                "Plan",
+                (),
+                {
+                    "recovery_action": "resume_execution",
+                    "resume_stage": "execution",
+                },
+            )()
+
+    contract._executor._reliability = _Reliability()
+    with pytest.raises(RuntimeError, match="recovery action required: resume_execution"):
+        contract.execute_autopilot(
+            GoalExecutionRequest(
+                goal="resume durable task",
+                business_id="biz-1",
+                tenant_id="tenant-1",
+                meta={"task_id": "task-1"},
+            )
+        )
