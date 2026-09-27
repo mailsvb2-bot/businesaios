@@ -241,3 +241,109 @@ def test_runtime_reliability_does_not_invent_task_scope_for_legacy_decision() ->
     assert checkpoint.business_id == "business-a"
     assert checkpoint.task_id is None
     assert checkpoint.step_id is None
+
+
+
+def test_phase9_task_run_and_step_projection_reuses_checkpoint_owner(tmp_path) -> None:
+    path = tmp_path / "run-step-checkpoints.jsonl"
+    store = JsonlExecutionCheckpointStore(path)
+    rows = (
+        ExecutionCheckpoint(
+            tenant_id="tenant-p9",
+            business_id="business-p9",
+            task_id="task-p9",
+            step_id="step-a",
+            run_id="run-a",
+            sequence_no=1,
+            stage="request",
+            checkpoint_id="cp-1",
+        ),
+        ExecutionCheckpoint(
+            tenant_id="tenant-p9",
+            business_id="business-p9",
+            task_id="task-p9",
+            step_id="step-a",
+            run_id="run-a",
+            sequence_no=2,
+            stage="execution",
+            checkpoint_id="cp-2",
+        ),
+        ExecutionCheckpoint(
+            tenant_id="tenant-p9",
+            business_id="business-p9",
+            task_id="task-p9",
+            step_id="step-b",
+            run_id="run-a",
+            sequence_no=3,
+            stage="completed",
+            checkpoint_id="cp-3",
+        ),
+    )
+    for row in rows:
+        store.append(row)
+
+    rebuilt = JsonlExecutionCheckpointStore(path)
+    runs = rebuilt.list_task_runs(
+        tenant_id="tenant-p9",
+        business_id="business-p9",
+        task_id="task-p9",
+    )
+    assert len(runs) == 1
+    assert runs[0].run_id == "run-a"
+    assert runs[0].checkpoint_count == 3
+    assert runs[0].terminal_stage == "completed"
+
+    steps = rebuilt.list_run_steps(
+        tenant_id="tenant-p9",
+        business_id="business-p9",
+        task_id="task-p9",
+        run_id="run-a",
+    )
+    assert [item.step_id for item in steps] == ["step-a", "step-b"]
+    assert steps[0].first_sequence_no == 1
+    assert steps[0].last_sequence_no == 2
+    assert steps[0].checkpoint_count == 2
+    assert steps[0].latest_stage == "execution"
+    assert steps[1].latest_stage == "completed"
+
+
+def test_phase9_run_step_projection_is_business_and_task_isolated() -> None:
+    store = InMemoryExecutionCheckpointStore()
+    store.append(
+        ExecutionCheckpoint(
+            tenant_id="tenant-p9",
+            business_id="business-a",
+            task_id="task-a",
+            step_id="step-a",
+            run_id="run-shared",
+            sequence_no=1,
+            stage="request",
+            checkpoint_id="cp-a",
+        )
+    )
+    store.append(
+        ExecutionCheckpoint(
+            tenant_id="tenant-p9",
+            business_id="business-b",
+            task_id="task-b",
+            step_id="step-b",
+            run_id="run-shared",
+            sequence_no=2,
+            stage="decision",
+            checkpoint_id="cp-b",
+        )
+    )
+
+    runs = store.list_task_runs(
+        tenant_id="tenant-p9",
+        business_id="business-a",
+        task_id="task-a",
+    )
+    assert [item.run_id for item in runs] == ["run-shared"]
+    steps = store.list_run_steps(
+        tenant_id="tenant-p9",
+        business_id="business-a",
+        task_id="task-a",
+        run_id="run-shared",
+    )
+    assert [item.step_id for item in steps] == ["step-a"]
