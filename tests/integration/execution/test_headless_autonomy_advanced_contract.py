@@ -206,3 +206,41 @@ def test_phase9_expired_task_deadline_fails_before_effect(tmp_path: Path) -> Non
     with pytest.raises(TimeoutError, match="deadline"):
         contract.execute_autopilot(request)
     assert registry.calls == [("tenant-1", "biz-1", "task-1")]
+
+
+
+def test_phase9_running_task_requires_recovery_checkpoint_owner(tmp_path: Path) -> None:
+    contract = _build_contract(tmp_path)
+    contract._task_registry = _TaskRegistry("running")
+    request = GoalExecutionRequest(
+        goal="resume durable task",
+        business_id="biz-1",
+        tenant_id="tenant-1",
+        meta={"task_id": "task-1"},
+    )
+    with pytest.raises(RuntimeError, match="recovery checkpoints"):
+        contract.execute_autopilot(request)
+
+
+def test_phase9_incomplete_running_task_fails_before_duplicate_effect(tmp_path: Path) -> None:
+    contract = _build_contract(tmp_path)
+    contract._task_registry = _TaskRegistry("running")
+
+    class _CheckpointStore:
+        def list_task_runs(self, **kwargs: Any):
+            del kwargs
+            return (type("Run", (), {"terminal_stage": None})(),)
+
+    contract._executor._reliability = type(
+        "Reliability",
+        (),
+        {"checkpoint_store": _CheckpointStore()},
+    )()
+    request = GoalExecutionRequest(
+        goal="resume durable task",
+        business_id="biz-1",
+        tenant_id="tenant-1",
+        meta={"task_id": "task-1"},
+    )
+    with pytest.raises(RuntimeError, match="incomplete execution run"):
+        contract.execute_autopilot(request)
