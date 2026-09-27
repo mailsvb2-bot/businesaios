@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from collections.abc import Mapping
+from hashlib import sha256
 from typing import Any
 
 from contracts.task import DurableTask, DurableTaskStatus
@@ -49,13 +50,15 @@ def build_task_job_request(
         if task.retry_policy.retry_ambiguous
         else JobClaimExpiryPolicy.DEAD_LETTER_AMBIGUOUS
     )
+    dedupe_material = "\0".join((task.business_id, task.task_id, suffix)).encode("utf-8")
+    durable_dedupe_key = f"durable-task-{sha256(dedupe_material).hexdigest()[:32]}"
     return JobDispatchRequest(
         tenant_id=task.tenant_id,
         job_id=job_id,
         queue_name=queue_name,
         job_type=job_type,
         payload=body,
-        dedupe_key=f"durable-task:{task.business_id}:{task.task_id}:{suffix}",
+        dedupe_key=durable_dedupe_key,
         delay_seconds=delay_seconds,
         priority=priority,
         max_attempts=task.retry_policy.max_attempts,
