@@ -139,6 +139,7 @@ class HeadlessExecutionContract:
         autonomy_safety_bundle: AutonomySafetyBundle | None = None,
         owner_path_service: Any | None = None,
         agent_identity_registry: Any | None = None,
+        task_registry: Any | None = None,
     ) -> None:
         try:
             validate_headless_decision_core(decision_core)
@@ -150,6 +151,7 @@ class HeadlessExecutionContract:
         self._executor = executor
         self._state_mapper = state_mapper
         self._agent_identity_registry = agent_identity_registry
+        self._task_registry = task_registry
         self._feedback_reader = feedback_reader
         self._stop_policy = stop_policy or HeadlessStopPolicy()
         self._ledger = ledger
@@ -260,6 +262,18 @@ class HeadlessExecutionContract:
         )
 
     def execute_autopilot(self, request: GoalExecutionRequest) -> GoalExecutionReport:
+        task_id = str(getattr(request, "task_id", "") or "").strip()
+        if task_id:
+            if self._task_registry is None:
+                raise RuntimeError("canonical task registry is required for task-bound execution")
+            task = self._task_registry.get(
+                tenant_id=request.tenant_id,
+                business_id=request.business_id,
+                task_id=task_id,
+            )
+            status = str(getattr(getattr(task, "status", None), "value", getattr(task, "status", "")) or "")
+            if status in {"succeeded", "failed", "cancelled"}:
+                raise ValueError("terminal task cannot start a new execution run")
         loop_result = self._loop.run(request)
         run_artifact = canonical_goal_execution_report(
             goal=request.goal,
