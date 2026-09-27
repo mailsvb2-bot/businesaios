@@ -4,6 +4,7 @@ import threading
 
 import pytest
 
+from application.artifact import ArtifactRegistry
 from application.task import (
     DurableTaskHistoryInvariantViolation,
     DurableTaskProjector,
@@ -455,3 +456,110 @@ def test_phase9_compensation_is_explicit_and_not_fake_rollback() -> None:
     )
     assert failed.status is DurableTaskStatus.FAILED
     assert failed.terminal_at_ms == 130
+
+
+
+def test_phase9_task_artifact_binding_reuses_canonical_artifact_owner() -> None:
+    events = MemoryEventStore()
+    claims = InMemoryIdempotencyStore()
+    artifacts = ArtifactRegistry(event_store=events, idempotency_store=claims)
+    registry = DurableTaskRegistry(
+        event_store=events,
+        idempotency_store=claims,
+        artifact_registry=artifacts,
+    )
+    artifacts.create(
+        tenant_id="tenant-p9",
+        business_id="business-p9",
+        artifact_id="artifact-p9",
+        idempotency_key="artifact-create",
+        artifact_kind="execution_output",
+        storage_ref="evidence://artifact-p9",
+        occurred_at_ms=90,
+    )
+    registry.create(
+        tenant_id="tenant-p9",
+        business_id="business-p9",
+        task_id="task-p9",
+        idempotency_key="task-create",
+        occurred_at_ms=100,
+    )
+    attached = registry.attach_artifact(
+        tenant_id="tenant-p9",
+        business_id="business-p9",
+        task_id="task-p9",
+        artifact_id="artifact-p9",
+        idempotency_key="attach",
+        expected_version=1,
+        occurred_at_ms=110,
+    )
+    assert attached.artifact_ids == ("artifact-p9",)
+    assert attached.version == 2
+    assert registry.attach_artifact(
+        tenant_id="tenant-p9",
+        business_id="business-p9",
+        task_id="task-p9",
+        artifact_id="artifact-p9",
+        idempotency_key="attach",
+        occurred_at_ms=999,
+    ) == attached
+
+
+def test_phase9_task_artifact_binding_fails_closed_for_wrong_scope_and_terminal_task() -> None:
+    events = MemoryEventStore()
+    claims = InMemoryIdempotencyStore()
+    artifacts = ArtifactRegistry(event_store=events, idempotency_store=claims)
+    registry = DurableTaskRegistry(
+        event_store=events,
+        idempotency_store=claims,
+        artifact_registry=artifacts,
+    )
+    artifacts.create(
+        tenant_id="tenant-p9",
+        business_id="other-business",
+        artifact_id="artifact-other",
+        idempotency_key="artifact-create",
+        occurred_at_ms=90,
+    )
+    registry.create(
+        tenant_id="tenant-p9",
+        business_id="business-p9",
+        task_id="task-p9",
+        idempotency_key="task-create",
+        occurred_at_ms=100,
+    )
+    before = len(events.events)
+    with pytest.raises(LookupError):
+        registry.attach_artifact(
+            tenant_id="tenant-p9",
+            business_id="business-p9",
+            task_id="task-p9",
+            artifact_id="artifact-other",
+            idempotency_key="attach-wrong-scope",
+            occurred_at_ms=110,
+        )
+    assert len(events.events) == before
+
+    registry.start(
+        tenant_id="tenant-p9",
+        business_id="business-p9",
+        task_id="task-p9",
+        idempotency_key="start",
+        occurred_at_ms=120,
+    )
+    registry.complete(
+        tenant_id="tenant-p9",
+        business_id="business-p9",
+        task_id="task-p9",
+        idempotency_key="complete",
+        occurred_at_ms=130,
+    )
+    with pytest.raises(ValueError, match="terminal task"):
+        registry.attach_artifact(
+            tenant_id="tenant-p9",
+            business_id="business-p9",
+            task_id="task-p9",
+            artifact_id="artifact-other",
+            idempotency_key="attach-terminal",
+            occurred_at_ms=140,
+        )
