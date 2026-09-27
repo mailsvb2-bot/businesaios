@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import threading
 
-from application.task.conflict_control import TaskConflictController
+from application.task.registry import TaskConflictController
 from reliability.distributed_lock import InMemoryDistributedLock
 
 
