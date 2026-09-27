@@ -11,6 +11,7 @@ from contracts.task import RetryPolicy, TimeoutPolicy
 from execution.goal_plan_memory import FileGoalPlanMemoryStore, GoalPlanMemoryService
 from execution.headless_contract import HeadlessExecutionContract
 from runtime.execution.executor_result import ExecutionResult
+from reliability.distributed_lock import InMemoryDistributedLock
 from reliability.recovery_policy_engine import RecoveryPolicyDecision
 
 
@@ -105,10 +106,12 @@ class _TaskRegistry:
         *,
         retry_policy: RetryPolicy | None = None,
         timeout_policy: TimeoutPolicy | None = None,
+        conflict_keys: tuple[str, ...] = (),
     ) -> None:
         self.status = status
         self.retry_policy = retry_policy
         self.timeout_policy = timeout_policy
+        self.conflict_keys = conflict_keys
         self.calls: list[tuple[str, str, str]] = []
 
     def get(self, *, tenant_id: str, business_id: str, task_id: str):
@@ -121,6 +124,7 @@ class _TaskRegistry:
                 "status": status,
                 "retry_policy": self.retry_policy,
                 "timeout_policy": self.timeout_policy,
+                "conflict_keys": self.conflict_keys,
             },
         )()
 
@@ -333,3 +337,90 @@ def test_phase9_recovery_does_not_blindly_replay_post_decision_run(tmp_path: Pat
                 meta={"task_id": "task-1"},
             )
         )
+
+
+
+def test_phase9_conflicting_task_requires_canonical_distributed_lock(tmp_path: Path) -> None:
+    contract = _build_contract(tmp_path)
+    contract._task_registry = _TaskRegistry(
+        "ready",
+        conflict_keys=("ledger",),
+    )
+    with pytest.raises(RuntimeError, match="canonical distributed lock"):
+        contract.execute_autopilot(
+            GoalExecutionRequest(
+                goal="execute durable task",
+                business_id="biz-1",
+                tenant_id="tenant-1",
+                meta={"task_id": "task-1"},
+            )
+        )
+
+
+def test_phase9_conflict_lock_blocks_second_task_before_effect(tmp_path: Path) -> None:
+    lock = InMemoryDistributedLock()
+    contract = _build_contract(tmp_path)
+    contract._task_registry = _TaskRegistry(
+        "ready",
+        conflict_keys=("ledger",),
+    )
+    contract._executor._reliability = type(
+        "Reliability",
+        (),
+        {"distributed_lock": lock},
+    )()
+
+    existing = lock.acquire(
+        tenant_id="tenant-1",
+        resource="durable-task-conflict:biz-1:ledger",
+        owner_id="durable-task:biz-1:other-task",
+        ttl_seconds=3600,
+    )
+    assert existing is not None
+    try:
+        with pytest.raises(RuntimeError, match="already locked"):
+            contract.execute_autopilot(
+                GoalExecutionRequest(
+                    goal="execute durable task",
+                    business_id="biz-1",
+                    tenant_id="tenant-1",
+                    meta={"task_id": "task-1"},
+                )
+            )
+    finally:
+        lock.release(lease=existing)
+
+
+def test_phase9_conflict_lock_released_after_execution(tmp_path: Path) -> None:
+    lock = InMemoryDistributedLock()
+    contract = _build_contract(
+        tmp_path,
+        executor_ok=True,
+        executor_output={"verified": True, "goal_reached": True},
+    )
+    contract._task_registry = _TaskRegistry(
+        "ready",
+        conflict_keys=("ledger",),
+    )
+    contract._executor._reliability = type(
+        "Reliability",
+        (),
+        {"distributed_lock": lock},
+    )()
+    report = contract.execute_autopilot(
+        GoalExecutionRequest(
+            goal="execute durable task",
+            business_id="biz-1",
+            tenant_id="tenant-1",
+            meta={"task_id": "task-1"},
+        )
+    )
+    assert report.completed is True
+    reacquired = lock.acquire(
+        tenant_id="tenant-1",
+        resource="durable-task-conflict:biz-1:ledger",
+        owner_id="durable-task:biz-1:after",
+        ttl_seconds=60,
+    )
+    assert reacquired is not None
+    lock.release(lease=reacquired)
