@@ -278,6 +278,23 @@ class HeadlessExecutionContract:
                 raise ValueError("terminal task cannot start a new execution run")
             if status not in {"ready", "running"}:
                 raise ValueError(f"task is not executable from status: {status or 'unknown'}")
+            if status == "running":
+                reliability = getattr(self._executor, "_reliability", None)
+                checkpoint_store = getattr(reliability, "checkpoint_store", None)
+                list_task_runs = getattr(checkpoint_store, "list_task_runs", None)
+                if not callable(list_task_runs):
+                    raise RuntimeError(
+                        "running durable task requires canonical recovery checkpoints"
+                    )
+                runs = list_task_runs(
+                    tenant_id=request.tenant_id,
+                    business_id=request.business_id,
+                    task_id=task_id,
+                )
+                if runs and getattr(runs[-1], "terminal_stage", None) is None:
+                    raise RuntimeError(
+                        "durable task has an incomplete execution run; recovery is required"
+                    )
             timeout_policy = getattr(task, "timeout_policy", None)
             if timeout_policy is not None and timeout_policy.is_task_timed_out(
                 now_ms=int(time.time() * 1000)
