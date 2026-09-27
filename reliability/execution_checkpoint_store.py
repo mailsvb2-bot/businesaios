@@ -7,6 +7,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Mapping, Protocol
 import json
+import os
 import threading
 
 from core.tenancy.normalization import require_tenant_id
@@ -45,6 +46,9 @@ class ExecutionCheckpoint:
     action_id: str | None = None
     idempotency_key: str | None = None
     outbox_message_id: str | None = None
+    business_id: str | None = None
+    task_id: str | None = None
+    step_id: str | None = None
     payload: Mapping[str, Any] = field(default_factory=dict)
 
     def validate(self) -> None:
@@ -59,6 +63,13 @@ class ExecutionCheckpoint:
             raise ValueError("checkpoint_id is required")
         if self.created_at.tzinfo is None:
             raise ValueError("created_at must be timezone-aware")
+        business_id = str(self.business_id or "").strip()
+        task_id = str(self.task_id or "").strip()
+        step_id = str(self.step_id or "").strip()
+        if task_id and not business_id:
+            raise ValueError("task-scoped checkpoint requires business_id")
+        if step_id and not task_id:
+            raise ValueError("step-scoped checkpoint requires task_id")
 
     def to_row(self) -> dict[str, Any]:
         self.validate()
@@ -84,6 +95,9 @@ class ExecutionCheckpoint:
             action_id=row.get("action_id"),
             idempotency_key=row.get("idempotency_key"),
             outbox_message_id=row.get("outbox_message_id"),
+            business_id=row.get("business_id"),
+            task_id=row.get("task_id"),
+            step_id=row.get("step_id"),
             payload=dict(row.get("payload") or {}),
         )
         checkpoint.validate()
@@ -94,6 +108,8 @@ class ExecutionCheckpointStore(Protocol):
     def append(self, checkpoint: ExecutionCheckpoint) -> None: ...
     def latest(self, *, tenant_id: str, run_id: str) -> ExecutionCheckpoint | None: ...
     def list_run(self, *, tenant_id: str, run_id: str) -> tuple[ExecutionCheckpoint, ...]: ...
+    def list_task(self, *, tenant_id: str, business_id: str, task_id: str) -> tuple[ExecutionCheckpoint, ...]: ...
+    def latest_for_task(self, *, tenant_id: str, business_id: str, task_id: str) -> ExecutionCheckpoint | None: ...
 
 
 class InMemoryExecutionCheckpointStore(ExecutionCheckpointStore):
@@ -106,12 +122,12 @@ class InMemoryExecutionCheckpointStore(ExecutionCheckpointStore):
         cache_key = (checkpoint.tenant_id, checkpoint.run_id)
         with self._lock:
             items = self._items.setdefault(cache_key, [])
+            if any(item.checkpoint_id == checkpoint.checkpoint_id for item in items):
+                raise ValueError("checkpoint_id must be unique within run")
             if items:
                 latest = items[-1]
                 if checkpoint.sequence_no <= latest.sequence_no:
                     raise ValueError("checkpoint sequence_no must strictly increase")
-                if checkpoint.checkpoint_id == latest.checkpoint_id:
-                    raise ValueError("checkpoint_id must be unique within run")
                 current_index = _STAGE_INDEX.get(str(latest.stage))
                 new_index = _STAGE_INDEX.get(str(checkpoint.stage))
                 if current_index is not None and new_index is not None and latest.stage != "failed":
@@ -127,6 +143,27 @@ class InMemoryExecutionCheckpointStore(ExecutionCheckpointStore):
     def list_run(self, *, tenant_id: str, run_id: str) -> tuple[ExecutionCheckpoint, ...]:
         with self._lock:
             return tuple(self._items.get((require_tenant_id(tenant_id), str(run_id)), []))
+
+    def list_task(self, *, tenant_id: str, business_id: str, task_id: str) -> tuple[ExecutionCheckpoint, ...]:
+        tenant = require_tenant_id(tenant_id)
+        business = str(business_id or "").strip()
+        task = str(task_id or "").strip()
+        if not business or not task:
+            raise ValueError("business_id and task_id are required")
+        with self._lock:
+            matches = [
+                item
+                for (item_tenant, _), items in self._items.items()
+                if item_tenant == tenant
+                for item in items
+                if str(item.business_id or "") == business and str(item.task_id or "") == task
+            ]
+        matches.sort(key=lambda item: (item.created_at, item.run_id, item.sequence_no, item.checkpoint_id))
+        return tuple(matches)
+
+    def latest_for_task(self, *, tenant_id: str, business_id: str, task_id: str) -> ExecutionCheckpoint | None:
+        items = self.list_task(tenant_id=tenant_id, business_id=business_id, task_id=task_id)
+        return items[-1] if items else None
 
 
 class JsonlExecutionCheckpointStore(ExecutionCheckpointStore):
@@ -148,12 +185,19 @@ class JsonlExecutionCheckpointStore(ExecutionCheckpointStore):
             with self._path.open("a", encoding="utf-8") as fh:
                 fh.write(json.dumps(checkpoint.to_row(), ensure_ascii=False, sort_keys=True) + "\n")
                 fh.flush()
+                os.fsync(fh.fileno())
 
     def latest(self, *, tenant_id: str, run_id: str) -> ExecutionCheckpoint | None:
         return self._cache.latest(tenant_id=tenant_id, run_id=run_id)
 
     def list_run(self, *, tenant_id: str, run_id: str) -> tuple[ExecutionCheckpoint, ...]:
         return self._cache.list_run(tenant_id=tenant_id, run_id=run_id)
+
+    def list_task(self, *, tenant_id: str, business_id: str, task_id: str) -> tuple[ExecutionCheckpoint, ...]:
+        return self._cache.list_task(tenant_id=tenant_id, business_id=business_id, task_id=task_id)
+
+    def latest_for_task(self, *, tenant_id: str, business_id: str, task_id: str) -> ExecutionCheckpoint | None:
+        return self._cache.latest_for_task(tenant_id=tenant_id, business_id=business_id, task_id=task_id)
 
 
 __all__ = [
