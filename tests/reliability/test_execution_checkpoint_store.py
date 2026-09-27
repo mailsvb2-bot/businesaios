@@ -253,7 +253,8 @@ def test_phase9_task_run_and_step_projection_reuses_checkpoint_owner(tmp_path) -
             business_id="business-p9",
             task_id="task-p9",
             step_id="step-a",
-            run_id="run-a",
+            run_id="executor-run-1",
+            task_run_id="task-run-a",
             sequence_no=1,
             stage="request",
             checkpoint_id="cp-1",
@@ -263,7 +264,8 @@ def test_phase9_task_run_and_step_projection_reuses_checkpoint_owner(tmp_path) -
             business_id="business-p9",
             task_id="task-p9",
             step_id="step-a",
-            run_id="run-a",
+            run_id="executor-run-1",
+            task_run_id="task-run-a",
             sequence_no=2,
             stage="execution",
             checkpoint_id="cp-2",
@@ -273,7 +275,8 @@ def test_phase9_task_run_and_step_projection_reuses_checkpoint_owner(tmp_path) -
             business_id="business-p9",
             task_id="task-p9",
             step_id="step-b",
-            run_id="run-a",
+            run_id="executor-run-2",
+            task_run_id="task-run-a",
             sequence_no=3,
             stage="completed",
             checkpoint_id="cp-3",
@@ -289,7 +292,7 @@ def test_phase9_task_run_and_step_projection_reuses_checkpoint_owner(tmp_path) -
         task_id="task-p9",
     )
     assert len(runs) == 1
-    assert runs[0].run_id == "run-a"
+    assert runs[0].run_id == "task-run-a"
     assert runs[0].checkpoint_count == 3
     assert runs[0].terminal_stage == "completed"
 
@@ -297,7 +300,7 @@ def test_phase9_task_run_and_step_projection_reuses_checkpoint_owner(tmp_path) -
         tenant_id="tenant-p9",
         business_id="business-p9",
         task_id="task-p9",
-        run_id="run-a",
+        run_id="task-run-a",
     )
     assert [item.step_id for item in steps] == ["step-a", "step-b"]
     assert steps[0].first_sequence_no == 1
@@ -315,7 +318,8 @@ def test_phase9_run_step_projection_is_business_and_task_isolated() -> None:
             business_id="business-a",
             task_id="task-a",
             step_id="step-a",
-            run_id="run-shared",
+            run_id="executor-a",
+            task_run_id="run-shared",
             sequence_no=1,
             stage="request",
             checkpoint_id="cp-a",
@@ -327,7 +331,8 @@ def test_phase9_run_step_projection_is_business_and_task_isolated() -> None:
             business_id="business-b",
             task_id="task-b",
             step_id="step-b",
-            run_id="run-shared",
+            run_id="executor-b",
+            task_run_id="run-shared",
             sequence_no=2,
             stage="decision",
             checkpoint_id="cp-b",
@@ -347,3 +352,17 @@ def test_phase9_run_step_projection_is_business_and_task_isolated() -> None:
         run_id="run-shared",
     )
     assert [item.step_id for item in steps] == ["step-a"]
+
+
+
+def test_phase9_task_run_scope_requires_task_identity() -> None:
+    with pytest.raises(ValueError, match="task run checkpoint requires task_id"):
+        ExecutionCheckpoint(
+            tenant_id="tenant-p9",
+            business_id="business-p9",
+            task_run_id="task-run-a",
+            run_id="executor-run-a",
+            sequence_no=1,
+            stage="request",
+            checkpoint_id="cp-run-scope",
+        ).validate()
