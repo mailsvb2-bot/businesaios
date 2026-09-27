@@ -12,7 +12,8 @@ from contracts.task import RetryPolicy, TimeoutPolicy
 from execution.goal_plan_memory import FileGoalPlanMemoryStore, GoalPlanMemoryService
 from execution.headless_contract import HeadlessExecutionContract
 from reliability.distributed_lock import InMemoryDistributedLock
-from reliability.recovery_policy_engine import RecoveryPolicyDecision
+from reliability.execution_reconciliation import ReconciliationReport
+from reliability.recovery_orchestrator import RecoveryPlan
 from runtime.execution.executor_result import ExecutionResult
 
 
@@ -321,10 +322,17 @@ def test_phase9_recovery_approved_early_restart_is_allowed(tmp_path: Path) -> No
                 "task_id": "task-1",
                 "task_run_id": "task-run-1",
             }
-            return RecoveryPolicyDecision(
+            return RecoveryPlan(
                 run_id="executor-run-1",
-                action="restart",
+                recovery_action="restart",
                 reason="restart_from_world_state",
+                reconciliation=ReconciliationReport(
+                    run_id="executor-run-1",
+                    latest_stage="world_state",
+                    idempotency_state=None,
+                    outbox_state=None,
+                    checkpoint_count=2,
+                ),
                 resume_stage="world_state",
             )
 
@@ -360,10 +368,17 @@ def test_phase9_recovery_does_not_blindly_replay_post_decision_run(tmp_path: Pat
 
         def plan_task_run_recovery(self, **kwargs: Any):
             del kwargs
-            return RecoveryPolicyDecision(
+            return RecoveryPlan(
                 run_id="executor-run-2",
-                action="resume_execution",
+                recovery_action="resume_execution",
                 reason="resume_from_execution",
+                reconciliation=ReconciliationReport(
+                    run_id="executor-run-2",
+                    latest_stage="execution",
+                    idempotency_state=None,
+                    outbox_state=None,
+                    checkpoint_count=4,
+                ),
                 resume_stage="execution",
             )
 
