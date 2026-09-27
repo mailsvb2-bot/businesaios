@@ -42,6 +42,104 @@ class WaitConditionKind(StrEnum):
     PROVIDER_RECOVERY = "provider_recovery"
 
 
+@dataclass(frozen=True, slots=True)
+class RetryPolicy:
+    max_attempts: int = 1
+    initial_backoff_ms: int = 0
+    max_backoff_ms: int = 0
+    retryable_statuses: tuple[str, ...] = ("temporary_failure", "rate_limited")
+    retry_ambiguous: bool = False
+
+    def __post_init__(self) -> None:
+        max_attempts = int(self.max_attempts)
+        initial_backoff_ms = int(self.initial_backoff_ms)
+        max_backoff_ms = int(self.max_backoff_ms)
+        if max_attempts < 1:
+            raise ValueError("max_attempts must be >= 1")
+        if initial_backoff_ms < 0 or max_backoff_ms < 0:
+            raise ValueError("retry backoff cannot be negative")
+        if max_backoff_ms and max_backoff_ms < initial_backoff_ms:
+            raise ValueError("max_backoff_ms must be >= initial_backoff_ms")
+        statuses = tuple(dict.fromkeys(_required(value, "retryable_status", 100) for value in self.retryable_statuses))
+        object.__setattr__(self, "max_attempts", max_attempts)
+        object.__setattr__(self, "initial_backoff_ms", initial_backoff_ms)
+        object.__setattr__(self, "max_backoff_ms", max_backoff_ms)
+        object.__setattr__(self, "retryable_statuses", statuses)
+
+    def allows_retry(self, *, attempt: int, status: str, ambiguous: bool = False) -> bool:
+        if ambiguous and not self.retry_ambiguous:
+            return False
+        return 1 <= int(attempt) < self.max_attempts and str(status or "").strip() in self.retryable_statuses
+
+    def backoff_ms(self, *, attempt: int) -> int:
+        if int(attempt) < 1:
+            raise ValueError("attempt must be >= 1")
+        if self.initial_backoff_ms == 0:
+            return 0
+        delay = self.initial_backoff_ms * (2 ** max(0, int(attempt) - 1))
+        return min(delay, self.max_backoff_ms) if self.max_backoff_ms else delay
+
+    def to_dict(self) -> dict[str, object]:
+        return {
+            "max_attempts": self.max_attempts,
+            "initial_backoff_ms": self.initial_backoff_ms,
+            "max_backoff_ms": self.max_backoff_ms,
+            "retryable_statuses": list(self.retryable_statuses),
+            "retry_ambiguous": bool(self.retry_ambiguous),
+        }
+
+    @classmethod
+    def from_dict(cls, payload: dict[str, object]) -> RetryPolicy:
+        return cls(
+            max_attempts=int(payload.get("max_attempts") or 1),
+            initial_backoff_ms=int(payload.get("initial_backoff_ms") or 0),
+            max_backoff_ms=int(payload.get("max_backoff_ms") or 0),
+            retryable_statuses=tuple(str(item) for item in (payload.get("retryable_statuses") or ())),
+            retry_ambiguous=bool(payload.get("retry_ambiguous", False)),
+        )
+
+
+@dataclass(frozen=True, slots=True)
+class TimeoutPolicy:
+    attempt_timeout_ms: int | None = None
+    task_deadline_ms: int | None = None
+
+    def __post_init__(self) -> None:
+        for field_name in ("attempt_timeout_ms", "task_deadline_ms"):
+            raw = getattr(self, field_name)
+            if raw is None:
+                continue
+            value = int(raw)
+            if value <= 0:
+                raise ValueError(f"{field_name} must be > 0")
+            object.__setattr__(self, field_name, value)
+
+    def attempt_deadline_ms(self, *, started_at_ms: int) -> int | None:
+        if self.attempt_timeout_ms is None:
+            return None
+        return int(started_at_ms) + self.attempt_timeout_ms
+
+    def is_task_timed_out(self, *, now_ms: int) -> bool:
+        return self.task_deadline_ms is not None and int(now_ms) >= self.task_deadline_ms
+
+    def to_dict(self) -> dict[str, object]:
+        return {
+            "attempt_timeout_ms": self.attempt_timeout_ms,
+            "task_deadline_ms": self.task_deadline_ms,
+        }
+
+    @classmethod
+    def from_dict(cls, payload: dict[str, object]) -> TimeoutPolicy:
+        return cls(
+            attempt_timeout_ms=(
+                None if payload.get("attempt_timeout_ms") is None else int(payload["attempt_timeout_ms"])
+            ),
+            task_deadline_ms=(
+                None if payload.get("task_deadline_ms") is None else int(payload["task_deadline_ms"])
+            ),
+        )
+
+
 def _required(value: object, field_name: str, limit: int = 200) -> str:
     text = str(value or "").strip()
     if not text or len(text) > limit or any(ord(ch) < 32 for ch in text):
@@ -122,6 +220,8 @@ class DurableTask:
     version: int = 1
     wait_condition: WaitCondition | None = None
     artifact_ids: tuple[str, ...] = ()
+    retry_policy: RetryPolicy = RetryPolicy()
+    timeout_policy: TimeoutPolicy = TimeoutPolicy()
 
     def __post_init__(self) -> None:
         for field_name in ("task_id", "tenant_id", "business_id"):
@@ -149,6 +249,18 @@ class DurableTask:
             dict.fromkeys(_required(value, "artifact_id") for value in self.artifact_ids)
         )
         object.__setattr__(self, "artifact_ids", artifact_ids)
+        retry_policy = self.retry_policy
+        if not isinstance(retry_policy, RetryPolicy):
+            if not isinstance(retry_policy, dict):
+                raise ValueError("retry_policy must be RetryPolicy or dict")
+            retry_policy = RetryPolicy.from_dict(retry_policy)
+            object.__setattr__(self, "retry_policy", retry_policy)
+        timeout_policy = self.timeout_policy
+        if not isinstance(timeout_policy, TimeoutPolicy):
+            if not isinstance(timeout_policy, dict):
+                raise ValueError("timeout_policy must be TimeoutPolicy or dict")
+            timeout_policy = TimeoutPolicy.from_dict(timeout_policy)
+            object.__setattr__(self, "timeout_policy", timeout_policy)
 
         if self.status is DurableTaskStatus.WAITING and wait_condition is None:
             raise ValueError("waiting task requires wait_condition")
@@ -180,6 +292,8 @@ __all__ = [
     "DurableTask",
     "DurableTaskNotFound",
     "DurableTaskStatus",
+    "RetryPolicy",
+    "TimeoutPolicy",
     "WaitCondition",
     "WaitConditionKind",
 ]
