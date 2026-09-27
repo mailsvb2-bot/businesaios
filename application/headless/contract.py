@@ -309,7 +309,7 @@ class HeadlessExecutionContract:
                         task_run_id=task_run_id,
                     )
                     recovery_action = str(
-                        getattr(recovery_plan, "recovery_action", "") or ""
+                        getattr(recovery_plan, "action", "") or ""
                     ).strip()
                     resume_stage = str(
                         getattr(recovery_plan, "resume_stage", "") or ""
