@@ -19,7 +19,14 @@ from application.task.facts import (
     TASK_WAITING,
 )
 from contracts.event_store import BUSINESS_FACT_EVENT_TYPE
-from contracts.task import DurableTask, DurableTaskNotFound, DurableTaskStatus, WaitCondition
+from contracts.task import (
+    DurableTask,
+    DurableTaskNotFound,
+    DurableTaskStatus,
+    RetryPolicy,
+    TimeoutPolicy,
+    WaitCondition,
+)
 
 CANON_DURABLE_TASK_PROJECTOR = True
 
@@ -120,6 +127,8 @@ class DurableTaskProjector:
             business_id=str(business_id),
             title=payload.get("title"),
             status=DurableTaskStatus.CREATED,
+            retry_policy=RetryPolicy.from_dict(dict(payload.get("retry_policy") or {})),
+            timeout_policy=TimeoutPolicy.from_dict(dict(payload.get("timeout_policy") or {})),
             created_at_ms=int(created["event_time_ms"]),
             updated_at_ms=int(created["event_time_ms"]),
             version=1,
