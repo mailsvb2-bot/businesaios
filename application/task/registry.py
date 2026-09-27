@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import time
 from dataclasses import dataclass
+from threading import Event, Lock, Thread
 from typing import Any
 
 from application.ontology import EventFactLifecycleWriter
@@ -618,6 +619,49 @@ class TaskConflictLeaseGroup:
     leases: tuple[LockLease, ...]
 
 
+class TaskConflictLeaseHeartbeat:
+    def __init__(
+        self,
+        *,
+        controller: "TaskConflictController",
+        group: TaskConflictLeaseGroup,
+        ttl_seconds: int,
+        interval_seconds: float,
+    ) -> None:
+        self._controller = controller
+        self._group = group
+        self._ttl_seconds = max(1, int(ttl_seconds))
+        self._interval_seconds = max(0.01, float(interval_seconds))
+        self._stop = Event()
+        self._guard = Lock()
+        self._error: BaseException | None = None
+        self._thread = Thread(target=self._run, name=f"task-conflict-heartbeat-{group.task_id}", daemon=True)
+        self._thread.start()
+
+    def _run(self) -> None:
+        while not self._stop.wait(self._interval_seconds):
+            try:
+                renewed = self._controller.renew(
+                    self._group,
+                    ttl_seconds=self._ttl_seconds,
+                )
+            except BaseException as exc:
+                with self._guard:
+                    self._error = exc
+                self._stop.set()
+                return
+            with self._guard:
+                self._group = renewed
+
+    def close(self) -> TaskConflictLeaseGroup:
+        self._stop.set()
+        self._thread.join(timeout=max(1.0, self._interval_seconds + 1.0))
+        with self._guard:
+            if self._error is not None:
+                raise RuntimeError("durable task conflict lease renewal failed") from self._error
+            return self._group
+
+
 class TaskConflictController:
     """Task conflict adapter over the canonical distributed-lock owner."""
 
@@ -668,6 +712,51 @@ class TaskConflictController:
             leases=tuple(leases),
         )
 
+    def renew(
+        self,
+        group: TaskConflictLeaseGroup,
+        *,
+        ttl_seconds: int = 3600,
+    ) -> TaskConflictLeaseGroup:
+        renewed: list[LockLease] = []
+        try:
+            for lease in group.leases:
+                renewed.append(
+                    self._lock.renew(
+                        lease=lease,
+                        ttl_seconds=ttl_seconds,
+                    )
+                )
+        except BaseException:
+            for lease in reversed(tuple(renewed) + group.leases[len(renewed):]):
+                self._lock.release(lease=lease)
+            raise
+        return TaskConflictLeaseGroup(
+            tenant_id=group.tenant_id,
+            business_id=group.business_id,
+            task_id=group.task_id,
+            leases=tuple(renewed),
+        )
+
+    def heartbeat(
+        self,
+        group: TaskConflictLeaseGroup,
+        *,
+        ttl_seconds: int = 3600,
+        interval_seconds: float | None = None,
+    ) -> TaskConflictLeaseHeartbeat:
+        interval = (
+            max(1.0, float(ttl_seconds) / 3.0)
+            if interval_seconds is None
+            else float(interval_seconds)
+        )
+        return TaskConflictLeaseHeartbeat(
+            controller=self,
+            group=group,
+            ttl_seconds=ttl_seconds,
+            interval_seconds=interval,
+        )
+
     def release(self, group: TaskConflictLeaseGroup) -> None:
         for lease in reversed(group.leases):
             self._lock.release(lease=lease)
@@ -680,4 +769,5 @@ __all__ = [
     "DurableTaskRegistry",
     "TaskConflictController",
     "TaskConflictLeaseGroup",
+    "TaskConflictLeaseHeartbeat",
 ]
