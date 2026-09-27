@@ -97,9 +97,9 @@ class RetryPolicy:
     @classmethod
     def from_dict(cls, payload: dict[str, object]) -> RetryPolicy:
         return cls(
-            max_attempts=int(payload.get("max_attempts") or 1),
-            initial_backoff_ms=int(payload.get("initial_backoff_ms") or 0),
-            max_backoff_ms=int(payload.get("max_backoff_ms") or 0),
+            max_attempts=1 if payload.get("max_attempts") is None else payload["max_attempts"],
+            initial_backoff_ms=0 if payload.get("initial_backoff_ms") is None else payload["initial_backoff_ms"],
+            max_backoff_ms=0 if payload.get("max_backoff_ms") is None else payload["max_backoff_ms"],
             retryable_statuses=tuple(
                 str(item)
                 for item in payload.get(
@@ -146,10 +146,10 @@ class TimeoutPolicy:
     def from_dict(cls, payload: dict[str, object]) -> TimeoutPolicy:
         return cls(
             attempt_timeout_ms=(
-                None if payload.get("attempt_timeout_ms") is None else int(payload["attempt_timeout_ms"])
+                None if payload.get("attempt_timeout_ms") is None else payload["attempt_timeout_ms"]
             ),
             task_deadline_ms=(
-                None if payload.get("task_deadline_ms") is None else int(payload["task_deadline_ms"])
+                None if payload.get("task_deadline_ms") is None else payload["task_deadline_ms"]
             ),
         )
 
