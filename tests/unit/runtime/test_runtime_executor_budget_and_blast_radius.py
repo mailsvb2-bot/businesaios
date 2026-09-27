@@ -66,6 +66,8 @@ def test_runtime_executor_denies_budget_exceeded() -> None:
     (
         {"action_count": True},
         {"action_count": -1},
+        {"action_count": 1.9},
+        {"action_count": "1"},
         {"connector_call_count": "not-a-number"},
         {"budget_delta": "not-money"},
         {"budget_delta": -0.01},
