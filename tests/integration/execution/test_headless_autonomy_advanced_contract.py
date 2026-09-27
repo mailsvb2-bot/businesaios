@@ -118,10 +118,11 @@ class _TaskRegistry:
         self.retry_policy = retry_policy
         self.timeout_policy = timeout_policy
         self.conflict_keys = conflict_keys
+        self.version = 1
         self.calls: list[tuple[str, str, str]] = []
+        self.transitions: list[str] = []
 
-    def get(self, *, tenant_id: str, business_id: str, task_id: str):
-        self.calls.append((tenant_id, business_id, task_id))
+    def _task(self):
         status = type("Status", (), {"value": self.status})()
         return type(
             "Task",
@@ -131,8 +132,29 @@ class _TaskRegistry:
                 "retry_policy": self.retry_policy,
                 "timeout_policy": self.timeout_policy,
                 "conflict_keys": self.conflict_keys,
+                "version": self.version,
             },
         )()
+
+    def get(self, *, tenant_id: str, business_id: str, task_id: str):
+        self.calls.append((tenant_id, business_id, task_id))
+        return self._task()
+
+    def start(self, *, expected_version: int, **kwargs: Any):
+        del kwargs
+        assert expected_version == self.version
+        self.status = "running"
+        self.version += 1
+        self.transitions.append("start")
+        return self._task()
+
+    def succeed(self, *, expected_version: int, **kwargs: Any):
+        del kwargs
+        assert expected_version == self.version
+        self.status = "succeeded"
+        self.version += 1
+        self.transitions.append("succeed")
+        return self._task()
 
 
 def test_phase9_task_bound_execution_requires_canonical_registry(tmp_path: Path) -> None:
@@ -146,6 +168,59 @@ def test_phase9_task_bound_execution_requires_canonical_registry(tmp_path: Path)
     assert request.task_id == "task-1"
     with pytest.raises(RuntimeError, match="canonical task registry"):
         contract.execute_autopilot(request)
+
+
+def test_phase9_ready_task_transitions_running_then_succeeded_after_verified_run(
+    tmp_path: Path,
+) -> None:
+    contract = _build_contract(
+        tmp_path,
+        executor_ok=True,
+        executor_output={"verified": True, "goal_reached": True},
+    )
+    registry = _TaskRegistry("ready")
+    contract._task_registry = registry
+
+    report = contract.execute_autopilot(
+        GoalExecutionRequest(
+            goal="execute durable task",
+            business_id="biz-1",
+            tenant_id="tenant-1",
+            meta={"task_id": "task-1"},
+        )
+    )
+
+    assert report.completed is True
+    assert registry.transitions == ["start", "succeed"]
+    assert registry.status == "succeeded"
+    assert registry.version == 3
+
+
+def test_phase9_incomplete_run_leaves_task_running_for_recovery(
+    tmp_path: Path,
+) -> None:
+    contract = _build_contract(
+        tmp_path,
+        executor_ok=True,
+        executor_output={"verified": True, "goal_reached": False},
+    )
+    registry = _TaskRegistry("ready")
+    contract._task_registry = registry
+
+    report = contract.execute_autopilot(
+        GoalExecutionRequest(
+            goal="execute durable task",
+            business_id="biz-1",
+            tenant_id="tenant-1",
+            max_steps=1,
+            meta={"task_id": "task-1"},
+        )
+    )
+
+    assert report.completed is False
+    assert registry.transitions == ["start"]
+    assert registry.status == "running"
+    assert registry.version == 2
 
 
 def test_phase9_terminal_task_fails_before_headless_effect(tmp_path: Path) -> None:
