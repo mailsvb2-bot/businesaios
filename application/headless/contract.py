@@ -264,6 +264,28 @@ class HeadlessExecutionContract:
             )
         )
 
+    def _task_preemption_requested(self, request: GoalExecutionRequest) -> bool:
+        task_id = str(getattr(request, "task_id", "") or "").strip()
+        if not task_id or self._task_registry is None:
+            return False
+        task = self._task_registry.get(
+            tenant_id=request.tenant_id,
+            business_id=request.business_id,
+            task_id=task_id,
+        )
+        status = str(
+            getattr(getattr(task, "status", None), "value", getattr(task, "status", ""))
+            or ""
+        )
+        return (
+            status == "running"
+            and bool(
+                str(
+                    getattr(task, "preemption_requested_by_task_id", "") or ""
+                ).strip()
+            )
+        )
+
     def execute_autopilot(self, request: GoalExecutionRequest) -> GoalExecutionReport:
         task_id = str(getattr(request, "task_id", "") or "").strip()
         task_conflict_controller = None
@@ -492,7 +514,28 @@ class HeadlessExecutionContract:
                         goal_id=request.goal_id,
                     )
                 )
-            if task_id and loop_result.completed:
+            if task_id and loop_result.stop_reason == "task_preempted":
+                _stop_task_conflict_heartbeat()
+                current_task = self._task_registry.get(
+                    tenant_id=request.tenant_id,
+                    business_id=request.business_id,
+                    task_id=task_id,
+                )
+                pause_task = getattr(self._task_registry, "pause", None)
+                if not callable(pause_task):
+                    raise RuntimeError("canonical task registry must provide pause()")
+                paused_task = pause_task(
+                    tenant_id=request.tenant_id,
+                    business_id=request.business_id,
+                    task_id=task_id,
+                    idempotency_key=(
+                        f"headless:preempt-pause:{task_id}:v"
+                        f"{getattr(current_task, 'version', 0)}"
+                    ),
+                    expected_version=int(getattr(current_task, "version", 0)),
+                )
+                task_execution_version = int(getattr(paused_task, "version", 0))
+            elif task_id and loop_result.completed:
                 _stop_task_conflict_heartbeat()
                 succeed_task = getattr(self._task_registry, "succeed", None)
                 if not callable(succeed_task):
