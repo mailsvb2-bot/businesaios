@@ -16,6 +16,11 @@ class CEOParticipation:
     risk_level: str = "conservative"
     mode: str = "advisory"
 
+    @property
+    def task_id(self) -> str | None:
+        value = str(dict(self.meta or {}).get("task_id") or "").strip()
+        return value or None
+
     def validate(self) -> tuple[bool, tuple[str, ...]]:
         issues: list[str] = []
         if self.enabled and self.mode != "advisory":
@@ -63,6 +68,8 @@ class GoalExecutionRequest:
             issues.append("invalid:goal_id")
         if self.agent_id is not None and not str(self.agent_id or "").strip():
             issues.append("invalid:agent_id")
+        if "task_id" in dict(self.meta or {}) and self.task_id is None:
+            issues.append("invalid:task_id")
         if not str(self.tenant_id or "").strip():
             issues.append("missing:tenant_id")
         if not str(self.channel or "").strip():
