@@ -24,6 +24,7 @@ FACT_TYPES = {
     "task.cancelled",
     "task.compensating",
     "task.artifact_attached",
+    "task.preemption_requested",
 }
 
 
