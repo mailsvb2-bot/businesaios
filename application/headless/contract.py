@@ -268,6 +268,8 @@ class HeadlessExecutionContract:
         task_id = str(getattr(request, "task_id", "") or "").strip()
         task_conflict_controller = None
         task_conflict_leases = None
+        task_status = ""
+        task_execution_version: int | None = None
         if task_id:
             if self._task_registry is None:
                 raise RuntimeError("canonical task registry is required for task-bound execution")
@@ -277,6 +279,13 @@ class HeadlessExecutionContract:
                 task_id=task_id,
             )
             status = str(getattr(getattr(task, "status", None), "value", getattr(task, "status", "")) or "")
+            task_status = status
+            raw_task_version = getattr(task, "version", None)
+            if isinstance(raw_task_version, bool) or raw_task_version is None:
+                raise RuntimeError("canonical durable task version is required")
+            task_execution_version = int(raw_task_version)
+            if task_execution_version < 1:
+                raise RuntimeError("canonical durable task version must be positive")
             if status in {"succeeded", "failed", "cancelled"}:
                 raise ValueError("terminal task cannot start a new execution run")
             if status not in {"ready", "running"}:
@@ -379,6 +388,20 @@ class HeadlessExecutionContract:
                     conflict_keys=conflict_keys,
                 )
         try:
+            if task_id and task_status == "ready":
+                start_task = getattr(self._task_registry, "start", None)
+                if not callable(start_task):
+                    raise RuntimeError("canonical task registry must provide start()")
+                started_task = start_task(
+                    tenant_id=request.tenant_id,
+                    business_id=request.business_id,
+                    task_id=task_id,
+                    idempotency_key=f"headless:start:{task_id}:v{task_execution_version}",
+                    expected_version=task_execution_version,
+                )
+                task_execution_version = int(getattr(started_task, "version", 0))
+                if task_execution_version < 1:
+                    raise RuntimeError("started durable task must expose a positive version")
             loop_result = self._loop.run(request)
         finally:
             if task_conflict_controller is not None and task_conflict_leases is not None:
@@ -450,6 +473,17 @@ class HeadlessExecutionContract:
                     canonical_run_artifact=run_artifact,
                     goal_id=request.goal_id,
                 )
+            )
+        if task_id and loop_result.completed:
+            succeed_task = getattr(self._task_registry, "succeed", None)
+            if not callable(succeed_task):
+                raise RuntimeError("canonical task registry must provide succeed()")
+            succeed_task(
+                tenant_id=request.tenant_id,
+                business_id=request.business_id,
+                task_id=task_id,
+                idempotency_key=f"headless:succeed:{task_id}:v{task_execution_version}",
+                expected_version=task_execution_version,
             )
         return report
 
