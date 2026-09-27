@@ -1,9 +1,9 @@
 from __future__ import annotations
 
+import time
 from collections.abc import Mapping
 from dataclasses import is_dataclass, replace
 from types import SimpleNamespace
-import time
 from typing import Any
 
 from application.headless.execution_gateway import execute_headless_envelope
