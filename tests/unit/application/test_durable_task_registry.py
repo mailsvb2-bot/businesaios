@@ -655,6 +655,10 @@ def test_phase9_retry_timeout_policy_validation_fails_closed() -> None:
         RetryPolicy.from_dict({"max_attempts": 2, "retry_ambiguous": "false"})
     with pytest.raises(ValueError, match="attempt_timeout_ms must be an integer"):
         TimeoutPolicy(attempt_timeout_ms=True)
+    with pytest.raises(ValueError, match="max_attempts must be an integer"):
+        RetryPolicy.from_dict({"max_attempts": True})
+    with pytest.raises(ValueError, match="attempt_timeout_ms must be an integer"):
+        TimeoutPolicy.from_dict({"attempt_timeout_ms": True})
 
 
 def test_phase9_legacy_task_without_policy_payload_projects_safe_defaults() -> None:
