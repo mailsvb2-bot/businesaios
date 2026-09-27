@@ -106,3 +106,13 @@ def test_phase9_task_runtime_reuses_canonical_queue_and_lock_owners() -> None:
     assert "self._lock.acquire(" in conflict_control
     assert "self._lock.release(" in conflict_control
     assert "class InMemoryDistributedLock" not in conflict_control
+
+
+
+def test_phase9_headless_boot_composes_task_queue_with_existing_runtime_dispatcher() -> None:
+    boot = (ROOT / "execution/headless_boot.py").read_text(encoding="utf-8")
+    assert "TaskQueueAdapter(" in boot
+    assert 'queue_support = getattr(executor, "_queue_support", None)' in boot
+    assert 'queue_dispatcher = getattr(queue_support, "dispatcher", None)' in boot
+    assert "dispatcher=queue_dispatcher" in boot
+    assert "JobDispatcher(" not in boot
