@@ -12,8 +12,12 @@ from contracts.task import RetryPolicy, TimeoutPolicy
 from execution.goal_plan_memory import FileGoalPlanMemoryStore, GoalPlanMemoryService
 from execution.headless_contract import HeadlessExecutionContract
 from reliability.distributed_lock import InMemoryDistributedLock
+from reliability.execution_checkpoint_store import ExecutionCheckpoint, JsonlExecutionCheckpointStore
 from reliability.execution_reconciliation import ReconciliationReport
-from reliability.recovery_orchestrator import RecoveryPlan
+from reliability.idempotency_store import InMemoryIdempotencyStore
+from reliability.outbox_store import InMemoryOutboxStore
+from reliability.recovery_orchestrator import RecoveryOrchestrator, RecoveryPlan
+from runtime.execution.reliability_runtime import RuntimeReliability
 from runtime.execution.executor_result import ExecutionResult
 
 
@@ -328,6 +332,132 @@ def test_phase9_incomplete_running_task_fails_before_duplicate_effect(tmp_path: 
     with pytest.raises(RuntimeError, match="incomplete execution run"):
         contract.execute_autopilot(request)
 
+
+
+def _restart_reliability_from_persisted_task_checkpoints(
+    path: Path,
+) -> RuntimeReliability:
+    rebuilt = JsonlExecutionCheckpointStore(path)
+    idempotency = InMemoryIdempotencyStore()
+    outbox = InMemoryOutboxStore()
+    return RuntimeReliability(
+        checkpoint_store=rebuilt,
+        idempotency_store=idempotency,
+        recovery_orchestrator=RecoveryOrchestrator(
+            checkpoint_store=rebuilt,
+            idempotency_store=idempotency,
+            outbox_store=outbox,
+        ),
+        distributed_lock=InMemoryDistributedLock(),
+        scheduler_leader_election=None,
+        recovery_leader_election=None,
+    )
+
+
+def test_phase9_persisted_pre_effect_crash_restarts_through_real_recovery_chain(
+    tmp_path: Path,
+) -> None:
+    checkpoint_path = tmp_path / "task-restart.jsonl"
+    before_crash = JsonlExecutionCheckpointStore(checkpoint_path)
+    before_crash.append(
+        ExecutionCheckpoint(
+            tenant_id="tenant-1",
+            business_id="biz-1",
+            task_id="task-1",
+            task_run_id="task-run-crashed",
+            step_id="task-run-crashed:0",
+            run_id="executor-run-crashed",
+            sequence_no=0,
+            stage="request",
+            checkpoint_id="cp-request",
+        )
+    )
+
+    contract = _build_contract(
+        tmp_path,
+        executor_ok=True,
+        executor_output={"verified": True, "goal_reached": True},
+    )
+    contract._task_registry = _TaskRegistry("running")
+    calls: list[str] = []
+
+    class _CountingExecutor(StubExecutor):
+        def execute(self, env: Any) -> ExecutionResult:
+            calls.append(str(env.decision.decision_id))
+            return super().execute(env)
+
+    restarted_executor = _CountingExecutor(
+        ok=True,
+        output={"verified": True, "goal_reached": True},
+    )
+    restarted_executor._reliability = _restart_reliability_from_persisted_task_checkpoints(
+        checkpoint_path
+    )
+    contract._executor = restarted_executor
+
+    report = contract.execute_autopilot(
+        GoalExecutionRequest(
+            goal="resume durable task",
+            business_id="biz-1",
+            tenant_id="tenant-1",
+            meta={"task_id": "task-1"},
+        )
+    )
+
+    assert report.completed is True
+    assert calls == ["dec-1"]
+
+
+def test_phase9_persisted_post_effect_crash_does_not_replay_side_effect(
+    tmp_path: Path,
+) -> None:
+    checkpoint_path = tmp_path / "task-post-effect-crash.jsonl"
+    before_crash = JsonlExecutionCheckpointStore(checkpoint_path)
+    for sequence_no, stage in enumerate(
+        ("request", "world_state", "decision", "executable_action", "execution")
+    ):
+        before_crash.append(
+            ExecutionCheckpoint(
+                tenant_id="tenant-1",
+                business_id="biz-1",
+                task_id="task-1",
+                task_run_id="task-run-crashed",
+                step_id="task-run-crashed:0",
+                run_id="executor-run-crashed",
+                sequence_no=sequence_no,
+                stage=stage,
+                checkpoint_id=f"cp-{stage}",
+                outbox_message_id=(
+                    "decision-crashed" if stage == "execution" else None
+                ),
+            )
+        )
+
+    contract = _build_contract(tmp_path)
+    contract._task_registry = _TaskRegistry("running")
+    calls: list[str] = []
+
+    class _CountingExecutor(StubExecutor):
+        def execute(self, env: Any) -> ExecutionResult:
+            calls.append(str(env.decision.decision_id))
+            return super().execute(env)
+
+    restarted_executor = _CountingExecutor()
+    restarted_executor._reliability = _restart_reliability_from_persisted_task_checkpoints(
+        checkpoint_path
+    )
+    contract._executor = restarted_executor
+
+    with pytest.raises(RuntimeError, match="recovery action required"):
+        contract.execute_autopilot(
+            GoalExecutionRequest(
+                goal="resume durable task",
+                business_id="biz-1",
+                tenant_id="tenant-1",
+                meta={"task_id": "task-1"},
+            )
+        )
+    assert calls == []
 
 
 def test_phase9_recovery_approved_early_restart_is_allowed(tmp_path: Path) -> None:
