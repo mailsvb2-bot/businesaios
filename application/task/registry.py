@@ -15,6 +15,7 @@ from application.task.facts import (
     TASK_CREATED,
     TASK_FAILED,
     TASK_PAUSED,
+    TASK_PREEMPTION_REQUESTED,
     TASK_READY,
     TASK_STARTED,
     TASK_SUCCEEDED,
@@ -197,6 +198,63 @@ class DurableTaskRegistry:
             idempotency_key=idempotency_key,
             fact_type=fact_type,
             payload=transition_payload,
+            occurred_at_ms=when,
+            event_metadata=event_metadata,
+        )
+        return self._projector.get(
+            tenant_id=tenant_id,
+            business_id=business_id,
+            task_id=task_id,
+        )
+
+    def request_preemption(
+        self,
+        *,
+        tenant_id: str,
+        business_id: str,
+        task_id: str,
+        requested_by_task_id: str,
+        requested_priority: int,
+        idempotency_key: str,
+        occurred_at_ms: int | None = None,
+        event_metadata: dict[str, object] | None = None,
+        expected_version: int | None = None,
+    ) -> DurableTask:
+        current = self._projector.get(
+            tenant_id=tenant_id,
+            business_id=business_id,
+            task_id=task_id,
+        )
+        requester = str(requested_by_task_id or "").strip()
+        if not requester or requester == current.task_id:
+            raise ValueError("valid requested_by_task_id is required")
+        if isinstance(requested_priority, bool):
+            raise ValueError("requested_priority must be an integer")
+        priority = int(requested_priority)
+        if current.status is not DurableTaskStatus.RUNNING:
+            raise ValueError("only RUNNING task can receive preemption request")
+        if priority <= current.priority or priority > 100:
+            raise ValueError("preempting task must have higher priority")
+        if expected_version is not None and current.version != int(expected_version):
+            raise RuntimeError(
+                f"task version conflict: expected {int(expected_version)}, got {current.version}"
+            )
+        if current.preemption_requested_by_task_id is not None:
+            return current
+        payload = {
+            "requested_by_task_id": requester,
+            "requested_priority": priority,
+        }
+        when = max(current.updated_at_ms, self._time(occurred_at_ms))
+        self._writer.append_transition_once(
+            tenant_id=tenant_id,
+            business_id=business_id,
+            entity_id=task_id,
+            expected_state_token=self._state_token(current),
+            operation=f"request_preemption:{requester}",
+            idempotency_key=idempotency_key,
+            fact_type=TASK_PREEMPTION_REQUESTED,
+            payload=payload,
             occurred_at_ms=when,
             event_metadata=event_metadata,
         )
