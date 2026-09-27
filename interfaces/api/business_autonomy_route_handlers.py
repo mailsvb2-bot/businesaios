@@ -168,10 +168,10 @@ class BusinessAutonomyRouteHandlers:
         data_scope: tuple[str, ...] = (),
         requested_by: str = "control-plane",
     ) -> dict[str, Any]:
-        registry = self.stack.get("agent_identity_registry")
-        if registry is None:
+        agent_identity_registry = self.stack.get("agent_identity_registry")
+        if agent_identity_registry is None:
             raise RuntimeError("agent identity registry is not configured")
-        identity = registry.register(
+        identity = agent_identity_registry.register(
             tenant_id=tenant_id,
             business_id=business_id,
             agent_id=agent_id,
