@@ -260,6 +260,45 @@ class RuntimeReliability:
         self.checkpoint_store.append(cp)
         return cp
 
+    def plan_task_run_recovery(
+        self,
+        *,
+        tenant_id: str,
+        business_id: str,
+        task_id: str,
+        task_run_id: str,
+    ):
+        task_run = str(task_run_id or "").strip()
+        if not task_run:
+            raise ValueError("task_run_id is required")
+        checkpoints = [
+            checkpoint
+            for checkpoint in self.checkpoint_store.list_task(
+                tenant_id=tenant_id,
+                business_id=business_id,
+                task_id=task_id,
+            )
+            if str(checkpoint.task_run_id or checkpoint.run_id) == task_run
+        ]
+        if not checkpoints:
+            raise LookupError(f"task run not found: {task_run}")
+        latest = max(
+            checkpoints,
+            key=lambda item: (
+                item.created_at,
+                item.run_id,
+                item.sequence_no,
+                item.checkpoint_id,
+            ),
+        )
+        if self.recovery_orchestrator is None:
+            raise RuntimeError("canonical recovery orchestrator is not configured")
+        return self.recovery_orchestrator.plan(
+            tenant_id=tenant_id,
+            run_id=latest.run_id,
+            outbox_message_id=latest.outbox_message_id,
+        )
+
     def campaign_scheduler_leader(self, *, tenant_id: str, owner_id: str, ttl_seconds: int | None = None, now=None) -> LeadershipLease | None:
         return self.scheduler_leader_election.campaign(tenant_id=tenant_id, leader_id=owner_id, ttl_seconds=ttl_seconds, now=now)
 
