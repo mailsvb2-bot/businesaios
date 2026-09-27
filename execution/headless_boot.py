@@ -187,9 +187,14 @@ def build_headless_runtime(*, entrypoint: str = "headless_sdk", root_dir: str | 
         raise RuntimeError(
             "canonical queue scheduler and distributed lock are required for Durable Task"
         )
-    queue_scheduler._task_preemption_coordinator = TaskQueuePreemptionCoordinator(
-        task_registry=task_registry,
-        distributed_lock=distributed_lock,
+    configure_preemption = getattr(queue_scheduler, "configure_task_preemption", None)
+    if not callable(configure_preemption):
+        raise RuntimeError("canonical queue scheduler lacks task preemption configuration")
+    configure_preemption(
+        TaskQueuePreemptionCoordinator(
+            task_registry=task_registry,
+            distributed_lock=distributed_lock,
+        )
     )
     operational_runtime = resolve_operational_safety_runtime(default_root=paths.root_dir)
     if getattr(executor, "_operational_budget_service", None) is None:
