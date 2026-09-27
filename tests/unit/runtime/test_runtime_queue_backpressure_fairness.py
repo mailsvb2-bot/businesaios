@@ -10,6 +10,9 @@ from runtime.queue.job_scheduler import JobScheduler
 from runtime.queue.job_store import InMemoryJobStore
 from runtime.queue.queue_observability import QueueObservabilityRegistry
 from runtime.queue.tenant_fair_scheduler import TenantFairScheduler, TenantQueuePressure
+from application.task.registry import DurableTaskRegistry, TaskConflictController, TaskQueuePreemptionCoordinator
+from reliability.distributed_lock import InMemoryDistributedLock
+from reliability.idempotency_store import InMemoryIdempotencyStore
 from tenancy.tenant_audit_scope import TenantAuditScope
 from tenancy.tenant_billing_scope import TenantBillingScope
 from tenancy.tenant_connector_scope import TenantConnectorScope
@@ -144,6 +147,100 @@ def test_job_scheduler_skips_task_when_canonical_resource_budget_is_exhausted() 
     assert [job.job_id for job in batch.jobs] == ["job-allowed"]
     assert batch.resource_previews["job-over-budget"].allowed is False
     assert batch.resource_previews["job-allowed"].allowed is True
+
+
+def test_job_scheduler_requests_preemption_and_keeps_high_priority_job_pending() -> None:
+    class _Events:
+        def __init__(self) -> None:
+            self.events: list[dict] = []
+
+        def append_event(self, event: dict) -> None:
+            self.events.append(dict(event))
+
+        def iter_events(self, *, tenant_id, start_ms, end_ms=None, user_id=None, event_type=None):
+            del end_ms, user_id
+            for event in self.events:
+                if event.get("tenant_id") == tenant_id and event.get("timestamp_ms", 0) >= start_ms:
+                    if event_type is None or event.get("event_type") == event_type:
+                        yield dict(event)
+
+    events = _Events()
+    tasks = DurableTaskRegistry(
+        event_store=events,
+        idempotency_store=InMemoryIdempotencyStore(),
+    )
+    tasks.create(
+        tenant_id="tenant-1", business_id="business-1", task_id="low",
+        idempotency_key="create-low", priority=20, conflict_keys=("ledger",), occurred_at_ms=1,
+    )
+    tasks.ready(
+        tenant_id="tenant-1", business_id="business-1", task_id="low",
+        idempotency_key="ready-low", expected_version=1, occurred_at_ms=2,
+    )
+    tasks.start(
+        tenant_id="tenant-1", business_id="business-1", task_id="low",
+        idempotency_key="start-low", expected_version=2, occurred_at_ms=3,
+    )
+    tasks.create(
+        tenant_id="tenant-1", business_id="business-1", task_id="high",
+        idempotency_key="create-high", priority=90, conflict_keys=("ledger",), occurred_at_ms=4,
+    )
+    tasks.ready(
+        tenant_id="tenant-1", business_id="business-1", task_id="high",
+        idempotency_key="ready-high", expected_version=1, occurred_at_ms=5,
+    )
+    lock = InMemoryDistributedLock()
+    controller = TaskConflictController(distributed_lock=lock)
+    held = controller.acquire(
+        tenant_id="tenant-1", business_id="business-1", task_id="low",
+        conflict_keys=("ledger",), ttl_seconds=60,
+    )
+    store = InMemoryJobStore()
+    now = utc_now()
+    store.put(
+        JobDispatchRequest(
+            tenant_id="tenant-1",
+            job_id="job-high",
+            queue_name="tasks",
+            job_type="work",
+            payload={
+                "business_id": "business-1",
+                "task_id": "high",
+                "task_conflict_keys": ["ledger"],
+            },
+            dedupe_key="high",
+            priority=90,
+        ).to_record(now=now)
+    )
+    scheduler = JobScheduler(
+        store=store,
+        task_preemption_coordinator=TaskQueuePreemptionCoordinator(
+            task_registry=tasks,
+            distributed_lock=lock,
+        ),
+    )
+
+    first = scheduler.select_due_jobs(
+        tenant_id="tenant-1", queue_name="tasks", now=now
+    )
+    assert first.jobs == ()
+    low = tasks.get(
+        tenant_id="tenant-1", business_id="business-1", task_id="low"
+    )
+    assert low.status.value == "running"
+    assert low.preemption_requested_by_task_id == "high"
+
+    paused = tasks.pause(
+        tenant_id="tenant-1", business_id="business-1", task_id="low",
+        idempotency_key="pause-low", expected_version=low.version, occurred_at_ms=6,
+    )
+    assert paused.status.value == "paused"
+    controller.release(held)
+
+    second = scheduler.select_due_jobs(
+        tenant_id="tenant-1", queue_name="tasks", now=now
+    )
+    assert [job.job_id for job in second.jobs] == ["job-high"]
 
 
 def test_job_scheduler_filters_jobs_by_capability_preview_and_worker_commit_path() -> None:
