@@ -232,6 +232,7 @@ class SqliteJobStore:
             )
             claimed = self._fetch_job(db, tenant_id=tid, job_id=jid)
             assert claimed is not None
+        self._checkpoint_claim_commit()
         return claimed
 
     def get_active_claim(self, *, tenant_id: str, job_id: str, owner_id: str | None = None, fencing_token: int | None = None, now: datetime | None = None) -> JobRecord | None:
@@ -321,6 +322,17 @@ class SqliteJobStore:
         qn = _require_queue_name(queue_name)
         with self._lock, self._tx() as db:
             return reap_expired_claims_sqlite(db=db, tenant_id=tid, queue_name=qn, now=now)
+
+
+    def _checkpoint_claim_commit(self) -> None:
+        # A claimed job is cross-process coordination state. Before claim()
+        # returns, force committed WAL frames into the main database so an
+        # immediate worker crash cannot make the claim disappear for the
+        # janitor/recovery process. Limit the checkpoint to this boundary;
+        # ordinary queue transactions remain free of per-transaction
+        # checkpoint contention.
+        with self._connect() as db:
+            db.execute("PRAGMA wal_checkpoint(PASSIVE);")
 
 
     def _tx(self):
