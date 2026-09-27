@@ -77,11 +77,15 @@ def init_sqlite_job_store_schema(*, path: Path, busy_timeout_ms: int) -> None:
     with connect_sqlite_job_store(
         path=path,
         busy_timeout_ms=busy_timeout_ms,
+        configure_journal_mode=False,
+    ) as probe:
+        if _schema_is_current(probe):
+            return
+    with connect_sqlite_job_store(
+        path=path,
+        busy_timeout_ms=busy_timeout_ms,
         configure_journal_mode=True,
     ) as db:
-        # Worker processes open the same durable queue repeatedly. Once schema v3
-        # and WAL are established, keep startup read-only instead of taking
-        # needless schema/meta write locks in every process.
         if _schema_is_current(db):
             return
         db.executescript(
