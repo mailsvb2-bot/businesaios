@@ -274,6 +274,8 @@ class HeadlessExecutionContract:
             status = str(getattr(getattr(task, "status", None), "value", getattr(task, "status", "")) or "")
             if status in {"succeeded", "failed", "cancelled"}:
                 raise ValueError("terminal task cannot start a new execution run")
+            if status not in {"ready", "running"}:
+                raise ValueError(f"task is not executable from status: {status or 'unknown'}")
         loop_result = self._loop.run(request)
         run_artifact = canonical_goal_execution_report(
             goal=request.goal,
