@@ -27,6 +27,7 @@ from application.memory.business_operating_memory import (
 from application.planning.long_horizon_planner import LongHorizonPlanner
 from application.planning.multi_goal_planner import FileMultiGoalPlannerStore, MultiGoalPlannerService
 from application.planning.strategy_memory import FileStrategyMemoryStore, StrategyMemoryService
+from application.task import DurableTaskRegistry
 from bootstrap.entrypoint_context import bootstrap_entrypoint, is_allowed_bootstrap_entrypoint
 from core.safety.operational.runtime_bootstrap import resolve_operational_safety_runtime
 from execution.autonomy_counters import AutonomyCounterResolver, FileAutonomyCounterStore
@@ -90,6 +91,7 @@ class HeadlessRuntime:
     evidence_store: object | None = None
     state_synthesis_engine: object | None = None
     agent_identity_registry: object | None = None
+    task_registry: object | None = None
 
 
 @lru_cache(maxsize=8)
@@ -164,6 +166,10 @@ def build_headless_runtime(*, entrypoint: str = "headless_sdk", root_dir: str | 
         event_store=event_store,
         idempotency_store=reliability_idempotency,
     )
+    task_registry = DurableTaskRegistry(
+        event_store=event_store,
+        idempotency_store=reliability_idempotency,
+    )
     operational_runtime = resolve_operational_safety_runtime(default_root=paths.root_dir)
     if getattr(executor, "_operational_budget_service", None) is None:
         executor._operational_budget_service = operational_runtime.service
@@ -211,6 +217,7 @@ def build_headless_runtime(*, entrypoint: str = "headless_sdk", root_dir: str | 
         event_store=event_store,
         world_model_event_projector=world_model_event_projector,
         agent_identity_registry=agent_identity_registry,
+        task_registry=task_registry,
     )
     return HeadlessRuntime(
         decision_core=core,
@@ -239,6 +246,7 @@ def build_headless_runtime(*, entrypoint: str = "headless_sdk", root_dir: str | 
         evidence_store=evidence_store,
         state_synthesis_engine=state_synthesis_engine,
         agent_identity_registry=agent_identity_registry,
+        task_registry=task_registry,
     )
 
 
