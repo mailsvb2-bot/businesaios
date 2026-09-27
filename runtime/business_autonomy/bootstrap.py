@@ -71,8 +71,11 @@ from application.business_autonomy.persistence import (
 )
 from application.business_autonomy.policy import BusinessAutonomyPolicy, BusinessTrustPolicy
 from application.business_autonomy.provider_admin_service import ProviderAdminService
-from application.business_autonomy.registry import AgentIdentityRegistry
-from application.business_autonomy.registry import BusinessAdapterRegistry, RegisteredBusinessCapabilities
+from application.business_autonomy.registry import (
+    AgentIdentityRegistry,
+    BusinessAdapterRegistry,
+    RegisteredBusinessCapabilities,
+)
 from application.business_autonomy.service import BusinessAutonomyService
 from application.business_autonomy.trust import BusinessTrustSnapshot
 from application.planning.distributed_planning_memory_backend import DistributedPlanningMemoryBackend
