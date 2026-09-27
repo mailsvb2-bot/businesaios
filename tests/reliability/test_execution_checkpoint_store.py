@@ -392,3 +392,52 @@ def test_runtime_reliability_fails_closed_on_task_run_without_task() -> None:
             stage="request",
             checkpoint_id="task-run-request",
         )
+
+
+
+def test_phase9_task_run_recovery_uses_existing_recovery_orchestrator() -> None:
+    store = InMemoryExecutionCheckpointStore()
+    store.append(
+        ExecutionCheckpoint(
+            tenant_id="tenant-p9",
+            business_id="business-p9",
+            task_id="task-p9",
+            task_run_id="task-run-p9",
+            step_id="step-p9",
+            run_id="executor-run-p9",
+            sequence_no=1,
+            stage="execution",
+            checkpoint_id="cp-recovery",
+            outbox_message_id="outbox-p9",
+        )
+    )
+
+    class _Recovery:
+        def __init__(self) -> None:
+            self.kwargs: dict[str, Any] | None = None
+
+        def plan(self, **kwargs: Any):
+            self.kwargs = dict(kwargs)
+            return {"recovery_action": "wait"}
+
+    recovery = _Recovery()
+    runtime = RuntimeReliability(
+        checkpoint_store=store,
+        idempotency_store=None,
+        recovery_orchestrator=recovery,
+        distributed_lock=None,
+        scheduler_leader_election=None,
+        recovery_leader_election=None,
+    )
+    result = runtime.plan_task_run_recovery(
+        tenant_id="tenant-p9",
+        business_id="business-p9",
+        task_id="task-p9",
+        task_run_id="task-run-p9",
+    )
+    assert result == {"recovery_action": "wait"}
+    assert recovery.kwargs == {
+        "tenant_id": "tenant-p9",
+        "run_id": "executor-run-p9",
+        "outbox_message_id": "outbox-p9",
+    }
