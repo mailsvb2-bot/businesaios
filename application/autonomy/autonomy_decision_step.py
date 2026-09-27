@@ -194,6 +194,11 @@ class AutonomyDecisionStep:
             "previous_feedback",
             dict(getattr(request, "meta", {}).get("previous_feedback") or {}),
         )
+        request_meta = dict(getattr(request, "meta", {}) or {})
+        for field_name in ("task_id", "task_run_id", "step_id"):
+            value = str(request_meta.get(field_name) or "").strip()
+            if value:
+                payload.setdefault(field_name, value)
         return payload
 
     def _project_executable_action(
