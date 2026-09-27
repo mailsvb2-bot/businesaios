@@ -127,7 +127,7 @@ def test_current_sqlite_queue_schema_reopens_without_journal_mode_negotiation(
     from runtime.queue import _sqlite_job_store_db as db_module
 
     path = tmp_path / "current-schema.sqlite3"
-    SqlitePersistentJobStore(path=path).close()
+    SqliteJobStore(path=path).close()
     calls: list[bool] = []
     original = db_module.configure_sqlite
 
@@ -140,7 +140,7 @@ def test_current_sqlite_queue_schema_reopens_without_journal_mode_negotiation(
         )
 
     monkeypatch.setattr(db_module, "configure_sqlite", observed)
-    reopened = SqlitePersistentJobStore(path=path)
+    reopened = SqliteJobStore(path=path)
     reopened.close()
 
     assert calls
