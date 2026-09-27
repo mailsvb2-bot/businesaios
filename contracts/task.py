@@ -238,6 +238,8 @@ class DurableTask:
     artifact_ids: tuple[str, ...] = ()
     retry_policy: RetryPolicy = RetryPolicy()
     timeout_policy: TimeoutPolicy = TimeoutPolicy()
+    preemption_requested_by_task_id: str | None = None
+    preemption_requested_priority: int | None = None
 
     def __post_init__(self) -> None:
         for field_name in ("task_id", "tenant_id", "business_id"):
@@ -287,6 +289,24 @@ class DurableTask:
                 raise ValueError("timeout_policy must be TimeoutPolicy or dict")
             timeout_policy = TimeoutPolicy.from_dict(timeout_policy)
             object.__setattr__(self, "timeout_policy", timeout_policy)
+
+        preemptor = self.preemption_requested_by_task_id
+        preempt_priority = self.preemption_requested_priority
+        if (preemptor is None) != (preempt_priority is None):
+            raise ValueError("task preemption request requires task id and priority")
+        if preemptor is not None:
+            preemptor = _required(preemptor, "preemption_requested_by_task_id")
+            if preemptor == self.task_id:
+                raise ValueError("task cannot preempt itself")
+            if isinstance(preempt_priority, bool):
+                raise ValueError("preemption priority must be an integer")
+            preempt_priority = int(preempt_priority)
+            if preempt_priority <= self.priority or preempt_priority > 100:
+                raise ValueError("preemption priority must exceed task priority and be <= 100")
+            if self.status is not DurableTaskStatus.RUNNING:
+                raise ValueError("preemption request is valid only for running task")
+            object.__setattr__(self, "preemption_requested_by_task_id", preemptor)
+            object.__setattr__(self, "preemption_requested_priority", preempt_priority)
 
         if self.status is DurableTaskStatus.WAITING and wait_condition is None:
             raise ValueError("waiting task requires wait_condition")
