@@ -114,6 +114,18 @@ class RuntimeReliability:
                 return tenant_id
         return normalize_tenant_id_or_unknown(self.tenant_default)
 
+    def task_scope_for_env(self, env: Any) -> tuple[str | None, str | None, str | None]:
+        payload = getattr(getattr(env, "decision", None), "payload", None)
+        payload_dict = dict(payload) if isinstance(payload, dict) else {}
+        business_id = str(payload_dict.get("business_id") or "").strip() or None
+        task_id = str(payload_dict.get("task_id") or "").strip() or None
+        step_id = str(payload_dict.get("step_id") or "").strip() or None
+        if task_id is not None and business_id is None:
+            raise ValueError("task-scoped execution checkpoint requires business_id")
+        if step_id is not None and task_id is None:
+            raise ValueError("step-scoped execution checkpoint requires task_id")
+        return business_id, task_id, step_id
+
     def run_id_for_env(self, env: Any) -> str:
         decision = getattr(env, "decision", None)
         decision_id = str(getattr(decision, "decision_id", "") or "").strip()
@@ -215,6 +227,7 @@ class RuntimeReliability:
                 return latest
         next_seq = int(sequence_no) if sequence_no is not None else (0 if latest is None else int(latest.sequence_no) + 1)
         decision = getattr(env, "decision", None)
+        business_id, task_id, step_id = self.task_scope_for_env(env)
         cp = ExecutionCheckpoint(
             tenant_id=tenant_id,
             run_id=run_id,
@@ -226,6 +239,9 @@ class RuntimeReliability:
             idempotency_key=self.idempotency_key_for_env(env).key,
             outbox_message_id=str(getattr(decision, "decision_id", "") or None) if getattr(decision, "decision_id", None) is not None else None,
             trace_id=str(getattr(decision, "correlation_id", "") or None) if getattr(decision, "correlation_id", None) is not None else None,
+            business_id=business_id,
+            task_id=task_id,
+            step_id=step_id,
             payload=dict(payload or {}),
         )
         self.checkpoint_store.append(cp)
