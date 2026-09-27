@@ -736,6 +736,89 @@ class TaskConflictLeaseHeartbeat:
             return self._group
 
 
+class TaskQueuePreemptionCoordinator:
+    """Cooperative admission over the canonical Task registry and lock owner."""
+
+    def __init__(
+        self,
+        *,
+        task_registry: DurableTaskRegistry,
+        distributed_lock: DistributedLock,
+    ) -> None:
+        self._tasks = task_registry
+        self._lock = distributed_lock
+
+    @staticmethod
+    def _owner_id(*, business_id: str, task_id: str) -> str:
+        return f"durable-task:{str(business_id).strip()}:{str(task_id).strip()}"
+
+    def admit(self, job: Any) -> bool:
+        payload = dict(getattr(job, "payload", {}) or {})
+        task_id = str(payload.get("task_id") or "").strip()
+        business_id = str(payload.get("business_id") or "").strip()
+        raw_keys = payload.get("task_conflict_keys")
+        if not task_id:
+            return True
+        if not business_id or not isinstance(raw_keys, list):
+            return False
+        conflict_keys = tuple(
+            sorted(dict.fromkeys(_normalize_conflict_key(key) for key in raw_keys))
+        )
+        if not conflict_keys:
+            return True
+        candidate = self._tasks.get(
+            tenant_id=job.tenant_id,
+            business_id=business_id,
+            task_id=task_id,
+        )
+        if candidate.status is not DurableTaskStatus.READY:
+            return False
+        blocked = False
+        tasks = self._tasks.list_for_business(
+            tenant_id=job.tenant_id,
+            business_id=business_id,
+        )
+        for key in conflict_keys:
+            resource = TaskConflictController._resource(
+                business_id=business_id,
+                conflict_key=key,
+            )
+            lease = self._lock.get(tenant_id=job.tenant_id, resource=resource)
+            if lease is None:
+                continue
+            blocked = True
+            target = next(
+                (
+                    task
+                    for task in tasks
+                    if task.status is DurableTaskStatus.RUNNING
+                    and key in task.conflict_keys
+                    and lease.owner_id
+                    == self._owner_id(
+                        business_id=business_id,
+                        task_id=task.task_id,
+                    )
+                ),
+                None,
+            )
+            if target is None or candidate.priority <= target.priority:
+                continue
+            if target.preemption_requested_by_task_id is not None:
+                continue
+            self._tasks.request_preemption(
+                tenant_id=job.tenant_id,
+                business_id=business_id,
+                task_id=target.task_id,
+                requested_by_task_id=candidate.task_id,
+                requested_priority=candidate.priority,
+                idempotency_key=(
+                    f"queue-preempt:{target.task_id}:by:{candidate.task_id}"
+                ),
+                expected_version=target.version,
+            )
+        return not blocked
+
+
 class TaskConflictController:
     """Task conflict adapter over the canonical distributed-lock owner."""
 
@@ -844,4 +927,5 @@ __all__ = [
     "TaskConflictController",
     "TaskConflictLeaseGroup",
     "TaskConflictLeaseHeartbeat",
+    "TaskQueuePreemptionCoordinator",
 ]
