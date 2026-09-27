@@ -728,3 +728,115 @@ def test_phase9_task_priority_and_conflict_metadata_fail_closed() -> None:
             business_id="business",
             conflict_keys=("   ",),
         )
+
+
+
+def test_phase9_preemption_request_is_durable_without_premature_pause() -> None:
+    registry, _ = _registry()
+    registry.create(
+        tenant_id="tenant-p9",
+        business_id="business-p9",
+        task_id="low",
+        idempotency_key="create-low",
+        priority=20,
+        occurred_at_ms=100,
+    )
+    registry.ready(
+        tenant_id="tenant-p9",
+        business_id="business-p9",
+        task_id="low",
+        idempotency_key="ready-low",
+        expected_version=1,
+        occurred_at_ms=110,
+    )
+    running = registry.start(
+        tenant_id="tenant-p9",
+        business_id="business-p9",
+        task_id="low",
+        idempotency_key="start-low",
+        expected_version=2,
+        occurred_at_ms=120,
+    )
+    requested = registry.request_preemption(
+        tenant_id="tenant-p9",
+        business_id="business-p9",
+        task_id="low",
+        requested_by_task_id="high",
+        requested_priority=90,
+        idempotency_key="preempt-low-by-high",
+        expected_version=running.version,
+        occurred_at_ms=130,
+    )
+
+    assert requested.status is DurableTaskStatus.RUNNING
+    assert requested.preemption_requested_by_task_id == "high"
+    assert requested.preemption_requested_priority == 90
+    reconstructed = DurableTaskRegistry(
+        event_store=registry._projector._events,
+        idempotency_store=InMemoryIdempotencyStore(),
+    ).get(
+        tenant_id="tenant-p9",
+        business_id="business-p9",
+        task_id="low",
+    )
+    assert reconstructed.preemption_requested_by_task_id == "high"
+
+    paused = registry.pause(
+        tenant_id="tenant-p9",
+        business_id="business-p9",
+        task_id="low",
+        idempotency_key="pause-preempted-low",
+        expected_version=requested.version,
+        occurred_at_ms=140,
+    )
+    assert paused.status is DurableTaskStatus.PAUSED
+    assert paused.preemption_requested_by_task_id is None
+    assert paused.preemption_requested_priority is None
+
+
+def test_phase9_preemption_request_rejects_equal_lower_or_nonrunning_task() -> None:
+    registry, events = _registry()
+    created = registry.create(
+        tenant_id="tenant-p9",
+        business_id="business-p9",
+        task_id="low",
+        idempotency_key="create-low",
+        priority=50,
+        occurred_at_ms=100,
+    )
+    with pytest.raises(ValueError, match="RUNNING"):
+        registry.request_preemption(
+            tenant_id="tenant-p9",
+            business_id="business-p9",
+            task_id="low",
+            requested_by_task_id="high",
+            requested_priority=90,
+            idempotency_key="preempt-created",
+            expected_version=created.version,
+        )
+    registry.ready(
+        tenant_id="tenant-p9",
+        business_id="business-p9",
+        task_id="low",
+        idempotency_key="ready-low",
+        expected_version=created.version,
+    )
+    running = registry.start(
+        tenant_id="tenant-p9",
+        business_id="business-p9",
+        task_id="low",
+        idempotency_key="start-low",
+        expected_version=2,
+    )
+    before = len(events.events)
+    with pytest.raises(ValueError, match="higher priority"):
+        registry.request_preemption(
+            tenant_id="tenant-p9",
+            business_id="business-p9",
+            task_id="low",
+            requested_by_task_id="peer",
+            requested_priority=50,
+            idempotency_key="preempt-peer",
+            expected_version=running.version,
+        )
+    assert len(events.events) == before
