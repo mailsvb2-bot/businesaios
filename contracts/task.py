@@ -227,6 +227,8 @@ class DurableTask:
     tenant_id: str
     business_id: str
     title: str | None = None
+    priority: int = 50
+    conflict_keys: tuple[str, ...] = ()
     status: DurableTaskStatus = DurableTaskStatus.CREATED
     created_at_ms: int = 0
     updated_at_ms: int = 0
@@ -241,6 +243,16 @@ class DurableTask:
         for field_name in ("task_id", "tenant_id", "business_id"):
             object.__setattr__(self, field_name, _required(getattr(self, field_name), field_name))
         object.__setattr__(self, "title", _optional(self.title, "title"))
+        if isinstance(self.priority, bool):
+            raise ValueError("task priority must be an integer")
+        priority = int(self.priority)
+        if priority < 0 or priority > 100:
+            raise ValueError("task priority must be within 0..100")
+        object.__setattr__(self, "priority", priority)
+        conflict_keys = tuple(
+            dict.fromkeys(_required(value, "conflict_key") for value in self.conflict_keys)
+        )
+        object.__setattr__(self, "conflict_keys", conflict_keys)
         object.__setattr__(self, "status", DurableTaskStatus(self.status))
         created, updated = int(self.created_at_ms), int(self.updated_at_ms)
         if created < 0 or updated < created:
