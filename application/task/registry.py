@@ -239,19 +239,35 @@ class DurableTaskRegistry:
             raise RuntimeError(
                 f"task version conflict: expected {int(expected_version)}, got {current.version}"
             )
-        if current.preemption_requested_by_task_id is not None:
-            return current
         payload = {
             "requested_by_task_id": requester,
             "requested_priority": priority,
         }
+        operation = f"request_preemption:{requester}"
+        if current.preemption_requested_by_task_id is not None:
+            if (
+                current.preemption_requested_by_task_id == requester
+                and current.preemption_requested_priority == priority
+                and self._writer.repair_existing(
+                    tenant_id=tenant_id,
+                    business_id=business_id,
+                    entity_id=task_id,
+                    operation=operation,
+                    idempotency_key=idempotency_key,
+                    fact_type=TASK_PREEMPTION_REQUESTED,
+                    payload=payload,
+                    event_metadata=event_metadata,
+                )
+            ):
+                return current
+            raise ValueError("task preemption is already requested")
         when = max(current.updated_at_ms, self._time(occurred_at_ms))
         self._writer.append_transition_once(
             tenant_id=tenant_id,
             business_id=business_id,
             entity_id=task_id,
             expected_state_token=self._state_token(current),
-            operation=f"request_preemption:{requester}",
+            operation=operation,
             idempotency_key=idempotency_key,
             fact_type=TASK_PREEMPTION_REQUESTED,
             payload=payload,
