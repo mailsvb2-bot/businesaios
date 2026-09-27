@@ -4,7 +4,7 @@ from collections.abc import Mapping
 from typing import Any
 
 from contracts.task import DurableTask, DurableTaskStatus
-from runtime.queue.job_contract import JobClaimExpiryPolicy, JobDispatchRequest, JobPriority
+from runtime.queue.job_contract import JobClaimExpiryPolicy, JobDispatchRequest
 
 CANON_DURABLE_TASK_QUEUE_ADAPTER = True
 
@@ -43,7 +43,7 @@ def build_task_job_request(
     suffix = str(dedupe_key or "").strip()
     if not suffix:
         raise ValueError("dedupe_key is required")
-    priority = max(int(JobPriority.LOW), min(int(JobPriority.CRITICAL), int(task.priority)))
+    priority = int(task.priority)
     expiry_policy = (
         JobClaimExpiryPolicy.RETRY_IF_BUDGET
         if task.retry_policy.retry_ambiguous
