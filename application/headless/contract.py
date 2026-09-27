@@ -29,6 +29,7 @@ from application.memory.business_memory_state_adapter import BusinessMemoryState
 from application.memory.business_operating_memory import FileBusinessOperatingMemoryStore
 from application.planning.goal_plan_memory import GoalPlanMemoryService
 from application.planning.multi_goal_planner import MultiGoalPlannerService
+from application.task.conflict_control import TaskConflictController
 from execution.action_budget_engine import ActionBudgetEngine
 from execution.autonomy_counters import AutonomyCounterResolver, FileAutonomyCounterStore
 from execution.blast_radius_guard import BlastRadiusGuard
@@ -265,6 +266,8 @@ class HeadlessExecutionContract:
 
     def execute_autopilot(self, request: GoalExecutionRequest) -> GoalExecutionReport:
         task_id = str(getattr(request, "task_id", "") or "").strip()
+        task_conflict_controller = None
+        task_conflict_leases = None
         if task_id:
             if self._task_registry is None:
                 raise RuntimeError("canonical task registry is required for task-bound execution")
@@ -354,7 +357,28 @@ class HeadlessExecutionContract:
                     ),
                 },
             )
-        loop_result = self._loop.run(request)
+            conflict_keys = tuple(getattr(task, "conflict_keys", ()) or ())
+            if conflict_keys:
+                reliability = getattr(self._executor, "_reliability", None)
+                distributed_lock = getattr(reliability, "distributed_lock", None)
+                if distributed_lock is None:
+                    raise RuntimeError(
+                        "durable task conflict control requires canonical distributed lock"
+                    )
+                task_conflict_controller = TaskConflictController(
+                    distributed_lock=distributed_lock
+                )
+                task_conflict_leases = task_conflict_controller.acquire(
+                    tenant_id=request.tenant_id,
+                    business_id=request.business_id,
+                    task_id=task_id,
+                    conflict_keys=conflict_keys,
+                )
+        try:
+            loop_result = self._loop.run(request)
+        finally:
+            if task_conflict_controller is not None and task_conflict_leases is not None:
+                task_conflict_controller.release(task_conflict_leases)
         run_artifact = canonical_goal_execution_report(
             goal=request.goal,
             business_id=request.business_id,
