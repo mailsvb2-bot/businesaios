@@ -16,11 +16,6 @@ class CEOParticipation:
     risk_level: str = "conservative"
     mode: str = "advisory"
 
-    @property
-    def task_id(self) -> str | None:
-        value = str(dict(self.meta or {}).get("task_id") or "").strip()
-        return value or None
-
     def validate(self) -> tuple[bool, tuple[str, ...]]:
         issues: list[str] = []
         if self.enabled and self.mode != "advisory":
@@ -57,6 +52,11 @@ class GoalExecutionRequest:
         raw = str(self.autonomy_tier or "").strip().lower()
         if raw in ALLOWED_AUTONOMY_TIERS:
             object.__setattr__(self, "autonomy_tier", normalize_autonomy_tier(raw))
+
+    @property
+    def task_id(self) -> str | None:
+        value = str(dict(self.meta or {}).get("task_id") or "").strip()
+        return value or None
 
     def validate(self) -> tuple[bool, tuple[str, ...]]:
         issues: list[str] = []
