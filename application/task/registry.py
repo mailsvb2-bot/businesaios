@@ -753,19 +753,15 @@ class TaskQueuePreemptionCoordinator:
         return f"durable-task:{str(business_id).strip()}:{str(task_id).strip()}"
 
     def admit(self, job: Any) -> bool:
+        tags = tuple(str(tag) for tag in (getattr(job, "tags", ()) or ()))
+        if "durable_task" not in tags:
+            return True
         payload = dict(getattr(job, "payload", {}) or {})
         task_id = str(payload.get("task_id") or "").strip()
         business_id = str(payload.get("business_id") or "").strip()
         raw_keys = payload.get("task_conflict_keys")
-        if not task_id:
-            return True
-        if not business_id or not isinstance(raw_keys, list):
+        if not task_id or not business_id or not isinstance(raw_keys, list):
             return False
-        conflict_keys = tuple(
-            sorted(dict.fromkeys(_normalize_conflict_key(key) for key in raw_keys))
-        )
-        if not conflict_keys:
-            return True
         candidate = self._tasks.get(
             tenant_id=job.tenant_id,
             business_id=business_id,
@@ -773,6 +769,22 @@ class TaskQueuePreemptionCoordinator:
         )
         if candidate.status is not DurableTaskStatus.READY:
             return False
+        try:
+            payload_priority = int(payload.get("task_priority"))
+        except (TypeError, ValueError):
+            return False
+        conflict_keys = tuple(
+            sorted(dict.fromkeys(_normalize_conflict_key(key) for key in raw_keys))
+        )
+        canonical_keys = tuple(sorted(candidate.conflict_keys))
+        if (
+            payload_priority != candidate.priority
+            or int(getattr(job, "priority", -1)) != candidate.priority
+            or conflict_keys != canonical_keys
+        ):
+            return False
+        if not conflict_keys:
+            return True
         blocked = False
         tasks = self._tasks.list_for_business(
             tenant_id=job.tenant_id,
