@@ -7,6 +7,7 @@ from typing import Any
 import pytest
 
 from application.headless.models import GoalExecutionRequest
+from contracts.task import RetryPolicy, TimeoutPolicy
 from execution.goal_plan_memory import FileGoalPlanMemoryStore, GoalPlanMemoryService
 from execution.headless_contract import HeadlessExecutionContract
 from runtime.execution.executor_result import ExecutionResult
@@ -97,14 +98,30 @@ def test_closed_loop_goal_evaluator_marks_completed_goal(tmp_path: Path) -> None
 
 
 class _TaskRegistry:
-    def __init__(self, status: str) -> None:
+    def __init__(
+        self,
+        status: str,
+        *,
+        retry_policy: RetryPolicy | None = None,
+        timeout_policy: TimeoutPolicy | None = None,
+    ) -> None:
         self.status = status
+        self.retry_policy = retry_policy
+        self.timeout_policy = timeout_policy
         self.calls: list[tuple[str, str, str]] = []
 
     def get(self, *, tenant_id: str, business_id: str, task_id: str):
         self.calls.append((tenant_id, business_id, task_id))
         status = type("Status", (), {"value": self.status})()
-        return type("Task", (), {"status": status})()
+        return type(
+            "Task",
+            (),
+            {
+                "status": status,
+                "retry_policy": self.retry_policy,
+                "timeout_policy": self.timeout_policy,
+            },
+        )()
 
 
 def test_phase9_task_bound_execution_requires_canonical_registry(tmp_path: Path) -> None:
@@ -167,5 +184,25 @@ def test_phase9_non_executable_task_states_fail_before_effect(
         meta={"task_id": "task-1"},
     )
     with pytest.raises(ValueError, match="not executable"):
+        contract.execute_autopilot(request)
+    assert registry.calls == [("tenant-1", "biz-1", "task-1")]
+
+
+
+def test_phase9_expired_task_deadline_fails_before_effect(tmp_path: Path) -> None:
+    contract = _build_contract(tmp_path)
+    registry = _TaskRegistry(
+        "ready",
+        retry_policy=RetryPolicy(max_attempts=2),
+        timeout_policy=TimeoutPolicy(task_deadline_ms=1),
+    )
+    contract._task_registry = registry
+    request = GoalExecutionRequest(
+        goal="execute durable task",
+        business_id="biz-1",
+        tenant_id="tenant-1",
+        meta={"task_id": "task-1"},
+    )
+    with pytest.raises(TimeoutError, match="deadline"):
         contract.execute_autopilot(request)
     assert registry.calls == [("tenant-1", "biz-1", "task-1")]
