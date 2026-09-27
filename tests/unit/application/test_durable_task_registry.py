@@ -11,7 +11,14 @@ from application.task import (
     DurableTaskRegistry,
 )
 from contracts.event_store import BusinessFactV1, canonical_business_event_contract
-from contracts.task import DurableTaskNotFound, DurableTaskStatus, WaitCondition, WaitConditionKind
+from contracts.task import (
+    DurableTaskNotFound,
+    DurableTaskStatus,
+    RetryPolicy,
+    TimeoutPolicy,
+    WaitCondition,
+    WaitConditionKind,
+)
 from reliability.idempotency_store import InMemoryIdempotencyStore
 
 
@@ -563,3 +570,104 @@ def test_phase9_task_artifact_binding_fails_closed_for_wrong_scope_and_terminal_
             idempotency_key="attach-terminal",
             occurred_at_ms=140,
         )
+
+
+
+def test_phase9_retry_and_timeout_policy_are_durable_and_deterministic() -> None:
+    events = MemoryEventStore()
+    claims = InMemoryIdempotencyStore()
+    registry = DurableTaskRegistry(event_store=events, idempotency_store=claims)
+    retry_policy = RetryPolicy(
+        max_attempts=4,
+        initial_backoff_ms=100,
+        max_backoff_ms=250,
+        retryable_statuses=("temporary_failure", "rate_limited"),
+    )
+    timeout_policy = TimeoutPolicy(
+        attempt_timeout_ms=5_000,
+        task_deadline_ms=50_000,
+    )
+    created = registry.create(
+        tenant_id="tenant-p9",
+        business_id="business-p9",
+        task_id="task-policy",
+        idempotency_key="create-policy",
+        retry_policy=retry_policy,
+        timeout_policy=timeout_policy,
+        occurred_at_ms=100,
+    )
+    assert created.retry_policy == retry_policy
+    assert created.timeout_policy == timeout_policy
+    assert retry_policy.allows_retry(attempt=1, status="temporary_failure") is True
+    assert retry_policy.allows_retry(attempt=4, status="temporary_failure") is False
+    assert retry_policy.allows_retry(
+        attempt=1,
+        status="temporary_failure",
+        ambiguous=True,
+    ) is False
+    assert retry_policy.backoff_ms(attempt=1) == 100
+    assert retry_policy.backoff_ms(attempt=2) == 200
+    assert retry_policy.backoff_ms(attempt=3) == 250
+    assert timeout_policy.attempt_deadline_ms(started_at_ms=1_000) == 6_000
+    assert timeout_policy.is_task_timed_out(now_ms=49_999) is False
+    assert timeout_policy.is_task_timed_out(now_ms=50_000) is True
+
+    rebuilt = DurableTaskRegistry(
+        event_store=events,
+        idempotency_store=claims,
+    ).get(
+        tenant_id="tenant-p9",
+        business_id="business-p9",
+        task_id="task-policy",
+    )
+    assert rebuilt.retry_policy == retry_policy
+    assert rebuilt.timeout_policy == timeout_policy
+
+
+def test_phase9_retry_policy_never_blindly_retries_ambiguous_effects_by_default() -> None:
+    policy = RetryPolicy(max_attempts=3)
+    assert policy.allows_retry(
+        attempt=1,
+        status="temporary_failure",
+        ambiguous=True,
+    ) is False
+    explicit = RetryPolicy(max_attempts=3, retry_ambiguous=True)
+    assert explicit.allows_retry(
+        attempt=1,
+        status="temporary_failure",
+        ambiguous=True,
+    ) is True
+
+
+def test_phase9_retry_timeout_policy_validation_fails_closed() -> None:
+    with pytest.raises(ValueError, match="max_attempts"):
+        RetryPolicy(max_attempts=0)
+    with pytest.raises(ValueError, match="max_backoff_ms"):
+        RetryPolicy(max_attempts=2, initial_backoff_ms=200, max_backoff_ms=100)
+    with pytest.raises(ValueError, match="attempt_timeout_ms"):
+        TimeoutPolicy(attempt_timeout_ms=0)
+    with pytest.raises(ValueError, match="task_deadline_ms"):
+        TimeoutPolicy(task_deadline_ms=-1)
+
+
+def test_phase9_legacy_task_without_policy_payload_projects_safe_defaults() -> None:
+    events = MemoryEventStore()
+    events.append_event(BusinessFactV1(
+        fact_id="task:create-legacy-policy",
+        tenant_id="tenant-p9",
+        business_id="business-p9",
+        fact_type="task.created",
+        entity_id="task-legacy-policy",
+        event_time_ms=100,
+        observed_at_ms=100,
+        source="durable_task_registry",
+        payload={"title": "legacy"},
+    ).as_event())
+    task = DurableTaskProjector(events).get(
+        tenant_id="tenant-p9",
+        business_id="business-p9",
+        task_id="task-legacy-policy",
+    )
+    assert task.retry_policy == RetryPolicy()
+    assert task.timeout_policy == TimeoutPolicy()
+    assert task.retry_policy.max_attempts == 1
