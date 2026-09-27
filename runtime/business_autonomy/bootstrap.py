@@ -71,7 +71,6 @@ from application.business_autonomy.persistence import (
 )
 from application.business_autonomy.policy import BusinessAutonomyPolicy, BusinessTrustPolicy
 from application.business_autonomy.provider_admin_service import ProviderAdminService
-from application.business_autonomy.registry import AgentIdentityRegistry
 from application.business_autonomy.registry import BusinessAdapterRegistry, RegisteredBusinessCapabilities
 from application.business_autonomy.service import BusinessAutonomyService
 from application.business_autonomy.trust import BusinessTrustSnapshot
@@ -755,6 +754,8 @@ def build_business_autonomy_guarded_service(*, business_id: str = 'external_busi
         ),
     )
     service._distributed_business_registry = distributed_registry
+    from application.business_autonomy.registry import AgentIdentityRegistry
+
     service._agent_identity_registry = AgentIdentityRegistry(
         event_store=ontology_event_store,
         idempotency_store=distributed['idempotency'],
