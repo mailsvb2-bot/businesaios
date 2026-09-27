@@ -3,6 +3,7 @@ from __future__ import annotations
 from collections.abc import Mapping
 from dataclasses import is_dataclass, replace
 from types import SimpleNamespace
+import time
 from typing import Any
 
 from application.headless.execution_gateway import execute_headless_envelope
@@ -224,6 +225,18 @@ class AutonomyExecutionStep:
                     capability=str(getattr(executable_action, "action_type", "") or ""),
                 )
 
+        attempt_deadline_raw = dict(getattr(effective_request, "meta", {}) or {}).get(
+            "durable_task_attempt_deadline_ms"
+        )
+        if attempt_deadline_raw is not None:
+            if isinstance(attempt_deadline_raw, bool):
+                raise ValueError("durable task attempt deadline must be an integer")
+            attempt_deadline_ms = int(attempt_deadline_raw)
+            if attempt_deadline_ms <= 0:
+                raise ValueError("durable task attempt deadline must be > 0")
+            if int(time.time() * 1000) >= attempt_deadline_ms:
+                raise TimeoutError("durable task attempt deadline has expired")
+
         try:
             result = execute_headless_envelope(
                 executor=self._contract._executor,
@@ -295,6 +308,11 @@ class AutonomyExecutionStep:
         final_payload["agent_id"] = str(getattr(executable_action, "agent_id", "") or "")
         final_payload["action_id"] = str(getattr(executable_action, "action_id", "") or "")
         final_payload["action_channel"] = str(getattr(executable_action, "channel", "") or "")
+        attempt_deadline_ms = dict(getattr(request, "meta", {}) or {}).get(
+            "durable_task_attempt_deadline_ms"
+        )
+        if attempt_deadline_ms is not None:
+            final_payload["durable_task_attempt_deadline_ms"] = int(attempt_deadline_ms)
         final_payload["evidence_refs"] = list(getattr(executable_action, "evidence_refs", ()) or ())
         final_payload["derived_fact_ref"] = str(getattr(executable_action, "derived_fact_ref", "") or "")
         final_payload["policy_decision"] = {
