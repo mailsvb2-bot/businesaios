@@ -292,8 +292,45 @@ class HeadlessExecutionContract:
                     task_id=task_id,
                 )
                 if runs and getattr(runs[-1], "terminal_stage", None) is None:
-                    raise RuntimeError(
-                        "durable task has an incomplete execution run; recovery is required"
+                    recovery_planner = getattr(reliability, "plan_task_run_recovery", None)
+                    if not callable(recovery_planner):
+                        raise RuntimeError(
+                            "durable task has an incomplete execution run; recovery is required"
+                        )
+                    task_run_id = str(getattr(runs[-1], "run_id", "") or "").strip()
+                    if not task_run_id:
+                        raise RuntimeError(
+                            "durable task has an incomplete execution run without task_run_id"
+                        )
+                    recovery_plan = recovery_planner(
+                        tenant_id=request.tenant_id,
+                        business_id=request.business_id,
+                        task_id=task_id,
+                        task_run_id=task_run_id,
+                    )
+                    recovery_action = str(
+                        getattr(recovery_plan, "recovery_action", "") or ""
+                    ).strip()
+                    resume_stage = str(
+                        getattr(recovery_plan, "resume_stage", "") or ""
+                    ).strip()
+                    if recovery_action != "restart" or resume_stage not in {
+                        "",
+                        "request",
+                        "world_state",
+                    }:
+                        raise RuntimeError(
+                            "durable task has an incomplete execution run; "
+                            f"recovery action required: {recovery_action or 'unknown'}"
+                        )
+                    request = replace(
+                        request,
+                        meta={
+                            **dict(request.meta or {}),
+                            "recovery_from_task_run_id": task_run_id,
+                            "recovery_action": recovery_action,
+                            "recovery_resume_stage": resume_stage or None,
+                        },
                     )
             timeout_policy = getattr(task, "timeout_policy", None)
             if timeout_policy is not None and timeout_policy.is_task_timed_out(
