@@ -249,7 +249,12 @@ class RuntimeReliability:
             decision_id=str(getattr(decision, "decision_id", "") or None) if getattr(decision, "decision_id", None) is not None else None,
             action_id=str(getattr(decision, "action", "") or None) if getattr(decision, "action", None) is not None else None,
             idempotency_key=self.idempotency_key_for_env(env).key,
-            outbox_message_id=str(getattr(decision, "decision_id", "") or None) if getattr(decision, "decision_id", None) is not None else None,
+            outbox_message_id=(
+                str(getattr(decision, "decision_id", "") or None)
+                if stage in {"execution", "verification", "state_update", "evidence"}
+                and getattr(decision, "decision_id", None) is not None
+                else None
+            ),
             trace_id=str(getattr(decision, "correlation_id", "") or None) if getattr(decision, "correlation_id", None) is not None else None,
             business_id=business_id,
             task_id=task_id,
