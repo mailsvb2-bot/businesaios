@@ -5,7 +5,7 @@ import pytest
 from contracts.task import DurableTask, DurableTaskStatus, RetryPolicy
 from runtime.queue import InMemoryJobStore, JobDispatcher, JobScheduler
 from runtime.queue.job_contract import JobClaimExpiryPolicy
-from runtime.queue.task_job_adapter import TaskQueueAdapter, build_task_job_request
+from runtime.queue.job_dispatcher import TaskQueueAdapter, build_task_job_request
 
 
 class _Registry:
