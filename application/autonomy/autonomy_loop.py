@@ -64,6 +64,7 @@ class AutonomyLoop:
             payload={
                 "goal": request.goal,
                 "goal_id": request.goal_id,
+                "task_id": getattr(request, "task_id", None),
                 "business_id": request.business_id,
                 "tenant_id": request.tenant_id,
                 "user_id": request.user_id,
@@ -102,6 +103,17 @@ class AutonomyLoop:
                 multi_goal_context=multi_goal_context,
                 owner_path_context=owner_path_context,
             )
+            task_id = str(getattr(request, "task_id", "") or "").strip()
+            if task_id:
+                runtime_request = replace(
+                    runtime_request,
+                    meta={
+                        **dict(runtime_request.meta or {}),
+                        "task_id": task_id,
+                        "task_run_id": trace.run_id,
+                        "step_id": f"{trace.run_id}:{step_index}",
+                    },
+                )
             trace.record(
                 event_type="step_started",
                 step_index=step_index,
