@@ -28,6 +28,7 @@ from application.planning.long_horizon_planner import LongHorizonPlanner
 from application.planning.multi_goal_planner import FileMultiGoalPlannerStore, MultiGoalPlannerService
 from application.planning.strategy_memory import FileStrategyMemoryStore, StrategyMemoryService
 from application.task import DurableTaskRegistry
+from runtime.queue.job_dispatcher import TaskQueueAdapter
 from bootstrap.entrypoint_context import bootstrap_entrypoint, is_allowed_bootstrap_entrypoint
 from core.safety.operational.runtime_bootstrap import resolve_operational_safety_runtime
 from execution.autonomy_counters import AutonomyCounterResolver, FileAutonomyCounterStore
@@ -92,6 +93,7 @@ class HeadlessRuntime:
     state_synthesis_engine: object | None = None
     agent_identity_registry: object | None = None
     task_registry: object | None = None
+    task_queue_adapter: object | None = None
 
 
 @lru_cache(maxsize=8)
@@ -170,6 +172,14 @@ def build_headless_runtime(*, entrypoint: str = "headless_sdk", root_dir: str | 
         event_store=event_store,
         idempotency_store=reliability_idempotency,
     )
+    queue_support = getattr(executor, "_queue_support", None)
+    queue_dispatcher = getattr(queue_support, "dispatcher", None)
+    if queue_dispatcher is None:
+        raise RuntimeError("canonical runtime queue dispatcher is required for Durable Task")
+    task_queue_adapter = TaskQueueAdapter(
+        task_registry=task_registry,
+        dispatcher=queue_dispatcher,
+    )
     operational_runtime = resolve_operational_safety_runtime(default_root=paths.root_dir)
     if getattr(executor, "_operational_budget_service", None) is None:
         executor._operational_budget_service = operational_runtime.service
@@ -218,6 +228,7 @@ def build_headless_runtime(*, entrypoint: str = "headless_sdk", root_dir: str | 
         world_model_event_projector=world_model_event_projector,
         agent_identity_registry=agent_identity_registry,
         task_registry=task_registry,
+        task_queue_adapter=task_queue_adapter,
     )
     return HeadlessRuntime(
         decision_core=core,
