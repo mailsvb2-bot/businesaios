@@ -216,3 +216,28 @@ def test_runtime_reliability_fails_closed_on_incomplete_task_scope() -> None:
             stage="request",
             checkpoint_id="task-request",
         )
+
+
+
+def test_runtime_reliability_does_not_invent_task_scope_for_legacy_decision() -> None:
+    runtime = _runtime_reliability_for_checkpoint_test()
+    env = SimpleNamespace(
+        decision=SimpleNamespace(
+            decision_id="decision-legacy",
+            correlation_id="trace-legacy",
+            action="noop@v1",
+            payload={
+                "tenant_id": "tenant-a",
+                "business_id": "business-a",
+                "idempotency_key": "idem-legacy",
+            },
+        )
+    )
+    checkpoint = runtime.append_checkpoint(
+        env,
+        stage="request",
+        checkpoint_id="legacy-request",
+    )
+    assert checkpoint.business_id == "business-a"
+    assert checkpoint.task_id is None
+    assert checkpoint.step_id is None
