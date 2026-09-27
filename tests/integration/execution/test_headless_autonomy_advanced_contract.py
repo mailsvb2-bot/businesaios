@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from pathlib import Path
+from types import SimpleNamespace
 from typing import Any
 
 import pytest
@@ -234,8 +235,12 @@ def test_phase9_expired_attempt_deadline_fails_before_executor(
 
     contract._executor = _CountingExecutor()
     monkeypatch.setattr(
-        "application.autonomy.autonomy_execution_step.time.time",
-        lambda: 10**12,
+        "application.autonomy.autonomy_loop.time",
+        SimpleNamespace(time=lambda: 1_000.0),
+    )
+    monkeypatch.setattr(
+        "application.autonomy.autonomy_execution_step.time",
+        SimpleNamespace(time=lambda: 1_002.0),
     )
     with pytest.raises(TimeoutError, match="attempt deadline"):
         contract.execute_autopilot(
