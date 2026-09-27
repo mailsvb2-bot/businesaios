@@ -11,6 +11,7 @@ from contracts.task import RetryPolicy, TimeoutPolicy
 from execution.goal_plan_memory import FileGoalPlanMemoryStore, GoalPlanMemoryService
 from execution.headless_contract import HeadlessExecutionContract
 from runtime.execution.executor_result import ExecutionResult
+from reliability.recovery_policy_engine import RecoveryPolicyDecision
 
 
 @dataclass(frozen=True)
@@ -276,14 +277,12 @@ def test_phase9_recovery_approved_early_restart_is_allowed(tmp_path: Path) -> No
                 "task_id": "task-1",
                 "task_run_id": "task-run-1",
             }
-            return type(
-                "Plan",
-                (),
-                {
-                    "action": "restart",
-                    "resume_stage": "world_state",
-                },
-            )()
+            return RecoveryPolicyDecision(
+                run_id="executor-run-1",
+                action="restart",
+                reason="restart_from_world_state",
+                resume_stage="world_state",
+            )
 
     contract._executor._reliability = _Reliability()
     report = contract.execute_autopilot(
@@ -317,14 +316,12 @@ def test_phase9_recovery_does_not_blindly_replay_post_decision_run(tmp_path: Pat
 
         def plan_task_run_recovery(self, **kwargs: Any):
             del kwargs
-            return type(
-                "Plan",
-                (),
-                {
-                    "action": "resume_execution",
-                    "resume_stage": "execution",
-                },
-            )()
+            return RecoveryPolicyDecision(
+                run_id="executor-run-2",
+                action="resume_execution",
+                reason="resume_from_execution",
+                resume_stage="execution",
+            )
 
     contract._executor._reliability = _Reliability()
     with pytest.raises(RuntimeError, match="recovery action required: resume_execution"):
