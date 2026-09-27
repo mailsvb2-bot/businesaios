@@ -13,7 +13,6 @@ from typing import Any, Protocol
 
 from core.tenancy.normalization import require_tenant_id
 
-
 CANON_EXECUTION_CHECKPOINT_STORE = True
 CANON_CHECKPOINT_STAGE_ORDER = (
     "request",
