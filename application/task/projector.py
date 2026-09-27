@@ -4,6 +4,7 @@ from dataclasses import replace
 from typing import Any
 
 from application.task.facts import (
+    TASK_ARTIFACT_ATTACHED,
     TASK_BLOCKED,
     TASK_CANCELLED,
     TASK_COMPENSATING,
@@ -139,6 +140,24 @@ class DurableTaskProjector:
                 raise DurableTaskHistoryInvariantViolation(
                     f"task history continues after terminal state: {task.status.value}"
                 )
+
+            if fact_type == TASK_ARTIFACT_ATTACHED:
+                artifact_id = str(payload.get("artifact_id") or "").strip()
+                if not artifact_id:
+                    raise DurableTaskHistoryInvariantViolation(
+                        "task.artifact_attached requires artifact_id"
+                    )
+                if artifact_id in task.artifact_ids:
+                    raise DurableTaskHistoryInvariantViolation(
+                        "task history contains duplicate artifact attachment"
+                    )
+                task = self._next(
+                    task,
+                    status=task.status,
+                    when=when,
+                    artifact_ids=(*task.artifact_ids, artifact_id),
+                )
+                continue
 
             if fact_type == TASK_READY:
                 if task.status not in {
