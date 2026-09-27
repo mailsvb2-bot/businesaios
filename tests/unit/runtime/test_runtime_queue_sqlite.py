@@ -117,3 +117,32 @@ def test_sqlite_schema_migrates_legacy_jobs_to_default_claim_expiry_policy(tmp_p
     inserted = store.put(_request().to_record(now=utc_now()))
     assert inserted.claim_expiry_policy.value == "retry_if_budget"
     store.close()
+
+
+
+def test_current_sqlite_queue_schema_reopens_without_journal_mode_negotiation(
+    tmp_path,
+    monkeypatch,
+) -> None:
+    from runtime.queue import _sqlite_job_store_db as db_module
+
+    path = tmp_path / "current-schema.sqlite3"
+    SqlitePersistentJobStore(path=path).close()
+    calls: list[bool] = []
+    original = db_module.configure_sqlite
+
+    def observed(conn, *, prod, configure_journal_mode=True):
+        calls.append(bool(configure_journal_mode))
+        return original(
+            conn,
+            prod=prod,
+            configure_journal_mode=configure_journal_mode,
+        )
+
+    monkeypatch.setattr(db_module, "configure_sqlite", observed)
+    reopened = SqlitePersistentJobStore(path=path)
+    reopened.close()
+
+    assert calls
+    assert calls[0] is False
+    assert True not in calls
