@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from datetime import timedelta
 
+import pytest
+
 from runtime.queue.backpressure_monitor import BackpressureMonitor
 from runtime.queue.backpressure_policy import BackpressurePolicy
 from runtime.queue.capability_throttle_policy import CapabilityThrottlePolicy, CapabilityThrottleRule
