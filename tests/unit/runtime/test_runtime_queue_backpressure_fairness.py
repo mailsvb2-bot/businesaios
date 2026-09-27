@@ -8,6 +8,7 @@ from runtime.queue.backpressure_monitor import BackpressureMonitor
 from runtime.queue.backpressure_policy import BackpressurePolicy
 from runtime.queue.capability_throttle_policy import CapabilityThrottlePolicy, CapabilityThrottleRule
 from runtime.queue.job_contract import JobDispatchRequest, utc_now
+from runtime.queue.job_dispatcher import build_task_job_request
 from runtime.queue.job_scheduler import JobScheduler
 from runtime.queue.job_store import InMemoryJobStore
 from runtime.queue.queue_observability import QueueObservabilityRegistry
@@ -187,7 +188,7 @@ def test_job_scheduler_requests_preemption_and_keeps_high_priority_job_pending()
         tenant_id="tenant-1", business_id="business-1", task_id="high",
         idempotency_key="create-high", priority=90, conflict_keys=("ledger",), occurred_at_ms=4,
     )
-    tasks.ready(
+    high = tasks.ready(
         tenant_id="tenant-1", business_id="business-1", task_id="high",
         idempotency_key="ready-high", expected_version=1, occurred_at_ms=5,
     )
@@ -200,18 +201,12 @@ def test_job_scheduler_requests_preemption_and_keeps_high_priority_job_pending()
     store = InMemoryJobStore()
     now = utc_now()
     store.put(
-        JobDispatchRequest(
-            tenant_id="tenant-1",
-            job_id="job-high",
+        build_task_job_request(
+            task=high,
             queue_name="tasks",
+            job_id="job-high",
             job_type="work",
-            payload={
-                "business_id": "business-1",
-                "task_id": "high",
-                "task_conflict_keys": ["ledger"],
-            },
             dedupe_key="high",
-            priority=90,
         ).to_record(now=now)
     )
     scheduler = JobScheduler(
