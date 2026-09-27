@@ -28,6 +28,7 @@ from application.planning.long_horizon_planner import LongHorizonPlanner
 from application.planning.multi_goal_planner import FileMultiGoalPlannerStore, MultiGoalPlannerService
 from application.planning.strategy_memory import FileStrategyMemoryStore, StrategyMemoryService
 from application.task import DurableTaskRegistry
+from application.task.registry import TaskQueuePreemptionCoordinator
 from runtime.queue.job_dispatcher import TaskQueueAdapter
 from bootstrap.entrypoint_context import bootstrap_entrypoint, is_allowed_bootstrap_entrypoint
 from core.safety.operational.runtime_bootstrap import resolve_operational_safety_runtime
@@ -179,6 +180,16 @@ def build_headless_runtime(*, entrypoint: str = "headless_sdk", root_dir: str | 
     task_queue_adapter = TaskQueueAdapter(
         task_registry=task_registry,
         dispatcher=queue_dispatcher,
+    )
+    queue_scheduler = getattr(queue_support, "scheduler", None)
+    distributed_lock = getattr(reliability, "distributed_lock", None)
+    if queue_scheduler is None or distributed_lock is None:
+        raise RuntimeError(
+            "canonical queue scheduler and distributed lock are required for Durable Task"
+        )
+    queue_scheduler._task_preemption_coordinator = TaskQueuePreemptionCoordinator(
+        task_registry=task_registry,
+        distributed_lock=distributed_lock,
     )
     operational_runtime = resolve_operational_safety_runtime(default_root=paths.root_dir)
     if getattr(executor, "_operational_budget_service", None) is None:
