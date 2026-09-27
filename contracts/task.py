@@ -289,6 +289,64 @@ class DurableTask:
             raise ValueError("non-terminal task cannot have terminal_at_ms")
 
 
+@dataclass(frozen=True, slots=True)
+class DurableTaskRun:
+    tenant_id: str
+    business_id: str
+    task_id: str
+    run_id: str
+    started_at_ms: int
+    updated_at_ms: int
+    checkpoint_count: int
+    terminal_stage: str | None = None
+
+    def __post_init__(self) -> None:
+        for field_name in ("tenant_id", "business_id", "task_id", "run_id"):
+            object.__setattr__(self, field_name, _required(getattr(self, field_name), field_name))
+        started_at_ms = int(self.started_at_ms)
+        updated_at_ms = int(self.updated_at_ms)
+        checkpoint_count = int(self.checkpoint_count)
+        if started_at_ms < 0 or updated_at_ms < started_at_ms:
+            raise ValueError("task run timestamps are invalid")
+        if checkpoint_count < 1:
+            raise ValueError("checkpoint_count must be >= 1")
+        object.__setattr__(self, "started_at_ms", started_at_ms)
+        object.__setattr__(self, "updated_at_ms", updated_at_ms)
+        object.__setattr__(self, "checkpoint_count", checkpoint_count)
+        object.__setattr__(
+            self,
+            "terminal_stage",
+            _optional(self.terminal_stage, "terminal_stage", 100),
+        )
+
+
+@dataclass(frozen=True, slots=True)
+class DurableTaskStep:
+    tenant_id: str
+    business_id: str
+    task_id: str
+    run_id: str
+    step_id: str
+    first_sequence_no: int
+    last_sequence_no: int
+    checkpoint_count: int
+    latest_stage: str
+
+    def __post_init__(self) -> None:
+        for field_name in ("tenant_id", "business_id", "task_id", "run_id", "step_id", "latest_stage"):
+            object.__setattr__(self, field_name, _required(getattr(self, field_name), field_name))
+        first_sequence_no = int(self.first_sequence_no)
+        last_sequence_no = int(self.last_sequence_no)
+        checkpoint_count = int(self.checkpoint_count)
+        if first_sequence_no < 0 or last_sequence_no < first_sequence_no:
+            raise ValueError("task step sequence bounds are invalid")
+        if checkpoint_count < 1:
+            raise ValueError("checkpoint_count must be >= 1")
+        object.__setattr__(self, "first_sequence_no", first_sequence_no)
+        object.__setattr__(self, "last_sequence_no", last_sequence_no)
+        object.__setattr__(self, "checkpoint_count", checkpoint_count)
+
+
 class DurableTaskNotFound(LookupError):
     pass
 
@@ -297,7 +355,9 @@ __all__ = [
     "CANON_DURABLE_TASK_CONTRACT",
     "DurableTask",
     "DurableTaskNotFound",
+    "DurableTaskRun",
     "DurableTaskStatus",
+    "DurableTaskStep",
     "RetryPolicy",
     "TimeoutPolicy",
     "WaitCondition",
