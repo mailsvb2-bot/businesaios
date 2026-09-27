@@ -10,6 +10,7 @@ TASK_FAILED = "task.failed"
 TASK_CANCELLED = "task.cancelled"
 TASK_COMPENSATING = "task.compensating"
 TASK_ARTIFACT_ATTACHED = "task.artifact_attached"
+TASK_PREEMPTION_REQUESTED = "task.preemption_requested"
 
 TASK_FACT_TYPES = frozenset(
     {
@@ -25,6 +26,7 @@ TASK_FACT_TYPES = frozenset(
         TASK_CANCELLED,
         TASK_COMPENSATING,
         TASK_ARTIFACT_ATTACHED,
+        TASK_PREEMPTION_REQUESTED,
     }
 )
 
@@ -38,6 +40,7 @@ __all__ = [
     "TASK_FACT_TYPES",
     "TASK_FAILED",
     "TASK_PAUSED",
+    "TASK_PREEMPTION_REQUESTED",
     "TASK_READY",
     "TASK_STARTED",
     "TASK_SUCCEEDED",
