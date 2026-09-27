@@ -245,6 +245,78 @@ def test_job_scheduler_requests_preemption_and_keeps_high_priority_job_pending()
     assert [job.job_id for job in second.jobs] == ["job-high"]
 
 
+def test_task_preemption_coordinator_ignores_non_durable_task_payloads() -> None:
+    class _NoCalls:
+        def get(self, **kwargs):
+            raise AssertionError(kwargs)
+
+    coordinator = TaskQueuePreemptionCoordinator(
+        task_registry=_NoCalls(),
+        distributed_lock=InMemoryDistributedLock(),
+    )
+    job = JobDispatchRequest(
+        tenant_id="tenant-1",
+        job_id="ordinary",
+        queue_name="tasks",
+        job_type="ordinary",
+        payload={"task_id": "unrelated-domain-task"},
+        dedupe_key="ordinary",
+    ).to_record(now=utc_now())
+    assert coordinator.admit(job) is True
+
+
+def test_task_preemption_coordinator_rejects_tampered_task_priority_and_conflicts() -> None:
+    class _Events:
+        def __init__(self) -> None:
+            self.events: list[dict] = []
+
+        def append_event(self, event: dict) -> None:
+            self.events.append(dict(event))
+
+        def iter_events(self, *, tenant_id, start_ms, end_ms=None, user_id=None, event_type=None):
+            del end_ms, user_id
+            for event in self.events:
+                if event.get("tenant_id") == tenant_id and event.get("timestamp_ms", 0) >= start_ms:
+                    if event_type is None or event.get("event_type") == event_type:
+                        yield dict(event)
+
+    tasks = DurableTaskRegistry(
+        event_store=_Events(),
+        idempotency_store=InMemoryIdempotencyStore(),
+    )
+    tasks.create(
+        tenant_id="tenant-1", business_id="business-1", task_id="canonical",
+        idempotency_key="create", priority=40, conflict_keys=("ledger",), occurred_at_ms=1,
+    )
+    tasks.ready(
+        tenant_id="tenant-1", business_id="business-1", task_id="canonical",
+        idempotency_key="ready", expected_version=1, occurred_at_ms=2,
+    )
+    coordinator = TaskQueuePreemptionCoordinator(
+        task_registry=tasks,
+        distributed_lock=InMemoryDistributedLock(),
+    )
+    now = utc_now()
+    tampered_priority = JobDispatchRequest(
+        tenant_id="tenant-1", job_id="p", queue_name="tasks", job_type="work",
+        payload={
+            "business_id": "business-1", "task_id": "canonical",
+            "task_priority": 90, "task_conflict_keys": ["ledger"],
+        },
+        dedupe_key="p", priority=90, tags=("durable_task",),
+    ).to_record(now=now)
+    tampered_keys = JobDispatchRequest(
+        tenant_id="tenant-1", job_id="k", queue_name="tasks", job_type="work",
+        payload={
+            "business_id": "business-1", "task_id": "canonical",
+            "task_priority": 40, "task_conflict_keys": [],
+        },
+        dedupe_key="k", priority=40, tags=("durable_task",),
+    ).to_record(now=now)
+    assert coordinator.admit(tampered_priority) is False
+    assert coordinator.admit(tampered_keys) is False
+
+
 def test_job_scheduler_rejects_invalid_preemption_coordinator() -> None:
     scheduler = JobScheduler(store=InMemoryJobStore())
     with pytest.raises(ValueError, match="provide admit"):
