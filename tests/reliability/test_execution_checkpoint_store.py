@@ -175,6 +175,7 @@ def test_runtime_reliability_projects_only_explicit_task_scope_into_checkpoint()
                 "tenant_id": "tenant-a",
                 "business_id": "business-a",
                 "task_id": "task-a",
+                "task_run_id": "task-run-a",
                 "step_id": "step-a",
                 "idempotency_key": "idem-a",
             },
@@ -187,6 +188,7 @@ def test_runtime_reliability_projects_only_explicit_task_scope_into_checkpoint()
     )
     assert checkpoint.business_id == "business-a"
     assert checkpoint.task_id == "task-a"
+    assert checkpoint.task_run_id == "task-run-a"
     assert checkpoint.step_id == "step-a"
     rebuilt = runtime.checkpoint_store.latest_for_task(
         tenant_id="tenant-a",
@@ -366,3 +368,27 @@ def test_phase9_task_run_scope_requires_task_identity() -> None:
             stage="request",
             checkpoint_id="cp-run-scope",
         ).validate()
+
+
+
+def test_runtime_reliability_fails_closed_on_task_run_without_task() -> None:
+    runtime = _runtime_reliability_for_checkpoint_test()
+    env = SimpleNamespace(
+        decision=SimpleNamespace(
+            decision_id="decision-task-run",
+            correlation_id="trace-task-run",
+            action="send_message@v1",
+            payload={
+                "tenant_id": "tenant-a",
+                "business_id": "business-a",
+                "task_run_id": "task-run-a",
+                "idempotency_key": "idem-task-run",
+            },
+        )
+    )
+    with pytest.raises(ValueError, match="task run checkpoint requires task_id"):
+        runtime.append_checkpoint(
+            env,
+            stage="request",
+            checkpoint_id="task-run-request",
+        )
