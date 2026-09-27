@@ -47,7 +47,7 @@ class RetryPolicy:
     max_attempts: int = 1
     initial_backoff_ms: int = 0
     max_backoff_ms: int = 0
-    retryable_statuses: tuple[str, ...] = ("temporary_failure", "rate_limited")
+    retryable_statuses: tuple[str, ...] = ("recoverable", "temporary_failure", "rate_limited")
     retry_ambiguous: bool = False
 
     def __post_init__(self) -> None:
@@ -98,7 +98,7 @@ class RetryPolicy:
                 str(item)
                 for item in payload.get(
                     "retryable_statuses",
-                    ("temporary_failure", "rate_limited"),
+                    ("recoverable", "temporary_failure", "rate_limited"),
                 )
             ),
             retry_ambiguous=bool(payload.get("retry_ambiguous", False)),
