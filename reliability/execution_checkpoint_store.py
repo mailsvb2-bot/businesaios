@@ -49,6 +49,7 @@ class ExecutionCheckpoint:
     outbox_message_id: str | None = None
     business_id: str | None = None
     task_id: str | None = None
+    task_run_id: str | None = None
     step_id: str | None = None
     payload: Mapping[str, Any] = field(default_factory=dict)
 
@@ -66,9 +67,12 @@ class ExecutionCheckpoint:
             raise ValueError("created_at must be timezone-aware")
         business_id = str(self.business_id or "").strip()
         task_id = str(self.task_id or "").strip()
+        task_run_id = str(self.task_run_id or "").strip()
         step_id = str(self.step_id or "").strip()
         if task_id and not business_id:
             raise ValueError("task-scoped checkpoint requires business_id")
+        if task_run_id and not task_id:
+            raise ValueError("task run checkpoint requires task_id")
         if step_id and not task_id:
             raise ValueError("step-scoped checkpoint requires task_id")
 
@@ -98,6 +102,7 @@ class ExecutionCheckpoint:
             outbox_message_id=row.get("outbox_message_id"),
             business_id=row.get("business_id"),
             task_id=row.get("task_id"),
+            task_run_id=row.get("task_run_id"),
             step_id=row.get("step_id"),
             payload=dict(row.get("payload") or {}),
         )
