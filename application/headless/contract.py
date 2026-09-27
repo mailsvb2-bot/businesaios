@@ -294,7 +294,11 @@ class HeadlessExecutionContract:
                     business_id=request.business_id,
                     task_id=task_id,
                 )
-                if runs and getattr(runs[-1], "terminal_stage", None) is None:
+                if not runs:
+                    raise RuntimeError(
+                        "running durable task requires existing recovery checkpoints"
+                    )
+                if getattr(runs[-1], "terminal_stage", None) is None:
                     recovery_planner = getattr(reliability, "plan_task_run_recovery", None)
                     if not callable(recovery_planner):
                         raise RuntimeError(
