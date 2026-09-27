@@ -18,6 +18,27 @@ CANON_API_BUSINESS_AUTONOMY_ROUTE_HANDLERS = True
 CANON_API_BUSINESS_AUTONOMY_ROUTE_HANDLERS_FINAL_OWNER = "interfaces.api.business_autonomy_route_handlers"
 
 
+def _agent_identity_dict(identity: Any) -> dict[str, Any]:
+    return {
+        "agent_id": str(identity.agent_id),
+        "agent_type": str(identity.agent_type),
+        "agent_version": str(identity.agent_version),
+        "tenant_id": str(identity.tenant_id),
+        "business_id": str(identity.business_id),
+        "delegated_by": identity.delegated_by,
+        "policy_profile": str(identity.policy_profile),
+        "capability_scope": list(identity.capability_scope),
+        "budget_scope": dict(identity.budget_scope),
+        "risk_scope": list(identity.risk_scope),
+        "data_scope": list(identity.data_scope),
+        "lifecycle_status": str(getattr(identity.lifecycle_status, "value", identity.lifecycle_status)),
+        "schema_version": int(identity.schema_version),
+        "created_at_ms": int(identity.created_at_ms),
+        "updated_at_ms": int(identity.updated_at_ms),
+        "revoked_at_ms": identity.revoked_at_ms,
+    }
+
+
 def _default_stack() -> dict[str, Any]:
     return build_business_autonomy_operationalization()
 
@@ -129,6 +150,86 @@ class BusinessAutonomyRouteHandlers:
         )
         alignment = bridge.build_alignment(request=request, capability_allowed=True, policy_verdict={"allowed": True, "reason": "preview"})
         return {"business_id": business_id, "execution_verdict": dict(alignment.execution_verdict), "normalized_request": dict(alignment.normalized_request)}
+
+    def register_agent_identity(
+        self,
+        *,
+        tenant_id: str,
+        business_id: str,
+        agent_id: str,
+        idempotency_key: str,
+        agent_type: str,
+        agent_version: str,
+        delegated_by: str | None = None,
+        policy_profile: str = "default",
+        capability_scope: tuple[str, ...] = (),
+        budget_scope: Mapping[str, float] | None = None,
+        risk_scope: tuple[str, ...] = (),
+        data_scope: tuple[str, ...] = (),
+        requested_by: str = "control-plane",
+    ) -> dict[str, Any]:
+        agent_identity_registry = self.stack.get("agent_identity_registry")
+        if agent_identity_registry is None:
+            raise RuntimeError("agent identity registry is not configured")
+        identity = agent_identity_registry.register(
+            tenant_id=tenant_id,
+            business_id=business_id,
+            agent_id=agent_id,
+            idempotency_key=idempotency_key,
+            agent_type=agent_type,
+            agent_version=agent_version,
+            delegated_by=delegated_by,
+            policy_profile=policy_profile,
+            capability_scope=tuple(capability_scope),
+            budget_scope=dict(budget_scope or {}),
+            risk_scope=tuple(risk_scope),
+            data_scope=tuple(data_scope),
+            event_metadata={"actor_id": str(requested_by or "control-plane")},
+        )
+        return _agent_identity_dict(identity)
+
+    def list_agent_identities(
+        self,
+        *,
+        tenant_id: str,
+        business_id: str,
+        include_revoked: bool = False,
+    ) -> dict[str, Any]:
+        registry = self.stack.get("agent_identity_registry")
+        if registry is None:
+            raise RuntimeError("agent identity registry is not configured")
+        identities = registry.list_for_business(
+            tenant_id=tenant_id,
+            business_id=business_id,
+            include_revoked=bool(include_revoked),
+        )
+        return {
+            "tenant_id": tenant_id,
+            "business_id": business_id,
+            "identities": [_agent_identity_dict(item) for item in identities],
+            "count": len(identities),
+        }
+
+    def revoke_agent_identity(
+        self,
+        *,
+        tenant_id: str,
+        business_id: str,
+        agent_id: str,
+        idempotency_key: str,
+        requested_by: str = "control-plane",
+    ) -> dict[str, Any]:
+        registry = self.stack.get("agent_identity_registry")
+        if registry is None:
+            raise RuntimeError("agent identity registry is not configured")
+        identity = registry.revoke(
+            tenant_id=tenant_id,
+            business_id=business_id,
+            agent_id=agent_id,
+            idempotency_key=idempotency_key,
+            event_metadata={"actor_id": str(requested_by or "control-plane")},
+        )
+        return _agent_identity_dict(identity)
 
     def get_registered_capabilities(self, business_id: str) -> dict[str, Any]:
         return get_registered_business_capabilities(

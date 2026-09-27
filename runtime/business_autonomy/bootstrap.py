@@ -71,7 +71,11 @@ from application.business_autonomy.persistence import (
 )
 from application.business_autonomy.policy import BusinessAutonomyPolicy, BusinessTrustPolicy
 from application.business_autonomy.provider_admin_service import ProviderAdminService
-from application.business_autonomy.registry import BusinessAdapterRegistry, RegisteredBusinessCapabilities
+from application.business_autonomy.registry import (
+    AgentIdentityRegistry,
+    BusinessAdapterRegistry,
+    RegisteredBusinessCapabilities,
+)
 from application.business_autonomy.service import BusinessAutonomyService
 from application.business_autonomy.trust import BusinessTrustSnapshot
 from application.planning.distributed_planning_memory_backend import DistributedPlanningMemoryBackend
@@ -754,6 +758,10 @@ def build_business_autonomy_guarded_service(*, business_id: str = 'external_busi
         ),
     )
     service._distributed_business_registry = distributed_registry
+    service._agent_identity_registry = AgentIdentityRegistry(
+        event_store=ontology_event_store,
+        idempotency_store=distributed['idempotency'],
+    )
     service._typed_channel_registry = typed_registry
     service._operator_admin_plane = UnifiedOperatorAdminPlane(BusinessAutonomyFleetReadModel(distributed_registry))
     service._execution_runtime = build_execution_runtime(route_state=distributed['region_state'])

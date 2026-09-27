@@ -210,12 +210,17 @@ class AutonomyExecutionStep:
         )
         registry = getattr(self._contract, "_agent_identity_registry", None)
         authorization_hook = None
-        if registry is not None:
+        bound_agent_id = str(getattr(request, "agent_id", "") or "").strip()
+        if registry is not None and bound_agent_id:
+            executable_agent_id = str(getattr(executable_action, "agent_id", "") or "").strip()
+            if executable_agent_id != bound_agent_id:
+                raise PermissionError("executable action agent identity does not match trusted request identity")
+
             def authorization_hook(_locked_envelope: Any) -> None:
                 registry.assert_execution_authorized(
                     tenant_id=str(getattr(request, "tenant_id", "") or ""),
                     business_id=str(getattr(request, "business_id", "") or ""),
-                    agent_id=str(getattr(executable_action, "agent_id", "") or ""),
+                    agent_id=bound_agent_id,
                     capability=str(getattr(executable_action, "action_type", "") or ""),
                 )
 

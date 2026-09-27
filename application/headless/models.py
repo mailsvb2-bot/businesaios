@@ -46,6 +46,7 @@ class GoalExecutionRequest:
     autonomy_tier: str = 'supervised'
     approval_policy: dict[str, Any] = field(default_factory=dict)
     goal_id: str | None = None
+    agent_id: str | None = None
 
     def __post_init__(self) -> None:
         raw = str(self.autonomy_tier or "").strip().lower()
@@ -60,6 +61,8 @@ class GoalExecutionRequest:
             issues.append("missing:business_id")
         if self.goal_id is not None and not str(self.goal_id or "").strip():
             issues.append("invalid:goal_id")
+        if self.agent_id is not None and not str(self.agent_id or "").strip():
+            issues.append("invalid:agent_id")
         if not str(self.tenant_id or "").strip():
             issues.append("missing:tenant_id")
         if not str(self.channel or "").strip():

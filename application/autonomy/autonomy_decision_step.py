@@ -53,11 +53,14 @@ class AutonomyDecisionStep:
         explanation = self._contract._policy_explainer.explain(state=state, envelope=envelope)
         action_intent = self._project_action_intent(request=request, envelope=envelope)
         registry = getattr(self._contract, "_agent_identity_registry", None)
-        if registry is not None:
+        bound_agent_id = str(getattr(request, "agent_id", "") or "").strip()
+        if registry is not None and bound_agent_id:
+            if action_intent.agent_id != bound_agent_id:
+                raise PermissionError("signed decision agent identity does not match trusted request identity")
             registry.assert_execution_authorized(
                 tenant_id=action_intent.tenant_id,
                 business_id=action_intent.business_id,
-                agent_id=action_intent.agent_id,
+                agent_id=bound_agent_id,
                 capability=action_intent.action_type,
             )
         self._assert_goal_identity(request=request, action_intent=action_intent)

@@ -98,10 +98,18 @@ def register_public_api_routes(
                 if http_request is None:
                     raise PermissionError('api_perimeter_request_required')
                 request_context, principal = authorize_request(request=http_request, auth_bundle=auth_bundle)
-                principal_business_id = str(dict(getattr(principal, 'metadata', {}) or {}).get('business_id') or '').strip()
+                principal_metadata = dict(getattr(principal, 'metadata', {}) or {})
+                principal_business_id = str(principal_metadata.get('business_id') or '').strip()
+                principal_kind = str(principal_metadata.get('principal_kind') or '').strip().lower()
+                authenticated_agent_id = (
+                    str(getattr(principal, 'actor_id', None) or getattr(principal, 'subject', '') or '').strip()
+                    if principal_kind == 'service'
+                    else ''
+                )
                 request_context = request_context.with_metadata(
                     route=route_path,
                     **({'authenticated_business_id': principal_business_id} if principal_business_id else {}),
+                    **({'authenticated_agent_id': authenticated_agent_id} if authenticated_agent_id else {}),
                 )
             _enforce_security_guard(
                 security_guard=security_guard,

@@ -102,8 +102,16 @@ def register_public_core_routes(*, router, health_handler, handlers, headless_ha
 
     @router.post('/goals/execute', response_model=ExecuteGoalResponse)
     def execute_goal(http_request: Request, request: ExecuteGoalRequest) -> ExecuteGoalResponse:
-        enforce_public_security(route_path='/goals/execute', request_context=RequestContext.from_http_request(http_request, metadata={'route': '/goals/execute'}), body=request.model_dump(), http_request=http_request)
-        return headless_handlers.execute_goal(request)
+        request_context = enforce_public_security(
+            route_path='/goals/execute',
+            request_context=RequestContext.from_http_request(http_request, metadata={'route': '/goals/execute'}),
+            body=request.model_dump(),
+            http_request=http_request,
+        )
+        trusted_agent_id = str(request_context.metadata.get('authenticated_agent_id') or '').strip() or None
+        if trusted_agent_id is None:
+            return headless_handlers.execute_goal(request)
+        return headless_handlers.execute_goal(request, agent_id=trusted_agent_id)
 
     @router.post('/baselines/promote', response_model=PromoteBaselineResponse)
     def promote_baseline(http_request: Request, request: PromoteBaselineRequest) -> PromoteBaselineResponse:
