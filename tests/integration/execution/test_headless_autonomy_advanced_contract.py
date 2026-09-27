@@ -120,6 +120,8 @@ class _TaskRegistry:
         self.timeout_policy = timeout_policy
         self.conflict_keys = conflict_keys
         self.version = 1
+        self.preemption_requested_by_task_id: str | None = None
+        self.preemption_requested_priority: int | None = None
         self.calls: list[tuple[str, str, str]] = []
         self.transitions: list[str] = []
 
@@ -134,6 +136,8 @@ class _TaskRegistry:
                 "timeout_policy": self.timeout_policy,
                 "conflict_keys": self.conflict_keys,
                 "version": self.version,
+                "preemption_requested_by_task_id": self.preemption_requested_by_task_id,
+                "preemption_requested_priority": self.preemption_requested_priority,
             },
         )()
 
@@ -155,6 +159,16 @@ class _TaskRegistry:
         self.status = "succeeded"
         self.version += 1
         self.transitions.append("succeed")
+        return self._task()
+
+    def pause(self, *, expected_version: int, **kwargs: Any):
+        del kwargs
+        assert expected_version == self.version
+        self.status = "paused"
+        self.preemption_requested_by_task_id = None
+        self.preemption_requested_priority = None
+        self.version += 1
+        self.transitions.append("pause")
         return self._task()
 
 
@@ -307,6 +321,48 @@ def test_phase9_conflict_lock_is_held_through_evidence_and_terminal_commit(
     )
     assert after_commit is not None
     distributed_lock.release(lease=after_commit)
+
+
+def test_phase9_cooperative_preemption_stops_before_second_side_effect_and_pauses(
+    tmp_path: Path,
+) -> None:
+    contract = _build_contract(
+        tmp_path,
+        executor_ok=True,
+        executor_output={"verified": True, "goal_reached": False},
+    )
+    registry = _TaskRegistry("ready")
+    contract._task_registry = registry
+    calls: list[str] = []
+
+    class _PreemptingExecutor(StubExecutor):
+        def execute(self, env: Any) -> ExecutionResult:
+            calls.append(str(env.decision.decision_id))
+            result = super().execute(env)
+            registry.preemption_requested_by_task_id = "task-high"
+            registry.preemption_requested_priority = 90
+            registry.version += 1
+            return result
+
+    contract._executor = _PreemptingExecutor(
+        ok=True,
+        output={"verified": True, "goal_reached": False},
+    )
+    report = contract.execute_autopilot(
+        GoalExecutionRequest(
+            goal="execute durable task",
+            business_id="biz-1",
+            tenant_id="tenant-1",
+            max_steps=3,
+            meta={"task_id": "task-1"},
+        )
+    )
+
+    assert report.completed is False
+    assert report.stop_reason == "task_preempted"
+    assert len(calls) == 1
+    assert registry.transitions == ["start", "pause"]
+    assert registry.status == "paused"
 
 
 def test_phase9_ready_task_transitions_running_then_succeeded_after_verified_run(
