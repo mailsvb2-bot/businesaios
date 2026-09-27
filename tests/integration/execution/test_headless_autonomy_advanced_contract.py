@@ -171,6 +171,47 @@ def test_phase9_task_bound_execution_requires_canonical_registry(tmp_path: Path)
         contract.execute_autopilot(request)
 
 
+def test_phase9_lost_conflict_heartbeat_prevents_terminal_success(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    contract = _build_contract(
+        tmp_path,
+        executor_ok=True,
+        executor_output={"verified": True, "goal_reached": True},
+    )
+    registry = _TaskRegistry("ready", conflict_keys=("ledger",))
+    contract._task_registry = registry
+    contract._executor._reliability = type(
+        "Reliability",
+        (),
+        {"distributed_lock": InMemoryDistributedLock()},
+    )()
+
+    class _FailedHeartbeat:
+        def close(self):
+            raise RuntimeError("durable task conflict lease renewal failed")
+
+    monkeypatch.setattr(
+        TaskConflictController,
+        "heartbeat",
+        lambda self, group, **kwargs: _FailedHeartbeat(),
+    )
+
+    with pytest.raises(RuntimeError, match="lease renewal failed"):
+        contract.execute_autopilot(
+            GoalExecutionRequest(
+                goal="execute durable task",
+                business_id="biz-1",
+                tenant_id="tenant-1",
+                meta={"task_id": "task-1"},
+            )
+        )
+
+    assert registry.transitions == ["start"]
+    assert registry.status == "running"
+
+
 def test_phase9_task_conflict_execution_starts_and_closes_lease_heartbeat(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
