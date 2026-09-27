@@ -9,6 +9,7 @@ TASK_COMPLETED = "task.completed"  # legacy success fact accepted during migrati
 TASK_FAILED = "task.failed"
 TASK_CANCELLED = "task.cancelled"
 TASK_COMPENSATING = "task.compensating"
+TASK_ARTIFACT_ATTACHED = "task.artifact_attached"
 
 TASK_FACT_TYPES = frozenset(
     {
@@ -23,10 +24,12 @@ TASK_FACT_TYPES = frozenset(
         TASK_FAILED,
         TASK_CANCELLED,
         TASK_COMPENSATING,
+        TASK_ARTIFACT_ATTACHED,
     }
 )
 
 __all__ = [
+    "TASK_ARTIFACT_ATTACHED",
     "TASK_BLOCKED",
     "TASK_CANCELLED",
     "TASK_COMPLETED",
