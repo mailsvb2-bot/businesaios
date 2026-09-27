@@ -4,6 +4,8 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
+import pytest
+
 from application.headless.models import GoalExecutionRequest
 from execution.goal_plan_memory import FileGoalPlanMemoryStore, GoalPlanMemoryService
 from execution.headless_contract import HeadlessExecutionContract
@@ -91,3 +93,59 @@ def test_closed_loop_goal_evaluator_marks_completed_goal(tmp_path: Path) -> None
     assert report.completed is True
     assert report.stop_reason == "goal_achieved"
     assert report.final_feedback["goal_evaluation"]["achieved"] is True
+
+
+
+class _TaskRegistry:
+    def __init__(self, status: str) -> None:
+        self.status = status
+        self.calls: list[tuple[str, str, str]] = []
+
+    def get(self, *, tenant_id: str, business_id: str, task_id: str):
+        self.calls.append((tenant_id, business_id, task_id))
+        status = type("Status", (), {"value": self.status})()
+        return type("Task", (), {"status": status})()
+
+
+def test_phase9_task_bound_execution_requires_canonical_registry(tmp_path: Path) -> None:
+    contract = _build_contract(tmp_path)
+    request = GoalExecutionRequest(
+        goal="execute durable task",
+        business_id="biz-1",
+        tenant_id="tenant-1",
+        meta={"task_id": "task-1"},
+    )
+    assert request.task_id == "task-1"
+    with pytest.raises(RuntimeError, match="canonical task registry"):
+        contract.execute_autopilot(request)
+
+
+def test_phase9_terminal_task_fails_before_headless_effect(tmp_path: Path) -> None:
+    contract = _build_contract(tmp_path)
+    registry = _TaskRegistry("succeeded")
+    contract._task_registry = registry
+    request = GoalExecutionRequest(
+        goal="execute durable task",
+        business_id="biz-1",
+        tenant_id="tenant-1",
+        meta={"task_id": "task-1"},
+    )
+    with pytest.raises(ValueError, match="terminal task"):
+        contract.execute_autopilot(request)
+    assert registry.calls == [("tenant-1", "biz-1", "task-1")]
+
+
+def test_phase9_blank_task_binding_is_invalid_without_affecting_legacy_requests() -> None:
+    invalid = GoalExecutionRequest(
+        goal="x",
+        business_id="biz-1",
+        meta={"task_id": "   "},
+    )
+    ok, issues = invalid.validate()
+    assert ok is False
+    assert "invalid:task_id" in issues
+
+    legacy = GoalExecutionRequest(goal="x", business_id="biz-1")
+    legacy_ok, legacy_issues = legacy.validate()
+    assert legacy_ok is True
+    assert "invalid:task_id" not in legacy_issues
