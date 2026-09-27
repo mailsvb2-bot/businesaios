@@ -94,7 +94,13 @@ class RetryPolicy:
             max_attempts=int(payload.get("max_attempts") or 1),
             initial_backoff_ms=int(payload.get("initial_backoff_ms") or 0),
             max_backoff_ms=int(payload.get("max_backoff_ms") or 0),
-            retryable_statuses=tuple(str(item) for item in (payload.get("retryable_statuses") or ())),
+            retryable_statuses=tuple(
+                str(item)
+                for item in payload.get(
+                    "retryable_statuses",
+                    ("temporary_failure", "rate_limited"),
+                )
+            ),
             retry_ambiguous=bool(payload.get("retry_ambiguous", False)),
         )
 
