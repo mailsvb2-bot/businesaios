@@ -202,6 +202,7 @@ class SqliteJobStore:
         owner = _require_owner_id(owner_id)
         moment = normalize_now(now)
         expiry = moment + timedelta(seconds=DEFAULT_QUEUE_STORE_POLICY.normalize_claim_lease_seconds(lease_seconds))
+        claimed = None
         with self._lock, self._tx() as db:
             current = self._fetch_job(db, tenant_id=tid, job_id=jid)
             if current is None or not current.is_claimable(now=moment):
@@ -231,7 +232,8 @@ class SqliteJobStore:
             )
             claimed = self._fetch_job(db, tenant_id=tid, job_id=jid)
             assert claimed is not None
-            return claimed
+        self._checkpoint_claim_commit()
+        return claimed
 
     def get_active_claim(self, *, tenant_id: str, job_id: str, owner_id: str | None = None, fencing_token: int | None = None, now: datetime | None = None) -> JobRecord | None:
         self._ensure_open()
@@ -321,6 +323,13 @@ class SqliteJobStore:
         with self._lock, self._tx() as db:
             return reap_expired_claims_sqlite(db=db, tenant_id=tid, queue_name=qn, now=now)
 
+
+    def _checkpoint_claim_commit(self) -> None:
+        try:
+            with self._connect() as db:
+                db.execute("PRAGMA wal_checkpoint(PASSIVE);")
+        except Exception:
+            pass
 
     def _tx(self):
         return sqlite_job_store_tx(path=self._path, busy_timeout_ms=self._busy_timeout_ms)
