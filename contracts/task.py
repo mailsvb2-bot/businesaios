@@ -51,6 +51,12 @@ class RetryPolicy:
     retry_ambiguous: bool = False
 
     def __post_init__(self) -> None:
+        if isinstance(self.max_attempts, bool):
+            raise ValueError("max_attempts must be an integer")
+        if isinstance(self.initial_backoff_ms, bool) or isinstance(self.max_backoff_ms, bool):
+            raise ValueError("retry backoff must be an integer")
+        if not isinstance(self.retry_ambiguous, bool):
+            raise ValueError("retry_ambiguous must be boolean")
         max_attempts = int(self.max_attempts)
         initial_backoff_ms = int(self.initial_backoff_ms)
         max_backoff_ms = int(self.max_backoff_ms)
@@ -101,7 +107,7 @@ class RetryPolicy:
                     ("recoverable", "temporary_failure", "rate_limited"),
                 )
             ),
-            retry_ambiguous=bool(payload.get("retry_ambiguous", False)),
+            retry_ambiguous=payload.get("retry_ambiguous", False),
         )
 
 
@@ -115,6 +121,8 @@ class TimeoutPolicy:
             raw = getattr(self, field_name)
             if raw is None:
                 continue
+            if isinstance(raw, bool):
+                raise ValueError(f"{field_name} must be an integer")
             value = int(raw)
             if value <= 0:
                 raise ValueError(f"{field_name} must be > 0")
