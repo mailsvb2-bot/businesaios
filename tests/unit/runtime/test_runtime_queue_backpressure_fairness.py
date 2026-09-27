@@ -243,6 +243,12 @@ def test_job_scheduler_requests_preemption_and_keeps_high_priority_job_pending()
     assert [job.job_id for job in second.jobs] == ["job-high"]
 
 
+def test_job_scheduler_rejects_invalid_preemption_coordinator() -> None:
+    scheduler = JobScheduler(store=InMemoryJobStore())
+    with pytest.raises(ValueError, match="provide admit"):
+        scheduler.configure_task_preemption(object())
+
+
 def test_job_scheduler_filters_jobs_by_capability_preview_and_worker_commit_path() -> None:
     store = InMemoryJobStore()
     now = utc_now()
