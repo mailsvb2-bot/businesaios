@@ -35,6 +35,7 @@ def connect_sqlite_job_store(
         configure_journal_mode=bool(configure_journal_mode),
     )
     db.execute(f"PRAGMA busy_timeout={busy_timeout_ms};")
+    db.execute("PRAGMA synchronous=FULL;")
     return db
 
 
