@@ -13,6 +13,7 @@ from application.task.facts import (
     TASK_FACT_TYPES,
     TASK_FAILED,
     TASK_PAUSED,
+    TASK_PREEMPTION_REQUESTED,
     TASK_READY,
     TASK_STARTED,
     TASK_SUCCEEDED,
@@ -170,6 +171,31 @@ class DurableTaskProjector:
                 )
                 continue
 
+            if fact_type == TASK_PREEMPTION_REQUESTED:
+                if task.status is not DurableTaskStatus.RUNNING:
+                    raise DurableTaskHistoryInvariantViolation(
+                        "task.preemption_requested requires running state"
+                    )
+                preemptor = str(payload.get("requested_by_task_id") or "").strip()
+                priority = payload.get("requested_priority")
+                if not preemptor or preemptor == task.task_id or isinstance(priority, bool):
+                    raise DurableTaskHistoryInvariantViolation(
+                        "task.preemption_requested contains invalid requester"
+                    )
+                priority = int(priority)
+                if priority <= task.priority or priority > 100:
+                    raise DurableTaskHistoryInvariantViolation(
+                        "task.preemption_requested priority must exceed running task"
+                    )
+                task = self._next(
+                    task,
+                    status=task.status,
+                    when=when,
+                    preemption_requested_by_task_id=preemptor,
+                    preemption_requested_priority=priority,
+                )
+                continue
+
             if fact_type == TASK_READY:
                 if task.status not in {
                     DurableTaskStatus.CREATED,
@@ -245,6 +271,8 @@ class DurableTaskProjector:
                     status=DurableTaskStatus.PAUSED,
                     when=when,
                     wait_condition=None,
+                    preemption_requested_by_task_id=None,
+                    preemption_requested_priority=None,
                 )
                 continue
 
@@ -292,6 +320,8 @@ class DurableTaskProjector:
                     when=when,
                     terminal_at_ms=when,
                     wait_condition=None,
+                    preemption_requested_by_task_id=None,
+                    preemption_requested_priority=None,
                 )
                 continue
 
