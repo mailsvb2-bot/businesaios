@@ -19,7 +19,7 @@ from application.task.facts import (
     TASK_WAITING,
 )
 from application.task.projector import DurableTaskProjector
-from contracts.task import DurableTask, DurableTaskStatus, WaitCondition
+from contracts.task import DurableTask, DurableTaskStatus, RetryPolicy, TimeoutPolicy, WaitCondition
 from reliability.idempotency_contract import IdempotencyStore
 
 CANON_DURABLE_TASK_LIFECYCLE_OWNER = True
@@ -62,6 +62,8 @@ class DurableTaskRegistry:
         task_id: str,
         idempotency_key: str,
         title: str | None = None,
+        retry_policy: RetryPolicy | None = None,
+        timeout_policy: TimeoutPolicy | None = None,
         occurred_at_ms: int | None = None,
         event_metadata: dict[str, object] | None = None,
     ) -> DurableTask:
@@ -71,10 +73,16 @@ class DurableTaskRegistry:
             tenant_id=tenant_id,
             business_id=business_id,
             title=title,
+            retry_policy=retry_policy or RetryPolicy(),
+            timeout_policy=timeout_policy or TimeoutPolicy(),
             created_at_ms=when,
             updated_at_ms=when,
         )
-        payload = {"title": candidate.title}
+        payload = {
+            "title": candidate.title,
+            "retry_policy": candidate.retry_policy.to_dict(),
+            "timeout_policy": candidate.timeout_policy.to_dict(),
+        }
         try:
             current = self._projector.get(
                 tenant_id=tenant_id,
@@ -84,7 +92,11 @@ class DurableTaskRegistry:
         except LookupError:
             current = None
         if current is not None:
-            if current.title != candidate.title:
+            if (
+                current.title != candidate.title
+                or current.retry_policy != candidate.retry_policy
+                or current.timeout_policy != candidate.timeout_policy
+            ):
                 raise ValueError("task already exists with different identity metadata")
             repaired = self._writer.repair_existing(
                 tenant_id=tenant_id,
