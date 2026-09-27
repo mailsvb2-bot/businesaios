@@ -268,6 +268,43 @@ def test_phase9_running_task_requires_recovery_checkpoint_owner(tmp_path: Path) 
         contract.execute_autopilot(request)
 
 
+def test_phase9_running_task_without_checkpoint_history_fails_before_effect(
+    tmp_path: Path,
+) -> None:
+    contract = _build_contract(tmp_path)
+    contract._task_registry = _TaskRegistry("running")
+    calls: list[str] = []
+
+    class _CountingExecutor(StubExecutor):
+        def execute(self, env: Any) -> ExecutionResult:
+            calls.append(str(env.decision.decision_id))
+            return super().execute(env)
+
+    class _CheckpointStore:
+        def list_task_runs(self, **kwargs: Any):
+            del kwargs
+            return ()
+
+    executor = _CountingExecutor()
+    executor._reliability = type(
+        "Reliability",
+        (),
+        {"checkpoint_store": _CheckpointStore()},
+    )()
+    contract._executor = executor
+
+    with pytest.raises(RuntimeError, match="existing recovery checkpoints"):
+        contract.execute_autopilot(
+            GoalExecutionRequest(
+                goal="resume durable task",
+                business_id="biz-1",
+                tenant_id="tenant-1",
+                meta={"task_id": "task-1"},
+            )
+        )
+    assert calls == []
+
+
 def test_phase9_incomplete_running_task_fails_before_duplicate_effect(tmp_path: Path) -> None:
     contract = _build_contract(tmp_path)
     contract._task_registry = _TaskRegistry("running")
