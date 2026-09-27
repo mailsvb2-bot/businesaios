@@ -268,6 +268,7 @@ class HeadlessExecutionContract:
         task_id = str(getattr(request, "task_id", "") or "").strip()
         task_conflict_controller = None
         task_conflict_leases = None
+        task_conflict_heartbeat = None
         task_status = ""
         task_execution_version: int | None = None
         if task_id:
@@ -387,6 +388,16 @@ class HeadlessExecutionContract:
                     task_id=task_id,
                     conflict_keys=conflict_keys,
                 )
+                task_conflict_heartbeat = task_conflict_controller.heartbeat(
+                    task_conflict_leases
+                )
+        def _release_task_conflicts() -> None:
+            nonlocal task_conflict_leases
+            if task_conflict_heartbeat is not None:
+                task_conflict_leases = task_conflict_heartbeat.close()
+            _release_task_conflicts()
+                task_conflict_leases = None
+
         try:
             if task_id and task_status == "ready":
                 start_task = getattr(self._task_registry, "start", None)
@@ -404,8 +415,7 @@ class HeadlessExecutionContract:
                     raise RuntimeError("started durable task must expose a positive version")
             loop_result = self._loop.run(request)
         except BaseException:
-            if task_conflict_controller is not None and task_conflict_leases is not None:
-                task_conflict_controller.release(task_conflict_leases)
+            _release_task_conflicts()
             raise
         try:
             run_artifact = canonical_goal_execution_report(
@@ -488,11 +498,9 @@ class HeadlessExecutionContract:
                     expected_version=task_execution_version,
                 )
         except BaseException:
-            if task_conflict_controller is not None and task_conflict_leases is not None:
-                task_conflict_controller.release(task_conflict_leases)
+            _release_task_conflicts()
             raise
-        if task_conflict_controller is not None and task_conflict_leases is not None:
-            task_conflict_controller.release(task_conflict_leases)
+        _release_task_conflicts()
         return report
 
 
