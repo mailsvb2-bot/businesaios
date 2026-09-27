@@ -9,13 +9,26 @@ from datetime import datetime
 from decimal import Decimal
 from enum import Enum
 from pathlib import Path
-from threading import RLock
+from threading import Lock, RLock
 
 from runtime.platform.outbox.sqlite_pragmas import configure_sqlite, is_prod_env
 
 
 CANON_CLIENT_OUTCOME_SQLITE_PERSISTENCE = True
 CANON_CLIENT_OUTCOME_SINGLE_REPLICA_FAIL_CLOSED = True
+
+_OWNER_LOCKS_GUARD = Lock()
+_OWNER_LOCKS: dict[str, RLock] = {}
+
+
+def _shared_owner_lock(path: Path) -> RLock:
+    key = str(path.expanduser().resolve())
+    with _OWNER_LOCKS_GUARD:
+        lock = _OWNER_LOCKS.get(key)
+        if lock is None:
+            lock = RLock()
+            _OWNER_LOCKS[key] = lock
+        return lock
 
 
 def client_outcome_db_path() -> Path:
@@ -71,7 +84,7 @@ class _SQLiteOwner:
         enforce_client_outcome_replica_contract()
         self.path = Path(path) if path is not None else client_outcome_db_path()
         self.path.parent.mkdir(parents=True, exist_ok=True)
-        self._lock = RLock()
+        self._lock = _shared_owner_lock(self.path)
         self._initialize()
 
     def _connect(self) -> sqlite3.Connection:
