@@ -246,8 +246,8 @@ class DurableTask:
         if isinstance(self.priority, bool):
             raise ValueError("task priority must be an integer")
         priority = int(self.priority)
-        if priority < 0 or priority > 100:
-            raise ValueError("task priority must be within 0..100")
+        if priority < 10 or priority > 100:
+            raise ValueError("task priority must be within 10..100")
         object.__setattr__(self, "priority", priority)
         conflict_keys = tuple(
             dict.fromkeys(_required(value, "conflict_key") for value in self.conflict_keys)
