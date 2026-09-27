@@ -146,3 +146,75 @@ def test_current_sqlite_queue_schema_reopens_without_journal_mode_negotiation(
     assert calls
     assert calls[0] is False
     assert True not in calls
+
+
+
+def test_sqlite_store_default_close_does_not_truncate_shared_wal(
+    tmp_path,
+    monkeypatch,
+) -> None:
+    store = SqliteJobStore(tmp_path / "shared.sqlite3")
+    calls: list[str] = []
+    original_connect = store._connect
+
+    class _ObservedConnection:
+        def __init__(self, inner):
+            self._inner = inner
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, exc_type, exc, tb):
+            self._inner.close()
+
+        def execute(self, sql, params=()):
+            calls.append(str(sql))
+            return self._inner.execute(sql, params)
+
+    def observed_connect():
+        inner = original_connect()
+        return _ObservedConnection(inner)
+
+    monkeypatch.setattr(store, "_connect", observed_connect)
+    store.close()
+
+    assert not any("wal_checkpoint(TRUNCATE)" in sql for sql in calls)
+
+
+def test_sqlite_store_successful_claim_checkpoints_after_commit(
+    tmp_path,
+    monkeypatch,
+) -> None:
+    store = SqliteJobStore(tmp_path / "claim.sqlite3")
+    store.put(_request().to_record(now=utc_now()))
+    checkpoints: list[str] = []
+    original_connect = store._connect
+
+    class _ObservedConnection:
+        def __init__(self, inner):
+            self._inner = inner
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, exc_type, exc, tb):
+            self._inner.close()
+
+        def execute(self, sql, params=()):
+            if "wal_checkpoint" in str(sql):
+                checkpoints.append(str(sql))
+            return self._inner.execute(sql, params)
+
+    def observed_connect():
+        return _ObservedConnection(original_connect())
+
+    monkeypatch.setattr(store, "_connect", observed_connect)
+    claimed = store.claim(
+        tenant_id="tenant-1",
+        job_id="job-1",
+        owner_id="worker",
+        lease_seconds=30,
+        now=utc_now(),
+    )
+    assert claimed is not None
+    assert checkpoints == ["PRAGMA wal_checkpoint(PASSIVE);"]
