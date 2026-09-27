@@ -29,7 +29,7 @@ from application.memory.business_memory_state_adapter import BusinessMemoryState
 from application.memory.business_operating_memory import FileBusinessOperatingMemoryStore
 from application.planning.goal_plan_memory import GoalPlanMemoryService
 from application.planning.multi_goal_planner import MultiGoalPlannerService
-from application.task.conflict_control import TaskConflictController
+from application.task.registry import TaskConflictController
 from execution.action_budget_engine import ActionBudgetEngine
 from execution.autonomy_counters import AutonomyCounterResolver, FileAutonomyCounterStore
 from execution.blast_radius_guard import BlastRadiusGuard
