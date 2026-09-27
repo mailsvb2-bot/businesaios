@@ -280,7 +280,7 @@ def test_phase9_recovery_approved_early_restart_is_allowed(tmp_path: Path) -> No
                 "Plan",
                 (),
                 {
-                    "recovery_action": "restart",
+                    "action": "restart",
                     "resume_stage": "world_state",
                 },
             )()
@@ -321,7 +321,7 @@ def test_phase9_recovery_does_not_blindly_replay_post_decision_run(tmp_path: Pat
                 "Plan",
                 (),
                 {
-                    "recovery_action": "resume_execution",
+                    "action": "resume_execution",
                     "resume_stage": "execution",
                 },
             )()
