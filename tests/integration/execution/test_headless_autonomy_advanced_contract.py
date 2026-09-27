@@ -170,6 +170,51 @@ def test_phase9_task_bound_execution_requires_canonical_registry(tmp_path: Path)
         contract.execute_autopilot(request)
 
 
+def test_phase9_task_conflict_execution_starts_and_closes_lease_heartbeat(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    contract = _build_contract(
+        tmp_path,
+        executor_ok=True,
+        executor_output={"verified": True, "goal_reached": True},
+    )
+    registry = _TaskRegistry("ready", conflict_keys=("ledger",))
+    contract._task_registry = registry
+    contract._executor._reliability = type(
+        "Reliability",
+        (),
+        {"distributed_lock": InMemoryDistributedLock()},
+    )()
+    events: list[str] = []
+    original_heartbeat = TaskConflictController.heartbeat
+
+    class _ObservedHeartbeat:
+        def __init__(self, inner: Any) -> None:
+            self._inner = inner
+
+        def close(self):
+            events.append("close")
+            return self._inner.close()
+
+    def _heartbeat(self, group, **kwargs):
+        events.append("start")
+        return _ObservedHeartbeat(original_heartbeat(self, group, **kwargs))
+
+    monkeypatch.setattr(TaskConflictController, "heartbeat", _heartbeat)
+    report = contract.execute_autopilot(
+        GoalExecutionRequest(
+            goal="execute durable task",
+            business_id="biz-1",
+            tenant_id="tenant-1",
+            meta={"task_id": "task-1"},
+        )
+    )
+
+    assert report.completed is True
+    assert events == ["start", "close"]
+
+
 def test_phase9_conflict_lock_is_held_through_evidence_and_terminal_commit(
     tmp_path: Path,
 ) -> None:
