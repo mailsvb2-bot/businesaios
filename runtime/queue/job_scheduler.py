@@ -51,6 +51,7 @@ class JobScheduler:
         fair_scheduler: TenantFairScheduler | None = None,
         capability_throttle_policy: CapabilityThrottlePolicy | None = None,
         tenant_execution_budget_guard: TenantExecutionBudgetGuard | None = None,
+        task_preemption_coordinator: object | None = None,
     ) -> None:
         self._store = store
         self._throttle_policy = throttle_policy or ThrottlePolicy()
@@ -58,6 +59,7 @@ class JobScheduler:
         self._fair_scheduler = fair_scheduler or TenantFairScheduler()
         self._capability_throttle_policy = capability_throttle_policy or CapabilityThrottlePolicy()
         self._tenant_execution_budget_guard = tenant_execution_budget_guard
+        self._task_preemption_coordinator = task_preemption_coordinator
 
     def select_due_jobs(self, *, tenant_id: str, queue_name: str, now: datetime | None = None) -> ScheduleBatch:
         moment = normalize_now(now)
@@ -84,6 +86,12 @@ class JobScheduler:
         resource_previews: dict[str, TenantExecutionBudgetVerdict] = {}
         provisional_counts: dict[str, int] = {}
         for candidate in due:
+            if self._task_preemption_coordinator is not None:
+                admit = getattr(self._task_preemption_coordinator, "admit", None)
+                if not callable(admit):
+                    raise RuntimeError("task preemption coordinator must provide admit()")
+                if not bool(admit(candidate)):
+                    continue
             if self._tenant_execution_budget_guard is not None:
                 usage = self._tenant_execution_budget_guard.from_execution_payload(
                     tenant_id=normalized_tenant_id,
