@@ -232,7 +232,6 @@ class SqliteJobStore:
             )
             claimed = self._fetch_job(db, tenant_id=tid, job_id=jid)
             assert claimed is not None
-        self._checkpoint_claim_commit()
         return claimed
 
     def get_active_claim(self, *, tenant_id: str, job_id: str, owner_id: str | None = None, fencing_token: int | None = None, now: datetime | None = None) -> JobRecord | None:
@@ -323,13 +322,6 @@ class SqliteJobStore:
         with self._lock, self._tx() as db:
             return reap_expired_claims_sqlite(db=db, tenant_id=tid, queue_name=qn, now=now)
 
-
-    def _checkpoint_claim_commit(self) -> None:
-        try:
-            with self._connect() as db:
-                db.execute("PRAGMA wal_checkpoint(PASSIVE);")
-        except Exception:
-            pass
 
     def _tx(self):
         return sqlite_job_store_tx(path=self._path, busy_timeout_ms=self._busy_timeout_ms)
