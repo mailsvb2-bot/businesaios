@@ -677,3 +677,49 @@ def test_phase9_legacy_task_without_policy_payload_projects_safe_defaults() -> N
     assert task.retry_policy == RetryPolicy()
     assert task.timeout_policy == TimeoutPolicy()
     assert task.retry_policy.max_attempts == 1
+
+
+
+def test_phase9_task_priority_and_conflict_keys_are_durable() -> None:
+    events = MemoryEventStore()
+    claims = InMemoryIdempotencyStore()
+    registry = DurableTaskRegistry(event_store=events, idempotency_store=claims)
+    created = registry.create(
+        tenant_id="tenant-p9",
+        business_id="business-p9",
+        task_id="task-conflict",
+        idempotency_key="create-conflict",
+        priority=90,
+        conflict_keys=("customer:42", "ledger"),
+        occurred_at_ms=100,
+    )
+    assert created.priority == 90
+    assert created.conflict_keys == ("customer:42", "ledger")
+
+    rebuilt = DurableTaskRegistry(
+        event_store=events,
+        idempotency_store=claims,
+    ).get(
+        tenant_id="tenant-p9",
+        business_id="business-p9",
+        task_id="task-conflict",
+    )
+    assert rebuilt.priority == 90
+    assert rebuilt.conflict_keys == ("customer:42", "ledger")
+
+
+def test_phase9_task_priority_and_conflict_metadata_fail_closed() -> None:
+    with pytest.raises(ValueError, match="priority"):
+        DurableTask(
+            task_id="task",
+            tenant_id="tenant",
+            business_id="business",
+            priority=101,
+        )
+    with pytest.raises(ValueError, match="conflict_key"):
+        DurableTask(
+            task_id="task",
+            tenant_id="tenant",
+            business_id="business",
+            conflict_keys=("   ",),
+        )
