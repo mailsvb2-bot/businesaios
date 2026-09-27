@@ -60,6 +60,26 @@ def test_runtime_executor_denies_budget_exceeded() -> None:
 
 
 
+@pytest.mark.parametrize(
+    "payload",
+    (
+        {"action_count": True},
+        {"action_count": -1},
+        {"connector_call_count": "not-a-number"},
+        {"budget_delta": "not-money"},
+        {"budget_delta": -0.01},
+    ),
+)
+def test_tenant_execution_usage_payload_fails_closed_on_malformed_resource_values(
+    payload: dict[str, object],
+) -> None:
+    with pytest.raises((TypeError, ValueError)):
+        TenantExecutionBudgetGuard.from_execution_payload(
+            tenant_id="tenant-1",
+            payload=payload,
+        )
+
+
 def test_runtime_executor_returns_consumed_tenant_budget_verdict() -> None:
     tenant_id = 'tenant-1'
     bundle = TenantPolicyBundle(
