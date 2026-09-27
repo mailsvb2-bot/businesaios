@@ -3,7 +3,7 @@ from __future__ import annotations
 import threading
 
 from application.task.registry import TaskConflictController
-from reliability.distributed_lock import InMemoryDistributedLock, utc_now
+from reliability.distributed_lock import InMemoryDistributedLock
 
 
 def test_task_conflict_lock_allows_only_one_concurrent_task() -> None:
