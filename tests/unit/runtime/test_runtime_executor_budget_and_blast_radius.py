@@ -6,6 +6,7 @@ from typing import Any
 import pytest
 
 from runtime.executor import RuntimeExecutor
+from runtime.queue.job_contract import JobDispatchRequest
 from tenancy.tenant_audit_scope import TenantAuditScope
 from tenancy.tenant_billing_scope import TenantBillingScope
 from tenancy.tenant_connector_scope import TenantConnectorScope
@@ -78,6 +79,60 @@ def test_tenant_execution_usage_payload_fails_closed_on_malformed_resource_value
             tenant_id="tenant-1",
             payload=payload,
         )
+
+
+def test_runtime_queue_scheduler_uses_same_tenant_resource_guard_as_executor() -> None:
+    tenant_id = "tenant-1"
+    bundle = TenantPolicyBundle(
+        tenant_id=tenant_id,
+        feature_flags=TenantFeatureFlags(tenant_id=tenant_id),
+        runtime_limits=TenantRuntimeLimits(tenant_id=tenant_id, max_actions_per_run=1),
+        memory_scope=TenantMemoryScope(tenant_id=tenant_id),
+        connector_scope=TenantConnectorScope(tenant_id=tenant_id),
+        audit_scope=TenantAuditScope(tenant_id=tenant_id),
+        billing_scope=TenantBillingScope(tenant_id=tenant_id),
+        quotas={"actions_per_day": 100.0},
+    )
+    store = InMemoryTenantPolicyStore((bundle,))
+    resource_guard = TenantExecutionBudgetGuard(
+        policy_store=store,
+        quota_guard=TenantQuotaGuard(policy_store=store),
+    )
+    seen: list[str] = []
+    executor = RuntimeExecutor(
+        guard=_Guard(),
+        handlers=_Handlers(),
+        event_log=_Events(),
+        policy_registry=_PolicyRegistry(),
+        tenant_execution_budget_guard=resource_guard,
+        queue_runner=lambda job: seen.append(job.job_id) or {"ok": True, "status": "done"},
+    )
+    assert executor.enqueue_runtime_job(
+        JobDispatchRequest(
+            tenant_id=tenant_id,
+            job_id="job-blocked",
+            queue_name="tasks",
+            job_type="work",
+            payload={"action_count": 2},
+            dedupe_key="blocked",
+            priority=100,
+        )
+    ).accepted is True
+    assert executor.enqueue_runtime_job(
+        JobDispatchRequest(
+            tenant_id=tenant_id,
+            job_id="job-allowed",
+            queue_name="tasks",
+            job_type="work",
+            payload={"action_count": 1},
+            dedupe_key="allowed",
+            priority=10,
+        )
+    ).accepted is True
+
+    report = executor.run_queue_tick(tenant_id=tenant_id, queue_name="tasks")
+    assert report.succeeded == 1
+    assert seen == ["job-allowed"]
 
 
 def test_runtime_executor_returns_consumed_tenant_budget_verdict() -> None:
