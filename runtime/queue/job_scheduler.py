@@ -61,6 +61,12 @@ class JobScheduler:
         self._tenant_execution_budget_guard = tenant_execution_budget_guard
         self._task_preemption_coordinator = task_preemption_coordinator
 
+    def configure_task_preemption(self, coordinator: object) -> None:
+        admit = getattr(coordinator, "admit", None)
+        if not callable(admit):
+            raise ValueError("task preemption coordinator must provide admit()")
+        self._task_preemption_coordinator = coordinator
+
     def select_due_jobs(self, *, tenant_id: str, queue_name: str, now: datetime | None = None) -> ScheduleBatch:
         moment = normalize_now(now)
         normalized_tenant_id = require_tenant_id(tenant_id)
