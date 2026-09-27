@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from decimal import Decimal
 from threading import RLock
 from typing import Mapping
 
@@ -268,16 +267,19 @@ class TenantExecutionBudgetGuard:
         body = dict(payload or {})
 
         def _safe_int(value: object) -> int:
-            try:
-                return max(0, int(value or 0))
-            except (TypeError, ValueError):
+            if value is None or value == "":
                 return 0
+            if isinstance(value, bool):
+                raise ValueError("execution usage count must be an integer")
+            parsed = int(value)
+            if parsed < 0:
+                raise ValueError("execution usage count must be non-negative")
+            return parsed
 
         def _safe_budget(value: object) -> float:
-            try:
-                normalized = money_decimal(value or 0, name="budget_delta")
-            except ValueError:
-                normalized = Decimal("0")
+            normalized = money_decimal(0 if value is None or value == "" else value, name="budget_delta")
+            if normalized < 0:
+                raise ValueError("budget_delta must be non-negative")
             return legacy_float(normalized, name="budget_delta")
 
         labels = {
