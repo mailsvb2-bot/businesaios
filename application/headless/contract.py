@@ -391,11 +391,15 @@ class HeadlessExecutionContract:
                 task_conflict_heartbeat = task_conflict_controller.heartbeat(
                     task_conflict_leases
                 )
-        def _release_task_conflicts() -> None:
+        def _stop_task_conflict_heartbeat() -> None:
             nonlocal task_conflict_heartbeat, task_conflict_leases
             if task_conflict_heartbeat is not None:
                 task_conflict_leases = task_conflict_heartbeat.close()
                 task_conflict_heartbeat = None
+
+        def _release_task_conflicts() -> None:
+            nonlocal task_conflict_leases
+            _stop_task_conflict_heartbeat()
             if task_conflict_controller is not None and task_conflict_leases is not None:
                 task_conflict_controller.release(task_conflict_leases)
                 task_conflict_leases = None
@@ -489,6 +493,7 @@ class HeadlessExecutionContract:
                     )
                 )
             if task_id and loop_result.completed:
+                _stop_task_conflict_heartbeat()
                 succeed_task = getattr(self._task_registry, "succeed", None)
                 if not callable(succeed_task):
                     raise RuntimeError("canonical task registry must provide succeed()")
