@@ -403,88 +403,96 @@ class HeadlessExecutionContract:
                 if task_execution_version < 1:
                     raise RuntimeError("started durable task must expose a positive version")
             loop_result = self._loop.run(request)
-        finally:
+        except BaseException:
             if task_conflict_controller is not None and task_conflict_leases is not None:
                 task_conflict_controller.release(task_conflict_leases)
-        run_artifact = canonical_goal_execution_report(
-            goal=request.goal,
-            business_id=request.business_id,
-            tenant_id=request.tenant_id,
-            completed=loop_result.completed,
-            stop_reason=loop_result.stop_reason,
-            steps=tuple(loop_result.steps),
-            final_feedback=dict(loop_result.final_feedback),
-            goal_id=request.goal_id,
-        )
-        report = GoalExecutionReport(
-            goal=request.goal,
-            business_id=request.business_id,
-            tenant_id=request.tenant_id,
-            completed=loop_result.completed,
-            stop_reason=loop_result.stop_reason,
-            steps=tuple(loop_result.steps),
-            final_feedback=dict(loop_result.final_feedback),
-            run_id=str(loop_result.trace.run_id),
-            trace_id=str(loop_result.trace.trace_id),
-            canonical_run_artifact=run_artifact,
-            goal_id=request.goal_id,
-        )
-        last_step = loop_result.steps[-1] if loop_result.steps else None
-        self._evidence_persistence_service.persist(
-            tenant_id=request.tenant_id,
-            business_id=request.business_id,
-            run_id=loop_result.trace.run_id,
-            goal=request.goal,
-            goal_id=request.goal_id,
-            step_index=int(last_step.step_index if last_step is not None else max(len(loop_result.steps) - 1, 0)),
-            action={
-                "action_type": str(last_step.action if last_step is not None else ""),
-                "action_id": str(last_step.action_id if last_step is not None else ""),
-            },
-            execution_result=dict(loop_result.final_feedback),
-            verification_result=dict(loop_result.final_feedback),
-            world_state_before={},
-            world_state_after=None,
-            request_meta=dict(request.meta),
-            request_profile=dict(request.profile),
-            request_constraints=dict(request.constraints),
-            request_signals=list(request.signals),
-            request_channel=request.channel,
-            request_region=request.region,
-            request_product_name=request.product_name,
-            completed=loop_result.completed,
-            stop_reason=loop_result.stop_reason,
-            final_feedback=dict(loop_result.final_feedback),
-            step_count=len(loop_result.steps),
-        )
-        if self._ledger is not None:
-            self._ledger.write(
-                LedgerRecord(
-                    run_id=loop_result.trace.run_id,
-                    trace_id=loop_result.trace.trace_id,
-                    business_id=request.business_id,
-                    tenant_id=request.tenant_id,
-                    goal=request.goal,
-                    completed=loop_result.completed,
-                    stop_reason=loop_result.stop_reason,
-                    steps_count=len(loop_result.steps),
-                    final_feedback=dict(loop_result.final_feedback),
-                    trace=loop_result.trace.to_dict(),
-                    canonical_run_artifact=run_artifact,
-                    goal_id=request.goal_id,
-                )
+            raise
+        try:
+            run_artifact = canonical_goal_execution_report(
+                goal=request.goal,
+                business_id=request.business_id,
+                tenant_id=request.tenant_id,
+                completed=loop_result.completed,
+                stop_reason=loop_result.stop_reason,
+                steps=tuple(loop_result.steps),
+                final_feedback=dict(loop_result.final_feedback),
+                goal_id=request.goal_id,
             )
-        if task_id and loop_result.completed:
-            succeed_task = getattr(self._task_registry, "succeed", None)
-            if not callable(succeed_task):
-                raise RuntimeError("canonical task registry must provide succeed()")
-            succeed_task(
+            report = GoalExecutionReport(
+                goal=request.goal,
+                business_id=request.business_id,
+                tenant_id=request.tenant_id,
+                completed=loop_result.completed,
+                stop_reason=loop_result.stop_reason,
+                steps=tuple(loop_result.steps),
+                final_feedback=dict(loop_result.final_feedback),
+                run_id=str(loop_result.trace.run_id),
+                trace_id=str(loop_result.trace.trace_id),
+                canonical_run_artifact=run_artifact,
+                goal_id=request.goal_id,
+            )
+            last_step = loop_result.steps[-1] if loop_result.steps else None
+            self._evidence_persistence_service.persist(
                 tenant_id=request.tenant_id,
                 business_id=request.business_id,
-                task_id=task_id,
-                idempotency_key=f"headless:succeed:{task_id}:v{task_execution_version}",
-                expected_version=task_execution_version,
+                run_id=loop_result.trace.run_id,
+                goal=request.goal,
+                goal_id=request.goal_id,
+                step_index=int(last_step.step_index if last_step is not None else max(len(loop_result.steps) - 1, 0)),
+                action={
+                    "action_type": str(last_step.action if last_step is not None else ""),
+                    "action_id": str(last_step.action_id if last_step is not None else ""),
+                },
+                execution_result=dict(loop_result.final_feedback),
+                verification_result=dict(loop_result.final_feedback),
+                world_state_before={},
+                world_state_after=None,
+                request_meta=dict(request.meta),
+                request_profile=dict(request.profile),
+                request_constraints=dict(request.constraints),
+                request_signals=list(request.signals),
+                request_channel=request.channel,
+                request_region=request.region,
+                request_product_name=request.product_name,
+                completed=loop_result.completed,
+                stop_reason=loop_result.stop_reason,
+                final_feedback=dict(loop_result.final_feedback),
+                step_count=len(loop_result.steps),
             )
+            if self._ledger is not None:
+                self._ledger.write(
+                    LedgerRecord(
+                        run_id=loop_result.trace.run_id,
+                        trace_id=loop_result.trace.trace_id,
+                        business_id=request.business_id,
+                        tenant_id=request.tenant_id,
+                        goal=request.goal,
+                        completed=loop_result.completed,
+                        stop_reason=loop_result.stop_reason,
+                        steps_count=len(loop_result.steps),
+                        final_feedback=dict(loop_result.final_feedback),
+                        trace=loop_result.trace.to_dict(),
+                        canonical_run_artifact=run_artifact,
+                        goal_id=request.goal_id,
+                    )
+                )
+            if task_id and loop_result.completed:
+                succeed_task = getattr(self._task_registry, "succeed", None)
+                if not callable(succeed_task):
+                    raise RuntimeError("canonical task registry must provide succeed()")
+                succeed_task(
+                    tenant_id=request.tenant_id,
+                    business_id=request.business_id,
+                    task_id=task_id,
+                    idempotency_key=f"headless:succeed:{task_id}:v{task_execution_version}",
+                    expected_version=task_execution_version,
+                )
+            except BaseException:
+            if task_conflict_controller is not None and task_conflict_leases is not None:
+                task_conflict_controller.release(task_conflict_leases)
+            raise
+        if task_conflict_controller is not None and task_conflict_leases is not None:
+            task_conflict_controller.release(task_conflict_leases)
         return report
 
 
