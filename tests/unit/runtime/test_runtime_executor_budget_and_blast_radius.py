@@ -7,6 +7,7 @@ import pytest
 
 from runtime.executor import RuntimeExecutor
 from runtime.queue.job_contract import JobDispatchRequest
+from runtime.queue.job_store import InMemoryJobStore
 from tenancy.tenant_audit_scope import TenantAuditScope
 from tenancy.tenant_billing_scope import TenantBillingScope
 from tenancy.tenant_connector_scope import TenantConnectorScope
@@ -107,6 +108,7 @@ def test_runtime_queue_scheduler_uses_same_tenant_resource_guard_as_executor() -
         event_log=_Events(),
         policy_registry=_PolicyRegistry(),
         tenant_execution_budget_guard=resource_guard,
+        queue_store=InMemoryJobStore(),
         queue_runner=lambda job: seen.append(job.job_id) or {"ok": True, "status": "done"},
     )
     assert executor.enqueue_runtime_job(
