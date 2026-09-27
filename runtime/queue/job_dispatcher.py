@@ -10,7 +10,7 @@ from core.tenancy.normalization import require_tenant_id
 from reliability.idempotency_contract import IdempotencyResolution, IdempotencyStore
 from reliability.idempotency_scope import build_idempotency_key
 from runtime.queue.backpressure_policy import BackpressurePolicy
-from runtime.queue.job_contract import JobDispatchRequest, JobRecord, JobState, normalize_now
+from runtime.queue.job_contract import JobClaimExpiryPolicy, JobDispatchRequest, JobRecord, JobState, normalize_now
 from runtime.queue.job_store import JobStore
 from runtime.queue.rate_limit_guard import RateLimitGuard, RateLimitVerdict
 from tenancy.tenant_contract import TenantRegistryContract
