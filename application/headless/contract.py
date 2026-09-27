@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import time
+from dataclasses import replace
 from typing import Any
 
 from application.autonomy.autonomy_kill_switch import FileAutonomyKillSwitchRegistry
@@ -276,6 +278,28 @@ class HeadlessExecutionContract:
                 raise ValueError("terminal task cannot start a new execution run")
             if status not in {"ready", "running"}:
                 raise ValueError(f"task is not executable from status: {status or 'unknown'}")
+            timeout_policy = getattr(task, "timeout_policy", None)
+            if timeout_policy is not None and timeout_policy.is_task_timed_out(
+                now_ms=int(time.time() * 1000)
+            ):
+                raise TimeoutError("durable task deadline has expired")
+            retry_policy = getattr(task, "retry_policy", None)
+            request = replace(
+                request,
+                meta={
+                    **dict(request.meta or {}),
+                    "durable_task_retry_policy": (
+                        retry_policy.to_dict()
+                        if callable(getattr(retry_policy, "to_dict", None))
+                        else {}
+                    ),
+                    "durable_task_timeout_policy": (
+                        timeout_policy.to_dict()
+                        if callable(getattr(timeout_policy, "to_dict", None))
+                        else {}
+                    ),
+                },
+            )
         loop_result = self._loop.run(request)
         run_artifact = canonical_goal_execution_report(
             goal=request.goal,
