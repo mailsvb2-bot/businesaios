@@ -487,7 +487,7 @@ class HeadlessExecutionContract:
                     idempotency_key=f"headless:succeed:{task_id}:v{task_execution_version}",
                     expected_version=task_execution_version,
                 )
-            except BaseException:
+        except BaseException:
             if task_conflict_controller is not None and task_conflict_leases is not None:
                 task_conflict_controller.release(task_conflict_leases)
             raise
