@@ -62,6 +62,8 @@ class DurableTaskRegistry:
         task_id: str,
         idempotency_key: str,
         title: str | None = None,
+        priority: int = 50,
+        conflict_keys: tuple[str, ...] = (),
         retry_policy: RetryPolicy | None = None,
         timeout_policy: TimeoutPolicy | None = None,
         occurred_at_ms: int | None = None,
@@ -73,6 +75,8 @@ class DurableTaskRegistry:
             tenant_id=tenant_id,
             business_id=business_id,
             title=title,
+            priority=priority,
+            conflict_keys=conflict_keys,
             retry_policy=retry_policy or RetryPolicy(),
             timeout_policy=timeout_policy or TimeoutPolicy(),
             created_at_ms=when,
@@ -80,6 +84,8 @@ class DurableTaskRegistry:
         )
         payload = {
             "title": candidate.title,
+            "priority": candidate.priority,
+            "conflict_keys": list(candidate.conflict_keys),
             "retry_policy": candidate.retry_policy.to_dict(),
             "timeout_policy": candidate.timeout_policy.to_dict(),
         }
@@ -94,6 +100,8 @@ class DurableTaskRegistry:
         if current is not None:
             if (
                 current.title != candidate.title
+                or current.priority != candidate.priority
+                or current.conflict_keys != candidate.conflict_keys
                 or current.retry_policy != candidate.retry_policy
                 or current.timeout_policy != candidate.timeout_policy
             ):
