@@ -8,6 +8,7 @@ from contracts.action_intent import ActionIntentV1
 from contracts.action_result import ActionResult
 from contracts.business_outcome import BusinessOutcomeV1
 from contracts.executable_action import ExecutableAction
+from contracts.task import RetryPolicy
 from execution.canonical_autonomy_safety import canonical_autonomy_safety_decision
 from execution.canonical_operator_handoff import canonical_operator_handoff
 from execution.headless_trace import HeadlessTrace
@@ -225,6 +226,46 @@ class AutonomyFeedbackStep:
             step_ok=bool(action_result.executed),
         )
         should_retry = bool(plan.should_retry and self_healing.should_retry)
+        durable_retry_payload = self._safe_dict(
+            self._safe_dict(getattr(request, "meta", {})).get(
+                "durable_task_retry_policy"
+            )
+        )
+        durable_retry_policy = (
+            RetryPolicy.from_dict(durable_retry_payload)
+            if durable_retry_payload
+            else None
+        )
+        if durable_retry_policy is not None and should_retry:
+            ambiguous = str(
+                feedback.get("verification_status")
+                or normalized_outcome.get("verification_status")
+                or ""
+            ).strip().lower() == "ambiguous"
+            durable_retry_allowed = durable_retry_policy.allows_retry(
+                attempt=attempt_index + 1,
+                status=self_healing.retry_kind,
+                ambiguous=ambiguous,
+            )
+            feedback["durable_retry_policy"] = {
+                **durable_retry_policy.to_dict(),
+                "allowed_for_attempt": durable_retry_allowed,
+                "attempt": attempt_index + 1,
+                "retry_kind": self_healing.retry_kind,
+                "ambiguous": ambiguous,
+            }
+            if not durable_retry_allowed:
+                trace.record(
+                    event_type="retry_suppressed",
+                    step_index=step_index,
+                    payload={
+                        "attempt_index": attempt_index,
+                        "reason": "durable_task_retry_policy",
+                        "retry_kind": self_healing.retry_kind,
+                        "ambiguous": ambiguous,
+                    },
+                )
+            should_retry = bool(durable_retry_allowed)
         if should_retry:
             trace.record(
                 event_type="retry_scheduled",
