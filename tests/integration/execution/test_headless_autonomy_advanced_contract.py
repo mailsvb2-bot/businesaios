@@ -170,6 +170,58 @@ def test_phase9_task_bound_execution_requires_canonical_registry(tmp_path: Path)
         contract.execute_autopilot(request)
 
 
+def test_phase9_conflict_lock_is_held_through_evidence_and_terminal_commit(
+    tmp_path: Path,
+) -> None:
+    contract = _build_contract(
+        tmp_path,
+        executor_ok=True,
+        executor_output={"verified": True, "goal_reached": True},
+    )
+    registry = _TaskRegistry("ready", conflict_keys=("ledger",))
+    contract._task_registry = registry
+    distributed_lock = InMemoryDistributedLock()
+    contract._executor._reliability = type(
+        "Reliability",
+        (),
+        {"distributed_lock": distributed_lock},
+    )()
+    observed: list[bool] = []
+
+    class _Evidence:
+        def persist(self, **kwargs: Any) -> None:
+            del kwargs
+            competitor = distributed_lock.acquire(
+                tenant_id="tenant-1",
+                resource="durable-task-conflict:biz-1:ledger",
+                owner_id="competitor",
+                ttl_seconds=60,
+            )
+            observed.append(competitor is None)
+            if competitor is not None:
+                distributed_lock.release(lease=competitor)
+
+    contract._evidence_persistence_service = _Evidence()
+    report = contract.execute_autopilot(
+        GoalExecutionRequest(
+            goal="execute durable task",
+            business_id="biz-1",
+            tenant_id="tenant-1",
+            meta={"task_id": "task-1"},
+        )
+    )
+    assert report.completed is True
+    assert observed == [True]
+    after_commit = distributed_lock.acquire(
+        tenant_id="tenant-1",
+        resource="durable-task-conflict:biz-1:ledger",
+        owner_id="competitor",
+        ttl_seconds=60,
+    )
+    assert after_commit is not None
+    distributed_lock.release(lease=after_commit)
+
+
 def test_phase9_ready_task_transitions_running_then_succeeded_after_verified_run(
     tmp_path: Path,
 ) -> None:
