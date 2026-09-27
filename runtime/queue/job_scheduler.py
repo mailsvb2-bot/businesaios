@@ -86,7 +86,12 @@ class JobScheduler:
         tenant_limit = throttle.max_claim_count
         if fair_schedule.allocations:
             tenant_limit = min(tenant_limit, max(0, int(fair_schedule.allocations[0].claim_limit)))
-        due = self._store.list_due(tenant_id=normalized_tenant_id, queue_name=queue, limit=max(0, int(tenant_limit)), now=moment)
+        due = self._store.list_due(
+            tenant_id=normalized_tenant_id,
+            queue_name=queue,
+            limit=max(0, int(queue_depth)),
+            now=moment,
+        )
         jobs: list[JobRecord] = []
         previews: dict[str, CapabilityThrottleVerdict] = {}
         resource_previews: dict[str, TenantExecutionBudgetVerdict] = {}
@@ -124,6 +129,8 @@ class JobScheduler:
             provisional_counts[capability] = provisional_counts.get(capability, 0) + 1
             jobs.append(candidate)
             previews[candidate.job_id] = preview
+            if len(jobs) >= tenant_limit:
+                break
         return ScheduleBatch(
             queue_name=queue,
             jobs=tuple(jobs),
