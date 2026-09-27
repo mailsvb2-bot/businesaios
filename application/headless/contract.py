@@ -537,6 +537,14 @@ class HeadlessExecutionContract:
                 task_execution_version = int(getattr(paused_task, "version", 0))
             elif task_id and loop_result.completed:
                 _stop_task_conflict_heartbeat()
+                current_task = self._task_registry.get(
+                    tenant_id=request.tenant_id,
+                    business_id=request.business_id,
+                    task_id=task_id,
+                )
+                current_version = int(getattr(current_task, "version", 0))
+                if current_version < 1:
+                    raise RuntimeError("canonical durable task version must be positive")
                 succeed_task = getattr(self._task_registry, "succeed", None)
                 if not callable(succeed_task):
                     raise RuntimeError("canonical task registry must provide succeed()")
@@ -544,8 +552,8 @@ class HeadlessExecutionContract:
                     tenant_id=request.tenant_id,
                     business_id=request.business_id,
                     task_id=task_id,
-                    idempotency_key=f"headless:succeed:{task_id}:v{task_execution_version}",
-                    expected_version=task_execution_version,
+                    idempotency_key=f"headless:succeed:{task_id}:v{current_version}",
+                    expected_version=current_version,
                 )
         except BaseException:
             _release_task_conflicts()
