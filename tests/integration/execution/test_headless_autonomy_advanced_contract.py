@@ -323,6 +323,44 @@ def test_phase9_conflict_lock_is_held_through_evidence_and_terminal_commit(
     distributed_lock.release(lease=after_commit)
 
 
+def test_phase9_completed_goal_wins_late_preemption_request_with_latest_version(
+    tmp_path: Path,
+) -> None:
+    contract = _build_contract(
+        tmp_path,
+        executor_ok=True,
+        executor_output={"verified": True, "goal_reached": True},
+    )
+    registry = _TaskRegistry("ready")
+    contract._task_registry = registry
+
+    class _LatePreemptionExecutor(StubExecutor):
+        def execute(self, env: Any) -> ExecutionResult:
+            result = super().execute(env)
+            registry.preemption_requested_by_task_id = "task-high"
+            registry.preemption_requested_priority = 90
+            registry.version += 1
+            return result
+
+    contract._executor = _LatePreemptionExecutor(
+        ok=True,
+        output={"verified": True, "goal_reached": True},
+    )
+    report = contract.execute_autopilot(
+        GoalExecutionRequest(
+            goal="finish durable task",
+            business_id="biz-1",
+            tenant_id="tenant-1",
+            max_steps=1,
+            meta={"task_id": "task-1"},
+        )
+    )
+
+    assert report.completed is True
+    assert registry.transitions == ["start", "succeed"]
+    assert registry.status == "succeeded"
+
+
 def test_phase9_cooperative_preemption_stops_before_second_side_effect_and_pauses(
     tmp_path: Path,
 ) -> None:
