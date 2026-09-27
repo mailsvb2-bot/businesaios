@@ -228,7 +228,6 @@ def build_headless_runtime(*, entrypoint: str = "headless_sdk", root_dir: str | 
         world_model_event_projector=world_model_event_projector,
         agent_identity_registry=agent_identity_registry,
         task_registry=task_registry,
-        task_queue_adapter=task_queue_adapter,
     )
     return HeadlessRuntime(
         decision_core=core,
@@ -258,6 +257,7 @@ def build_headless_runtime(*, entrypoint: str = "headless_sdk", root_dir: str | 
         state_synthesis_engine=state_synthesis_engine,
         agent_identity_registry=agent_identity_registry,
         task_registry=task_registry,
+        task_queue_adapter=task_queue_adapter,
     )
 
 
