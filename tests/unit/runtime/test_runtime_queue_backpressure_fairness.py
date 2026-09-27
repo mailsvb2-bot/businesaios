@@ -10,6 +10,15 @@ from runtime.queue.job_scheduler import JobScheduler
 from runtime.queue.job_store import InMemoryJobStore
 from runtime.queue.queue_observability import QueueObservabilityRegistry
 from runtime.queue.tenant_fair_scheduler import TenantFairScheduler, TenantQueuePressure
+from tenancy.tenant_audit_scope import TenantAuditScope
+from tenancy.tenant_billing_scope import TenantBillingScope
+from tenancy.tenant_connector_scope import TenantConnectorScope
+from tenancy.tenant_execution_budget_guard import TenantExecutionBudgetGuard
+from tenancy.tenant_feature_flags import TenantFeatureFlags
+from tenancy.tenant_memory_scope import TenantMemoryScope
+from tenancy.tenant_policy_store import InMemoryTenantPolicyStore, TenantPolicyBundle
+from tenancy.tenant_quota_guard import TenantQuotaGuard
+from tenancy.tenant_runtime_limits import TenantRuntimeLimits
 
 
 def _job(*, tenant_id: str, job_id: str, queue_name: str = "email", job_type: str = "send_email", now=None):
@@ -83,6 +92,58 @@ def test_backpressure_monitor_reports_fairness_gap_and_global_pressure() -> None
     assert status_by_tenant["tenant-a"].fairness_gap >= 4
     assert any(alert.code == "tenant_fairness_gap_high" for alert in report.alerts)
     assert observability.snapshot().alerts
+
+
+def test_job_scheduler_skips_task_when_canonical_resource_budget_is_exhausted() -> None:
+    tenant_id = "tenant-1"
+    bundle = TenantPolicyBundle(
+        tenant_id=tenant_id,
+        feature_flags=TenantFeatureFlags(tenant_id=tenant_id),
+        runtime_limits=TenantRuntimeLimits(tenant_id=tenant_id, max_actions_per_run=1),
+        memory_scope=TenantMemoryScope(tenant_id=tenant_id),
+        connector_scope=TenantConnectorScope(tenant_id=tenant_id),
+        audit_scope=TenantAuditScope(tenant_id=tenant_id),
+        billing_scope=TenantBillingScope(tenant_id=tenant_id),
+        quotas={"actions_per_day": 100.0},
+    )
+    policies = InMemoryTenantPolicyStore((bundle,))
+    budget_guard = TenantExecutionBudgetGuard(
+        policy_store=policies,
+        quota_guard=TenantQuotaGuard(policy_store=policies),
+    )
+    store = InMemoryJobStore()
+    now = utc_now()
+    store.put(
+        JobDispatchRequest(
+            tenant_id=tenant_id,
+            job_id="job-over-budget",
+            queue_name="email",
+            job_type="send_email",
+            payload={"recipient": "x@example.com", "action_count": 2},
+            dedupe_key="d-over-budget",
+            priority=100,
+        ).to_record(now=now)
+    )
+    store.put(
+        JobDispatchRequest(
+            tenant_id=tenant_id,
+            job_id="job-allowed",
+            queue_name="email",
+            job_type="send_email",
+            payload={"recipient": "ok@example.com", "action_count": 1},
+            dedupe_key="d-allowed",
+            priority=10,
+        ).to_record(now=now)
+    )
+
+    batch = JobScheduler(
+        store=store,
+        tenant_execution_budget_guard=budget_guard,
+    ).select_due_jobs(tenant_id=tenant_id, queue_name="email", now=now)
+
+    assert [job.job_id for job in batch.jobs] == ["job-allowed"]
+    assert batch.resource_previews["job-over-budget"].allowed is False
+    assert batch.resource_previews["job-allowed"].allowed is True
 
 
 def test_job_scheduler_filters_jobs_by_capability_preview_and_worker_commit_path() -> None:
