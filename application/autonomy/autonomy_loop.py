@@ -243,6 +243,15 @@ class AutonomyLoop:
                 stop_reason = str(stop_eval.stop_reason or stop_reason)
                 completed = bool(stop_eval.completed)
                 break
+            if self._contract._task_preemption_requested(request):
+                stop_reason = "task_preempted"
+                completed = False
+                trace.record(
+                    event_type="task_preemption_observed",
+                    step_index=step_index,
+                    payload={"task_id": str(getattr(request, "task_id", "") or "")},
+                )
+                break
 
         final_feedback = self._memory_step.finalize_feedback(
             previous_feedback=previous_feedback,
