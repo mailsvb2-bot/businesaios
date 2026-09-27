@@ -805,17 +805,31 @@ class TaskQueuePreemptionCoordinator:
                 continue
             if target.preemption_requested_by_task_id is not None:
                 continue
-            self._tasks.request_preemption(
-                tenant_id=job.tenant_id,
-                business_id=business_id,
-                task_id=target.task_id,
-                requested_by_task_id=candidate.task_id,
-                requested_priority=candidate.priority,
-                idempotency_key=(
-                    f"queue-preempt:{target.task_id}:by:{candidate.task_id}"
-                ),
-                expected_version=target.version,
-            )
+            try:
+                self._tasks.request_preemption(
+                    tenant_id=job.tenant_id,
+                    business_id=business_id,
+                    task_id=target.task_id,
+                    requested_by_task_id=candidate.task_id,
+                    requested_priority=candidate.priority,
+                    idempotency_key=(
+                        f"queue-preempt:{target.task_id}:by:{candidate.task_id}"
+                    ),
+                    expected_version=target.version,
+                )
+            except RuntimeError as exc:
+                if "task version conflict" not in str(exc):
+                    raise
+                refreshed = self._tasks.get(
+                    tenant_id=job.tenant_id,
+                    business_id=business_id,
+                    task_id=target.task_id,
+                )
+                if (
+                    refreshed.status is DurableTaskStatus.RUNNING
+                    and refreshed.preemption_requested_by_task_id is None
+                ):
+                    return False
         return not blocked
 
 
