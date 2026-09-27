@@ -121,6 +121,7 @@ class DurableTask:
     terminal_at_ms: int | None = None
     version: int = 1
     wait_condition: WaitCondition | None = None
+    artifact_ids: tuple[str, ...] = ()
 
     def __post_init__(self) -> None:
         for field_name in ("task_id", "tenant_id", "business_id"):
@@ -144,6 +145,11 @@ class DurableTask:
                 raise ValueError("wait_condition must be WaitCondition or dict")
             wait_condition = WaitCondition.from_dict(wait_condition)
             object.__setattr__(self, "wait_condition", wait_condition)
+        artifact_ids = tuple(
+            dict.fromkeys(_required(value, "artifact_id") for value in self.artifact_ids)
+        )
+        object.__setattr__(self, "artifact_ids", artifact_ids)
+
         if self.status is DurableTaskStatus.WAITING and wait_condition is None:
             raise ValueError("waiting task requires wait_condition")
         if self.status is not DurableTaskStatus.WAITING and wait_condition is not None:
