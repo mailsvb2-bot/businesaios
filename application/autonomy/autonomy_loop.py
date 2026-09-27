@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+import time
 from dataclasses import asdict, dataclass, replace
 from typing import Any
 
@@ -285,14 +286,32 @@ class AutonomyLoop:
                 step_index=step_index,
                 attempt_index=attempt_index,
             )
+            attempt_request = request
+            timeout_payload = dict((request.meta or {}).get("durable_task_timeout_policy") or {})
+            raw_attempt_timeout_ms = timeout_payload.get("attempt_timeout_ms")
+            if raw_attempt_timeout_ms is not None:
+                if isinstance(raw_attempt_timeout_ms, bool):
+                    raise ValueError("attempt_timeout_ms must be an integer")
+                attempt_timeout_ms = int(raw_attempt_timeout_ms)
+                if attempt_timeout_ms <= 0:
+                    raise ValueError("attempt_timeout_ms must be > 0")
+                attempt_request = replace(
+                    request,
+                    meta={
+                        **dict(request.meta or {}),
+                        "durable_task_attempt_deadline_ms": int(time.time() * 1000)
+                        + attempt_timeout_ms,
+                        "durable_task_attempt_index": attempt_index,
+                    },
+                )
             result = self._execution_step.execute(
-                request=request,
+                request=attempt_request,
                 executable_action=decision.executable_action,
                 envelope=decision.envelope,
                 autonomy_decision=decision.autonomy_decision,
             )
             step, should_retry = self._feedback_step.build_step(
-                request=request,
+                request=attempt_request,
                 state=state,
                 trace=trace,
                 step_index=step_index,
