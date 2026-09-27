@@ -253,6 +253,8 @@ class DurableTaskProjector:
                     status=DurableTaskStatus.WAITING,
                     when=when,
                     wait_condition=wait_condition,
+                    preemption_requested_by_task_id=None,
+                    preemption_requested_priority=None,
                 )
                 continue
 
@@ -290,6 +292,8 @@ class DurableTaskProjector:
                     status=DurableTaskStatus.BLOCKED,
                     when=when,
                     wait_condition=None,
+                    preemption_requested_by_task_id=None,
+                    preemption_requested_priority=None,
                 )
                 continue
 
@@ -306,6 +310,8 @@ class DurableTaskProjector:
                     status=DurableTaskStatus.COMPENSATING,
                     when=when,
                     wait_condition=None,
+                    preemption_requested_by_task_id=None,
+                    preemption_requested_priority=None,
                 )
                 continue
 
@@ -340,6 +346,8 @@ class DurableTaskProjector:
                     when=when,
                     terminal_at_ms=when,
                     wait_condition=None,
+                    preemption_requested_by_task_id=None,
+                    preemption_requested_priority=None,
                 )
                 continue
 
@@ -362,6 +370,8 @@ class DurableTaskProjector:
                     when=when,
                     terminal_at_ms=when,
                     wait_condition=None,
+                    preemption_requested_by_task_id=None,
+                    preemption_requested_priority=None,
                 )
                 continue
 
