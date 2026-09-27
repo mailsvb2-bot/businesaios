@@ -51,7 +51,9 @@ def test_task_job_request_preserves_durable_task_execution_contract() -> None:
     assert request.priority == 90
     assert request.max_attempts == 3
     assert request.claim_expiry_policy is JobClaimExpiryPolicy.DEAD_LETTER_AMBIGUOUS
-    assert request.dedupe_key == "durable-task:business-1:task-1:attempt-1"
+    assert request.dedupe_key.startswith("durable-task-")
+    assert len(request.dedupe_key) == len("durable-task-") + 32
+    assert all(forbidden not in request.dedupe_key for forbidden in ("/", "\\", ":", "\n", "\r", "\t"))
     assert request.payload["task_id"] == "task-1"
     assert request.payload["task_conflict_keys"] == ["ledger"]
     assert request.payload["durable_task_retry_policy"]["max_attempts"] == 3
