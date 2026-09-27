@@ -87,3 +87,20 @@ def test_business_autonomy_bootstrap_wires_task_to_existing_event_store() -> Non
     assert '"_artifact_registry": artifact_registry' in wiring
     assert '"_task_registry"' in wiring
     assert "wire_business_ontology_runtime(" in bootstrap
+
+
+
+def test_phase9_task_runtime_reuses_canonical_queue_and_lock_owners() -> None:
+    queue_adapter = (ROOT / "runtime/queue/task_job_adapter.py").read_text(encoding="utf-8")
+    conflict_control = (ROOT / "application/task/conflict_control.py").read_text(encoding="utf-8")
+
+    assert "from runtime.queue.job_contract import" in queue_adapter
+    assert "JobDispatchRequest" in queue_adapter
+    assert "self._dispatcher.dispatch(request)" in queue_adapter
+    assert "class JobScheduler" not in queue_adapter
+    assert "class JobStore" not in queue_adapter
+
+    assert "from reliability.distributed_lock import DistributedLock" in conflict_control
+    assert "self._lock.acquire(" in conflict_control
+    assert "self._lock.release(" in conflict_control
+    assert "class InMemoryDistributedLock" not in conflict_control
