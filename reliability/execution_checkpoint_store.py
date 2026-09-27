@@ -11,6 +11,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any, Protocol
 
+from contracts.task import DurableTaskRun, DurableTaskStep
 from core.tenancy.normalization import require_tenant_id
 
 CANON_EXECUTION_CHECKPOINT_STORE = True
@@ -110,6 +111,15 @@ class ExecutionCheckpointStore(Protocol):
     def list_run(self, *, tenant_id: str, run_id: str) -> tuple[ExecutionCheckpoint, ...]: ...
     def list_task(self, *, tenant_id: str, business_id: str, task_id: str) -> tuple[ExecutionCheckpoint, ...]: ...
     def latest_for_task(self, *, tenant_id: str, business_id: str, task_id: str) -> ExecutionCheckpoint | None: ...
+    def list_task_runs(self, *, tenant_id: str, business_id: str, task_id: str) -> tuple[DurableTaskRun, ...]: ...
+    def list_run_steps(
+        self,
+        *,
+        tenant_id: str,
+        business_id: str,
+        task_id: str,
+        run_id: str,
+    ) -> tuple[DurableTaskStep, ...]: ...
 
 
 class InMemoryExecutionCheckpointStore(ExecutionCheckpointStore):
@@ -203,6 +213,34 @@ class JsonlExecutionCheckpointStore(ExecutionCheckpointStore):
 
     def latest_for_task(self, *, tenant_id: str, business_id: str, task_id: str) -> ExecutionCheckpoint | None:
         return self._cache.latest_for_task(tenant_id=tenant_id, business_id=business_id, task_id=task_id)
+
+    def list_task_runs(
+        self,
+        *,
+        tenant_id: str,
+        business_id: str,
+        task_id: str,
+    ) -> tuple[DurableTaskRun, ...]:
+        return self._cache.list_task_runs(
+            tenant_id=tenant_id,
+            business_id=business_id,
+            task_id=task_id,
+        )
+
+    def list_run_steps(
+        self,
+        *,
+        tenant_id: str,
+        business_id: str,
+        task_id: str,
+        run_id: str,
+    ) -> tuple[DurableTaskStep, ...]:
+        return self._cache.list_run_steps(
+            tenant_id=tenant_id,
+            business_id=business_id,
+            task_id=task_id,
+            run_id=run_id,
+        )
 
 
 __all__ = [
