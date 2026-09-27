@@ -10,9 +10,9 @@ from application.headless.models import GoalExecutionRequest
 from contracts.task import RetryPolicy, TimeoutPolicy
 from execution.goal_plan_memory import FileGoalPlanMemoryStore, GoalPlanMemoryService
 from execution.headless_contract import HeadlessExecutionContract
-from runtime.execution.executor_result import ExecutionResult
 from reliability.distributed_lock import InMemoryDistributedLock
 from reliability.recovery_policy_engine import RecoveryPolicyDecision
+from runtime.execution.executor_result import ExecutionResult
 
 
 @dataclass(frozen=True)
