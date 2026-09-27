@@ -1,14 +1,15 @@
-from __future__ import annotations
-
 """Execution checkpoints for crash-safe single-path runtime flow."""
 
-from dataclasses import asdict, dataclass, field
-from datetime import datetime, timezone
-from pathlib import Path
-from typing import Any, Mapping, Protocol
+from __future__ import annotations
+
 import json
 import os
 import threading
+from collections.abc import Mapping
+from dataclasses import asdict, dataclass, field
+from datetime import UTC, datetime
+from pathlib import Path
+from typing import Any, Protocol
 
 from core.tenancy.normalization import require_tenant_id
 
@@ -30,7 +31,7 @@ _STAGE_INDEX = {name: index for index, name in enumerate(CANON_CHECKPOINT_STAGE_
 
 
 def utc_now() -> datetime:
-    return datetime.now(timezone.utc)
+    return datetime.now(UTC)
 
 
 @dataclass(frozen=True)
@@ -79,7 +80,7 @@ class ExecutionCheckpoint:
         return row
 
     @classmethod
-    def from_row(cls, row: Mapping[str, Any]) -> "ExecutionCheckpoint":
+    def from_row(cls, row: Mapping[str, Any]) -> ExecutionCheckpoint:
         created_at = datetime.fromisoformat(str(row["created_at"]))
         if created_at.tzinfo is None:
             raise ValueError("created_at must be timezone-aware")
@@ -130,9 +131,14 @@ class InMemoryExecutionCheckpointStore(ExecutionCheckpointStore):
                     raise ValueError("checkpoint sequence_no must strictly increase")
                 current_index = _STAGE_INDEX.get(str(latest.stage))
                 new_index = _STAGE_INDEX.get(str(checkpoint.stage))
-                if current_index is not None and new_index is not None and latest.stage != "failed":
-                    if new_index < current_index and checkpoint.stage != "failed":
-                        raise ValueError("checkpoint stage order must not move backwards")
+                if (
+                    current_index is not None
+                    and new_index is not None
+                    and latest.stage != "failed"
+                    and new_index < current_index
+                    and checkpoint.stage != "failed"
+                ):
+                    raise ValueError("checkpoint stage order must not move backwards")
             items.append(checkpoint)
 
     def latest(self, *, tenant_id: str, run_id: str) -> ExecutionCheckpoint | None:
