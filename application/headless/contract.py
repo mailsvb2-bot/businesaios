@@ -392,10 +392,12 @@ class HeadlessExecutionContract:
                     task_conflict_leases
                 )
         def _release_task_conflicts() -> None:
-            nonlocal task_conflict_leases
+            nonlocal task_conflict_heartbeat, task_conflict_leases
             if task_conflict_heartbeat is not None:
                 task_conflict_leases = task_conflict_heartbeat.close()
-            _release_task_conflicts()
+                task_conflict_heartbeat = None
+            if task_conflict_controller is not None and task_conflict_leases is not None:
+                task_conflict_controller.release(task_conflict_leases)
                 task_conflict_leases = None
 
         try:
