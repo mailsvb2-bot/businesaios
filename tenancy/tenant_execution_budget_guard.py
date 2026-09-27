@@ -267,14 +267,13 @@ class TenantExecutionBudgetGuard:
         body = dict(payload or {})
 
         def _safe_int(value: object) -> int:
-            if value is None or value == "":
+            if value is None:
                 return 0
-            if isinstance(value, bool):
+            if isinstance(value, bool) or not isinstance(value, int):
                 raise ValueError("execution usage count must be an integer")
-            parsed = int(value)
-            if parsed < 0:
+            if value < 0:
                 raise ValueError("execution usage count must be non-negative")
-            return parsed
+            return value
 
         def _safe_budget(value: object) -> float:
             normalized = money_decimal(0 if value is None or value == "" else value, name="budget_delta")
