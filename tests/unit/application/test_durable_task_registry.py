@@ -12,6 +12,7 @@ from application.task import (
 )
 from contracts.event_store import BusinessFactV1, canonical_business_event_contract
 from contracts.task import (
+    DurableTask,
     DurableTaskNotFound,
     DurableTaskStatus,
     RetryPolicy,
