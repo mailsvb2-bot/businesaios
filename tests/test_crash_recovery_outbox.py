@@ -115,3 +115,70 @@ def test_recovery_executes_effects_when_ledger_marked(tmp_path):
     ledger_ctx.__exit__(None, None, None)
     archive_ctx.__exit__(None, None, None)
     outbox_ctx.__exit__(None, None, None)
+
+
+def test_pre_effect_recovery_creates_missing_outbox_before_dispatch(tmp_path):
+    schemas = SchemaRegistry()
+    schemas.register(
+        "send_message@v1", 1,
+        DecisionSchema(
+            required={"user_id", "text"}, optional=set(),
+            field_types={"user_id": str, "text": str},
+        ),
+    )
+    preg = PolicyRegistry()
+    preg.register(PolicyA())
+    selector = PolicySelector(preg)
+    keyring = Keyring({"k1": {"secret": b"s1", "revoked": False}}, "k1")
+    events = EventLog(MemoryEventStore(), tenant="default")
+
+    archive_ctx = SqliteDecisionArchive(str(tmp_path / "archive-pre-effect.db"))
+    archive = archive_ctx.__enter__()
+    outbox_ctx = SqliteOutbox(str(tmp_path / "outbox-pre-effect.db"))
+    outbox = outbox_ctx.__enter__()
+    ledger_ctx = SqliteLedger(str(tmp_path / "ledger-pre-effect.db"))
+    ledger = ledger_ctx.__enter__()
+    try:
+        core = DecisionCore(
+            selector, keyring, schemas, MemorySnapshotStore(), events,
+            decision_archive=archive,
+        )
+        guard = RuntimeGuard(keyring, ledger, schemas, event_log=events)
+        handlers = ActionHandlerRegistry()
+        calls = []
+
+        def _send_message(payload, effects, env):
+            del effects
+            calls.append((payload["user_id"], payload["text"], env.decision.decision_id))
+            return {
+                "ok": True,
+                "status": "verified",
+                "router_evidence": {
+                    "source": "effect_router", "verified": True, "status": "verified",
+                    "external_refs": ["telegram:message:pre-effect-recovered-1"],
+                    "confidence": 1.0,
+                },
+            }
+
+        handlers.register("send_message@v1", _send_message)
+        executor = RuntimeExecutor(
+            guard, handlers, events, policy_registry=preg, decision_core=core,
+            outbox=outbox, decision_archive=archive,
+        )
+        env = core.optimize(
+            WorldStateV1(1, {}, {}, {}, {}, int(time.time() * 1000), user_id="u1")
+        )
+
+        # Crash window: authorization was committed to the ledger, but outbox
+        # creation never happened.
+        guard.execute_once(env)
+        assert outbox.status(str(env.decision.decision_id)) is None
+
+        result = executor.execute_pre_effect_recovery(env)
+        assert result.ok is True
+        assert calls == [("u1", "hi", env.decision.decision_id)]
+        assert outbox.status(str(env.decision.decision_id)) == "delivered"
+    finally:
+        ledger_ctx.__exit__(None, None, None)
+        archive_ctx.__exit__(None, None, None)
+        outbox_ctx.__exit__(None, None, None)
