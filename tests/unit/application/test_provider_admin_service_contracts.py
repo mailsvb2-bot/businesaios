@@ -130,3 +130,23 @@ def test_provider_admin_service_uses_single_owner_messaging_metadata_builder():
     text = path.read_text(encoding="utf-8")
     assert "messaging_binding_to_metadata(messaging_binding)" in text
     assert "'required_capabilities': dict(messaging_binding.required_capabilities)" not in text
+
+
+def test_provider_runtime_metrics_truth_persists_across_runtime_instances(tmp_path):
+    service, _registry = _service(tmp_path)
+    first = service._live_sync_runtime()
+    second = service._live_sync_runtime()
+    assert first is not second
+    assert first.observability is service.runtime_observability
+    assert second.observability is service.runtime_observability
+    service.runtime_observability.record_sync(
+        tenant_id='tenant-a', provider_key='telegram_bot', operation='message_send',
+        status='live_executed', accepted=True, mode='live', latency_ms=42.0,
+    )
+    truth = service.provider_runtime_metrics_truth(
+        tenant_id='tenant-a', provider_key='telegram_bot', window_seconds=3600,
+    )
+    assert truth['reliability'] == 1.0
+    assert truth['error_rate'] == 0.0
+    assert truth['latency_ms'] == 42.0
+    assert truth['sample_count'] == 1

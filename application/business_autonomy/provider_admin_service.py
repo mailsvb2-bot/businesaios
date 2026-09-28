@@ -23,6 +23,7 @@ from runtime.business_autonomy.provider_pagination_walkers import ProviderPagina
 from runtime.business_autonomy.provider_queue_execution import ProviderQueueExecutionRuntime
 from runtime.business_autonomy.provider_response_parsers import ProviderResponseParsers
 from runtime.business_autonomy.provider_runtime_audit import ProviderRuntimeAuditRecorder
+from runtime.business_autonomy.provider_runtime_observability import ProviderRuntimeObservability
 from runtime.business_autonomy.provider_secret_versioning import ProviderSecretVersioningService
 from runtime.business_autonomy.provider_sync_runtime import ProviderSyncRuntimePlanner
 from runtime.business_autonomy.provider_sync_scheduler import ProviderSyncScheduler
@@ -64,10 +65,16 @@ class ProviderAdminService:
     provider_media: Any | None = None
     provider_registry: ProviderDefinitionRegistry = field(default_factory=ProviderDefinitionRegistry)
     audit_recorder: ProviderRuntimeAuditRecorder = field(default_factory=ProviderRuntimeAuditRecorder.in_memory)
+    runtime_observability: ProviderRuntimeObservability = field(default_factory=ProviderRuntimeObservability)
     def _live_transports(self):
         if self.provider_media is None:
             return build_provider_vendor_transports(self.secret_vault)
         return build_provider_vendor_transports(self.secret_vault, media_preparation=self.provider_media)
+    def _live_sync_runtime(self) -> ProviderLiveSyncRuntime:
+        return ProviderLiveSyncRuntime(self.secret_vault, transports=self._live_transports(), audit_recorder=self.audit_recorder, observability=self.runtime_observability)
+    def provider_runtime_metrics_truth(self, *, tenant_id: str, provider_key: str, window_seconds: int = 3600) -> dict[str, object]:
+        self.provider_registry.get(provider_key)
+        return self.runtime_observability.provider_truth(tenant_id=require_tenant_id(tenant_id), provider_key=str(provider_key).strip(), window_seconds=window_seconds)
     def _reconcile_provider_webhook(self, *, provider: ProviderDefinition, tenant_id: str, business_id: str) -> dict[str, Any]:
         try:
             result = ProviderWebhookReconciler(self.secret_vault).reconcile(provider=provider, tenant_id=tenant_id, business_id=business_id)
@@ -107,12 +114,12 @@ class ProviderAdminService:
     def list_provider_retry_jobs(self, *, tenant_id: str, business_id: str, provider_key: str, limit: int = 20) -> tuple[dict[str, Any], ...]:
         return ProviderSyncScheduler().list_jobs(tenant_id=require_tenant_id(tenant_id), business_id=str(business_id).strip(), provider_key=str(provider_key).strip(), limit=limit)
     def list_provider_export_history(self, *, tenant_id: str, business_id: str, provider_key: str, limit: int = 20) -> tuple[dict[str, Any], ...]:
-        return ProviderLiveSyncRuntime(self.secret_vault, transports=self._live_transports(), audit_recorder=self.audit_recorder).export_bridge.list_history(tenant_id=require_tenant_id(tenant_id), business_id=str(business_id).strip(), provider_key=str(provider_key).strip(), limit=limit)
+        return self._live_sync_runtime().export_bridge.list_history(tenant_id=require_tenant_id(tenant_id), business_id=str(business_id).strip(), provider_key=str(provider_key).strip(), limit=limit)
     def list_provider_sync_history(self, *, tenant_id: str, business_id: str, provider_key: str, limit: int = 20) -> tuple[dict[str, Any], ...]:
-        runtime = ProviderLiveSyncRuntime(self.secret_vault, transports=self._live_transports(), audit_recorder=self.audit_recorder)
+        runtime = self._live_sync_runtime()
         return runtime.sync_history.list_for_provider(tenant_id=require_tenant_id(tenant_id), business_id=str(business_id).strip(), provider_key=str(provider_key).strip(), limit=limit)
     def find_provider_sync_history_jobs(self, *, tenant_id: str, business_id: str, provider_key: str, queue_job_ids: tuple[str, ...]) -> dict[str, dict[str, Any]]:
-        return ProviderLiveSyncRuntime(self.secret_vault, transports=self._live_transports(), audit_recorder=self.audit_recorder).sync_history.find_for_queue_jobs(tenant_id=require_tenant_id(tenant_id), business_id=str(business_id).strip(), provider_key=str(provider_key).strip(), queue_job_ids=queue_job_ids)
+        return self._live_sync_runtime().sync_history.find_for_queue_jobs(tenant_id=require_tenant_id(tenant_id), business_id=str(business_id).strip(), provider_key=str(provider_key).strip(), queue_job_ids=queue_job_ids)
     def list_provider_runtime_incidents(self, *, tenant_id: str, business_id: str, provider_key: str, limit: int = 50) -> tuple[dict[str, Any], ...]:
         return FileProviderIncidentRegistry().list_for_provider(tenant_id=require_tenant_id(tenant_id), business_id=str(business_id).strip(), provider_key=str(provider_key).strip(), limit=limit)
     def describe_provider_response_parser(self, *, provider_key: str) -> dict[str, Any]:
@@ -125,7 +132,7 @@ class ProviderAdminService:
         return {'provider_key': result.provider_key, 'mode': result.mode, 'status': result.status, 'ok': result.ok, 'metadata': dict(result.metadata or {})}
     def paginate_provider_sync(self, *, tenant_id: str, business_id: str, provider_key: str, operation: str, mode: str = 'dry_run', payload: Mapping[str, Any] | None = None, max_pages: int = 3) -> dict[str, Any]:
         provider = self.provider_registry.get(provider_key)
-        runtime = ProviderLiveSyncRuntime(self.secret_vault, transports=self._live_transports(), audit_recorder=self.audit_recorder)
+        runtime = self._live_sync_runtime()
         walker = ProviderPaginationWalkers(runtime=runtime)
         result = walker.walk(provider=provider, tenant_id=require_tenant_id(tenant_id), business_id=str(business_id).strip(), operation=str(operation).strip(), mode=str(mode or 'dry_run').strip() or 'dry_run', payload=dict(payload or {}), max_pages=max_pages)
         return {'provider_key': result.provider_key, 'operation': result.operation, 'mode': result.mode, 'status': result.status, 'accepted': result.accepted, 'metadata': dict(result.metadata or {})}
@@ -240,7 +247,7 @@ class ProviderAdminService:
         )
         runtime_plan = ProviderSyncRuntimePlanner().describe(provider)
         webhook_contract = ProviderWebhookRuntime(self.secret_vault).describe(provider)
-        live_sync_runner = ProviderLiveSyncRuntime(self.secret_vault, transports=self._live_transports(), audit_recorder=self.audit_recorder).describe_runner(provider)
+        live_sync_runner = self._live_sync_runtime().describe_runner(provider)
         webhook_reconciliation = self._reconcile_provider_webhook(
             provider=provider, tenant_id=normalized_tenant, business_id=normalized_business
         )
@@ -372,7 +379,7 @@ class ProviderAdminService:
         health_probe = ProviderConnectorHealthService(self.secret_vault).probe(provider=provider, tenant_id=normalized_tenant, business_id=normalized_business, probe_mode=probe_mode)
         runtime_plan = ProviderSyncRuntimePlanner().describe(provider)
         webhook_contract = ProviderWebhookRuntime(self.secret_vault).describe(provider)
-        live_sync_runner = ProviderLiveSyncRuntime(self.secret_vault, transports=self._live_transports(), audit_recorder=self.audit_recorder).describe_runner(provider)
+        live_sync_runner = self._live_sync_runtime().describe_runner(provider)
         webhook_reconciliation = self._reconcile_provider_webhook(
             provider=provider, tenant_id=normalized_tenant, business_id=normalized_business
         )
@@ -465,7 +472,7 @@ class ProviderAdminService:
         return self.activation_store.put(status)
     def trigger_provider_sync(self, *, tenant_id: str, business_id: str, provider_key: str, operation: str, mode: str = 'dry_run', payload: Mapping[str, Any] | None = None) -> dict[str, Any]:
         provider = self.provider_registry.get(provider_key)
-        runtime = ProviderLiveSyncRuntime(self.secret_vault, transports=self._live_transports(), audit_recorder=self.audit_recorder)
+        runtime = self._live_sync_runtime()
         result = runtime.run(provider=provider, tenant_id=require_tenant_id(tenant_id), business_id=str(business_id).strip(), operation=str(operation).strip(), mode=str(mode or 'dry_run').strip() or 'dry_run', payload=dict(payload or {}))
         return {'provider_key': result.provider_key, 'operation': result.operation, 'mode': result.mode, 'status': result.status, 'accepted': result.accepted, 'metadata': dict(result.metadata or {})}
     def ingest_provider_webhook(self, *, tenant_id: str, business_id: str, provider_key: str, headers: Mapping[str, str], body: bytes, event_key: str, topic: str = '', owner_id: str = 'provider_admin') -> dict[str, Any]:
@@ -479,12 +486,12 @@ class ProviderAdminService:
         return {'provider_key': result.provider_key, 'event_key': result.event_key, 'accepted': result.accepted, 'status': result.status, 'transport_ack_safe': ack_safe, 'response_body': ingress.webhook_runtime.response_body(provider=provider, tenant_id=tenant_id, business_id=business_id, body=body) if result.status != 'invalid_signature' and ack_safe else None, 'metadata': {**metadata, 'route_extract': route_extract}}
     def enqueue_provider_sync(self, *, tenant_id: str, business_id: str, provider_key: str, operation: str, mode: str = 'live', payload: Mapping[str, Any] | None = None, approval_completion_context: Mapping[str, Any] | None = None) -> dict[str, Any]:
         provider = self.provider_registry.get(provider_key)
-        runtime = ProviderLiveSyncRuntime(self.secret_vault, transports=self._live_transports(), audit_recorder=self.audit_recorder)
+        runtime = self._live_sync_runtime()
         queue_runtime = ProviderQueueExecutionRuntime(self.secret_vault, live_runtime=runtime, idempotency_store=self.idempotency_store, pacing_coordinator=self.provider_pacing, media_preparation=self.provider_media)
         result = queue_runtime.enqueue_sync(provider=provider, tenant_id=require_tenant_id(tenant_id), business_id=str(business_id).strip(), operation=str(operation).strip(), mode=str(mode or 'live').strip() or 'live', payload=dict(payload or {}), approval_completion_context=approval_completion_context)
         return {'job_id': result.job_id, 'queued': result.queued, 'status': result.status, 'metadata': dict(result.metadata)}
     def tick_provider_sync_queue(self, *, tenant_id: str, worker_id: str = 'provider-runtime-worker', job_id: str | None = None) -> dict[str, Any]:
-        runtime = ProviderLiveSyncRuntime(self.secret_vault, transports=self._live_transports(), audit_recorder=self.audit_recorder)
+        runtime = self._live_sync_runtime()
         queue_runtime = ProviderQueueExecutionRuntime(self.secret_vault, live_runtime=runtime, pacing_coordinator=self.provider_pacing, media_preparation=self.provider_media)
         registry = {item.provider_key: item for item in self.provider_registry.list()}
         return queue_runtime.tick(provider_registry=registry, tenant_id=require_tenant_id(tenant_id), worker_id=worker_id, job_id=job_id)
@@ -518,7 +525,7 @@ class ProviderAdminService:
             worker = {'worker_id': worker_id, 'replayed_from_history': 'queue_state' not in result}
         return {'dispatch': dispatch, 'worker': worker, 'result': result}
     def list_provider_queue_jobs(self, *, tenant_id: str, business_id: str | None = None, provider_key: str, limit: int = 50) -> tuple[dict[str, Any], ...]:
-        runtime = ProviderLiveSyncRuntime(self.secret_vault, transports=self._live_transports(), audit_recorder=self.audit_recorder)
+        runtime = self._live_sync_runtime()
         queue_runtime = ProviderQueueExecutionRuntime(self.secret_vault, live_runtime=runtime, pacing_coordinator=self.provider_pacing, media_preparation=self.provider_media)
         return queue_runtime.list_jobs(tenant_id=require_tenant_id(tenant_id), business_id=None if business_id in {None, ''} else str(business_id).strip(), provider_key=str(provider_key).strip(), limit=limit)
     def describe_provider_live_client(self, *, provider_key: str) -> dict[str, Any]:
