@@ -3,7 +3,12 @@ from __future__ import annotations
 import logging
 
 from runtime.execution.entrypoint_context import run_with_bound_execution_context
-from runtime.execution.executor_commit import _decision_tenant_id, has_pending
+from runtime.execution.executor_commit import (
+    _decision_tenant_id,
+    enqueue_once,
+    has_pending,
+    status as outbox_status,
+)
 from runtime.execution.executor_result import ExecutionResult
 from runtime.execution.outcome_persistence_lock import finalize_recovered_outcome
 from runtime.observability.perf import watchdog_tick
@@ -82,6 +87,33 @@ def has_proof_event(*, event_log, decision_id: str, action: str, warn) -> bool:
     # A lookup failure is not evidence that the proof is absent. Propagate it so
     # recovery cannot re-dispatch an irreversible effect on a false negative.
     return bool(event_log.has_event(str(decision_id), expected_event))
+
+
+def execute_pre_effect_recovery_flow(
+    *, executor, env, outbox, guard, event_log, executor_context_cm, warn
+) -> ExecutionResult:
+    """Recover only the post-authorization/pre-outbox crash window."""
+    if outbox is None:
+        raise RuntimeError("PRE_EFFECT_RECOVERY_REQUIRES_OUTBOX")
+    tenant_id = _decision_tenant_id(env.decision)
+    decision_id = str(env.decision.decision_id)
+    current = outbox_status(outbox, decision_id=decision_id, tenant_id=tenant_id)
+    if current is not None and current not in {"pending", "delivering", "inflight"}:
+        raise RuntimeError(f"PRE_EFFECT_RECOVERY_OUTBOX_STATE_INVALID:{current}")
+    guard.verify_recovery(env)
+    if current is None:
+        enqueue_once(outbox, decision=env.decision)
+    if not has_pending(outbox, decision_id=decision_id, tenant_id=tenant_id):
+        raise RuntimeError("PRE_EFFECT_RECOVERY_OUTBOX_NOT_PENDING")
+    return execute_recovery_flow(
+        executor=executor,
+        env=env,
+        outbox=outbox,
+        guard=guard,
+        event_log=event_log,
+        executor_context_cm=executor_context_cm,
+        warn=warn,
+    )
 
 
 def execute_recovery_flow(*, executor, env, outbox, guard, event_log, executor_context_cm, warn) -> ExecutionResult:
