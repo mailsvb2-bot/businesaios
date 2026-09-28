@@ -5,6 +5,13 @@ from typing import Any
 
 import pytest
 
+from core.ai.decision import Decision
+from core.security.keyring import Keyring
+from kernel.decision_crypto import (
+    decision_envelope_from_recovery_snapshot,
+    signed_envelope_from_decision,
+)
+
 from reliability.execution_checkpoint_store import (
     ExecutionCheckpoint,
     InMemoryExecutionCheckpointStore,
@@ -473,3 +480,65 @@ def test_phase9_task_run_recovery_uses_existing_recovery_orchestrator() -> None:
         "run_id": "executor-run-p9",
         "outbox_message_id": "outbox-p9",
     }
+
+
+def test_executable_action_checkpoint_persists_reconstructable_signed_envelope() -> None:
+    from runtime.execution.executor_stages import preflight_and_verify
+
+    keyring = Keyring({"k1": {"secret": b"s1", "revoked": False}}, "k1")
+    env = signed_envelope_from_decision(
+        decision=Decision(
+            decision_id="decision-recovery", issuer_id="businesaios-core",
+            issued_at_ms=100, expires_at_ms=200, policy_id="p1",
+            action="noop@v1",
+            payload={"tenant_id": "tenant-a", "business_id": "business-a"},
+            snapshot_id="s1", state_hash="h1", correlation_id="c1",
+            state_schema_version=1, action_schema_version=1,
+        ),
+        keyring=keyring,
+    )
+    runtime = _runtime_reliability_for_checkpoint_test()
+
+    class _Guard:
+        def verify(self, _env): pass
+        def execute_once(self, _env): pass
+
+    executor = SimpleNamespace(
+        _reliability=runtime,
+        _guard=_Guard(),
+        _constitution=SimpleNamespace(assert_decision_envelope=lambda _env: None),
+        _economic_layer=None,
+        _snapshot_store=None,
+        _events=None,
+        _operational_budget_service=None,
+        _governance_execution_guard=None,
+    )
+    # Keep this focused on checkpoint persistence; production policy helpers are
+    # exercised by their existing suites.
+    import runtime.execution.executor_stages as stages
+    original_safe_mode = stages.enforce_safe_mode
+    original_timescale = stages.assert_timescale_allowed
+    original_product = stages._review_product_capability
+    original_budget = stages.review_operational_budget
+    original_governance = stages.review_governance_execution
+    original_authorized = stages.project_action_authorized_event
+    try:
+        stages.enforce_safe_mode = lambda **_: None
+        stages.assert_timescale_allowed = lambda **_: None
+        stages._review_product_capability = lambda **_: None
+        stages.review_operational_budget = lambda **_: None
+        stages.review_governance_execution = lambda **_: None
+        stages.project_action_authorized_event = lambda **_: None
+        preflight_and_verify(executor=executor, env=env, timescale=SimpleNamespace(value="runtime"))
+    finally:
+        stages.enforce_safe_mode = original_safe_mode
+        stages.assert_timescale_allowed = original_timescale
+        stages._review_product_capability = original_product
+        stages.review_operational_budget = original_budget
+        stages.review_governance_execution = original_governance
+        stages.project_action_authorized_event = original_authorized
+
+    latest = runtime.checkpoint_store.latest(tenant_id="tenant-a", run_id="decision-recovery")
+    assert latest is not None and latest.stage == "executable_action"
+    rebuilt = decision_envelope_from_recovery_snapshot(latest.payload["recovery_envelope"])
+    assert rebuilt == env
