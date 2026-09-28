@@ -82,7 +82,9 @@ class AutonomyLoop:
         )
 
         steps: list[Any] = []
-        previous_feedback: dict[str, Any] = {}
+        previous_feedback: dict[str, Any] = dict(
+            (getattr(request, "meta", {}) or {}).get("previous_feedback") or {}
+        )
         completed = False
         stop_reason = "max_steps_reached"
         consecutive_failures = 0
