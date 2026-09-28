@@ -4,12 +4,13 @@ from dataclasses import replace
 from typing import Any
 
 from application.business_autonomy.integration_capability_catalog import capability_discovery_snapshot
-from application.business_autonomy.provider_truth_matrix import provider_runtime_truth_map
+from application.business_autonomy.provider_truth_matrix import provider_runtime_metrics_truth_map, provider_runtime_truth_map
 from execution.business_operating_memory import (
     project_business_memory_contract_bundle,
     project_business_memory_meta_payloads,
 )
 from execution.headless_trace import HeadlessTrace
+from runtime.business_autonomy.provider_sync_history import ProviderSyncHistory
 
 CANON_AUTONOMY_STATE_ASSEMBLY = True
 
@@ -284,9 +285,27 @@ class AutonomyStateAssembly:
                     step_index=step_index,
                     payload={"error": type(exc).__name__, "message": str(exc)},
                 )
+        provider_metrics_truth: dict[str, dict[str, Any]] = {}
+        provider_keys = tuple(provider_runtime_truth)
+        if provider_keys:
+            try:
+                sync_history = getattr(self._contract, "_provider_sync_history", None) or ProviderSyncHistory()
+                provider_metrics_truth = provider_runtime_metrics_truth_map(
+                    sync_history=sync_history,
+                    tenant_id=request.tenant_id,
+                    business_id=request.business_id,
+                    provider_keys=provider_keys,
+                )
+            except Exception as exc:
+                trace.record(
+                    event_type="capability_discovery_metrics_truth_failed",
+                    step_index=step_index,
+                    payload={"error": type(exc).__name__, "message": str(exc)},
+                )
         meta = dict(getattr(state, "meta", {}) or {})
         meta["capability_discovery"] = capability_discovery_snapshot(
-            provider_runtime_truth=provider_runtime_truth
+            provider_runtime_truth=provider_runtime_truth,
+            provider_metrics_truth=provider_metrics_truth,
         )
         state = replace(state, meta=meta)
         adapter = getattr(self._contract, "_business_memory_state_adapter", None)

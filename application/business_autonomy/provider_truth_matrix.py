@@ -14,6 +14,7 @@ from application.business_autonomy.provider_catalog import (
 )
 from contracts.event_store import canonical_business_event_contract
 from core.events.event_types import PROVIDER_CREATED, PROVIDER_UPDATED
+from runtime.business_autonomy.provider_sync_history import ProviderSyncHistory
 from runtime.business_autonomy.provider_sync_runtime import ProviderSyncRuntimePlanner
 from runtime.business_autonomy.provider_transport_bindings import ProviderTransportBindings
 
@@ -265,6 +266,50 @@ def provider_runtime_truth_map(*, event_store: Any, tenant_id: str, business_id:
                 raise RuntimeError("PROVIDER_ACTIVATION_EVENT_CONFLICT")
     return latest
 
+def provider_runtime_metrics_truth_map(
+    *,
+    sync_history: ProviderSyncHistory,
+    tenant_id: str,
+    business_id: str,
+    provider_keys: Iterable[str],
+    limit: int = 50,
+) -> dict[str, dict[str, Any]]:
+    """Project durable provider execution history into decision-facing metrics truth."""
+    tenant = str(tenant_id or "").strip()
+    business = str(business_id or "").strip()
+    if not tenant or not business:
+        raise ValueError("tenant_id and business_id are required")
+    result: dict[str, dict[str, Any]] = {}
+    for provider_key in tuple(dict.fromkeys(str(key).strip() for key in provider_keys if str(key).strip())):
+        rows = sync_history.list_for_provider(
+            tenant_id=tenant,
+            business_id=business,
+            provider_key=provider_key,
+            limit=max(1, int(limit)),
+        )
+        measured = [
+            dict(row) for row in rows
+            if str(row.get("mode") or "").strip().lower() == "live"
+            and row.get("transport_latency_ms") is not None
+        ]
+        if not measured:
+            continue
+        latencies = sorted(max(0.0, float(row["transport_latency_ms"])) for row in measured)
+        successes = sum(1 for row in measured if bool(row.get("accepted")))
+        sample_count = len(measured)
+        p95_index = min(sample_count - 1, max(0, int(round((sample_count - 1) * 0.95))))
+        reliability = successes / sample_count
+        result[provider_key] = {
+            "provider_key": provider_key,
+            "reliability": reliability,
+            "error_rate": 1.0 - reliability,
+            "latency_ms": latencies[p95_index],
+            "sample_count": sample_count,
+            "source": "provider_sync_history",
+        }
+    return result
+
+
 def summarize_provider_truth(rows: Iterable[ProviderTruthRow] | None = None) -> dict[str, Any]:
     selected = tuple(rows or build_provider_truth_matrix())
     return {
@@ -282,5 +327,5 @@ def summarize_provider_truth(rows: Iterable[ProviderTruthRow] | None = None) -> 
 
 __all__ = [
     "CANON_PROVIDER_TRUTH_MATRIX", "ProviderTruthRow", "ProviderTruthStatus", "build_provider_truth_matrix",
-    "provider_truth_map", "provider_runtime_truth_map", "list_provider_truth_payloads", "summarize_provider_truth",
+    "provider_truth_map", "provider_runtime_truth_map", "provider_runtime_metrics_truth_map", "list_provider_truth_payloads", "summarize_provider_truth",
 ]
