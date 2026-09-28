@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import hashlib
+from time import perf_counter
 from collections.abc import Mapping
 from dataclasses import dataclass, field
 from typing import Any, Protocol
@@ -73,7 +74,7 @@ class ProviderLiveSyncRuntime:
         refs = self.audit_recorder.record_sync_run(tenant_id=tenant_id, business_id=business_id, provider_key=provider.provider_key, operation=operation, mode=mode, status=result.status, accepted=result.accepted, payload=raw_payload, metadata={**dict(result.metadata), **({'decision_provenance': decision_provenance} if decision_provenance else {})})
         export_refs = self.export_bridge.export_runtime_event(tenant_id=str(tenant_id), business_id=str(business_id), provider_key=provider.provider_key, event_kind='sync', payload={'operation': operation, 'mode': mode, 'status': result.status, 'accepted': result.accepted})
         history_row = self.sync_history.append({'tenant_id': str(tenant_id), 'business_id': str(business_id), 'provider_key': provider.provider_key, 'operation': operation, 'mode': mode, 'status': result.status, 'accepted': result.accepted, 'queue_job_id': str(dict(payload or {}).get('_provider_queue_job_id') or '') or None, 'recorded_at_utc': refs.get('recorded_at_utc') if isinstance(refs, dict) else None, 'parsed_response': dict(result.metadata.get('parsed_response') or {}), 'transport_response': dict(result.metadata.get('transport_response') or {}), 'error': dict(result.metadata.get('error') or {}), 'retry_policy': dict(result.metadata.get('retry_policy') or {}), **({'decision_provenance': decision_provenance} if decision_provenance else {})})
-        self.observability.record_sync(tenant_id=str(tenant_id), provider_key=provider.provider_key, operation=operation, status=result.status, accepted=result.accepted, mode=mode)
+        self.observability.record_sync(tenant_id=str(tenant_id), provider_key=provider.provider_key, operation=operation, status=result.status, accepted=result.accepted, mode=mode, latency_ms=dict(result.metadata or {}).get('transport_latency_ms'))
         if not result.accepted or str(result.status).startswith('live_execution_failed'):
             error_view = dict(result.metadata.get('error') or {})
             retry_view = dict(result.metadata.get('retry_policy') or {})
@@ -128,6 +129,7 @@ class ProviderLiveSyncRuntime:
         if transport is None:
             result = ProviderSyncRunResult(provider_key=provider.provider_key, operation=normalized_operation, mode=normalized_mode, status='live_transport_unbound', accepted=False, metadata={'request_envelope': envelope, 'health_probe': {'status': health.status, 'reason': health.reason}, 'provider_write_guard': write_guard_decision.to_metadata()})
             return self._finalize_result(tenant_id=tenant_id, business_id=business_id, provider=provider, operation=normalized_operation, mode=normalized_mode, result=result, payload=public_execution_payload)
+        transport_started = perf_counter()
         try:
             transport_payload = {**caller_payload, '_allow_network': True, '_provider_write_approved': bool(write_guard_decision.allowed and write_guard_decision.is_write_operation), **({'_provider_queue_job_id': queue_job_id} if queue_job_id else {})}
             if provider.provider_key == 'vk_messaging' and normalized_operation == 'message_send' and queue_job_id:
@@ -141,14 +143,14 @@ class ProviderLiveSyncRuntime:
             response['parsed_response'] = parsed_response
             response_ok = bool(response.pop('_response_ok', parsed_response.get('ok', True))) and not parsed_response.get('error_code')
             if response.pop('_prepared_only', False):
-                result = ProviderSyncRunResult(provider_key=provider.provider_key, operation=normalized_operation, mode=normalized_mode, status='live_prepared_only', accepted=False, metadata={'request_envelope': envelope, 'transport_response': response, 'health_probe': {'status': health.status, 'reason': health.reason}, 'response_parser': self.response_parsers.describe(provider=provider), 'provider_write_guard': write_guard_decision.to_metadata()})
+                result = ProviderSyncRunResult(provider_key=provider.provider_key, operation=normalized_operation, mode=normalized_mode, status='live_prepared_only', accepted=False, metadata={'request_envelope': envelope, 'transport_response': response, 'health_probe': {'status': health.status, 'reason': health.reason}, 'response_parser': self.response_parsers.describe(provider=provider), 'provider_write_guard': write_guard_decision.to_metadata(), 'transport_latency_ms': (perf_counter() - transport_started) * 1000.0})
             else:
                 retry_metadata = self._retry_metadata(provider_key=provider.provider_key, category=str(parsed_response.get('error_category') or 'provider_runtime_error'), retryable=bool(parsed_response.get('retryable')), attempts=max(1, int(attempts or 1)), retry_after_seconds=parsed_response.get('retry_after_seconds')) if not response_ok else {}
-                result = ProviderSyncRunResult(provider_key=provider.provider_key, operation=normalized_operation, mode=normalized_mode, status='live_executed' if response_ok else 'live_execution_failed', accepted=response_ok, metadata={'request_envelope': envelope, 'transport_response': response, 'parsed_response': parsed_response, 'health_probe': {'status': health.status, 'reason': health.reason}, 'response_parser': self.response_parsers.describe(provider=provider), 'provider_write_guard': write_guard_decision.to_metadata(), **retry_metadata})
+                result = ProviderSyncRunResult(provider_key=provider.provider_key, operation=normalized_operation, mode=normalized_mode, status='live_executed' if response_ok else 'live_execution_failed', accepted=response_ok, metadata={'request_envelope': envelope, 'transport_response': response, 'parsed_response': parsed_response, 'health_probe': {'status': health.status, 'reason': health.reason}, 'response_parser': self.response_parsers.describe(provider=provider), 'provider_write_guard': write_guard_decision.to_metadata(), 'transport_latency_ms': (perf_counter() - transport_started) * 1000.0, **retry_metadata})
         except Exception as exc:
             error_view = self.error_taxonomy.classify(provider_key=provider.provider_key, error=exc)
             retry_metadata = self._retry_metadata(provider_key=provider.provider_key, category=error_view.category, retryable=error_view.retryable, attempts=max(1, int(attempts or 1)))
-            result = ProviderSyncRunResult(provider_key=provider.provider_key, operation=normalized_operation, mode=normalized_mode, status='live_execution_failed', accepted=False, metadata={'request_envelope': envelope, 'health_probe': {'status': health.status, 'reason': health.reason}, 'provider_write_guard': write_guard_decision.to_metadata(), 'error': {'category': error_view.category, 'code': error_view.code, 'retryable': error_view.retryable, 'message': error_view.message, 'metadata': dict(error_view.metadata)}, **retry_metadata})
+            result = ProviderSyncRunResult(provider_key=provider.provider_key, operation=normalized_operation, mode=normalized_mode, status='live_execution_failed', accepted=False, metadata={'request_envelope': envelope, 'health_probe': {'status': health.status, 'reason': health.reason}, 'provider_write_guard': write_guard_decision.to_metadata(), 'transport_latency_ms': (perf_counter() - transport_started) * 1000.0, 'error': {'category': error_view.category, 'code': error_view.code, 'retryable': error_view.retryable, 'message': error_view.message, 'metadata': dict(error_view.metadata)}, **retry_metadata})
         return self._finalize_result(tenant_id=tenant_id, business_id=business_id, provider=provider, operation=normalized_operation, mode=normalized_mode, result=result, payload=public_execution_payload)
 
 

@@ -821,9 +821,11 @@ def list_integration_capabilities(
 def capability_discovery_snapshot(
     *,
     provider_runtime_truth: Mapping[str, Mapping[str, Any]] | None = None,
+    provider_metrics_truth: Mapping[str, Mapping[str, Any]] | None = None,
 ) -> tuple[dict[str, Any], ...]:
     """Compact canonical capability truth for pre-planning discovery."""
     runtime_truth = dict(provider_runtime_truth or {})
+    metrics_truth = dict(provider_metrics_truth or {})
     rows: list[dict[str, Any]] = []
     live_healthy = {'probe_live_ok'}
     live_unhealthy = {
@@ -841,6 +843,9 @@ def capability_discovery_snapshot(
         ]
         availability = item.availability.value
         health = item.health.value
+        cost = item.cost
+        latency_ms = item.latency_ms
+        reliability = item.reliability
         if provider_rows and item.connectable:
             ready = [
                 row for row in provider_rows
@@ -870,17 +875,30 @@ def capability_discovery_snapshot(
             # A connected provider cannot promote an unimplemented/contract-only
             # business capability. Provider readiness is necessary, not sufficient.
             availability = CapabilityAvailabilityState.UNAVAILABLE.value
+        metric_rows = [dict(metrics_truth[key]) for key in item.provider_keys if key in metrics_truth]
+        if item.connectable and metric_rows:
+            reliability_values = [float(row['reliability']) for row in metric_rows if row.get('reliability') is not None]
+            latency_values = [float(row['latency_ms']) for row in metric_rows if row.get('latency_ms') is not None]
+            if reliability_values and len(reliability_values) == len(item.provider_keys):
+                reliability = min(reliability_values)
+            if latency_values and len(latency_values) == len(item.provider_keys):
+                latency_ms = max(latency_values)
         gaps = list(item.contract_gaps)
         if health != CapabilityHealthState.UNKNOWN.value and 'health' in gaps:
             gaps.remove('health')
         if availability != CapabilityAvailabilityState.UNKNOWN.value and 'availability' in gaps:
             gaps.remove('availability')
+        if latency_ms is not None and 'latency_ms' in gaps:
+            gaps.remove('latency_ms')
+        if reliability is not None and 'reliability' in gaps:
+            gaps.remove('reliability')
         rows.append({
             'capability_id': item.capability_id,
             'lifecycle': item.lifecycle.value,
             'status': item.status.value,
             'provider_keys': list(item.provider_keys),
             'provider_runtime': provider_rows,
+            'provider_metrics': metric_rows,
             'read_supported': bool(item.read_supported),
             'write_supported': bool(item.write_supported),
             'verify_supported': bool(item.verify_supported),
@@ -889,9 +907,9 @@ def capability_discovery_snapshot(
             'risk': item.risk_level,
             'contract_complete': not gaps,
             'contract_gaps': gaps,
-            'cost': item.cost,
-            'latency_ms': item.latency_ms,
-            'reliability': item.reliability,
+            'cost': cost,
+            'latency_ms': latency_ms,
+            'reliability': reliability,
             'reversible': item.reversible,
             'approval_requirements': {
                 'owner_approval': bool(item.requires_owner_approval),

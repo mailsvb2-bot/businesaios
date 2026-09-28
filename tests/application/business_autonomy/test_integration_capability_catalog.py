@@ -382,3 +382,22 @@ def test_measured_numeric_capability_truth_closes_only_its_own_gaps():
     assert "latency_ms" not in capability.contract_gaps
     assert "reliability" not in capability.contract_gaps
 
+
+
+def test_capability_discovery_uses_provider_scoped_runtime_metrics_without_cross_provider_mix():
+    rows = capability_discovery_snapshot(
+        provider_runtime_truth={
+            'telegram_bot': {'provider_key': 'telegram_bot', 'connected': True, 'onboarding_ready': True, 'health_probe': {'status': 'probe_live_ok'}},
+        },
+        provider_metrics_truth={
+            'telegram_bot': {'provider_key': 'telegram_bot', 'reliability': 0.75, 'error_rate': 0.25, 'latency_ms': 240.0, 'sample_count': 4},
+            'whatsapp_cloud': {'provider_key': 'whatsapp_cloud', 'reliability': 1.0, 'error_rate': 0.0, 'latency_ms': 999.0, 'sample_count': 99},
+        },
+    )
+    telegram = {row['capability_id']: row for row in rows}['interaction.telegram']
+    assert telegram['reliability'] == 0.75
+    assert telegram['latency_ms'] == 240.0
+    assert telegram['provider_metrics'][0]['provider_key'] == 'telegram_bot'
+    assert 'reliability' not in telegram['contract_gaps']
+    assert 'latency_ms' not in telegram['contract_gaps']
+    assert 'cost' in telegram['contract_gaps']

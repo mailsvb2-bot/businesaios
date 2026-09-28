@@ -88,10 +88,13 @@ class TenantMetricsRegistry:
     def record_error_rate(self, *, tenant_id: str, metric_name: str, error_ratio: float, labels: Mapping[str, str] | None = None, emitted_at: datetime | None = None) -> None:
         self.emit(tenant_id=tenant_id, metric_name=metric_name, kind=SLIKind.ERROR_RATE, value=float(error_ratio), aggregation=MetricAggregation.AVG, labels=labels, emitted_at=emitted_at)
 
-    def metric_snapshot(self, *, tenant_id: str, metric_name: str, window_seconds: int | None = None) -> dict[str, object] | None:
+    def metric_snapshot(self, *, tenant_id: str, metric_name: str, window_seconds: int | None = None, labels: Mapping[str, str] | None = None) -> dict[str, object] | None:
         tid = require_tenant_id(tenant_id)
         key = (tid, str(metric_name))
         samples = list(self._samples.get(key, []))
+        wanted_labels = {str(k): str(v) for k, v in dict(labels or {}).items()}
+        if wanted_labels:
+            samples = [sample for sample in samples if all(str(sample.labels.get(k, '')) == v for k, v in wanted_labels.items())]
         if window_seconds is not None:
             cutoff = utc_now() - timedelta(seconds=max(1, int(window_seconds)))
             samples = [sample for sample in samples if sample.emitted_at >= cutoff]
@@ -109,6 +112,7 @@ class TenantMetricsRegistry:
             'sample_count': len(samples),
             'labels': merged_labels,
             'window_seconds': window_seconds,
+            'label_filter': wanted_labels,
         }
 
     def snapshot(self, *, tenant_id: str, window_seconds: int | None = None) -> dict[str, dict[str, object]]:
