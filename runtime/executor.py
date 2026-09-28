@@ -111,6 +111,7 @@ from runtime.executor_api_support import (
     run_queue_tick_as_leader as executor_api_run_queue_tick_as_leader,
 )
 from runtime.executor_recovery_flow import (
+    execute_decision_recovery_flow,
     execute_pre_effect_recovery_flow,
     execute_recovery_flow,
 )
@@ -430,6 +431,17 @@ class RuntimeExecutor:
             outbox=self._outbox,
             event_log=self._events,
             env=env,
+        )
+
+    def execute_decision_recovery(self, env: DecisionEnvelope) -> ExecutionResult:
+        return execute_decision_recovery_flow(
+            executor=self,
+            env=env,
+            outbox=self._outbox,
+            guard=self._guard,
+            event_log=self._events,
+            executor_context_cm=executor_context,
+            warn=_throttled_exec_warn,
         )
 
     def execute_pre_effect_recovery(self, env: DecisionEnvelope) -> ExecutionResult:
