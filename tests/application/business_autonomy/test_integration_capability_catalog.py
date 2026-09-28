@@ -121,6 +121,8 @@ def test_capability_payload_exposes_canonical_contract_surface():
     assert payload["latency_ms"] == 0.0
     assert payload["reliability"] == 0.0
     assert payload["reversible"] is False
+    assert payload["contract_complete"] is False
+    assert set(payload["contract_gaps"]) == {"input_schema", "output_schema", "health", "availability"}
     assert payload["approval_requirements"] == {
         "owner_approval": True,
         "budget_guard": False,
@@ -163,3 +165,21 @@ def test_production_ready_capability_cannot_claim_weaker_lifecycle():
             owner_text="owner",
             next_required_step="next",
         )
+
+
+def test_connectable_capability_without_provider_is_reported_incomplete():
+    capability = IntegrationCapability(
+        capability_id="interaction.internal_test",
+        title="Internal Test",
+        surface=CapabilitySurface.INTERACTION,
+        group="Test",
+        status=CapabilityStatus.IMPLEMENTED,
+        owner_text="owner",
+        next_required_step="next",
+        input_schema={"type": "object"},
+        output_schema={"type": "object"},
+        health="healthy",
+        availability="available",
+    )
+    assert capability.contract_complete is False
+    assert capability.contract_gaps == ("providers",)
