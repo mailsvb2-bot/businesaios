@@ -30,6 +30,7 @@ def _task(
         task_id=task_id,
         tenant_id="tenant-1",
         business_id="business-1",
+        goal_id="goal-1",
         status=status,
         priority=priority,
         conflict_keys=("ledger",),
@@ -55,6 +56,7 @@ def test_task_job_request_preserves_durable_task_execution_contract() -> None:
     assert len(request.dedupe_key) == len("durable-task-") + 32
     assert all(forbidden not in request.dedupe_key for forbidden in ("/", "\\", ":", "\n", "\r", "\t"))
     assert request.payload["task_id"] == "task-1"
+    assert request.payload["goal_id"] == "goal-1"
     assert request.payload["task_conflict_keys"] == ["ledger"]
     assert request.payload["durable_task_retry_policy"]["max_attempts"] == 3
 
