@@ -65,6 +65,7 @@ class DurableTaskRegistry:
         business_id: str,
         task_id: str,
         idempotency_key: str,
+        goal_id: str | None = None,
         title: str | None = None,
         priority: int = 50,
         conflict_keys: tuple[str, ...] = (),
@@ -78,6 +79,7 @@ class DurableTaskRegistry:
             task_id=task_id,
             tenant_id=tenant_id,
             business_id=business_id,
+            goal_id=goal_id,
             title=title,
             priority=priority,
             conflict_keys=conflict_keys,
@@ -87,6 +89,7 @@ class DurableTaskRegistry:
             updated_at_ms=when,
         )
         payload = {
+            "goal_id": candidate.goal_id,
             "title": candidate.title,
             "priority": candidate.priority,
             "conflict_keys": list(candidate.conflict_keys),
@@ -103,7 +106,8 @@ class DurableTaskRegistry:
             current = None
         if current is not None:
             if (
-                current.title != candidate.title
+                current.goal_id != candidate.goal_id
+                or current.title != candidate.title
                 or current.priority != candidate.priority
                 or current.conflict_keys != candidate.conflict_keys
                 or current.retry_policy != candidate.retry_policy
