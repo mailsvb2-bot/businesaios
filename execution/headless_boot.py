@@ -100,74 +100,36 @@ class HeadlessRuntime:
     task_queue_adapter: object | None = None
 
 
-def build_headless_durable_task_queue_runner(
-    *,
-    contract: HeadlessExecutionContract,
-    task_registry: DurableTaskRegistry,
-    goal_reader: BusinessGoalProjector,
-    fallback_runner,
-):
+def build_headless_durable_task_queue_runner(*, contract, task_registry, goal_reader, fallback_runner):
     def _run(job):
-        tags = tuple(getattr(job, "tags", ()) or ())
-        if "durable_task" not in tags:
+        if "durable_task" not in tuple(getattr(job, "tags", ()) or ()):
             return fallback_runner(job)
         payload = dict(getattr(job, "payload", {}) or {})
-        tenant_id = str(getattr(job, "tenant_id", "") or "").strip()
-        business_id = str(payload.get("business_id") or "").strip()
-        task_id = str(payload.get("task_id") or "").strip()
-        if not tenant_id or not business_id or not task_id:
-            raise ValueError("durable task queue job is missing canonical scope")
-        task = task_registry.get(
-            tenant_id=tenant_id,
-            business_id=business_id,
-            task_id=task_id,
+        tenant_id, business_id, task_id = (
+            str(getattr(job, "tenant_id", "") or "").strip(),
+            str(payload.get("business_id") or "").strip(),
+            str(payload.get("task_id") or "").strip(),
         )
+        if not all((tenant_id, business_id, task_id)):
+            raise ValueError("durable task queue job is missing canonical scope")
+        task = task_registry.get(tenant_id=tenant_id, business_id=business_id, task_id=task_id)
         goal_id = str(getattr(task, "goal_id", "") or "").strip()
         if not goal_id:
             raise RuntimeError("durable task has no canonical goal_id")
-        queued_goal_id = str(payload.get("goal_id") or "").strip()
-        if queued_goal_id != goal_id:
+        if str(payload.get("goal_id") or "").strip() != goal_id:
             raise ValueError("durable task queue goal_id mismatch")
-        goal = goal_reader.get(
-            tenant_id=tenant_id,
-            business_id=business_id,
-            goal_id=goal_id,
-        )
-        goal_text = " | ".join(
-            part
-            for part in (
-                str(getattr(goal, "goal_kind", "") or "").strip(),
-                str(getattr(goal, "metric", "") or "").strip(),
-                (
-                    f"{getattr(goal, 'baseline', None)} -> {getattr(goal, 'target', None)}"
-                    if getattr(goal, "baseline", None) is not None
-                    and getattr(goal, "target", None) is not None
-                    else ""
-                ),
-            )
-            if part
-        )
-        report = contract.execute_autopilot(
-            GoalExecutionRequest(
-                goal=goal_text or f"canonical_goal:{goal_id}",
-                business_id=business_id,
-                tenant_id=tenant_id,
-                goal_id=goal_id,
-                meta={"task_id": task_id},
-            )
-        )
-        accepted = bool(report.completed or report.stop_reason == "task_preempted")
-        return {
-            "ok": accepted,
-            "status": "completed" if report.completed else report.stop_reason,
-            "output": {
-                "task_id": task_id,
-                "goal_id": goal_id,
-                "run_id": report.run_id,
-                "stop_reason": report.stop_reason,
-            },
-        }
-
+        goal = goal_reader.get(tenant_id=tenant_id, business_id=business_id, goal_id=goal_id)
+        parts = [str(getattr(goal, name, "") or "").strip() for name in ("goal_kind", "metric")]
+        if getattr(goal, "baseline", None) is not None and getattr(goal, "target", None) is not None:
+            parts.append(f"{goal.baseline} -> {goal.target}")
+        report = contract.execute_autopilot(GoalExecutionRequest(
+            goal=" | ".join(part for part in parts if part) or f"canonical_goal:{goal_id}",
+            business_id=business_id, tenant_id=tenant_id, goal_id=goal_id, meta={"task_id": task_id},
+        ))
+        return {"ok": bool(report.completed or report.stop_reason == "task_preempted"),
+                "status": "completed" if report.completed else report.stop_reason,
+                "output": {"task_id": task_id, "goal_id": goal_id, "run_id": report.run_id,
+                           "stop_reason": report.stop_reason}}
     return _run
 
 
@@ -323,27 +285,19 @@ def build_headless_runtime(*, entrypoint: str = "headless_sdk", root_dir: str | 
     if not callable(fallback_runner):
         raise RuntimeError("canonical runtime queue runner is required")
     executor._queue_support = build_executor_queue_support(
-        queue_store=queue_support.store,
-        queue_dead_letter_store=queue_support.dead_letter_store,
-        queue_dispatcher=queue_support.dispatcher,
-        queue_scheduler=queue_support.scheduler,
+        queue_store=queue_support.store, queue_dead_letter_store=queue_support.dead_letter_store,
+        queue_dispatcher=queue_support.dispatcher, queue_scheduler=queue_support.scheduler,
         queue_runner=build_headless_durable_task_queue_runner(
-            contract=contract,
-            task_registry=task_registry,
-            goal_reader=BusinessGoalProjector(event_store),
-            fallback_runner=fallback_runner,
+            contract=contract, task_registry=task_registry,
+            goal_reader=BusinessGoalProjector(event_store), fallback_runner=fallback_runner,
         ),
         queue_rate_limit_guard=queue_support.rate_limit_guard,
         queue_backpressure_policy=queue_support.backpressure_policy,
-        queue_throttle_policy=queue_support.throttle_policy,
-        queue_retry_policy=queue_support.retry_policy,
+        queue_throttle_policy=queue_support.throttle_policy, queue_retry_policy=queue_support.retry_policy,
         tenant_execution_budget_guard=getattr(executor, "_tenant_execution_budget_guard", None),
         worker_id=getattr(getattr(queue_support, "worker", None), "worker_id", "runtime-executor"),
     )
-    task_queue_adapter = TaskQueueAdapter(
-        task_registry=task_registry,
-        dispatcher=executor._queue_support.dispatcher,
-    )
+    task_queue_adapter = TaskQueueAdapter(task_registry=task_registry, dispatcher=executor._queue_support.dispatcher)
     return HeadlessRuntime(
         decision_core=core,
         executor=executor,
@@ -376,9 +330,4 @@ def build_headless_runtime(*, entrypoint: str = "headless_sdk", root_dir: str | 
     )
 
 
-__all__ = [
-    "CANON_HEADLESS_BOOT",
-    "HeadlessRuntime",
-    "build_headless_durable_task_queue_runner",
-    "build_headless_runtime",
-]
+__all__ = ["CANON_HEADLESS_BOOT", "HeadlessRuntime", "build_headless_durable_task_queue_runner", "build_headless_runtime"]
