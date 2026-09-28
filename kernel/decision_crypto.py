@@ -231,6 +231,50 @@ def signed_envelope_from_decision(*, decision: "Decision", keyring: Any) -> "Dec
     )
 
 
+def decision_envelope_recovery_snapshot(env: "DecisionEnvelope") -> dict[str, Any]:
+    """Serialize an already-signed envelope for crash recovery, never for re-decision."""
+    assert_envelope_signature_surface(env)
+    decision = env.decision
+    return {
+        "schema_version": 1,
+        "decision": dict(decision.__dict__),
+        "payload_hash": str(env.payload_hash),
+        "signature": str(env.signature),
+        "kid": str(env.kid),
+        "envelope_version": _as_int(
+            getattr(env, "envelope_version", getattr(decision, "envelope_version", 1)),
+            default=1,
+        ),
+        "policy_version": getattr(env, "policy_version", None),
+        "rollout_group": getattr(env, "rollout_group", None),
+        "canary_flag": bool(getattr(env, "canary_flag", False)),
+    }
+
+
+def decision_envelope_from_recovery_snapshot(snapshot: Mapping[str, Any]) -> "DecisionEnvelope":
+    """Rebuild a signed envelope and fail closed on persisted payload tampering."""
+    from core.ai.decision_contracts import Decision, DecisionEnvelope
+
+    data = dict(snapshot)
+    if _as_int(data.get("schema_version"), default=0) != 1:
+        raise RuntimeError("RECOVERY_ENVELOPE_SCHEMA_UNSUPPORTED")
+    raw_decision = data.get("decision")
+    if not isinstance(raw_decision, Mapping):
+        raise RuntimeError("RECOVERY_ENVELOPE_DECISION_REQUIRED")
+    env = DecisionEnvelope(
+        decision=Decision(**dict(raw_decision)),
+        payload_hash=str(data.get("payload_hash") or ""),
+        signature=str(data.get("signature") or ""),
+        kid=str(data.get("kid") or ""),
+        envelope_version=_as_int(data.get("envelope_version"), default=1),
+        policy_version=data.get("policy_version"),
+        rollout_group=data.get("rollout_group"),
+        canary_flag=bool(data.get("canary_flag", False)),
+    )
+    assert_envelope_signature_surface(env)
+    return env
+
+
 def load_keyring_secret(*, keyring: Any, kid: str) -> bytes:
     secret = keyring.verify_key(str(kid))
     if not secret:
