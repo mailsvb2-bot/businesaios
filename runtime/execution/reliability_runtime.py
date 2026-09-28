@@ -328,13 +328,14 @@ class RuntimeReliability:
             checkpoints,
             key=lambda item: (item.created_at, item.run_id, item.sequence_no, item.checkpoint_id),
         )
-        if latest.stage != "executable_action":
+        if latest.stage not in {"decision", "executable_action"}:
             raise RuntimeError(
-                f"recovery envelope is only admissible from executable_action, got {latest.stage}"
+                "recovery envelope is only admissible from decision/executable_action, "
+                f"got {latest.stage}"
             )
         raw_snapshot = dict(latest.payload or {}).get("recovery_envelope")
         if not isinstance(raw_snapshot, dict):
-            raise RuntimeError("executable_action checkpoint has no recovery envelope")
+            raise RuntimeError(f"{latest.stage} checkpoint has no recovery envelope")
         env = decision_envelope_from_recovery_snapshot(raw_snapshot)
         decision = env.decision
         payload = dict(getattr(decision, "payload", {}) or {})
