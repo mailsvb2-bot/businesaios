@@ -823,6 +823,101 @@ def test_phase9_recovery_approved_early_restart_is_allowed(tmp_path: Path) -> No
     assert report.completed is True
 
 
+def test_phase9_executable_action_recovery_resumes_then_reenters_canonical_loop(
+    tmp_path: Path,
+) -> None:
+    contract = _build_contract(
+        tmp_path,
+        executor_ok=True,
+        executor_output={"verified": True, "goal_reached": True},
+    )
+    contract._task_registry = _TaskRegistry("running")
+    recovered_env = _Envelope(
+        decision=_Decision(
+            decision_id="decision-recovered",
+            action="notify_owner",
+            payload={
+                "tenant_id": "tenant-1",
+                "business_id": "biz-1",
+                "task_id": "task-1",
+                "task_run_id": "task-run-recovery",
+            },
+            correlation_id="corr-recovered",
+        )
+    )
+    calls: list[str] = []
+
+    class _CheckpointStore:
+        def list_task_runs(self, **kwargs: Any):
+            del kwargs
+            return (
+                type(
+                    "Run",
+                    (),
+                    {"run_id": "task-run-recovery", "terminal_stage": None},
+                )(),
+            )
+
+    class _Reliability:
+        checkpoint_store = _CheckpointStore()
+
+        def plan_task_run_recovery(self, **kwargs: Any):
+            del kwargs
+            return RecoveryPlan(
+                run_id="decision-recovered",
+                recovery_action="resume_execution",
+                reason="resume_from_executable_action",
+                reconciliation=ReconciliationReport(
+                    run_id="decision-recovered",
+                    latest_stage="executable_action",
+                    idempotency_state=None,
+                    outbox_state=None,
+                    checkpoint_count=4,
+                ),
+                resume_stage="executable_action",
+            )
+
+        def recovery_envelope_for_task_run(self, **kwargs: Any):
+            assert kwargs["task_run_id"] == "task-run-recovery"
+            return recovered_env
+
+    class _RecoveryExecutor(StubExecutor):
+        def __init__(self):
+            super().__init__(ok=True, output={"verified": True})
+            self._reliability = _Reliability()
+
+        def execute_pre_effect_recovery(self, env: Any) -> ExecutionResult:
+            calls.append(f"recover:{env.decision.decision_id}")
+            return ExecutionResult(
+                ok=True,
+                output={"verified": True},
+                decision_id=env.decision.decision_id,
+                correlation_id=env.decision.correlation_id,
+            )
+
+        def execute(self, env: Any) -> ExecutionResult:
+            calls.append(f"next:{env.decision.decision_id}")
+            return ExecutionResult(
+                ok=True,
+                output={"verified": True, "goal_reached": True},
+                decision_id=env.decision.decision_id,
+                correlation_id=env.decision.correlation_id,
+            )
+
+    contract._executor = _RecoveryExecutor()
+    report = contract.execute_autopilot(
+        GoalExecutionRequest(
+            goal="resume durable task",
+            business_id="biz-1",
+            tenant_id="tenant-1",
+            meta={"task_id": "task-1"},
+        )
+    )
+    assert report.completed is True
+    assert calls[0] == "recover:decision-recovered"
+    assert calls[1:] == ["next:dec-1"]
+
+
 def test_phase9_recovery_does_not_blindly_replay_post_decision_run(tmp_path: Path) -> None:
     contract = _build_contract(tmp_path)
     contract._task_registry = _TaskRegistry("running")
