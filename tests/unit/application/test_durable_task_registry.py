@@ -136,6 +136,39 @@ def test_task_metadata_propagates_and_exact_replay_rejects_change() -> None:
         registry.complete( tenant_id="t", business_id="b", task_id="task", idempotency_key="complete-meta", occurred_at_ms=300, event_metadata={**complete_metadata, "actor_id": "owner-2"}, )
 
 
+def test_phase9_task_goal_identity_is_durable_and_create_is_immutable() -> None:
+    registry, events = _registry()
+    created = registry.create(
+        tenant_id="tenant-a",
+        business_id="business-a",
+        task_id="task-goal",
+        idempotency_key="create-goal",
+        goal_id="goal-a",
+        occurred_at_ms=100,
+    )
+    assert created.goal_id == "goal-a"
+
+    rebuilt = DurableTaskRegistry(
+        event_store=events,
+        idempotency_store=InMemoryIdempotencyStore(),
+    ).get(
+        tenant_id="tenant-a",
+        business_id="business-a",
+        task_id="task-goal",
+    )
+    assert rebuilt.goal_id == "goal-a"
+
+    with pytest.raises(ValueError, match="different identity metadata"):
+        registry.create(
+            tenant_id="tenant-a",
+            business_id="business-a",
+            task_id="task-goal",
+            idempotency_key="create-goal",
+            goal_id="goal-b",
+            occurred_at_ms=100,
+        )
+
+
 def test_task_rejects_new_key_for_already_applied_transition() -> None:
     registry, _ = _registry()
     registry.create(
