@@ -1,8 +1,11 @@
 from __future__ import annotations
 
+from types import SimpleNamespace
+
 import pytest
 
 from contracts.task import DurableTask, DurableTaskStatus, RetryPolicy
+from execution.headless_boot import build_headless_durable_task_queue_runner
 from runtime.queue import InMemoryJobStore, JobDispatcher, JobScheduler
 from runtime.queue.job_contract import JobClaimExpiryPolicy
 from runtime.queue.job_dispatcher import TaskQueueAdapter, build_task_job_request
@@ -121,3 +124,57 @@ def test_explicit_ambiguous_retry_maps_to_queue_retry_policy() -> None:
         dedupe_key="attempt-1",
     )
     assert request.claim_expiry_policy is JobClaimExpiryPolicy.RETRY_IF_BUDGET
+
+
+def test_headless_durable_queue_runner_uses_canonical_goal_and_preserves_fallback() -> None:
+    task = _task("task-1")
+    seen = {}
+
+    class _Contract:
+        def execute_autopilot(self, request):
+            seen["request"] = request
+            return SimpleNamespace(completed=True, stop_reason="goal_reached", run_id="run-1")
+
+    class _GoalReader:
+        def get(self, *, tenant_id: str, business_id: str, goal_id: str):
+            assert (tenant_id, business_id, goal_id) == ("tenant-1", "business-1", "goal-1")
+            return SimpleNamespace(goal_kind="increase_profit", metric="profit", baseline=100, target=120)
+
+    fallback_calls = []
+    runner = build_headless_durable_task_queue_runner(
+        contract=_Contract(),
+        task_registry=_Registry({"task-1": task}),
+        goal_reader=_GoalReader(),
+        fallback_runner=lambda job: fallback_calls.append(job) or {"ok": True},
+    )
+
+    result = runner(SimpleNamespace(
+        tenant_id="tenant-1",
+        tags=("durable_task",),
+        payload={"business_id": "business-1", "task_id": "task-1", "goal_id": "goal-1"},
+    ))
+    assert result["ok"] is True
+    assert result["output"]["goal_id"] == "goal-1"
+    assert seen["request"].goal_id == "goal-1"
+    assert seen["request"].task_id == "task-1"
+    assert "increase_profit" in seen["request"].goal
+    assert fallback_calls == []
+
+    non_durable = SimpleNamespace(tenant_id="tenant-1", tags=(), payload={})
+    assert runner(non_durable) == {"ok": True}
+    assert fallback_calls == [non_durable]
+
+
+def test_headless_durable_queue_runner_fails_closed_on_goal_mismatch() -> None:
+    runner = build_headless_durable_task_queue_runner(
+        contract=SimpleNamespace(),
+        task_registry=_Registry({"task-1": _task("task-1")}),
+        goal_reader=SimpleNamespace(),
+        fallback_runner=lambda job: None,
+    )
+    with pytest.raises(ValueError, match="goal_id mismatch"):
+        runner(SimpleNamespace(
+            tenant_id="tenant-1",
+            tags=("durable_task",),
+            payload={"business_id": "business-1", "task_id": "task-1", "goal_id": "goal-other"},
+        ))
