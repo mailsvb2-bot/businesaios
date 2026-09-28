@@ -140,6 +140,13 @@ def test_capability_payload_exposes_canonical_contract_surface():
         ({"latency_ms": -1}, "cost/latency"),
         ({"reliability": -0.01}, "reliability"),
         ({"reliability": 1.01}, "reliability"),
+        ({"cost": True}, "must not use booleans"),
+        ({"latency_ms": False}, "must not use booleans"),
+        ({"reliability": True}, "must not use booleans"),
+        ({"cost": float("nan")}, "finite numbers"),
+        ({"latency_ms": float("inf")}, "finite numbers"),
+        ({"reliability": float("-inf")}, "finite numbers"),
+        ({"cost": "not-a-number"}, "finite numbers"),
     ],
 )
 def test_capability_contract_numeric_bounds_fail_closed(kwargs, message):
