@@ -542,3 +542,41 @@ def test_executable_action_checkpoint_persists_reconstructable_signed_envelope()
     assert latest is not None and latest.stage == "executable_action"
     rebuilt = decision_envelope_from_recovery_snapshot(latest.payload["recovery_envelope"])
     assert rebuilt == env
+
+
+def test_phase9_recovery_envelope_requires_exact_task_lineage() -> None:
+    runtime = _runtime_reliability_for_checkpoint_test()
+    keyring = Keyring({"k1": {"secret": b"s1", "revoked": False}}, "k1")
+    env = signed_envelope_from_decision(
+        decision=Decision(
+            decision_id="decision-lineage", issuer_id="businesaios-core",
+            issued_at_ms=100, expires_at_ms=200, policy_id="p1",
+            action="noop@v1",
+            payload={
+                "tenant_id": "tenant-a", "business_id": "business-a",
+                "task_id": "task-a", "task_run_id": "task-run-a", "step_id": "step-a",
+            },
+            snapshot_id="s1", state_hash="h1", correlation_id="c1",
+            state_schema_version=1, action_schema_version=1,
+        ),
+        keyring=keyring,
+    )
+    from kernel.decision_crypto import decision_envelope_recovery_snapshot
+
+    runtime.append_checkpoint(env, stage="request", checkpoint_id="request:decision-lineage")
+    runtime.append_checkpoint(env, stage="decision", checkpoint_id="decision:decision-lineage")
+    runtime.append_checkpoint(
+        env, stage="executable_action", checkpoint_id="executable:decision-lineage",
+        payload={"recovery_envelope": decision_envelope_recovery_snapshot(env)},
+    )
+    recovered = runtime.recovery_envelope_for_task_run(
+        tenant_id="tenant-a", business_id="business-a",
+        task_id="task-a", task_run_id="task-run-a",
+    )
+    assert recovered == env
+
+    with pytest.raises(LookupError):
+        runtime.recovery_envelope_for_task_run(
+            tenant_id="tenant-a", business_id="business-a",
+            task_id="task-a", task_run_id="other-run",
+        )
