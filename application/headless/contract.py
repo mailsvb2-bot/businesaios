@@ -361,6 +361,7 @@ class HeadlessExecutionContract:
         task_conflict_heartbeat = None
         task_status = ""
         task_execution_version: int | None = None
+        pending_executable_recovery: tuple[Any, str] | None = None
         if task_id:
             if self._task_registry is None:
                 raise RuntimeError("canonical task registry is required for task-bound execution")
@@ -436,11 +437,15 @@ class HeadlessExecutionContract:
                             },
                         )
                     elif recovery_action == "resume_execution" and resume_stage == "executable_action":
-                        request = self._resume_executable_action(
-                            request=request,
-                            reliability=reliability,
-                            task_id=task_id,
-                            task_run_id=task_run_id,
+                        pending_executable_recovery = (reliability, task_run_id)
+                        request = replace(
+                            request,
+                            meta={
+                                **dict(request.meta or {}),
+                                "recovery_from_task_run_id": task_run_id,
+                                "recovery_action": recovery_action,
+                                "recovery_resume_stage": resume_stage,
+                            },
                         )
                     else:
                         raise RuntimeError(
@@ -503,6 +508,14 @@ class HeadlessExecutionContract:
                 task_conflict_leases = None
 
         try:
+            if pending_executable_recovery is not None:
+                recovery_reliability, recovery_task_run_id = pending_executable_recovery
+                request = self._resume_executable_action(
+                    request=request,
+                    reliability=recovery_reliability,
+                    task_id=task_id,
+                    task_run_id=recovery_task_run_id,
+                )
             if task_id and task_status == "ready":
                 start_task = getattr(self._task_registry, "start", None)
                 if not callable(start_task):
