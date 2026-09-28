@@ -4,7 +4,10 @@ from dataclasses import replace
 from typing import Any
 
 from application.business_autonomy.integration_capability_catalog import capability_discovery_snapshot
-from application.business_autonomy.provider_truth_matrix import provider_runtime_metrics_truth_map, provider_runtime_truth_map
+from application.business_autonomy.provider_truth_matrix import (
+    provider_runtime_metrics_truth_map,
+    provider_runtime_truth_map,
+)
 from execution.business_operating_memory import (
     project_business_memory_contract_bundle,
     project_business_memory_meta_payloads,
