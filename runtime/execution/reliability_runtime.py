@@ -19,6 +19,7 @@ from reliability.idempotency_sqlite_backend import SQLiteBackendError, SQLiteIde
 from reliability.idempotency_store import JsonlIdempotencyStore
 from reliability.leader_election import LeaderElection, LeadershipLease
 from reliability.recovery_orchestrator import RecoveryOrchestrator
+from kernel.decision_crypto import decision_envelope_from_recovery_snapshot
 
 CANON_RUNTIME_RELIABILITY = True
 
@@ -303,6 +304,54 @@ class RuntimeReliability:
             run_id=latest.run_id,
             outbox_message_id=latest.outbox_message_id,
         )
+
+    def recovery_envelope_for_task_run(
+        self,
+        *,
+        tenant_id: str,
+        business_id: str,
+        task_id: str,
+        task_run_id: str,
+    ):
+        checkpoints = tuple(
+            checkpoint
+            for checkpoint in self.checkpoint_store.list_task(
+                tenant_id=tenant_id,
+                business_id=business_id,
+                task_id=task_id,
+            )
+            if str(checkpoint.task_run_id or checkpoint.run_id) == str(task_run_id)
+        )
+        if not checkpoints:
+            raise LookupError(f"task run not found: {task_run_id}")
+        latest = max(
+            checkpoints,
+            key=lambda item: (item.created_at, item.run_id, item.sequence_no, item.checkpoint_id),
+        )
+        if latest.stage != "executable_action":
+            raise RuntimeError(
+                f"recovery envelope is only admissible from executable_action, got {latest.stage}"
+            )
+        raw_snapshot = dict(latest.payload or {}).get("recovery_envelope")
+        if not isinstance(raw_snapshot, dict):
+            raise RuntimeError("executable_action checkpoint has no recovery envelope")
+        env = decision_envelope_from_recovery_snapshot(raw_snapshot)
+        decision = env.decision
+        payload = dict(getattr(decision, "payload", {}) or {})
+        expected = {
+            "tenant_id": str(tenant_id),
+            "business_id": str(business_id),
+            "task_id": str(task_id),
+            "task_run_id": str(task_run_id),
+        }
+        for name, value in expected.items():
+            if str(payload.get(name) or "") != value:
+                raise RuntimeError(f"recovery envelope {name} mismatch")
+        if latest.decision_id and str(decision.decision_id) != str(latest.decision_id):
+            raise RuntimeError("recovery envelope decision_id mismatch")
+        if latest.action_id and str(decision.action) != str(latest.action_id):
+            raise RuntimeError("recovery envelope action mismatch")
+        return env
 
     def campaign_scheduler_leader(self, *, tenant_id: str, owner_id: str, ttl_seconds: int | None = None, now=None) -> LeadershipLease | None:
         return self.scheduler_leader_election.campaign(tenant_id=tenant_id, leader_id=owner_id, ttl_seconds=ttl_seconds, now=now)
