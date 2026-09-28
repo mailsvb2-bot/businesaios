@@ -710,6 +710,35 @@ def list_integration_capabilities(
     return tuple(sorted(selected, key=lambda item: (item.surface.value, item.group, -_STATUS_RANK[item.status], item.title)))
 
 
+
+def capability_discovery_snapshot() -> tuple[dict[str, Any], ...]:
+    """Compact canonical capability truth for pre-planning discovery."""
+    return tuple(
+        {
+            'capability_id': item.capability_id,
+            'lifecycle': item.lifecycle.value,
+            'status': item.status.value,
+            'provider_keys': list(item.provider_keys),
+            'read_supported': bool(item.read_supported),
+            'write_supported': bool(item.write_supported),
+            'verify_supported': bool(item.verify_supported),
+            'health': item.health,
+            'availability': item.availability,
+            'risk': item.risk_level,
+            'cost': item.cost,
+            'latency_ms': item.latency_ms,
+            'reliability': item.reliability,
+            'reversible': item.reversible,
+            'approval_requirements': {
+                'owner_approval': bool(item.requires_owner_approval),
+                'budget_guard': bool(item.requires_budget_guard),
+                'consent': bool(item.requires_consent),
+            },
+        }
+        for item in list_integration_capabilities(include_roadmap=True)
+    )
+
+
 def capability_map() -> dict[str, IntegrationCapability]:
     return dict(_CAPABILITY_BY_ID)
 
@@ -762,6 +791,7 @@ __all__ = [
     'IntegrationCapability',
     'CAPABILITIES',
     'capability_map',
+    'capability_discovery_snapshot',
     'list_integration_capabilities',
     'list_integration_capability_payloads',
     'summarize_integration_capabilities',
