@@ -45,6 +45,21 @@ class CapabilityLifecycle(str, Enum):
     DEPRECATED = 'deprecated'
 
 
+class CapabilityHealthState(str, Enum):
+    UNKNOWN = 'unknown'
+    HEALTHY = 'healthy'
+    DEGRADED = 'degraded'
+    UNHEALTHY = 'unhealthy'
+    DISABLED = 'disabled'
+
+
+class CapabilityAvailabilityState(str, Enum):
+    UNKNOWN = 'unknown'
+    AVAILABLE = 'available'
+    DEGRADED = 'degraded'
+    UNAVAILABLE = 'unavailable'
+
+
 _STATUS_RANK = {
     CapabilityStatus.PRODUCTION_READY: 5,
     CapabilityStatus.IMPLEMENTED: 4,
@@ -102,8 +117,8 @@ class IntegrationCapability:
     input_schema: Mapping[str, Any] = field(default_factory=dict)
     output_schema: Mapping[str, Any] = field(default_factory=dict)
     lifecycle: CapabilityLifecycle | None = None
-    health: str = 'unknown'
-    availability: str = 'unknown'
+    health: CapabilityHealthState | str = CapabilityHealthState.UNKNOWN
+    availability: CapabilityAvailabilityState | str = CapabilityAvailabilityState.UNKNOWN
     cost: float = 0.0
     latency_ms: float = 0.0
     reliability: float = 0.0
@@ -140,6 +155,8 @@ class IntegrationCapability:
         lifecycle = CapabilityLifecycle(lifecycle)
         if production_ready and lifecycle is not CapabilityLifecycle.PRODUCTION_READY:
             raise ValueError('production_ready capability must use production_ready lifecycle')
+        health = CapabilityHealthState(self.health)
+        availability = CapabilityAvailabilityState(self.availability)
         cost = float(self.cost)
         latency_ms = float(self.latency_ms)
         reliability = float(self.reliability)
@@ -158,8 +175,8 @@ class IntegrationCapability:
         object.__setattr__(self, 'lifecycle', lifecycle)
         object.__setattr__(self, 'input_schema', MappingProxyType(dict(self.input_schema or {})))
         object.__setattr__(self, 'output_schema', MappingProxyType(dict(self.output_schema or {})))
-        object.__setattr__(self, 'health', str(self.health or 'unknown').strip().lower() or 'unknown')
-        object.__setattr__(self, 'availability', str(self.availability or 'unknown').strip().lower() or 'unknown')
+        object.__setattr__(self, 'health', health)
+        object.__setattr__(self, 'availability', availability)
         object.__setattr__(self, 'cost', cost)
         object.__setattr__(self, 'latency_ms', latency_ms)
         object.__setattr__(self, 'reliability', reliability)
@@ -186,9 +203,9 @@ class IntegrationCapability:
             gaps.append('input_schema')
         if not self.output_schema:
             gaps.append('output_schema')
-        if self.health == 'unknown':
+        if self.health is CapabilityHealthState.UNKNOWN:
             gaps.append('health')
-        if self.availability == 'unknown':
+        if self.availability is CapabilityAvailabilityState.UNKNOWN:
             gaps.append('availability')
         if self.connectable and not self.provider_keys:
             gaps.append('providers')
@@ -240,8 +257,8 @@ class IntegrationCapability:
             'input_schema': dict(self.input_schema),
             'output_schema': dict(self.output_schema),
             'lifecycle': self.lifecycle.value,
-            'health': self.health,
-            'availability': self.availability,
+            'health': self.health.value,
+            'availability': self.availability.value,
             'cost': self.cost,
             'latency_ms': self.latency_ms,
             'reliability': self.reliability,
@@ -700,6 +717,7 @@ CAPABILITIES: tuple[IntegrationCapability, ...] = (
 
 def _validate_capability_catalog(items: tuple[IntegrationCapability, ...]) -> dict[str, IntegrationCapability]:
     by_id: dict[str, IntegrationCapability] = {}
+    providers = provider_map()
     for item in items:
         if item.capability_id in by_id:
             raise ValueError(f'duplicate capability_id: {item.capability_id}')
@@ -710,6 +728,9 @@ def _validate_capability_catalog(items: tuple[IntegrationCapability, ...]) -> di
             )
         if item.schema_version != CAPABILITY_SCHEMA_VERSION:
             raise ValueError(f'unsupported capability schema version: {item.capability_id}')
+        unknown_providers = tuple(key for key in item.provider_keys if key not in providers)
+        if unknown_providers:
+            raise ValueError(f'unknown capability providers for {item.capability_id}: {unknown_providers}')
         by_id[item.capability_id] = item
     return by_id
 
@@ -743,8 +764,8 @@ def capability_discovery_snapshot() -> tuple[dict[str, Any], ...]:
             'read_supported': bool(item.read_supported),
             'write_supported': bool(item.write_supported),
             'verify_supported': bool(item.verify_supported),
-            'health': item.health,
-            'availability': item.availability,
+            'health': item.health.value,
+            'availability': item.availability.value,
             'risk': item.risk_level,
             'contract_complete': item.contract_complete,
             'contract_gaps': list(item.contract_gaps),
@@ -811,6 +832,8 @@ __all__ = [
     'CapabilityStatus',
     'CapabilitySurface',
     'CapabilityLifecycle',
+    'CapabilityHealthState',
+    'CapabilityAvailabilityState',
     'IntegrationCapability',
     'CAPABILITIES',
     'capability_map',

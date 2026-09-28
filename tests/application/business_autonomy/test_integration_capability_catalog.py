@@ -2,6 +2,8 @@ import pytest
 
 from application.business_autonomy.integration_capability_catalog import (
     CAPABILITY_SCHEMA_VERSION,
+    CapabilityAvailabilityState,
+    CapabilityHealthState,
     CapabilityLifecycle,
     CapabilityStatus,
     CapabilitySurface,
@@ -183,3 +185,34 @@ def test_connectable_capability_without_provider_is_reported_incomplete():
     )
     assert capability.contract_complete is False
     assert capability.contract_gaps == ("providers",)
+
+
+@pytest.mark.parametrize(
+    ("field", "value"),
+    [
+        ("health", "magical"),
+        ("availability", "sometimes"),
+    ],
+)
+def test_capability_truth_states_fail_closed(field, value):
+    kwargs = {field: value}
+    with pytest.raises(ValueError):
+        IntegrationCapability(
+            capability_id="interaction.invalid_truth",
+            title="Invalid Truth",
+            surface=CapabilitySurface.INTERACTION,
+            group="Test",
+            status=CapabilityStatus.CONTRACT_ONLY,
+            owner_text="owner",
+            next_required_step="next",
+            **kwargs,
+        )
+
+
+def test_capability_truth_state_enums_are_explicit():
+    assert {item.value for item in CapabilityHealthState} == {
+        "unknown", "healthy", "degraded", "unhealthy", "disabled"
+    }
+    assert {item.value for item in CapabilityAvailabilityState} == {
+        "unknown", "available", "degraded", "unavailable"
+    }
