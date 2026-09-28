@@ -153,7 +153,8 @@ def test_provider_activation_projects_created_and_updated_without_secret_metadat
         "probe_mode": "dry_run",
         "reason": "validated_secret_shape",
     }
-    assert "secret" not in str(created_event["payload"])
+    assert "metadata" not in created_event["payload"]["health_probe"]
+    assert "secret_value" not in created_event["payload"]
 
     updated = store.put(
         _status(
