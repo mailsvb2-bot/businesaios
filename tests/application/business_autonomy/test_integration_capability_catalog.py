@@ -1,5 +1,9 @@
+import pytest
+
 from application.business_autonomy.integration_capability_catalog import (
     CAPABILITY_SCHEMA_VERSION,
+    CapabilityLifecycle,
+    CapabilityStatus,
     CapabilitySurface,
     IntegrationCapability,
     capability_map,
@@ -89,3 +93,73 @@ def test_capability_map_is_a_copy_of_release_catalog_index():
     first.pop("interaction.telegram")
     assert "interaction.telegram" in capability_map()
     assert all(isinstance(item, IntegrationCapability) for item in capability_map().values())
+
+
+def test_capability_lifecycle_matches_canon_state_set():
+    assert {item.value for item in CapabilityLifecycle} == {
+        "defined",
+        "implemented",
+        "integrated",
+        "tested",
+        "live_verified",
+        "user_available",
+        "production_ready",
+        "degraded",
+        "disabled",
+        "deprecated",
+    }
+
+
+def test_capability_payload_exposes_canonical_contract_surface():
+    payload = capability_map()["interaction.telegram"].to_payload()
+    assert payload["lifecycle"] == "implemented"
+    assert payload["input_schema"] == {}
+    assert payload["output_schema"] == {}
+    assert payload["health"] == "unknown"
+    assert payload["availability"] == "unknown"
+    assert payload["cost"] == 0.0
+    assert payload["latency_ms"] == 0.0
+    assert payload["reliability"] == 0.0
+    assert payload["reversible"] is False
+    assert payload["approval_requirements"] == {
+        "owner_approval": True,
+        "budget_guard": False,
+        "consent": False,
+    }
+
+
+@pytest.mark.parametrize(
+    ("kwargs", "message"),
+    [
+        ({"cost": -0.01}, "cost/latency"),
+        ({"latency_ms": -1}, "cost/latency"),
+        ({"reliability": -0.01}, "reliability"),
+        ({"reliability": 1.01}, "reliability"),
+    ],
+)
+def test_capability_contract_numeric_bounds_fail_closed(kwargs, message):
+    with pytest.raises(ValueError, match=message):
+        IntegrationCapability(
+            capability_id="interaction.test",
+            title="Test",
+            surface=CapabilitySurface.INTERACTION,
+            group="Test",
+            status=CapabilityStatus.IMPLEMENTED,
+            owner_text="owner",
+            next_required_step="next",
+            **kwargs,
+        )
+
+
+def test_production_ready_capability_cannot_claim_weaker_lifecycle():
+    with pytest.raises(ValueError, match="production_ready lifecycle"):
+        IntegrationCapability(
+            capability_id="interaction.test",
+            title="Test",
+            surface=CapabilitySurface.INTERACTION,
+            group="Test",
+            status=CapabilityStatus.PRODUCTION_READY,
+            lifecycle=CapabilityLifecycle.TESTED,
+            owner_text="owner",
+            next_required_step="next",
+        )
