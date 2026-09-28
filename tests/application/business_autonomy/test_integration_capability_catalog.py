@@ -333,3 +333,18 @@ def test_capability_risk_level_reuses_canonical_risk_vocabulary():
             risk_level="magical",
         )
 
+def test_email_capability_schema_reuses_canonical_outbound_and_runtime_contract_shape():
+    email = capability_map()["interaction.email"]
+    assert "contracts.email_outbound" in email.registry_sources
+    assert "application.business_autonomy.provider_runtime_contract" in email.registry_sources
+    assert email.input_schema["required"] == ["recipient", "subject", "body"]
+    assert email.input_schema["properties"]["recipient"]["format"] == "email"
+    assert email.input_schema["properties"]["subject"]["maxLength"] == 240
+    assert email.input_schema["properties"]["body"]["maxLength"] == 100000
+    assert email.input_schema["additionalProperties"] is False
+    assert email.output_schema["required"] == [
+        "provider_key", "operation", "mode", "status", "accepted", "metadata"
+    ]
+    assert email.output_schema["properties"]["accepted"] == {"type": "boolean"}
+    assert set(email.contract_gaps) == {"health", "availability"}
+

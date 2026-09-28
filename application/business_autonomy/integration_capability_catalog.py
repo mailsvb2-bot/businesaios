@@ -307,6 +307,30 @@ def _e(source: str, claim: str, confidence: float = 1.0) -> CapabilityEvidence:
 
 _BRIDGE_INTERACTION_CAPABILITY_IDS = {'instagram': 'interaction.instagram_direct', 'messenger': 'interaction.facebook_messenger'}
 
+_EMAIL_MESSAGE_SEND_INPUT_SCHEMA = {
+    'type': 'object',
+    'required': ['recipient', 'subject', 'body'],
+    'properties': {
+        'recipient': {'type': 'string', 'format': 'email', 'minLength': 3, 'maxLength': 320},
+        'subject': {'type': 'string', 'minLength': 1, 'maxLength': 240},
+        'body': {'type': 'string', 'minLength': 1, 'maxLength': 100000},
+    },
+    'additionalProperties': False,
+}
+_PROVIDER_SYNC_RESULT_OUTPUT_SCHEMA = {
+    'type': 'object',
+    'required': ['provider_key', 'operation', 'mode', 'status', 'accepted', 'metadata'],
+    'properties': {
+        'provider_key': {'type': 'string', 'minLength': 1},
+        'operation': {'type': 'string', 'minLength': 1},
+        'mode': {'type': 'string', 'minLength': 1},
+        'status': {'type': 'string', 'minLength': 1},
+        'accepted': {'type': 'boolean'},
+        'metadata': {'type': 'object'},
+    },
+    'additionalProperties': False,
+}
+
 
 def _bridge_messaging_interaction_capabilities() -> tuple[IntegrationCapability, ...]:
     providers = provider_map()
@@ -485,9 +509,12 @@ CAPABILITIES: tuple[IntegrationCapability, ...] = (
         group='Reactivation',
         status=CapabilityStatus.PARTIAL,
         provider_keys=('email_connector',),
+        registry_sources=('application.business_autonomy.provider_catalog', 'contracts.email_outbound', 'application.business_autonomy.provider_runtime_contract'),
         read_supported=False,
         write_supported=True,
         verify_supported=False,
+        input_schema=_EMAIL_MESSAGE_SEND_INPUT_SCHEMA,
+        output_schema=_PROVIDER_SYNC_RESULT_OUTPUT_SCHEMA,
         requires_credentials=True,
         requires_consent=True,
         risk_level='medium',
