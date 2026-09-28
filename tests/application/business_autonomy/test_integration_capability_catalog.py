@@ -266,3 +266,33 @@ def test_dry_run_provider_truth_never_claims_live_health():
     assert telegram["availability"] == "available"
     assert telegram["health"] == "unknown"
     assert "health" in telegram["contract_gaps"]
+
+def test_connected_provider_cannot_promote_roadmap_capability_to_live_truth():
+    static = capability_map()["acquisition.meta_ads"]
+    assert static.status is CapabilityStatus.CONTRACT_ONLY
+    assert static.connectable is False
+
+    rows = capability_discovery_snapshot(provider_runtime_truth={
+        "meta_ads": {
+            "provider_key": "meta_ads",
+            "provider_version": 4,
+            "connected": True,
+            "onboarding_ready": True,
+            "governance_enabled": True,
+            "health_probe": {
+                "status": "probe_live_ok",
+                "probe_mode": "live",
+                "reason": "provider_credentials_are_valid",
+            },
+            "source": "event_spine.provider_activation",
+        }
+    })
+    meta_ads = {row["capability_id"]: row for row in rows}["acquisition.meta_ads"]
+
+    assert meta_ads["status"] == "contract_only"
+    assert meta_ads["availability"] == "unavailable"
+    assert meta_ads["health"] == "unknown"
+    assert "availability" not in meta_ads["contract_gaps"]
+    assert "health" in meta_ads["contract_gaps"]
+    assert meta_ads["contract_complete"] is False
+

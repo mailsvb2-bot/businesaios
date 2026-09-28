@@ -789,7 +789,7 @@ def capability_discovery_snapshot(
         ]
         availability = item.availability.value
         health = item.health.value
-        if provider_rows:
+        if provider_rows and item.connectable:
             ready = [
                 row for row in provider_rows
                 if bool(row.get('connected')) and bool(row.get('onboarding_ready'))
@@ -814,6 +814,10 @@ def capability_discovery_snapshot(
                     if probe_statuses & live_healthy
                     else CapabilityHealthState.UNHEALTHY.value
                 )
+        elif provider_rows:
+            # A connected provider cannot promote an unimplemented/contract-only
+            # business capability. Provider readiness is necessary, not sufficient.
+            availability = CapabilityAvailabilityState.UNAVAILABLE.value
         gaps = list(item.contract_gaps)
         if health != CapabilityHealthState.UNKNOWN.value and 'health' in gaps:
             gaps.remove('health')
