@@ -3,6 +3,7 @@ from __future__ import annotations
 from collections.abc import Iterable, Mapping
 from dataclasses import dataclass, field
 from enum import Enum
+from math import isfinite
 from types import MappingProxyType
 from typing import Any
 
@@ -157,9 +158,21 @@ class IntegrationCapability:
             raise ValueError('production_ready capability must use production_ready lifecycle')
         health = CapabilityHealthState(self.health)
         availability = CapabilityAvailabilityState(self.availability)
-        cost = float(self.cost)
-        latency_ms = float(self.latency_ms)
-        reliability = float(self.reliability)
+        numeric_inputs = {
+            'cost': self.cost,
+            'latency_ms': self.latency_ms,
+            'reliability': self.reliability,
+        }
+        if any(isinstance(value, bool) for value in numeric_inputs.values()):
+            raise ValueError('capability numeric truth must not use booleans')
+        try:
+            cost = float(self.cost)
+            latency_ms = float(self.latency_ms)
+            reliability = float(self.reliability)
+        except (TypeError, ValueError) as exc:
+            raise ValueError('capability numeric truth must be finite numbers') from exc
+        if not all(isfinite(value) for value in (cost, latency_ms, reliability)):
+            raise ValueError('capability numeric truth must be finite numbers')
         if cost < 0.0 or latency_ms < 0.0:
             raise ValueError('capability cost/latency must be non-negative')
         if not 0.0 <= reliability <= 1.0:
