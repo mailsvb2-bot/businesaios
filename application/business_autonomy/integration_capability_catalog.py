@@ -12,6 +12,7 @@ from application.business_autonomy.provider_catalog import (
     MESSAGING_GUARDED_WRITE_PROVIDER_KEYS,
     provider_map,
 )
+from contracts.risk import RiskLevel
 
 CANON_INTEGRATION_CAPABILITY_CATALOG = True
 CANON_CAPABILITY_ENTITY_OWNER = True
@@ -84,7 +85,16 @@ class CapabilityEvidence:
             raise ValueError('capability evidence source is required')
         if not claim:
             raise ValueError('capability evidence claim is required')
-        confidence = max(0.0, min(1.0, float(self.confidence)))
+        if isinstance(self.confidence, bool):
+            raise ValueError('capability evidence confidence must be a finite number')
+        try:
+            confidence = float(self.confidence)
+        except (TypeError, ValueError) as exc:
+            raise ValueError('capability evidence confidence must be a finite number') from exc
+        if not isfinite(confidence):
+            raise ValueError('capability evidence confidence must be a finite number')
+        if not 0.0 <= confidence <= 1.0:
+            raise ValueError('capability evidence confidence must be between 0 and 1')
         object.__setattr__(self, 'source', source)
         object.__setattr__(self, 'claim', claim)
         object.__setattr__(self, 'confidence', confidence)
@@ -158,6 +168,7 @@ class IntegrationCapability:
             raise ValueError('production_ready capability must use production_ready lifecycle')
         health = CapabilityHealthState(self.health)
         availability = CapabilityAvailabilityState(self.availability)
+        risk_level = RiskLevel(self.risk_level).value
         numeric_inputs = {
             'cost': self.cost,
             'latency_ms': self.latency_ms,
@@ -190,6 +201,7 @@ class IntegrationCapability:
         object.__setattr__(self, 'output_schema', MappingProxyType(dict(self.output_schema or {})))
         object.__setattr__(self, 'health', health)
         object.__setattr__(self, 'availability', availability)
+        object.__setattr__(self, 'risk_level', risk_level)
         object.__setattr__(self, 'cost', cost)
         object.__setattr__(self, 'latency_ms', latency_ms)
         object.__setattr__(self, 'reliability', reliability)

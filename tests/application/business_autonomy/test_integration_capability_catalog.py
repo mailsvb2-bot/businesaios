@@ -3,6 +3,7 @@ import pytest
 from application.business_autonomy.integration_capability_catalog import (
     CAPABILITY_SCHEMA_VERSION,
     CapabilityAvailabilityState,
+    CapabilityEvidence,
     CapabilityHealthState,
     CapabilityLifecycle,
     CapabilityStatus,
@@ -295,4 +296,40 @@ def test_connected_provider_cannot_promote_roadmap_capability_to_live_truth():
     assert "availability" not in meta_ads["contract_gaps"]
     assert "health" in meta_ads["contract_gaps"]
     assert meta_ads["contract_complete"] is False
+
+@pytest.mark.parametrize("value", [True, False, float("nan"), float("inf"), float("-inf"), "bad"])
+def test_capability_evidence_confidence_rejects_non_finite_and_non_numeric_truth(value):
+    with pytest.raises(ValueError, match="finite number"):
+        CapabilityEvidence(source="test", claim="claim", confidence=value)
+
+
+@pytest.mark.parametrize("value", [-0.01, 1.01])
+def test_capability_evidence_confidence_rejects_out_of_range_truth(value):
+    with pytest.raises(ValueError, match="between 0 and 1"):
+        CapabilityEvidence(source="test", claim="claim", confidence=value)
+
+
+def test_capability_risk_level_reuses_canonical_risk_vocabulary():
+    capability = IntegrationCapability(
+        capability_id="interaction.risk_test",
+        title="Risk Test",
+        surface=CapabilitySurface.INTERACTION,
+        group="Test",
+        status=CapabilityStatus.CONTRACT_ONLY,
+        owner_text="owner",
+        next_required_step="next",
+        risk_level="critical",
+    )
+    assert capability.risk_level == "critical"
+    with pytest.raises(ValueError):
+        IntegrationCapability(
+            capability_id="interaction.invalid_risk",
+            title="Invalid Risk",
+            surface=CapabilitySurface.INTERACTION,
+            group="Test",
+            status=CapabilityStatus.CONTRACT_ONLY,
+            owner_text="owner",
+            next_required_step="next",
+            risk_level="magical",
+        )
 
