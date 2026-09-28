@@ -264,6 +264,74 @@ class HeadlessExecutionContract:
             )
         )
 
+    def _resume_executable_action(
+        self,
+        *,
+        request: GoalExecutionRequest,
+        reliability: Any,
+        task_id: str,
+        task_run_id: str,
+    ) -> GoalExecutionRequest:
+        recover = getattr(reliability, "recovery_envelope_for_task_run", None)
+        execute = getattr(self._executor, "execute_pre_effect_recovery", None)
+        if not callable(recover) or not callable(execute):
+            raise RuntimeError("canonical executable-action recovery path is unavailable")
+        envelope = recover(
+            tenant_id=request.tenant_id,
+            business_id=request.business_id,
+            task_id=task_id,
+            task_run_id=task_run_id,
+        )
+        payload = dict(getattr(envelope.decision, "payload", {}) or {})
+        requested_goal_id = str(request.goal_id or "").strip()
+        recovered_goal_id = str(
+            payload.get("goal_id")
+            or dict(getattr(envelope.decision, "contract_v2", {}) or {}).get("goal_id")
+            or ""
+        ).strip()
+        if requested_goal_id and recovered_goal_id != requested_goal_id:
+            raise RuntimeError("recovery envelope goal_id mismatch")
+        agent_id = str(getattr(request, "agent_id", "") or "").strip()
+        registry = self._agent_identity_registry
+        if agent_id and registry is not None:
+            if str(payload.get("agent_id") or "").strip() != agent_id:
+                raise PermissionError("recovery envelope agent identity mismatch")
+            registry.assert_execution_authorized(
+                tenant_id=request.tenant_id,
+                business_id=request.business_id,
+                agent_id=agent_id,
+                capability=str(envelope.decision.action or ""),
+            )
+        result = execute(envelope)
+        output = dict(result.output or {}) if isinstance(result.output, dict) else {}
+        effector = dict(output.get("effector") or {}) if isinstance(output.get("effector"), dict) else {}
+        previous_feedback = {
+            "recovered_execution": True,
+            "recovery_from_task_run_id": task_run_id,
+            "decision_id": str(envelope.decision.decision_id),
+            "action": str(envelope.decision.action),
+            "action_id": str(payload.get("action_id") or ""),
+            "intent_id": str(payload.get("intent_id") or ""),
+            "attempted": bool(effector.get("attempted", True)),
+            "executed": bool(effector.get("executed", result.ok)),
+            "verified": bool(effector.get("verified", output.get("verified", False))),
+            "operator_required": bool(
+                effector.get("operator_required", output.get("operator_required", False))
+            ),
+            "error": result.error,
+            "execution_output": output,
+        }
+        return replace(
+            request,
+            meta={
+                **dict(request.meta or {}),
+                "recovery_from_task_run_id": task_run_id,
+                "recovery_action": "resume_execution",
+                "recovery_resume_stage": "executable_action",
+                "previous_feedback": previous_feedback,
+            },
+        )
+
     def _task_preemption_requested(self, request: GoalExecutionRequest) -> bool:
         task_id = str(getattr(request, "task_id", "") or "").strip()
         if not task_id or self._task_registry is None:
@@ -353,24 +421,32 @@ class HeadlessExecutionContract:
                     resume_stage = str(
                         getattr(recovery_plan, "resume_stage", "") or ""
                     ).strip()
-                    if recovery_action != "restart" or resume_stage not in {
+                    if recovery_action == "restart" and resume_stage in {
                         "",
                         "request",
                         "world_state",
                     }:
+                        request = replace(
+                            request,
+                            meta={
+                                **dict(request.meta or {}),
+                                "recovery_from_task_run_id": task_run_id,
+                                "recovery_action": recovery_action,
+                                "recovery_resume_stage": resume_stage or None,
+                            },
+                        )
+                    elif recovery_action == "resume_execution" and resume_stage == "executable_action":
+                        request = self._resume_executable_action(
+                            request=request,
+                            reliability=reliability,
+                            task_id=task_id,
+                            task_run_id=task_run_id,
+                        )
+                    else:
                         raise RuntimeError(
                             "durable task has an incomplete execution run; "
                             f"recovery action required: {recovery_action or 'unknown'}"
                         )
-                    request = replace(
-                        request,
-                        meta={
-                            **dict(request.meta or {}),
-                            "recovery_from_task_run_id": task_run_id,
-                            "recovery_action": recovery_action,
-                            "recovery_resume_stage": resume_stage or None,
-                        },
-                    )
             timeout_policy = getattr(task, "timeout_policy", None)
             if timeout_policy is not None and timeout_policy.is_task_timed_out(
                 now_ms=int(time.time() * 1000)
