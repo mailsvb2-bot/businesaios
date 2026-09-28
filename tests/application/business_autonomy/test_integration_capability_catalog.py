@@ -8,6 +8,7 @@ from application.business_autonomy.integration_capability_catalog import (
     CapabilityStatus,
     CapabilitySurface,
     IntegrationCapability,
+    capability_discovery_snapshot,
     capability_map,
     list_integration_capability_payloads,
     summarize_integration_capabilities,
@@ -216,3 +217,45 @@ def test_capability_truth_state_enums_are_explicit():
     assert {item.value for item in CapabilityAvailabilityState} == {
         "unknown", "available", "degraded", "unavailable"
     }
+
+
+def test_capability_discovery_overlays_live_provider_truth_without_mutating_catalog():
+    static = capability_map()["interaction.telegram"]
+    assert static.health is CapabilityHealthState.UNKNOWN
+    assert static.availability is CapabilityAvailabilityState.UNKNOWN
+
+    rows = capability_discovery_snapshot(provider_runtime_truth={
+        "telegram_bot": {
+            "provider_key": "telegram_bot",
+            "provider_version": 3,
+            "connected": True,
+            "onboarding_ready": True,
+            "governance_enabled": True,
+            "health_probe": {"status": "probe_live_ok", "probe_mode": "live", "reason": "ok"},
+            "source": "event_spine.provider_activation",
+        }
+    })
+    telegram = {row["capability_id"]: row for row in rows}["interaction.telegram"]
+
+    assert telegram["health"] == "healthy"
+    assert telegram["availability"] == "available"
+    assert telegram["provider_runtime"][0]["provider_version"] == 3
+    assert "health" not in telegram["contract_gaps"]
+    assert "availability" not in telegram["contract_gaps"]
+    assert set(telegram["contract_gaps"]) == {"input_schema", "output_schema"}
+
+
+def test_dry_run_provider_truth_never_claims_live_health():
+    rows = capability_discovery_snapshot(provider_runtime_truth={
+        "telegram_bot": {
+            "provider_key": "telegram_bot",
+            "provider_version": 1,
+            "connected": True,
+            "onboarding_ready": True,
+            "health_probe": {"status": "ready_for_credentials", "probe_mode": "dry_run"},
+        }
+    })
+    telegram = {row["capability_id"]: row for row in rows}["interaction.telegram"]
+    assert telegram["availability"] == "available"
+    assert telegram["health"] == "unknown"
+    assert "health" in telegram["contract_gaps"]

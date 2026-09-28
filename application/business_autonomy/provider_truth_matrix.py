@@ -5,6 +5,8 @@ from dataclasses import dataclass, field
 from enum import Enum
 from typing import Any
 
+from contracts.event_store import canonical_business_event_contract
+from core.events.event_types import PROVIDER_CREATED, PROVIDER_UPDATED
 from application.business_autonomy.integration_capability_catalog import CapabilityStatus, list_integration_capabilities
 from application.business_autonomy.provider_admin_contract import ProviderDefinition
 from application.business_autonomy.provider_catalog import (
@@ -223,6 +225,46 @@ def list_provider_truth_payloads() -> list[dict[str, Any]]:
     return [row.to_payload() for row in build_provider_truth_matrix()]
 
 
+
+def provider_runtime_truth_map(*, event_store: Any, tenant_id: str, business_id: str) -> dict[str, dict[str, Any]]:
+    """Read latest provider activation truth from the canonical Event Spine."""
+    tenant = str(tenant_id or "").strip()
+    business = str(business_id or "").strip()
+    if not tenant:
+        raise ValueError("tenant_id is required")
+    if not business:
+        raise ValueError("business_id is required")
+    if event_store is None:
+        return {}
+
+    latest: dict[str, dict[str, Any]] = {}
+    for event_type in (PROVIDER_CREATED, PROVIDER_UPDATED):
+        for raw in event_store.iter_events(tenant_id=tenant, start_ms=0, event_type=event_type):
+            event = canonical_business_event_contract(raw)
+            if str(event.get("business_id") or "").strip() != business:
+                continue
+            payload = dict(event.get("payload") or {})
+            provider_key = str(payload.get("provider_key") or "").strip()
+            version = int(payload.get("provider_version") or 0)
+            if not provider_key or version <= 0:
+                raise RuntimeError("PROVIDER_ACTIVATION_EVENT_INVALID")
+            candidate = {
+                "provider_key": provider_key,
+                "provider_version": version,
+                "connected": bool(payload.get("connected")),
+                "governance_enabled": bool(payload.get("governance_enabled")),
+                "onboarding_ready": bool(payload.get("onboarding_ready")),
+                "recorded_at_ms": int(payload.get("recorded_at_ms") or event.get("timestamp_ms") or 0),
+                "health_probe": dict(payload.get("health_probe") or {}),
+                "source": "event_spine.provider_activation",
+            }
+            current = latest.get(provider_key)
+            if current is None or version > int(current["provider_version"]):
+                latest[provider_key] = candidate
+            elif version == int(current["provider_version"]) and candidate != current:
+                raise RuntimeError("PROVIDER_ACTIVATION_EVENT_CONFLICT")
+    return latest
+
 def summarize_provider_truth(rows: Iterable[ProviderTruthRow] | None = None) -> dict[str, Any]:
     selected = tuple(rows or build_provider_truth_matrix())
     return {
@@ -240,5 +282,5 @@ def summarize_provider_truth(rows: Iterable[ProviderTruthRow] | None = None) -> 
 
 __all__ = [
     "CANON_PROVIDER_TRUTH_MATRIX", "ProviderTruthRow", "ProviderTruthStatus", "build_provider_truth_matrix",
-    "provider_truth_map", "list_provider_truth_payloads", "summarize_provider_truth",
+    "provider_truth_map", "provider_runtime_truth_map", "list_provider_truth_payloads", "summarize_provider_truth",
 ]

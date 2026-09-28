@@ -4,6 +4,7 @@ from dataclasses import replace
 from typing import Any
 
 from application.business_autonomy.integration_capability_catalog import capability_discovery_snapshot
+from application.business_autonomy.provider_truth_matrix import provider_runtime_truth_map
 from execution.business_operating_memory import (
     project_business_memory_contract_bundle,
     project_business_memory_meta_payloads,
@@ -268,8 +269,25 @@ class AutonomyStateAssembly:
             meta = dict(getattr(state, "meta", {}) or {})
             meta["runtime_capabilities"] = runtime_snapshot
             state = replace(state, meta=meta)
+        provider_runtime_truth: dict[str, dict[str, Any]] = {}
+        event_store = getattr(self._contract, "_event_store", None)
+        if event_store is not None:
+            try:
+                provider_runtime_truth = provider_runtime_truth_map(
+                    event_store=event_store,
+                    tenant_id=request.tenant_id,
+                    business_id=request.business_id,
+                )
+            except Exception as exc:
+                trace.record(
+                    event_type="capability_discovery_runtime_truth_failed",
+                    step_index=step_index,
+                    payload={"error": type(exc).__name__, "message": str(exc)},
+                )
         meta = dict(getattr(state, "meta", {}) or {})
-        meta["capability_discovery"] = capability_discovery_snapshot()
+        meta["capability_discovery"] = capability_discovery_snapshot(
+            provider_runtime_truth=provider_runtime_truth
+        )
         state = replace(state, meta=meta)
         adapter = getattr(self._contract, "_business_memory_state_adapter", None)
         if adapter is not None:

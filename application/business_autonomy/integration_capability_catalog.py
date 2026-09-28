@@ -753,22 +753,73 @@ def list_integration_capabilities(
 
 
 
-def capability_discovery_snapshot() -> tuple[dict[str, Any], ...]:
+def capability_discovery_snapshot(
+    *,
+    provider_runtime_truth: Mapping[str, Mapping[str, Any]] | None = None,
+) -> tuple[dict[str, Any], ...]:
     """Compact canonical capability truth for pre-planning discovery."""
-    return tuple(
-        {
+    runtime_truth = dict(provider_runtime_truth or {})
+    rows: list[dict[str, Any]] = []
+    live_healthy = {'probe_live_ok'}
+    live_unhealthy = {
+        'probe_live_failed',
+        'probe_rejected_misconfigured',
+        'misconfigured',
+        'invalid_secret_shape',
+        'missing_required_secrets',
+    }
+    for item in list_integration_capabilities(include_roadmap=True):
+        provider_rows = [
+            dict(runtime_truth[key])
+            for key in item.provider_keys
+            if key in runtime_truth
+        ]
+        availability = item.availability.value
+        health = item.health.value
+        if provider_rows:
+            ready = [
+                row for row in provider_rows
+                if bool(row.get('connected')) and bool(row.get('onboarding_ready'))
+            ]
+            availability = (
+                CapabilityAvailabilityState.AVAILABLE.value
+                if len(ready) == len(item.provider_keys)
+                else CapabilityAvailabilityState.DEGRADED.value
+                if ready
+                else CapabilityAvailabilityState.UNAVAILABLE.value
+            )
+            probe_statuses = {
+                str(dict(row.get('health_probe') or {}).get('status') or '').strip()
+                for row in provider_rows
+            }
+            probe_statuses.discard('')
+            if probe_statuses and probe_statuses <= live_healthy:
+                health = CapabilityHealthState.HEALTHY.value
+            elif probe_statuses & live_unhealthy:
+                health = (
+                    CapabilityHealthState.DEGRADED.value
+                    if probe_statuses & live_healthy
+                    else CapabilityHealthState.UNHEALTHY.value
+                )
+        gaps = list(item.contract_gaps)
+        if health != CapabilityHealthState.UNKNOWN.value and 'health' in gaps:
+            gaps.remove('health')
+        if availability != CapabilityAvailabilityState.UNKNOWN.value and 'availability' in gaps:
+            gaps.remove('availability')
+        rows.append({
             'capability_id': item.capability_id,
             'lifecycle': item.lifecycle.value,
             'status': item.status.value,
             'provider_keys': list(item.provider_keys),
+            'provider_runtime': provider_rows,
             'read_supported': bool(item.read_supported),
             'write_supported': bool(item.write_supported),
             'verify_supported': bool(item.verify_supported),
-            'health': item.health.value,
-            'availability': item.availability.value,
+            'health': health,
+            'availability': availability,
             'risk': item.risk_level,
-            'contract_complete': item.contract_complete,
-            'contract_gaps': list(item.contract_gaps),
+            'contract_complete': not gaps,
+            'contract_gaps': gaps,
             'cost': item.cost,
             'latency_ms': item.latency_ms,
             'reliability': item.reliability,
@@ -778,9 +829,8 @@ def capability_discovery_snapshot() -> tuple[dict[str, Any], ...]:
                 'budget_guard': bool(item.requires_budget_guard),
                 'consent': bool(item.requires_consent),
             },
-        }
-        for item in list_integration_capabilities(include_roadmap=True)
-    )
+        })
+    return tuple(rows)
 
 
 def capability_map() -> dict[str, IntegrationCapability]:
