@@ -271,11 +271,17 @@ class HeadlessExecutionContract:
         reliability: Any,
         task_id: str,
         task_run_id: str,
+        resume_stage: str,
     ) -> GoalExecutionRequest:
         recover = getattr(reliability, "recovery_envelope_for_task_run", None)
-        execute = getattr(self._executor, "execute_pre_effect_recovery", None)
+        execute_name = (
+            "execute_decision_recovery"
+            if resume_stage == "decision"
+            else "execute_pre_effect_recovery"
+        )
+        execute = getattr(self._executor, execute_name, None)
         if not callable(recover) or not callable(execute):
-            raise RuntimeError("canonical executable-action recovery path is unavailable")
+            raise RuntimeError("canonical pre-effect recovery path is unavailable")
         envelope = recover(
             tenant_id=request.tenant_id,
             business_id=request.business_id,
@@ -327,7 +333,7 @@ class HeadlessExecutionContract:
                 **dict(request.meta or {}),
                 "recovery_from_task_run_id": task_run_id,
                 "recovery_action": "resume_execution",
-                "recovery_resume_stage": "executable_action",
+                "recovery_resume_stage": resume_stage,
                 "previous_feedback": previous_feedback,
             },
         )
@@ -361,7 +367,7 @@ class HeadlessExecutionContract:
         task_conflict_heartbeat = None
         task_status = ""
         task_execution_version: int | None = None
-        pending_executable_recovery: tuple[Any, str] | None = None
+        pending_pre_effect_recovery: tuple[Any, str, str] | None = None
         if task_id:
             if self._task_registry is None:
                 raise RuntimeError("canonical task registry is required for task-bound execution")
@@ -436,8 +442,15 @@ class HeadlessExecutionContract:
                                 "recovery_resume_stage": resume_stage or None,
                             },
                         )
-                    elif recovery_action == "resume_execution" and resume_stage == "executable_action":
-                        pending_executable_recovery = (reliability, task_run_id)
+                    elif recovery_action == "resume_execution" and resume_stage in {
+                        "decision",
+                        "executable_action",
+                    }:
+                        pending_pre_effect_recovery = (
+                            reliability,
+                            task_run_id,
+                            resume_stage,
+                        )
                         request = replace(
                             request,
                             meta={
@@ -508,13 +521,16 @@ class HeadlessExecutionContract:
                 task_conflict_leases = None
 
         try:
-            if pending_executable_recovery is not None:
-                recovery_reliability, recovery_task_run_id = pending_executable_recovery
+            if pending_pre_effect_recovery is not None:
+                recovery_reliability, recovery_task_run_id, recovery_stage = (
+                    pending_pre_effect_recovery
+                )
                 request = self._resume_executable_action(
                     request=request,
                     reliability=recovery_reliability,
                     task_id=task_id,
                     task_run_id=recovery_task_run_id,
+                    resume_stage=recovery_stage,
                 )
             if task_id and task_status == "ready":
                 start_task = getattr(self._task_registry, "start", None)
