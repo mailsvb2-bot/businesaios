@@ -226,6 +226,7 @@ class DurableTask:
     task_id: str
     tenant_id: str
     business_id: str
+    goal_id: str | None = None
     title: str | None = None
     priority: int = 50
     conflict_keys: tuple[str, ...] = ()
@@ -244,6 +245,8 @@ class DurableTask:
     def __post_init__(self) -> None:
         for field_name in ("task_id", "tenant_id", "business_id"):
             object.__setattr__(self, field_name, _required(getattr(self, field_name), field_name))
+        if self.goal_id is not None:
+            object.__setattr__(self, "goal_id", _required(self.goal_id, "goal_id"))
         object.__setattr__(self, "title", _optional(self.title, "title"))
         if isinstance(self.priority, bool):
             raise ValueError("task priority must be an integer")
