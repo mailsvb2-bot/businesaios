@@ -16,7 +16,7 @@ from contracts.risk import RiskLevel
 
 CANON_INTEGRATION_CAPABILITY_CATALOG = True
 CANON_CAPABILITY_ENTITY_OWNER = True
-CAPABILITY_SCHEMA_VERSION = 1
+CAPABILITY_SCHEMA_VERSION = 2
 
 
 class CapabilityStatus(str, Enum):
@@ -130,9 +130,9 @@ class IntegrationCapability:
     lifecycle: CapabilityLifecycle | None = None
     health: CapabilityHealthState | str = CapabilityHealthState.UNKNOWN
     availability: CapabilityAvailabilityState | str = CapabilityAvailabilityState.UNKNOWN
-    cost: float = 0.0
-    latency_ms: float = 0.0
-    reliability: float = 0.0
+    cost: float | None = None
+    latency_ms: float | None = None
+    reliability: float | None = None
     reversible: bool = False
     evidence: tuple[CapabilityEvidence, ...] = field(default_factory=tuple)
     metadata: Mapping[str, Any] = field(default_factory=dict)
@@ -174,19 +174,26 @@ class IntegrationCapability:
             'latency_ms': self.latency_ms,
             'reliability': self.reliability,
         }
-        if any(isinstance(value, bool) for value in numeric_inputs.values()):
-            raise ValueError('capability numeric truth must not use booleans')
-        try:
-            cost = float(self.cost)
-            latency_ms = float(self.latency_ms)
-            reliability = float(self.reliability)
-        except (TypeError, ValueError) as exc:
-            raise ValueError('capability numeric truth must be finite numbers') from exc
-        if not all(isfinite(value) for value in (cost, latency_ms, reliability)):
-            raise ValueError('capability numeric truth must be finite numbers')
-        if cost < 0.0 or latency_ms < 0.0:
+        normalized_numeric: dict[str, float | None] = {}
+        for name, value in numeric_inputs.items():
+            if value is None:
+                normalized_numeric[name] = None
+                continue
+            if isinstance(value, bool):
+                raise ValueError('capability numeric truth must not use booleans')
+            try:
+                normalized = float(value)
+            except (TypeError, ValueError) as exc:
+                raise ValueError('capability numeric truth must be finite numbers') from exc
+            if not isfinite(normalized):
+                raise ValueError('capability numeric truth must be finite numbers')
+            normalized_numeric[name] = normalized
+        cost = normalized_numeric['cost']
+        latency_ms = normalized_numeric['latency_ms']
+        reliability = normalized_numeric['reliability']
+        if cost is not None and cost < 0.0 or latency_ms is not None and latency_ms < 0.0:
             raise ValueError('capability cost/latency must be non-negative')
-        if not 0.0 <= reliability <= 1.0:
+        if reliability is not None and not 0.0 <= reliability <= 1.0:
             raise ValueError('capability reliability must be between 0 and 1')
         object.__setattr__(self, 'capability_id', capability_id)
         object.__setattr__(self, 'title', title)
@@ -232,6 +239,12 @@ class IntegrationCapability:
             gaps.append('health')
         if self.availability is CapabilityAvailabilityState.UNKNOWN:
             gaps.append('availability')
+        if self.cost is None:
+            gaps.append('cost')
+        if self.latency_ms is None:
+            gaps.append('latency_ms')
+        if self.reliability is None:
+            gaps.append('reliability')
         if self.connectable and not self.provider_keys:
             gaps.append('providers')
         return tuple(gaps)

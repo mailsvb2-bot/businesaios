@@ -81,9 +81,9 @@ def test_every_external_messaging_provider_has_honest_interaction_capability():
 
 def test_capability_definitions_are_versioned_and_immutable():
     capability = capability_map()["interaction.telegram"]
-    assert capability.schema_version == CAPABILITY_SCHEMA_VERSION == 1
+    assert capability.schema_version == CAPABILITY_SCHEMA_VERSION == 2
     payload = capability.to_payload()
-    assert payload["schema_version"] == 1
+    assert payload["schema_version"] == 2
     try:
         capability.metadata["forged"] = True
     except TypeError:
@@ -121,12 +121,12 @@ def test_capability_payload_exposes_canonical_contract_surface():
     assert payload["output_schema"] == {}
     assert payload["health"] == "unknown"
     assert payload["availability"] == "unknown"
-    assert payload["cost"] == 0.0
-    assert payload["latency_ms"] == 0.0
-    assert payload["reliability"] == 0.0
+    assert payload["cost"] is None
+    assert payload["latency_ms"] is None
+    assert payload["reliability"] is None
     assert payload["reversible"] is False
     assert payload["contract_complete"] is False
-    assert set(payload["contract_gaps"]) == {"input_schema", "output_schema", "health", "availability"}
+    assert set(payload["contract_gaps"]) == {"input_schema", "output_schema", "health", "availability", "cost", "latency_ms", "reliability"}
     assert payload["approval_requirements"] == {
         "owner_approval": True,
         "budget_guard": False,
@@ -193,7 +193,7 @@ def test_connectable_capability_without_provider_is_reported_incomplete():
         availability="available",
     )
     assert capability.contract_complete is False
-    assert capability.contract_gaps == ("providers",)
+    assert set(capability.contract_gaps) == {"cost", "latency_ms", "reliability", "providers"}
 
 
 @pytest.mark.parametrize(
@@ -250,7 +250,7 @@ def test_capability_discovery_overlays_live_provider_truth_without_mutating_cata
     assert telegram["provider_runtime"][0]["provider_version"] == 3
     assert "health" not in telegram["contract_gaps"]
     assert "availability" not in telegram["contract_gaps"]
-    assert set(telegram["contract_gaps"]) == {"input_schema", "output_schema"}
+    assert set(telegram["contract_gaps"]) == {"input_schema", "output_schema", "cost", "latency_ms", "reliability"}
 
 
 def test_dry_run_provider_truth_never_claims_live_health():
@@ -346,5 +346,39 @@ def test_email_capability_schema_reuses_canonical_outbound_and_runtime_contract_
         "provider_key", "operation", "mode", "status", "accepted", "metadata"
     ]
     assert email.output_schema["properties"]["accepted"] == {"type": "boolean"}
-    assert set(email.contract_gaps) == {"health", "availability"}
+    assert set(email.contract_gaps) == {"health", "availability", "cost", "latency_ms", "reliability"}
+
+def test_unknown_numeric_capability_truth_is_explicit_and_not_zero():
+    capability = IntegrationCapability(
+        capability_id="interaction.unknown_numeric_truth",
+        title="Unknown Numeric Truth",
+        surface=CapabilitySurface.INTERACTION,
+        group="Test",
+        status=CapabilityStatus.CONTRACT_ONLY,
+        owner_text="owner",
+        next_required_step="next",
+    )
+    payload = capability.to_payload()
+    assert payload["cost"] is None
+    assert payload["latency_ms"] is None
+    assert payload["reliability"] is None
+    assert {"cost", "latency_ms", "reliability"} <= set(payload["contract_gaps"])
+
+
+def test_measured_numeric_capability_truth_closes_only_its_own_gaps():
+    capability = IntegrationCapability(
+        capability_id="interaction.measured_numeric_truth",
+        title="Measured Numeric Truth",
+        surface=CapabilitySurface.INTERACTION,
+        group="Test",
+        status=CapabilityStatus.CONTRACT_ONLY,
+        owner_text="owner",
+        next_required_step="next",
+        cost=0.0,
+        latency_ms=0.0,
+        reliability=1.0,
+    )
+    assert "cost" not in capability.contract_gaps
+    assert "latency_ms" not in capability.contract_gaps
+    assert "reliability" not in capability.contract_gaps
 
