@@ -6,6 +6,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+from kernel.decision_crypto import decision_envelope_from_recovery_snapshot
 from reliability.distributed_lock import DistributedLock, build_distributed_lock
 from reliability.execution_checkpoint_store import (
     CANON_CHECKPOINT_STAGE_ORDER,
@@ -19,7 +20,6 @@ from reliability.idempotency_sqlite_backend import SQLiteBackendError, SQLiteIde
 from reliability.idempotency_store import JsonlIdempotencyStore
 from reliability.leader_election import LeaderElection, LeadershipLease
 from reliability.recovery_orchestrator import RecoveryOrchestrator
-from kernel.decision_crypto import decision_envelope_from_recovery_snapshot
 
 CANON_RUNTIME_RELIABILITY = True
 
