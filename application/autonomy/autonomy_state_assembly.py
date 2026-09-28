@@ -3,6 +3,7 @@ from __future__ import annotations
 from dataclasses import replace
 from typing import Any
 
+from application.business_autonomy.integration_capability_catalog import capability_discovery_snapshot
 from execution.business_operating_memory import (
     project_business_memory_contract_bundle,
     project_business_memory_meta_payloads,
@@ -267,6 +268,9 @@ class AutonomyStateAssembly:
             meta = dict(getattr(state, "meta", {}) or {})
             meta["runtime_capabilities"] = runtime_snapshot
             state = replace(state, meta=meta)
+        meta = dict(getattr(state, "meta", {}) or {})
+        meta["capability_discovery"] = capability_discovery_snapshot()
+        state = replace(state, meta=meta)
         adapter = getattr(self._contract, "_business_memory_state_adapter", None)
         if adapter is not None:
             inject_context = getattr(adapter, "inject_context", None)
