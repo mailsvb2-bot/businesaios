@@ -5,8 +5,6 @@ from dataclasses import dataclass, field
 from enum import Enum
 from typing import Any
 
-from contracts.event_store import canonical_business_event_contract
-from core.events.event_types import PROVIDER_CREATED, PROVIDER_UPDATED
 from application.business_autonomy.integration_capability_catalog import CapabilityStatus, list_integration_capabilities
 from application.business_autonomy.provider_admin_contract import ProviderDefinition
 from application.business_autonomy.provider_catalog import (
@@ -14,6 +12,8 @@ from application.business_autonomy.provider_catalog import (
     MESSAGING_GUARDED_WRITE_PROVIDER_KEYS,
     PROVIDERS,
 )
+from contracts.event_store import canonical_business_event_contract
+from core.events.event_types import PROVIDER_CREATED, PROVIDER_UPDATED
 from runtime.business_autonomy.provider_sync_runtime import ProviderSyncRuntimePlanner
 from runtime.business_autonomy.provider_transport_bindings import ProviderTransportBindings
 
