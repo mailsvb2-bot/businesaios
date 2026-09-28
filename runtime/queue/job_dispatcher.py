@@ -250,6 +250,7 @@ def build_task_job_request(
         "tenant_id": task.tenant_id,
         "business_id": task.business_id,
         "task_id": task.task_id,
+        "goal_id": task.goal_id,
         "task_priority": task.priority,
         "task_conflict_keys": list(task.conflict_keys),
         "durable_task_retry_policy": task.retry_policy.to_dict(),
