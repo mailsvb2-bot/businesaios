@@ -179,6 +179,25 @@ class IntegrationCapability:
     def roadmap_only(self) -> bool:
         return not self.connectable
 
+    @property
+    def contract_gaps(self) -> tuple[str, ...]:
+        gaps: list[str] = []
+        if not self.input_schema:
+            gaps.append('input_schema')
+        if not self.output_schema:
+            gaps.append('output_schema')
+        if self.health == 'unknown':
+            gaps.append('health')
+        if self.availability == 'unknown':
+            gaps.append('availability')
+        if self.connectable and not self.provider_keys:
+            gaps.append('providers')
+        return tuple(gaps)
+
+    @property
+    def contract_complete(self) -> bool:
+        return not self.contract_gaps
+
     def to_payload(self, *, active_provider_keys: Iterable[str] = ()) -> dict[str, Any]:
         active = {str(item).strip() for item in active_provider_keys if str(item).strip()}
         provider_rows = []
@@ -216,6 +235,8 @@ class IntegrationCapability:
             'requires_consent': bool(self.requires_consent),
             'requires_admin_surface': bool(self.requires_admin_surface),
             'risk_level': self.risk_level,
+            'contract_complete': self.contract_complete,
+            'contract_gaps': list(self.contract_gaps),
             'input_schema': dict(self.input_schema),
             'output_schema': dict(self.output_schema),
             'lifecycle': self.lifecycle.value,
@@ -725,6 +746,8 @@ def capability_discovery_snapshot() -> tuple[dict[str, Any], ...]:
             'health': item.health,
             'availability': item.availability,
             'risk': item.risk_level,
+            'contract_complete': item.contract_complete,
+            'contract_gaps': list(item.contract_gaps),
             'cost': item.cost,
             'latency_ms': item.latency_ms,
             'reliability': item.reliability,
