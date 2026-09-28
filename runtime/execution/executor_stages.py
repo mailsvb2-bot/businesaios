@@ -77,7 +77,6 @@ def _mark_execution_failed(*, executor: Any, env: Any, reason: str) -> None:
 
 def preflight_and_verify(*, executor: Any, env: Any, timescale: TimeScale) -> None:
     _checkpoint(executor=executor, env=env, stage="request", payload={"timescale": str(timescale.value if hasattr(timescale, "value") else timescale)})
-    _checkpoint(executor=executor, env=env, stage="decision", payload={"action": str(env.decision.action)})
     # Authenticate the envelope before any operational policy gate. Otherwise a
     # global safe-mode state can mask payload/signature/TTL/replay failures and
     # the security regression wall stops exercising the intended controls.
@@ -92,6 +91,15 @@ def preflight_and_verify(*, executor: Any, env: Any, timescale: TimeScale) -> No
     project_action_authorized_event(
         event_store=getattr(getattr(executor, "_runtime_infra", None), "event_store", None),
         decision=env.decision,
+    )
+    _checkpoint(
+        executor=executor,
+        env=env,
+        stage="decision",
+        payload={
+            "action": str(env.decision.action),
+            "recovery_envelope": decision_envelope_recovery_snapshot(env),
+        },
     )
     executor._guard.execute_once(env)
     _checkpoint(
