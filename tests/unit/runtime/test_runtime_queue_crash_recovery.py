@@ -9,7 +9,7 @@ from runtime.queue.job_contract import JobDispatchRequest, utc_now
 from runtime.queue.job_janitor import JobQueueJanitor
 from runtime.queue.job_store_sqlite import SqliteJobStore
 
-CTX = get_context("fork")
+CTX = get_context("spawn")
 
 
 def _request() -> JobDispatchRequest:

@@ -1,16 +1,18 @@
-from __future__ import annotations
-
 """Execution checkpoints for crash-safe single-path runtime flow."""
 
-from dataclasses import asdict, dataclass, field
-from datetime import datetime, timezone
-from pathlib import Path
-from typing import Any, Mapping, Protocol
+from __future__ import annotations
+
 import json
+import os
 import threading
+from collections.abc import Mapping
+from dataclasses import asdict, dataclass, field
+from datetime import UTC, datetime
+from pathlib import Path
+from typing import Any, Protocol
 
+from contracts.task import DurableTaskRun, DurableTaskStep
 from core.tenancy.normalization import require_tenant_id
-
 
 CANON_EXECUTION_CHECKPOINT_STORE = True
 CANON_CHECKPOINT_STAGE_ORDER = (
@@ -29,7 +31,7 @@ _STAGE_INDEX = {name: index for index, name in enumerate(CANON_CHECKPOINT_STAGE_
 
 
 def utc_now() -> datetime:
-    return datetime.now(timezone.utc)
+    return datetime.now(UTC)
 
 
 @dataclass(frozen=True)
@@ -45,6 +47,10 @@ class ExecutionCheckpoint:
     action_id: str | None = None
     idempotency_key: str | None = None
     outbox_message_id: str | None = None
+    business_id: str | None = None
+    task_id: str | None = None
+    task_run_id: str | None = None
+    step_id: str | None = None
     payload: Mapping[str, Any] = field(default_factory=dict)
 
     def validate(self) -> None:
@@ -59,6 +65,16 @@ class ExecutionCheckpoint:
             raise ValueError("checkpoint_id is required")
         if self.created_at.tzinfo is None:
             raise ValueError("created_at must be timezone-aware")
+        business_id = str(self.business_id or "").strip()
+        task_id = str(self.task_id or "").strip()
+        task_run_id = str(self.task_run_id or "").strip()
+        step_id = str(self.step_id or "").strip()
+        if task_id and not business_id:
+            raise ValueError("task-scoped checkpoint requires business_id")
+        if task_run_id and not task_id:
+            raise ValueError("task run checkpoint requires task_id")
+        if step_id and not task_id:
+            raise ValueError("step-scoped checkpoint requires task_id")
 
     def to_row(self) -> dict[str, Any]:
         self.validate()
@@ -68,7 +84,7 @@ class ExecutionCheckpoint:
         return row
 
     @classmethod
-    def from_row(cls, row: Mapping[str, Any]) -> "ExecutionCheckpoint":
+    def from_row(cls, row: Mapping[str, Any]) -> ExecutionCheckpoint:
         created_at = datetime.fromisoformat(str(row["created_at"]))
         if created_at.tzinfo is None:
             raise ValueError("created_at must be timezone-aware")
@@ -84,6 +100,10 @@ class ExecutionCheckpoint:
             action_id=row.get("action_id"),
             idempotency_key=row.get("idempotency_key"),
             outbox_message_id=row.get("outbox_message_id"),
+            business_id=row.get("business_id"),
+            task_id=row.get("task_id"),
+            task_run_id=row.get("task_run_id"),
+            step_id=row.get("step_id"),
             payload=dict(row.get("payload") or {}),
         )
         checkpoint.validate()
@@ -94,6 +114,17 @@ class ExecutionCheckpointStore(Protocol):
     def append(self, checkpoint: ExecutionCheckpoint) -> None: ...
     def latest(self, *, tenant_id: str, run_id: str) -> ExecutionCheckpoint | None: ...
     def list_run(self, *, tenant_id: str, run_id: str) -> tuple[ExecutionCheckpoint, ...]: ...
+    def list_task(self, *, tenant_id: str, business_id: str, task_id: str) -> tuple[ExecutionCheckpoint, ...]: ...
+    def latest_for_task(self, *, tenant_id: str, business_id: str, task_id: str) -> ExecutionCheckpoint | None: ...
+    def list_task_runs(self, *, tenant_id: str, business_id: str, task_id: str) -> tuple[DurableTaskRun, ...]: ...
+    def list_run_steps(
+        self,
+        *,
+        tenant_id: str,
+        business_id: str,
+        task_id: str,
+        run_id: str,
+    ) -> tuple[DurableTaskStep, ...]: ...
 
 
 class InMemoryExecutionCheckpointStore(ExecutionCheckpointStore):
@@ -106,17 +137,22 @@ class InMemoryExecutionCheckpointStore(ExecutionCheckpointStore):
         cache_key = (checkpoint.tenant_id, checkpoint.run_id)
         with self._lock:
             items = self._items.setdefault(cache_key, [])
+            if any(item.checkpoint_id == checkpoint.checkpoint_id for item in items):
+                raise ValueError("checkpoint_id must be unique within run")
             if items:
                 latest = items[-1]
                 if checkpoint.sequence_no <= latest.sequence_no:
                     raise ValueError("checkpoint sequence_no must strictly increase")
-                if checkpoint.checkpoint_id == latest.checkpoint_id:
-                    raise ValueError("checkpoint_id must be unique within run")
                 current_index = _STAGE_INDEX.get(str(latest.stage))
                 new_index = _STAGE_INDEX.get(str(checkpoint.stage))
-                if current_index is not None and new_index is not None and latest.stage != "failed":
-                    if new_index < current_index and checkpoint.stage != "failed":
-                        raise ValueError("checkpoint stage order must not move backwards")
+                if (
+                    current_index is not None
+                    and new_index is not None
+                    and latest.stage != "failed"
+                    and new_index < current_index
+                    and checkpoint.stage != "failed"
+                ):
+                    raise ValueError("checkpoint stage order must not move backwards")
             items.append(checkpoint)
 
     def latest(self, *, tenant_id: str, run_id: str) -> ExecutionCheckpoint | None:
@@ -127,6 +163,114 @@ class InMemoryExecutionCheckpointStore(ExecutionCheckpointStore):
     def list_run(self, *, tenant_id: str, run_id: str) -> tuple[ExecutionCheckpoint, ...]:
         with self._lock:
             return tuple(self._items.get((require_tenant_id(tenant_id), str(run_id)), []))
+
+    def list_task(self, *, tenant_id: str, business_id: str, task_id: str) -> tuple[ExecutionCheckpoint, ...]:
+        tenant = require_tenant_id(tenant_id)
+        business = str(business_id or "").strip()
+        task = str(task_id or "").strip()
+        if not business or not task:
+            raise ValueError("business_id and task_id are required")
+        with self._lock:
+            matches = [
+                item
+                for (item_tenant, _), items in self._items.items()
+                if item_tenant == tenant
+                for item in items
+                if str(item.business_id or "") == business and str(item.task_id or "") == task
+            ]
+        matches.sort(key=lambda item: (item.created_at, item.run_id, item.sequence_no, item.checkpoint_id))
+        return tuple(matches)
+
+    def latest_for_task(self, *, tenant_id: str, business_id: str, task_id: str) -> ExecutionCheckpoint | None:
+        items = self.list_task(tenant_id=tenant_id, business_id=business_id, task_id=task_id)
+        return items[-1] if items else None
+
+    def list_task_runs(
+        self,
+        *,
+        tenant_id: str,
+        business_id: str,
+        task_id: str,
+    ) -> tuple[DurableTaskRun, ...]:
+        items = self.list_task(
+            tenant_id=tenant_id,
+            business_id=business_id,
+            task_id=task_id,
+        )
+        grouped: dict[str, list[ExecutionCheckpoint]] = {}
+        for item in items:
+            grouped.setdefault(str(item.task_run_id or item.run_id), []).append(item)
+        runs: list[DurableTaskRun] = []
+        for task_run_id, checkpoints in grouped.items():
+            checkpoints.sort(
+                key=lambda item: (item.created_at, item.run_id, item.sequence_no, item.checkpoint_id)
+            )
+            first, latest = checkpoints[0], checkpoints[-1]
+            runs.append(
+                DurableTaskRun(
+                    tenant_id=first.tenant_id,
+                    business_id=str(first.business_id or ""),
+                    task_id=str(first.task_id or ""),
+                    run_id=task_run_id,
+                    started_at_ms=int(first.created_at.timestamp() * 1000),
+                    updated_at_ms=int(latest.created_at.timestamp() * 1000),
+                    checkpoint_count=len(checkpoints),
+                    terminal_stage=(
+                        latest.stage if latest.stage in {"completed", "failed"} else None
+                    ),
+                )
+            )
+        runs.sort(key=lambda item: (item.started_at_ms, item.run_id))
+        return tuple(runs)
+
+    def list_run_steps(
+        self,
+        *,
+        tenant_id: str,
+        business_id: str,
+        task_id: str,
+        run_id: str,
+    ) -> tuple[DurableTaskStep, ...]:
+        tenant = require_tenant_id(tenant_id)
+        business = str(business_id or "").strip()
+        task = str(task_id or "").strip()
+        task_run = str(run_id or "").strip()
+        if not business or not task or not task_run:
+            raise ValueError("business_id, task_id and run_id are required")
+        items = [
+            item
+            for item in self.list_task(
+                tenant_id=tenant,
+                business_id=business,
+                task_id=task,
+            )
+            if str(item.task_run_id or item.run_id) == task_run
+            and str(item.step_id or "").strip()
+        ]
+        grouped: dict[str, list[ExecutionCheckpoint]] = {}
+        for item in items:
+            grouped.setdefault(str(item.step_id), []).append(item)
+        steps: list[DurableTaskStep] = []
+        for step_id, checkpoints in grouped.items():
+            checkpoints.sort(
+                key=lambda item: (item.created_at, item.run_id, item.sequence_no, item.checkpoint_id)
+            )
+            latest = checkpoints[-1]
+            steps.append(
+                DurableTaskStep(
+                    tenant_id=tenant,
+                    business_id=business,
+                    task_id=task,
+                    run_id=task_run,
+                    step_id=step_id,
+                    first_sequence_no=min(item.sequence_no for item in checkpoints),
+                    last_sequence_no=max(item.sequence_no for item in checkpoints),
+                    checkpoint_count=len(checkpoints),
+                    latest_stage=latest.stage,
+                )
+            )
+        steps.sort(key=lambda item: (item.first_sequence_no, item.step_id))
+        return tuple(steps)
 
 
 class JsonlExecutionCheckpointStore(ExecutionCheckpointStore):
@@ -148,12 +292,47 @@ class JsonlExecutionCheckpointStore(ExecutionCheckpointStore):
             with self._path.open("a", encoding="utf-8") as fh:
                 fh.write(json.dumps(checkpoint.to_row(), ensure_ascii=False, sort_keys=True) + "\n")
                 fh.flush()
+                os.fsync(fh.fileno())
 
     def latest(self, *, tenant_id: str, run_id: str) -> ExecutionCheckpoint | None:
         return self._cache.latest(tenant_id=tenant_id, run_id=run_id)
 
     def list_run(self, *, tenant_id: str, run_id: str) -> tuple[ExecutionCheckpoint, ...]:
         return self._cache.list_run(tenant_id=tenant_id, run_id=run_id)
+
+    def list_task(self, *, tenant_id: str, business_id: str, task_id: str) -> tuple[ExecutionCheckpoint, ...]:
+        return self._cache.list_task(tenant_id=tenant_id, business_id=business_id, task_id=task_id)
+
+    def latest_for_task(self, *, tenant_id: str, business_id: str, task_id: str) -> ExecutionCheckpoint | None:
+        return self._cache.latest_for_task(tenant_id=tenant_id, business_id=business_id, task_id=task_id)
+
+    def list_task_runs(
+        self,
+        *,
+        tenant_id: str,
+        business_id: str,
+        task_id: str,
+    ) -> tuple[DurableTaskRun, ...]:
+        return self._cache.list_task_runs(
+            tenant_id=tenant_id,
+            business_id=business_id,
+            task_id=task_id,
+        )
+
+    def list_run_steps(
+        self,
+        *,
+        tenant_id: str,
+        business_id: str,
+        task_id: str,
+        run_id: str,
+    ) -> tuple[DurableTaskStep, ...]:
+        return self._cache.list_run_steps(
+            tenant_id=tenant_id,
+            business_id=business_id,
+            task_id=task_id,
+            run_id=run_id,
+        )
 
 
 __all__ = [

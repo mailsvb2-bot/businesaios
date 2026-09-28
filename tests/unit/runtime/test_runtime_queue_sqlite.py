@@ -117,3 +117,78 @@ def test_sqlite_schema_migrates_legacy_jobs_to_default_claim_expiry_policy(tmp_p
     inserted = store.put(_request().to_record(now=utc_now()))
     assert inserted.claim_expiry_policy.value == "retry_if_budget"
     store.close()
+
+
+
+def test_current_sqlite_queue_schema_reopens_without_journal_mode_negotiation(
+    tmp_path,
+    monkeypatch,
+) -> None:
+    from runtime.queue import _sqlite_job_store_db as db_module
+
+    path = tmp_path / "current-schema.sqlite3"
+    SqliteJobStore(path=path).close()
+    calls: list[bool] = []
+    original = db_module.configure_sqlite
+
+    def observed(conn, *, prod, configure_journal_mode=True):
+        calls.append(bool(configure_journal_mode))
+        return original(
+            conn,
+            prod=prod,
+            configure_journal_mode=configure_journal_mode,
+        )
+
+    monkeypatch.setattr(db_module, "configure_sqlite", observed)
+    reopened = SqliteJobStore(path=path)
+    reopened.close()
+
+    assert calls
+    assert calls[0] is False
+    assert True not in calls
+
+
+
+def test_sqlite_store_default_close_does_not_truncate_shared_wal(
+    tmp_path,
+    monkeypatch,
+) -> None:
+    store = SqliteJobStore(tmp_path / "shared.sqlite3")
+    calls: list[str] = []
+    original_connect = store._connect
+
+    class _ObservedConnection:
+        def __init__(self, inner):
+            self._inner = inner
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, exc_type, exc, tb):
+            self._inner.close()
+
+        def execute(self, sql, params=()):
+            calls.append(str(sql))
+            return self._inner.execute(sql, params)
+
+    def observed_connect():
+        inner = original_connect()
+        return _ObservedConnection(inner)
+
+    monkeypatch.setattr(store, "_connect", observed_connect)
+    store.close()
+
+    assert not any("wal_checkpoint(TRUNCATE)" in sql for sql in calls)
+
+
+
+
+
+def test_sqlite_queue_connections_use_full_synchronous_durability(tmp_path) -> None:
+    store = SqliteJobStore(tmp_path / "durable.sqlite3")
+    with store._connect() as db:
+        row = db.execute("PRAGMA synchronous;").fetchone()
+    store.close()
+
+    assert row is not None
+    assert int(row[0]) == 2

@@ -128,6 +128,7 @@ def build_executor_queue_support(
     queue_backpressure_policy: BackpressurePolicy | None = None,
     queue_throttle_policy: ThrottlePolicy | None = None,
     queue_retry_policy: JobRetryPolicy | None = None,
+    tenant_execution_budget_guard: Any | None = None,
     worker_id: str = "runtime-executor",
 ) -> RuntimeExecutorQueueSupport:
     """Build an operational queue bundle for RuntimeExecutor.
@@ -167,6 +168,7 @@ def build_executor_queue_support(
         scheduler = JobScheduler(
             store=store,
             throttle_policy=throttle_policy,
+            tenant_execution_budget_guard=tenant_execution_budget_guard,
         )
     if worker is None:
         worker = JobWorker(

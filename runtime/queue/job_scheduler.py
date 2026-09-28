@@ -24,6 +24,7 @@ from runtime.queue.tenant_fair_scheduler import (
     TenantQueuePressure,
 )
 from runtime.queue.throttle_policy import ThrottlePolicy
+from tenancy.tenant_execution_budget_guard import TenantExecutionBudgetGuard, TenantExecutionBudgetVerdict
 
 CANON_RUNTIME_QUEUE_SCHEDULER = True
 
@@ -37,6 +38,7 @@ class ScheduleBatch:
     active_claims: int = 0
     fair_schedule: TenantFairScheduleReport | None = None
     capability_previews: dict[str, CapabilityThrottleVerdict] = field(default_factory=dict)
+    resource_previews: dict[str, TenantExecutionBudgetVerdict] = field(default_factory=dict)
 
 
 class JobScheduler:
@@ -48,12 +50,22 @@ class JobScheduler:
         lease_manager: JobLeaseManager | None = None,
         fair_scheduler: TenantFairScheduler | None = None,
         capability_throttle_policy: CapabilityThrottlePolicy | None = None,
+        tenant_execution_budget_guard: TenantExecutionBudgetGuard | None = None,
+        task_preemption_coordinator: object | None = None,
     ) -> None:
         self._store = store
         self._throttle_policy = throttle_policy or ThrottlePolicy()
         self._lease_manager = lease_manager or JobLeaseManager(store=store)
         self._fair_scheduler = fair_scheduler or TenantFairScheduler()
         self._capability_throttle_policy = capability_throttle_policy or CapabilityThrottlePolicy()
+        self._tenant_execution_budget_guard = tenant_execution_budget_guard
+        self._task_preemption_coordinator = task_preemption_coordinator
+
+    def configure_task_preemption(self, coordinator: object) -> None:
+        admit = getattr(coordinator, "admit", None)
+        if not callable(admit):
+            raise ValueError("task preemption coordinator must provide admit()")
+        self._task_preemption_coordinator = coordinator
 
     def select_due_jobs(self, *, tenant_id: str, queue_name: str, now: datetime | None = None) -> ScheduleBatch:
         moment = normalize_now(now)
@@ -74,11 +86,32 @@ class JobScheduler:
         tenant_limit = throttle.max_claim_count
         if fair_schedule.allocations:
             tenant_limit = min(tenant_limit, max(0, int(fair_schedule.allocations[0].claim_limit)))
-        due = self._store.list_due(tenant_id=normalized_tenant_id, queue_name=queue, limit=max(0, int(tenant_limit)), now=moment)
+        due = self._store.list_due(
+            tenant_id=normalized_tenant_id,
+            queue_name=queue,
+            limit=max(0, int(queue_depth)),
+            now=moment,
+        )
         jobs: list[JobRecord] = []
         previews: dict[str, CapabilityThrottleVerdict] = {}
+        resource_previews: dict[str, TenantExecutionBudgetVerdict] = {}
         provisional_counts: dict[str, int] = {}
         for candidate in due:
+            if self._task_preemption_coordinator is not None:
+                admit = getattr(self._task_preemption_coordinator, "admit", None)
+                if not callable(admit):
+                    raise RuntimeError("task preemption coordinator must provide admit()")
+                if not bool(admit(candidate)):
+                    continue
+            if self._tenant_execution_budget_guard is not None:
+                usage = self._tenant_execution_budget_guard.from_execution_payload(
+                    tenant_id=normalized_tenant_id,
+                    payload=candidate.payload,
+                )
+                resource_verdict = self._tenant_execution_budget_guard.evaluate(usage=usage)
+                resource_previews[candidate.job_id] = resource_verdict
+                if not resource_verdict.allowed:
+                    continue
             try:
                 capability = resolve_capability_key(job_type=candidate.job_type, payload=candidate.payload, tags=candidate.tags)
             except ValueError:
@@ -96,6 +129,8 @@ class JobScheduler:
             provisional_counts[capability] = provisional_counts.get(capability, 0) + 1
             jobs.append(candidate)
             previews[candidate.job_id] = preview
+            if len(jobs) >= tenant_limit:
+                break
         return ScheduleBatch(
             queue_name=queue,
             jobs=tuple(jobs),
@@ -105,6 +140,7 @@ class JobScheduler:
             active_claims=active_claims,
             fair_schedule=fair_schedule,
             capability_previews=previews,
+            resource_previews=resource_previews,
         )
 
     def commit_claimed_job(self, *, job: JobRecord, now: datetime | None = None) -> None:

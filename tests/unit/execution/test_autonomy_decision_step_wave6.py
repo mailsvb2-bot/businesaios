@@ -176,3 +176,24 @@ def test_autonomy_decision_step_does_not_apply_bootstrap_recommendation_without_
         )(),
     )
     assert effective == 'autonomous_bounded'
+
+
+
+def test_phase9_task_run_step_lineage_enters_intent_payload() -> None:
+    request = _Request(
+        meta={
+            "task_id": "task-1",
+            "task_run_id": "task-run-1",
+            "step_id": "task-run-1:0",
+        }
+    )
+    payload = AutonomyDecisionStep._intent_payload(
+        request=request,
+        envelope=_Envelope(
+            decision=_Decision(payload={"existing": True})
+        ),
+    )
+    assert payload["existing"] is True
+    assert payload["task_id"] == "task-1"
+    assert payload["task_run_id"] == "task-run-1"
+    assert payload["step_id"] == "task-run-1:0"

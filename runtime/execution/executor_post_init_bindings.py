@@ -75,6 +75,7 @@ def bind_executor_post_init_surfaces(
         queue_backpressure_policy=queue_backpressure_policy,
         queue_throttle_policy=queue_throttle_policy,
         queue_retry_policy=queue_retry_policy,
+        tenant_execution_budget_guard=executor._tenant_execution_budget_guard,
         worker_id=str(queue_worker_id or "runtime-executor"),
     )
 

@@ -6,6 +6,7 @@ from pathlib import Path
 
 from application.autonomy.autonomy_safety_bundle import AutonomySafetyBundle
 from application.business_autonomy.registry import AgentIdentityRegistry
+from application.business_goal import BusinessGoalProjector
 from application.capability.capability_health_scoring import (
     build_capability_health_scoring_service,
 )
@@ -13,6 +14,7 @@ from application.effects.effect_journal import FileEffectJournal
 from application.headless.contract import HeadlessExecutionContract
 from application.headless.feedback import SimpleHeadlessFeedbackReader
 from application.headless.goal_mapper import HeadlessGoalStateMapper
+from application.headless.models import GoalExecutionRequest
 from application.headless.stop_policy import HeadlessStopPolicy
 from application.learning.retry_learning_engine import RetryLearningEngine
 from application.learning.retry_learning_store import RetryLearningStore
@@ -27,6 +29,10 @@ from application.memory.business_operating_memory import (
 from application.planning.long_horizon_planner import LongHorizonPlanner
 from application.planning.multi_goal_planner import FileMultiGoalPlannerStore, MultiGoalPlannerService
 from application.planning.strategy_memory import FileStrategyMemoryStore, StrategyMemoryService
+from application.task import DurableTaskRegistry
+from application.task.registry import TaskQueuePreemptionCoordinator
+from runtime.executor_runtime_support import build_executor_queue_support
+from runtime.queue.job_dispatcher import TaskQueueAdapter
 from bootstrap.entrypoint_context import bootstrap_entrypoint, is_allowed_bootstrap_entrypoint
 from core.safety.operational.runtime_bootstrap import resolve_operational_safety_runtime
 from execution.autonomy_counters import AutonomyCounterResolver, FileAutonomyCounterStore
@@ -90,6 +96,41 @@ class HeadlessRuntime:
     evidence_store: object | None = None
     state_synthesis_engine: object | None = None
     agent_identity_registry: object | None = None
+    task_registry: object | None = None
+    task_queue_adapter: object | None = None
+
+
+def build_headless_durable_task_queue_runner(*, contract, task_registry, goal_reader, fallback_runner):
+    def _run(job):
+        if "durable_task" not in tuple(getattr(job, "tags", ()) or ()):
+            return fallback_runner(job)
+        payload = dict(getattr(job, "payload", {}) or {})
+        tenant_id, business_id, task_id = (
+            str(getattr(job, "tenant_id", "") or "").strip(),
+            str(payload.get("business_id") or "").strip(),
+            str(payload.get("task_id") or "").strip(),
+        )
+        if not all((tenant_id, business_id, task_id)):
+            raise ValueError("durable task queue job is missing canonical scope")
+        task = task_registry.get(tenant_id=tenant_id, business_id=business_id, task_id=task_id)
+        goal_id = str(getattr(task, "goal_id", "") or "").strip()
+        if not goal_id:
+            raise RuntimeError("durable task has no canonical goal_id")
+        if str(payload.get("goal_id") or "").strip() != goal_id:
+            raise ValueError("durable task queue goal_id mismatch")
+        goal = goal_reader.get(tenant_id=tenant_id, business_id=business_id, goal_id=goal_id)
+        parts = [str(getattr(goal, name, "") or "").strip() for name in ("goal_kind", "metric")]
+        if getattr(goal, "baseline", None) is not None and getattr(goal, "target", None) is not None:
+            parts.append(f"{goal.baseline} -> {goal.target}")
+        report = contract.execute_autopilot(GoalExecutionRequest(
+            goal=" | ".join(part for part in parts if part) or f"canonical_goal:{goal_id}",
+            business_id=business_id, tenant_id=tenant_id, goal_id=goal_id, meta={"task_id": task_id},
+        ))
+        return {"ok": bool(report.completed or report.stop_reason == "task_preempted"),
+                "status": "completed" if report.completed else report.stop_reason,
+                "output": {"task_id": task_id, "goal_id": goal_id, "run_id": report.run_id,
+                           "stop_reason": report.stop_reason}}
+    return _run
 
 
 @lru_cache(maxsize=8)
@@ -164,6 +205,33 @@ def build_headless_runtime(*, entrypoint: str = "headless_sdk", root_dir: str | 
         event_store=event_store,
         idempotency_store=reliability_idempotency,
     )
+    task_registry = DurableTaskRegistry(
+        event_store=event_store,
+        idempotency_store=reliability_idempotency,
+    )
+    queue_support = getattr(executor, "_queue_support", None)
+    queue_dispatcher = getattr(queue_support, "dispatcher", None)
+    if queue_dispatcher is None:
+        raise RuntimeError("canonical runtime queue dispatcher is required for Durable Task")
+    task_queue_adapter = TaskQueueAdapter(
+        task_registry=task_registry,
+        dispatcher=queue_dispatcher,
+    )
+    queue_scheduler = getattr(queue_support, "scheduler", None)
+    distributed_lock = getattr(reliability, "distributed_lock", None)
+    if queue_scheduler is None or distributed_lock is None:
+        raise RuntimeError(
+            "canonical queue scheduler and distributed lock are required for Durable Task"
+        )
+    configure_preemption = getattr(queue_scheduler, "configure_task_preemption", None)
+    if not callable(configure_preemption):
+        raise RuntimeError("canonical queue scheduler lacks task preemption configuration")
+    configure_preemption(
+        TaskQueuePreemptionCoordinator(
+            task_registry=task_registry,
+            distributed_lock=distributed_lock,
+        )
+    )
     operational_runtime = resolve_operational_safety_runtime(default_root=paths.root_dir)
     if getattr(executor, "_operational_budget_service", None) is None:
         executor._operational_budget_service = operational_runtime.service
@@ -211,7 +279,25 @@ def build_headless_runtime(*, entrypoint: str = "headless_sdk", root_dir: str | 
         event_store=event_store,
         world_model_event_projector=world_model_event_projector,
         agent_identity_registry=agent_identity_registry,
+        task_registry=task_registry,
     )
+    fallback_runner = getattr(getattr(queue_support, "worker", None), "_runner", None)
+    if not callable(fallback_runner):
+        raise RuntimeError("canonical runtime queue runner is required")
+    executor._queue_support = build_executor_queue_support(
+        queue_store=queue_support.store, queue_dead_letter_store=queue_support.dead_letter_store,
+        queue_dispatcher=queue_support.dispatcher, queue_scheduler=queue_support.scheduler,
+        queue_runner=build_headless_durable_task_queue_runner(
+            contract=contract, task_registry=task_registry,
+            goal_reader=BusinessGoalProjector(event_store), fallback_runner=fallback_runner,
+        ),
+        queue_rate_limit_guard=queue_support.rate_limit_guard,
+        queue_backpressure_policy=queue_support.backpressure_policy,
+        queue_throttle_policy=queue_support.throttle_policy, queue_retry_policy=queue_support.retry_policy,
+        tenant_execution_budget_guard=getattr(executor, "_tenant_execution_budget_guard", None),
+        worker_id=getattr(getattr(queue_support, "worker", None), "worker_id", "runtime-executor"),
+    )
+    task_queue_adapter = TaskQueueAdapter(task_registry=task_registry, dispatcher=executor._queue_support.dispatcher)
     return HeadlessRuntime(
         decision_core=core,
         executor=executor,
@@ -239,7 +325,9 @@ def build_headless_runtime(*, entrypoint: str = "headless_sdk", root_dir: str | 
         evidence_store=evidence_store,
         state_synthesis_engine=state_synthesis_engine,
         agent_identity_registry=agent_identity_registry,
+        task_registry=task_registry,
+        task_queue_adapter=task_queue_adapter,
     )
 
 
-__all__ = ["CANON_HEADLESS_BOOT", "HeadlessRuntime", "build_headless_runtime"]
+__all__ = ["CANON_HEADLESS_BOOT", "HeadlessRuntime", "build_headless_durable_task_queue_runner", "build_headless_runtime"]

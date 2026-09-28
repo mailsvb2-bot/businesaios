@@ -17,7 +17,7 @@ class QueueStorePolicy:
     default_purge_limit: int = 1000
     default_sqlite_busy_timeout_ms: int = 5000
     min_sqlite_busy_timeout_ms: int = 100
-    wal_checkpoint_on_close: bool = True
+    wal_checkpoint_on_close: bool = False
 
     def normalize_due_limit(self, value: int) -> int:
         return max(0, int(value))

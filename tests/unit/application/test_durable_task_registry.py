@@ -4,13 +4,22 @@ import threading
 
 import pytest
 
+from application.artifact import ArtifactRegistry
 from application.task import (
     DurableTaskHistoryInvariantViolation,
     DurableTaskProjector,
     DurableTaskRegistry,
 )
 from contracts.event_store import BusinessFactV1, canonical_business_event_contract
-from contracts.task import DurableTaskNotFound, DurableTaskStatus
+from contracts.task import (
+    DurableTask,
+    DurableTaskNotFound,
+    DurableTaskStatus,
+    RetryPolicy,
+    TimeoutPolicy,
+    WaitCondition,
+    WaitConditionKind,
+)
 from reliability.idempotency_store import InMemoryIdempotencyStore
 
 
@@ -127,6 +136,39 @@ def test_task_metadata_propagates_and_exact_replay_rejects_change() -> None:
         registry.complete( tenant_id="t", business_id="b", task_id="task", idempotency_key="complete-meta", occurred_at_ms=300, event_metadata={**complete_metadata, "actor_id": "owner-2"}, )
 
 
+def test_phase9_task_goal_identity_is_durable_and_create_is_immutable() -> None:
+    registry, events = _registry()
+    created = registry.create(
+        tenant_id="tenant-a",
+        business_id="business-a",
+        task_id="task-goal",
+        idempotency_key="create-goal",
+        goal_id="goal-a",
+        occurred_at_ms=100,
+    )
+    assert created.goal_id == "goal-a"
+
+    rebuilt = DurableTaskRegistry(
+        event_store=events,
+        idempotency_store=InMemoryIdempotencyStore(),
+    ).get(
+        tenant_id="tenant-a",
+        business_id="business-a",
+        task_id="task-goal",
+    )
+    assert rebuilt.goal_id == "goal-a"
+
+    with pytest.raises(ValueError, match="different identity metadata"):
+        registry.create(
+            tenant_id="tenant-a",
+            business_id="business-a",
+            task_id="task-goal",
+            idempotency_key="create-goal",
+            goal_id="goal-b",
+            occurred_at_ms=100,
+        )
+
+
 def test_task_rejects_new_key_for_already_applied_transition() -> None:
     registry, _ = _registry()
     registry.create(
@@ -164,7 +206,7 @@ def test_task_state_machine_rejects_invalid_transitions() -> None:
         tenant_id="tenant-a", business_id="business-a", task_id="task-a",
         idempotency_key="create-a", occurred_at_ms=100,
     )
-    with pytest.raises(ValueError, match="pending -> complete"):
+    with pytest.raises(ValueError, match="created -> complete"):
         registry.complete(
             tenant_id="tenant-a", business_id="business-a", task_id="task-a",
             idempotency_key="complete-a", occurred_at_ms=200,
@@ -300,3 +342,602 @@ def test_task_projector_rejects_events_after_terminal_state() -> None:
         DurableTaskProjector(events).get(
             tenant_id="tenant-a", business_id="business-a", task_id="task-a"
         )
+
+
+
+def test_phase9_canonical_ready_wait_resume_survives_runtime_reconstruction() -> None:
+    events = MemoryEventStore()
+    claims = InMemoryIdempotencyStore()
+    registry = DurableTaskRegistry(event_store=events, idempotency_store=claims)
+
+    created = registry.create(
+        tenant_id="tenant-p9",
+        business_id="business-p9",
+        task_id="task-p9",
+        idempotency_key="create",
+        title="Wait for approval",
+        occurred_at_ms=100,
+    )
+    assert created.status is DurableTaskStatus.CREATED
+    assert created.version == 1
+
+    ready = registry.ready(
+        tenant_id="tenant-p9",
+        business_id="business-p9",
+        task_id="task-p9",
+        idempotency_key="ready",
+        expected_version=1,
+        occurred_at_ms=110,
+    )
+    assert ready.status is DurableTaskStatus.READY
+    assert ready.version == 2
+
+    running = registry.start(
+        tenant_id="tenant-p9",
+        business_id="business-p9",
+        task_id="task-p9",
+        idempotency_key="start",
+        expected_version=2,
+        occurred_at_ms=120,
+    )
+    wait_condition = WaitCondition(
+        condition_id="approval-owner",
+        kind=WaitConditionKind.APPROVAL,
+        correlation_key="approval:task-p9",
+    )
+    waiting = registry.wait(
+        tenant_id="tenant-p9",
+        business_id="business-p9",
+        task_id="task-p9",
+        idempotency_key="wait",
+        wait_condition=wait_condition,
+        expected_version=running.version,
+        occurred_at_ms=130,
+    )
+    assert waiting.status is DurableTaskStatus.WAITING
+    assert waiting.wait_condition == wait_condition
+
+    reconstructed = DurableTaskRegistry(
+        event_store=events,
+        idempotency_store=claims,
+    ).get(
+        tenant_id="tenant-p9",
+        business_id="business-p9",
+        task_id="task-p9",
+    )
+    assert reconstructed == waiting
+
+    resumed = registry.ready(
+        tenant_id="tenant-p9",
+        business_id="business-p9",
+        task_id="task-p9",
+        idempotency_key="resume",
+        expected_version=waiting.version,
+        occurred_at_ms=140,
+    )
+    assert resumed.status is DurableTaskStatus.READY
+    assert resumed.wait_condition is None
+    assert resumed.version == waiting.version + 1
+
+
+def test_phase9_stale_version_fails_closed_without_new_event() -> None:
+    registry, events = _registry()
+    registry.create(
+        tenant_id="tenant-p9",
+        business_id="business-p9",
+        task_id="task-p9",
+        idempotency_key="create",
+        occurred_at_ms=100,
+    )
+    registry.ready(
+        tenant_id="tenant-p9",
+        business_id="business-p9",
+        task_id="task-p9",
+        idempotency_key="ready",
+        expected_version=1,
+        occurred_at_ms=110,
+    )
+    before = len(events.events)
+    with pytest.raises(RuntimeError, match="task version conflict"):
+        registry.start(
+            tenant_id="tenant-p9",
+            business_id="business-p9",
+            task_id="task-p9",
+            idempotency_key="stale-start",
+            expected_version=1,
+            occurred_at_ms=120,
+        )
+    assert len(events.events) == before
+
+
+def test_phase9_date_wait_requires_durable_wakeup_time() -> None:
+    with pytest.raises(ValueError, match="date wait condition requires resume_at_ms"):
+        WaitCondition(
+            condition_id="scheduled",
+            kind=WaitConditionKind.DATE,
+        )
+    condition = WaitCondition(
+        condition_id="scheduled",
+        kind=WaitConditionKind.DATE,
+        resume_at_ms=1_000,
+    )
+    assert WaitCondition.from_dict(condition.to_dict()) == condition
+
+
+def test_phase9_compensation_is_explicit_and_not_fake_rollback() -> None:
+    registry, _ = _registry()
+    registry.create(
+        tenant_id="tenant-p9",
+        business_id="business-p9",
+        task_id="task-p9",
+        idempotency_key="create",
+        occurred_at_ms=100,
+    )
+    registry.start(
+        tenant_id="tenant-p9",
+        business_id="business-p9",
+        task_id="task-p9",
+        idempotency_key="start",
+        occurred_at_ms=110,
+    )
+    compensating = registry.begin_compensation(
+        tenant_id="tenant-p9",
+        business_id="business-p9",
+        task_id="task-p9",
+        idempotency_key="compensate",
+        occurred_at_ms=120,
+    )
+    assert compensating.status is DurableTaskStatus.COMPENSATING
+    failed = registry.fail(
+        tenant_id="tenant-p9",
+        business_id="business-p9",
+        task_id="task-p9",
+        idempotency_key="fail-after-compensation",
+        occurred_at_ms=130,
+    )
+    assert failed.status is DurableTaskStatus.FAILED
+    assert failed.terminal_at_ms == 130
+
+
+
+def test_phase9_task_artifact_binding_reuses_canonical_artifact_owner() -> None:
+    events = MemoryEventStore()
+    claims = InMemoryIdempotencyStore()
+    artifacts = ArtifactRegistry(event_store=events, idempotency_store=claims)
+    registry = DurableTaskRegistry(
+        event_store=events,
+        idempotency_store=claims,
+        artifact_registry=artifacts,
+    )
+    artifacts.create(
+        tenant_id="tenant-p9",
+        business_id="business-p9",
+        artifact_id="artifact-p9",
+        idempotency_key="artifact-create",
+        artifact_kind="execution_output",
+        storage_ref="evidence://artifact-p9",
+        occurred_at_ms=90,
+    )
+    registry.create(
+        tenant_id="tenant-p9",
+        business_id="business-p9",
+        task_id="task-p9",
+        idempotency_key="task-create",
+        occurred_at_ms=100,
+    )
+    attached = registry.attach_artifact(
+        tenant_id="tenant-p9",
+        business_id="business-p9",
+        task_id="task-p9",
+        artifact_id="artifact-p9",
+        idempotency_key="attach",
+        expected_version=1,
+        occurred_at_ms=110,
+    )
+    assert attached.artifact_ids == ("artifact-p9",)
+    assert attached.version == 2
+    assert registry.attach_artifact(
+        tenant_id="tenant-p9",
+        business_id="business-p9",
+        task_id="task-p9",
+        artifact_id="artifact-p9",
+        idempotency_key="attach",
+        occurred_at_ms=999,
+    ) == attached
+
+
+def test_phase9_task_artifact_binding_fails_closed_for_wrong_scope_and_terminal_task() -> None:
+    events = MemoryEventStore()
+    claims = InMemoryIdempotencyStore()
+    artifacts = ArtifactRegistry(event_store=events, idempotency_store=claims)
+    registry = DurableTaskRegistry(
+        event_store=events,
+        idempotency_store=claims,
+        artifact_registry=artifacts,
+    )
+    artifacts.create(
+        tenant_id="tenant-p9",
+        business_id="other-business",
+        artifact_id="artifact-other",
+        idempotency_key="artifact-create",
+        occurred_at_ms=90,
+    )
+    registry.create(
+        tenant_id="tenant-p9",
+        business_id="business-p9",
+        task_id="task-p9",
+        idempotency_key="task-create",
+        occurred_at_ms=100,
+    )
+    before = len(events.events)
+    with pytest.raises(LookupError):
+        registry.attach_artifact(
+            tenant_id="tenant-p9",
+            business_id="business-p9",
+            task_id="task-p9",
+            artifact_id="artifact-other",
+            idempotency_key="attach-wrong-scope",
+            occurred_at_ms=110,
+        )
+    assert len(events.events) == before
+
+    registry.start(
+        tenant_id="tenant-p9",
+        business_id="business-p9",
+        task_id="task-p9",
+        idempotency_key="start",
+        occurred_at_ms=120,
+    )
+    registry.complete(
+        tenant_id="tenant-p9",
+        business_id="business-p9",
+        task_id="task-p9",
+        idempotency_key="complete",
+        occurred_at_ms=130,
+    )
+    with pytest.raises(ValueError, match="terminal task"):
+        registry.attach_artifact(
+            tenant_id="tenant-p9",
+            business_id="business-p9",
+            task_id="task-p9",
+            artifact_id="artifact-other",
+            idempotency_key="attach-terminal",
+            occurred_at_ms=140,
+        )
+
+
+
+def test_phase9_retry_and_timeout_policy_are_durable_and_deterministic() -> None:
+    events = MemoryEventStore()
+    claims = InMemoryIdempotencyStore()
+    registry = DurableTaskRegistry(event_store=events, idempotency_store=claims)
+    retry_policy = RetryPolicy(
+        max_attempts=4,
+        initial_backoff_ms=100,
+        max_backoff_ms=250,
+        retryable_statuses=("temporary_failure", "rate_limited"),
+    )
+    timeout_policy = TimeoutPolicy(
+        attempt_timeout_ms=5_000,
+        task_deadline_ms=50_000,
+    )
+    created = registry.create(
+        tenant_id="tenant-p9",
+        business_id="business-p9",
+        task_id="task-policy",
+        idempotency_key="create-policy",
+        retry_policy=retry_policy,
+        timeout_policy=timeout_policy,
+        occurred_at_ms=100,
+    )
+    assert created.retry_policy == retry_policy
+    assert created.timeout_policy == timeout_policy
+    assert retry_policy.allows_retry(attempt=1, status="temporary_failure") is True
+    assert retry_policy.allows_retry(attempt=4, status="temporary_failure") is False
+    assert retry_policy.allows_retry(
+        attempt=1,
+        status="temporary_failure",
+        ambiguous=True,
+    ) is False
+    assert retry_policy.backoff_ms(attempt=1) == 100
+    assert retry_policy.backoff_ms(attempt=2) == 200
+    assert retry_policy.backoff_ms(attempt=3) == 250
+    assert timeout_policy.attempt_deadline_ms(started_at_ms=1_000) == 6_000
+    assert timeout_policy.is_task_timed_out(now_ms=49_999) is False
+    assert timeout_policy.is_task_timed_out(now_ms=50_000) is True
+
+    rebuilt = DurableTaskRegistry(
+        event_store=events,
+        idempotency_store=claims,
+    ).get(
+        tenant_id="tenant-p9",
+        business_id="business-p9",
+        task_id="task-policy",
+    )
+    assert rebuilt.retry_policy == retry_policy
+    assert rebuilt.timeout_policy == timeout_policy
+
+
+def test_phase9_retry_policy_never_blindly_retries_ambiguous_effects_by_default() -> None:
+    policy = RetryPolicy(max_attempts=3)
+    assert policy.allows_retry(
+        attempt=1,
+        status="temporary_failure",
+        ambiguous=True,
+    ) is False
+    explicit = RetryPolicy(max_attempts=3, retry_ambiguous=True)
+    assert explicit.allows_retry(
+        attempt=1,
+        status="temporary_failure",
+        ambiguous=True,
+    ) is True
+
+
+def test_phase9_retry_timeout_policy_validation_fails_closed() -> None:
+    with pytest.raises(ValueError, match="max_attempts"):
+        RetryPolicy(max_attempts=0)
+    with pytest.raises(ValueError, match="max_backoff_ms"):
+        RetryPolicy(max_attempts=2, initial_backoff_ms=200, max_backoff_ms=100)
+    with pytest.raises(ValueError, match="attempt_timeout_ms"):
+        TimeoutPolicy(attempt_timeout_ms=0)
+    with pytest.raises(ValueError, match="task_deadline_ms"):
+        TimeoutPolicy(task_deadline_ms=-1)
+    with pytest.raises(ValueError, match="max_attempts must be an integer"):
+        RetryPolicy(max_attempts=True)
+    with pytest.raises(ValueError, match="retry_ambiguous must be boolean"):
+        RetryPolicy.from_dict({"max_attempts": 2, "retry_ambiguous": "false"})
+    with pytest.raises(ValueError, match="attempt_timeout_ms must be an integer"):
+        TimeoutPolicy(attempt_timeout_ms=True)
+    with pytest.raises(ValueError, match="max_attempts must be an integer"):
+        RetryPolicy.from_dict({"max_attempts": True})
+    with pytest.raises(ValueError, match="attempt_timeout_ms must be an integer"):
+        TimeoutPolicy.from_dict({"attempt_timeout_ms": True})
+
+
+def test_phase9_legacy_task_without_policy_payload_projects_safe_defaults() -> None:
+    events = MemoryEventStore()
+    events.append_event(BusinessFactV1(
+        fact_id="task:create-legacy-policy",
+        tenant_id="tenant-p9",
+        business_id="business-p9",
+        fact_type="task.created",
+        entity_id="task-legacy-policy",
+        event_time_ms=100,
+        observed_at_ms=100,
+        source="durable_task_registry",
+        payload={"title": "legacy"},
+    ).as_event())
+    task = DurableTaskProjector(events).get(
+        tenant_id="tenant-p9",
+        business_id="business-p9",
+        task_id="task-legacy-policy",
+    )
+    assert task.retry_policy == RetryPolicy()
+    assert task.timeout_policy == TimeoutPolicy()
+    assert task.retry_policy.max_attempts == 1
+
+
+
+def test_phase9_task_priority_and_conflict_keys_are_durable() -> None:
+    events = MemoryEventStore()
+    claims = InMemoryIdempotencyStore()
+    registry = DurableTaskRegistry(event_store=events, idempotency_store=claims)
+    created = registry.create(
+        tenant_id="tenant-p9",
+        business_id="business-p9",
+        task_id="task-conflict",
+        idempotency_key="create-conflict",
+        priority=90,
+        conflict_keys=("customer:42", "ledger"),
+        occurred_at_ms=100,
+    )
+    assert created.priority == 90
+    assert created.conflict_keys == ("customer:42", "ledger")
+
+    rebuilt = DurableTaskRegistry(
+        event_store=events,
+        idempotency_store=claims,
+    ).get(
+        tenant_id="tenant-p9",
+        business_id="business-p9",
+        task_id="task-conflict",
+    )
+    assert rebuilt.priority == 90
+    assert rebuilt.conflict_keys == ("customer:42", "ledger")
+
+
+def test_phase9_task_priority_and_conflict_metadata_fail_closed() -> None:
+    with pytest.raises(ValueError, match="priority"):
+        DurableTask(
+            task_id="task",
+            tenant_id="tenant",
+            business_id="business",
+            priority=101,
+        )
+    with pytest.raises(ValueError, match="conflict_key"):
+        DurableTask(
+            task_id="task",
+            tenant_id="tenant",
+            business_id="business",
+            conflict_keys=("   ",),
+        )
+
+
+
+def test_phase9_preemption_request_is_durable_without_premature_pause() -> None:
+    registry, events = _registry()
+    registry.create(
+        tenant_id="tenant-p9",
+        business_id="business-p9",
+        task_id="low",
+        idempotency_key="create-low",
+        priority=20,
+        occurred_at_ms=100,
+    )
+    registry.ready(
+        tenant_id="tenant-p9",
+        business_id="business-p9",
+        task_id="low",
+        idempotency_key="ready-low",
+        expected_version=1,
+        occurred_at_ms=110,
+    )
+    running = registry.start(
+        tenant_id="tenant-p9",
+        business_id="business-p9",
+        task_id="low",
+        idempotency_key="start-low",
+        expected_version=2,
+        occurred_at_ms=120,
+    )
+    requested = registry.request_preemption(
+        tenant_id="tenant-p9",
+        business_id="business-p9",
+        task_id="low",
+        requested_by_task_id="high",
+        requested_priority=90,
+        idempotency_key="preempt-low-by-high",
+        expected_version=running.version,
+        occurred_at_ms=130,
+    )
+
+    assert requested.status is DurableTaskStatus.RUNNING
+    assert requested.preemption_requested_by_task_id == "high"
+    assert requested.preemption_requested_priority == 90
+    assert registry.request_preemption(
+        tenant_id="tenant-p9",
+        business_id="business-p9",
+        task_id="low",
+        requested_by_task_id="high",
+        requested_priority=90,
+        idempotency_key="preempt-low-by-high",
+        occurred_at_ms=999,
+    ) == requested
+    with pytest.raises(ValueError, match="already requested"):
+        registry.request_preemption(
+            tenant_id="tenant-p9",
+            business_id="business-p9",
+            task_id="low",
+            requested_by_task_id="high",
+            requested_priority=90,
+            idempotency_key="different-preemption-key",
+        )
+    reconstructed = DurableTaskRegistry(
+        event_store=events,
+        idempotency_store=InMemoryIdempotencyStore(),
+    ).get(
+        tenant_id="tenant-p9",
+        business_id="business-p9",
+        task_id="low",
+    )
+    assert reconstructed.preemption_requested_by_task_id == "high"
+
+    paused = registry.pause(
+        tenant_id="tenant-p9",
+        business_id="business-p9",
+        task_id="low",
+        idempotency_key="pause-preempted-low",
+        expected_version=requested.version,
+        occurred_at_ms=140,
+    )
+    assert paused.status is DurableTaskStatus.PAUSED
+    assert paused.preemption_requested_by_task_id is None
+    assert paused.preemption_requested_priority is None
+
+
+def test_phase9_preemption_request_rejects_equal_lower_or_nonrunning_task() -> None:
+    registry, events = _registry()
+    created = registry.create(
+        tenant_id="tenant-p9",
+        business_id="business-p9",
+        task_id="low",
+        idempotency_key="create-low",
+        priority=50,
+        occurred_at_ms=100,
+    )
+    with pytest.raises(ValueError, match="RUNNING"):
+        registry.request_preemption(
+            tenant_id="tenant-p9",
+            business_id="business-p9",
+            task_id="low",
+            requested_by_task_id="high",
+            requested_priority=90,
+            idempotency_key="preempt-created",
+            expected_version=created.version,
+        )
+    registry.ready(
+        tenant_id="tenant-p9",
+        business_id="business-p9",
+        task_id="low",
+        idempotency_key="ready-low",
+        expected_version=created.version,
+    )
+    running = registry.start(
+        tenant_id="tenant-p9",
+        business_id="business-p9",
+        task_id="low",
+        idempotency_key="start-low",
+        expected_version=2,
+    )
+    before = len(events.events)
+    with pytest.raises(ValueError, match="higher priority"):
+        registry.request_preemption(
+            tenant_id="tenant-p9",
+            business_id="business-p9",
+            task_id="low",
+            requested_by_task_id="peer",
+            requested_priority=50,
+            idempotency_key="preempt-peer",
+            expected_version=running.version,
+        )
+    assert len(events.events) == before
+
+
+
+def test_phase9_preemption_metadata_clears_on_cancel_from_running() -> None:
+    registry, _ = _registry()
+    registry.create(
+        tenant_id="tenant-p9",
+        business_id="business-p9",
+        task_id="low-cancel",
+        idempotency_key="create",
+        priority=20,
+        occurred_at_ms=100,
+    )
+    registry.ready(
+        tenant_id="tenant-p9",
+        business_id="business-p9",
+        task_id="low-cancel",
+        idempotency_key="ready",
+        expected_version=1,
+        occurred_at_ms=110,
+    )
+    running = registry.start(
+        tenant_id="tenant-p9",
+        business_id="business-p9",
+        task_id="low-cancel",
+        idempotency_key="start",
+        expected_version=2,
+        occurred_at_ms=120,
+    )
+    requested = registry.request_preemption(
+        tenant_id="tenant-p9",
+        business_id="business-p9",
+        task_id="low-cancel",
+        requested_by_task_id="high",
+        requested_priority=90,
+        idempotency_key="preempt",
+        expected_version=running.version,
+        occurred_at_ms=130,
+    )
+    cancelled = registry.cancel(
+        tenant_id="tenant-p9",
+        business_id="business-p9",
+        task_id="low-cancel",
+        idempotency_key="cancel",
+        expected_version=requested.version,
+        occurred_at_ms=140,
+    )
+    assert cancelled.status is DurableTaskStatus.CANCELLED
+    assert cancelled.preemption_requested_by_task_id is None
+    assert cancelled.preemption_requested_priority is None

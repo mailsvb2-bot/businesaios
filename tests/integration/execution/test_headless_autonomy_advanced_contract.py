@@ -2,11 +2,23 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from pathlib import Path
+from types import SimpleNamespace
 from typing import Any
 
+import pytest
+
 from application.headless.models import GoalExecutionRequest
+from application.task.registry import TaskConflictController
+from contracts.task import RetryPolicy, TimeoutPolicy
 from execution.goal_plan_memory import FileGoalPlanMemoryStore, GoalPlanMemoryService
 from execution.headless_contract import HeadlessExecutionContract
+from reliability.distributed_lock import InMemoryDistributedLock
+from reliability.execution_checkpoint_store import ExecutionCheckpoint, JsonlExecutionCheckpointStore
+from reliability.execution_reconciliation import ReconciliationReport
+from reliability.idempotency_store import InMemoryIdempotencyStore
+from reliability.outbox_store import InMemoryOutboxStore
+from reliability.recovery_orchestrator import RecoveryOrchestrator, RecoveryPlan
+from runtime.execution.reliability_runtime import RuntimeReliability
 from runtime.execution.executor_result import ExecutionResult
 
 
@@ -91,3 +103,949 @@ def test_closed_loop_goal_evaluator_marks_completed_goal(tmp_path: Path) -> None
     assert report.completed is True
     assert report.stop_reason == "goal_achieved"
     assert report.final_feedback["goal_evaluation"]["achieved"] is True
+
+
+
+class _TaskRegistry:
+    def __init__(
+        self,
+        status: str,
+        *,
+        retry_policy: RetryPolicy | None = None,
+        timeout_policy: TimeoutPolicy | None = None,
+        conflict_keys: tuple[str, ...] = (),
+    ) -> None:
+        self.status = status
+        self.retry_policy = retry_policy
+        self.timeout_policy = timeout_policy
+        self.conflict_keys = conflict_keys
+        self.version = 1
+        self.preemption_requested_by_task_id: str | None = None
+        self.preemption_requested_priority: int | None = None
+        self.calls: list[tuple[str, str, str]] = []
+        self.transitions: list[str] = []
+
+    def _task(self):
+        status = type("Status", (), {"value": self.status})()
+        return type(
+            "Task",
+            (),
+            {
+                "status": status,
+                "retry_policy": self.retry_policy,
+                "timeout_policy": self.timeout_policy,
+                "conflict_keys": self.conflict_keys,
+                "version": self.version,
+                "preemption_requested_by_task_id": self.preemption_requested_by_task_id,
+                "preemption_requested_priority": self.preemption_requested_priority,
+            },
+        )()
+
+    def get(self, *, tenant_id: str, business_id: str, task_id: str):
+        self.calls.append((tenant_id, business_id, task_id))
+        return self._task()
+
+    def start(self, *, expected_version: int, **kwargs: Any):
+        del kwargs
+        assert expected_version == self.version
+        self.status = "running"
+        self.version += 1
+        self.transitions.append("start")
+        return self._task()
+
+    def succeed(self, *, expected_version: int, **kwargs: Any):
+        del kwargs
+        assert expected_version == self.version
+        self.status = "succeeded"
+        self.version += 1
+        self.transitions.append("succeed")
+        return self._task()
+
+    def pause(self, *, expected_version: int, **kwargs: Any):
+        del kwargs
+        assert expected_version == self.version
+        self.status = "paused"
+        self.preemption_requested_by_task_id = None
+        self.preemption_requested_priority = None
+        self.version += 1
+        self.transitions.append("pause")
+        return self._task()
+
+
+def test_phase9_task_bound_execution_requires_canonical_registry(tmp_path: Path) -> None:
+    contract = _build_contract(tmp_path)
+    request = GoalExecutionRequest(
+        goal="execute durable task",
+        business_id="biz-1",
+        tenant_id="tenant-1",
+        meta={"task_id": "task-1"},
+    )
+    assert request.task_id == "task-1"
+    with pytest.raises(RuntimeError, match="canonical task registry"):
+        contract.execute_autopilot(request)
+
+
+def test_phase9_lost_conflict_heartbeat_prevents_terminal_success(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    contract = _build_contract(
+        tmp_path,
+        executor_ok=True,
+        executor_output={"verified": True, "goal_reached": True},
+    )
+    registry = _TaskRegistry("ready", conflict_keys=("ledger",))
+    contract._task_registry = registry
+    contract._executor._reliability = type(
+        "Reliability",
+        (),
+        {"distributed_lock": InMemoryDistributedLock()},
+    )()
+
+    class _FailedHeartbeat:
+        def close(self):
+            raise RuntimeError("durable task conflict lease renewal failed")
+
+    monkeypatch.setattr(
+        TaskConflictController,
+        "heartbeat",
+        lambda self, group, **kwargs: _FailedHeartbeat(),
+    )
+
+    with pytest.raises(RuntimeError, match="lease renewal failed"):
+        contract.execute_autopilot(
+            GoalExecutionRequest(
+                goal="execute durable task",
+                business_id="biz-1",
+                tenant_id="tenant-1",
+                meta={"task_id": "task-1"},
+            )
+        )
+
+    assert registry.transitions == ["start"]
+    assert registry.status == "running"
+
+
+def test_phase9_task_conflict_execution_starts_and_closes_lease_heartbeat(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    contract = _build_contract(
+        tmp_path,
+        executor_ok=True,
+        executor_output={"verified": True, "goal_reached": True},
+    )
+    registry = _TaskRegistry("ready", conflict_keys=("ledger",))
+    contract._task_registry = registry
+    contract._executor._reliability = type(
+        "Reliability",
+        (),
+        {"distributed_lock": InMemoryDistributedLock()},
+    )()
+    events: list[str] = []
+    original_heartbeat = TaskConflictController.heartbeat
+
+    class _ObservedHeartbeat:
+        def __init__(self, inner: Any) -> None:
+            self._inner = inner
+
+        def close(self):
+            events.append("close")
+            return self._inner.close()
+
+    def _heartbeat(self, group, **kwargs):
+        events.append("start")
+        return _ObservedHeartbeat(original_heartbeat(self, group, **kwargs))
+
+    monkeypatch.setattr(TaskConflictController, "heartbeat", _heartbeat)
+    report = contract.execute_autopilot(
+        GoalExecutionRequest(
+            goal="execute durable task",
+            business_id="biz-1",
+            tenant_id="tenant-1",
+            meta={"task_id": "task-1"},
+        )
+    )
+
+    assert report.completed is True
+    assert events == ["start", "close"]
+
+
+def test_phase9_conflict_lock_is_held_through_evidence_and_terminal_commit(
+    tmp_path: Path,
+) -> None:
+    contract = _build_contract(
+        tmp_path,
+        executor_ok=True,
+        executor_output={"verified": True, "goal_reached": True},
+    )
+    registry = _TaskRegistry("ready", conflict_keys=("ledger",))
+    contract._task_registry = registry
+    distributed_lock = InMemoryDistributedLock()
+    contract._executor._reliability = type(
+        "Reliability",
+        (),
+        {"distributed_lock": distributed_lock},
+    )()
+    observed: list[bool] = []
+
+    class _Evidence:
+        def persist(self, **kwargs: Any) -> None:
+            del kwargs
+            competitor = distributed_lock.acquire(
+                tenant_id="tenant-1",
+                resource="durable-task-conflict:biz-1:ledger",
+                owner_id="competitor",
+                ttl_seconds=60,
+            )
+            observed.append(competitor is None)
+            if competitor is not None:
+                distributed_lock.release(lease=competitor)
+
+    contract._evidence_persistence_service = _Evidence()
+    report = contract.execute_autopilot(
+        GoalExecutionRequest(
+            goal="execute durable task",
+            business_id="biz-1",
+            tenant_id="tenant-1",
+            meta={"task_id": "task-1"},
+        )
+    )
+    assert report.completed is True
+    assert observed == [True]
+    after_commit = distributed_lock.acquire(
+        tenant_id="tenant-1",
+        resource="durable-task-conflict:biz-1:ledger",
+        owner_id="competitor",
+        ttl_seconds=60,
+    )
+    assert after_commit is not None
+    distributed_lock.release(lease=after_commit)
+
+
+def test_phase9_completed_goal_wins_late_preemption_request_with_latest_version(
+    tmp_path: Path,
+) -> None:
+    contract = _build_contract(
+        tmp_path,
+        executor_ok=True,
+        executor_output={"verified": True, "goal_reached": True},
+    )
+    registry = _TaskRegistry("ready")
+    contract._task_registry = registry
+
+    class _LatePreemptionExecutor(StubExecutor):
+        def execute(self, env: Any) -> ExecutionResult:
+            result = super().execute(env)
+            registry.preemption_requested_by_task_id = "task-high"
+            registry.preemption_requested_priority = 90
+            registry.version += 1
+            return result
+
+    contract._executor = _LatePreemptionExecutor(
+        ok=True,
+        output={"verified": True, "goal_reached": True},
+    )
+    report = contract.execute_autopilot(
+        GoalExecutionRequest(
+            goal="finish durable task",
+            business_id="biz-1",
+            tenant_id="tenant-1",
+            max_steps=1,
+            meta={"task_id": "task-1"},
+        )
+    )
+
+    assert report.completed is True
+    assert registry.transitions == ["start", "succeed"]
+    assert registry.status == "succeeded"
+
+
+def test_phase9_cooperative_preemption_stops_before_second_side_effect_and_pauses(
+    tmp_path: Path,
+) -> None:
+    contract = _build_contract(
+        tmp_path,
+        executor_ok=True,
+        executor_output={"verified": True, "goal_reached": False},
+    )
+    registry = _TaskRegistry("ready")
+    contract._task_registry = registry
+    calls: list[str] = []
+
+    class _PreemptingExecutor(StubExecutor):
+        def execute(self, env: Any) -> ExecutionResult:
+            calls.append(str(env.decision.decision_id))
+            result = super().execute(env)
+            registry.preemption_requested_by_task_id = "task-high"
+            registry.preemption_requested_priority = 90
+            registry.version += 1
+            return result
+
+    contract._executor = _PreemptingExecutor(
+        ok=True,
+        output={"verified": True, "goal_reached": False},
+    )
+    report = contract.execute_autopilot(
+        GoalExecutionRequest(
+            goal="execute durable task",
+            business_id="biz-1",
+            tenant_id="tenant-1",
+            max_steps=3,
+            meta={"task_id": "task-1"},
+        )
+    )
+
+    assert report.completed is False
+    assert report.stop_reason == "task_preempted"
+    assert len(calls) == 1
+    assert registry.transitions == ["start", "pause"]
+    assert registry.status == "paused"
+
+
+def test_phase9_ready_task_transitions_running_then_succeeded_after_verified_run(
+    tmp_path: Path,
+) -> None:
+    contract = _build_contract(
+        tmp_path,
+        executor_ok=True,
+        executor_output={"verified": True, "goal_reached": True},
+    )
+    registry = _TaskRegistry("ready")
+    contract._task_registry = registry
+
+    report = contract.execute_autopilot(
+        GoalExecutionRequest(
+            goal="execute durable task",
+            business_id="biz-1",
+            tenant_id="tenant-1",
+            meta={"task_id": "task-1"},
+        )
+    )
+
+    assert report.completed is True
+    assert registry.transitions == ["start", "succeed"]
+    assert registry.status == "succeeded"
+    assert registry.version == 3
+
+
+def test_phase9_incomplete_run_leaves_task_running_for_recovery(
+    tmp_path: Path,
+) -> None:
+    contract = _build_contract(
+        tmp_path,
+        executor_ok=True,
+        executor_output={"verified": True, "goal_reached": False},
+    )
+    registry = _TaskRegistry("ready")
+    contract._task_registry = registry
+
+    report = contract.execute_autopilot(
+        GoalExecutionRequest(
+            goal="execute durable task",
+            business_id="biz-1",
+            tenant_id="tenant-1",
+            max_steps=1,
+            meta={"task_id": "task-1"},
+        )
+    )
+
+    assert report.completed is False
+    assert registry.transitions == ["start"]
+    assert registry.status == "running"
+    assert registry.version == 2
+
+
+def test_phase9_terminal_task_fails_before_headless_effect(tmp_path: Path) -> None:
+    contract = _build_contract(tmp_path)
+    registry = _TaskRegistry("succeeded")
+    contract._task_registry = registry
+    request = GoalExecutionRequest(
+        goal="execute durable task",
+        business_id="biz-1",
+        tenant_id="tenant-1",
+        meta={"task_id": "task-1"},
+    )
+    with pytest.raises(ValueError, match="terminal task"):
+        contract.execute_autopilot(request)
+    assert registry.calls == [("tenant-1", "biz-1", "task-1")]
+
+
+def test_phase9_blank_task_binding_is_invalid_without_affecting_legacy_requests() -> None:
+    invalid = GoalExecutionRequest(
+        goal="x",
+        business_id="biz-1",
+        meta={"task_id": "   "},
+    )
+    ok, issues = invalid.validate()
+    assert ok is False
+    assert "invalid:task_id" in issues
+
+    legacy = GoalExecutionRequest(goal="x", business_id="biz-1")
+    legacy_ok, legacy_issues = legacy.validate()
+    assert legacy_ok is True
+    assert "invalid:task_id" not in legacy_issues
+
+
+
+@pytest.mark.parametrize("status", ["created", "waiting", "paused", "blocked", "compensating"])
+def test_phase9_non_executable_task_states_fail_before_effect(
+    tmp_path: Path,
+    status: str,
+) -> None:
+    contract = _build_contract(tmp_path)
+    registry = _TaskRegistry(status)
+    contract._task_registry = registry
+    request = GoalExecutionRequest(
+        goal="execute durable task",
+        business_id="biz-1",
+        tenant_id="tenant-1",
+        meta={"task_id": "task-1"},
+    )
+    with pytest.raises(ValueError, match="not executable"):
+        contract.execute_autopilot(request)
+    assert registry.calls == [("tenant-1", "biz-1", "task-1")]
+
+
+
+def test_phase9_expired_task_deadline_fails_before_effect(tmp_path: Path) -> None:
+    contract = _build_contract(tmp_path)
+    registry = _TaskRegistry(
+        "ready",
+        retry_policy=RetryPolicy(max_attempts=2),
+        timeout_policy=TimeoutPolicy(task_deadline_ms=1),
+    )
+    contract._task_registry = registry
+    request = GoalExecutionRequest(
+        goal="execute durable task",
+        business_id="biz-1",
+        tenant_id="tenant-1",
+        meta={"task_id": "task-1"},
+    )
+    with pytest.raises(TimeoutError, match="deadline"):
+        contract.execute_autopilot(request)
+    assert registry.calls == [("tenant-1", "biz-1", "task-1")]
+
+
+
+def test_phase9_expired_attempt_deadline_fails_before_executor(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    contract = _build_contract(tmp_path)
+    registry = _TaskRegistry(
+        "ready",
+        retry_policy=RetryPolicy(max_attempts=2),
+        timeout_policy=TimeoutPolicy(attempt_timeout_ms=1_000),
+    )
+    contract._task_registry = registry
+    calls: list[str] = []
+
+    class _CountingExecutor(StubExecutor):
+        def execute(self, env: Any) -> ExecutionResult:
+            calls.append(str(env.decision.decision_id))
+            return super().execute(env)
+
+    contract._executor = _CountingExecutor()
+    monkeypatch.setattr(
+        "application.autonomy.autonomy_loop.time",
+        SimpleNamespace(time=lambda: 1_000.0),
+    )
+    monkeypatch.setattr(
+        "application.autonomy.autonomy_execution_step.time",
+        SimpleNamespace(time=lambda: 1_002.0),
+    )
+    with pytest.raises(TimeoutError, match="attempt deadline"):
+        contract.execute_autopilot(
+            GoalExecutionRequest(
+                goal="execute durable task",
+                business_id="biz-1",
+                tenant_id="tenant-1",
+                meta={"task_id": "task-1"},
+            )
+        )
+    assert calls == []
+
+
+def test_phase9_running_task_requires_recovery_checkpoint_owner(tmp_path: Path) -> None:
+    contract = _build_contract(tmp_path)
+    contract._task_registry = _TaskRegistry("running")
+    request = GoalExecutionRequest(
+        goal="resume durable task",
+        business_id="biz-1",
+        tenant_id="tenant-1",
+        meta={"task_id": "task-1"},
+    )
+    with pytest.raises(RuntimeError, match="recovery checkpoints"):
+        contract.execute_autopilot(request)
+
+
+def test_phase9_running_task_without_checkpoint_history_fails_before_effect(
+    tmp_path: Path,
+) -> None:
+    contract = _build_contract(tmp_path)
+    contract._task_registry = _TaskRegistry("running")
+    calls: list[str] = []
+
+    class _CountingExecutor(StubExecutor):
+        def execute(self, env: Any) -> ExecutionResult:
+            calls.append(str(env.decision.decision_id))
+            return super().execute(env)
+
+    class _CheckpointStore:
+        def list_task_runs(self, **kwargs: Any):
+            del kwargs
+            return ()
+
+    executor = _CountingExecutor()
+    executor._reliability = type(
+        "Reliability",
+        (),
+        {"checkpoint_store": _CheckpointStore()},
+    )()
+    contract._executor = executor
+
+    with pytest.raises(RuntimeError, match="existing recovery checkpoints"):
+        contract.execute_autopilot(
+            GoalExecutionRequest(
+                goal="resume durable task",
+                business_id="biz-1",
+                tenant_id="tenant-1",
+                meta={"task_id": "task-1"},
+            )
+        )
+    assert calls == []
+
+
+def test_phase9_incomplete_running_task_fails_before_duplicate_effect(tmp_path: Path) -> None:
+    contract = _build_contract(tmp_path)
+    contract._task_registry = _TaskRegistry("running")
+
+    class _CheckpointStore:
+        def list_task_runs(self, **kwargs: Any):
+            del kwargs
+            return (type("Run", (), {"terminal_stage": None})(),)
+
+    contract._executor._reliability = type(
+        "Reliability",
+        (),
+        {"checkpoint_store": _CheckpointStore()},
+    )()
+    request = GoalExecutionRequest(
+        goal="resume durable task",
+        business_id="biz-1",
+        tenant_id="tenant-1",
+        meta={"task_id": "task-1"},
+    )
+    with pytest.raises(RuntimeError, match="incomplete execution run"):
+        contract.execute_autopilot(request)
+
+
+
+def _restart_reliability_from_persisted_task_checkpoints(
+    path: Path,
+) -> RuntimeReliability:
+    rebuilt = JsonlExecutionCheckpointStore(path)
+    idempotency = InMemoryIdempotencyStore()
+    outbox = InMemoryOutboxStore()
+    return RuntimeReliability(
+        checkpoint_store=rebuilt,
+        idempotency_store=idempotency,
+        recovery_orchestrator=RecoveryOrchestrator(
+            checkpoint_store=rebuilt,
+            idempotency_store=idempotency,
+            outbox_store=outbox,
+        ),
+        distributed_lock=InMemoryDistributedLock(),
+        scheduler_leader_election=None,
+        recovery_leader_election=None,
+    )
+
+
+def test_phase9_persisted_pre_effect_crash_restarts_through_real_recovery_chain(
+    tmp_path: Path,
+) -> None:
+    checkpoint_path = tmp_path / "task-restart.jsonl"
+    before_crash = JsonlExecutionCheckpointStore(checkpoint_path)
+    before_crash.append(
+        ExecutionCheckpoint(
+            tenant_id="tenant-1",
+            business_id="biz-1",
+            task_id="task-1",
+            task_run_id="task-run-crashed",
+            step_id="task-run-crashed:0",
+            run_id="executor-run-crashed",
+            sequence_no=0,
+            stage="request",
+            checkpoint_id="cp-request",
+        )
+    )
+
+    contract = _build_contract(
+        tmp_path,
+        executor_ok=True,
+        executor_output={"verified": True, "goal_reached": True},
+    )
+    contract._task_registry = _TaskRegistry("running")
+    calls: list[str] = []
+
+    class _CountingExecutor(StubExecutor):
+        def execute(self, env: Any) -> ExecutionResult:
+            calls.append(str(env.decision.decision_id))
+            return super().execute(env)
+
+    restarted_executor = _CountingExecutor(
+        ok=True,
+        output={"verified": True, "goal_reached": True},
+    )
+    restarted_executor._reliability = _restart_reliability_from_persisted_task_checkpoints(
+        checkpoint_path
+    )
+    contract._executor = restarted_executor
+
+    report = contract.execute_autopilot(
+        GoalExecutionRequest(
+            goal="resume durable task",
+            business_id="biz-1",
+            tenant_id="tenant-1",
+            meta={"task_id": "task-1"},
+        )
+    )
+
+    assert report.completed is True
+    assert calls == ["dec-1"]
+
+
+def test_phase9_persisted_post_effect_crash_does_not_replay_side_effect(
+    tmp_path: Path,
+) -> None:
+    checkpoint_path = tmp_path / "task-post-effect-crash.jsonl"
+    before_crash = JsonlExecutionCheckpointStore(checkpoint_path)
+    for sequence_no, stage in enumerate(
+        ("request", "world_state", "decision", "executable_action", "execution")
+    ):
+        before_crash.append(
+            ExecutionCheckpoint(
+                tenant_id="tenant-1",
+                business_id="biz-1",
+                task_id="task-1",
+                task_run_id="task-run-crashed",
+                step_id="task-run-crashed:0",
+                run_id="executor-run-crashed",
+                sequence_no=sequence_no,
+                stage=stage,
+                checkpoint_id=f"cp-{stage}",
+                outbox_message_id=(
+                    "decision-crashed" if stage == "execution" else None
+                ),
+            )
+        )
+
+    contract = _build_contract(tmp_path)
+    contract._task_registry = _TaskRegistry("running")
+    calls: list[str] = []
+
+    class _CountingExecutor(StubExecutor):
+        def execute(self, env: Any) -> ExecutionResult:
+            calls.append(str(env.decision.decision_id))
+            return super().execute(env)
+
+    restarted_executor = _CountingExecutor()
+    restarted_executor._reliability = _restart_reliability_from_persisted_task_checkpoints(
+        checkpoint_path
+    )
+    contract._executor = restarted_executor
+
+    with pytest.raises(RuntimeError, match="recovery action required"):
+        contract.execute_autopilot(
+            GoalExecutionRequest(
+                goal="resume durable task",
+                business_id="biz-1",
+                tenant_id="tenant-1",
+                meta={"task_id": "task-1"},
+            )
+        )
+    assert calls == []
+
+
+def test_phase9_recovery_approved_early_restart_is_allowed(tmp_path: Path) -> None:
+    contract = _build_contract(
+        tmp_path,
+        executor_ok=True,
+        executor_output={"verified": True, "goal_reached": True},
+    )
+    contract._task_registry = _TaskRegistry("running")
+
+    class _CheckpointStore:
+        def list_task_runs(self, **kwargs: Any):
+            del kwargs
+            return (
+                type(
+                    "Run",
+                    (),
+                    {"run_id": "task-run-1", "terminal_stage": None},
+                )(),
+            )
+
+    class _Reliability:
+        checkpoint_store = _CheckpointStore()
+
+        def plan_task_run_recovery(self, **kwargs: Any):
+            assert kwargs == {
+                "tenant_id": "tenant-1",
+                "business_id": "biz-1",
+                "task_id": "task-1",
+                "task_run_id": "task-run-1",
+            }
+            return RecoveryPlan(
+                run_id="executor-run-1",
+                recovery_action="restart",
+                reason="restart_from_world_state",
+                reconciliation=ReconciliationReport(
+                    run_id="executor-run-1",
+                    latest_stage="world_state",
+                    idempotency_state=None,
+                    outbox_state=None,
+                    checkpoint_count=2,
+                ),
+                resume_stage="world_state",
+            )
+
+    contract._executor._reliability = _Reliability()
+    report = contract.execute_autopilot(
+        GoalExecutionRequest(
+            goal="resume durable task",
+            business_id="biz-1",
+            tenant_id="tenant-1",
+            meta={"task_id": "task-1"},
+        )
+    )
+    assert report.completed is True
+
+
+def test_phase9_executable_action_recovery_resumes_then_reenters_canonical_loop(
+    tmp_path: Path,
+) -> None:
+    contract = _build_contract(
+        tmp_path,
+        executor_ok=True,
+        executor_output={"verified": True, "goal_reached": True},
+    )
+    contract._task_registry = _TaskRegistry("running")
+    recovered_env = _Envelope(
+        decision=_Decision(
+            decision_id="decision-recovered",
+            action="notify_owner",
+            payload={
+                "tenant_id": "tenant-1",
+                "business_id": "biz-1",
+                "task_id": "task-1",
+                "task_run_id": "task-run-recovery",
+            },
+            correlation_id="corr-recovered",
+        )
+    )
+    calls: list[str] = []
+
+    class _CheckpointStore:
+        def list_task_runs(self, **kwargs: Any):
+            del kwargs
+            return (
+                type(
+                    "Run",
+                    (),
+                    {"run_id": "task-run-recovery", "terminal_stage": None},
+                )(),
+            )
+
+    class _Reliability:
+        checkpoint_store = _CheckpointStore()
+
+        def plan_task_run_recovery(self, **kwargs: Any):
+            del kwargs
+            return RecoveryPlan(
+                run_id="decision-recovered",
+                recovery_action="resume_execution",
+                reason="resume_from_executable_action",
+                reconciliation=ReconciliationReport(
+                    run_id="decision-recovered",
+                    latest_stage="executable_action",
+                    idempotency_state=None,
+                    outbox_state=None,
+                    checkpoint_count=4,
+                ),
+                resume_stage="executable_action",
+            )
+
+        def recovery_envelope_for_task_run(self, **kwargs: Any):
+            assert kwargs["task_run_id"] == "task-run-recovery"
+            return recovered_env
+
+    class _RecoveryExecutor(StubExecutor):
+        def __init__(self):
+            super().__init__(ok=True, output={"verified": True})
+            self._reliability = _Reliability()
+
+        def execute_pre_effect_recovery(self, env: Any) -> ExecutionResult:
+            calls.append(f"recover:{env.decision.decision_id}")
+            return ExecutionResult(
+                ok=True,
+                output={"verified": True},
+                decision_id=env.decision.decision_id,
+                correlation_id=env.decision.correlation_id,
+            )
+
+        def execute(self, env: Any) -> ExecutionResult:
+            calls.append(f"next:{env.decision.decision_id}")
+            return ExecutionResult(
+                ok=True,
+                output={"verified": True, "goal_reached": True},
+                decision_id=env.decision.decision_id,
+                correlation_id=env.decision.correlation_id,
+            )
+
+    contract._executor = _RecoveryExecutor()
+    report = contract.execute_autopilot(
+        GoalExecutionRequest(
+            goal="resume durable task",
+            business_id="biz-1",
+            tenant_id="tenant-1",
+            meta={"task_id": "task-1"},
+        )
+    )
+    assert report.completed is True
+    assert calls[0] == "recover:decision-recovered"
+    assert calls[1:] == ["next:dec-1"]
+
+
+def test_phase9_recovery_does_not_blindly_replay_post_decision_run(tmp_path: Path) -> None:
+    contract = _build_contract(tmp_path)
+    contract._task_registry = _TaskRegistry("running")
+
+    class _CheckpointStore:
+        def list_task_runs(self, **kwargs: Any):
+            del kwargs
+            return (
+                type(
+                    "Run",
+                    (),
+                    {"run_id": "task-run-2", "terminal_stage": None},
+                )(),
+            )
+
+    class _Reliability:
+        checkpoint_store = _CheckpointStore()
+
+        def plan_task_run_recovery(self, **kwargs: Any):
+            del kwargs
+            return RecoveryPlan(
+                run_id="executor-run-2",
+                recovery_action="resume_execution",
+                reason="resume_from_execution",
+                reconciliation=ReconciliationReport(
+                    run_id="executor-run-2",
+                    latest_stage="execution",
+                    idempotency_state=None,
+                    outbox_state=None,
+                    checkpoint_count=4,
+                ),
+                resume_stage="execution",
+            )
+
+    contract._executor._reliability = _Reliability()
+    with pytest.raises(RuntimeError, match="recovery action required: resume_execution"):
+        contract.execute_autopilot(
+            GoalExecutionRequest(
+                goal="resume durable task",
+                business_id="biz-1",
+                tenant_id="tenant-1",
+                meta={"task_id": "task-1"},
+            )
+        )
+
+
+
+def test_phase9_conflicting_task_requires_canonical_distributed_lock(tmp_path: Path) -> None:
+    contract = _build_contract(tmp_path)
+    contract._task_registry = _TaskRegistry(
+        "ready",
+        conflict_keys=("ledger",),
+    )
+    with pytest.raises(RuntimeError, match="canonical distributed lock"):
+        contract.execute_autopilot(
+            GoalExecutionRequest(
+                goal="execute durable task",
+                business_id="biz-1",
+                tenant_id="tenant-1",
+                meta={"task_id": "task-1"},
+            )
+        )
+
+
+def test_phase9_conflict_lock_blocks_second_task_before_effect(tmp_path: Path) -> None:
+    lock = InMemoryDistributedLock()
+    contract = _build_contract(tmp_path)
+    contract._task_registry = _TaskRegistry(
+        "ready",
+        conflict_keys=("ledger",),
+    )
+    contract._executor._reliability = type(
+        "Reliability",
+        (),
+        {"distributed_lock": lock},
+    )()
+
+    existing = lock.acquire(
+        tenant_id="tenant-1",
+        resource="durable-task-conflict:biz-1:ledger",
+        owner_id="durable-task:biz-1:other-task",
+        ttl_seconds=3600,
+    )
+    assert existing is not None
+    try:
+        with pytest.raises(RuntimeError, match="already locked"):
+            contract.execute_autopilot(
+                GoalExecutionRequest(
+                    goal="execute durable task",
+                    business_id="biz-1",
+                    tenant_id="tenant-1",
+                    meta={"task_id": "task-1"},
+                )
+            )
+    finally:
+        lock.release(lease=existing)
+
+
+def test_phase9_conflict_lock_released_after_execution(tmp_path: Path) -> None:
+    lock = InMemoryDistributedLock()
+    contract = _build_contract(
+        tmp_path,
+        executor_ok=True,
+        executor_output={"verified": True, "goal_reached": True},
+    )
+    contract._task_registry = _TaskRegistry(
+        "ready",
+        conflict_keys=("ledger",),
+    )
+    contract._executor._reliability = type(
+        "Reliability",
+        (),
+        {"distributed_lock": lock},
+    )()
+    report = contract.execute_autopilot(
+        GoalExecutionRequest(
+            goal="execute durable task",
+            business_id="biz-1",
+            tenant_id="tenant-1",
+            meta={"task_id": "task-1"},
+        )
+    )
+    assert report.completed is True
+    reacquired = lock.acquire(
+        tenant_id="tenant-1",
+        resource="durable-task-conflict:biz-1:ledger",
+        owner_id="durable-task:biz-1:after",
+        ttl_seconds=60,
+    )
+    assert reacquired is not None
+    lock.release(lease=reacquired)

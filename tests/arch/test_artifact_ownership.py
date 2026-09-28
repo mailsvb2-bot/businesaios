@@ -81,6 +81,23 @@ def test_artifact_registry_uses_shared_event_mutation_not_technical_artifact_sto
 def test_business_autonomy_bootstrap_wires_artifact_to_existing_event_store() -> None:
     bootstrap = (ROOT / "runtime/business_autonomy/bootstrap.py").read_text(encoding="utf-8")
     wiring = (ROOT / "runtime/business_autonomy/ontology_runtime.py").read_text(encoding="utf-8")
-    assert "ArtifactRegistry(event_store=event_store, idempotency_store=idempotency_store)" in wiring
+    tree = ast.parse(wiring)
+    artifact_calls = [
+        node
+        for node in ast.walk(tree)
+        if isinstance(node, ast.Call)
+        and isinstance(node.func, ast.Name)
+        and node.func.id == "ArtifactRegistry"
+    ]
+    assert len(artifact_calls) == 1
+    keywords = {
+        keyword.arg: keyword.value
+        for keyword in artifact_calls[0].keywords
+        if keyword.arg is not None
+    }
+    assert isinstance(keywords.get("event_store"), ast.Name)
+    assert keywords["event_store"].id == "event_store"
+    assert isinstance(keywords.get("idempotency_store"), ast.Name)
+    assert keywords["idempotency_store"].id == "idempotency_store"
     assert '"_artifact_registry"' in wiring
     assert "wire_business_ontology_runtime(" in bootstrap

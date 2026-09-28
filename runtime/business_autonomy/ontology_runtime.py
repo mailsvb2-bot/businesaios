@@ -93,6 +93,10 @@ def wire_business_ontology_runtime(
             idempotency_store=idempotency_store,
             pii_vault=pii_vault,
         )
+        artifact_registry = ArtifactRegistry(
+            event_store=event_store,
+            idempotency_store=idempotency_store,
+        )
         bindings = {
             "_organization_registry": OrganizationRegistry(event_store=event_store, idempotency_store=idempotency_store),
             "_lead_registry": LeadRegistry(event_store=event_store, idempotency_store=idempotency_store),
@@ -103,8 +107,12 @@ def wire_business_ontology_runtime(
             "_business_goal_registry": BusinessGoalRegistry(event_store=event_store, idempotency_store=idempotency_store),
             "_business_resource_registry": BusinessResourceRegistry(event_store=event_store, idempotency_store=idempotency_store),
             "_business_service_registry": BusinessServiceRegistry(event_store=event_store, idempotency_store=idempotency_store),
-            "_task_registry": DurableTaskRegistry(event_store=event_store, idempotency_store=idempotency_store),
-            "_artifact_registry": ArtifactRegistry(event_store=event_store, idempotency_store=idempotency_store),
+            "_task_registry": DurableTaskRegistry(
+                event_store=event_store,
+                idempotency_store=idempotency_store,
+                artifact_registry=artifact_registry,
+            ),
+            "_artifact_registry": artifact_registry,
             "_asset_registry": AssetRegistry(event_store=event_store, idempotency_store=idempotency_store),
             "_document_registry": DocumentRegistry(event_store=event_store, idempotency_store=idempotency_store),
             "_deal_registry": DealRegistry(event_store=event_store, idempotency_store=idempotency_store),

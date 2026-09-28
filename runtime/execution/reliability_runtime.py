@@ -6,10 +6,11 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+from kernel.decision_crypto import decision_envelope_from_recovery_snapshot
 from reliability.distributed_lock import DistributedLock, build_distributed_lock
 from reliability.execution_checkpoint_store import (
-    ExecutionCheckpoint,
     CANON_CHECKPOINT_STAGE_ORDER,
+    ExecutionCheckpoint,
     ExecutionCheckpointStore,
     JsonlExecutionCheckpointStore,
 )
@@ -114,6 +115,24 @@ class RuntimeReliability:
                 return tenant_id
         return normalize_tenant_id_or_unknown(self.tenant_default)
 
+    def task_scope_for_env(
+        self,
+        env: Any,
+    ) -> tuple[str | None, str | None, str | None, str | None]:
+        payload = getattr(getattr(env, "decision", None), "payload", None)
+        payload_dict = dict(payload) if isinstance(payload, dict) else {}
+        business_id = str(payload_dict.get("business_id") or "").strip() or None
+        task_id = str(payload_dict.get("task_id") or "").strip() or None
+        task_run_id = str(payload_dict.get("task_run_id") or "").strip() or None
+        step_id = str(payload_dict.get("step_id") or "").strip() or None
+        if task_id is not None and business_id is None:
+            raise ValueError("task-scoped execution checkpoint requires business_id")
+        if task_run_id is not None and task_id is None:
+            raise ValueError("task run checkpoint requires task_id")
+        if step_id is not None and task_id is None:
+            raise ValueError("step-scoped execution checkpoint requires task_id")
+        return business_id, task_id, task_run_id, step_id
+
     def run_id_for_env(self, env: Any) -> str:
         decision = getattr(env, "decision", None)
         decision_id = str(getattr(decision, "decision_id", "") or "").strip()
@@ -210,11 +229,18 @@ class RuntimeReliability:
         tenant_id = self.tenant_id_for_env(env)
         run_id = self.run_id_for_env(env)
         latest = self.checkpoint_store.latest(tenant_id=tenant_id, run_id=run_id)
-        if latest is not None and latest.stage != "failed" and stage in CANON_CHECKPOINT_STAGE_ORDER and latest.stage in CANON_CHECKPOINT_STAGE_ORDER:
-            if CANON_CHECKPOINT_STAGE_ORDER.index(stage) <= CANON_CHECKPOINT_STAGE_ORDER.index(latest.stage):
-                return latest
+        if (
+            latest is not None
+            and latest.stage != "failed"
+            and stage in CANON_CHECKPOINT_STAGE_ORDER
+            and latest.stage in CANON_CHECKPOINT_STAGE_ORDER
+            and CANON_CHECKPOINT_STAGE_ORDER.index(stage)
+            <= CANON_CHECKPOINT_STAGE_ORDER.index(latest.stage)
+        ):
+            return latest
         next_seq = int(sequence_no) if sequence_no is not None else (0 if latest is None else int(latest.sequence_no) + 1)
         decision = getattr(env, "decision", None)
+        business_id, task_id, task_run_id, step_id = self.task_scope_for_env(env)
         cp = ExecutionCheckpoint(
             tenant_id=tenant_id,
             run_id=run_id,
@@ -224,12 +250,109 @@ class RuntimeReliability:
             decision_id=str(getattr(decision, "decision_id", "") or None) if getattr(decision, "decision_id", None) is not None else None,
             action_id=str(getattr(decision, "action", "") or None) if getattr(decision, "action", None) is not None else None,
             idempotency_key=self.idempotency_key_for_env(env).key,
-            outbox_message_id=str(getattr(decision, "decision_id", "") or None) if getattr(decision, "decision_id", None) is not None else None,
+            outbox_message_id=(
+                str(getattr(decision, "decision_id", "") or None)
+                if stage in {"execution", "verification", "state_update", "evidence"}
+                and getattr(decision, "decision_id", None) is not None
+                else None
+            ),
             trace_id=str(getattr(decision, "correlation_id", "") or None) if getattr(decision, "correlation_id", None) is not None else None,
+            business_id=business_id,
+            task_id=task_id,
+            task_run_id=task_run_id,
+            step_id=step_id,
             payload=dict(payload or {}),
         )
         self.checkpoint_store.append(cp)
         return cp
+
+    def plan_task_run_recovery(
+        self,
+        *,
+        tenant_id: str,
+        business_id: str,
+        task_id: str,
+        task_run_id: str,
+    ):
+        task_run = str(task_run_id or "").strip()
+        if not task_run:
+            raise ValueError("task_run_id is required")
+        checkpoints = [
+            checkpoint
+            for checkpoint in self.checkpoint_store.list_task(
+                tenant_id=tenant_id,
+                business_id=business_id,
+                task_id=task_id,
+            )
+            if str(checkpoint.task_run_id or checkpoint.run_id) == task_run
+        ]
+        if not checkpoints:
+            raise LookupError(f"task run not found: {task_run}")
+        latest = max(
+            checkpoints,
+            key=lambda item: (
+                item.created_at,
+                item.run_id,
+                item.sequence_no,
+                item.checkpoint_id,
+            ),
+        )
+        if self.recovery_orchestrator is None:
+            raise RuntimeError("canonical recovery orchestrator is not configured")
+        return self.recovery_orchestrator.plan(
+            tenant_id=tenant_id,
+            run_id=latest.run_id,
+            outbox_message_id=latest.outbox_message_id,
+        )
+
+    def recovery_envelope_for_task_run(
+        self,
+        *,
+        tenant_id: str,
+        business_id: str,
+        task_id: str,
+        task_run_id: str,
+    ):
+        checkpoints = tuple(
+            checkpoint
+            for checkpoint in self.checkpoint_store.list_task(
+                tenant_id=tenant_id,
+                business_id=business_id,
+                task_id=task_id,
+            )
+            if str(checkpoint.task_run_id or checkpoint.run_id) == str(task_run_id)
+        )
+        if not checkpoints:
+            raise LookupError(f"task run not found: {task_run_id}")
+        latest = max(
+            checkpoints,
+            key=lambda item: (item.created_at, item.run_id, item.sequence_no, item.checkpoint_id),
+        )
+        if latest.stage not in {"decision", "executable_action"}:
+            raise RuntimeError(
+                "recovery envelope is only admissible from decision/executable_action, "
+                f"got {latest.stage}"
+            )
+        raw_snapshot = dict(latest.payload or {}).get("recovery_envelope")
+        if not isinstance(raw_snapshot, dict):
+            raise RuntimeError(f"{latest.stage} checkpoint has no recovery envelope")
+        env = decision_envelope_from_recovery_snapshot(raw_snapshot)
+        decision = env.decision
+        payload = dict(getattr(decision, "payload", {}) or {})
+        expected = {
+            "tenant_id": str(tenant_id),
+            "business_id": str(business_id),
+            "task_id": str(task_id),
+            "task_run_id": str(task_run_id),
+        }
+        for name, value in expected.items():
+            if str(payload.get(name) or "") != value:
+                raise RuntimeError(f"recovery envelope {name} mismatch")
+        if latest.decision_id and str(decision.decision_id) != str(latest.decision_id):
+            raise RuntimeError("recovery envelope decision_id mismatch")
+        if latest.action_id and str(decision.action) != str(latest.action_id):
+            raise RuntimeError("recovery envelope action mismatch")
+        return env
 
     def campaign_scheduler_leader(self, *, tenant_id: str, owner_id: str, ttl_seconds: int | None = None, now=None) -> LeadershipLease | None:
         return self.scheduler_leader_election.campaign(tenant_id=tenant_id, leader_id=owner_id, ttl_seconds=ttl_seconds, now=now)

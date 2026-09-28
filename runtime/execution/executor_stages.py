@@ -3,6 +3,7 @@ from __future__ import annotations
 from typing import Any
 
 from governance.time_scale import TimeScale
+from kernel.decision_crypto import decision_envelope_recovery_snapshot
 from runtime.execution.dispatcher import effect_succeeded
 from runtime.execution.execution_contract_lock import (
     ExecutionContractLockError,
@@ -76,7 +77,6 @@ def _mark_execution_failed(*, executor: Any, env: Any, reason: str) -> None:
 
 def preflight_and_verify(*, executor: Any, env: Any, timescale: TimeScale) -> None:
     _checkpoint(executor=executor, env=env, stage="request", payload={"timescale": str(timescale.value if hasattr(timescale, "value") else timescale)})
-    _checkpoint(executor=executor, env=env, stage="decision", payload={"action": str(env.decision.action)})
     # Authenticate the envelope before any operational policy gate. Otherwise a
     # global safe-mode state can mask payload/signature/TTL/replay failures and
     # the security regression wall stops exercising the intended controls.
@@ -92,8 +92,25 @@ def preflight_and_verify(*, executor: Any, env: Any, timescale: TimeScale) -> No
         event_store=getattr(getattr(executor, "_runtime_infra", None), "event_store", None),
         decision=env.decision,
     )
+    _checkpoint(
+        executor=executor,
+        env=env,
+        stage="decision",
+        payload={
+            "action": str(env.decision.action),
+            "recovery_envelope": decision_envelope_recovery_snapshot(env),
+        },
+    )
     executor._guard.execute_once(env)
-    _checkpoint(executor=executor, env=env, stage="executable_action", payload={"action": str(env.decision.action)})
+    _checkpoint(
+        executor=executor,
+        env=env,
+        stage="executable_action",
+        payload={
+            "action": str(env.decision.action),
+            "recovery_envelope": decision_envelope_recovery_snapshot(env),
+        },
+    )
     _emit_operational_event(executor=executor, env=env, event_type="runtime_executor_preflight_passed", payload={"action": str(env.decision.action), "timescale": str(timescale.value if hasattr(timescale, 'value') else timescale)})
 
 

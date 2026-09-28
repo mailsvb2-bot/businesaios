@@ -12,7 +12,19 @@ PRODUCTION_ROOTS = ("application", "runtime", "storage", "core", "adapters", "bi
 REGISTRY = Path("application/task/registry.py")
 FACTS = Path("application/task/facts.py")
 FACT_TYPES = {
-    "task.created", "task.started", "task.completed", "task.failed", "task.cancelled"
+    "task.created",
+    "task.ready",
+    "task.started",
+    "task.waiting",
+    "task.paused",
+    "task.blocked",
+    "task.succeeded",
+    "task.completed",
+    "task.failed",
+    "task.cancelled",
+    "task.compensating",
+    "task.artifact_attached",
+    "task.preemption_requested",
 }
 
 
@@ -71,6 +83,37 @@ def test_task_registry_delegates_durable_mutation_to_shared_owner() -> None:
 def test_business_autonomy_bootstrap_wires_task_to_existing_event_store() -> None:
     bootstrap = (ROOT / "runtime/business_autonomy/bootstrap.py").read_text(encoding="utf-8")
     wiring = (ROOT / "runtime/business_autonomy/ontology_runtime.py").read_text(encoding="utf-8")
-    assert "DurableTaskRegistry(event_store=event_store, idempotency_store=idempotency_store)" in wiring
+    assert "artifact_registry = ArtifactRegistry(" in wiring
+    assert "artifact_registry=artifact_registry" in wiring
+    assert '"_artifact_registry": artifact_registry' in wiring
     assert '"_task_registry"' in wiring
     assert "wire_business_ontology_runtime(" in bootstrap
+
+
+
+def test_phase9_task_runtime_reuses_canonical_queue_and_lock_owners() -> None:
+    queue_adapter = (ROOT / "runtime/queue/job_dispatcher.py").read_text(encoding="utf-8")
+    conflict_control = (ROOT / "application/task/registry.py").read_text(encoding="utf-8")
+
+    assert "from runtime.queue.job_contract import" in queue_adapter
+    assert "CANON_DURABLE_TASK_QUEUE_ADAPTER = True" in queue_adapter
+    assert "JobDispatchRequest" in queue_adapter
+    assert "self._dispatcher.dispatch(request)" in queue_adapter
+    assert "class JobScheduler" not in queue_adapter
+    assert "class JobStore" not in queue_adapter
+
+    assert "from reliability.distributed_lock import DistributedLock" in conflict_control
+    assert "CANON_DURABLE_TASK_CONFLICT_CONTROL = True" in conflict_control
+    assert "self._lock.acquire(" in conflict_control
+    assert "self._lock.release(" in conflict_control
+    assert "class InMemoryDistributedLock" not in conflict_control
+
+
+
+def test_phase9_headless_boot_composes_task_queue_with_existing_runtime_dispatcher() -> None:
+    boot = (ROOT / "execution/headless_boot.py").read_text(encoding="utf-8")
+    assert "TaskQueueAdapter(" in boot
+    assert 'queue_support = getattr(executor, "_queue_support", None)' in boot
+    assert 'queue_dispatcher = getattr(queue_support, "dispatcher", None)' in boot
+    assert "dispatcher=queue_dispatcher" in boot
+    assert "JobDispatcher(" not in boot

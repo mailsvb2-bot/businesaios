@@ -4,7 +4,12 @@ import pytest
 
 from core.ai.decision import Decision
 from core.security.keyring import Keyring
-from kernel.decision_crypto import assert_envelope_signature_surface, signed_envelope_from_decision
+from kernel.decision_crypto import (
+    assert_envelope_signature_surface,
+    decision_envelope_from_recovery_snapshot,
+    decision_envelope_recovery_snapshot,
+    signed_envelope_from_decision,
+)
 from observability.platform.decision_archive.sqlite_decision_archive import SqliteDecisionArchive
 
 
@@ -51,3 +56,24 @@ def test_evidence_ref_tampering_breaks_signed_decision_payload():
     env.decision.payload["meta"]["world_model_meta"]["evidence_refs"][0] = "forged-evidence"
     with pytest.raises(RuntimeError, match="PAYLOAD_TAMPERED"):
         assert_envelope_signature_surface(env)
+
+
+def test_recovery_snapshot_roundtrip_preserves_signed_envelope_and_rejects_tampering() -> None:
+    keyring = Keyring({"k1": {"secret": b"s1", "revoked": False}}, "k1")
+    decision = Decision(
+        decision_id="d-recovery", issuer_id="businesaios-core",
+        issued_at_ms=100, expires_at_ms=200, policy_id="p1",
+        action="send_message@v1",
+        payload={"tenant_id": "tenant-a", "business_id": "business-a", "text": "hello"},
+        snapshot_id="s1", state_hash="h1", correlation_id="c1",
+        state_schema_version=1, action_schema_version=1, envelope_version=1,
+    )
+    env = signed_envelope_from_decision(decision=decision, keyring=keyring)
+    snapshot = decision_envelope_recovery_snapshot(env)
+    rebuilt = decision_envelope_from_recovery_snapshot(snapshot)
+    assert rebuilt == env
+
+    tampered = dict(snapshot)
+    tampered["decision"] = {**dict(snapshot["decision"]), "payload": {**decision.payload, "text": "changed"}}
+    with pytest.raises(RuntimeError, match="PAYLOAD_TAMPERED"):
+        decision_envelope_from_recovery_snapshot(tampered)

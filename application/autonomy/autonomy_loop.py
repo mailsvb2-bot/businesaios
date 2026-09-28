@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+import time
 from dataclasses import asdict, dataclass, replace
 from typing import Any
 
@@ -64,6 +65,7 @@ class AutonomyLoop:
             payload={
                 "goal": request.goal,
                 "goal_id": request.goal_id,
+                "task_id": getattr(request, "task_id", None),
                 "business_id": request.business_id,
                 "tenant_id": request.tenant_id,
                 "user_id": request.user_id,
@@ -80,7 +82,9 @@ class AutonomyLoop:
         )
 
         steps: list[Any] = []
-        previous_feedback: dict[str, Any] = {}
+        previous_feedback: dict[str, Any] = dict(
+            (getattr(request, "meta", {}) or {}).get("previous_feedback") or {}
+        )
         completed = False
         stop_reason = "max_steps_reached"
         consecutive_failures = 0
@@ -102,6 +106,17 @@ class AutonomyLoop:
                 multi_goal_context=multi_goal_context,
                 owner_path_context=owner_path_context,
             )
+            task_id = str(getattr(request, "task_id", "") or "").strip()
+            if task_id:
+                runtime_request = replace(
+                    runtime_request,
+                    meta={
+                        **dict(runtime_request.meta or {}),
+                        "task_id": task_id,
+                        "task_run_id": trace.run_id,
+                        "step_id": f"{trace.run_id}:{step_index}",
+                    },
+                )
             trace.record(
                 event_type="step_started",
                 step_index=step_index,
@@ -230,6 +245,15 @@ class AutonomyLoop:
                 stop_reason = str(stop_eval.stop_reason or stop_reason)
                 completed = bool(stop_eval.completed)
                 break
+            if self._contract._task_preemption_requested(request):
+                stop_reason = "task_preempted"
+                completed = False
+                trace.record(
+                    event_type="task_preemption_observed",
+                    step_index=step_index,
+                    payload={"task_id": str(getattr(request, "task_id", "") or "")},
+                )
+                break
 
         final_feedback = self._memory_step.finalize_feedback(
             previous_feedback=previous_feedback,
@@ -273,14 +297,32 @@ class AutonomyLoop:
                 step_index=step_index,
                 attempt_index=attempt_index,
             )
+            attempt_request = request
+            timeout_payload = dict((request.meta or {}).get("durable_task_timeout_policy") or {})
+            raw_attempt_timeout_ms = timeout_payload.get("attempt_timeout_ms")
+            if raw_attempt_timeout_ms is not None:
+                if isinstance(raw_attempt_timeout_ms, bool):
+                    raise ValueError("attempt_timeout_ms must be an integer")
+                attempt_timeout_ms = int(raw_attempt_timeout_ms)
+                if attempt_timeout_ms <= 0:
+                    raise ValueError("attempt_timeout_ms must be > 0")
+                attempt_request = replace(
+                    request,
+                    meta={
+                        **dict(request.meta or {}),
+                        "durable_task_attempt_deadline_ms": int(time.time() * 1000)
+                        + attempt_timeout_ms,
+                        "durable_task_attempt_index": attempt_index,
+                    },
+                )
             result = self._execution_step.execute(
-                request=request,
+                request=attempt_request,
                 executable_action=decision.executable_action,
                 envelope=decision.envelope,
                 autonomy_decision=decision.autonomy_decision,
             )
             step, should_retry = self._feedback_step.build_step(
-                request=request,
+                request=attempt_request,
                 state=state,
                 trace=trace,
                 step_index=step_index,

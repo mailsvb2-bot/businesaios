@@ -1,5 +1,6 @@
 
 from core.ai.decision import Decision
+from core.utils.canonical import payload_hash
 from runtime.decision import DecisionEnvelope
 from runtime.execution.executor_result import ExecutionResult
 from runtime.executor import RuntimeExecutor
@@ -71,19 +72,18 @@ def test_runtime_executor_consumes_budget_after_safety(monkeypatch):
     executor = RuntimeExecutor(_Guard(), _Handlers(), _Events(), policy_registry=_Policy(), tenant_execution_budget_guard=guard)
     monkeypatch.setattr(executor, '_dispatch', lambda env, depth, enqueue: ExecutionResult(ok=True, output={}, decision_id='d1', correlation_id='c1'))
     monkeypatch.setattr(executor, '_apply_reliability_gate', lambda env: None)
+    payload = {
+        'tenant_id':'tenant-a',
+        'business_id':'b1',
+        'autonomy_tier':'supervised',
+        'approval_policy':{},
+        'constraints':{},
+        'economy':{},
+        'action_type':'send_message@v1',
+    }
     env = DecisionEnvelope(
-        decision=_decision(
-            payload={
-                'tenant_id':'tenant-a',
-                'business_id':'b1',
-                'autonomy_tier':'supervised',
-                'approval_policy':{},
-                'constraints':{},
-                'economy':{},
-                'action_type':'send_message@v1',
-            }
-        ),
-        payload_hash='h',
+        decision=_decision(payload=payload),
+        payload_hash=payload_hash(payload),
         signature='s',
         kid='k',
     )

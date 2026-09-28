@@ -44,7 +44,10 @@ class StubDecisionCore:
 
 @dataclass
 class StubExecutor:
+    calls: int = 0
+
     def execute(self, env):
+        self.calls += 1
         return ExecutionResult(
             ok=False,
             output={"revenue": "40", "responded": 1},
@@ -88,3 +91,41 @@ def test_contract_emits_retry_and_normalized_outcome_metadata(tmp_path) -> None:
     assert step_feedback["normalized_outcome"]["revenue"] == 40.0
     assert step_feedback["normalized_outcome"]["responded"] is True
     assert step_feedback["policy_explanation"]["policy_id"] == "policy-77"
+
+
+
+def test_durable_task_retry_policy_can_suppress_live_retry(tmp_path) -> None:
+    executor = StubExecutor()
+    contract = HeadlessExecutionContract(
+        decision_core=StubDecisionCore(),
+        executor=executor,
+        state_mapper=HeadlessGoalStateMapper(),
+        feedback_reader=SimpleHeadlessFeedbackReader(),
+        stop_policy=HeadlessStopPolicy(max_failures=1),
+        ledger=FileHeadlessLedger(root_dir=tmp_path / "ledger"),
+        state_store=FileHeadlessStateStore(root_dir=tmp_path / "state"),
+        effect_journal=FileEffectJournal(root_dir=tmp_path / "effects"),
+        idempotency_guard=FileIdempotencyGuard(root_dir=tmp_path / "idem"),
+        goal_score_engine=GoalScoreEngine(),
+        retry_taxonomy=RetryTaxonomy(),
+        policy_explainer=PolicyExplainer(),
+        outcome_normalizer=OutcomeNormalizer(),
+    )
+    report = contract.execute_autopilot(
+        GoalExecutionRequest(
+            goal="process inbound leads",
+            business_id="biz-1",
+            tenant_id="tenant-1",
+            max_steps=1,
+            meta={
+                "durable_task_retry_policy": {
+                    "max_attempts": 1,
+                    "retryable_statuses": ["recoverable"],
+                    "retry_ambiguous": False,
+                }
+            },
+        )
+    )
+    assert report.completed is False
+    assert executor.calls == 1
+    assert report.steps[0].feedback["durable_retry_policy"]["allowed_for_attempt"] is False

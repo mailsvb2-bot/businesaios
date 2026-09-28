@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import importlib
-from contextlib import contextmanager, suppress
+from contextlib import contextmanager
 from dataclasses import replace
 from pathlib import Path
 
@@ -35,6 +35,7 @@ def connect_sqlite_job_store(
         configure_journal_mode=bool(configure_journal_mode),
     )
     db.execute(f"PRAGMA busy_timeout={busy_timeout_ms};")
+    db.execute("PRAGMA synchronous=FULL;")
     return db
 
 
@@ -45,13 +46,6 @@ def sqlite_job_store_tx(*, path: Path, busy_timeout_ms: int):
         db.execute("BEGIN IMMEDIATE;")
         yield db
         db.commit()
-        # Crash-recovery contract: queue claims must be observable by a janitor
-        # even when the worker process exits immediately after claim() returns.
-        # WAL readers normally see committed frames, but an explicit passive
-        # checkpoint keeps the SQLite fallback deterministic across fork/os._exit
-        # tests without changing the canonical Postgres production path.
-        with suppress(Exception):
-            db.execute("PRAGMA wal_checkpoint(PASSIVE);")
     except Exception:
         db.rollback()
         raise
@@ -84,11 +78,15 @@ def init_sqlite_job_store_schema(*, path: Path, busy_timeout_ms: int) -> None:
     with connect_sqlite_job_store(
         path=path,
         busy_timeout_ms=busy_timeout_ms,
+        configure_journal_mode=False,
+    ) as probe:
+        if _schema_is_current(probe):
+            return
+    with connect_sqlite_job_store(
+        path=path,
+        busy_timeout_ms=busy_timeout_ms,
         configure_journal_mode=True,
     ) as db:
-        # Worker processes open the same durable queue repeatedly. Once schema v3
-        # and WAL are established, keep startup read-only instead of taking
-        # needless schema/meta write locks in every process.
         if _schema_is_current(db):
             return
         db.executescript(

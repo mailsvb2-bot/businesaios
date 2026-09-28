@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import time
+from dataclasses import replace
 from typing import Any
 
 from application.autonomy.autonomy_kill_switch import FileAutonomyKillSwitchRegistry
@@ -27,6 +29,7 @@ from application.memory.business_memory_state_adapter import BusinessMemoryState
 from application.memory.business_operating_memory import FileBusinessOperatingMemoryStore
 from application.planning.goal_plan_memory import GoalPlanMemoryService
 from application.planning.multi_goal_planner import MultiGoalPlannerService
+from application.task.registry import TaskConflictController
 from execution.action_budget_engine import ActionBudgetEngine
 from execution.autonomy_counters import AutonomyCounterResolver, FileAutonomyCounterStore
 from execution.blast_radius_guard import BlastRadiusGuard
@@ -139,6 +142,7 @@ class HeadlessExecutionContract:
         autonomy_safety_bundle: AutonomySafetyBundle | None = None,
         owner_path_service: Any | None = None,
         agent_identity_registry: Any | None = None,
+        task_registry: Any | None = None,
     ) -> None:
         try:
             validate_headless_decision_core(decision_core)
@@ -150,6 +154,7 @@ class HeadlessExecutionContract:
         self._executor = executor
         self._state_mapper = state_mapper
         self._agent_identity_registry = agent_identity_registry
+        self._task_registry = task_registry
         self._feedback_reader = feedback_reader
         self._stop_policy = stop_policy or HeadlessStopPolicy()
         self._ledger = ledger
@@ -259,76 +264,406 @@ class HeadlessExecutionContract:
             )
         )
 
-    def execute_autopilot(self, request: GoalExecutionRequest) -> GoalExecutionReport:
-        loop_result = self._loop.run(request)
-        run_artifact = canonical_goal_execution_report(
-            goal=request.goal,
-            business_id=request.business_id,
-            tenant_id=request.tenant_id,
-            completed=loop_result.completed,
-            stop_reason=loop_result.stop_reason,
-            steps=tuple(loop_result.steps),
-            final_feedback=dict(loop_result.final_feedback),
-            goal_id=request.goal_id,
+    def _resume_executable_action(
+        self,
+        *,
+        request: GoalExecutionRequest,
+        reliability: Any,
+        task_id: str,
+        task_run_id: str,
+        resume_stage: str,
+    ) -> GoalExecutionRequest:
+        recover = getattr(reliability, "recovery_envelope_for_task_run", None)
+        execute_name = (
+            "execute_decision_recovery"
+            if resume_stage == "decision"
+            else "execute_pre_effect_recovery"
         )
-        report = GoalExecutionReport(
-            goal=request.goal,
-            business_id=request.business_id,
-            tenant_id=request.tenant_id,
-            completed=loop_result.completed,
-            stop_reason=loop_result.stop_reason,
-            steps=tuple(loop_result.steps),
-            final_feedback=dict(loop_result.final_feedback),
-            run_id=str(loop_result.trace.run_id),
-            trace_id=str(loop_result.trace.trace_id),
-            canonical_run_artifact=run_artifact,
-            goal_id=request.goal_id,
-        )
-        last_step = loop_result.steps[-1] if loop_result.steps else None
-        self._evidence_persistence_service.persist(
+        execute = getattr(self._executor, execute_name, None)
+        if not callable(recover) or not callable(execute):
+            raise RuntimeError("canonical pre-effect recovery path is unavailable")
+        envelope = recover(
             tenant_id=request.tenant_id,
             business_id=request.business_id,
-            run_id=loop_result.trace.run_id,
-            goal=request.goal,
-            goal_id=request.goal_id,
-            step_index=int(last_step.step_index if last_step is not None else max(len(loop_result.steps) - 1, 0)),
-            action={
-                "action_type": str(last_step.action if last_step is not None else ""),
-                "action_id": str(last_step.action_id if last_step is not None else ""),
-            },
-            execution_result=dict(loop_result.final_feedback),
-            verification_result=dict(loop_result.final_feedback),
-            world_state_before={},
-            world_state_after=None,
-            request_meta=dict(request.meta),
-            request_profile=dict(request.profile),
-            request_constraints=dict(request.constraints),
-            request_signals=list(request.signals),
-            request_channel=request.channel,
-            request_region=request.region,
-            request_product_name=request.product_name,
-            completed=loop_result.completed,
-            stop_reason=loop_result.stop_reason,
-            final_feedback=dict(loop_result.final_feedback),
-            step_count=len(loop_result.steps),
+            task_id=task_id,
+            task_run_id=task_run_id,
         )
-        if self._ledger is not None:
-            self._ledger.write(
-                LedgerRecord(
-                    run_id=loop_result.trace.run_id,
-                    trace_id=loop_result.trace.trace_id,
-                    business_id=request.business_id,
-                    tenant_id=request.tenant_id,
-                    goal=request.goal,
-                    completed=loop_result.completed,
-                    stop_reason=loop_result.stop_reason,
-                    steps_count=len(loop_result.steps),
-                    final_feedback=dict(loop_result.final_feedback),
-                    trace=loop_result.trace.to_dict(),
-                    canonical_run_artifact=run_artifact,
-                    goal_id=request.goal_id,
-                )
+        payload = dict(getattr(envelope.decision, "payload", {}) or {})
+        requested_goal_id = str(request.goal_id or "").strip()
+        recovered_goal_id = str(
+            payload.get("goal_id")
+            or dict(getattr(envelope.decision, "contract_v2", {}) or {}).get("goal_id")
+            or ""
+        ).strip()
+        if requested_goal_id and recovered_goal_id != requested_goal_id:
+            raise RuntimeError("recovery envelope goal_id mismatch")
+        agent_id = str(getattr(request, "agent_id", "") or "").strip()
+        registry = self._agent_identity_registry
+        if agent_id and registry is not None:
+            if str(payload.get("agent_id") or "").strip() != agent_id:
+                raise PermissionError("recovery envelope agent identity mismatch")
+            registry.assert_execution_authorized(
+                tenant_id=request.tenant_id,
+                business_id=request.business_id,
+                agent_id=agent_id,
+                capability=str(envelope.decision.action or ""),
             )
+        result = execute(envelope)
+        output = dict(result.output or {}) if isinstance(result.output, dict) else {}
+        effector = dict(output.get("effector") or {}) if isinstance(output.get("effector"), dict) else {}
+        previous_feedback = {
+            "recovered_execution": True,
+            "recovery_from_task_run_id": task_run_id,
+            "decision_id": str(envelope.decision.decision_id),
+            "action": str(envelope.decision.action),
+            "action_id": str(payload.get("action_id") or ""),
+            "intent_id": str(payload.get("intent_id") or ""),
+            "attempted": bool(effector.get("attempted", True)),
+            "executed": bool(effector.get("executed", result.ok)),
+            "verified": bool(effector.get("verified", output.get("verified", False))),
+            "operator_required": bool(
+                effector.get("operator_required", output.get("operator_required", False))
+            ),
+            "error": result.error,
+            "execution_output": output,
+        }
+        return replace(
+            request,
+            meta={
+                **dict(request.meta or {}),
+                "recovery_from_task_run_id": task_run_id,
+                "recovery_action": "resume_execution",
+                "recovery_resume_stage": resume_stage,
+                "previous_feedback": previous_feedback,
+            },
+        )
+
+    def _task_preemption_requested(self, request: GoalExecutionRequest) -> bool:
+        task_id = str(getattr(request, "task_id", "") or "").strip()
+        if not task_id or self._task_registry is None:
+            return False
+        task = self._task_registry.get(
+            tenant_id=request.tenant_id,
+            business_id=request.business_id,
+            task_id=task_id,
+        )
+        status = str(
+            getattr(getattr(task, "status", None), "value", getattr(task, "status", ""))
+            or ""
+        )
+        return (
+            status == "running"
+            and bool(
+                str(
+                    getattr(task, "preemption_requested_by_task_id", "") or ""
+                ).strip()
+            )
+        )
+
+    def execute_autopilot(self, request: GoalExecutionRequest) -> GoalExecutionReport:
+        task_id = str(getattr(request, "task_id", "") or "").strip()
+        task_conflict_controller = None
+        task_conflict_leases = None
+        task_conflict_heartbeat = None
+        task_status = ""
+        task_execution_version: int | None = None
+        pending_pre_effect_recovery: tuple[Any, str, str] | None = None
+        if task_id:
+            if self._task_registry is None:
+                raise RuntimeError("canonical task registry is required for task-bound execution")
+            task = self._task_registry.get(
+                tenant_id=request.tenant_id,
+                business_id=request.business_id,
+                task_id=task_id,
+            )
+            status = str(getattr(getattr(task, "status", None), "value", getattr(task, "status", "")) or "")
+            task_status = status
+            raw_task_version = getattr(task, "version", None)
+            if isinstance(raw_task_version, bool) or raw_task_version is None:
+                raise RuntimeError("canonical durable task version is required")
+            task_execution_version = int(raw_task_version)
+            if task_execution_version < 1:
+                raise RuntimeError("canonical durable task version must be positive")
+            if status in {"succeeded", "failed", "cancelled"}:
+                raise ValueError("terminal task cannot start a new execution run")
+            if status not in {"ready", "running"}:
+                raise ValueError(f"task is not executable from status: {status or 'unknown'}")
+            if status == "running":
+                reliability = getattr(self._executor, "_reliability", None)
+                checkpoint_store = getattr(reliability, "checkpoint_store", None)
+                list_task_runs = getattr(checkpoint_store, "list_task_runs", None)
+                if not callable(list_task_runs):
+                    raise RuntimeError(
+                        "running durable task requires canonical recovery checkpoints"
+                    )
+                runs = list_task_runs(
+                    tenant_id=request.tenant_id,
+                    business_id=request.business_id,
+                    task_id=task_id,
+                )
+                if not runs:
+                    raise RuntimeError(
+                        "running durable task requires existing recovery checkpoints"
+                    )
+                if getattr(runs[-1], "terminal_stage", None) is None:
+                    recovery_planner = getattr(reliability, "plan_task_run_recovery", None)
+                    if not callable(recovery_planner):
+                        raise RuntimeError(
+                            "durable task has an incomplete execution run; recovery is required"
+                        )
+                    task_run_id = str(getattr(runs[-1], "run_id", "") or "").strip()
+                    if not task_run_id:
+                        raise RuntimeError(
+                            "durable task has an incomplete execution run without task_run_id"
+                        )
+                    recovery_plan = recovery_planner(
+                        tenant_id=request.tenant_id,
+                        business_id=request.business_id,
+                        task_id=task_id,
+                        task_run_id=task_run_id,
+                    )
+                    recovery_action = str(
+                        getattr(recovery_plan, "recovery_action", "") or ""
+                    ).strip()
+                    resume_stage = str(
+                        getattr(recovery_plan, "resume_stage", "") or ""
+                    ).strip()
+                    if recovery_action == "restart" and resume_stage in {
+                        "",
+                        "request",
+                        "world_state",
+                    }:
+                        request = replace(
+                            request,
+                            meta={
+                                **dict(request.meta or {}),
+                                "recovery_from_task_run_id": task_run_id,
+                                "recovery_action": recovery_action,
+                                "recovery_resume_stage": resume_stage or None,
+                            },
+                        )
+                    elif recovery_action == "resume_execution" and resume_stage in {
+                        "decision",
+                        "executable_action",
+                    }:
+                        pending_pre_effect_recovery = (
+                            reliability,
+                            task_run_id,
+                            resume_stage,
+                        )
+                        request = replace(
+                            request,
+                            meta={
+                                **dict(request.meta or {}),
+                                "recovery_from_task_run_id": task_run_id,
+                                "recovery_action": recovery_action,
+                                "recovery_resume_stage": resume_stage,
+                            },
+                        )
+                    else:
+                        raise RuntimeError(
+                            "durable task has an incomplete execution run; "
+                            f"recovery action required: {recovery_action or 'unknown'}"
+                        )
+            timeout_policy = getattr(task, "timeout_policy", None)
+            if timeout_policy is not None and timeout_policy.is_task_timed_out(
+                now_ms=int(time.time() * 1000)
+            ):
+                raise TimeoutError("durable task deadline has expired")
+            retry_policy = getattr(task, "retry_policy", None)
+            request = replace(
+                request,
+                meta={
+                    **dict(request.meta or {}),
+                    "durable_task_retry_policy": (
+                        retry_policy.to_dict()
+                        if callable(getattr(retry_policy, "to_dict", None))
+                        else {}
+                    ),
+                    "durable_task_timeout_policy": (
+                        timeout_policy.to_dict()
+                        if callable(getattr(timeout_policy, "to_dict", None))
+                        else {}
+                    ),
+                },
+            )
+            conflict_keys = tuple(getattr(task, "conflict_keys", ()) or ())
+            if conflict_keys:
+                reliability = getattr(self._executor, "_reliability", None)
+                distributed_lock = getattr(reliability, "distributed_lock", None)
+                if distributed_lock is None:
+                    raise RuntimeError(
+                        "durable task conflict control requires canonical distributed lock"
+                    )
+                task_conflict_controller = TaskConflictController(
+                    distributed_lock=distributed_lock
+                )
+                task_conflict_leases = task_conflict_controller.acquire(
+                    tenant_id=request.tenant_id,
+                    business_id=request.business_id,
+                    task_id=task_id,
+                    conflict_keys=conflict_keys,
+                )
+                task_conflict_heartbeat = task_conflict_controller.heartbeat(
+                    task_conflict_leases
+                )
+        def _stop_task_conflict_heartbeat() -> None:
+            nonlocal task_conflict_heartbeat, task_conflict_leases
+            if task_conflict_heartbeat is not None:
+                task_conflict_leases = task_conflict_heartbeat.close()
+                task_conflict_heartbeat = None
+
+        def _release_task_conflicts() -> None:
+            nonlocal task_conflict_leases
+            _stop_task_conflict_heartbeat()
+            if task_conflict_controller is not None and task_conflict_leases is not None:
+                task_conflict_controller.release(task_conflict_leases)
+                task_conflict_leases = None
+
+        try:
+            if pending_pre_effect_recovery is not None:
+                recovery_reliability, recovery_task_run_id, recovery_stage = (
+                    pending_pre_effect_recovery
+                )
+                request = self._resume_executable_action(
+                    request=request,
+                    reliability=recovery_reliability,
+                    task_id=task_id,
+                    task_run_id=recovery_task_run_id,
+                    resume_stage=recovery_stage,
+                )
+            if task_id and task_status == "ready":
+                start_task = getattr(self._task_registry, "start", None)
+                if not callable(start_task):
+                    raise RuntimeError("canonical task registry must provide start()")
+                started_task = start_task(
+                    tenant_id=request.tenant_id,
+                    business_id=request.business_id,
+                    task_id=task_id,
+                    idempotency_key=f"headless:start:{task_id}:v{task_execution_version}",
+                    expected_version=task_execution_version,
+                )
+                task_execution_version = int(getattr(started_task, "version", 0))
+                if task_execution_version < 1:
+                    raise RuntimeError("started durable task must expose a positive version")
+            loop_result = self._loop.run(request)
+        except BaseException:
+            _release_task_conflicts()
+            raise
+        try:
+            run_artifact = canonical_goal_execution_report(
+                goal=request.goal,
+                business_id=request.business_id,
+                tenant_id=request.tenant_id,
+                completed=loop_result.completed,
+                stop_reason=loop_result.stop_reason,
+                steps=tuple(loop_result.steps),
+                final_feedback=dict(loop_result.final_feedback),
+                goal_id=request.goal_id,
+            )
+            report = GoalExecutionReport(
+                goal=request.goal,
+                business_id=request.business_id,
+                tenant_id=request.tenant_id,
+                completed=loop_result.completed,
+                stop_reason=loop_result.stop_reason,
+                steps=tuple(loop_result.steps),
+                final_feedback=dict(loop_result.final_feedback),
+                run_id=str(loop_result.trace.run_id),
+                trace_id=str(loop_result.trace.trace_id),
+                canonical_run_artifact=run_artifact,
+                goal_id=request.goal_id,
+            )
+            last_step = loop_result.steps[-1] if loop_result.steps else None
+            self._evidence_persistence_service.persist(
+                tenant_id=request.tenant_id,
+                business_id=request.business_id,
+                run_id=loop_result.trace.run_id,
+                goal=request.goal,
+                goal_id=request.goal_id,
+                step_index=int(last_step.step_index if last_step is not None else max(len(loop_result.steps) - 1, 0)),
+                action={
+                    "action_type": str(last_step.action if last_step is not None else ""),
+                    "action_id": str(last_step.action_id if last_step is not None else ""),
+                },
+                execution_result=dict(loop_result.final_feedback),
+                verification_result=dict(loop_result.final_feedback),
+                world_state_before={},
+                world_state_after=None,
+                request_meta=dict(request.meta),
+                request_profile=dict(request.profile),
+                request_constraints=dict(request.constraints),
+                request_signals=list(request.signals),
+                request_channel=request.channel,
+                request_region=request.region,
+                request_product_name=request.product_name,
+                completed=loop_result.completed,
+                stop_reason=loop_result.stop_reason,
+                final_feedback=dict(loop_result.final_feedback),
+                step_count=len(loop_result.steps),
+            )
+            if self._ledger is not None:
+                self._ledger.write(
+                    LedgerRecord(
+                        run_id=loop_result.trace.run_id,
+                        trace_id=loop_result.trace.trace_id,
+                        business_id=request.business_id,
+                        tenant_id=request.tenant_id,
+                        goal=request.goal,
+                        completed=loop_result.completed,
+                        stop_reason=loop_result.stop_reason,
+                        steps_count=len(loop_result.steps),
+                        final_feedback=dict(loop_result.final_feedback),
+                        trace=loop_result.trace.to_dict(),
+                        canonical_run_artifact=run_artifact,
+                        goal_id=request.goal_id,
+                    )
+                )
+            if task_id and loop_result.stop_reason == "task_preempted":
+                _stop_task_conflict_heartbeat()
+                current_task = self._task_registry.get(
+                    tenant_id=request.tenant_id,
+                    business_id=request.business_id,
+                    task_id=task_id,
+                )
+                pause_task = getattr(self._task_registry, "pause", None)
+                if not callable(pause_task):
+                    raise RuntimeError("canonical task registry must provide pause()")
+                paused_task = pause_task(
+                    tenant_id=request.tenant_id,
+                    business_id=request.business_id,
+                    task_id=task_id,
+                    idempotency_key=(
+                        f"headless:preempt-pause:{task_id}:v"
+                        f"{getattr(current_task, 'version', 0)}"
+                    ),
+                    expected_version=int(getattr(current_task, "version", 0)),
+                )
+                task_execution_version = int(getattr(paused_task, "version", 0))
+            elif task_id and loop_result.completed:
+                _stop_task_conflict_heartbeat()
+                current_task = self._task_registry.get(
+                    tenant_id=request.tenant_id,
+                    business_id=request.business_id,
+                    task_id=task_id,
+                )
+                current_version = int(getattr(current_task, "version", 0))
+                if current_version < 1:
+                    raise RuntimeError("canonical durable task version must be positive")
+                succeed_task = getattr(self._task_registry, "succeed", None)
+                if not callable(succeed_task):
+                    raise RuntimeError("canonical task registry must provide succeed()")
+                succeed_task(
+                    tenant_id=request.tenant_id,
+                    business_id=request.business_id,
+                    task_id=task_id,
+                    idempotency_key=f"headless:succeed:{task_id}:v{current_version}",
+                    expected_version=current_version,
+                )
+        except BaseException:
+            _release_task_conflicts()
+            raise
+        _release_task_conflicts()
         return report
 
 

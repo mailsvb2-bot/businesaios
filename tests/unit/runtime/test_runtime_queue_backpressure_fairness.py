@@ -2,14 +2,29 @@ from __future__ import annotations
 
 from datetime import timedelta
 
+import pytest
+
 from runtime.queue.backpressure_monitor import BackpressureMonitor
 from runtime.queue.backpressure_policy import BackpressurePolicy
 from runtime.queue.capability_throttle_policy import CapabilityThrottlePolicy, CapabilityThrottleRule
 from runtime.queue.job_contract import JobDispatchRequest, utc_now
+from runtime.queue.job_dispatcher import build_task_job_request
 from runtime.queue.job_scheduler import JobScheduler
 from runtime.queue.job_store import InMemoryJobStore
 from runtime.queue.queue_observability import QueueObservabilityRegistry
 from runtime.queue.tenant_fair_scheduler import TenantFairScheduler, TenantQueuePressure
+from application.task.registry import DurableTaskRegistry, TaskConflictController, TaskQueuePreemptionCoordinator
+from reliability.distributed_lock import InMemoryDistributedLock
+from reliability.idempotency_store import InMemoryIdempotencyStore
+from tenancy.tenant_audit_scope import TenantAuditScope
+from tenancy.tenant_billing_scope import TenantBillingScope
+from tenancy.tenant_connector_scope import TenantConnectorScope
+from tenancy.tenant_execution_budget_guard import TenantExecutionBudgetGuard
+from tenancy.tenant_feature_flags import TenantFeatureFlags
+from tenancy.tenant_memory_scope import TenantMemoryScope
+from tenancy.tenant_policy_store import InMemoryTenantPolicyStore, TenantPolicyBundle
+from tenancy.tenant_quota_guard import TenantQuotaGuard
+from tenancy.tenant_runtime_limits import TenantRuntimeLimits
 
 
 def _job(*, tenant_id: str, job_id: str, queue_name: str = "email", job_type: str = "send_email", now=None):
@@ -83,6 +98,224 @@ def test_backpressure_monitor_reports_fairness_gap_and_global_pressure() -> None
     assert status_by_tenant["tenant-a"].fairness_gap >= 4
     assert any(alert.code == "tenant_fairness_gap_high" for alert in report.alerts)
     assert observability.snapshot().alerts
+
+
+def test_job_scheduler_skips_task_when_canonical_resource_budget_is_exhausted() -> None:
+    tenant_id = "tenant-1"
+    bundle = TenantPolicyBundle(
+        tenant_id=tenant_id,
+        feature_flags=TenantFeatureFlags(tenant_id=tenant_id),
+        runtime_limits=TenantRuntimeLimits(tenant_id=tenant_id, max_actions_per_run=1),
+        memory_scope=TenantMemoryScope(tenant_id=tenant_id),
+        connector_scope=TenantConnectorScope(tenant_id=tenant_id),
+        audit_scope=TenantAuditScope(tenant_id=tenant_id),
+        billing_scope=TenantBillingScope(tenant_id=tenant_id),
+        quotas={"actions_per_day": 100.0},
+    )
+    policies = InMemoryTenantPolicyStore((bundle,))
+    budget_guard = TenantExecutionBudgetGuard(
+        policy_store=policies,
+        quota_guard=TenantQuotaGuard(policy_store=policies),
+    )
+    store = InMemoryJobStore()
+    now = utc_now()
+    store.put(
+        JobDispatchRequest(
+            tenant_id=tenant_id,
+            job_id="job-over-budget",
+            queue_name="email",
+            job_type="send_email",
+            payload={"recipient": "x@example.com", "action_count": 2},
+            dedupe_key="d-over-budget",
+            priority=100,
+        ).to_record(now=now)
+    )
+    store.put(
+        JobDispatchRequest(
+            tenant_id=tenant_id,
+            job_id="job-allowed",
+            queue_name="email",
+            job_type="send_email",
+            payload={"recipient": "ok@example.com", "action_count": 1},
+            dedupe_key="d-allowed",
+            priority=10,
+        ).to_record(now=now)
+    )
+
+    batch = JobScheduler(
+        store=store,
+        tenant_execution_budget_guard=budget_guard,
+    ).select_due_jobs(tenant_id=tenant_id, queue_name="email", now=now)
+
+    assert [job.job_id for job in batch.jobs] == ["job-allowed"]
+    assert batch.resource_previews["job-over-budget"].allowed is False
+    assert batch.resource_previews["job-allowed"].allowed is True
+
+
+def test_job_scheduler_requests_preemption_and_keeps_high_priority_job_pending() -> None:
+    class _Events:
+        def __init__(self) -> None:
+            self.events: list[dict] = []
+
+        def append_event(self, event: dict) -> None:
+            self.events.append(dict(event))
+
+        def iter_events(self, *, tenant_id, start_ms, end_ms=None, user_id=None, event_type=None):
+            del end_ms, user_id
+            for event in self.events:
+                if event.get("tenant_id") == tenant_id and event.get("timestamp_ms", 0) >= start_ms:
+                    if event_type is None or event.get("event_type") == event_type:
+                        yield dict(event)
+
+    events = _Events()
+    tasks = DurableTaskRegistry(
+        event_store=events,
+        idempotency_store=InMemoryIdempotencyStore(),
+    )
+    tasks.create(
+        tenant_id="tenant-1", business_id="business-1", task_id="low",
+        idempotency_key="create-low", priority=20, conflict_keys=("ledger",), occurred_at_ms=1,
+    )
+    tasks.ready(
+        tenant_id="tenant-1", business_id="business-1", task_id="low",
+        idempotency_key="ready-low", expected_version=1, occurred_at_ms=2,
+    )
+    tasks.start(
+        tenant_id="tenant-1", business_id="business-1", task_id="low",
+        idempotency_key="start-low", expected_version=2, occurred_at_ms=3,
+    )
+    tasks.create(
+        tenant_id="tenant-1", business_id="business-1", task_id="high",
+        idempotency_key="create-high", priority=90, conflict_keys=("ledger",), occurred_at_ms=4,
+    )
+    high = tasks.ready(
+        tenant_id="tenant-1", business_id="business-1", task_id="high",
+        idempotency_key="ready-high", expected_version=1, occurred_at_ms=5,
+    )
+    lock = InMemoryDistributedLock()
+    controller = TaskConflictController(distributed_lock=lock)
+    held = controller.acquire(
+        tenant_id="tenant-1", business_id="business-1", task_id="low",
+        conflict_keys=("ledger",), ttl_seconds=60,
+    )
+    store = InMemoryJobStore()
+    now = utc_now()
+    store.put(
+        build_task_job_request(
+            task=high,
+            queue_name="tasks",
+            job_id="job-high",
+            job_type="work",
+            dedupe_key="high",
+        ).to_record(now=now)
+    )
+    scheduler = JobScheduler(
+        store=store,
+        task_preemption_coordinator=TaskQueuePreemptionCoordinator(
+            task_registry=tasks,
+            distributed_lock=lock,
+        ),
+    )
+
+    first = scheduler.select_due_jobs(
+        tenant_id="tenant-1", queue_name="tasks", now=now
+    )
+    assert first.jobs == ()
+    low = tasks.get(
+        tenant_id="tenant-1", business_id="business-1", task_id="low"
+    )
+    assert low.status.value == "running"
+    assert low.preemption_requested_by_task_id == "high"
+
+    paused = tasks.pause(
+        tenant_id="tenant-1", business_id="business-1", task_id="low",
+        idempotency_key="pause-low", expected_version=low.version, occurred_at_ms=6,
+    )
+    assert paused.status.value == "paused"
+    controller.release(held)
+
+    second = scheduler.select_due_jobs(
+        tenant_id="tenant-1", queue_name="tasks", now=now
+    )
+    assert [job.job_id for job in second.jobs] == ["job-high"]
+
+
+def test_task_preemption_coordinator_ignores_non_durable_task_payloads() -> None:
+    class _NoCalls:
+        def get(self, **kwargs):
+            raise AssertionError(kwargs)
+
+    coordinator = TaskQueuePreemptionCoordinator(
+        task_registry=_NoCalls(),
+        distributed_lock=InMemoryDistributedLock(),
+    )
+    job = JobDispatchRequest(
+        tenant_id="tenant-1",
+        job_id="ordinary",
+        queue_name="tasks",
+        job_type="ordinary",
+        payload={"task_id": "unrelated-domain-task"},
+        dedupe_key="ordinary",
+    ).to_record(now=utc_now())
+    assert coordinator.admit(job) is True
+
+
+def test_task_preemption_coordinator_rejects_tampered_task_priority_and_conflicts() -> None:
+    class _Events:
+        def __init__(self) -> None:
+            self.events: list[dict] = []
+
+        def append_event(self, event: dict) -> None:
+            self.events.append(dict(event))
+
+        def iter_events(self, *, tenant_id, start_ms, end_ms=None, user_id=None, event_type=None):
+            del end_ms, user_id
+            for event in self.events:
+                if event.get("tenant_id") == tenant_id and event.get("timestamp_ms", 0) >= start_ms:
+                    if event_type is None or event.get("event_type") == event_type:
+                        yield dict(event)
+
+    tasks = DurableTaskRegistry(
+        event_store=_Events(),
+        idempotency_store=InMemoryIdempotencyStore(),
+    )
+    tasks.create(
+        tenant_id="tenant-1", business_id="business-1", task_id="canonical",
+        idempotency_key="create", priority=40, conflict_keys=("ledger",), occurred_at_ms=1,
+    )
+    tasks.ready(
+        tenant_id="tenant-1", business_id="business-1", task_id="canonical",
+        idempotency_key="ready", expected_version=1, occurred_at_ms=2,
+    )
+    coordinator = TaskQueuePreemptionCoordinator(
+        task_registry=tasks,
+        distributed_lock=InMemoryDistributedLock(),
+    )
+    now = utc_now()
+    tampered_priority = JobDispatchRequest(
+        tenant_id="tenant-1", job_id="p", queue_name="tasks", job_type="work",
+        payload={
+            "business_id": "business-1", "task_id": "canonical",
+            "task_priority": 90, "task_conflict_keys": ["ledger"],
+        },
+        dedupe_key="p", priority=90, tags=("durable_task",),
+    ).to_record(now=now)
+    tampered_keys = JobDispatchRequest(
+        tenant_id="tenant-1", job_id="k", queue_name="tasks", job_type="work",
+        payload={
+            "business_id": "business-1", "task_id": "canonical",
+            "task_priority": 40, "task_conflict_keys": [],
+        },
+        dedupe_key="k", priority=40, tags=("durable_task",),
+    ).to_record(now=now)
+    assert coordinator.admit(tampered_priority) is False
+    assert coordinator.admit(tampered_keys) is False
+
+
+def test_job_scheduler_rejects_invalid_preemption_coordinator() -> None:
+    scheduler = JobScheduler(store=InMemoryJobStore())
+    with pytest.raises(ValueError, match="provide admit"):
+        scheduler.configure_task_preemption(object())
 
 
 def test_job_scheduler_filters_jobs_by_capability_preview_and_worker_commit_path() -> None:
