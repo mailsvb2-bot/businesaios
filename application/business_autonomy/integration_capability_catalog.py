@@ -32,6 +32,19 @@ class CapabilitySurface(str, Enum):
     INFRASTRUCTURE = 'infrastructure'
 
 
+class CapabilityLifecycle(str, Enum):
+    DEFINED = 'defined'
+    IMPLEMENTED = 'implemented'
+    INTEGRATED = 'integrated'
+    TESTED = 'tested'
+    LIVE_VERIFIED = 'live_verified'
+    USER_AVAILABLE = 'user_available'
+    PRODUCTION_READY = 'production_ready'
+    DEGRADED = 'degraded'
+    DISABLED = 'disabled'
+    DEPRECATED = 'deprecated'
+
+
 _STATUS_RANK = {
     CapabilityStatus.PRODUCTION_READY: 5,
     CapabilityStatus.IMPLEMENTED: 4,
@@ -86,6 +99,15 @@ class IntegrationCapability:
     requires_consent: bool = False
     requires_admin_surface: bool = True
     risk_level: str = 'medium'
+    input_schema: Mapping[str, Any] = field(default_factory=dict)
+    output_schema: Mapping[str, Any] = field(default_factory=dict)
+    lifecycle: CapabilityLifecycle | None = None
+    health: str = 'unknown'
+    availability: str = 'unknown'
+    cost: float = 0.0
+    latency_ms: float = 0.0
+    reliability: float = 0.0
+    reversible: bool = False
     evidence: tuple[CapabilityEvidence, ...] = field(default_factory=tuple)
     metadata: Mapping[str, Any] = field(default_factory=dict)
     schema_version: int = CAPABILITY_SCHEMA_VERSION
@@ -106,6 +128,25 @@ class IntegrationCapability:
         production_ready = bool(self.production_ready or status is CapabilityStatus.PRODUCTION_READY)
         if production_ready and status not in (CapabilityStatus.PRODUCTION_READY, CapabilityStatus.IMPLEMENTED):
             raise ValueError(f'production_ready cannot be true for status={status.value}')
+        lifecycle = self.lifecycle
+        if lifecycle is None:
+            lifecycle = (
+                CapabilityLifecycle.PRODUCTION_READY
+                if production_ready
+                else CapabilityLifecycle.IMPLEMENTED
+                if status in (CapabilityStatus.IMPLEMENTED, CapabilityStatus.PARTIAL)
+                else CapabilityLifecycle.DEFINED
+            )
+        lifecycle = CapabilityLifecycle(lifecycle)
+        if production_ready and lifecycle is not CapabilityLifecycle.PRODUCTION_READY:
+            raise ValueError('production_ready capability must use production_ready lifecycle')
+        cost = float(self.cost)
+        latency_ms = float(self.latency_ms)
+        reliability = float(self.reliability)
+        if cost < 0.0 or latency_ms < 0.0:
+            raise ValueError('capability cost/latency must be non-negative')
+        if not 0.0 <= reliability <= 1.0:
+            raise ValueError('capability reliability must be between 0 and 1')
         object.__setattr__(self, 'capability_id', capability_id)
         object.__setattr__(self, 'title', title)
         object.__setattr__(self, 'provider_keys', provider_keys)
@@ -114,6 +155,15 @@ class IntegrationCapability:
         object.__setattr__(self, 'status', status)
         object.__setattr__(self, 'surface', surface)
         object.__setattr__(self, 'production_ready', production_ready)
+        object.__setattr__(self, 'lifecycle', lifecycle)
+        object.__setattr__(self, 'input_schema', MappingProxyType(dict(self.input_schema or {})))
+        object.__setattr__(self, 'output_schema', MappingProxyType(dict(self.output_schema or {})))
+        object.__setattr__(self, 'health', str(self.health or 'unknown').strip().lower() or 'unknown')
+        object.__setattr__(self, 'availability', str(self.availability or 'unknown').strip().lower() or 'unknown')
+        object.__setattr__(self, 'cost', cost)
+        object.__setattr__(self, 'latency_ms', latency_ms)
+        object.__setattr__(self, 'reliability', reliability)
+        object.__setattr__(self, 'reversible', bool(self.reversible))
         object.__setattr__(self, 'schema_version', CAPABILITY_SCHEMA_VERSION)
         object.__setattr__(self, 'metadata', MappingProxyType(dict(self.metadata or {})))
 
@@ -166,6 +216,20 @@ class IntegrationCapability:
             'requires_consent': bool(self.requires_consent),
             'requires_admin_surface': bool(self.requires_admin_surface),
             'risk_level': self.risk_level,
+            'input_schema': dict(self.input_schema),
+            'output_schema': dict(self.output_schema),
+            'lifecycle': self.lifecycle.value,
+            'health': self.health,
+            'availability': self.availability,
+            'cost': self.cost,
+            'latency_ms': self.latency_ms,
+            'reliability': self.reliability,
+            'reversible': self.reversible,
+            'approval_requirements': {
+                'owner_approval': bool(self.requires_owner_approval),
+                'budget_guard': bool(self.requires_budget_guard),
+                'consent': bool(self.requires_consent),
+            },
             'provider_keys': list(self.provider_keys),
             'providers': provider_rows,
             'registry_sources': list(self.registry_sources),
@@ -694,6 +758,7 @@ __all__ = [
     'CapabilityEvidence',
     'CapabilityStatus',
     'CapabilitySurface',
+    'CapabilityLifecycle',
     'IntegrationCapability',
     'CAPABILITIES',
     'capability_map',
