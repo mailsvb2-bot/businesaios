@@ -126,6 +126,7 @@ class DurableTaskProjector:
             task_id=str(task_id),
             tenant_id=str(tenant_id),
             business_id=str(business_id),
+            goal_id=(None if payload.get("goal_id") is None else str(payload.get("goal_id") or "")),
             title=payload.get("title"),
             priority=int(payload.get("priority") if payload.get("priority") is not None else 50),
             conflict_keys=tuple(str(item) for item in (payload.get("conflict_keys") or ())),
