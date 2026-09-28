@@ -35,6 +35,7 @@ def test_capability_inventory_names_release_managed_definition_owner() -> None:
     assert row.storage_owner == "application.business_autonomy.integration_capability_catalog"
     assert row.allowed_writers == ("application.business_autonomy.integration_capability_catalog",)
     assert row.allowed_readers == (
+        "application.autonomy.autonomy_state_assembly",
         "application.business_autonomy.provider_truth_matrix",
         "application.public_site.landing_content",
     )
