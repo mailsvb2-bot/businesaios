@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+import time
 
 from runtime.execution.entrypoint_context import run_with_bound_execution_context
 from runtime.execution.executor_commit import (
@@ -100,6 +101,13 @@ def execute_pre_effect_recovery_flow(
     current = outbox_status(outbox, decision_id=decision_id, tenant_id=tenant_id)
     if current is not None and current not in {"pending", "delivering", "inflight"}:
         raise RuntimeError(f"PRE_EFFECT_RECOVERY_OUTBOX_STATE_INVALID:{current}")
+    payload = getattr(env.decision, "payload", {}) or {}
+    if isinstance(payload, dict) and payload.get("durable_task_attempt_deadline_ms") is not None:
+        raw_deadline = payload.get("durable_task_attempt_deadline_ms")
+        if isinstance(raw_deadline, bool):
+            raise ValueError("durable task recovery deadline must be an integer")
+        if int(time.time() * 1000) >= int(raw_deadline):
+            raise TimeoutError("durable task recovery deadline has expired")
     guard.verify_recovery(env)
     if current is None:
         enqueue_once(outbox, decision=env.decision)
