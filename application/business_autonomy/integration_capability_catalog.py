@@ -12,7 +12,7 @@ from application.business_autonomy.provider_catalog import (
     MESSAGING_GUARDED_WRITE_PROVIDER_KEYS,
     provider_map,
 )
-from application.business_autonomy.provider_runtime_contract import provider_sync_run_request_schema, provider_sync_run_result_schema
+from application.business_autonomy.provider_runtime_contract import provider_sync_run_request_schema, provider_sync_run_result_schema, provider_webhook_ingress_request_schema, provider_webhook_ingress_result_schema
 from application.capability.capability_health_policy import CapabilityHealthPolicy
 from contracts.email_outbound import email_outbound_payload_schema_v1
 from contracts.risk import RiskLevel
@@ -372,6 +372,8 @@ _CRM_WEBHOOK_EVENT_INPUT_SCHEMA = crm_webhook_event_schema()
 _WEB_CHAT_SESSION_INPUT_SCHEMA = web_chat_session_schema()
 _MESSAGING_INPUT_SCHEMA = message_envelope_schema()
 _MESSAGING_OUTPUT_SCHEMA = outbound_envelope_schema()
+_PROVIDER_WEBHOOK_INPUT_SCHEMA = provider_webhook_ingress_request_schema()
+_PROVIDER_WEBHOOK_OUTPUT_SCHEMA = provider_webhook_ingress_result_schema()
 
 
 def _bridge_messaging_interaction_capabilities() -> tuple[IntegrationCapability, ...]:
@@ -828,6 +830,9 @@ CAPABILITIES: tuple[IntegrationCapability, ...] = (
         requires_credentials=True,
         requires_webhook=True,
         risk_level='medium',
+        input_schema=_PROVIDER_WEBHOOK_INPUT_SCHEMA,
+        output_schema=_PROVIDER_WEBHOOK_OUTPUT_SCHEMA,
+        registry_sources=('application.business_autonomy.provider_runtime_contract', 'adapters.api.fastapi.provider_webhook_routes'),
         owner_text='Control-plane/API webhook surface может быть честным интеграционным каналом.',
         next_required_step='Усилить auth, schema validation, rate limit, idempotency и audit.',
         evidence=(_e('app/web/pages/platform_control_center.py', 'control-plane API endpoints are surfaced', 0.8),),
