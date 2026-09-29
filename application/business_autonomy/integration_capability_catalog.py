@@ -12,13 +12,24 @@ from application.business_autonomy.provider_catalog import (
     MESSAGING_GUARDED_WRITE_PROVIDER_KEYS,
     provider_map,
 )
-from application.business_autonomy.provider_runtime_contract import provider_sync_run_request_schema, provider_sync_run_result_schema, provider_webhook_ingress_request_schema, provider_webhook_ingress_result_schema
+from application.business_autonomy.provider_runtime_contract import (
+    provider_sync_run_request_schema,
+    provider_sync_run_result_schema,
+    provider_webhook_ingress_request_schema,
+    provider_webhook_ingress_result_schema,
+)
 from application.capability.capability_health_policy import CapabilityHealthPolicy
 from contracts.email_outbound import email_outbound_payload_schema_v1
+from contracts.platforms.market_intelligence_contract import (
+    search_intelligence_envelope_schema,
+    search_intelligence_target_schema,
+)
 from contracts.risk import RiskLevel
-from contracts.platforms.market_intelligence_contract import search_intelligence_envelope_schema, search_intelligence_target_schema
 from crm.webhooks.crm_webhook_contract import crm_webhook_event_schema
-from interfaces.messaging_runtime.contracts import message_envelope_schema, outbound_envelope_schema
+from interfaces.messaging_runtime.contracts import (
+    message_envelope_schema,
+    outbound_envelope_schema,
+)
 from interfaces.web.chat_widget.session_contract import web_chat_session_schema
 
 CANON_INTEGRATION_CAPABILITY_CATALOG = True
