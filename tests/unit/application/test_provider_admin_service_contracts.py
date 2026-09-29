@@ -17,7 +17,7 @@ from runtime.business_autonomy.distributed_state import FileDistributedDocumentS
 from runtime.business_autonomy.provider_activation_store import FileProviderActivationStore
 from security.connector_secret_scope import ConnectorSecretScope
 from security.secret_vault import InMemorySecretVault
-from tenancy.tenant_quota_counter_store import InMemoryTenantQuotaCounterStore
+from tenancy.tenant_quota_guard import InMemoryTenantQuotaCounterStore
 
 ROOT = Path(__file__).resolve().parents[3]
 
