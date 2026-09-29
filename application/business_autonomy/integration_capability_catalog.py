@@ -17,6 +17,7 @@ from application.capability.capability_health_policy import CapabilityHealthPoli
 from contracts.email_outbound import email_outbound_payload_schema_v1
 from contracts.risk import RiskLevel
 from crm.webhooks.crm_webhook_contract import crm_webhook_event_schema
+from interfaces.messaging_runtime.contracts import message_envelope_schema, outbound_envelope_schema
 from interfaces.web.chat_widget.session_contract import web_chat_session_schema
 
 CANON_INTEGRATION_CAPABILITY_CATALOG = True
@@ -369,6 +370,8 @@ _PROVIDER_SYNC_REQUEST_INPUT_SCHEMA = provider_sync_run_request_schema()
 _PROVIDER_SYNC_RESULT_OUTPUT_SCHEMA = provider_sync_run_result_schema()
 _CRM_WEBHOOK_EVENT_INPUT_SCHEMA = crm_webhook_event_schema()
 _WEB_CHAT_SESSION_INPUT_SCHEMA = web_chat_session_schema()
+_MESSAGING_INPUT_SCHEMA = message_envelope_schema()
+_MESSAGING_OUTPUT_SCHEMA = outbound_envelope_schema()
 
 
 def _bridge_messaging_interaction_capabilities() -> tuple[IntegrationCapability, ...]:
@@ -384,13 +387,15 @@ def _bridge_messaging_interaction_capabilities() -> tuple[IntegrationCapability,
             group='Messengers',
             status=CapabilityStatus.PARTIAL,
             provider_keys=(provider_key,),
-            registry_sources=('application.business_autonomy.provider_catalog', 'runtime.business_autonomy.provider_webhook_messaging_bridge'),
+            registry_sources=('application.business_autonomy.provider_catalog', 'runtime.business_autonomy.provider_webhook_messaging_bridge', 'interfaces.messaging_runtime.contracts'),
             read_supported=True,
             write_supported=provider_key in MESSAGING_GUARDED_WRITE_PROVIDER_KEYS,
             verify_supported=True,
             requires_credentials=True,
             requires_webhook=True,
             risk_level='medium',
+            input_schema=_MESSAGING_INPUT_SCHEMA,
+            output_schema=_MESSAGING_OUTPUT_SCHEMA if provider_key in MESSAGING_GUARDED_WRITE_PROVIDER_KEYS else {},
             owner_text=(f'{provider.title} уже имеет signed inbound и approval-gated guarded outbound через единый canonical messaging runtime; live production readiness отдельно не доказана.' if provider_key in MESSAGING_GUARDED_WRITE_PROVIDER_KEYS else f'{provider.title} уже имеет signed provider-webhook bridge через единый canonical messaging runtime; native vendor API и outbound ещё не доказаны.'),
             next_required_step=('Доказать live credentials/probe, delivery receipts, rate-limit/retry evidence и только затем повышать live/production readiness.' if provider_key in MESSAGING_GUARDED_WRITE_PROVIDER_KEYS else 'Добавить official vendor auth/native transport, live probe, delivery receipts/rate-limit evidence и только затем отдельно сертифицировать guarded writes.'),
             evidence=(
@@ -677,6 +682,9 @@ CAPABILITIES: tuple[IntegrationCapability, ...] = (
         requires_credentials=True,
         requires_webhook=True,
         risk_level='medium',
+        input_schema=_MESSAGING_INPUT_SCHEMA,
+        registry_sources=('application.business_autonomy.provider_catalog', 'interfaces.messaging_runtime.contracts'),
+        output_schema=_MESSAGING_OUTPUT_SCHEMA,
         owner_text='Telegram bot/runtime контур есть, но его нужно сделать единой правдой для provider catalog, runtime и admin capability map.',
         next_required_step='Синхронизировать Telegram provider/runtime/admin registry и доказать webhook/polling e2e без второго transport brain.',
         evidence=(_e('provider_catalog.telegram_bot', 'telegram provider exists'), _e('boot/config telegram files', 'telegram runtime surfaces exist', 0.8)),
@@ -695,6 +703,9 @@ CAPABILITIES: tuple[IntegrationCapability, ...] = (
         requires_webhook=True,
         requires_consent=True,
         risk_level='high',
+        input_schema=_MESSAGING_INPUT_SCHEMA,
+        registry_sources=('application.business_autonomy.provider_catalog', 'interfaces.messaging_runtime.contracts'),
+        output_schema=_MESSAGING_OUTPUT_SCHEMA,
         owner_text='WhatsApp Cloud plain-text outbound проходит через owner approval, durable provider queue и provider receipt evidence; template sends отдельно не сертифицированы.',
         next_required_step='Сохранить consent/24h policy guard и отдельно сертифицировать template policy без расширения текущего plain-text write boundary.',
         evidence=(
@@ -753,8 +764,9 @@ CAPABILITIES: tuple[IntegrationCapability, ...] = (
         verify_supported=False,
         requires_webhook=True,
         risk_level='medium',
-        input_schema=_WEB_CHAT_SESSION_INPUT_SCHEMA,
-        registry_sources=('interfaces.web.chat_widget.session_contract',),
+        input_schema=_MESSAGING_INPUT_SCHEMA,
+        output_schema=_MESSAGING_OUTPUT_SCHEMA,
+        registry_sources=('interfaces.messaging_runtime.contracts', 'interfaces.web.chat_widget.session_contract'),
         owner_text='Есть website/chatbot surface, но не доказан отдельный channel adapter.',
         next_required_step='Сделать webchat session, identity link, transcript evidence и Conversation Router binding.',
         evidence=(_e('website/chatbot surface', 'partial web chat surface exists', 0.75),),
