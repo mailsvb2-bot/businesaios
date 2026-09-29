@@ -1,7 +1,9 @@
 from __future__ import annotations
 
+from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timezone
 from decimal import Decimal
+import sqlite3
 
 import pytest
 
@@ -15,6 +17,7 @@ from tenancy.tenant_policy_store import InMemoryTenantPolicyStore, TenantPolicyB
 from tenancy.tenant_quota_counter_store import (
     InMemoryTenantQuotaCounterStore,
     PersistentTenantQuotaCounterStore,
+    SQLiteTenantQuotaCounterStore,
     TenantQuotaCounterState,
 )
 from tenancy.tenant_quota_guard import TenantQuotaGuard
@@ -151,4 +154,87 @@ def test_connector_quota_rejects_split_counter_stores() -> None:
             counter_store=InMemoryTenantQuotaCounterStore(),
             per_connector_hour_limit=1,
         )
+
+def test_sqlite_quota_counter_persists_across_store_instances(tmp_path) -> None:
+    path = tmp_path / 'quota.sqlite3'
+    first = SQLiteTenantQuotaCounterStore(path)
+    first.increment(
+        tenant_id='tenant-a',
+        counter_key='tenant:connector_calls_per_hour',
+        window_key='2026092913',
+        amount=Decimal('1'),
+        updated_at=datetime.now(timezone.utc),
+    )
+    restarted = SQLiteTenantQuotaCounterStore(path)
+    state = restarted.get(
+        tenant_id='tenant-a',
+        counter_key='tenant:connector_calls_per_hour',
+        window_key='2026092913',
+    )
+    assert state is not None
+    assert state.used == Decimal('1')
+
+
+def test_sqlite_quota_counter_atomic_increment_has_no_lost_updates(tmp_path) -> None:
+    path = tmp_path / 'quota.sqlite3'
+    SQLiteTenantQuotaCounterStore(path)
+
+    def increment_once(_index: int) -> None:
+        SQLiteTenantQuotaCounterStore(path).increment(
+            tenant_id='tenant-a',
+            counter_key='tenant:connector_calls_per_hour',
+            window_key='2026092913',
+            amount=Decimal('1'),
+            updated_at=datetime.now(timezone.utc),
+        )
+
+    with ThreadPoolExecutor(max_workers=8) as pool:
+        list(pool.map(increment_once, range(40)))
+
+    state = SQLiteTenantQuotaCounterStore(path).get(
+        tenant_id='tenant-a',
+        counter_key='tenant:connector_calls_per_hour',
+        window_key='2026092913',
+    )
+    assert state is not None
+    assert state.used == Decimal('40')
+
+
+def test_sqlite_quota_counter_legacy_json_migration_is_idempotent(tmp_path) -> None:
+    legacy_path = tmp_path / 'quota.json'
+    legacy = PersistentTenantQuotaCounterStore(legacy_path)
+    legacy.save(
+        TenantQuotaCounterState(
+            tenant_id='tenant-a',
+            counter_key='tenant:connector_calls_per_hour',
+            window_key='2026092913',
+            used=Decimal('7'),
+            updated_at=datetime.now(timezone.utc),
+        )
+    )
+    sqlite_store = SQLiteTenantQuotaCounterStore(tmp_path / 'quota.sqlite3')
+    assert sqlite_store.migrate_legacy_file(legacy_path) == 1
+    assert sqlite_store.migrate_legacy_file(legacy_path) == 0
+    state = sqlite_store.get(
+        tenant_id='tenant-a',
+        counter_key='tenant:connector_calls_per_hour',
+        window_key='2026092913',
+    )
+    assert state is not None
+    assert state.used == Decimal('7')
+
+
+def test_sqlite_quota_counter_unknown_schema_fails_closed(tmp_path) -> None:
+    path = tmp_path / 'quota.sqlite3'
+    with sqlite3.connect(path) as conn:
+        conn.execute(
+            'CREATE TABLE tenant_quota_counter_meta (key TEXT PRIMARY KEY, value TEXT NOT NULL)'
+        )
+        conn.execute(
+            'INSERT INTO tenant_quota_counter_meta(key, value) VALUES (?, ?)',
+            ('schema_version', '999'),
+        )
+
+    with pytest.raises(RuntimeError, match='unsupported tenant quota counter schema version'):
+        SQLiteTenantQuotaCounterStore(path)
 
