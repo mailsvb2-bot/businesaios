@@ -14,10 +14,12 @@ from connectors.platform.connector_contract import (
     ConnectorVerificationRequest,
 )
 from connectors.platform.connector_failover_router import ConnectorFailoverRouter
+from connectors.platform.connector_quota_guard import ConnectorQuotaGuard
 from connectors.platform.connector_registry import ConnectorRegistry, ConnectorRegistryEntry
 from connectors.platform.connector_retry_policy import ConnectorRetryPolicy, ConnectorRetryRule
 from interfaces.common.connector_health import ConnectorHealth
 from interfaces.common.connector_result import ConnectorResult
+from tenancy.tenant_quota_counter_store import InMemoryTenantQuotaCounterStore
 
 
 class _DirectTimeoutPolicy:
@@ -189,6 +191,7 @@ def _router(
     breaker=None,
     health=None,
     observability=None,
+    quota_guard=None,
     sleep_fn=None,
     max_attempts: int = 1,
 ) -> ConnectorFailoverRouter:
@@ -197,6 +200,7 @@ def _router(
         circuit_breaker=breaker,
         health_monitor=health,
         observability=observability,
+        quota_guard=quota_guard,
         retry_policy=_retry_policy(max_attempts),
         timeout_policy=_DirectTimeoutPolicy(),
         sleep_fn=sleep_fn,
@@ -504,3 +508,57 @@ def test_router_rejects_broken_retry_policy_with_zero_attempts() -> None:
     with pytest.raises(ValueError, match="max_attempts"):
         router.execute(_request())
     assert primary.execute_calls == 0
+
+def test_connector_quota_blocks_network_call_before_execution() -> None:
+    connector = _ScriptedConnector(
+        provider="a",
+        outcomes=[ConnectorResult(ok=True, code="unexpected")],
+    )
+    shared = InMemoryTenantQuotaCounterStore()
+    quota = ConnectorQuotaGuard(
+        per_connector_hour_limit=1,
+        counter_store=shared,
+    )
+    router = _router(connector, quota_guard=quota)
+
+    first = router.execute(_request(), require_write=False)
+    assert first.result.ok is True
+    assert connector.execute_calls == 1
+
+    with pytest.raises(PermissionError, match="connector quota exceeded"):
+        router.execute(_request(), require_write=False)
+    assert connector.execute_calls == 1
+
+
+def test_connector_quota_counts_retry_attempts_and_dry_run_does_not_consume() -> None:
+    connector = _ScriptedConnector(
+        provider="a",
+        outcomes=[
+            ConnectorResult(ok=False, code="timeout"),
+            ConnectorResult(ok=True, code="ok"),
+            ConnectorResult(ok=True, code="dry-ok"),
+        ],
+    )
+    quota = ConnectorQuotaGuard(
+        per_connector_hour_limit=2,
+        counter_store=InMemoryTenantQuotaCounterStore(),
+    )
+    router = _router(
+        connector,
+        quota_guard=quota,
+        max_attempts=2,
+        sleep_fn=lambda classification: None,
+    )
+
+    routed = router.execute(_request(), require_write=False)
+    assert routed.result.ok is True
+    assert connector.execute_calls == 2
+
+    dry = router.execute(_request(dry_run=True), require_write=False)
+    assert dry.result.ok is True
+    assert connector.execute_calls == 3
+
+    with pytest.raises(PermissionError, match="connector quota exceeded"):
+        router.execute(_request(), require_write=False)
+    assert connector.execute_calls == 3
+
