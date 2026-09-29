@@ -209,6 +209,7 @@ def test_action_level_health_does_not_forge_provider_specific_discovery_health()
     assert discovery["interaction.email"]["health"] == "unknown"
 
 def test_durable_provider_metrics_reject_corrupt_latency_history():
+    now = datetime(2026, 9, 29, 12, 0, tzinfo=UTC)
     history = ProviderSyncHistory(InMemoryProviderSyncHistoryStore())
     history.append({
         "tenant_id": "tenant-1",
@@ -217,7 +218,7 @@ def test_durable_provider_metrics_reject_corrupt_latency_history():
         "mode": "live",
         "accepted": True,
         "transport_latency_ms": float("nan"),
-        "recorded_at_utc": "2026-09-28T12:01:00+00:00",
+        "recorded_at_utc": (now - timedelta(minutes=1)).isoformat(),
     })
     with pytest.raises(ValueError, match="transport_latency_ms"):
         provider_runtime_metrics_truth_map(
@@ -225,6 +226,7 @@ def test_durable_provider_metrics_reject_corrupt_latency_history():
             tenant_id="tenant-1",
             business_id="business-1",
             provider_keys=("telegram_bot",),
+            now_utc=now,
         )
 
 def test_durable_provider_metrics_ignore_stale_history():
