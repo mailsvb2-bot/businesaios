@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from decimal import Decimal
 from enum import Enum
@@ -10,6 +9,11 @@ from typing import Iterable
 from core.finance.money import legacy_float, money_decimal, quantity_decimal
 from core.tenancy.normalization import require_tenant_id
 from tenancy.tenant_contract import TenantPolicyStoreContract, TenantQuotaCheck, utc_now
+from tenancy.tenant_quota_counter_store import (
+    InMemoryTenantQuotaCounterStore,
+    TenantQuotaCounterState,
+    TenantQuotaCounterStore,
+)
 
 
 CANON_TENANT_QUOTA_GUARD = True
@@ -25,24 +29,20 @@ class QuotaDimension(str, Enum):
     DAILY_BUDGET = "daily_budget"
 
 
-@dataclass
-class _Counter:
-    tenant_id: str
-    dimension: str
-    window_key: str
-    used: Decimal = field(default_factory=lambda: Decimal("0"))
-    updated_at: datetime = field(default_factory=utc_now)
-
-
 class TenantQuotaGuard:
     def __init__(
         self,
         *,
         policy_store: TenantPolicyStoreContract | None = None,
+        counter_store: TenantQuotaCounterStore | None = None,
     ) -> None:
         self._policy_store = policy_store
-        self._counters: dict[tuple[str, str, str], _Counter] = {}
+        self._counter_store = counter_store or InMemoryTenantQuotaCounterStore()
         self._lock = RLock()
+
+    @property
+    def counter_store(self) -> TenantQuotaCounterStore:
+        return self._counter_store
 
     def check(
         self,
@@ -101,11 +101,9 @@ class TenantQuotaGuard:
             )
             if not verdict.allowed:
                 return verdict
-            counter = self._counter_for_locked(tid, dim)
-            counter.used += requested
-            counter.updated_at = utc_now()
+            state = self._consume_locked(tid, dim, requested)
             return self._build_consumed_verdict_locked(
-                counter=counter,
+                state=state,
                 requested=requested,
             )
 
@@ -135,11 +133,9 @@ class TenantQuotaGuard:
                 return checks
             consumed: dict[str, TenantQuotaCheck] = {}
             for dimension, amount in prepared:
-                counter = self._counter_for_locked(tid, dimension)
-                counter.used += amount
-                counter.updated_at = utc_now()
+                state = self._consume_locked(tid, dimension, amount)
                 consumed[dimension] = self._build_consumed_verdict_locked(
-                    counter=counter,
+                    state=state,
                     requested=amount,
                 )
             return consumed
@@ -147,17 +143,13 @@ class TenantQuotaGuard:
     def reset(self, *, tenant_id: str, dimension: str | None = None) -> None:
         tid = require_tenant_id(tenant_id)
         with self._lock:
-            if dimension is None:
-                keys = [key for key in self._counters if key[0] == tid]
+            counter_key = None if dimension is None else self._counter_key(self._require_dimension(dimension))
+            if counter_key is None:
+                for state in self._counter_store.list_for_tenant(tenant_id=tid):
+                    if state.counter_key.startswith("tenant:"):
+                        self._counter_store.delete(tenant_id=tid, counter_key=state.counter_key)
             else:
-                dim = self._require_dimension(dimension)
-                keys = [
-                    key
-                    for key in self._counters
-                    if key[0] == tid and key[1] == dim
-                ]
-            for key in keys:
-                self._counters.pop(key, None)
+                self._counter_store.delete(tenant_id=tid, counter_key=counter_key)
 
     def snapshot(self, *, tenant_id: str) -> dict[str, float]:
         tid = require_tenant_id(tenant_id)
@@ -168,9 +160,13 @@ class TenantQuotaGuard:
                 if bundle is not None:
                     for dimension in sorted(dict(bundle.quotas).keys()):
                         result[str(dimension)] = Decimal("0")
-            for (counter_tid, dimension, _window_key), counter in self._counters.items():
-                if counter_tid == tid:
-                    result[dimension] = result.get(dimension, Decimal("0")) + counter.used
+            for state in self._counter_store.list_for_tenant(tenant_id=tid):
+                if not state.counter_key.startswith("tenant:"):
+                    continue
+                dimension = state.counter_key.removeprefix("tenant:")
+                if state.window_key != self._window_key(dimension):
+                    continue
+                result[dimension] = state.used
             return {
                 dimension: legacy_float(value, name=f"{dimension}_used")
                 for dimension, value in result.items()
@@ -184,10 +180,12 @@ class TenantQuotaGuard:
         amount: Decimal,
     ) -> TenantQuotaCheck:
         limit = self._limit_for_locked(tenant_id, dimension)
-        counter = self._counters.get(
-            (tenant_id, dimension, self._window_key(dimension))
+        state = self._counter_store.get(
+            tenant_id=tenant_id,
+            counter_key=self._counter_key(dimension),
+            window_key=self._window_key(dimension),
         )
-        used = Decimal("0") if counter is None else counter.used
+        used = Decimal("0") if state is None else state.used
         requested_value = legacy_float(amount, name="requested")
         used_value = legacy_float(used, name="used")
         if limit is None:
@@ -221,18 +219,19 @@ class TenantQuotaGuard:
     def _build_consumed_verdict_locked(
         self,
         *,
-        counter: _Counter,
+        state: TenantQuotaCounterState,
         requested: Decimal,
     ) -> TenantQuotaCheck:
-        limit = self._limit_for_locked(counter.tenant_id, counter.dimension)
-        remaining = None if limit is None else max(Decimal("0"), limit - counter.used)
+        dimension = state.counter_key.removeprefix("tenant:")
+        limit = self._limit_for_locked(state.tenant_id, dimension)
+        remaining = None if limit is None else max(Decimal("0"), limit - state.used)
         return TenantQuotaCheck(
             allowed=True,
             reason="consumed",
-            tenant_id=counter.tenant_id,
-            dimension=counter.dimension,
+            tenant_id=state.tenant_id,
+            dimension=dimension,
             requested=legacy_float(requested, name="requested"),
-            used=legacy_float(counter.used, name="used"),
+            used=legacy_float(state.used, name="used"),
             limit=None if limit is None else legacy_float(limit, name="limit"),
             remaining=(
                 None
@@ -253,18 +252,28 @@ class TenantQuotaGuard:
             return None
         return self._require_amount(dimension, raw)
 
-    def _counter_for_locked(self, tenant_id: str, dimension: str) -> _Counter:
+    def _consume_locked(self, tenant_id: str, dimension: str, amount: Decimal) -> TenantQuotaCounterState:
         window_key = self._window_key(dimension)
-        key = (tenant_id, dimension, window_key)
-        current = self._counters.get(key)
-        if current is None:
-            current = _Counter(
+        counter_key = self._counter_key(dimension)
+        current = self._counter_store.get(
+            tenant_id=tenant_id,
+            counter_key=counter_key,
+            window_key=window_key,
+        )
+        used = Decimal("0") if current is None else current.used
+        return self._counter_store.save(
+            TenantQuotaCounterState(
                 tenant_id=tenant_id,
-                dimension=dimension,
+                counter_key=counter_key,
                 window_key=window_key,
+                used=used + amount,
+                updated_at=utc_now(),
             )
-            self._counters[key] = current
-        return current
+        )
+
+    @staticmethod
+    def _counter_key(dimension: str) -> str:
+        return f"tenant:{dimension}"
 
     @staticmethod
     def _require_dimension(dimension: str) -> str:

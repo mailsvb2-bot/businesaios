@@ -6,6 +6,7 @@ from tenancy.tenant_connector_scope import TenantConnectorScope
 from tenancy.tenant_feature_flags import TenantFeatureFlags
 from tenancy.tenant_memory_scope import TenantMemoryScope
 from tenancy.tenant_policy_store import InMemoryTenantPolicyStore, TenantPolicyBundle
+from tenancy.tenant_quota_counter_store import PersistentTenantQuotaCounterStore
 from tenancy.tenant_quota_guard import TenantQuotaGuard
 from tenancy.tenant_runtime_limits import TenantRuntimeLimits
 
@@ -65,3 +66,41 @@ def test_tenant_quota_guard_unconfigured_dimension_is_fail_open_but_tracked_sepa
     assert verdict.allowed is True
     assert verdict.limit is None
     assert guard.snapshot(tenant_id='tenant-a')['custom_metric'] == 1.0
+
+def test_tenant_quota_guard_persists_usage_across_restart(tmp_path) -> None:
+    policies = InMemoryTenantPolicyStore()
+    policies.save(_bundle('tenant-a', {'connector_calls_per_hour': 2}))
+    path = tmp_path / 'quota-counters.json'
+
+    first = TenantQuotaGuard(
+        policy_store=policies,
+        counter_store=PersistentTenantQuotaCounterStore(path),
+    )
+    first.consume(tenant_id='tenant-a', dimension='connector_calls_per_hour')
+    assert first.check(tenant_id='tenant-a', dimension='connector_calls_per_hour').remaining == 1.0
+
+    restarted = TenantQuotaGuard(
+        policy_store=policies,
+        counter_store=PersistentTenantQuotaCounterStore(path),
+    )
+    assert restarted.check(tenant_id='tenant-a', dimension='connector_calls_per_hour').used == 1.0
+    restarted.consume(tenant_id='tenant-a', dimension='connector_calls_per_hour')
+    assert restarted.check(tenant_id='tenant-a', dimension='connector_calls_per_hour').allowed is False
+
+
+def test_tenant_quota_snapshot_ignores_stale_windows(tmp_path) -> None:
+    policies = InMemoryTenantPolicyStore()
+    policies.save(_bundle('tenant-a', {'actions_per_hour': 2}))
+    store = PersistentTenantQuotaCounterStore(tmp_path / 'quota-counters.json')
+    guard = TenantQuotaGuard(policy_store=policies, counter_store=store)
+    store.save(
+        __import__('tenancy.tenant_quota_counter_store', fromlist=['TenantQuotaCounterState']).TenantQuotaCounterState(
+            tenant_id='tenant-a',
+            counter_key='tenant:actions_per_hour',
+            window_key='1999010101',
+            used=__import__('decimal').Decimal('99'),
+            updated_at=__import__('datetime').datetime.now(__import__('datetime').timezone.utc),
+        )
+    )
+    assert guard.snapshot(tenant_id='tenant-a')['actions_per_hour'] == 0.0
+
