@@ -3,8 +3,13 @@ from __future__ import annotations
 from dataclasses import dataclass
 from datetime import datetime, timezone
 
+from core.finance.money import quantity_decimal
 from core.tenancy.normalization import require_tenant_id
-from tenancy.tenant_quota_counter_store import InMemoryTenantQuotaCounterStore, TenantQuotaCounterState, TenantQuotaCounterStore
+from tenancy.tenant_quota_counter_store import (
+    InMemoryTenantQuotaCounterStore,
+    TenantQuotaCounterState,
+    TenantQuotaCounterStore,
+)
 from tenancy.tenant_quota_guard import QuotaDimension, TenantQuotaGuard
 
 
