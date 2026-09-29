@@ -363,10 +363,18 @@ def test_messaging_capabilities_reuse_canonical_runtime_envelopes():
         assert dict(capability.output_schema) == outbound
         assert "input_schema" not in capability.contract_gaps
         assert "output_schema" not in capability.contract_gaps
-    for provider_key in MESSAGING_GUARDED_WRITE_PROVIDER_KEYS:
-        capability = next(item for item in capability_map().values() if provider_key in item.provider_keys)
+    for provider_key in BRIDGE_MESSAGING_PROVIDER_KEYS:
+        capability = next(
+            item
+            for item in capability_map().values()
+            if item.provider_keys == (provider_key,)
+            and "runtime.business_autonomy.provider_webhook_messaging_bridge" in item.registry_sources
+        )
         assert dict(capability.input_schema) == inbound
-        assert dict(capability.output_schema) == outbound
+        if provider_key in MESSAGING_GUARDED_WRITE_PROVIDER_KEYS:
+            assert dict(capability.output_schema) == outbound
+        else:
+            assert dict(capability.output_schema) == {}
 
 def test_web_chat_acquisition_reuses_session_contract_without_forging_output_schema():
     capability = capability_map()["acquisition.web_chat_widget"]
