@@ -62,6 +62,27 @@ class FileDistributedDocumentStore:
         items.sort(key=lambda row: str(row.get("updated_at_utc") or row.get("updated_at") or ""), reverse=True)
         return tuple(items[: max(1, int(limit))])
 
+    def list_matching(
+        self,
+        *,
+        collection: str,
+        fields: Mapping[str, object],
+        limit: int = 100,
+        order_field: str = "updated_at_utc",
+    ) -> Sequence[Mapping[str, Any]]:
+        normalized_limit = max(1, int(limit))
+        order_key = str(order_field or "").strip()
+        if not order_key:
+            raise ValueError("order_field is required")
+        with self._lock:
+            items = [
+                dict(value)
+                for value in self._read_collection(collection).values()
+                if all(str(value.get(key) or "") == str(expected) for key, expected in fields.items())
+            ]
+        items.sort(key=lambda row: str(row.get(order_key) or ""), reverse=True)
+        return tuple(items[:normalized_limit])
+
     def find_exact_many(self, *, collection: str, fields: Mapping[str, object], key_field: str, keys: tuple[str, ...]) -> Mapping[str, Mapping[str, Any]]:
         wanted = {str(key) for key in keys}
         with self._lock:

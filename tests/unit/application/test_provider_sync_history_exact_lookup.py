@@ -43,3 +43,39 @@ def test_file_batch_lookup_reads_collection_once_and_keeps_latest(tmp_path, monk
     assert calls == 1
     assert found["target-a"]["marker"] == "latest"
     assert found["noise-79"]["queue_job_id"] == "noise-79"
+
+def test_file_history_scopes_before_limit_so_cross_tenant_noise_cannot_hide_recent_rows(tmp_path, monkeypatch) -> None:
+    documents = FileDistributedDocumentStore(tmp_path)
+    history = ProviderSyncHistory(FileProviderSyncHistoryStore(documents))
+    history.append({**_row("target-old", "2026-09-29T10:00:00+00:00"), "marker": "old"})
+    history.append({**_row("target-new", "2026-09-29T12:00:00+00:00"), "marker": "new"})
+    for index in range(80):
+        history.append({
+            "tenant_id": "tenant-noise",
+            "business_id": "business-noise",
+            "provider_key": "email_connector",
+            "queue_job_id": f"noise-{index}",
+            "recorded_at_utc": f"2026-09-29T13:{index % 60:02d}:00+00:00",
+            "updated_at_utc": f"2026-09-29T14:{index % 60:02d}:00+00:00",
+            "status": "live_executed",
+            "accepted": True,
+        })
+    original = documents._read_collection
+    calls = 0
+    def counted(collection: str):
+        nonlocal calls
+        calls += 1
+        return original(collection)
+    monkeypatch.setattr(documents, "_read_collection", counted)
+
+    rows = history.list_for_provider(
+        tenant_id="tenant-a",
+        business_id="business-a",
+        provider_key="email_connector",
+        limit=2,
+    )
+
+    assert calls == 1
+    assert [row["queue_job_id"] for row in rows] == ["target-new", "target-old"]
+    assert all(row["tenant_id"] == "tenant-a" for row in rows)
+
