@@ -14,13 +14,13 @@ from tenancy.tenant_connector_scope import TenantConnectorScope
 from tenancy.tenant_feature_flags import TenantFeatureFlags
 from tenancy.tenant_memory_scope import TenantMemoryScope
 from tenancy.tenant_policy_store import InMemoryTenantPolicyStore, TenantPolicyBundle
-from tenancy.tenant_quota_counter_store import (
+from runtime.platform.tenancy.tenant_registry import SQLiteTenantQuotaCounterStore
+from tenancy.tenant_quota_guard import (
     InMemoryTenantQuotaCounterStore,
     PersistentTenantQuotaCounterStore,
-    SQLiteTenantQuotaCounterStore,
     TenantQuotaCounterState,
+    TenantQuotaGuard,
 )
-from tenancy.tenant_quota_guard import TenantQuotaGuard
 from tenancy.tenant_runtime_limits import TenantRuntimeLimits
 
 
