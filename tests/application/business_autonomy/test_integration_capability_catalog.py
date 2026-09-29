@@ -81,9 +81,9 @@ def test_every_external_messaging_provider_has_honest_interaction_capability():
 
 def test_capability_definitions_are_versioned_and_immutable():
     capability = capability_map()["interaction.telegram"]
-    assert capability.schema_version == CAPABILITY_SCHEMA_VERSION == 2
+    assert capability.schema_version == CAPABILITY_SCHEMA_VERSION == 3
     payload = capability.to_payload()
-    assert payload["schema_version"] == 2
+    assert payload["schema_version"] == 3
     try:
         capability.metadata["forged"] = True
     except TypeError:
@@ -124,9 +124,10 @@ def test_capability_payload_exposes_canonical_contract_surface():
     assert payload["cost"] is None
     assert payload["latency_ms"] is None
     assert payload["reliability"] is None
+    assert payload["error_rate"] is None
     assert payload["reversible"] is False
     assert payload["contract_complete"] is False
-    assert set(payload["contract_gaps"]) == {"input_schema", "output_schema", "health", "availability", "cost", "latency_ms", "reliability"}
+    assert set(payload["contract_gaps"]) == {"input_schema", "output_schema", "health", "availability", "cost", "latency_ms", "reliability", "error_rate"}
     assert payload["approval_requirements"] == {
         "owner_approval": True,
         "budget_guard": False,
@@ -193,7 +194,7 @@ def test_connectable_capability_without_provider_is_reported_incomplete():
         availability="available",
     )
     assert capability.contract_complete is False
-    assert set(capability.contract_gaps) == {"cost", "latency_ms", "reliability", "providers"}
+    assert set(capability.contract_gaps) == {"cost", "latency_ms", "reliability", "error_rate", "providers"}
 
 
 @pytest.mark.parametrize(
@@ -250,7 +251,7 @@ def test_capability_discovery_overlays_live_provider_truth_without_mutating_cata
     assert telegram["provider_runtime"][0]["provider_version"] == 3
     assert "health" not in telegram["contract_gaps"]
     assert "availability" not in telegram["contract_gaps"]
-    assert set(telegram["contract_gaps"]) == {"input_schema", "output_schema", "cost", "latency_ms", "reliability"}
+    assert set(telegram["contract_gaps"]) == {"input_schema", "output_schema", "cost", "latency_ms", "reliability", "error_rate"}
 
 
 def test_dry_run_provider_truth_never_claims_live_health():
@@ -346,7 +347,7 @@ def test_email_capability_schema_reuses_canonical_outbound_and_runtime_contract_
         "provider_key", "operation", "mode", "status", "accepted", "metadata"
     ]
     assert email.output_schema["properties"]["accepted"] == {"type": "boolean"}
-    assert set(email.contract_gaps) == {"health", "availability", "cost", "latency_ms", "reliability"}
+    assert set(email.contract_gaps) == {"health", "availability", "cost", "latency_ms", "reliability", "error_rate"}
 
 def test_unknown_numeric_capability_truth_is_explicit_and_not_zero():
     capability = IntegrationCapability(
@@ -362,7 +363,7 @@ def test_unknown_numeric_capability_truth_is_explicit_and_not_zero():
     assert payload["cost"] is None
     assert payload["latency_ms"] is None
     assert payload["reliability"] is None
-    assert {"cost", "latency_ms", "reliability"} <= set(payload["contract_gaps"])
+    assert {"cost", "latency_ms", "reliability", "error_rate"} <= set(payload["contract_gaps"])
 
 
 def test_measured_numeric_capability_truth_closes_only_its_own_gaps():
@@ -377,10 +378,12 @@ def test_measured_numeric_capability_truth_closes_only_its_own_gaps():
         cost=0.0,
         latency_ms=0.0,
         reliability=1.0,
+        error_rate=0.0,
     )
     assert "cost" not in capability.contract_gaps
     assert "latency_ms" not in capability.contract_gaps
     assert "reliability" not in capability.contract_gaps
+    assert "error_rate" not in capability.contract_gaps
 
 
 
@@ -397,7 +400,24 @@ def test_capability_discovery_uses_provider_scoped_runtime_metrics_without_cross
     telegram = {row['capability_id']: row for row in rows}['interaction.telegram']
     assert telegram['reliability'] == 0.75
     assert telegram['latency_ms'] == 240.0
+    assert telegram['error_rate'] == 0.25
     assert telegram['provider_metrics'][0]['provider_key'] == 'telegram_bot'
     assert 'reliability' not in telegram['contract_gaps']
     assert 'latency_ms' not in telegram['contract_gaps']
+    assert 'error_rate' not in telegram['contract_gaps']
     assert 'cost' in telegram['contract_gaps']
+
+@pytest.mark.parametrize("value", [-0.01, 1.01])
+def test_capability_error_rate_rejects_out_of_range_truth(value):
+    with pytest.raises(ValueError, match="error_rate"):
+        IntegrationCapability(
+            capability_id="interaction.invalid_error_rate",
+            title="Invalid Error Rate",
+            surface=CapabilitySurface.INTERACTION,
+            group="Test",
+            status=CapabilityStatus.CONTRACT_ONLY,
+            owner_text="owner",
+            next_required_step="next",
+            error_rate=value,
+        )
+

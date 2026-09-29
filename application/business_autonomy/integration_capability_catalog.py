@@ -16,7 +16,7 @@ from contracts.risk import RiskLevel
 
 CANON_INTEGRATION_CAPABILITY_CATALOG = True
 CANON_CAPABILITY_ENTITY_OWNER = True
-CAPABILITY_SCHEMA_VERSION = 2
+CAPABILITY_SCHEMA_VERSION = 3
 
 
 class CapabilityStatus(str, Enum):
@@ -133,6 +133,7 @@ class IntegrationCapability:
     cost: float | None = None
     latency_ms: float | None = None
     reliability: float | None = None
+    error_rate: float | None = None
     reversible: bool = False
     evidence: tuple[CapabilityEvidence, ...] = field(default_factory=tuple)
     metadata: Mapping[str, Any] = field(default_factory=dict)
@@ -173,6 +174,7 @@ class IntegrationCapability:
             'cost': self.cost,
             'latency_ms': self.latency_ms,
             'reliability': self.reliability,
+            'error_rate': self.error_rate,
         }
         normalized_numeric: dict[str, float | None] = {}
         for name, value in numeric_inputs.items():
@@ -191,10 +193,13 @@ class IntegrationCapability:
         cost = normalized_numeric['cost']
         latency_ms = normalized_numeric['latency_ms']
         reliability = normalized_numeric['reliability']
+        error_rate = normalized_numeric['error_rate']
         if cost is not None and cost < 0.0 or latency_ms is not None and latency_ms < 0.0:
             raise ValueError('capability cost/latency must be non-negative')
         if reliability is not None and not 0.0 <= reliability <= 1.0:
             raise ValueError('capability reliability must be between 0 and 1')
+        if error_rate is not None and not 0.0 <= error_rate <= 1.0:
+            raise ValueError('capability error_rate must be between 0 and 1')
         object.__setattr__(self, 'capability_id', capability_id)
         object.__setattr__(self, 'title', title)
         object.__setattr__(self, 'provider_keys', provider_keys)
@@ -212,6 +217,7 @@ class IntegrationCapability:
         object.__setattr__(self, 'cost', cost)
         object.__setattr__(self, 'latency_ms', latency_ms)
         object.__setattr__(self, 'reliability', reliability)
+        object.__setattr__(self, 'error_rate', error_rate)
         object.__setattr__(self, 'reversible', bool(self.reversible))
         object.__setattr__(self, 'schema_version', CAPABILITY_SCHEMA_VERSION)
         object.__setattr__(self, 'metadata', MappingProxyType(dict(self.metadata or {})))
@@ -245,6 +251,8 @@ class IntegrationCapability:
             gaps.append('latency_ms')
         if self.reliability is None:
             gaps.append('reliability')
+        if self.error_rate is None:
+            gaps.append('error_rate')
         if self.connectable and not self.provider_keys:
             gaps.append('providers')
         return tuple(gaps)
@@ -300,6 +308,7 @@ class IntegrationCapability:
             'cost': self.cost,
             'latency_ms': self.latency_ms,
             'reliability': self.reliability,
+            'error_rate': self.error_rate,
             'reversible': self.reversible,
             'approval_requirements': {
                 'owner_approval': bool(self.requires_owner_approval),
@@ -849,6 +858,7 @@ def capability_discovery_snapshot(
         cost = item.cost
         latency_ms = item.latency_ms
         reliability = item.reliability
+        error_rate = item.error_rate
         if provider_rows and item.connectable:
             ready = [
                 row for row in provider_rows
@@ -882,10 +892,13 @@ def capability_discovery_snapshot(
         if item.connectable and metric_rows:
             reliability_values = [float(row['reliability']) for row in metric_rows if row.get('reliability') is not None]
             latency_values = [float(row['latency_ms']) for row in metric_rows if row.get('latency_ms') is not None]
+            error_values = [float(row['error_rate']) for row in metric_rows if row.get('error_rate') is not None]
             if reliability_values and len(reliability_values) == len(item.provider_keys):
                 reliability = min(reliability_values)
             if latency_values and len(latency_values) == len(item.provider_keys):
                 latency_ms = max(latency_values)
+            if error_values and len(error_values) == len(item.provider_keys):
+                error_rate = max(error_values)
         gaps = list(item.contract_gaps)
         if health != CapabilityHealthState.UNKNOWN.value and 'health' in gaps:
             gaps.remove('health')
@@ -895,6 +908,8 @@ def capability_discovery_snapshot(
             gaps.remove('latency_ms')
         if reliability is not None and 'reliability' in gaps:
             gaps.remove('reliability')
+        if error_rate is not None and 'error_rate' in gaps:
+            gaps.remove('error_rate')
         rows.append({
             'capability_id': item.capability_id,
             'lifecycle': item.lifecycle.value,
@@ -913,6 +928,7 @@ def capability_discovery_snapshot(
             'cost': cost,
             'latency_ms': latency_ms,
             'reliability': reliability,
+            'error_rate': error_rate,
             'reversible': item.reversible,
             'approval_requirements': {
                 'owner_approval': bool(item.requires_owner_approval),
