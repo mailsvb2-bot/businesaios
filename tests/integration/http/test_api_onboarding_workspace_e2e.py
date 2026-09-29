@@ -222,6 +222,8 @@ def test_real_api_onboarding_issues_owner_session_and_opens_workspace(tmp_path) 
             )
             assert status == 200, workspace
             assert workspace["scope_source"] == "authenticated_owner_session"
+            assert workspace["capabilities_schema_version"] == 3
+            assert all(item["schema_version"] == 3 for item in workspace["capabilities"])
             assert workspace["write_actions_enabled"] is False
             chosen = next((item for item in workspace["providers"] if item["provider_key"] == provider_key), None)
             assert chosen is not None

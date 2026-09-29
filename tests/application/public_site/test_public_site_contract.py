@@ -12,6 +12,7 @@ def test_public_site_has_required_sections():
 def test_public_site_capabilities_come_from_backend_catalog():
     payload = build_landing_payload()
     assert payload['capabilities']['source_of_truth'] == 'application.business_autonomy.integration_capability_catalog'
+    assert payload['capabilities']['capabilities_schema_version'] == 3
     assert payload['sections']['capabilities']['summary']['total'] >= 1
 
 
