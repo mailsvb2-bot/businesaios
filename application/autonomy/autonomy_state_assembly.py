@@ -5,6 +5,7 @@ from typing import Any
 
 from application.business_autonomy.integration_capability_catalog import capability_discovery_snapshot
 from application.business_autonomy.provider_truth_matrix import (
+    provider_quota_truth_map,
     provider_runtime_metrics_truth_map,
     provider_runtime_truth_map,
 )
@@ -305,10 +306,26 @@ class AutonomyStateAssembly:
                     step_index=step_index,
                     payload={"error": type(exc).__name__, "message": str(exc)},
                 )
+        provider_quota_truth: dict[str, dict[str, Any]] = {}
+        quota_guard = getattr(self._contract, "_provider_quota_guard", None)
+        if provider_keys and quota_guard is not None:
+            try:
+                provider_quota_truth = provider_quota_truth_map(
+                    quota_guard=quota_guard,
+                    tenant_id=request.tenant_id,
+                    provider_keys=provider_keys,
+                )
+            except Exception as exc:
+                trace.record(
+                    event_type="capability_discovery_quota_truth_failed",
+                    step_index=step_index,
+                    payload={"error": type(exc).__name__, "message": str(exc)},
+                )
         meta = dict(getattr(state, "meta", {}) or {})
         meta["capability_discovery"] = capability_discovery_snapshot(
             provider_runtime_truth=provider_runtime_truth,
             provider_metrics_truth=provider_metrics_truth,
+            provider_quota_truth=provider_quota_truth,
         )
         state = replace(state, meta=meta)
         adapter = getattr(self._contract, "_business_memory_state_adapter", None)
