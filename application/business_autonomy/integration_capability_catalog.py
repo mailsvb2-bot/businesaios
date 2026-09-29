@@ -16,6 +16,7 @@ from application.business_autonomy.provider_runtime_contract import provider_syn
 from application.capability.capability_health_policy import CapabilityHealthPolicy
 from contracts.email_outbound import email_outbound_payload_schema_v1
 from contracts.risk import RiskLevel
+from crm.webhooks.crm_webhook_contract import crm_webhook_event_schema
 
 CANON_INTEGRATION_CAPABILITY_CATALOG = True
 CANON_CAPABILITY_ENTITY_OWNER = True
@@ -365,6 +366,7 @@ _BRIDGE_INTERACTION_CAPABILITY_IDS = {'instagram': 'interaction.instagram_direct
 _EMAIL_MESSAGE_SEND_INPUT_SCHEMA = email_outbound_payload_schema_v1()
 _PROVIDER_SYNC_REQUEST_INPUT_SCHEMA = provider_sync_run_request_schema()
 _PROVIDER_SYNC_RESULT_OUTPUT_SCHEMA = provider_sync_run_result_schema()
+_CRM_WEBHOOK_EVENT_INPUT_SCHEMA = crm_webhook_event_schema()
 
 
 def _bridge_messaging_interaction_capabilities() -> tuple[IntegrationCapability, ...]:
@@ -764,9 +766,9 @@ CAPABILITIES: tuple[IntegrationCapability, ...] = (
         requires_credentials=True,
         requires_webhook=True,
         risk_level='medium',
-        input_schema=_PROVIDER_SYNC_REQUEST_INPUT_SCHEMA,
+        input_schema=_CRM_WEBHOOK_EVENT_INPUT_SCHEMA,
         output_schema=_PROVIDER_SYNC_RESULT_OUTPUT_SCHEMA,
-        registry_sources=('application.business_autonomy.provider_catalog', 'application.business_autonomy.provider_runtime_contract'),
+        registry_sources=('application.business_autonomy.provider_catalog', 'crm.webhooks.crm_webhook_contract', 'application.business_autonomy.provider_runtime_contract'),
         owner_text='CRM events/actions/onboarding являются одним из самых полезных контуров взаимодействия с бизнес-системами.',
         next_required_step='Доказать canonical event → decision → action → evidence без параллельного решения.',
         evidence=(_e('provider_catalog.hubspot', 'hubspot provider exists'), _e('crm providers', 'crm contour exists', 0.8)),
