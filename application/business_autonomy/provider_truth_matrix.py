@@ -14,6 +14,7 @@ from application.business_autonomy.provider_catalog import (
 )
 from contracts.event_store import canonical_business_event_contract
 from core.events.event_types import PROVIDER_CREATED, PROVIDER_UPDATED
+from observability.tenant_metrics_registry import percentile_value
 from runtime.business_autonomy.provider_sync_history import ProviderSyncHistory
 from runtime.business_autonomy.provider_sync_runtime import ProviderSyncRuntimePlanner
 from runtime.business_autonomy.provider_transport_bindings import ProviderTransportBindings
@@ -294,16 +295,15 @@ def provider_runtime_metrics_truth_map(
         ]
         if not measured:
             continue
-        latencies = sorted(max(0.0, float(row["transport_latency_ms"])) for row in measured)
+        latencies = [max(0.0, float(row["transport_latency_ms"])) for row in measured]
         successes = sum(1 for row in measured if bool(row.get("accepted")))
         sample_count = len(measured)
-        p95_index = min(sample_count - 1, max(0, int(round((sample_count - 1) * 0.95))))
         reliability = successes / sample_count
         result[provider_key] = {
             "provider_key": provider_key,
             "reliability": reliability,
             "error_rate": 1.0 - reliability,
-            "latency_ms": latencies[p95_index],
+            "latency_ms": percentile_value(latencies, 0.95),
             "sample_count": sample_count,
             "source": "provider_sync_history",
         }

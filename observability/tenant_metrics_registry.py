@@ -27,6 +27,19 @@ def utc_now() -> datetime:
     return datetime.now(timezone.utc)
 
 
+def percentile_value(values: list[float], p: float) -> float:
+    ordered = sorted(float(value) for value in values)
+    if not ordered:
+        return 0.0
+    if len(ordered) == 1:
+        return ordered[0]
+    pos = (len(ordered) - 1) * max(0.0, min(1.0, float(p)))
+    lo = int(pos)
+    hi = min(lo + 1, len(ordered) - 1)
+    frac = pos - lo
+    return ordered[lo] * (1.0 - frac) + ordered[hi] * frac
+
+
 class MetricAggregation(str, Enum):
     SUM = 'sum'
     LAST = 'last'
@@ -148,14 +161,7 @@ class TenantMetricsRegistry:
 
     @staticmethod
     def _percentile(values: list[float], p: float) -> float:
-        ordered = sorted(float(v) for v in values)
-        if len(ordered) == 1:
-            return ordered[0]
-        pos = (len(ordered) - 1) * max(0.0, min(1.0, p))
-        lo = int(pos)
-        hi = min(lo + 1, len(ordered) - 1)
-        frac = pos - lo
-        return ordered[lo] * (1.0 - frac) + ordered[hi] * frac
+        return percentile_value(values, p)
 
     @staticmethod
     def _merge_labels(samples: list[MetricSample]) -> dict[str, str]:
@@ -171,4 +177,5 @@ __all__ = [
     'MetricSample',
     'TenantMetricsRegistry',
     'utc_now',
+    'percentile_value',
 ]

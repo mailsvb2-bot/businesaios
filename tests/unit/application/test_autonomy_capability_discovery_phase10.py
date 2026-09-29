@@ -150,7 +150,7 @@ def test_capability_discovery_reads_durable_provider_metrics_before_decision(tmp
     )
     telegram = {row["capability_id"]: row for row in state.meta["capability_discovery"]}["interaction.telegram"]
     assert telegram["reliability"] == 0.5
-    assert telegram["latency_ms"] == 300.0
+    assert telegram["latency_ms"] == 290.0
     assert telegram["provider_metrics"][0]["source"] == "provider_sync_history"
     assert telegram["provider_metrics"][0]["sample_count"] == 2
 
