@@ -22,6 +22,7 @@ from application.business_autonomy.provider_catalog import (
 )
 from application.business_autonomy.provider_runtime_contract import provider_sync_run_request_schema, provider_sync_run_result_schema
 from contracts.email_outbound import EmailOutboundPayloadV1, email_outbound_payload_schema_v1
+from crm.webhooks.crm_webhook_contract import crm_webhook_event_schema
 
 def test_capability_catalog_exposes_honest_statuses():
     capabilities = capability_map()
@@ -338,13 +339,17 @@ def test_email_capability_schema_reuses_canonical_outbound_and_runtime_contract_
 def test_provider_sync_capabilities_reuse_canonical_request_and_result_schemas():
     request_schema = provider_sync_run_request_schema()
     result_schema = provider_sync_run_result_schema()
-    for capability_id in ("acquisition.crm_reactivation", "acquisition.commerce_marketplaces", "interaction.crm_events"):
+    for capability_id in ("acquisition.crm_reactivation", "acquisition.commerce_marketplaces"):
         capability = capability_map()[capability_id]
         assert "application.business_autonomy.provider_runtime_contract" in capability.registry_sources
         assert dict(capability.input_schema) == request_schema
         assert dict(capability.output_schema) == result_schema
         assert "input_schema" not in capability.contract_gaps
         assert "output_schema" not in capability.contract_gaps
+    crm_events = capability_map()["interaction.crm_events"]
+    assert "crm.webhooks.crm_webhook_contract" in crm_events.registry_sources
+    assert dict(crm_events.input_schema) == crm_webhook_event_schema()
+    assert dict(crm_events.output_schema) == result_schema
 
 def test_unknown_numeric_capability_truth_is_explicit_and_not_zero():
     capability = IntegrationCapability(
