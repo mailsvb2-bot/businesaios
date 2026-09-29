@@ -153,3 +153,51 @@ def test_capability_discovery_reads_durable_provider_metrics_before_decision(tmp
     assert telegram["latency_ms"] == 300.0
     assert telegram["provider_metrics"][0]["source"] == "provider_sync_history"
     assert telegram["provider_metrics"][0]["sample_count"] == 2
+
+class _ActionHealthStateMapper:
+    def to_world_state(self, **_kwargs):
+        return _State(meta={
+            "runtime_capabilities": {
+                "send_message@v1": {
+                    "enabled": True,
+                    "healthy": True,
+                    "health_score": 1.0,
+                    "health_tier": "healthy",
+                    "routing_state": "enabled",
+                    "source": "capability_health_registry",
+                }
+            }
+        })
+
+
+def test_action_level_health_does_not_forge_provider_specific_discovery_health():
+    contract = SimpleNamespace(
+        _state_mapper=_ActionHealthStateMapper(),
+        _capability_health_registry=None,
+        _capability_health_scoring_service=None,
+        _business_memory_state_adapter=None,
+        _state_store=None,
+        _event_store=None,
+    )
+    request = SimpleNamespace(
+        tenant_id="tenant-1",
+        business_id="business-1",
+        goal="grow revenue",
+        goal_id="goal-1",
+        meta={},
+    )
+
+    state = AutonomyStateAssembly(contract=contract).assemble_state(
+        request=request,
+        trace=_Trace(),
+        step_index=0,
+        previous_feedback={},
+        business_memory_context={},
+    )
+
+    assert state.meta["runtime_capabilities"]["send_message@v1"]["health_tier"] == "healthy"
+    discovery = {row["capability_id"]: row for row in state.meta["capability_discovery"]}
+    assert discovery["interaction.telegram"]["health"] == "unknown"
+    assert discovery["interaction.whatsapp"]["health"] == "unknown"
+    assert discovery["interaction.email"]["health"] == "unknown"
+
