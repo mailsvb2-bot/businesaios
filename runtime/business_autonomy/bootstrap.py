@@ -116,7 +116,7 @@ from runtime.state import build_canonical_state_synthesis_engine
 from security.connector_secret_scope import ConnectorSecretScope
 from security.secret_vault import build_default_secret_vault
 from storage.distributed_evidence_audit_backend import DistributedGovernanceAuditLog
-from tenancy.tenant_policy_store import build_default_tenant_policy_store
+from tenancy.tenant_policy_store import build_default_tenant_policy_store, ensure_tenant_policy_bundle
 from tenancy.tenant_quota_counter_store import build_default_tenant_quota_counter_store
 from tenancy.tenant_quota_guard import TenantQuotaGuard
 
@@ -604,6 +604,8 @@ def build_business_autonomy_guarded_service(*, business_id: str = 'external_busi
     connector_secret_scope = admin_dependencies['connector_secret_scope']
     secret_vault = admin_dependencies['secret_vault']
     activation_store = admin_dependencies['activation_store']
+    provider_quota_counter_store = build_default_tenant_quota_counter_store()
+    provider_quota_policy_store = build_default_tenant_policy_store()
     audit = DistributedBusinessAutonomyAudit(distributed['audit'])
     file_surface = BusinessAutonomyFileSurfaceMirror.from_data_dir()
     evidence_store = CompositeBusinessAutonomyEvidenceStore(
@@ -619,6 +621,7 @@ def build_business_autonomy_guarded_service(*, business_id: str = 'external_busi
         registry_record = distributed_registry.get(tenant_id, scoped_business_id)
         if registry_record is None:
             raise KeyError(f'business is not explicitly onboarded for tenant: {tenant_id}:{scoped_business_id}')
+        ensure_tenant_policy_bundle(provider_quota_policy_store, tenant_id)
         legacy_region = registry_record.region
         try:
             identity = distributed_registry.channel_identity_snapshot(
@@ -788,8 +791,6 @@ def build_business_autonomy_guarded_service(*, business_id: str = 'external_busi
             ontology_event_store, ontology_event_store_stack.close
         )
     provider_runtime_audit = build_provider_runtime_audit_recorder()
-    provider_quota_counter_store = build_default_tenant_quota_counter_store()
-    provider_quota_policy_store = build_default_tenant_policy_store()
     provider_quota_guard = ConnectorQuotaGuard(
         quota_guard=TenantQuotaGuard(
             policy_store=provider_quota_policy_store,
