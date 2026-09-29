@@ -1,12 +1,18 @@
 from __future__ import annotations
 
+from datetime import datetime, timezone
+from decimal import Decimal
+
 from tenancy.tenant_audit_scope import TenantAuditScope
 from tenancy.tenant_billing_scope import TenantBillingScope
 from tenancy.tenant_connector_scope import TenantConnectorScope
 from tenancy.tenant_feature_flags import TenantFeatureFlags
 from tenancy.tenant_memory_scope import TenantMemoryScope
 from tenancy.tenant_policy_store import InMemoryTenantPolicyStore, TenantPolicyBundle
-from tenancy.tenant_quota_counter_store import PersistentTenantQuotaCounterStore
+from tenancy.tenant_quota_counter_store import (
+    PersistentTenantQuotaCounterStore,
+    TenantQuotaCounterState,
+)
 from tenancy.tenant_quota_guard import TenantQuotaGuard
 from tenancy.tenant_runtime_limits import TenantRuntimeLimits
 
@@ -94,12 +100,12 @@ def test_tenant_quota_snapshot_ignores_stale_windows(tmp_path) -> None:
     store = PersistentTenantQuotaCounterStore(tmp_path / 'quota-counters.json')
     guard = TenantQuotaGuard(policy_store=policies, counter_store=store)
     store.save(
-        __import__('tenancy.tenant_quota_counter_store', fromlist=['TenantQuotaCounterState']).TenantQuotaCounterState(
+        TenantQuotaCounterState(
             tenant_id='tenant-a',
             counter_key='tenant:actions_per_hour',
             window_key='1999010101',
-            used=__import__('decimal').Decimal('99'),
-            updated_at=__import__('datetime').datetime.now(__import__('datetime').timezone.utc),
+            used=Decimal('99'),
+            updated_at=datetime.now(timezone.utc),
         )
     )
     assert guard.snapshot(tenant_id='tenant-a')['actions_per_hour'] == 0.0
