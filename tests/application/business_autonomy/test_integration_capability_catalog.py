@@ -14,14 +14,13 @@ from application.business_autonomy.integration_capability_catalog import (
     list_integration_capability_payloads,
     summarize_integration_capabilities,
 )
-from application.business_autonomy.provider_runtime_contract import provider_sync_run_result_schema
-from contracts.email_outbound import EmailOutboundPayloadV1, email_outbound_payload_schema_v1
-
 from application.business_autonomy.provider_catalog import (
     BRIDGE_MESSAGING_PROVIDER_KEYS,
     MESSAGING_CHANNEL_PROVIDER_KEYS,
     MESSAGING_GUARDED_WRITE_PROVIDER_KEYS,
 )
+from application.business_autonomy.provider_runtime_contract import provider_sync_run_result_schema
+from contracts.email_outbound import EmailOutboundPayloadV1, email_outbound_payload_schema_v1
 
 
 def test_capability_catalog_exposes_honest_statuses():
