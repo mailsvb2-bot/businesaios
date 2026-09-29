@@ -20,7 +20,7 @@ from application.business_autonomy.provider_catalog import (
     MESSAGING_CHANNEL_PROVIDER_KEYS,
     MESSAGING_GUARDED_WRITE_PROVIDER_KEYS,
 )
-from application.business_autonomy.provider_runtime_contract import provider_sync_run_request_schema, provider_sync_run_result_schema
+from application.business_autonomy.provider_runtime_contract import provider_sync_run_request_schema, provider_sync_run_result_schema, provider_webhook_ingress_request_schema, provider_webhook_ingress_result_schema
 from contracts.email_outbound import EmailOutboundPayloadV1, email_outbound_payload_schema_v1
 from crm.webhooks.crm_webhook_contract import crm_webhook_event_schema
 from interfaces.messaging_runtime.contracts import message_envelope_schema, outbound_envelope_schema
@@ -374,6 +374,14 @@ def test_web_chat_acquisition_reuses_session_contract_without_forging_output_sch
     assert dict(capability.output_schema) == {}
     assert "input_schema" not in capability.contract_gaps
     assert "output_schema" in capability.contract_gaps
+
+def test_webhook_api_reuses_provider_ingress_contract():
+    capability = capability_map()["interaction.webhook_api"]
+    assert "application.business_autonomy.provider_runtime_contract" in capability.registry_sources
+    assert dict(capability.input_schema) == provider_webhook_ingress_request_schema()
+    assert dict(capability.output_schema) == provider_webhook_ingress_result_schema()
+    assert "input_schema" not in capability.contract_gaps
+    assert "output_schema" not in capability.contract_gaps
 
 def test_unknown_numeric_capability_truth_is_explicit_and_not_zero():
     capability = IntegrationCapability(
