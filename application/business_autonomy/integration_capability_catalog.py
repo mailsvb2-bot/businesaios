@@ -17,6 +17,7 @@ from application.capability.capability_health_policy import CapabilityHealthPoli
 from contracts.email_outbound import email_outbound_payload_schema_v1
 from contracts.risk import RiskLevel
 from crm.webhooks.crm_webhook_contract import crm_webhook_event_schema
+from interfaces.web.chat_widget.session_contract import web_chat_session_schema
 
 CANON_INTEGRATION_CAPABILITY_CATALOG = True
 CANON_CAPABILITY_ENTITY_OWNER = True
@@ -367,6 +368,7 @@ _EMAIL_MESSAGE_SEND_INPUT_SCHEMA = email_outbound_payload_schema_v1()
 _PROVIDER_SYNC_REQUEST_INPUT_SCHEMA = provider_sync_run_request_schema()
 _PROVIDER_SYNC_RESULT_OUTPUT_SCHEMA = provider_sync_run_result_schema()
 _CRM_WEBHOOK_EVENT_INPUT_SCHEMA = crm_webhook_event_schema()
+_WEB_CHAT_SESSION_INPUT_SCHEMA = web_chat_session_schema()
 
 
 def _bridge_messaging_interaction_capabilities() -> tuple[IntegrationCapability, ...]:
@@ -440,6 +442,8 @@ CAPABILITIES: tuple[IntegrationCapability, ...] = (
         verify_supported=False,
         requires_webhook=True,
         risk_level='medium',
+        input_schema=_WEB_CHAT_SESSION_INPUT_SCHEMA,
+        registry_sources=('interfaces.web.chat_widget.session_contract',),
         owner_text='Есть website/chatbot surface, но нужен полноценный channel adapter через единый Conversation Router.',
         next_required_step='Сделать webchat session, identity link, transcript evidence и каноничный inbound event.',
         evidence=(_e('website/chatbot surface', 'partial web chat surface exists', 0.75),),
@@ -749,6 +753,8 @@ CAPABILITIES: tuple[IntegrationCapability, ...] = (
         verify_supported=False,
         requires_webhook=True,
         risk_level='medium',
+        input_schema=_WEB_CHAT_SESSION_INPUT_SCHEMA,
+        registry_sources=('interfaces.web.chat_widget.session_contract',),
         owner_text='Есть website/chatbot surface, но не доказан отдельный channel adapter.',
         next_required_step='Сделать webchat session, identity link, transcript evidence и Conversation Router binding.',
         evidence=(_e('website/chatbot surface', 'partial web chat surface exists', 0.75),),
