@@ -20,9 +20,8 @@ from application.business_autonomy.provider_catalog import (
     MESSAGING_CHANNEL_PROVIDER_KEYS,
     MESSAGING_GUARDED_WRITE_PROVIDER_KEYS,
 )
-from application.business_autonomy.provider_runtime_contract import provider_sync_run_result_schema
+from application.business_autonomy.provider_runtime_contract import provider_sync_run_request_schema, provider_sync_run_result_schema
 from contracts.email_outbound import EmailOutboundPayloadV1, email_outbound_payload_schema_v1
-
 
 def test_capability_catalog_exposes_honest_statuses():
     capabilities = capability_map()
@@ -33,7 +32,6 @@ def test_capability_catalog_exposes_honest_statuses():
     assert capabilities['acquisition.meta_ads'].connectable is False
     assert capabilities['acquisition.google_ads'].requires_budget_guard is True
 
-
 def test_capability_payload_blocks_roadmap_as_connectable():
     rows = list_integration_capability_payloads(include_roadmap=True)
     by_id = {row['id']: row for row in rows}
@@ -43,7 +41,6 @@ def test_capability_payload_blocks_roadmap_as_connectable():
     assert by_id['interaction.email']['connectable'] is True
     assert by_id['interaction.email']['requires_consent'] is True
 
-
 def test_capability_summary_counts_are_consistent():
     rows = list_integration_capability_payloads(include_roadmap=True)
     summary = summarize_integration_capabilities()
@@ -52,7 +49,6 @@ def test_capability_summary_counts_are_consistent():
     assert summary['connectable'] + summary['roadmap_only'] == summary['total']
     assert summary['by_surface']['acquisition'] > 0
     assert summary['by_surface']['interaction'] > 0
-
 
 def test_every_external_messaging_provider_has_honest_interaction_capability():
     capabilities = tuple(
@@ -81,7 +77,6 @@ def test_every_external_messaging_provider_has_honest_interaction_capability():
     assert catalog['interaction.instagram_direct'].provider_keys == ('instagram_messaging',)
     assert catalog['interaction.facebook_messenger'].provider_keys == ('messenger_messaging',)
 
-
 def test_capability_definitions_are_versioned_and_immutable():
     capability = capability_map()["interaction.telegram"]
     assert capability.schema_version == CAPABILITY_SCHEMA_VERSION == 4
@@ -94,13 +89,11 @@ def test_capability_definitions_are_versioned_and_immutable():
     else:
         raise AssertionError("capability metadata must be immutable")
 
-
 def test_capability_map_is_a_copy_of_release_catalog_index():
     first = capability_map()
     first.pop("interaction.telegram")
     assert "interaction.telegram" in capability_map()
     assert all(isinstance(item, IntegrationCapability) for item in capability_map().values())
-
 
 def test_capability_lifecycle_matches_canon_state_set():
     assert {item.value for item in CapabilityLifecycle} == {
@@ -115,7 +108,6 @@ def test_capability_lifecycle_matches_canon_state_set():
         "disabled",
         "deprecated",
     }
-
 
 def test_capability_payload_exposes_canonical_contract_surface():
     payload = capability_map()["interaction.telegram"].to_payload()
@@ -136,7 +128,6 @@ def test_capability_payload_exposes_canonical_contract_surface():
         "budget_guard": False,
         "consent": False,
     }
-
 
 @pytest.mark.parametrize(
     ("kwargs", "message"),
@@ -167,7 +158,6 @@ def test_capability_contract_numeric_bounds_fail_closed(kwargs, message):
             **kwargs,
         )
 
-
 def test_production_ready_capability_cannot_claim_weaker_lifecycle():
     with pytest.raises(ValueError, match="production_ready lifecycle"):
         IntegrationCapability(
@@ -180,7 +170,6 @@ def test_production_ready_capability_cannot_claim_weaker_lifecycle():
             owner_text="owner",
             next_required_step="next",
         )
-
 
 def test_connectable_capability_without_provider_is_reported_incomplete():
     capability = IntegrationCapability(
@@ -198,7 +187,6 @@ def test_connectable_capability_without_provider_is_reported_incomplete():
     )
     assert capability.contract_complete is False
     assert set(capability.contract_gaps) == {"cost", "latency_ms", "reliability", "error_rate", "providers"}
-
 
 @pytest.mark.parametrize(
     ("field", "value"),
@@ -221,7 +209,6 @@ def test_capability_truth_states_fail_closed(field, value):
             **kwargs,
         )
 
-
 def test_capability_truth_state_enums_are_explicit():
     assert {item.value for item in CapabilityHealthState} == {
         "unknown", "healthy", "degraded", "unhealthy", "disabled"
@@ -229,7 +216,6 @@ def test_capability_truth_state_enums_are_explicit():
     assert {item.value for item in CapabilityAvailabilityState} == {
         "unknown", "available", "degraded", "unavailable"
     }
-
 
 def test_capability_discovery_overlays_live_provider_truth_without_mutating_catalog():
     static = capability_map()["interaction.telegram"]
@@ -255,7 +241,6 @@ def test_capability_discovery_overlays_live_provider_truth_without_mutating_cata
     assert "health" not in telegram["contract_gaps"]
     assert "availability" not in telegram["contract_gaps"]
     assert set(telegram["contract_gaps"]) == {"input_schema", "output_schema", "cost", "latency_ms", "reliability", "error_rate"}
-
 
 def test_dry_run_provider_truth_never_claims_live_health():
     rows = capability_discovery_snapshot(provider_runtime_truth={
@@ -306,12 +291,10 @@ def test_capability_evidence_confidence_rejects_non_finite_and_non_numeric_truth
     with pytest.raises(ValueError, match="finite number"):
         CapabilityEvidence(source="test", claim="claim", confidence=value)
 
-
 @pytest.mark.parametrize("value", [-0.01, 1.01])
 def test_capability_evidence_confidence_rejects_out_of_range_truth(value):
     with pytest.raises(ValueError, match="between 0 and 1"):
         CapabilityEvidence(source="test", claim="claim", confidence=value)
-
 
 def test_capability_risk_level_reuses_canonical_risk_vocabulary():
     capability = IntegrationCapability(
@@ -352,6 +335,17 @@ def test_email_capability_schema_reuses_canonical_outbound_and_runtime_contract_
     assert email.output_schema["properties"]["accepted"] == {"type": "boolean"}
     assert set(email.contract_gaps) == {"health", "availability", "cost", "latency_ms", "reliability", "error_rate"}
 
+def test_provider_sync_capabilities_reuse_canonical_request_and_result_schemas():
+    request_schema = provider_sync_run_request_schema()
+    result_schema = provider_sync_run_result_schema()
+    for capability_id in ("acquisition.crm_reactivation", "acquisition.commerce_marketplaces", "interaction.crm_events"):
+        capability = capability_map()[capability_id]
+        assert "application.business_autonomy.provider_runtime_contract" in capability.registry_sources
+        assert dict(capability.input_schema) == request_schema
+        assert dict(capability.output_schema) == result_schema
+        assert "input_schema" not in capability.contract_gaps
+        assert "output_schema" not in capability.contract_gaps
+
 def test_unknown_numeric_capability_truth_is_explicit_and_not_zero():
     capability = IntegrationCapability(
         capability_id="interaction.unknown_numeric_truth",
@@ -367,7 +361,6 @@ def test_unknown_numeric_capability_truth_is_explicit_and_not_zero():
     assert payload["latency_ms"] is None
     assert payload["reliability"] is None
     assert {"cost", "latency_ms", "reliability", "error_rate"} <= set(payload["contract_gaps"])
-
 
 def test_measured_numeric_capability_truth_closes_only_its_own_gaps():
     capability = IntegrationCapability(
@@ -387,8 +380,6 @@ def test_measured_numeric_capability_truth_closes_only_its_own_gaps():
     assert "latency_ms" not in capability.contract_gaps
     assert "reliability" not in capability.contract_gaps
     assert "error_rate" not in capability.contract_gaps
-
-
 
 def test_capability_discovery_uses_provider_scoped_runtime_metrics_without_cross_provider_mix():
     rows = capability_discovery_snapshot(
@@ -451,7 +442,6 @@ def test_production_ready_capability_requires_complete_contract_truth():
             provider_keys=("telegram_bot",),
         )
 
-
 def test_production_ready_capability_accepts_only_complete_contract_truth():
     capability = IntegrationCapability(
         capability_id="interaction.really_ready",
@@ -499,7 +489,6 @@ def test_durable_provider_failures_downgrade_healthy_probe_truth():
     assert telegram["health"] == "unhealthy"
     assert telegram["reliability"] == 0.25
     assert telegram["error_rate"] == 0.75
-
 
 def test_insufficient_provider_history_does_not_override_live_probe_health():
     rows = capability_discovery_snapshot(
@@ -592,7 +581,6 @@ def test_multi_provider_any_mode_marks_capability_available_with_one_ready_provi
     assert row["reliability"] == 0.9
     assert row["error_rate"] == 0.1
     assert row["latency_ms"] == 120.0
-
 
 def test_provider_mode_any_requires_real_alternatives():
     with pytest.raises(ValueError, match="at least two providers"):
