@@ -332,6 +332,23 @@ def _e(source: str, claim: str, confidence: float = 1.0) -> CapabilityEvidence:
     return CapabilityEvidence(source=source, claim=claim, confidence=confidence)
 
 
+def _provider_metric_number(row: Mapping[str, Any], key: str, *, ratio: bool = False) -> float | None:
+    raw = row.get(key)
+    if raw is None:
+        return None
+    if isinstance(raw, bool):
+        raise ValueError(f'provider metric {key} must be a finite number')
+    try:
+        value = float(raw)
+    except (TypeError, ValueError) as exc:
+        raise ValueError(f'provider metric {key} must be a finite number') from exc
+    if not isfinite(value):
+        raise ValueError(f'provider metric {key} must be a finite number')
+    if value < 0.0 or (ratio and value > 1.0):
+        raise ValueError(f'provider metric {key} is out of range')
+    return value
+
+
 _BRIDGE_INTERACTION_CAPABILITY_IDS = {'instagram': 'interaction.instagram_direct', 'messenger': 'interaction.facebook_messenger'}
 
 _EMAIL_MESSAGE_SEND_INPUT_SCHEMA = email_outbound_payload_schema_v1()
@@ -875,9 +892,9 @@ def capability_discovery_snapshot(
             availability = CapabilityAvailabilityState.UNAVAILABLE.value
         metric_rows = [dict(metrics_truth[key]) for key in item.provider_keys if key in metrics_truth]
         if item.connectable and metric_rows:
-            reliability_values = [float(row['reliability']) for row in metric_rows if row.get('reliability') is not None]
-            latency_values = [float(row['latency_ms']) for row in metric_rows if row.get('latency_ms') is not None]
-            error_values = [float(row['error_rate']) for row in metric_rows if row.get('error_rate') is not None]
+            reliability_values = [value for row in metric_rows if (value := _provider_metric_number(row, 'reliability', ratio=True)) is not None]
+            latency_values = [value for row in metric_rows if (value := _provider_metric_number(row, 'latency_ms')) is not None]
+            error_values = [value for row in metric_rows if (value := _provider_metric_number(row, 'error_rate', ratio=True)) is not None]
             if reliability_values and len(reliability_values) == len(item.provider_keys):
                 reliability = min(reliability_values)
             if latency_values and len(latency_values) == len(item.provider_keys):
@@ -886,7 +903,7 @@ def capability_discovery_snapshot(
                 error_rate = max(error_values)
             metric_health = [
                 health_policy.tier_for_observed_rate(
-                    float(row['reliability']),
+                    _provider_metric_number(row, 'reliability', ratio=True),
                     observation_count=int(row.get('sample_count') or 0),
                 )
                 for row in metric_rows

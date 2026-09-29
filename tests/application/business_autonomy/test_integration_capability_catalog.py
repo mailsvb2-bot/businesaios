@@ -524,3 +524,28 @@ def test_insufficient_provider_history_does_not_override_live_probe_health():
     telegram = {row["capability_id"]: row for row in rows}["interaction.telegram"]
     assert telegram["health"] == "healthy"
 
+@pytest.mark.parametrize(
+    ("field", "value"),
+    [
+        ("reliability", True),
+        ("reliability", float("nan")),
+        ("reliability", 1.01),
+        ("error_rate", float("inf")),
+        ("error_rate", -0.01),
+        ("latency_ms", -1.0),
+    ],
+)
+def test_provider_metric_overlay_rejects_corrupt_numeric_truth(field, value):
+    metrics = {
+        "provider_key": "telegram_bot",
+        "reliability": 1.0,
+        "error_rate": 0.0,
+        "latency_ms": 10.0,
+        "sample_count": 4,
+    }
+    metrics[field] = value
+    with pytest.raises(ValueError, match="provider metric"):
+        capability_discovery_snapshot(
+            provider_metrics_truth={"telegram_bot": metrics},
+        )
+

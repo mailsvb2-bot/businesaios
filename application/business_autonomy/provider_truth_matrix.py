@@ -3,6 +3,7 @@ from __future__ import annotations
 from collections.abc import Iterable, Mapping
 from dataclasses import dataclass, field
 from enum import Enum
+from math import isfinite
 from typing import Any
 
 from application.business_autonomy.integration_capability_catalog import CapabilityStatus, list_integration_capabilities
@@ -293,6 +294,17 @@ def provider_runtime_metrics_truth_map(
             if str(row.get("mode") or "").strip().lower() == "live"
             and row.get("transport_latency_ms") is not None
         ]
+        for row in measured:
+            raw_latency = row.get("transport_latency_ms")
+            if isinstance(raw_latency, bool):
+                raise ValueError("provider history transport_latency_ms must be a finite non-negative number")
+            try:
+                latency_value = float(raw_latency)
+            except (TypeError, ValueError) as exc:
+                raise ValueError("provider history transport_latency_ms must be a finite non-negative number") from exc
+            if not isfinite(latency_value) or latency_value < 0.0:
+                raise ValueError("provider history transport_latency_ms must be a finite non-negative number")
+            row["transport_latency_ms"] = latency_value
         if not measured:
             continue
         latencies = [max(0.0, float(row["transport_latency_ms"])) for row in measured]

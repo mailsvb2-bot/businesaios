@@ -204,3 +204,24 @@ def test_action_level_health_does_not_forge_provider_specific_discovery_health()
     assert discovery["interaction.whatsapp"]["health"] == "unknown"
     assert discovery["interaction.email"]["health"] == "unknown"
 
+def test_durable_provider_metrics_reject_corrupt_latency_history():
+    history = ProviderSyncHistory(InMemoryProviderSyncHistoryStore())
+    history.append({
+        "tenant_id": "tenant-1",
+        "business_id": "business-1",
+        "provider_key": "telegram_bot",
+        "mode": "live",
+        "accepted": True,
+        "transport_latency_ms": float("nan"),
+        "recorded_at_utc": "2026-09-28T12:01:00+00:00",
+    })
+    from application.business_autonomy.provider_truth_matrix import provider_runtime_metrics_truth_map
+    import pytest
+    with pytest.raises(ValueError, match="transport_latency_ms"):
+        provider_runtime_metrics_truth_map(
+            sync_history=history,
+            tenant_id="tenant-1",
+            business_id="business-1",
+            provider_keys=("telegram_bot",),
+        )
+
