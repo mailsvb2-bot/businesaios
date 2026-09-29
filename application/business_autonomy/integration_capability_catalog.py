@@ -12,7 +12,7 @@ from application.business_autonomy.provider_catalog import (
     MESSAGING_GUARDED_WRITE_PROVIDER_KEYS,
     provider_map,
 )
-from application.business_autonomy.provider_runtime_contract import provider_sync_run_result_schema
+from application.business_autonomy.provider_runtime_contract import provider_sync_run_request_schema, provider_sync_run_result_schema
 from application.capability.capability_health_policy import CapabilityHealthPolicy
 from contracts.email_outbound import email_outbound_payload_schema_v1
 from contracts.risk import RiskLevel
@@ -363,6 +363,7 @@ def _provider_metric_number(row: Mapping[str, Any], key: str, *, ratio: bool = F
 _BRIDGE_INTERACTION_CAPABILITY_IDS = {'instagram': 'interaction.instagram_direct', 'messenger': 'interaction.facebook_messenger'}
 
 _EMAIL_MESSAGE_SEND_INPUT_SCHEMA = email_outbound_payload_schema_v1()
+_PROVIDER_SYNC_REQUEST_INPUT_SCHEMA = provider_sync_run_request_schema()
 _PROVIDER_SYNC_RESULT_OUTPUT_SCHEMA = provider_sync_run_result_schema()
 
 
@@ -603,6 +604,9 @@ CAPABILITIES: tuple[IntegrationCapability, ...] = (
         requires_credentials=True,
         requires_webhook=True,
         risk_level='medium',
+        input_schema=_PROVIDER_SYNC_REQUEST_INPUT_SCHEMA,
+        output_schema=_PROVIDER_SYNC_RESULT_OUTPUT_SCHEMA,
+        registry_sources=('application.business_autonomy.provider_catalog', 'application.business_autonomy.provider_runtime_contract'),
         owner_text='CRM-контуры выглядят одними из самых зрелых: HubSpot provider, CRM actions/webhooks/onboarding.',
         next_required_step='Доказать idempotent CRM event → DecisionCore → action → evidence.',
         evidence=(_e('provider_catalog.hubspot', 'hubspot provider exists'), _e('crm providers', 'crm contour exists', 0.8)),
@@ -631,6 +635,9 @@ CAPABILITIES: tuple[IntegrationCapability, ...] = (
         requires_credentials=True,
         requires_webhook=True,
         risk_level='medium',
+        input_schema=_PROVIDER_SYNC_REQUEST_INPUT_SCHEMA,
+        output_schema=_PROVIDER_SYNC_RESULT_OUTPUT_SCHEMA,
+        registry_sources=('application.business_autonomy.provider_catalog', 'application.business_autonomy.provider_runtime_contract'),
         owner_text='Shopify/WooCommerce providers есть, но marketplace acquisition и commerce integration нужно разводить явно.',
         next_required_step='Разделить commerce catalog/order sync и marketplace lead acquisition capability.',
         evidence=(_e('provider_catalog.shopify', 'shopify provider exists'), _e('provider_catalog.woocommerce', 'woocommerce provider exists')),
@@ -757,6 +764,9 @@ CAPABILITIES: tuple[IntegrationCapability, ...] = (
         requires_credentials=True,
         requires_webhook=True,
         risk_level='medium',
+        input_schema=_PROVIDER_SYNC_REQUEST_INPUT_SCHEMA,
+        output_schema=_PROVIDER_SYNC_RESULT_OUTPUT_SCHEMA,
+        registry_sources=('application.business_autonomy.provider_catalog', 'application.business_autonomy.provider_runtime_contract'),
         owner_text='CRM events/actions/onboarding являются одним из самых полезных контуров взаимодействия с бизнес-системами.',
         next_required_step='Доказать canonical event → decision → action → evidence без параллельного решения.',
         evidence=(_e('provider_catalog.hubspot', 'hubspot provider exists'), _e('crm providers', 'crm contour exists', 0.8)),
