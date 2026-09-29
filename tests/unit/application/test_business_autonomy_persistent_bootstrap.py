@@ -62,7 +62,7 @@ async def test_business_autonomy_scope_materializes_quota_policy_without_overwri
             goal_type="deliver_value",
             goal_payload={"estimated_cost": 1.0},
             simulation=True,
-            constraints=(),
+            constraints=(PolicyConstraint(name="monthly_budget_limit", value=10.0),),
             metadata={"tenant_id": "tenant-quota"},
         ),
         integration_mode=IntegrationMode.POLICY_GUARDED_DELEGATED,
