@@ -255,20 +255,12 @@ class TenantQuotaGuard:
     def _consume_locked(self, tenant_id: str, dimension: str, amount: Decimal) -> TenantQuotaCounterState:
         window_key = self._window_key(dimension)
         counter_key = self._counter_key(dimension)
-        current = self._counter_store.get(
+        return self._counter_store.increment(
             tenant_id=tenant_id,
             counter_key=counter_key,
             window_key=window_key,
-        )
-        used = Decimal("0") if current is None else current.used
-        return self._counter_store.save(
-            TenantQuotaCounterState(
-                tenant_id=tenant_id,
-                counter_key=counter_key,
-                window_key=window_key,
-                used=used + amount,
-                updated_at=utc_now(),
-            )
+            amount=amount,
+            updated_at=utc_now(),
         )
 
     @staticmethod

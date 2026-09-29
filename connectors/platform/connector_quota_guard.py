@@ -7,7 +7,6 @@ from core.finance.money import quantity_decimal
 from core.tenancy.normalization import require_tenant_id
 from tenancy.tenant_quota_counter_store import (
     InMemoryTenantQuotaCounterStore,
-    TenantQuotaCounterState,
     TenantQuotaCounterStore,
 )
 from tenancy.tenant_quota_guard import QuotaDimension, TenantQuotaGuard
@@ -127,20 +126,12 @@ class ConnectorQuotaGuard:
     def _consume_local(self, *, tenant_id: str, connector_id: str, amount: float) -> None:
         window_key = self._window_key()
         counter_key = self._counter_key(connector_id)
-        current = self._counter_store.get(
+        self._counter_store.increment(
             tenant_id=tenant_id,
             counter_key=counter_key,
             window_key=window_key,
-        )
-        used = quantity_decimal(0 if current is None else current.used, name="used")
-        self._counter_store.save(
-            TenantQuotaCounterState(
-                tenant_id=tenant_id,
-                counter_key=counter_key,
-                window_key=window_key,
-                used=used + quantity_decimal(amount, name="requested_calls"),
-                updated_at=utc_now(),
-            )
+            amount=quantity_decimal(amount, name="requested_calls"),
+            updated_at=utc_now(),
         )
 
     def _local_remaining(self, *, tenant_id: str, connector_id: str) -> float | None:
