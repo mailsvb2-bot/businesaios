@@ -888,10 +888,12 @@ def capability_discovery_snapshot(
     *,
     provider_runtime_truth: Mapping[str, Mapping[str, Any]] | None = None,
     provider_metrics_truth: Mapping[str, Mapping[str, Any]] | None = None,
+    provider_quota_truth: Mapping[str, Mapping[str, Any]] | None = None,
 ) -> tuple[dict[str, Any], ...]:
     """Compact canonical capability truth for pre-planning discovery."""
     runtime_truth = dict(provider_runtime_truth or {})
     metrics_truth = dict(provider_metrics_truth or {})
+    quota_truth = dict(provider_quota_truth or {})
     rows: list[dict[str, Any]] = []
     live_healthy = {'probe_live_ok'}
     health_policy = CapabilityHealthPolicy()
@@ -955,6 +957,15 @@ def capability_discovery_snapshot(
             # A connected provider cannot promote an unimplemented/contract-only
             # business capability. Provider readiness is necessary, not sufficient.
             availability = CapabilityAvailabilityState.UNAVAILABLE.value
+        quota_rows = [dict(quota_truth[key]) for key in item.provider_keys if key in quota_truth]
+        if item.connectable and quota_rows:
+            quota_by_provider = {str(row.get('provider_key') or '').strip(): row for row in quota_rows}
+            if item.provider_mode is ProviderCompositionMode.ANY:
+                candidate_keys = {str(row.get('provider_key') or '').strip() for row in ready} if provider_rows else set(item.provider_keys)
+                if candidate_keys and not any(bool(quota_by_provider.get(key, {}).get('allowed')) for key in candidate_keys if key in quota_by_provider):
+                    availability = CapabilityAvailabilityState.UNAVAILABLE.value
+            elif len(quota_rows) == len(item.provider_keys) and any(not bool(row.get('allowed')) for row in quota_rows):
+                availability = CapabilityAvailabilityState.UNAVAILABLE.value
         metric_rows = [dict(metrics_truth[key]) for key in item.provider_keys if key in metrics_truth]
         if item.connectable and metric_rows:
             ready_keys = {str(row.get('provider_key') or '').strip() for row in ready} if provider_rows else set()
@@ -1033,6 +1044,7 @@ def capability_discovery_snapshot(
             'provider_mode': item.provider_mode.value,
             'provider_runtime': provider_rows,
             'provider_metrics': metric_rows,
+            'provider_quota': quota_rows,
             'read_supported': bool(item.read_supported),
             'write_supported': bool(item.write_supported),
             'verify_supported': bool(item.verify_supported),
