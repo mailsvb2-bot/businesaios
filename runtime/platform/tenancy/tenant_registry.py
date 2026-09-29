@@ -18,7 +18,7 @@ from tenancy.tenant_quota_guard import (
     TenantQuotaCounterState,
     TenantQuotaCounterStore,
     _normalized_state,
-    quota_quota_quantity_decimal,
+    quota_quantity_decimal,
     tenant_quota_counter_store_path,
 )
 
