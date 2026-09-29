@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from dataclasses import replace
+
 from pathlib import Path
 
 from application.business_autonomy.business_connector_framework import ConnectorOnboardingService, StaticTrustOnboarding
@@ -150,3 +152,14 @@ def test_provider_runtime_metrics_truth_persists_across_runtime_instances(tmp_pa
     assert truth['error_rate'] == 0.0
     assert truth['latency_ms'] == 42.0
     assert truth['sample_count'] == 1
+
+def test_provider_admin_live_runtime_reuses_injected_connector_quota_guard(tmp_path):
+    service, _registry = _service(tmp_path)
+    quota_guard = ConnectorQuotaGuard(
+        per_connector_hour_limit=1,
+        counter_store=InMemoryTenantQuotaCounterStore(),
+    )
+    service = replace(service, connector_quota_guard=quota_guard)
+    runtime = service._live_sync_runtime()
+    assert runtime.connector_quota_guard is quota_guard
+

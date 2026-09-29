@@ -11,6 +11,7 @@ from application.business_autonomy.provider_admin_contract import ProviderActiva
 from application.business_autonomy.provider_catalog import provider_map
 from application.business_autonomy.provider_messaging_binding import describe_provider_messaging_binding
 from application.business_autonomy.provider_messaging_metadata import messaging_binding_to_metadata
+from connectors.platform.connector_quota_guard import ConnectorQuotaGuard
 from core.tenancy.normalization import require_tenant_id
 from reliability.idempotency_contract import IdempotencyStore
 from reliability.idempotency_store import InMemoryIdempotencyStore
@@ -66,12 +67,13 @@ class ProviderAdminService:
     provider_registry: ProviderDefinitionRegistry = field(default_factory=ProviderDefinitionRegistry)
     audit_recorder: ProviderRuntimeAuditRecorder = field(default_factory=ProviderRuntimeAuditRecorder.in_memory)
     runtime_observability: ProviderRuntimeObservability = field(default_factory=ProviderRuntimeObservability)
+    connector_quota_guard: ConnectorQuotaGuard | None = None
     def _live_transports(self):
         if self.provider_media is None:
             return build_provider_vendor_transports(self.secret_vault)
         return build_provider_vendor_transports(self.secret_vault, media_preparation=self.provider_media)
     def _live_sync_runtime(self) -> ProviderLiveSyncRuntime:
-        return ProviderLiveSyncRuntime(self.secret_vault, transports=self._live_transports(), audit_recorder=self.audit_recorder, observability=self.runtime_observability)
+        return ProviderLiveSyncRuntime(self.secret_vault, transports=self._live_transports(), audit_recorder=self.audit_recorder, observability=self.runtime_observability, connector_quota_guard=self.connector_quota_guard)
     def provider_runtime_metrics_truth(self, *, tenant_id: str, provider_key: str, window_seconds: int = 3600) -> dict[str, object]:
         self.provider_registry.get(provider_key)
         return self.runtime_observability.provider_truth(tenant_id=require_tenant_id(tenant_id), provider_key=str(provider_key).strip(), window_seconds=window_seconds)

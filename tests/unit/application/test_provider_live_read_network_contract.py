@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from application.business_autonomy.provider_catalog import provider_map
+from connectors.platform.connector_quota_guard import ConnectorQuotaGuard
 from runtime._internal.http_transport import SyncHTTPResult
 from runtime.business_autonomy.provider_connector_health import ProviderConnectorHealthService
 from runtime.business_autonomy.provider_http_live_clients import build_live_http_transports
@@ -10,6 +11,7 @@ from runtime.business_autonomy.provider_response_parsers import ProviderResponse
 from runtime.messaging_capability.channel_health_registry import ChannelHealthRegistry
 from security.secret_contract import SecretRecord, SecretRef, SecretSource
 from security.secret_vault import InMemorySecretVault
+from tenancy.tenant_quota_counter_store import InMemoryTenantQuotaCounterStore
 
 
 def _put(vault, provider, business_id: str, name: str, value: str) -> None:
@@ -355,3 +357,54 @@ def test_native_messaging_truth_health_requirements_include_live_only_tokens() -
     assert rows['max_messaging'].health_requirements == ('webhook_secret', 'access_token')
     assert rows['slack_messaging'].health_requirements == ('webhook_secret', 'bot_token')
     assert rows['discord_messaging'].health_requirements == ('webhook_secret', 'bot_token')
+
+def test_provider_live_sync_enforces_connector_quota_before_network(monkeypatch, tmp_path) -> None:
+    monkeypatch.setenv('DATA_DIR', str(tmp_path / 'data'))
+    provider, vault, calls = provider_map()['telegram_bot'], InMemorySecretVault(), []
+    _put(vault, provider, 'biz-a', 'bot_token', '123:abc')
+    monkeypatch.setattr(
+        'runtime.business_autonomy.provider_http_live_clients._sync_request',
+        lambda **kwargs: (
+            calls.append(kwargs)
+            or SyncHTTPResult(
+                status=200,
+                headers={},
+                json={'ok': True, 'result': []},
+                text='{"ok": true, "result": []}',
+            )
+        ),
+    )
+    quota_guard = ConnectorQuotaGuard(
+        per_connector_hour_limit=1,
+        counter_store=InMemoryTenantQuotaCounterStore(),
+    )
+    runtime = ProviderLiveSyncRuntime(
+        vault,
+        transports=build_live_http_transports(vault, bind_live_network=True),
+        connector_quota_guard=quota_guard,
+    )
+
+    first = runtime.run(
+        provider=provider,
+        tenant_id='tenant-a',
+        business_id='biz-a',
+        operation='message_read',
+        mode='live',
+        payload={},
+    )
+    blocked = runtime.run(
+        provider=provider,
+        tenant_id='tenant-a',
+        business_id='biz-a',
+        operation='message_read',
+        mode='live',
+        payload={},
+    )
+
+    assert first.status == 'live_executed'
+    assert first.metadata['connector_quota']['allowed'] is True
+    assert blocked.status == 'connector_quota_exceeded'
+    assert blocked.accepted is False
+    assert blocked.metadata['connector_quota']['remaining'] == 0.0
+    assert len(calls) == 1
+

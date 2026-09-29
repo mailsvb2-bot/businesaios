@@ -79,6 +79,7 @@ from application.business_autonomy.registry import (
 from application.business_autonomy.service import BusinessAutonomyService
 from application.business_autonomy.trust import BusinessTrustSnapshot
 from application.planning.distributed_planning_memory_backend import DistributedPlanningMemoryBackend
+from connectors.platform.connector_quota_guard import ConnectorQuotaGuard
 from execution.distributed_operator_override_backend import DistributedOperatorOverrideStore
 from governance.distributed_approval_backend import DistributedApprovalStore
 from reliability.distributed_idempotency_backend import DistributedIdempotencyStore
@@ -115,6 +116,9 @@ from runtime.state import build_canonical_state_synthesis_engine
 from security.connector_secret_scope import ConnectorSecretScope
 from security.secret_vault import build_default_secret_vault
 from storage.distributed_evidence_audit_backend import DistributedGovernanceAuditLog
+from tenancy.tenant_policy_store import build_default_tenant_policy_store
+from tenancy.tenant_quota_counter_store import build_default_tenant_quota_counter_store
+from tenancy.tenant_quota_guard import TenantQuotaGuard
 
 
 @dataclass(frozen=True)
@@ -784,6 +788,15 @@ def build_business_autonomy_guarded_service(*, business_id: str = 'external_busi
             ontology_event_store, ontology_event_store_stack.close
         )
     provider_runtime_audit = build_provider_runtime_audit_recorder()
+    provider_quota_counter_store = build_default_tenant_quota_counter_store()
+    provider_quota_policy_store = build_default_tenant_policy_store()
+    provider_quota_guard = ConnectorQuotaGuard(
+        quota_guard=TenantQuotaGuard(
+            policy_store=provider_quota_policy_store,
+            counter_store=provider_quota_counter_store,
+        ),
+        counter_store=provider_quota_counter_store,
+    )
     service._provider_admin_service = ProviderAdminService(
         onboarding_service=onboarding,
         secret_vault=secret_vault,
@@ -797,6 +810,7 @@ def build_business_autonomy_guarded_service(*, business_id: str = 'external_busi
         provider_pacing=ProviderPacingCoordinator(distributed['provider_pacing']),
         provider_media=ProviderMediaPreparationCoordinator(distributed['provider_media']),
         audit_recorder=provider_runtime_audit,
+        connector_quota_guard=provider_quota_guard,
     )
     return service
 
