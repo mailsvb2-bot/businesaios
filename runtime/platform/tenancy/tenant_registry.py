@@ -10,7 +10,6 @@ from decimal import Decimal
 from pathlib import Path
 from typing import Any, Protocol
 
-from core.tenancy.normalization import require_tenant_id
 from governance.persistence_codec import read_json_or_default
 from tenancy.tenant_quota_guard import (
     InMemoryTenantQuotaCounterStore,
@@ -19,6 +18,7 @@ from tenancy.tenant_quota_guard import (
     TenantQuotaCounterStore,
     _normalized_state,
     quota_quantity_decimal,
+    quota_require_tenant_id,
     tenant_quota_counter_store_path,
 )
 
@@ -155,7 +155,7 @@ class SQLiteTenantQuotaCounterStore:
         )
 
     def get(self, *, tenant_id: str, counter_key: str, window_key: str) -> TenantQuotaCounterState | None:
-        tid = require_tenant_id(tenant_id)
+        tid = quota_require_tenant_id(tenant_id)
         key = str(counter_key).strip()
         window = str(window_key).strip()
         with self._connect() as conn:
@@ -196,7 +196,7 @@ class SQLiteTenantQuotaCounterStore:
         amount: Decimal,
         updated_at: datetime,
     ) -> TenantQuotaCounterState:
-        tid = require_tenant_id(tenant_id)
+        tid = quota_require_tenant_id(tenant_id)
         key = str(counter_key).strip()
         window = str(window_key).strip()
         delta = quota_quantity_decimal(amount, name="amount")
@@ -232,7 +232,7 @@ class SQLiteTenantQuotaCounterStore:
         return state
 
     def delete(self, *, tenant_id: str, counter_key: str | None = None) -> None:
-        tid = require_tenant_id(tenant_id)
+        tid = quota_require_tenant_id(tenant_id)
         with self._connect() as conn:
             if counter_key is None:
                 conn.execute("DELETE FROM tenant_quota_counters WHERE tenant_id = ?", (tid,))
@@ -243,7 +243,7 @@ class SQLiteTenantQuotaCounterStore:
                 )
 
     def list_for_tenant(self, *, tenant_id: str) -> tuple[TenantQuotaCounterState, ...]:
-        tid = require_tenant_id(tenant_id)
+        tid = quota_require_tenant_id(tenant_id)
         with self._connect() as conn:
             rows = conn.execute(
                 "SELECT tenant_id, counter_key, window_key, used_text, updated_at "
