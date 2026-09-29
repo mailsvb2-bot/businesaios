@@ -14,6 +14,9 @@ from application.business_autonomy.integration_capability_catalog import (
     list_integration_capability_payloads,
     summarize_integration_capabilities,
 )
+from application.business_autonomy.provider_runtime_contract import provider_sync_run_result_schema
+from contracts.email_outbound import EmailOutboundPayloadV1, email_outbound_payload_schema_v1
+
 from application.business_autonomy.provider_catalog import (
     BRIDGE_MESSAGING_PROVIDER_KEYS,
     MESSAGING_CHANNEL_PROVIDER_KEYS,
@@ -420,4 +423,17 @@ def test_capability_error_rate_rejects_out_of_range_truth(value):
             next_required_step="next",
             error_rate=value,
         )
+
+def test_email_capability_schema_is_owned_by_canonical_contracts():
+    email = capability_map()["interaction.email"]
+    assert dict(email.input_schema) == email_outbound_payload_schema_v1()
+    assert dict(email.output_schema) == provider_sync_run_result_schema()
+    normalized = EmailOutboundPayloadV1(
+        recipient="Owner <OWNER@example.com>",
+        subject="  Hello   world  ",
+        body=" message ",
+    )
+    assert normalized.recipient == "owner@example.com"
+    assert normalized.subject == "Hello world"
+    assert normalized.body == "message"
 

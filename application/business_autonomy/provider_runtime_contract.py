@@ -37,6 +37,22 @@ class ProviderWebhookReplayDecision:
     metadata: Mapping[str, Any] = field(default_factory=dict)
 
 
+def provider_sync_run_result_schema() -> dict[str, object]:
+    return {
+        "type": "object",
+        "required": ["provider_key", "operation", "mode", "status", "accepted", "metadata"],
+        "properties": {
+            "provider_key": {"type": "string", "minLength": 1},
+            "operation": {"type": "string", "minLength": 1},
+            "mode": {"type": "string", "minLength": 1},
+            "status": {"type": "string", "minLength": 1},
+            "accepted": {"type": "boolean"},
+            "metadata": {"type": "object"},
+        },
+        "additionalProperties": False,
+    }
+
+
 @dataclass(frozen=True)
 class ProviderSyncRunResult:
     provider_key: str
@@ -119,6 +135,7 @@ __all__ = [
     'ProviderWebhookContract',
     'ProviderWebhookReplayDecision',
     'ProviderSyncRunResult',
+    'provider_sync_run_result_schema',
     'ProviderWebhookIngressResult',
     'ProviderSecretLifecycleResult',
     'ProviderSecretCompromiseResult',

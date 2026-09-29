@@ -12,6 +12,8 @@ from application.business_autonomy.provider_catalog import (
     MESSAGING_GUARDED_WRITE_PROVIDER_KEYS,
     provider_map,
 )
+from application.business_autonomy.provider_runtime_contract import provider_sync_run_result_schema
+from contracts.email_outbound import email_outbound_payload_schema_v1
 from contracts.risk import RiskLevel
 
 CANON_INTEGRATION_CAPABILITY_CATALOG = True
@@ -329,29 +331,8 @@ def _e(source: str, claim: str, confidence: float = 1.0) -> CapabilityEvidence:
 
 _BRIDGE_INTERACTION_CAPABILITY_IDS = {'instagram': 'interaction.instagram_direct', 'messenger': 'interaction.facebook_messenger'}
 
-_EMAIL_MESSAGE_SEND_INPUT_SCHEMA = {
-    'type': 'object',
-    'required': ['recipient', 'subject', 'body'],
-    'properties': {
-        'recipient': {'type': 'string', 'format': 'email', 'minLength': 3, 'maxLength': 320},
-        'subject': {'type': 'string', 'minLength': 1, 'maxLength': 240},
-        'body': {'type': 'string', 'minLength': 1, 'maxLength': 100000},
-    },
-    'additionalProperties': False,
-}
-_PROVIDER_SYNC_RESULT_OUTPUT_SCHEMA = {
-    'type': 'object',
-    'required': ['provider_key', 'operation', 'mode', 'status', 'accepted', 'metadata'],
-    'properties': {
-        'provider_key': {'type': 'string', 'minLength': 1},
-        'operation': {'type': 'string', 'minLength': 1},
-        'mode': {'type': 'string', 'minLength': 1},
-        'status': {'type': 'string', 'minLength': 1},
-        'accepted': {'type': 'boolean'},
-        'metadata': {'type': 'object'},
-    },
-    'additionalProperties': False,
-}
+_EMAIL_MESSAGE_SEND_INPUT_SCHEMA = email_outbound_payload_schema_v1()
+_PROVIDER_SYNC_RESULT_OUTPUT_SCHEMA = provider_sync_run_result_schema()
 
 
 def _bridge_messaging_interaction_capabilities() -> tuple[IntegrationCapability, ...]:
