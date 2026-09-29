@@ -56,6 +56,7 @@ from execution.revenue_outcome import RevenueOutcomeProjector
 from execution.scenario_goal_score import ScenarioGoalScoreEngine
 from execution.self_healing_retry import SelfHealingRetryEngine
 from runtime.boot.system_builder import build_system
+from runtime.business_autonomy.execution_support import build_provider_quota_runtime
 from runtime.platform.business_memory.service import BusinessMemoryService
 from runtime.platform.business_memory.store import FileBusinessMemoryStore
 from runtime.state import (
@@ -232,6 +233,7 @@ def build_headless_runtime(*, entrypoint: str = "headless_sdk", root_dir: str | 
             distributed_lock=distributed_lock,
         )
     )
+    provider_quota_guard, _provider_quota_policy_store = build_provider_quota_runtime()
     operational_runtime = resolve_operational_safety_runtime(default_root=paths.root_dir)
     if getattr(executor, "_operational_budget_service", None) is None:
         executor._operational_budget_service = operational_runtime.service
@@ -280,6 +282,7 @@ def build_headless_runtime(*, entrypoint: str = "headless_sdk", root_dir: str | 
         world_model_event_projector=world_model_event_projector,
         agent_identity_registry=agent_identity_registry,
         task_registry=task_registry,
+        provider_quota_guard=provider_quota_guard,
     )
     fallback_runner = getattr(getattr(queue_support, "worker", None), "_runner", None)
     if not callable(fallback_runner):
