@@ -48,7 +48,7 @@ def test_capability_entity_owner_marker_is_unique() -> None:
 
 
 def test_release_catalog_ids_and_schema_are_unique_and_surface_bound() -> None:
-    assert CAPABILITY_SCHEMA_VERSION == 1
+    assert CAPABILITY_SCHEMA_VERSION == 2
     ids = tuple(item.capability_id for item in CAPABILITIES)
     assert len(ids) == len(set(ids))
     assert capability_map().keys() == set(ids)

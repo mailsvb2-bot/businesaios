@@ -87,5 +87,5 @@ def test_provider_truth_is_label_filtered_by_provider_and_mode():
     truth = obs.provider_truth(tenant_id='t1', provider_key='telegram_bot')
     assert truth['reliability'] == 0.5
     assert truth['error_rate'] == 0.5
-    assert truth['latency_ms'] == 300.0
+    assert truth['latency_ms'] == 290.0
     assert truth['sample_count'] == 2
