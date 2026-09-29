@@ -176,7 +176,7 @@ def test_capability_discovery_reads_quota_truth_before_decision(tmp_path):
     contract = SimpleNamespace(
         _state_mapper=_StateMapper(), _capability_health_registry=None, _capability_health_scoring_service=None,
         _business_memory_state_adapter=None, _state_store=None, _event_store=events,
-        _provider_quota_guard=_QuotaGuard({"messaging.telegram"}),
+        _provider_quota_guard=_QuotaGuard({"telegram"}),
     )
     request = SimpleNamespace(tenant_id="tenant-1", business_id="business-1", goal="grow revenue", goal_id="goal-1", meta={})
     state = AutonomyStateAssembly(contract=contract).assemble_state(
@@ -194,7 +194,7 @@ def test_provider_quota_truth_uses_canonical_provider_connector_id():
         tenant_id="tenant-1",
         provider_keys=("telegram_bot",),
     )
-    assert truth["telegram_bot"]["connector_id"] == "messaging.telegram"
+    assert truth["telegram_bot"]["connector_id"] == "telegram"
     assert truth["telegram_bot"]["source"] == "connector_quota_guard"
 
 class _ActionHealthStateMapper:
