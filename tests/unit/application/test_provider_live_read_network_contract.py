@@ -11,7 +11,7 @@ from runtime.business_autonomy.provider_response_parsers import ProviderResponse
 from runtime.messaging_capability.channel_health_registry import ChannelHealthRegistry
 from security.secret_contract import SecretRecord, SecretRef, SecretSource
 from security.secret_vault import InMemorySecretVault
-from tenancy.tenant_quota_counter_store import InMemoryTenantQuotaCounterStore
+from tenancy.tenant_quota_guard import InMemoryTenantQuotaCounterStore
 
 
 def _put(vault, provider, business_id: str, name: str, value: str) -> None:
