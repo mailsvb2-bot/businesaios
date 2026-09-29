@@ -280,6 +280,32 @@ def _provider_history_timestamp(value: object) -> datetime | None:
     return parsed.replace(tzinfo=UTC) if parsed.tzinfo is None else parsed.astimezone(UTC)
 
 
+def provider_quota_truth_map(*, quota_guard: Any, tenant_id: str, provider_keys: Iterable[str]) -> dict[str, dict[str, Any]]:
+    """Project canonical connector quota verdicts into decision-facing provider truth."""
+    tenant = str(tenant_id or "").strip()
+    if not tenant:
+        raise ValueError("tenant_id is required")
+    if quota_guard is None:
+        return {}
+    providers = {provider.provider_key: provider for provider in PROVIDERS}
+    result: dict[str, dict[str, Any]] = {}
+    for provider_key in tuple(dict.fromkeys(str(key).strip() for key in provider_keys if str(key).strip())):
+        provider = providers.get(provider_key)
+        if provider is None:
+            raise ValueError(f"unknown provider_key: {provider_key}")
+        verdict = quota_guard.check(tenant_id=tenant, connector_id=provider.connector_id, requested_calls=1.0)
+        result[provider_key] = {
+            "provider_key": provider_key,
+            "connector_id": provider.connector_id,
+            "allowed": bool(verdict.allowed),
+            "remaining": verdict.remaining,
+            "reason": str(verdict.reason),
+            "retry_after_seconds": verdict.retry_after_seconds,
+            "source": "connector_quota_guard",
+        }
+    return result
+
+
 def provider_runtime_metrics_truth_map(
     *,
     sync_history: ProviderSyncHistory,
@@ -373,5 +399,5 @@ def summarize_provider_truth(rows: Iterable[ProviderTruthRow] | None = None) -> 
 
 __all__ = [
     "CANON_PROVIDER_TRUTH_MATRIX", "ProviderTruthRow", "ProviderTruthStatus", "build_provider_truth_matrix",
-    "provider_truth_map", "provider_runtime_truth_map", "provider_runtime_metrics_truth_map", "list_provider_truth_payloads", "summarize_provider_truth",
+    "provider_truth_map", "provider_runtime_truth_map", "provider_runtime_metrics_truth_map", "provider_quota_truth_map", "list_provider_truth_payloads", "summarize_provider_truth",
 ]
