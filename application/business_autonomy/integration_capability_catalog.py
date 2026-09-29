@@ -16,6 +16,7 @@ from application.business_autonomy.provider_runtime_contract import provider_syn
 from application.capability.capability_health_policy import CapabilityHealthPolicy
 from contracts.email_outbound import email_outbound_payload_schema_v1
 from contracts.risk import RiskLevel
+from contracts.platforms.market_intelligence_contract import search_intelligence_envelope_schema, search_intelligence_target_schema
 from crm.webhooks.crm_webhook_contract import crm_webhook_event_schema
 from interfaces.messaging_runtime.contracts import message_envelope_schema, outbound_envelope_schema
 from interfaces.web.chat_widget.session_contract import web_chat_session_schema
@@ -374,6 +375,8 @@ _MESSAGING_INPUT_SCHEMA = message_envelope_schema()
 _MESSAGING_OUTPUT_SCHEMA = outbound_envelope_schema()
 _PROVIDER_WEBHOOK_INPUT_SCHEMA = provider_webhook_ingress_request_schema()
 _PROVIDER_WEBHOOK_OUTPUT_SCHEMA = provider_webhook_ingress_result_schema()
+_SEARCH_INTELLIGENCE_INPUT_SCHEMA = search_intelligence_target_schema()
+_SEARCH_INTELLIGENCE_OUTPUT_SCHEMA = search_intelligence_envelope_schema()
 
 
 def _bridge_messaging_interaction_capabilities() -> tuple[IntegrationCapability, ...]:
@@ -536,6 +539,9 @@ CAPABILITIES: tuple[IntegrationCapability, ...] = (
         write_supported=False,
         verify_supported=False,
         risk_level='medium',
+        input_schema=_SEARCH_INTELLIGENCE_INPUT_SCHEMA,
+        output_schema=_SEARCH_INTELLIGENCE_OUTPUT_SCHEMA,
+        registry_sources=('contracts.platforms.market_intelligence_contract',),
         owner_text='Market/search intelligence может помогать с аналитикой спроса, но это не полноценный acquisition connector.',
         next_required_step='Добавить real provider provenance, freshness, source evidence и lead attribution.',
         evidence=(_e('contracts/platforms/market_intelligence_provider_catalog.py', 'market intelligence catalog exists', 0.7),),
