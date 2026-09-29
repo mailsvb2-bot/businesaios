@@ -15,6 +15,7 @@ from governance.persistence_codec import atomic_write_json, read_json_or_default
 from tenancy.tenant_contract import TenantPolicyStoreContract, TenantQuotaCheck, utc_now
 
 CANON_TENANT_QUOTA_COUNTER_STORE = True
+quota_quantity_decimal = quantity_decimal
 
 @dataclass(frozen=True)
 class TenantQuotaCounterState:
@@ -34,7 +35,6 @@ class TenantQuotaCounterState:
         if self.updated_at.tzinfo is None:
             raise ValueError("updated_at must be timezone-aware")
 
-
 def _normalized_state(state: TenantQuotaCounterState) -> TenantQuotaCounterState:
     state.validate()
     return TenantQuotaCounterState(
@@ -44,7 +44,6 @@ def _normalized_state(state: TenantQuotaCounterState) -> TenantQuotaCounterState
         used=quantity_decimal(state.used, name="used"),
         updated_at=state.updated_at,
     )
-
 
 class TenantQuotaCounterStore(Protocol):
     def get(self, *, tenant_id: str, counter_key: str, window_key: str) -> TenantQuotaCounterState | None: ...
@@ -60,7 +59,6 @@ class TenantQuotaCounterStore(Protocol):
     ) -> TenantQuotaCounterState: ...
     def delete(self, *, tenant_id: str, counter_key: str | None = None) -> None: ...
     def list_for_tenant(self, *, tenant_id: str) -> tuple[TenantQuotaCounterState, ...]: ...
-
 
 class InMemoryTenantQuotaCounterStore:
     def __init__(self) -> None:
@@ -119,7 +117,6 @@ class InMemoryTenantQuotaCounterStore:
         with self._lock:
             return tuple(self._states[key] for key in sorted(self._states) if key[0] == tid)
 
-
 def tenant_quota_counter_store_path() -> Path:
     explicit = os.getenv("BUSINESAIOS_TENANT_QUOTA_COUNTER_STORE_PATH", "").strip()
     if explicit:
@@ -129,8 +126,6 @@ def tenant_quota_counter_store_path() -> Path:
         return Path(data_dir) / "tenant_quota_counters.json"
     base = os.getenv("DATA_DIR", "data").strip() or "data"
     return Path(base) / "tenancy" / "tenant_quota_counters.json"
-
-
 
 class PersistentTenantQuotaCounterStore(InMemoryTenantQuotaCounterStore):
     """Legacy/simple JSON backend retained for compatibility and focused tests."""
@@ -205,11 +200,7 @@ class PersistentTenantQuotaCounterStore(InMemoryTenantQuotaCounterStore):
             ]
         atomic_write_json(self._path, {"states": rows})
 
-
-
-
 CANON_TENANT_QUOTA_GUARD = True
-
 
 class QuotaDimension(str, Enum):
     ACTIONS_PER_HOUR = "actions_per_hour"
@@ -219,7 +210,6 @@ class QuotaDimension(str, Enum):
     MEMORY_WRITES_PER_DAY = "memory_writes_per_day"
     CONNECTOR_CALLS_PER_HOUR = "connector_calls_per_hour"
     DAILY_BUDGET = "daily_budget"
-
 
 class TenantQuotaGuard:
     def __init__(
@@ -482,7 +472,6 @@ class TenantQuotaGuard:
     @staticmethod
     def _retry_after_seconds(dimension: str) -> int:
         return 3600 if str(dimension).endswith("_per_hour") else 86400
-
 
 __all__ = [
     "CANON_TENANT_QUOTA_COUNTER_STORE",
