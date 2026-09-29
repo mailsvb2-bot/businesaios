@@ -3,6 +3,9 @@ from __future__ import annotations
 from datetime import datetime, timezone
 from decimal import Decimal
 
+import pytest
+
+from connectors.platform.connector_quota_guard import ConnectorQuotaGuard
 from tenancy.tenant_audit_scope import TenantAuditScope
 from tenancy.tenant_billing_scope import TenantBillingScope
 from tenancy.tenant_connector_scope import TenantConnectorScope
@@ -10,6 +13,7 @@ from tenancy.tenant_feature_flags import TenantFeatureFlags
 from tenancy.tenant_memory_scope import TenantMemoryScope
 from tenancy.tenant_policy_store import InMemoryTenantPolicyStore, TenantPolicyBundle
 from tenancy.tenant_quota_counter_store import (
+    InMemoryTenantQuotaCounterStore,
     PersistentTenantQuotaCounterStore,
     TenantQuotaCounterState,
 )
@@ -109,4 +113,42 @@ def test_tenant_quota_snapshot_ignores_stale_windows(tmp_path) -> None:
         )
     )
     assert guard.snapshot(tenant_id='tenant-a')['actions_per_hour'] == 0.0
+
+def test_connector_local_quota_persists_across_restart(tmp_path) -> None:
+    path = tmp_path / 'quota-counters.json'
+    first_store = PersistentTenantQuotaCounterStore(path)
+    first = ConnectorQuotaGuard(
+        per_connector_hour_limit=1,
+        counter_store=first_store,
+    )
+    consumed = first.consume(
+        tenant_id='tenant-a',
+        connector_id='telegram',
+    )
+    assert consumed.allowed is True
+    assert consumed.remaining == 0.0
+
+    restarted = ConnectorQuotaGuard(
+        per_connector_hour_limit=1,
+        counter_store=PersistentTenantQuotaCounterStore(path),
+    )
+    blocked = restarted.check(
+        tenant_id='tenant-a',
+        connector_id='telegram',
+    )
+    assert blocked.allowed is False
+    assert blocked.reason == 'connector_local_quota_exceeded'
+    assert blocked.remaining == 0.0
+
+
+def test_connector_quota_rejects_split_counter_stores() -> None:
+    shared = InMemoryTenantQuotaCounterStore()
+    tenant_guard = TenantQuotaGuard(counter_store=shared)
+
+    with pytest.raises(ValueError, match='share one counter_store'):
+        ConnectorQuotaGuard(
+            quota_guard=tenant_guard,
+            counter_store=InMemoryTenantQuotaCounterStore(),
+            per_connector_hour_limit=1,
+        )
 
