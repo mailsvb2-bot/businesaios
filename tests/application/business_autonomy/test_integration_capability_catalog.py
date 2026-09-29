@@ -5,6 +5,7 @@ from application.business_autonomy.integration_capability_catalog import (
     CapabilityAvailabilityState,
     CapabilityEvidence,
     CapabilityHealthState,
+    ProviderCompositionMode,
     CapabilityLifecycle,
     CapabilityStatus,
     CapabilitySurface,
@@ -83,9 +84,9 @@ def test_every_external_messaging_provider_has_honest_interaction_capability():
 
 def test_capability_definitions_are_versioned_and_immutable():
     capability = capability_map()["interaction.telegram"]
-    assert capability.schema_version == CAPABILITY_SCHEMA_VERSION == 3
+    assert capability.schema_version == CAPABILITY_SCHEMA_VERSION == 4
     payload = capability.to_payload()
-    assert payload["schema_version"] == 3
+    assert payload["schema_version"] == 4
     try:
         capability.metadata["forged"] = True
     except TypeError:
@@ -547,5 +548,63 @@ def test_provider_metric_overlay_rejects_corrupt_numeric_truth(field, value):
     with pytest.raises(ValueError, match="provider metric"):
         capability_discovery_snapshot(
             provider_metrics_truth={"telegram_bot": metrics},
+        )
+
+def test_multi_provider_any_mode_marks_capability_available_with_one_ready_provider():
+    commerce = capability_map()["acquisition.commerce_marketplaces"]
+    assert commerce.provider_mode is ProviderCompositionMode.ANY
+    rows = capability_discovery_snapshot(
+        provider_runtime_truth={
+            "shopify": {
+                "provider_key": "shopify",
+                "connected": True,
+                "onboarding_ready": True,
+                "health_probe": {"status": "probe_live_ok", "probe_mode": "live"},
+            },
+            "woocommerce": {
+                "provider_key": "woocommerce",
+                "connected": False,
+                "onboarding_ready": False,
+                "health_probe": {"status": "missing_required_secrets", "probe_mode": "live"},
+            },
+        },
+        provider_metrics_truth={
+            "shopify": {
+                "provider_key": "shopify",
+                "reliability": 0.9,
+                "error_rate": 0.1,
+                "latency_ms": 120.0,
+                "sample_count": 5,
+            },
+            "woocommerce": {
+                "provider_key": "woocommerce",
+                "reliability": 0.1,
+                "error_rate": 0.9,
+                "latency_ms": 900.0,
+                "sample_count": 5,
+            },
+        },
+    )
+    row = {item["capability_id"]: item for item in rows}["acquisition.commerce_marketplaces"]
+    assert row["provider_mode"] == "any"
+    assert row["availability"] == "available"
+    assert row["health"] == "healthy"
+    assert row["reliability"] == 0.9
+    assert row["error_rate"] == 0.1
+    assert row["latency_ms"] == 120.0
+
+
+def test_provider_mode_any_requires_real_alternatives():
+    with pytest.raises(ValueError, match="at least two providers"):
+        IntegrationCapability(
+            capability_id="interaction.invalid_any",
+            title="Invalid Any",
+            surface=CapabilitySurface.INTERACTION,
+            group="Test",
+            status=CapabilityStatus.PARTIAL,
+            owner_text="owner",
+            next_required_step="next",
+            provider_keys=("telegram_bot",),
+            provider_mode=ProviderCompositionMode.ANY,
         )
 

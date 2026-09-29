@@ -19,7 +19,7 @@ from contracts.risk import RiskLevel
 
 CANON_INTEGRATION_CAPABILITY_CATALOG = True
 CANON_CAPABILITY_ENTITY_OWNER = True
-CAPABILITY_SCHEMA_VERSION = 3
+CAPABILITY_SCHEMA_VERSION = 4
 
 
 class CapabilityStatus(str, Enum):
@@ -63,6 +63,11 @@ class CapabilityAvailabilityState(str, Enum):
     AVAILABLE = 'available'
     DEGRADED = 'degraded'
     UNAVAILABLE = 'unavailable'
+
+
+class ProviderCompositionMode(str, Enum):
+    ALL = 'all'
+    ANY = 'any'
 
 
 _STATUS_RANK = {
@@ -116,6 +121,7 @@ class IntegrationCapability:
     owner_text: str
     next_required_step: str
     provider_keys: tuple[str, ...] = ()
+    provider_mode: ProviderCompositionMode | str = ProviderCompositionMode.ALL
     registry_sources: tuple[str, ...] = ()
     read_supported: bool = False
     write_supported: bool = False
@@ -152,6 +158,9 @@ class IntegrationCapability:
         if int(self.schema_version) != CAPABILITY_SCHEMA_VERSION:
             raise ValueError('unsupported capability schema version')
         provider_keys = tuple(str(item).strip() for item in self.provider_keys if str(item).strip())
+        provider_mode = ProviderCompositionMode(self.provider_mode)
+        if provider_mode is ProviderCompositionMode.ANY and len(provider_keys) < 2:
+            raise ValueError('provider_mode=any requires at least two providers')
         registry_sources = tuple(str(item).strip() for item in self.registry_sources if str(item).strip())
         status = CapabilityStatus(self.status)
         surface = CapabilitySurface(self.surface)
@@ -206,6 +215,7 @@ class IntegrationCapability:
         object.__setattr__(self, 'capability_id', capability_id)
         object.__setattr__(self, 'title', title)
         object.__setattr__(self, 'provider_keys', provider_keys)
+        object.__setattr__(self, 'provider_mode', provider_mode)
         object.__setattr__(self, 'registry_sources', registry_sources)
         object.__setattr__(self, 'evidence', tuple(self.evidence))
         object.__setattr__(self, 'status', status)
@@ -321,6 +331,7 @@ class IntegrationCapability:
                 'consent': bool(self.requires_consent),
             },
             'provider_keys': list(self.provider_keys),
+            'provider_mode': self.provider_mode.value,
             'providers': provider_rows,
             'registry_sources': list(self.registry_sources),
             'evidence': [item.to_payload() for item in self.evidence],
@@ -613,6 +624,7 @@ CAPABILITIES: tuple[IntegrationCapability, ...] = (
         group='Commerce',
         status=CapabilityStatus.PARTIAL,
         provider_keys=('shopify', 'woocommerce'),
+        provider_mode=ProviderCompositionMode.ANY,
         read_supported=True,
         write_supported=True,
         verify_supported=False,
@@ -866,19 +878,31 @@ def capability_discovery_snapshot(
                 row for row in provider_rows
                 if bool(row.get('connected')) and bool(row.get('onboarding_ready'))
             ]
-            availability = (
-                CapabilityAvailabilityState.AVAILABLE.value
-                if len(ready) == len(item.provider_keys)
-                else CapabilityAvailabilityState.DEGRADED.value
-                if ready
-                else CapabilityAvailabilityState.UNAVAILABLE.value
-            )
+            if item.provider_mode is ProviderCompositionMode.ANY:
+                availability = (
+                    CapabilityAvailabilityState.AVAILABLE.value
+                    if ready
+                    else CapabilityAvailabilityState.UNAVAILABLE.value
+                )
+            else:
+                availability = (
+                    CapabilityAvailabilityState.AVAILABLE.value
+                    if len(ready) == len(item.provider_keys)
+                    else CapabilityAvailabilityState.DEGRADED.value
+                    if ready
+                    else CapabilityAvailabilityState.UNAVAILABLE.value
+                )
             probe_statuses = {
                 str(dict(row.get('health_probe') or {}).get('status') or '').strip()
                 for row in provider_rows
             }
             probe_statuses.discard('')
-            if probe_statuses and probe_statuses <= live_healthy:
+            if item.provider_mode is ProviderCompositionMode.ANY:
+                if probe_statuses & live_healthy:
+                    health = CapabilityHealthState.HEALTHY.value
+                elif probe_statuses & live_unhealthy:
+                    health = CapabilityHealthState.UNHEALTHY.value
+            elif probe_statuses and probe_statuses <= live_healthy:
                 health = CapabilityHealthState.HEALTHY.value
             elif probe_statuses & live_unhealthy:
                 health = (
@@ -892,31 +916,51 @@ def capability_discovery_snapshot(
             availability = CapabilityAvailabilityState.UNAVAILABLE.value
         metric_rows = [dict(metrics_truth[key]) for key in item.provider_keys if key in metrics_truth]
         if item.connectable and metric_rows:
-            reliability_values = [value for row in metric_rows if (value := _provider_metric_number(row, 'reliability', ratio=True)) is not None]
-            latency_values = [value for row in metric_rows if (value := _provider_metric_number(row, 'latency_ms')) is not None]
-            error_values = [value for row in metric_rows if (value := _provider_metric_number(row, 'error_rate', ratio=True)) is not None]
-            if reliability_values and len(reliability_values) == len(item.provider_keys):
-                reliability = min(reliability_values)
-            if latency_values and len(latency_values) == len(item.provider_keys):
-                latency_ms = max(latency_values)
-            if error_values and len(error_values) == len(item.provider_keys):
-                error_rate = max(error_values)
+            ready_keys = {str(row.get('provider_key') or '').strip() for row in ready} if provider_rows else set()
+            effective_metric_rows = (
+                [row for row in metric_rows if str(row.get('provider_key') or '').strip() in ready_keys]
+                if item.provider_mode is ProviderCompositionMode.ANY and ready_keys
+                else metric_rows
+            )
+            reliability_values = [value for row in effective_metric_rows if (value := _provider_metric_number(row, 'reliability', ratio=True)) is not None]
+            latency_values = [value for row in effective_metric_rows if (value := _provider_metric_number(row, 'latency_ms')) is not None]
+            error_values = [value for row in effective_metric_rows if (value := _provider_metric_number(row, 'error_rate', ratio=True)) is not None]
+            complete_metrics = (
+                bool(effective_metric_rows)
+                if item.provider_mode is ProviderCompositionMode.ANY
+                else len(effective_metric_rows) == len(item.provider_keys)
+            )
+            if reliability_values and complete_metrics:
+                reliability = max(reliability_values) if item.provider_mode is ProviderCompositionMode.ANY else min(reliability_values)
+            if latency_values and complete_metrics:
+                latency_ms = min(latency_values) if item.provider_mode is ProviderCompositionMode.ANY else max(latency_values)
+            if error_values and complete_metrics:
+                error_rate = min(error_values) if item.provider_mode is ProviderCompositionMode.ANY else max(error_values)
             metric_health = [
                 health_policy.tier_for_observed_rate(
                     _provider_metric_number(row, 'reliability', ratio=True),
                     observation_count=int(row.get('sample_count') or 0),
                 )
-                for row in metric_rows
+                for row in effective_metric_rows
                 if row.get('reliability') is not None
             ]
-            if len(metric_health) == len(item.provider_keys) and all(value != 'unknown' for value in metric_health):
-                observed_health = (
-                    CapabilityHealthState.UNHEALTHY.value
-                    if CapabilityHealthState.UNHEALTHY.value in metric_health
-                    else CapabilityHealthState.DEGRADED.value
-                    if CapabilityHealthState.DEGRADED.value in metric_health
-                    else CapabilityHealthState.HEALTHY.value
-                )
+            if complete_metrics and metric_health and all(value != 'unknown' for value in metric_health):
+                if item.provider_mode is ProviderCompositionMode.ANY:
+                    observed_health = (
+                        CapabilityHealthState.HEALTHY.value
+                        if CapabilityHealthState.HEALTHY.value in metric_health
+                        else CapabilityHealthState.DEGRADED.value
+                        if CapabilityHealthState.DEGRADED.value in metric_health
+                        else CapabilityHealthState.UNHEALTHY.value
+                    )
+                else:
+                    observed_health = (
+                        CapabilityHealthState.UNHEALTHY.value
+                        if CapabilityHealthState.UNHEALTHY.value in metric_health
+                        else CapabilityHealthState.DEGRADED.value
+                        if CapabilityHealthState.DEGRADED.value in metric_health
+                        else CapabilityHealthState.HEALTHY.value
+                    )
                 health_rank = {
                     CapabilityHealthState.UNKNOWN.value: 4,
                     CapabilityHealthState.HEALTHY.value: 3,
@@ -945,6 +989,7 @@ def capability_discovery_snapshot(
             'lifecycle': item.lifecycle.value,
             'status': item.status.value,
             'provider_keys': list(item.provider_keys),
+            'provider_mode': item.provider_mode.value,
             'provider_runtime': provider_rows,
             'provider_metrics': metric_rows,
             'read_supported': bool(item.read_supported),
@@ -1020,6 +1065,7 @@ __all__ = [
     'CapabilityLifecycle',
     'CapabilityHealthState',
     'CapabilityAvailabilityState',
+    'ProviderCompositionMode',
     'IntegrationCapability',
     'CAPABILITIES',
     'capability_map',
