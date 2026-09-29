@@ -10,7 +10,6 @@ from decimal import Decimal
 from pathlib import Path
 from typing import Any, Protocol
 
-from core.finance.money import quantity_decimal
 from core.tenancy.normalization import require_tenant_id
 from governance.persistence_codec import read_json_or_default
 from tenancy.tenant_quota_guard import (
@@ -19,9 +18,9 @@ from tenancy.tenant_quota_guard import (
     TenantQuotaCounterState,
     TenantQuotaCounterStore,
     _normalized_state,
+    quota_quota_quantity_decimal,
     tenant_quota_counter_store_path,
 )
-
 
 class EventStore(Protocol):
     def append(self, *, tenant_id: str, user_id: str | None, event_type: str, payload: dict[str, Any]) -> None: ...
@@ -75,9 +74,7 @@ class TenantRegistry:
         res.sort(key=lambda x: x.tenant_id)
         return res
 
-
 SQLITE_SCHEMA_VERSION = 1
-
 
 def tenant_quota_counter_sqlite_path() -> Path:
     explicit = os.getenv("BUSINESAIOS_TENANT_QUOTA_COUNTER_SQLITE_PATH", "").strip()
@@ -152,7 +149,7 @@ class SQLiteTenantQuotaCounterStore:
                 tenant_id=str(row[0]),
                 counter_key=str(row[1]),
                 window_key=str(row[2]),
-                used=quantity_decimal(row[3], name="used"),
+                used=quota_quantity_decimal(row[3], name="used"),
                 updated_at=datetime.fromisoformat(str(row[4])),
             )
         )
@@ -202,7 +199,7 @@ class SQLiteTenantQuotaCounterStore:
         tid = require_tenant_id(tenant_id)
         key = str(counter_key).strip()
         window = str(window_key).strip()
-        delta = quantity_decimal(amount, name="amount")
+        delta = quota_quantity_decimal(amount, name="amount")
         if not key or not window:
             raise ValueError("counter_key and window_key are required")
         if updated_at.tzinfo is None:
@@ -214,7 +211,7 @@ class SQLiteTenantQuotaCounterStore:
                 "WHERE tenant_id = ? AND counter_key = ? AND window_key = ?",
                 (tid, key, window),
             ).fetchone()
-            current = Decimal("0") if row is None else quantity_decimal(row[0], name="used")
+            current = Decimal("0") if row is None else quota_quantity_decimal(row[0], name="used")
             state = TenantQuotaCounterState(
                 tenant_id=tid,
                 counter_key=key,
@@ -268,7 +265,7 @@ class SQLiteTenantQuotaCounterStore:
                     tenant_id=str(item.get("tenant_id") or ""),
                     counter_key=str(item.get("counter_key") or ""),
                     window_key=str(item.get("window_key") or ""),
-                    used=quantity_decimal(item.get("used", 0), name="used"),
+                    used=quota_quantity_decimal(item.get("used", 0), name="used"),
                     updated_at=datetime.fromisoformat(str(item.get("updated_at") or "")),
                 )
             )
@@ -308,8 +305,6 @@ class SQLiteTenantQuotaCounterStore:
             )
         return len(states)
 
-
-
 def build_default_tenant_quota_counter_store() -> TenantQuotaCounterStore:
     mode = os.getenv("BUSINESAIOS_TENANT_QUOTA_COUNTER_STORE_BACKEND", "sqlite").strip().lower()
     if mode == "memory":
@@ -321,6 +316,4 @@ def build_default_tenant_quota_counter_store() -> TenantQuotaCounterStore:
     store = SQLiteTenantQuotaCounterStore()
     store.migrate_legacy_file(tenant_quota_counter_store_path())
     return store
-
-
 
