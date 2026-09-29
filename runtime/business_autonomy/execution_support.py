@@ -69,10 +69,36 @@ def ensure_business_route(*, route_state: FileRegionRouteState, tenant_id: str, 
     return route_state.read_route(tenant_id=tenant_id, business_id=business_id) or route
 
 
+def build_provider_quota_runtime():
+    from connectors.platform.connector_quota_guard import ConnectorQuotaGuard
+    from runtime.platform.tenancy.tenant_registry import build_default_tenant_quota_counter_store
+    from tenancy.tenant_policy_store import build_default_tenant_policy_store
+    from tenancy.tenant_quota_guard import TenantQuotaGuard
+
+    counter_store = build_default_tenant_quota_counter_store()
+    policy_store = build_default_tenant_policy_store()
+    guard = ConnectorQuotaGuard(
+        quota_guard=TenantQuotaGuard(
+            policy_store=policy_store,
+            counter_store=counter_store,
+        ),
+        counter_store=counter_store,
+    )
+    return guard, policy_store
+
+
+def ensure_provider_quota_tenant(policy_store, tenant_id: str) -> None:
+    from tenancy.tenant_policy_store import ensure_tenant_policy_bundle
+
+    ensure_tenant_policy_bundle(policy_store, tenant_id)
+
+
 __all__ = [
     "BusinessAutonomyExecutionRuntime",
     "FleetPressureGovernor",
     "StaticReplayRecovery",
     "build_execution_runtime",
+    "build_provider_quota_runtime",
+    "ensure_provider_quota_tenant",
     "ensure_business_route",
 ]
