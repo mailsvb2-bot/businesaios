@@ -13,6 +13,7 @@ from application.business_autonomy.provider_catalog import (
     provider_map,
 )
 from application.business_autonomy.provider_runtime_contract import provider_sync_run_result_schema
+from application.capability.capability_health_policy import CapabilityHealthPolicy
 from contracts.email_outbound import email_outbound_payload_schema_v1
 from contracts.risk import RiskLevel
 
@@ -823,6 +824,7 @@ def capability_discovery_snapshot(
     metrics_truth = dict(provider_metrics_truth or {})
     rows: list[dict[str, Any]] = []
     live_healthy = {'probe_live_ok'}
+    health_policy = CapabilityHealthPolicy()
     live_unhealthy = {
         'probe_live_failed',
         'probe_rejected_misconfigured',
@@ -882,6 +884,31 @@ def capability_discovery_snapshot(
                 latency_ms = max(latency_values)
             if error_values and len(error_values) == len(item.provider_keys):
                 error_rate = max(error_values)
+            metric_health = [
+                health_policy.tier_for_observed_rate(
+                    float(row['reliability']),
+                    observation_count=int(row.get('sample_count') or 0),
+                )
+                for row in metric_rows
+                if row.get('reliability') is not None
+            ]
+            if len(metric_health) == len(item.provider_keys) and all(value != 'unknown' for value in metric_health):
+                observed_health = (
+                    CapabilityHealthState.UNHEALTHY.value
+                    if CapabilityHealthState.UNHEALTHY.value in metric_health
+                    else CapabilityHealthState.DEGRADED.value
+                    if CapabilityHealthState.DEGRADED.value in metric_health
+                    else CapabilityHealthState.HEALTHY.value
+                )
+                health_rank = {
+                    CapabilityHealthState.UNKNOWN.value: 4,
+                    CapabilityHealthState.HEALTHY.value: 3,
+                    CapabilityHealthState.DEGRADED.value: 2,
+                    CapabilityHealthState.UNHEALTHY.value: 1,
+                    CapabilityHealthState.DISABLED.value: 0,
+                }
+                if health == CapabilityHealthState.UNKNOWN.value or health_rank[observed_health] < health_rank[health]:
+                    health = observed_health
         gaps = list(item.contract_gaps)
         if health != CapabilityHealthState.UNKNOWN.value and 'health' in gaps:
             gaps.remove('health')

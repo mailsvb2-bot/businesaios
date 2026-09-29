@@ -473,3 +473,54 @@ def test_production_ready_capability_accepts_only_complete_contract_truth():
     )
     assert capability.contract_complete is True
 
+def test_durable_provider_failures_downgrade_healthy_probe_truth():
+    rows = capability_discovery_snapshot(
+        provider_runtime_truth={
+            "telegram_bot": {
+                "provider_key": "telegram_bot",
+                "connected": True,
+                "onboarding_ready": True,
+                "health_probe": {"status": "probe_live_ok", "probe_mode": "live"},
+            }
+        },
+        provider_metrics_truth={
+            "telegram_bot": {
+                "provider_key": "telegram_bot",
+                "reliability": 0.25,
+                "error_rate": 0.75,
+                "latency_ms": 420.0,
+                "sample_count": 4,
+                "source": "provider_sync_history",
+            }
+        },
+    )
+    telegram = {row["capability_id"]: row for row in rows}["interaction.telegram"]
+    assert telegram["health"] == "unhealthy"
+    assert telegram["reliability"] == 0.25
+    assert telegram["error_rate"] == 0.75
+
+
+def test_insufficient_provider_history_does_not_override_live_probe_health():
+    rows = capability_discovery_snapshot(
+        provider_runtime_truth={
+            "telegram_bot": {
+                "provider_key": "telegram_bot",
+                "connected": True,
+                "onboarding_ready": True,
+                "health_probe": {"status": "probe_live_ok", "probe_mode": "live"},
+            }
+        },
+        provider_metrics_truth={
+            "telegram_bot": {
+                "provider_key": "telegram_bot",
+                "reliability": 0.0,
+                "error_rate": 1.0,
+                "latency_ms": 500.0,
+                "sample_count": 2,
+                "source": "provider_sync_history",
+            }
+        },
+    )
+    telegram = {row["capability_id"]: row for row in rows}["interaction.telegram"]
+    assert telegram["health"] == "healthy"
+
