@@ -5,11 +5,12 @@ from datetime import datetime, timezone
 
 from core.finance.money import quantity_decimal
 from core.tenancy.normalization import require_tenant_id
-from tenancy.tenant_quota_counter_store import (
+from tenancy.tenant_quota_guard import (
     InMemoryTenantQuotaCounterStore,
+    QuotaDimension,
     TenantQuotaCounterStore,
+    TenantQuotaGuard,
 )
-from tenancy.tenant_quota_guard import QuotaDimension, TenantQuotaGuard
 
 
 CANON_CONNECTOR_QUOTA_GUARD = True
