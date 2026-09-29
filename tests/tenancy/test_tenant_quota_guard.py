@@ -1,9 +1,9 @@
 from __future__ import annotations
 
+import sqlite3
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timezone
 from decimal import Decimal
-import sqlite3
 
 import pytest
 
