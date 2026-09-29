@@ -436,3 +436,40 @@ def test_email_capability_schema_is_owned_by_canonical_contracts():
     assert normalized.subject == "Hello world"
     assert normalized.body == "message"
 
+def test_production_ready_capability_requires_complete_contract_truth():
+    with pytest.raises(ValueError, match="contract gaps"):
+        IntegrationCapability(
+            capability_id="interaction.not_really_ready",
+            title="Not Really Ready",
+            surface=CapabilitySurface.INTERACTION,
+            group="Test",
+            status=CapabilityStatus.PRODUCTION_READY,
+            lifecycle=CapabilityLifecycle.PRODUCTION_READY,
+            owner_text="owner",
+            next_required_step="next",
+            provider_keys=("telegram_bot",),
+        )
+
+
+def test_production_ready_capability_accepts_only_complete_contract_truth():
+    capability = IntegrationCapability(
+        capability_id="interaction.really_ready",
+        title="Really Ready",
+        surface=CapabilitySurface.INTERACTION,
+        group="Test",
+        status=CapabilityStatus.PRODUCTION_READY,
+        lifecycle=CapabilityLifecycle.PRODUCTION_READY,
+        owner_text="owner",
+        next_required_step="next",
+        provider_keys=("telegram_bot",),
+        input_schema={"type": "object"},
+        output_schema={"type": "object"},
+        health=CapabilityHealthState.HEALTHY,
+        availability=CapabilityAvailabilityState.AVAILABLE,
+        cost=0.0,
+        latency_ms=1.0,
+        reliability=1.0,
+        error_rate=0.0,
+    )
+    assert capability.contract_complete is True
+

@@ -223,6 +223,8 @@ class IntegrationCapability:
         object.__setattr__(self, 'reversible', bool(self.reversible))
         object.__setattr__(self, 'schema_version', CAPABILITY_SCHEMA_VERSION)
         object.__setattr__(self, 'metadata', MappingProxyType(dict(self.metadata or {})))
+        if production_ready and self.contract_gaps:
+            raise ValueError(f'production_ready capability has contract gaps: {", ".join(self.contract_gaps)}')
 
     @property
     def connectable(self) -> bool:
