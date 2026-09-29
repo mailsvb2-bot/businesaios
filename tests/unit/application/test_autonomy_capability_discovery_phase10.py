@@ -58,6 +58,9 @@ def test_capability_discovery_is_present_before_headless_decision_planning():
     telegram = by_id["interaction.telegram"]
 
     assert telegram["lifecycle"] == "implemented"
+    assert telegram["schema_version"] == 3
+    assert isinstance(telegram["registry_sources"], list)
+    assert telegram["evidence"]
     assert telegram["provider_keys"] == ["telegram_bot"]
     assert telegram["health"] == "unknown"
     assert telegram["availability"] == "unknown"

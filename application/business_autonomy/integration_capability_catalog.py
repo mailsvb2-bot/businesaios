@@ -922,6 +922,9 @@ def capability_discovery_snapshot(
             gaps.remove('error_rate')
         rows.append({
             'capability_id': item.capability_id,
+            'schema_version': item.schema_version,
+            'registry_sources': list(item.registry_sources),
+            'evidence': [entry.to_payload() for entry in item.evidence],
             'lifecycle': item.lifecycle.value,
             'status': item.status.value,
             'provider_keys': list(item.provider_keys),
