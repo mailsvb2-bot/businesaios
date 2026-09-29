@@ -630,6 +630,22 @@ def test_multi_provider_any_mode_marks_capability_available_with_one_ready_provi
     assert row["error_rate"] == 0.1
     assert row["latency_ms"] == 120.0
 
+def test_multi_provider_any_mode_keeps_availability_when_one_ready_provider_has_quota():
+    rows = capability_discovery_snapshot(
+        provider_runtime_truth={
+            "shopify": {"provider_key": "shopify", "connected": True, "onboarding_ready": True, "health_probe": {"status": "probe_live_ok"}},
+            "woocommerce": {"provider_key": "woocommerce", "connected": True, "onboarding_ready": True, "health_probe": {"status": "probe_live_ok"}},
+        },
+        provider_quota_truth={
+            "shopify": {"provider_key": "shopify", "allowed": False, "remaining": 0.0},
+            "woocommerce": {"provider_key": "woocommerce", "allowed": True, "remaining": 10.0},
+        },
+    )
+    row = {item["capability_id"]: item for item in rows}["acquisition.commerce_marketplaces"]
+    assert row["provider_mode"] == "any"
+    assert row["availability"] == "available"
+    assert [item["allowed"] for item in row["provider_quota"]] == [False, True]
+
 def test_provider_mode_any_requires_real_alternatives():
     with pytest.raises(ValueError, match="at least two providers"):
         IntegrationCapability(
