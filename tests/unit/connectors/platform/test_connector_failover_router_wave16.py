@@ -19,7 +19,7 @@ from connectors.platform.connector_registry import ConnectorRegistry, ConnectorR
 from connectors.platform.connector_retry_policy import ConnectorRetryPolicy, ConnectorRetryRule
 from interfaces.common.connector_health import ConnectorHealth
 from interfaces.common.connector_result import ConnectorResult
-from tenancy.tenant_quota_counter_store import InMemoryTenantQuotaCounterStore
+from tenancy.tenant_quota_guard import InMemoryTenantQuotaCounterStore
 
 
 class _DirectTimeoutPolicy:
