@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from collections.abc import Iterable, Mapping
 from dataclasses import dataclass, field
+from datetime import UTC, datetime
 from enum import Enum
 from math import isfinite
 from typing import Any
@@ -268,6 +269,17 @@ def provider_runtime_truth_map(*, event_store: Any, tenant_id: str, business_id:
                 raise RuntimeError("PROVIDER_ACTIVATION_EVENT_CONFLICT")
     return latest
 
+def _provider_history_timestamp(value: object) -> datetime | None:
+    text = str(value or "").strip()
+    if not text:
+        return None
+    try:
+        parsed = datetime.fromisoformat(text[:-1] + "+00:00" if text.endswith("Z") else text)
+    except ValueError as exc:
+        raise ValueError("provider history recorded_at_utc is invalid") from exc
+    return parsed.replace(tzinfo=UTC) if parsed.tzinfo is None else parsed.astimezone(UTC)
+
+
 def provider_runtime_metrics_truth_map(
     *,
     sync_history: ProviderSyncHistory,
@@ -275,12 +287,22 @@ def provider_runtime_metrics_truth_map(
     business_id: str,
     provider_keys: Iterable[str],
     limit: int = 50,
+    window_seconds: int = 259200,
+    now_utc: datetime | None = None,
 ) -> dict[str, dict[str, Any]]:
     """Project durable provider execution history into decision-facing metrics truth."""
     tenant = str(tenant_id or "").strip()
     business = str(business_id or "").strip()
     if not tenant or not business:
         raise ValueError("tenant_id and business_id are required")
+    window = int(window_seconds)
+    if window <= 0:
+        raise ValueError("window_seconds must be > 0")
+    now = now_utc or datetime.now(UTC)
+    if now.tzinfo is None:
+        now = now.replace(tzinfo=UTC)
+    else:
+        now = now.astimezone(UTC)
     result: dict[str, dict[str, Any]] = {}
     for provider_key in tuple(dict.fromkeys(str(key).strip() for key in provider_keys if str(key).strip())):
         rows = sync_history.list_for_provider(
@@ -289,11 +311,21 @@ def provider_runtime_metrics_truth_map(
             provider_key=provider_key,
             limit=max(1, int(limit)),
         )
-        measured = [
-            dict(row) for row in rows
-            if str(row.get("mode") or "").strip().lower() == "live"
-            and row.get("transport_latency_ms") is not None
-        ]
+        measured: list[dict[str, Any]] = []
+        for raw_row in rows:
+            row = dict(raw_row)
+            if str(row.get("mode") or "").strip().lower() != "live" or row.get("transport_latency_ms") is None:
+                continue
+            observed_at = _provider_history_timestamp(row.get("recorded_at_utc"))
+            if observed_at is None:
+                continue
+            age_seconds = (now - observed_at).total_seconds()
+            if age_seconds < -300:
+                raise ValueError("provider history recorded_at_utc is unexpectedly in the future")
+            if age_seconds > window:
+                continue
+            row["_observed_at_utc"] = observed_at
+            measured.append(row)
         for row in measured:
             raw_latency = row.get("transport_latency_ms")
             if isinstance(raw_latency, bool):
@@ -307,7 +339,7 @@ def provider_runtime_metrics_truth_map(
             row["transport_latency_ms"] = latency_value
         if not measured:
             continue
-        latencies = [max(0.0, float(row["transport_latency_ms"])) for row in measured]
+        latencies = [float(row["transport_latency_ms"]) for row in measured]
         successes = sum(1 for row in measured if bool(row.get("accepted")))
         sample_count = len(measured)
         reliability = successes / sample_count
@@ -317,6 +349,8 @@ def provider_runtime_metrics_truth_map(
             "error_rate": 1.0 - reliability,
             "latency_ms": percentile_value(latencies, 0.95),
             "sample_count": sample_count,
+            "window_seconds": window,
+            "latest_observed_at": max(row["_observed_at_utc"] for row in measured).isoformat(),
             "source": "provider_sync_history",
         }
     return result
