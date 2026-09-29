@@ -23,6 +23,7 @@ from application.business_autonomy.provider_catalog import (
 from application.business_autonomy.provider_runtime_contract import provider_sync_run_request_schema, provider_sync_run_result_schema
 from contracts.email_outbound import EmailOutboundPayloadV1, email_outbound_payload_schema_v1
 from crm.webhooks.crm_webhook_contract import crm_webhook_event_schema
+from interfaces.messaging_runtime.contracts import message_envelope_schema, outbound_envelope_schema
 from interfaces.web.chat_widget.session_contract import web_chat_session_schema
 
 def test_capability_catalog_exposes_honest_statuses():
@@ -114,8 +115,8 @@ def test_capability_lifecycle_matches_canon_state_set():
 def test_capability_payload_exposes_canonical_contract_surface():
     payload = capability_map()["interaction.telegram"].to_payload()
     assert payload["lifecycle"] == "implemented"
-    assert payload["input_schema"] == {}
-    assert payload["output_schema"] == {}
+    assert payload["input_schema"] == message_envelope_schema()
+    assert payload["output_schema"] == outbound_envelope_schema()
     assert payload["health"] == "unknown"
     assert payload["availability"] == "unknown"
     assert payload["cost"] is None
@@ -124,7 +125,7 @@ def test_capability_payload_exposes_canonical_contract_surface():
     assert payload["error_rate"] is None
     assert payload["reversible"] is False
     assert payload["contract_complete"] is False
-    assert set(payload["contract_gaps"]) == {"input_schema", "output_schema", "health", "availability", "cost", "latency_ms", "reliability", "error_rate"}
+    assert set(payload["contract_gaps"]) == {"health", "availability", "cost", "latency_ms", "reliability", "error_rate"}
     assert payload["approval_requirements"] == {
         "owner_approval": True,
         "budget_guard": False,
@@ -242,7 +243,7 @@ def test_capability_discovery_overlays_live_provider_truth_without_mutating_cata
     assert telegram["provider_runtime"][0]["provider_version"] == 3
     assert "health" not in telegram["contract_gaps"]
     assert "availability" not in telegram["contract_gaps"]
-    assert set(telegram["contract_gaps"]) == {"input_schema", "output_schema", "cost", "latency_ms", "reliability", "error_rate"}
+    assert set(telegram["contract_gaps"]) == {"cost", "latency_ms", "reliability", "error_rate"}
 
 def test_dry_run_provider_truth_never_claims_live_health():
     rows = capability_discovery_snapshot(provider_runtime_truth={
@@ -352,15 +353,27 @@ def test_provider_sync_capabilities_reuse_canonical_request_and_result_schemas()
     assert dict(crm_events.input_schema) == crm_webhook_event_schema()
     assert dict(crm_events.output_schema) == result_schema
 
-def test_web_chat_capabilities_reuse_session_contract_without_forging_output_schema():
-    schema = web_chat_session_schema()
-    for capability_id in ("acquisition.web_chat_widget", "interaction.web_chat"):
+def test_messaging_capabilities_reuse_canonical_runtime_envelopes():
+    inbound, outbound = message_envelope_schema(), outbound_envelope_schema()
+    for capability_id in ("interaction.telegram", "interaction.whatsapp", "interaction.web_chat"):
         capability = capability_map()[capability_id]
-        assert "interfaces.web.chat_widget.session_contract" in capability.registry_sources
-        assert dict(capability.input_schema) == schema
-        assert dict(capability.output_schema) == {}
+        assert "interfaces.messaging_runtime.contracts" in capability.registry_sources
+        assert dict(capability.input_schema) == inbound
+        assert dict(capability.output_schema) == outbound
         assert "input_schema" not in capability.contract_gaps
-        assert "output_schema" in capability.contract_gaps
+        assert "output_schema" not in capability.contract_gaps
+    for provider_key in MESSAGING_GUARDED_WRITE_PROVIDER_KEYS:
+        capability = next(item for item in capability_map().values() if provider_key in item.provider_keys)
+        assert dict(capability.input_schema) == inbound
+        assert dict(capability.output_schema) == outbound
+
+def test_web_chat_acquisition_reuses_session_contract_without_forging_output_schema():
+    capability = capability_map()["acquisition.web_chat_widget"]
+    assert "interfaces.web.chat_widget.session_contract" in capability.registry_sources
+    assert dict(capability.input_schema) == web_chat_session_schema()
+    assert dict(capability.output_schema) == {}
+    assert "input_schema" not in capability.contract_gaps
+    assert "output_schema" in capability.contract_gaps
 
 def test_unknown_numeric_capability_truth_is_explicit_and_not_zero():
     capability = IntegrationCapability(
