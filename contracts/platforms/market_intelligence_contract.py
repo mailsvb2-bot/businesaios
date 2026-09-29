@@ -8,29 +8,30 @@ CANON_MARKET_INTELLIGENCE_CONTRACT = True
 
 SOURCE_FAMILIES: tuple[str, ...] = ('marketplace', 'ads_library', 'competitor_analytics', 'search_intelligence', 'professional_network', 'content_platform', 'app_store', 'review_platform', 'landing_intelligence', 'video_platform', 'ads_spy', 'newsletter_intelligence')
 
-
 def _clean_text(value: object, *, field_name: str) -> str:
     text = str(value or '').strip()
     if not text:
         raise ValueError(f'{field_name} is required')
     return text
 
-
 def _clean_optional_text(value: object | None) -> str | None:
     text = str(value or '').strip()
     return text or None
 
-
 def _safe_dict(value: Mapping[str, Any] | None) -> dict[str, Any]:
     return dict(value or {})
 
+def search_intelligence_target_schema() -> dict[str, object]:
+    return {"type": "object", "required": ["provider", "tenant_id"], "properties": {"source_family": {"const": "search_intelligence"}, "provider": {"type": "string", "minLength": 1}, "tenant_id": {"type": "string", "minLength": 1}, "query": {"type": ["string", "null"]}, "subject_url": {"type": ["string", "null"]}, "account_ref": {"type": ["string", "null"]}, "region": {"type": ["string", "null"]}, "locale": {"type": ["string", "null"]}, "limit": {"type": "integer", "minimum": 1, "maximum": 250}, "metadata": {"type": "object"}}, "additionalProperties": False}
+
+def search_intelligence_envelope_schema() -> dict[str, object]:
+    return {"type": "object", "required": ["connector_id", "provider", "source_family", "operation", "target", "records", "summary", "metadata"], "properties": {"connector_id": {"type": "string", "minLength": 1}, "provider": {"type": "string", "minLength": 1}, "source_family": {"const": "search_intelligence"}, "operation": {"type": "string", "minLength": 1}, "target": search_intelligence_target_schema(), "records": {"type": "array", "items": {"type": "object"}}, "cursor": {"type": ["string", "null"]}, "summary": {"type": "object"}, "metadata": {"type": "object"}}, "additionalProperties": False}
 
 def normalize_source_family(value: object, *, field_name: str = 'source_family') -> str:
     family = _clean_text(value, field_name=field_name).lower()
     if family not in set(SOURCE_FAMILIES):
         raise ValueError(f'unsupported source_family: {family}')
     return family
-
 
 @dataclass(frozen=True)
 class MarketIntelligenceTarget:
@@ -70,7 +71,6 @@ class MarketIntelligenceTarget:
             'limit': self.limit,
             'metadata': dict(self.metadata),
         }
-
 
 @dataclass(frozen=True)
 class MarketIntelligenceRecord:
@@ -119,7 +119,6 @@ class MarketIntelligenceRecord:
             'tags': list(self.tags),
         }
 
-
 @dataclass(frozen=True)
 class MarketIntelligenceEnvelope:
     connector_id: str
@@ -155,12 +154,13 @@ class MarketIntelligenceEnvelope:
             'metadata': dict(self.metadata),
         }
 
-
 __all__ = [
     'CANON_MARKET_INTELLIGENCE_CONTRACT',
     'SOURCE_FAMILIES',
     'MarketIntelligenceEnvelope',
     'MarketIntelligenceRecord',
     'MarketIntelligenceTarget',
+    'search_intelligence_target_schema',
+    'search_intelligence_envelope_schema',
     'normalize_source_family',
 ]
