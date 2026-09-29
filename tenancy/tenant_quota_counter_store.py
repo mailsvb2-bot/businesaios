@@ -14,7 +14,6 @@ from typing import Protocol
 from core.finance.money import quantity_decimal
 from core.tenancy.normalization import require_tenant_id
 from governance.persistence_codec import atomic_write_json, read_json_or_default
-from tenancy.tenant_contract import utc_now
 
 
 CANON_TENANT_QUOTA_COUNTER_STORE = True
