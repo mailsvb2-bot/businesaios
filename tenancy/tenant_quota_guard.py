@@ -16,6 +16,7 @@ from tenancy.tenant_contract import TenantPolicyStoreContract, TenantQuotaCheck,
 
 CANON_TENANT_QUOTA_COUNTER_STORE = True
 quota_quantity_decimal = quantity_decimal
+quota_require_tenant_id = require_tenant_id
 
 @dataclass(frozen=True)
 class TenantQuotaCounterState:
