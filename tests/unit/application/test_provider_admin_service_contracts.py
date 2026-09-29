@@ -1,13 +1,13 @@
 from __future__ import annotations
 
 from dataclasses import replace
-
 from pathlib import Path
 
 from application.business_autonomy.business_connector_framework import ConnectorOnboardingService, StaticTrustOnboarding
 from application.business_autonomy.distributed_capability_trust_registry import DistributedBusinessRegistry
 from application.business_autonomy.provider_admin_contract import ProviderCredentialSubmission
 from application.business_autonomy.provider_admin_service import ProviderAdminService
+from connectors.platform.connector_quota_guard import ConnectorQuotaGuard
 from runtime.business_autonomy.bootstrap import (
     StaticGovernanceEnablement,
     StaticPersistenceSurface,
@@ -17,6 +17,7 @@ from runtime.business_autonomy.distributed_state import FileDistributedDocumentS
 from runtime.business_autonomy.provider_activation_store import FileProviderActivationStore
 from security.connector_secret_scope import ConnectorSecretScope
 from security.secret_vault import InMemorySecretVault
+from tenancy.tenant_quota_counter_store import InMemoryTenantQuotaCounterStore
 
 ROOT = Path(__file__).resolve().parents[3]
 
