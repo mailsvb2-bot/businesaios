@@ -1,6 +1,6 @@
 # Business Discovery / Canonical Business Intake — foundation
 
-Status: STARTED
+Status: BD0 ownership audit locked; BD1 owner-assertion ingress and BD2 semantic-state projection in progress
 Branch: `canon/business-discovery-ui-foundation`
 Purpose: preserve and implement the missing canonical user-facing intake that feeds the existing BusinessAIOS World Model without creating a second brain.
 
@@ -47,6 +47,23 @@ This useful semantic content must be migrated into the canonical business intake
    - World Model: existing `core.world_model` builders and canonical state assembly
    - provider truth: existing Business Autonomy provider/capability owners
 10. Legacy/older onboarding semantics are migrated, then duplicate authority is removed.
+
+## BD0 canonical ownership map
+
+Business Discovery is an intake/orchestration surface, not a new domain owner. The current field set is bound to the existing owners below and architecture tests must fail if a parallel owner is introduced.
+
+| Concern | Canonical owner / storage | Business Discovery role |
+| --- | --- | --- |
+| Business identity/profile semantics | `contracts.business_profile`; durable business lifecycle in the existing Business Registry | emit scoped assertions/facts only; never own a second business profile store |
+| Business fact chronology | `application.ontology.event_fact_lifecycle.EventFactLifecycleWriter` over canonical EventStore | append schema-versioned owner assertions with provenance and idempotency |
+| Current semantic state / World Model input | `runtime.state.StateSynthesisEngine` + canonical StateSnapshotStore | submit observations and consume the synthesized snapshot; never mutate a parallel World Model |
+| Evidence | `storage.evidence_store` | write/reuse canonical EvidenceRecord lineage; never create a discovery evidence database |
+| Goals | `contracts.business_goal` + sole writer `application.business_goal` | BD4 may propose/create through the existing owner only |
+| Constraints | `contracts.business_constraints` + sole writer `application.business_constraint` | BD4 may propose/create through the existing owner only |
+| Provider/capability truth | existing Business Autonomy provider/capability owners landed in Phase 10 | drive adaptive questions and reconciliation; UI must not hardcode availability |
+| Legacy diagnostic onboarding | `core.autopilot.onboarding` | migration/read source only until parity is proven, then duplicate authority is retired |
+
+The lock test is `tests/arch/test_business_discovery_ownership.py`. It binds the branch to the canonical ontology inventory and rejects local duplicate registry/store classes for Business, Goal, Constraint, Evidence or World Model ownership.
 
 ## Target vertical slice
 
