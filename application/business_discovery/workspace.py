@@ -155,8 +155,10 @@ class BusinessDiscoveryWorkspace:
             occurred_at_ms=occurred_at_ms,
             event_metadata={
                 "actor_id": actor,
-                "ingress": "business_discovery",
-                "owner_confirmed": True,
+                "provenance": {
+                    "ingress": "business_discovery",
+                    "owner_confirmed": True,
+                },
             },
         )
         return _jsonable_dataclass(goal)
@@ -217,8 +219,10 @@ class BusinessDiscoveryWorkspace:
             occurred_at_ms=occurred_at_ms,
             event_metadata={
                 "actor_id": actor,
-                "ingress": "business_discovery",
-                "owner_confirmed": True,
+                "provenance": {
+                    "ingress": "business_discovery",
+                    "owner_confirmed": True,
+                },
             },
         )
         return _jsonable_dataclass(constraint)
