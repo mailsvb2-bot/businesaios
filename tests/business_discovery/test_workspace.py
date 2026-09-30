@@ -9,6 +9,7 @@ from application.business_discovery import (
     OwnerBusinessAssertionIngress,
 )
 from application.business_goal import BusinessGoalRegistry
+from contracts.event_store import BUSINESS_FACT_EVENT_TYPE
 from reliability.idempotency_store import InMemoryIdempotencyStore
 from runtime.platform.event_store.memory_event_store import MemoryEventStore
 from runtime.state import StateSynthesisEngine
@@ -158,7 +159,7 @@ def test_discovery_goal_and_constraint_provenance_uses_canonical_event_metadata(
         for event in events.iter_events(
             tenant_id="tenant-1",
             start_ms=0,
-            event_type="business.fact.v1",
+            event_type=BUSINESS_FACT_EVENT_TYPE,
         )
         if dict(event.get("payload") or {}).get("fact_type")
         in {"constraint.created", "goal.created"}
