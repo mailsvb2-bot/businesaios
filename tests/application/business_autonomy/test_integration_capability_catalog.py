@@ -27,6 +27,16 @@ from crm.webhooks.crm_webhook_contract import crm_webhook_event_schema
 from interfaces.messaging_runtime.contracts import message_envelope_schema, outbound_envelope_schema
 from interfaces.web.chat_widget.session_contract import web_chat_session_schema
 
+def _assert_owned_schema(capability_id, source, input_schema, output_schema):
+    capability = capability_map()[capability_id]
+    assert source in capability.registry_sources
+    assert dict(capability.input_schema) == input_schema
+    assert dict(capability.output_schema) == output_schema
+    assert "input_schema" not in capability.contract_gaps
+    if output_schema:
+        assert "output_schema" not in capability.contract_gaps
+
+
 def test_capability_catalog_exposes_honest_statuses():
     capabilities = capability_map()
 
@@ -385,22 +395,19 @@ def test_web_chat_acquisition_reuses_session_contract_without_forging_output_sch
     assert "output_schema" in capability.contract_gaps
 
 def test_webhook_api_reuses_provider_ingress_contract():
-    capability = capability_map()["interaction.webhook_api"]
-    assert "application.business_autonomy.provider_runtime_contract" in capability.registry_sources
-    assert dict(capability.input_schema) == provider_webhook_ingress_request_schema()
-    assert dict(capability.output_schema) == provider_webhook_ingress_result_schema()
-    assert "input_schema" not in capability.contract_gaps
-    assert "output_schema" not in capability.contract_gaps
+    _assert_owned_schema(
+        "interaction.webhook_api", "application.business_autonomy.provider_runtime_contract",
+        provider_webhook_ingress_request_schema(), provider_webhook_ingress_result_schema(),
+    )
 
 def test_seo_intelligence_reuses_canonical_market_intelligence_schemas():
+    _assert_owned_schema(
+        "acquisition.seo_intelligence", "contracts.platforms.market_intelligence_contract",
+        search_intelligence_target_schema(), search_intelligence_envelope_schema(),
+    )
     capability = capability_map()["acquisition.seo_intelligence"]
-    assert "contracts.platforms.market_intelligence_contract" in capability.registry_sources
-    assert dict(capability.input_schema) == search_intelligence_target_schema()
-    assert dict(capability.output_schema) == search_intelligence_envelope_schema()
     assert capability.input_schema["properties"]["source_family"] == {"const": "search_intelligence"}
     assert capability.output_schema["properties"]["source_family"] == {"const": "search_intelligence"}
-    assert "input_schema" not in capability.contract_gaps
-    assert "output_schema" not in capability.contract_gaps
 
 def test_unknown_numeric_capability_truth_is_explicit_and_not_zero():
     capability = IntegrationCapability(
