@@ -1,12 +1,17 @@
 from __future__ import annotations
 
+from application.business_autonomy.provider_admin_contract import ProviderActivationStatus
 from application.business_autonomy.provider_catalog import MESSAGING_GUARDED_WRITE_PROVIDER_KEYS, PROVIDERS
 from application.business_autonomy.provider_truth_matrix import (
     build_provider_truth_matrix,
+    provider_runtime_truth_map,
     provider_truth_map,
     summarize_provider_truth,
 )
+from runtime.business_autonomy.distributed_state import FileDistributedDocumentStore
+from runtime.business_autonomy.provider_activation_store import FileProviderActivationStore
 from runtime.business_autonomy.provider_sync_runtime import ProviderSyncRuntimePlanner
+from runtime.platform.event_store.memory_event_store import MemoryEventStore
 from runtime.business_autonomy.provider_transport_bindings import ProviderTransportBindings
 
 
@@ -104,3 +109,65 @@ def test_guarded_native_messaging_truth_never_claims_unproven_live_ready() -> No
         assert row.status == 'read_only_ready'
         assert row.read_only_supported is True and row.write_supported is True
         assert row.live_ready is False and row._live_ready_false_reason() == 'live_readiness_not_proven'
+
+
+def _activation_status(*, business_id: str, connected: bool, probe_status: str, updated_at: str) -> ProviderActivationStatus:
+    return ProviderActivationStatus(
+        tenant_id="tenant-1",
+        business_id=business_id,
+        provider_key="telegram_bot",
+        connected=connected,
+        connector_id="messaging.telegram",
+        title="Telegram",
+        channel_kind="chatbot",
+        secret_fields_bound=("bot_token",),
+        last_updated_utc=updated_at,
+        governance_enabled=True,
+        persistent_surfaces=("provider_activation",),
+        onboarding_ready=connected,
+        metadata={
+            "health_probe": {
+                "status": probe_status,
+                "probe_mode": "live" if probe_status == "probe_live_ok" else "dry_run",
+                "reason": "test",
+            }
+        },
+    )
+
+
+def test_provider_runtime_truth_reads_latest_scoped_event_spine_state(tmp_path) -> None:
+    events = MemoryEventStore()
+    store = FileProviderActivationStore(
+        FileDistributedDocumentStore(tmp_path / "documents"),
+        event_store=events,
+    )
+    store.put(_activation_status(
+        business_id="business-1",
+        connected=False,
+        probe_status="ready_for_credentials",
+        updated_at="2026-09-28T10:00:00+00:00",
+    ))
+    store.put(_activation_status(
+        business_id="business-1",
+        connected=True,
+        probe_status="probe_live_ok",
+        updated_at="2026-09-28T11:00:00+00:00",
+    ))
+    store.put(_activation_status(
+        business_id="business-2",
+        connected=False,
+        probe_status="probe_live_failed",
+        updated_at="2026-09-28T12:00:00+00:00",
+    ))
+
+    truth = provider_runtime_truth_map(
+        event_store=events,
+        tenant_id="tenant-1",
+        business_id="business-1",
+    )
+
+    assert tuple(truth) == ("telegram_bot",)
+    assert truth["telegram_bot"]["provider_version"] == 2
+    assert truth["telegram_bot"]["connected"] is True
+    assert truth["telegram_bot"]["health_probe"]["status"] == "probe_live_ok"
+    assert truth["telegram_bot"]["source"] == "event_spine.provider_activation"

@@ -4,6 +4,7 @@ from collections.abc import Mapping
 from dataclasses import dataclass, field
 from typing import Any
 
+CANON_MESSAGING_RUNTIME_CONTRACTS = True
 
 @dataclass(frozen=True)
 class InboundMessage:
@@ -16,7 +17,6 @@ class InboundMessage:
     channel: str
     user_id: str
     payload: Mapping[str, Any] = field(default_factory=dict)
-
 
 @dataclass(frozen=True)
 class MessageEnvelope:
@@ -37,7 +37,6 @@ class MessageEnvelope:
         if not self.correlation_id:
             raise ValueError("correlation_id is required")
 
-
 @dataclass(frozen=True)
 class RouteCommand:
     route_key: str
@@ -49,14 +48,12 @@ class RouteCommand:
         if not self.route_key:
             raise ValueError("route_key is required")
 
-
 @dataclass(frozen=True)
 class WorldStateInput:
     user_id: str
     channel: str
     correlation_id: str
     message_text: str
-
 
 @dataclass(frozen=True)
 class ViewModel:
@@ -65,7 +62,6 @@ class ViewModel:
     correlation_id: str
     body: str
     metadata: Mapping[str, Any] = field(default_factory=dict)
-
 
 @dataclass(frozen=True)
 class OutboundEnvelope:
@@ -87,3 +83,11 @@ class OutboundEnvelope:
             raise ValueError("body is required")
         if not self.dedupe_key:
             raise ValueError("dedupe_key is required")
+
+def message_envelope_schema() -> dict[str, object]:
+    return {"type": "object", "required": ["channel", "user_id", "text", "message_id", "correlation_id", "metadata"], "properties": {"channel": {"type": "string", "minLength": 1}, "user_id": {"type": "string", "minLength": 1}, "text": {"type": "string"}, "message_id": {"type": "string", "minLength": 1}, "correlation_id": {"type": "string", "minLength": 1}, "metadata": {"type": "object"}}, "additionalProperties": False}
+
+def outbound_envelope_schema() -> dict[str, object]:
+    return {"type": "object", "required": ["channel", "user_id", "correlation_id", "body", "dedupe_key", "metadata"], "properties": {"channel": {"type": "string", "minLength": 1}, "user_id": {"type": "string", "minLength": 1}, "correlation_id": {"type": "string", "minLength": 1}, "body": {"type": "string", "minLength": 1}, "dedupe_key": {"type": "string", "minLength": 1}, "metadata": {"type": "object"}}, "additionalProperties": False}
+
+__all__ = ["CANON_MESSAGING_RUNTIME_CONTRACTS", "InboundMessage", "MessageEnvelope", "RouteCommand", "WorldStateInput", "ViewModel", "OutboundEnvelope", "message_envelope_schema", "outbound_envelope_schema"]

@@ -47,6 +47,19 @@ def normalize_smtp_security(value: object) -> str:
     return security
 
 
+def email_outbound_payload_schema_v1() -> dict[str, object]:
+    return {
+        "type": "object",
+        "required": ["recipient", "subject", "body"],
+        "properties": {
+            "recipient": {"type": "string", "format": "email", "minLength": 3, "maxLength": 320},
+            "subject": {"type": "string", "minLength": 1, "maxLength": 240},
+            "body": {"type": "string", "minLength": 1, "maxLength": 100000},
+        },
+        "additionalProperties": False,
+    }
+
+
 @dataclass(frozen=True)
 class EmailOutboundPayloadV1:
     recipient: str
@@ -69,6 +82,7 @@ class EmailOutboundPayloadV1:
 __all__ = [
     "CANON_EMAIL_OUTBOUND_CONTRACT",
     "EmailOutboundPayloadV1",
+    "email_outbound_payload_schema_v1",
     "normalize_email_address",
     "normalize_smtp_host",
     "normalize_smtp_port",

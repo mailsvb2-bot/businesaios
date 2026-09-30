@@ -55,20 +55,17 @@ class FileProviderSyncHistoryStore:
         return dict(self.documents.get(collection=self.collection, document_id=history_id) or payload)
 
     def list_for_provider(self, *, tenant_id: str, business_id: str, provider_key: str, limit: int = 50) -> tuple[dict[str, Any], ...]:
-        rows = self.documents.list_prefix(collection=self.collection, prefix='', limit=max(limit * 5, limit))
-        result = []
-        for item in rows:
-            if str(item.get('tenant_id')) != str(tenant_id):
-                continue
-            if str(item.get('business_id')) != str(business_id):
-                continue
-            if str(item.get('provider_key')) != str(provider_key):
-                continue
-            result.append(dict(item))
-            if len(result) >= max(1, int(limit)):
-                break
-        result.sort(key=lambda row: str(row.get('recorded_at_utc') or ''), reverse=True)
-        return tuple(result)
+        rows = self.documents.list_matching(
+            collection=self.collection,
+            fields={
+                'tenant_id': str(tenant_id),
+                'business_id': str(business_id),
+                'provider_key': str(provider_key),
+            },
+            limit=max(1, int(limit)),
+            order_field='recorded_at_utc',
+        )
+        return tuple(dict(row) for row in rows)
     def find_for_queue_jobs(self, *, tenant_id: str, business_id: str, provider_key: str, queue_job_ids: tuple[str, ...]) -> dict[str, dict[str, Any]]:
         return {job_id: dict(row) for job_id, row in self.documents.find_exact_many(collection=self.collection, fields={'tenant_id': tenant_id, 'business_id': business_id, 'provider_key': provider_key}, key_field='queue_job_id', keys=queue_job_ids).items()}
 

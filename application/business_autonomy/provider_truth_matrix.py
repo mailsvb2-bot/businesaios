@@ -2,7 +2,9 @@ from __future__ import annotations
 
 from collections.abc import Iterable, Mapping
 from dataclasses import dataclass, field
+from datetime import UTC, datetime
 from enum import Enum
+from math import isfinite
 from typing import Any
 
 from application.business_autonomy.integration_capability_catalog import CapabilityStatus, list_integration_capabilities
@@ -12,6 +14,10 @@ from application.business_autonomy.provider_catalog import (
     MESSAGING_GUARDED_WRITE_PROVIDER_KEYS,
     PROVIDERS,
 )
+from contracts.event_store import canonical_business_event_contract
+from core.events.event_types import PROVIDER_CREATED, PROVIDER_UPDATED
+from observability.tenant_metrics_registry import percentile_value
+from runtime.business_autonomy.provider_sync_history import ProviderSyncHistory
 from runtime.business_autonomy.provider_sync_runtime import ProviderSyncRuntimePlanner
 from runtime.business_autonomy.provider_transport_bindings import ProviderTransportBindings
 
@@ -223,6 +229,157 @@ def list_provider_truth_payloads() -> list[dict[str, Any]]:
     return [row.to_payload() for row in build_provider_truth_matrix()]
 
 
+
+def provider_runtime_truth_map(*, event_store: Any, tenant_id: str, business_id: str) -> dict[str, dict[str, Any]]:
+    """Read latest provider activation truth from the canonical Event Spine."""
+    tenant = str(tenant_id or "").strip()
+    business = str(business_id or "").strip()
+    if not tenant:
+        raise ValueError("tenant_id is required")
+    if not business:
+        raise ValueError("business_id is required")
+    if event_store is None:
+        return {}
+
+    latest: dict[str, dict[str, Any]] = {}
+    for event_type in (PROVIDER_CREATED, PROVIDER_UPDATED):
+        for raw in event_store.iter_events(tenant_id=tenant, start_ms=0, event_type=event_type):
+            event = canonical_business_event_contract(raw)
+            if str(event.get("business_id") or "").strip() != business:
+                continue
+            payload = dict(event.get("payload") or {})
+            provider_key = str(payload.get("provider_key") or "").strip()
+            version = int(payload.get("provider_version") or 0)
+            if not provider_key or version <= 0:
+                raise RuntimeError("PROVIDER_ACTIVATION_EVENT_INVALID")
+            candidate = {
+                "provider_key": provider_key,
+                "provider_version": version,
+                "connected": bool(payload.get("connected")),
+                "governance_enabled": bool(payload.get("governance_enabled")),
+                "onboarding_ready": bool(payload.get("onboarding_ready")),
+                "recorded_at_ms": int(payload.get("recorded_at_ms") or event.get("timestamp_ms") or 0),
+                "health_probe": dict(payload.get("health_probe") or {}),
+                "source": "event_spine.provider_activation",
+            }
+            current = latest.get(provider_key)
+            if current is None or version > int(current["provider_version"]):
+                latest[provider_key] = candidate
+            elif version == int(current["provider_version"]) and candidate != current:
+                raise RuntimeError("PROVIDER_ACTIVATION_EVENT_CONFLICT")
+    return latest
+
+def _provider_history_timestamp(value: object) -> datetime | None:
+    text = str(value or "").strip()
+    if not text:
+        return None
+    try:
+        parsed = datetime.fromisoformat(text[:-1] + "+00:00" if text.endswith("Z") else text)
+    except ValueError as exc:
+        raise ValueError("provider history recorded_at_utc is invalid") from exc
+    return parsed.replace(tzinfo=UTC) if parsed.tzinfo is None else parsed.astimezone(UTC)
+
+
+def provider_quota_truth_map(*, quota_guard: Any, tenant_id: str, provider_keys: Iterable[str]) -> dict[str, dict[str, Any]]:
+    """Project canonical connector quota verdicts into decision-facing provider truth."""
+    tenant = str(tenant_id or "").strip()
+    if not tenant:
+        raise ValueError("tenant_id is required")
+    if quota_guard is None:
+        return {}
+    providers = {provider.provider_key: provider for provider in PROVIDERS}
+    result: dict[str, dict[str, Any]] = {}
+    for provider_key in tuple(dict.fromkeys(str(key).strip() for key in provider_keys if str(key).strip())):
+        provider = providers.get(provider_key)
+        if provider is None:
+            raise ValueError(f"unknown provider_key: {provider_key}")
+        verdict = quota_guard.check(tenant_id=tenant, connector_id=provider.connector_id, requested_calls=1.0)
+        result[provider_key] = {
+            "provider_key": provider_key,
+            "connector_id": provider.connector_id,
+            "allowed": bool(verdict.allowed),
+            "remaining": verdict.remaining,
+            "reason": str(verdict.reason),
+            "retry_after_seconds": verdict.retry_after_seconds,
+            "source": "connector_quota_guard",
+        }
+    return result
+
+
+def provider_runtime_metrics_truth_map(
+    *,
+    sync_history: ProviderSyncHistory,
+    tenant_id: str,
+    business_id: str,
+    provider_keys: Iterable[str],
+    limit: int = 50,
+    window_seconds: int = 259200,
+    now_utc: datetime | None = None,
+) -> dict[str, dict[str, Any]]:
+    """Project durable provider execution history into decision-facing metrics truth."""
+    tenant = str(tenant_id or "").strip()
+    business = str(business_id or "").strip()
+    if not tenant or not business:
+        raise ValueError("tenant_id and business_id are required")
+    window = int(window_seconds)
+    if window <= 0:
+        raise ValueError("window_seconds must be > 0")
+    now = now_utc or datetime.now(UTC)
+    if now.tzinfo is None:
+        now = now.replace(tzinfo=UTC)
+    else:
+        now = now.astimezone(UTC)
+    result: dict[str, dict[str, Any]] = {}
+    for provider_key in tuple(dict.fromkeys(str(key).strip() for key in provider_keys if str(key).strip())):
+        rows = sync_history.list_for_provider(
+            tenant_id=tenant,
+            business_id=business,
+            provider_key=provider_key,
+            limit=max(1, int(limit)),
+        )
+        measured: list[dict[str, Any]] = []
+        for raw_row in rows:
+            row = dict(raw_row)
+            raw_latency = row.get("transport_latency_ms")
+            if str(row.get("mode") or "").strip().lower() != "live" or raw_latency is None:
+                continue
+            observed_at = _provider_history_timestamp(row.get("recorded_at_utc"))
+            if observed_at is None:
+                continue
+            age_seconds = (now - observed_at).total_seconds()
+            if age_seconds < -300:
+                raise ValueError("provider history recorded_at_utc is unexpectedly in the future")
+            if age_seconds > window:
+                continue
+            if isinstance(raw_latency, bool):
+                raise ValueError("provider history transport_latency_ms must be a finite non-negative number")
+            try:
+                row["transport_latency_ms"] = float(raw_latency)
+            except (TypeError, ValueError) as exc:
+                raise ValueError("provider history transport_latency_ms must be a finite non-negative number") from exc
+            if not isfinite(row["transport_latency_ms"]) or row["transport_latency_ms"] < 0.0:
+                raise ValueError("provider history transport_latency_ms must be a finite non-negative number")
+            row["_observed_at_utc"] = observed_at
+            measured.append(row)
+        if not measured:
+            continue
+        latencies = [float(row["transport_latency_ms"]) for row in measured]
+        successes = sum(1 for row in measured if bool(row.get("accepted")))
+        sample_count = len(measured)
+        reliability = successes / sample_count
+        result[provider_key] = {
+            "provider_key": provider_key,
+            "reliability": reliability,
+            "error_rate": 1.0 - reliability,
+            "latency_ms": percentile_value(latencies, 0.95),
+            "sample_count": sample_count,
+            "window_seconds": window,
+            "latest_observed_at": max(row["_observed_at_utc"] for row in measured).isoformat(),
+            "source": "provider_sync_history",
+        }
+    return result
+
+
 def summarize_provider_truth(rows: Iterable[ProviderTruthRow] | None = None) -> dict[str, Any]:
     selected = tuple(rows or build_provider_truth_matrix())
     return {
@@ -240,5 +397,5 @@ def summarize_provider_truth(rows: Iterable[ProviderTruthRow] | None = None) -> 
 
 __all__ = [
     "CANON_PROVIDER_TRUTH_MATRIX", "ProviderTruthRow", "ProviderTruthStatus", "build_provider_truth_matrix",
-    "provider_truth_map", "list_provider_truth_payloads", "summarize_provider_truth",
+    "provider_truth_map", "provider_runtime_truth_map", "provider_runtime_metrics_truth_map", "provider_quota_truth_map", "list_provider_truth_payloads", "summarize_provider_truth",
 ]

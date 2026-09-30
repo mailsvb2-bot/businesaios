@@ -42,6 +42,15 @@ class _ProviderActivationEventSpineProjection:
     def _event_type(version: int) -> str:
         return PROVIDER_CREATED if int(version) == 1 else PROVIDER_UPDATED
 
+    @staticmethod
+    def _safe_health_probe(status: ProviderActivationStatus) -> dict[str, str]:
+        raw = dict(status.metadata.get("health_probe") or {})
+        return {
+            key: value
+            for key in ("status", "probe_mode", "reason")
+            if (value := str(raw.get(key) or "").strip())
+        }
+
     @classmethod
     def _event_id(
         cls,
@@ -84,6 +93,7 @@ class _ProviderActivationEventSpineProjection:
                 "governance_enabled": bool(status.governance_enabled),
                 "onboarding_ready": bool(status.onboarding_ready),
                 "persistent_surfaces": list(status.persistent_surfaces),
+                "health_probe": self._safe_health_probe(status),
             },
         }
         matches = [

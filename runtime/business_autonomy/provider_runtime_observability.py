@@ -20,10 +20,29 @@ CANON_PROVIDER_RUNTIME_OBSERVABILITY = True
 class ProviderRuntimeObservability:
     metrics_registry: TenantMetricsRegistry = field(default_factory=TenantMetricsRegistry)
 
-    def record_sync(self, *, tenant_id: str, provider_key: str, operation: str, status: str, accepted: bool, mode: str) -> None:
+    def record_sync(self, *, tenant_id: str, provider_key: str, operation: str, status: str, accepted: bool, mode: str, latency_ms: float | None = None) -> None:
         labels = {'provider_key': provider_key, 'operation': operation, 'mode': mode, 'status': status}
         self.metrics_registry.inc(tenant_id=tenant_id, metric_name='provider_runtime.sync_total', amount=1.0, labels=labels)
-        self.metrics_registry.record_success_rate(tenant_id=tenant_id, metric_name='provider_runtime.sync_success_rate', success_ratio=1.0 if accepted else 0.0, labels={'provider_key': provider_key, 'mode': mode})
+        metric_labels = {'provider_key': provider_key, 'mode': mode}
+        self.metrics_registry.record_success_rate(tenant_id=tenant_id, metric_name='provider_runtime.sync_success_rate', success_ratio=1.0 if accepted else 0.0, labels=metric_labels)
+        self.metrics_registry.record_error_rate(tenant_id=tenant_id, metric_name='provider_runtime.sync_error_rate', error_ratio=0.0 if accepted else 1.0, labels=metric_labels)
+        if latency_ms is not None:
+            self.metrics_registry.observe_latency_ms(tenant_id=tenant_id, metric_name='provider_runtime.sync_latency_ms', value_ms=max(0.0, float(latency_ms)), labels=metric_labels)
+
+    def provider_truth(self, *, tenant_id: str, provider_key: str, window_seconds: int = 3600) -> dict[str, object]:
+        labels = {'provider_key': str(provider_key), 'mode': 'live'}
+        success = self.metrics_registry.metric_snapshot(tenant_id=tenant_id, metric_name='provider_runtime.sync_success_rate', window_seconds=window_seconds, labels=labels)
+        errors = self.metrics_registry.metric_snapshot(tenant_id=tenant_id, metric_name='provider_runtime.sync_error_rate', window_seconds=window_seconds, labels=labels)
+        latency = self.metrics_registry.metric_snapshot(tenant_id=tenant_id, metric_name='provider_runtime.sync_latency_ms', window_seconds=window_seconds, labels=labels)
+        return {
+            'provider_key': str(provider_key),
+            'reliability': None if success is None else float(success['value']),
+            'error_rate': None if errors is None else float(errors['value']),
+            'latency_ms': None if latency is None else float(latency['value']),
+            'sample_count': max(int((success or {}).get('sample_count', 0)), int((errors or {}).get('sample_count', 0)), int((latency or {}).get('sample_count', 0))),
+            'window_seconds': int(window_seconds),
+            'source': 'provider_runtime_observability',
+        }
 
     def record_webhook(self, *, tenant_id: str, provider_key: str, status: str, accepted: bool, topic: str) -> None:
         labels = {'provider_key': provider_key, 'status': status, 'topic': topic}

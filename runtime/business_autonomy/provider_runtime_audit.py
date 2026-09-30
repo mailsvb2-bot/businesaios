@@ -104,7 +104,7 @@ class ProviderRuntimeAuditRecorder:
                 },
             )
         )
-        return {'audit_event_id': audit.event_id, 'evidence_id': evidence.evidence_id}
+        return {'audit_event_id': audit.event_id, 'evidence_id': evidence.evidence_id, 'recorded_at_utc': audit.created_at.isoformat()}
 
     def record_webhook_event(
         self,

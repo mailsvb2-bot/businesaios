@@ -1,12 +1,26 @@
 from __future__ import annotations
 
+import sqlite3
+from concurrent.futures import ThreadPoolExecutor
+from datetime import datetime, timezone
+from decimal import Decimal
+
+import pytest
+
+from connectors.platform.connector_quota_guard import ConnectorQuotaGuard
 from tenancy.tenant_audit_scope import TenantAuditScope
 from tenancy.tenant_billing_scope import TenantBillingScope
 from tenancy.tenant_connector_scope import TenantConnectorScope
 from tenancy.tenant_feature_flags import TenantFeatureFlags
 from tenancy.tenant_memory_scope import TenantMemoryScope
 from tenancy.tenant_policy_store import InMemoryTenantPolicyStore, TenantPolicyBundle
-from tenancy.tenant_quota_guard import TenantQuotaGuard
+from runtime.platform.tenancy.tenant_registry import SQLiteTenantQuotaCounterStore
+from tenancy.tenant_quota_guard import (
+    InMemoryTenantQuotaCounterStore,
+    PersistentTenantQuotaCounterStore,
+    TenantQuotaCounterState,
+    TenantQuotaGuard,
+)
 from tenancy.tenant_runtime_limits import TenantRuntimeLimits
 
 
@@ -65,3 +79,162 @@ def test_tenant_quota_guard_unconfigured_dimension_is_fail_open_but_tracked_sepa
     assert verdict.allowed is True
     assert verdict.limit is None
     assert guard.snapshot(tenant_id='tenant-a')['custom_metric'] == 1.0
+
+def test_tenant_quota_guard_persists_usage_across_restart(tmp_path) -> None:
+    policies = InMemoryTenantPolicyStore()
+    policies.save(_bundle('tenant-a', {'connector_calls_per_hour': 2}))
+    path = tmp_path / 'quota-counters.json'
+
+    first = TenantQuotaGuard(
+        policy_store=policies,
+        counter_store=PersistentTenantQuotaCounterStore(path),
+    )
+    first.consume(tenant_id='tenant-a', dimension='connector_calls_per_hour')
+    assert first.check(tenant_id='tenant-a', dimension='connector_calls_per_hour').remaining == 1.0
+
+    restarted = TenantQuotaGuard(
+        policy_store=policies,
+        counter_store=PersistentTenantQuotaCounterStore(path),
+    )
+    assert restarted.check(tenant_id='tenant-a', dimension='connector_calls_per_hour').used == 1.0
+    restarted.consume(tenant_id='tenant-a', dimension='connector_calls_per_hour')
+    assert restarted.check(tenant_id='tenant-a', dimension='connector_calls_per_hour').allowed is False
+
+
+def test_tenant_quota_snapshot_ignores_stale_windows(tmp_path) -> None:
+    policies = InMemoryTenantPolicyStore()
+    policies.save(_bundle('tenant-a', {'actions_per_hour': 2}))
+    store = PersistentTenantQuotaCounterStore(tmp_path / 'quota-counters.json')
+    guard = TenantQuotaGuard(policy_store=policies, counter_store=store)
+    store.save(
+        TenantQuotaCounterState(
+            tenant_id='tenant-a',
+            counter_key='tenant:actions_per_hour',
+            window_key='1999010101',
+            used=Decimal('99'),
+            updated_at=datetime.now(timezone.utc),
+        )
+    )
+    assert guard.snapshot(tenant_id='tenant-a')['actions_per_hour'] == 0.0
+
+def test_connector_local_quota_persists_across_restart(tmp_path) -> None:
+    path = tmp_path / 'quota-counters.json'
+    first_store = PersistentTenantQuotaCounterStore(path)
+    first = ConnectorQuotaGuard(
+        per_connector_hour_limit=1,
+        counter_store=first_store,
+    )
+    consumed = first.consume(
+        tenant_id='tenant-a',
+        connector_id='telegram',
+    )
+    assert consumed.allowed is True
+    assert consumed.remaining == 0.0
+
+    restarted = ConnectorQuotaGuard(
+        per_connector_hour_limit=1,
+        counter_store=PersistentTenantQuotaCounterStore(path),
+    )
+    blocked = restarted.check(
+        tenant_id='tenant-a',
+        connector_id='telegram',
+    )
+    assert blocked.allowed is False
+    assert blocked.reason == 'connector_local_quota_exceeded'
+    assert blocked.remaining == 0.0
+
+
+def test_connector_quota_rejects_split_counter_stores() -> None:
+    shared = InMemoryTenantQuotaCounterStore()
+    tenant_guard = TenantQuotaGuard(counter_store=shared)
+
+    with pytest.raises(ValueError, match='share one counter_store'):
+        ConnectorQuotaGuard(
+            quota_guard=tenant_guard,
+            counter_store=InMemoryTenantQuotaCounterStore(),
+            per_connector_hour_limit=1,
+        )
+
+def test_sqlite_quota_counter_persists_across_store_instances(tmp_path) -> None:
+    path = tmp_path / 'quota.sqlite3'
+    first = SQLiteTenantQuotaCounterStore(path)
+    first.increment(
+        tenant_id='tenant-a',
+        counter_key='tenant:connector_calls_per_hour',
+        window_key='2026092913',
+        amount=Decimal('1'),
+        updated_at=datetime.now(timezone.utc),
+    )
+    restarted = SQLiteTenantQuotaCounterStore(path)
+    state = restarted.get(
+        tenant_id='tenant-a',
+        counter_key='tenant:connector_calls_per_hour',
+        window_key='2026092913',
+    )
+    assert state is not None
+    assert state.used == Decimal('1')
+
+
+def test_sqlite_quota_counter_atomic_increment_has_no_lost_updates(tmp_path) -> None:
+    path = tmp_path / 'quota.sqlite3'
+    SQLiteTenantQuotaCounterStore(path)
+
+    def increment_once(_index: int) -> None:
+        SQLiteTenantQuotaCounterStore(path).increment(
+            tenant_id='tenant-a',
+            counter_key='tenant:connector_calls_per_hour',
+            window_key='2026092913',
+            amount=Decimal('1'),
+            updated_at=datetime.now(timezone.utc),
+        )
+
+    with ThreadPoolExecutor(max_workers=8) as pool:
+        list(pool.map(increment_once, range(40)))
+
+    state = SQLiteTenantQuotaCounterStore(path).get(
+        tenant_id='tenant-a',
+        counter_key='tenant:connector_calls_per_hour',
+        window_key='2026092913',
+    )
+    assert state is not None
+    assert state.used == Decimal('40')
+
+
+def test_sqlite_quota_counter_legacy_json_migration_is_idempotent(tmp_path) -> None:
+    legacy_path = tmp_path / 'quota.json'
+    legacy = PersistentTenantQuotaCounterStore(legacy_path)
+    legacy.save(
+        TenantQuotaCounterState(
+            tenant_id='tenant-a',
+            counter_key='tenant:connector_calls_per_hour',
+            window_key='2026092913',
+            used=Decimal('7'),
+            updated_at=datetime.now(timezone.utc),
+        )
+    )
+    sqlite_store = SQLiteTenantQuotaCounterStore(tmp_path / 'quota.sqlite3')
+    assert sqlite_store.migrate_legacy_file(legacy_path) == 1
+    assert sqlite_store.migrate_legacy_file(legacy_path) == 0
+    state = sqlite_store.get(
+        tenant_id='tenant-a',
+        counter_key='tenant:connector_calls_per_hour',
+        window_key='2026092913',
+    )
+    assert state is not None
+    assert state.used == Decimal('7')
+
+
+def test_sqlite_quota_counter_unknown_schema_fails_closed(tmp_path) -> None:
+    path = tmp_path / 'quota.sqlite3'
+    with sqlite3.connect(path) as conn:
+        conn.execute(
+            'CREATE TABLE tenant_quota_counter_meta (key TEXT PRIMARY KEY, value TEXT NOT NULL)'
+        )
+        conn.execute(
+            'INSERT INTO tenant_quota_counter_meta(key, value) VALUES (?, ?)',
+            ('schema_version', '999'),
+        )
+
+    with pytest.raises(RuntimeError, match='unsupported tenant quota counter schema version'):
+        SQLiteTenantQuotaCounterStore(path)
+

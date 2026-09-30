@@ -98,7 +98,12 @@ from runtime.business_autonomy.distributed_state import (
     FileOperatorOverrideDocumentPort,
     FilePlanningMemoryDocumentPort,
 )
-from runtime.business_autonomy.execution_support import build_execution_runtime, ensure_business_route
+from runtime.business_autonomy.execution_support import (
+    build_execution_runtime,
+    build_provider_quota_runtime,
+    ensure_business_route,
+    ensure_provider_quota_tenant,
+)
 from runtime.business_autonomy.fleet_read_model import BusinessAutonomyFleetReadModel
 from runtime.business_autonomy.provider_activation_store import FileProviderActivationStore
 from runtime.business_autonomy.provider_media import ProviderMediaPreparationCoordinator
@@ -600,6 +605,7 @@ def build_business_autonomy_guarded_service(*, business_id: str = 'external_busi
     connector_secret_scope = admin_dependencies['connector_secret_scope']
     secret_vault = admin_dependencies['secret_vault']
     activation_store = admin_dependencies['activation_store']
+    provider_quota_guard, provider_quota_policy_store = build_provider_quota_runtime()
     audit = DistributedBusinessAutonomyAudit(distributed['audit'])
     file_surface = BusinessAutonomyFileSurfaceMirror.from_data_dir()
     evidence_store = CompositeBusinessAutonomyEvidenceStore(
@@ -615,6 +621,7 @@ def build_business_autonomy_guarded_service(*, business_id: str = 'external_busi
         registry_record = distributed_registry.get(tenant_id, scoped_business_id)
         if registry_record is None:
             raise KeyError(f'business is not explicitly onboarded for tenant: {tenant_id}:{scoped_business_id}')
+        ensure_provider_quota_tenant(provider_quota_policy_store, tenant_id)
         legacy_region = registry_record.region
         try:
             identity = distributed_registry.channel_identity_snapshot(
@@ -797,6 +804,7 @@ def build_business_autonomy_guarded_service(*, business_id: str = 'external_busi
         provider_pacing=ProviderPacingCoordinator(distributed['provider_pacing']),
         provider_media=ProviderMediaPreparationCoordinator(distributed['provider_media']),
         audit_recorder=provider_runtime_audit,
+        connector_quota_guard=provider_quota_guard,
     )
     return service
 

@@ -50,7 +50,7 @@ def test_self_heal_purges_marketing_backlog_best_effort():
 
         def long_ux():
             started.set()
-            hold.wait(timeout=2.0)
+            hold.wait()
             with lock:
                 executed.append('UX_LONG_DONE')
 
@@ -93,4 +93,5 @@ def test_self_heal_purges_marketing_backlog_best_effort():
         assert len(ms) < 10, f'marketing backlog was not purged, executed={len(ms)}'
 
     finally:
+        hold.set()
         q.stop(timeout_s=1.0)

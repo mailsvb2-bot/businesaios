@@ -417,6 +417,7 @@ BUSINESS_ONTOLOGY_OWNERSHIP_AUDIT = (
         "IntegrationCapability is the single schema-versioned release-managed Capability definition owner and CAPABILITIES is its immutable catalog. The catalog module is the sole release-time definition writer; BusinessCapability records are business assignments, while decision advisory, execution-route, runtime-health, messaging and provider capability shapes are scoped projections over those definitions or their own technical domains, not competing Capability entities. Runtime enablement remains stored with the canonical Business registry rather than creating a second Capability lifecycle store.",
         writers=("application.business_autonomy.integration_capability_catalog",),
         readers=(
+            "application.autonomy.autonomy_state_assembly",
             "application.business_autonomy.provider_truth_matrix",
             "application.public_site.landing_content",
         ),

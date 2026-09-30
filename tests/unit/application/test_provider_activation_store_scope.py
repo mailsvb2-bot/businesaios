@@ -125,7 +125,15 @@ def test_provider_activation_projects_created_and_updated_without_secret_metadat
         FileDistributedDocumentStore(tmp_path / "documents"),
         event_store=events,
     )
-    created = store.put(_status(metadata={"secret_value": "must-not-project"}))
+    created = store.put(_status(metadata={
+        "secret_value": "must-not-project",
+        "health_probe": {
+            "status": "ready_for_credentials",
+            "probe_mode": "dry_run",
+            "reason": "validated_secret_shape",
+            "metadata": {"present_fields": ("bot_token",), "secret": "must-not-project"},
+        },
+    }))
     created_rows = list(
         events.iter_events(
             tenant_id=created.tenant_id,
@@ -140,6 +148,13 @@ def test_provider_activation_projects_created_and_updated_without_secret_metadat
     assert created_event["payload"]["provider_version"] == 1
     assert "metadata" not in created_event["payload"]
     assert "secret_fields_bound" not in created_event["payload"]
+    assert created_event["payload"]["health_probe"] == {
+        "status": "ready_for_credentials",
+        "probe_mode": "dry_run",
+        "reason": "validated_secret_shape",
+    }
+    assert "metadata" not in created_event["payload"]["health_probe"]
+    assert "secret_value" not in created_event["payload"]
 
     updated = store.put(
         _status(
