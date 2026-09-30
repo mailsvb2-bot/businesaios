@@ -224,6 +224,48 @@ def test_owner_assertion_replay_recovers_missing_semantic_snapshot(tmp_path) -> 
     ).fields["business.profile.industry"].value == "medical_services"
 
 
+def test_owner_assertion_replay_repairs_stale_existing_snapshot(tmp_path) -> None:
+    ingress, _, _, snapshots = _ingress(tmp_path)
+    snapshot_path = snapshots._path(tenant_id="tenant-1", business_id="business-1")
+
+    ingress.ingest(
+        assertion=_assertion(
+            field_key="market.region",
+            value="Nizhny Novgorod",
+        ),
+        idempotency_key="owner-region-1",
+        recorded_at_ms=1_700_000_000_100,
+    )
+    stale_snapshot = snapshot_path.read_bytes()
+
+    first = ingress.ingest(
+        assertion=_assertion(),
+        idempotency_key="owner-form-1",
+        recorded_at_ms=1_700_000_000_200,
+    )
+    assert snapshots.load_latest(
+        tenant_id="tenant-1",
+        business_id="business-1",
+    ).fields["business.profile.industry"].value == "medical_services"
+
+    snapshot_path.write_bytes(stale_snapshot)
+
+    recovered = ingress.ingest(
+        assertion=_assertion(),
+        idempotency_key="owner-form-1",
+        recorded_at_ms=1_700_000_000_200,
+    )
+
+    assert recovered.replayed is True
+    assert recovered.fact_id == first.fact_id
+    repaired = snapshots.load_latest(tenant_id="tenant-1", business_id="business-1")
+    assert repaired.fields["business.profile.industry"].value == "medical_services"
+    assert (
+        repaired.fields["business.profile.industry"].meta["business_discovery_fact_id"]
+        == first.fact_id
+    )
+
+
 def test_owner_assertion_scope_is_tenant_and_business_isolated(tmp_path) -> None:
     ingress, _, evidence, snapshots = _ingress(tmp_path)
     first = ingress.ingest(
