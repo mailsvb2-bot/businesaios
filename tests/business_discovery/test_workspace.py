@@ -99,6 +99,79 @@ def test_discovery_workspace_unknown_counts_as_explicitly_covered(tmp_path) -> N
 
 
 
+def test_discovery_goal_and_constraint_provenance_uses_canonical_event_metadata(tmp_path) -> None:
+    state = StateSynthesisEngine(
+        snapshot_store=FileStateSnapshotStore(tmp_path / "state-provenance")
+    )
+    events = MemoryEventStore()
+    idempotency = InMemoryIdempotencyStore()
+    workspace = BusinessDiscoveryWorkspace(
+        ingress=OwnerBusinessAssertionIngress(
+            event_store=events,
+            evidence_store=InMemoryEvidenceStore(),
+            state_engine=state,
+            idempotency_store=idempotency,
+        ),
+        state_engine=state,
+        goal_registry=BusinessGoalRegistry(
+            event_store=events,
+            idempotency_store=idempotency,
+        ),
+        constraint_registry=BusinessConstraintRegistry(
+            event_store=events,
+            idempotency_store=idempotency,
+        ),
+    )
+
+    workspace.create_constraint(
+        tenant_id="tenant-1",
+        business_id="business-1",
+        actor_id="owner-1",
+        idempotency_key="constraint-provenance-1",
+        confirmed=True,
+        constraint_id="constraint-provenance",
+        constraint_kind="metric_floor",
+        severity="hard",
+        subject_type="metric",
+        subject_id="gross_margin_pct",
+        comparison="gte",
+        threshold=20.0,
+        occurred_at_ms=1_700_000_000_000,
+    )
+    workspace.create_goal(
+        tenant_id="tenant-1",
+        business_id="business-1",
+        actor_id="owner-1",
+        idempotency_key="goal-provenance-1",
+        confirmed=True,
+        goal_id="goal-provenance",
+        goal_kind="improve_margin",
+        metric="gross_margin_pct",
+        baseline=20.0,
+        target=30.0,
+        constraint_ids=("constraint-provenance",),
+        occurred_at_ms=1_700_000_000_100,
+    )
+
+    facts = [
+        dict(event.get("payload") or {})
+        for event in events.iter_events(
+            tenant_id="tenant-1",
+            start_ms=0,
+            event_type="business.fact.v1",
+        )
+        if dict(event.get("payload") or {}).get("fact_type")
+        in {"constraint.created", "goal.created"}
+    ]
+    assert len(facts) == 2
+    assert all(item["actor_id"] == "owner-1" for item in facts)
+    assert all(
+        item["provenance"]
+        == {"ingress": "business_discovery", "owner_confirmed": True}
+        for item in facts
+    )
+
+
 def test_discovery_goal_and_constraint_use_canonical_registries_and_require_confirmation(tmp_path) -> None:
     workspace = _workspace(tmp_path)
 
