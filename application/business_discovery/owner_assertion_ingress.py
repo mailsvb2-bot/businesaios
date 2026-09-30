@@ -7,7 +7,11 @@ from datetime import UTC, datetime
 from hashlib import sha256
 from typing import Any
 
-from application.business_discovery.contracts import DiscoveryFieldSpec, discovery_field_spec
+from application.business_discovery.contracts import (
+    DiscoveryFieldSpec,
+    discovery_field_spec,
+    normalize_discovery_value,
+)
 from application.ontology.event_fact_lifecycle import (
     EventFactLifecycleWriter,
     business_fact_from_event,
@@ -76,12 +80,14 @@ class OwnerBusinessAssertion:
             if self.value not in (None, ""):
                 raise ValueError("unknown assertion must not carry a concrete value")
         else:
-            _json_value(self.value)
+            _json_value(normalize_discovery_value(spec, self.value))
         return spec
 
     def normalized_value(self) -> Any:
-        self.validate()
-        return None if self.unknown else _json_value(self.value)
+        spec = self.validate()
+        if self.unknown:
+            return None
+        return _json_value(normalize_discovery_value(spec, self.value))
 
 
 @dataclass(frozen=True)

@@ -1,10 +1,20 @@
 from __future__ import annotations
 
+import math
+from collections.abc import Mapping
 from dataclasses import dataclass
+from enum import StrEnum
 from types import MappingProxyType
-from typing import Final
+from typing import Any, Final
 
 CANON_BUSINESS_DISCOVERY_CONTRACT = True
+
+
+class DiscoveryValueKind(StrEnum):
+    TEXT = "text"
+    MONEY_MINOR = "money_minor"
+    PERCENTAGE = "percentage"
+    CLIENT_PRESENCE = "client_presence"
 
 
 @dataclass(frozen=True)
@@ -13,6 +23,8 @@ class DiscoveryFieldSpec:
     fact_type: str
     field_path: str
     domain: str
+    value_kind: DiscoveryValueKind = DiscoveryValueKind.TEXT
+    allowed_values: tuple[str, ...] = ()
     legacy_sources: tuple[str, ...] = ()
 
 
@@ -66,6 +78,7 @@ _FIELD_SPECS = (
         fact_type="business.discovery.economics.average_check",
         field_path="business.economics.average_check",
         domain="economics",
+        value_kind=DiscoveryValueKind.MONEY_MINOR,
         legacy_sources=(
             "core.autopilot.onboarding.Diagnostics.avg_check_minor",
             "core.autopilot.onboarding.Diagnostics.currency",
@@ -76,6 +89,7 @@ _FIELD_SPECS = (
         fact_type="business.discovery.economics.margin_pct",
         field_path="business.economics.margin_pct",
         domain="economics",
+        value_kind=DiscoveryValueKind.PERCENTAGE,
         legacy_sources=("core.autopilot.onboarding.Diagnostics.margin_pct",),
     ),
     DiscoveryFieldSpec(
@@ -83,6 +97,8 @@ _FIELD_SPECS = (
         fact_type="business.discovery.sales.has_clients",
         field_path="business.sales.has_clients",
         domain="sales",
+        value_kind=DiscoveryValueKind.CLIENT_PRESENCE,
+        allowed_values=("yes", "no", "some"),
         legacy_sources=("core.autopilot.onboarding.Diagnostics.has_clients",),
     ),
     DiscoveryFieldSpec(
@@ -90,6 +106,7 @@ _FIELD_SPECS = (
         fact_type="business.discovery.acquisition.test_budget_7d",
         field_path="business.acquisition.test_budget_7d",
         domain="acquisition",
+        value_kind=DiscoveryValueKind.MONEY_MINOR,
         legacy_sources=(
             "core.autopilot.onboarding.Diagnostics.budget_minor_7d",
             "core.autopilot.onboarding.Diagnostics.budget_currency",
@@ -108,9 +125,58 @@ def discovery_field_spec(key: str) -> DiscoveryFieldSpec:
         raise ValueError(f"unsupported business discovery field: {normalized or '<empty>'}") from exc
 
 
+def normalize_discovery_value(spec: DiscoveryFieldSpec, value: Any) -> Any:
+    kind = DiscoveryValueKind(spec.value_kind)
+    if kind is DiscoveryValueKind.TEXT:
+        if not isinstance(value, str):
+            raise ValueError(f"{spec.key} must be text")
+        normalized = value.strip()
+        if not normalized:
+            raise ValueError(f"{spec.key} must not be empty")
+        return normalized
+
+    if kind is DiscoveryValueKind.MONEY_MINOR:
+        if not isinstance(value, Mapping):
+            raise ValueError(f"{spec.key} must be a money object")
+        if set(value) != {"amount_minor", "currency"}:
+            raise ValueError(
+                f"{spec.key} money object must contain only amount_minor and currency"
+            )
+        amount = value.get("amount_minor")
+        if isinstance(amount, bool) or not isinstance(amount, int) or amount < 0:
+            raise ValueError(f"{spec.key}.amount_minor must be a non-negative integer")
+        currency_raw = value.get("currency")
+        if not isinstance(currency_raw, str):
+            raise ValueError(f"{spec.key}.currency must be a three-letter currency code")
+        currency = currency_raw.strip().upper()
+        if len(currency) != 3 or not currency.isalpha() or not currency.isascii():
+            raise ValueError(f"{spec.key}.currency must be a three-letter currency code")
+        return {"amount_minor": amount, "currency": currency}
+
+    if kind is DiscoveryValueKind.PERCENTAGE:
+        if isinstance(value, bool) or not isinstance(value, (int, float)):
+            raise ValueError(f"{spec.key} must be a number from 0 to 100")
+        normalized = float(value)
+        if not math.isfinite(normalized) or normalized < 0.0 or normalized > 100.0:
+            raise ValueError(f"{spec.key} must be a number from 0 to 100")
+        return value if isinstance(value, int) else normalized
+
+    if kind is DiscoveryValueKind.CLIENT_PRESENCE:
+        if not isinstance(value, str):
+            raise ValueError(f"{spec.key} must be one of {', '.join(spec.allowed_values)}")
+        normalized = value.strip().lower()
+        if normalized not in spec.allowed_values:
+            raise ValueError(f"{spec.key} must be one of {', '.join(spec.allowed_values)}")
+        return normalized
+
+    raise ValueError(f"unsupported business discovery value kind: {kind}")
+
+
 __all__ = [
     "CANON_BUSINESS_DISCOVERY_CONTRACT",
     "DISCOVERY_FIELDS",
     "DiscoveryFieldSpec",
+    "DiscoveryValueKind",
     "discovery_field_spec",
+    "normalize_discovery_value",
 ]

@@ -65,6 +65,18 @@ Business Discovery is an intake/orchestration surface, not a new domain owner. T
 
 The lock test is `tests/arch/test_business_discovery_ownership.py`. It binds the branch to the canonical ontology inventory and rejects local duplicate registry/store classes for Business, Goal, Constraint, Evidence or World Model ownership.
 
+## BD1 field value contract
+
+Known owner answers are fail-closed and normalized before Evidence/EventStore writes:
+
+- identity, market and offer fields are non-empty text;
+- money fields are exactly `{"amount_minor": <non-negative integer>, "currency": "<3-letter code>"}`, preserving the existing diagnostic onboarding minor-unit semantics;
+- `economics.margin_pct` is numeric and bounded to `0..100`;
+- `sales.has_clients` is one of `yes | no | some`;
+- epistemic unknown is represented only by `unknown=true` with no concrete value, never by an overloaded string value.
+
+This contract intentionally does not invent a new finance owner. It only validates the shape of owner assertions before those assertions enter the canonical Evidence/Event/State path.
+
 ## Target vertical slice
 
 Owner opens Business Workspace
