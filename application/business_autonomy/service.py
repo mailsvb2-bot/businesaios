@@ -13,6 +13,8 @@ from application.business_autonomy.contracts import (
     BusinessExecutionResult,
     CapabilityKind,
     ExecutionVerdict,
+    ExternalExecutionRequest,
+    MANAGED_EXTERNAL_EXECUTION_MODES,
 )
 from application.business_autonomy.guards import BusinessBlastRadiusGuard, BusinessBudgetGuard
 from application.business_autonomy.non_ai_onboarding_mode import NonAiOperatingMode
@@ -101,6 +103,7 @@ class BusinessAutonomyService:
             correlation_id=request.correlation_id,
             idempotency_key=request.idempotency_key,
             timeout_seconds=request.timeout_seconds,
+            action_intent=request.action_intent,
         )
         supported_modes = tuple(adapter.supported_modes())
         if delegated_request.integration_mode not in supported_modes:
@@ -114,7 +117,56 @@ class BusinessAutonomyService:
                 adapter_name=adapter.adapter_name,
                 metadata={"supported_modes": [item.value for item in supported_modes]},
             )
-        result = await adapter.execute(delegated_request)
+        if delegated_request.integration_mode in MANAGED_EXTERNAL_EXECUTION_MODES:
+            intent = delegated_request.action_intent
+            if intent is None:
+                return BusinessExecutionResult(
+                    verdict=ExecutionVerdict.REJECTED,
+                    business_id=request.envelope.business_id,
+                    goal_id=request.envelope.goal_id,
+                    execution_id=request.correlation_id,
+                    message="Managed external execution requires sovereign ActionIntentV2.",
+                    delegated_to_domain_engine=False,
+                    adapter_name=adapter.adapter_name,
+                    metadata={"reason": "missing_action_intent"},
+                )
+            if (
+                intent.business_id != request.envelope.business_id
+                or intent.goal_id != request.envelope.goal_id
+            ):
+                return BusinessExecutionResult(
+                    verdict=ExecutionVerdict.REJECTED,
+                    business_id=request.envelope.business_id,
+                    goal_id=request.envelope.goal_id,
+                    execution_id=request.correlation_id,
+                    message="Managed external execution intent does not match business goal scope.",
+                    delegated_to_domain_engine=False,
+                    adapter_name=adapter.adapter_name,
+                    metadata={"reason": "action_intent_scope_mismatch"},
+                )
+            execute_intent = getattr(adapter, "execute_intent", None)
+            if not callable(execute_intent):
+                return BusinessExecutionResult(
+                    verdict=ExecutionVerdict.REJECTED,
+                    business_id=request.envelope.business_id,
+                    goal_id=request.envelope.goal_id,
+                    execution_id=request.correlation_id,
+                    message="Adapter does not implement sovereign intent execution boundary.",
+                    delegated_to_domain_engine=False,
+                    adapter_name=adapter.adapter_name,
+                    metadata={"reason": "managed_intent_boundary_unsupported"},
+                )
+            result = await execute_intent(
+                ExternalExecutionRequest(
+                    action_intent=intent,
+                    integration_mode=delegated_request.integration_mode,
+                    correlation_id=delegated_request.correlation_id,
+                    idempotency_key=delegated_request.idempotency_key,
+                    timeout_seconds=delegated_request.timeout_seconds,
+                )
+            )
+        else:
+            result = await adapter.execute(delegated_request)
         if self._audit_sink is not None and hasattr(self._audit_sink, "record"):
             self._audit_sink.record(event_type="business_autonomy_result", business_id=result.business_id, goal_id=result.goal_id, detail={"verdict": result.verdict.value, "adapter_name": result.adapter_name})
         return result
