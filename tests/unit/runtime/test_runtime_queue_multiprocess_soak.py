@@ -50,7 +50,8 @@ def test_runtime_queue_multiprocess_soak_finishes_all_jobs(tmp_path):
             )
         )
 
-    procs = [mp.Process(target=_worker_process, args=(str(db_path), 120)) for _ in range(3)]
+    ctx = mp.get_context('spawn')
+    procs = [ctx.Process(target=_worker_process, args=(str(db_path), 120)) for _ in range(3)]
     for proc in procs:
         proc.start()
     for _ in range(80):
