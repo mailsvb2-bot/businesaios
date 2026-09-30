@@ -8,13 +8,13 @@ from application.business_autonomy.channel_adapter_registry import TypedChannelA
 from application.business_autonomy.channel_backed_adapter import ChannelBackedBusinessAdapter
 from application.business_autonomy.channel_contracts import ChannelIdentity, ChannelKind
 from application.business_autonomy.contracts import (
+    MANAGED_EXTERNAL_EXECUTION_MODES,
     BusinessCapability,
     BusinessExecutionRequest,
     BusinessExecutionResult,
     CapabilityKind,
     ExecutionVerdict,
     ExternalExecutionRequest,
-    MANAGED_EXTERNAL_EXECUTION_MODES,
 )
 from application.business_autonomy.guards import BusinessBlastRadiusGuard, BusinessBudgetGuard
 from application.business_autonomy.non_ai_onboarding_mode import NonAiOperatingMode
