@@ -57,6 +57,7 @@ from application.business_autonomy.contracts import (
     ExecutionVerdict,
     IntegrationMode,
 )
+from application.business_autonomy.decision_provenance import DecisionEventSpineProvenanceVerifier
 from application.business_autonomy.distributed_capability_trust_registry import DistributedBusinessRegistry
 from application.business_autonomy.evidence_projection import ExternalBusinessFactIngress
 from application.business_autonomy.guarded_service import BusinessAutonomyGuardedService
@@ -69,7 +70,6 @@ from application.business_autonomy.persistence import (
     PersistentBusinessOperatorOverridePolicy,
     PersistentBusinessPlanningMemorySink,
 )
-from application.business_autonomy.decision_provenance import DecisionEventSpineProvenanceVerifier
 from application.business_autonomy.policy import BusinessAutonomyPolicy, BusinessTrustPolicy
 from application.business_autonomy.provider_admin_service import ProviderAdminService
 from application.business_autonomy.registry import (
