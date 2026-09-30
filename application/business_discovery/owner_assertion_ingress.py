@@ -153,10 +153,11 @@ class OwnerBusinessAssertionIngress:
             else assertion.occurred_at_ms
         )
         observed_at_ms = int(assertion.observed_at_ms)
-        recorded = max(
-            int(time.time() * 1000) if recorded_at_ms is None else int(recorded_at_ms),
-            observed_at_ms,
-        )
+        recorded = int(time.time() * 1000) if recorded_at_ms is None else int(recorded_at_ms)
+        if recorded <= 0:
+            raise ValueError("recorded_at_ms must be > 0")
+        if observed_at_ms > recorded:
+            raise ValueError("observed_at_ms must not follow recorded_at_ms")
         correlation_id = str(assertion.correlation_id or "").strip() or None
 
         existing_for_key = self._find_existing_key_binding(

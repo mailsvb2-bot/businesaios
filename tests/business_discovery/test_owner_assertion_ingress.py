@@ -179,6 +179,27 @@ def test_owner_assertion_same_idempotency_key_cannot_move_to_another_field(tmp_p
     assert len(evidence.list_for_tenant(tenant_id="tenant-1")) == 1
 
 
+def test_owner_assertion_rejects_observation_from_after_recording_time(tmp_path) -> None:
+    ingress, events, evidence, snapshots = _ingress(tmp_path)
+
+    with pytest.raises(ValueError, match="observed_at_ms must not follow recorded_at_ms"):
+        ingress.ingest(
+            assertion=_assertion(observed_at_ms=1_700_000_000_200),
+            idempotency_key="future-observation",
+            recorded_at_ms=1_700_000_000_100,
+        )
+
+    assert list(
+        events.iter_events(
+            tenant_id="tenant-1",
+            start_ms=0,
+            event_type=BUSINESS_FACT_EVENT_TYPE,
+        )
+    ) == []
+    assert evidence.list_for_tenant(tenant_id="tenant-1") == []
+    assert snapshots.load_latest(tenant_id="tenant-1", business_id="business-1") is None
+
+
 def test_owner_assertion_same_idempotency_key_cannot_change_observation_time(tmp_path) -> None:
     ingress, events, evidence, _ = _ingress(tmp_path)
     ingress.ingest(
