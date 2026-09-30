@@ -21,6 +21,7 @@ from application.business_autonomy.non_ai_onboarding_mode import NonAiOperatingM
 from application.business_autonomy.onboarding_contract import BusinessOnboardingRequest
 from application.business_autonomy.policy import BusinessAutonomyPolicy
 from application.business_autonomy.registry import (
+    AgentIdentityRegistry,
     BusinessAdapterRegistry,
     BusinessCapabilityRegistry,
     RegisteredBusinessCapabilities,
@@ -46,6 +47,7 @@ class BusinessAutonomyService:
         channel_registry: TypedChannelAdapterRegistry | None = None,
         blast_radius_guard: BusinessBlastRadiusGuard | None = None,
         budget_guard: BusinessBudgetGuard | None = None,
+        agent_identity_registry: AgentIdentityRegistry | None = None,
     ) -> None:
         self._adapter_registry = adapter_registry or BusinessAdapterRegistry()
         self._capability_registry = BusinessCapabilityRegistry()
@@ -54,6 +56,7 @@ class BusinessAutonomyService:
         self._channel_registry = channel_registry or TypedChannelAdapterRegistry()
         self._blast_radius_guard = blast_radius_guard or BusinessBlastRadiusGuard()
         self._budget_guard = budget_guard or BusinessBudgetGuard()
+        self._agent_identity_registry = agent_identity_registry
 
     def onboard(self, request: BusinessOnboardingRequest) -> BusinessAutonomyOnboardingResult:
         identity = _identity_from_onboarding_request(request)
@@ -143,6 +146,38 @@ class BusinessAutonomyService:
                     delegated_to_domain_engine=False,
                     adapter_name=adapter.adapter_name,
                     metadata={"reason": "action_intent_scope_mismatch"},
+                )
+            if self._agent_identity_registry is None:
+                return BusinessExecutionResult(
+                    verdict=ExecutionVerdict.REJECTED,
+                    business_id=request.envelope.business_id,
+                    goal_id=request.envelope.goal_id,
+                    execution_id=request.correlation_id,
+                    message="Managed external execution requires AgentIdentity runtime authorization.",
+                    delegated_to_domain_engine=False,
+                    adapter_name=adapter.adapter_name,
+                    metadata={"reason": "missing_agent_identity_registry"},
+                )
+            try:
+                self._agent_identity_registry.assert_execution_authorized(
+                    tenant_id=intent.tenant_id,
+                    business_id=intent.business_id,
+                    agent_id=intent.agent_id,
+                    capability=intent.capability_target,
+                )
+            except (LookupError, PermissionError, ValueError) as exc:
+                return BusinessExecutionResult(
+                    verdict=ExecutionVerdict.REJECTED,
+                    business_id=request.envelope.business_id,
+                    goal_id=request.envelope.goal_id,
+                    execution_id=request.correlation_id,
+                    message=str(exc),
+                    delegated_to_domain_engine=False,
+                    adapter_name=adapter.adapter_name,
+                    metadata={
+                        "reason": "agent_authorization_denied",
+                        "failure_type": type(exc).__name__,
+                    },
                 )
             execute_intent = getattr(adapter, "execute_intent", None)
             if not callable(execute_intent):
