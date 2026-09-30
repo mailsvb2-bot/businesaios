@@ -1,6 +1,6 @@
 # External Intelligence Sovereignty Boundary — Workstream Plan
 
-Status: planned, not implementation-active  
+Status: implementation active; canonical managed-execution boundary implemented, acceptance closure in progress  
 Branch: `canon/external-intelligence-sovereignty-boundary`  
 Base: `main`
 
@@ -76,6 +76,19 @@ When managed by BusinessAIOS, an external intelligent system may optimize execut
 - Do not implement ClientPlatform-specific sovereignty rules in the canonical layer.
 - Do not remove advisory intelligence; only final business decision authority is exclusive.
 - Do not weaken existing tests, architecture scanners, approval gates or governance.
+
+## Legacy delegated-call audit
+
+The compatibility surface has been classified and constrained as follows:
+
+- **Managed intelligent domain execution** — `DOMAIN_AI`, `DOMAIN_PLANNER`, and `DOMAIN_SCHEDULER` are selected by `BusinessAutonomyPolicy` as `POLICY_GUARDED_DELEGATED`; `BusinessAutonomyService` intercepts that mode and exposes only `ExternalExecutionRequest(ActionIntentV2)` to the external adapter.
+- **Managed channel compatibility projection** — `ChannelBackedBusinessAdapter.execute_intent(...)` may build an internal `BusinessExecutionRequest` only from immutable `ActionIntentV2` fields. The original broad goal envelope is not forwarded to the external intelligent system.
+- **Observe/simulation** — simulation is forced to `OBSERVE_ONLY`; broad compatibility DTOs may remain because the path performs no live external decision/effect.
+- **Supervised/human-owned and low-autonomy non-AI compatibility** — broad `BusinessExecutionRequest` remains supported for backward compatibility, but these modes are outside the intelligent delegated-domain authority path.
+- **Governance alignment preview** — route-handler construction of a delegated request is advisory/read-only and is passed to the alignment bridge, not to an executing adapter.
+- **Provider result fields that resemble decisions** — retained only as provider evidence; the managed boundary overwrites authority metadata with `decision_authority=False` and `external_output_role=execution_result_evidence`.
+
+Architecture locks enforce the first two invariants so a future intelligent adapter cannot silently fall back to `execute(BusinessExecutionRequest)`.
 
 ## Acceptance criteria
 
