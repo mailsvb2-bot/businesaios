@@ -43,3 +43,4 @@ def _emit_drop(queue_obj: Any, task: Any) -> None:
         {"method": task.method, "qsize": int(queue_obj._q.qsize()), "priority": int(task.priority), **(task.meta or {})},
     )
     queue_obj._maybe_alert()
+    queue_obj._maybe_purge_backlog()
