@@ -15,6 +15,7 @@ from application.business_autonomy.contracts import (
     ExecutionVerdict,
     IntegrationMode,
 )
+from application.business_autonomy.execution_subject import business_execution_fingerprint
 from application.business_autonomy.policy import AutonomyPolicyDecision
 from application.business_autonomy.registry import BusinessAdapterRegistry
 from application.business_autonomy.service import BusinessAutonomyService
@@ -45,6 +46,7 @@ def _request(*, intent: ActionIntentV2 | None, mode: IntegrationMode = Integrati
             goal_id="goal-1",
             goal_type="reinterpret_this_goal",
             goal_payload={"text": "untrusted broad goal"},
+            metadata={"tenant_id": "tenant-1"},
         ),
         integration_mode=mode,
         correlation_id="corr-1",
@@ -292,3 +294,50 @@ async def test_managed_external_result_cannot_escape_sovereign_scope():
     assert result.goal_id == "goal-1"
     assert result.execution_id == "corr-1"
     assert result.metadata["reason"] == "external_result_scope_mismatch"
+
+
+@pytest.mark.asyncio
+async def test_managed_external_execution_rejects_tenant_scope_mismatch():
+    adapter = _Adapter()
+    intent = ActionIntentV2.from_projection(
+        action_id="action:decision-tenant",
+        intent_id="intent:decision-tenant",
+        tenant_id="other-tenant",
+        business_id="business-1",
+        decision_id="decision-tenant",
+        correlation_id="corr-1",
+        goal_id="goal-1",
+        agent_id="agent-1",
+        capability_target="send_message@v1",
+        parameters={"recipient": "user-1", "text": "sovereign text"},
+        payload_hash="b" * 64,
+        channel="telegram",
+    )
+    result = await _service(
+        adapter,
+        mode=IntegrationMode.POLICY_GUARDED_DELEGATED,
+        agent_registry=_AgentRegistry(),
+    ).execute(_request(intent=intent))
+    assert result.verdict is ExecutionVerdict.REJECTED
+    assert result.metadata["reason"] == "action_intent_scope_mismatch"
+    assert adapter.intent_calls == []
+
+
+def test_execution_fingerprint_changes_when_sovereign_intent_changes():
+    first = _request(intent=_intent())
+    second_intent = ActionIntentV2.from_projection(
+        action_id="action:decision-2",
+        intent_id="intent:decision-2",
+        tenant_id="tenant-1",
+        business_id="business-1",
+        decision_id="decision-2",
+        correlation_id="corr-1",
+        goal_id="goal-1",
+        agent_id="agent-1",
+        capability_target="send_message@v1",
+        parameters={"recipient": "user-1", "text": "different sovereign text"},
+        payload_hash="c" * 64,
+        channel="telegram",
+    )
+    second = _request(intent=second_intent)
+    assert business_execution_fingerprint(first) != business_execution_fingerprint(second)
