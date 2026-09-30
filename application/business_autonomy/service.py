@@ -14,7 +14,6 @@ from application.business_autonomy.contracts import (
     CapabilityKind,
     ExecutionVerdict,
     ExternalExecutionRequest,
-    IntegrationMode,
     MANAGED_EXTERNAL_EXECUTION_MODES,
 )
 from application.business_autonomy.guards import BusinessBlastRadiusGuard, BusinessBudgetGuard
