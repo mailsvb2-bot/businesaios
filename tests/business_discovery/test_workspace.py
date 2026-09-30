@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import pytest
+
 from application.business_constraint import BusinessConstraintRegistry
 from application.business_discovery import (
     BusinessDiscoveryWorkspace,
@@ -136,9 +138,7 @@ def test_discovery_goal_and_constraint_use_canonical_registries_and_require_conf
     )
     assert goal["goal_id"] == "goal-margin"
     assert goal["owner_id"] == "owner-1"
-    assert goal["constraint_ids"] == ["constraint-margin-floor"] or goal["constraint_ids"] == (
-        "constraint-margin-floor",
-    )
+    assert tuple(goal["constraint_ids"]) == ("constraint-margin-floor",)
     assert [item["goal_id"] for item in workspace.list_goals(
         tenant_id="tenant-1",
         business_id="business-1",
