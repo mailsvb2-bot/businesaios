@@ -18,7 +18,7 @@ from application.business_autonomy.contracts import (
     ExecutionVerdict,
     IntegrationMode,
 )
-from application.business_autonomy.decision_provenance import DecisionEventSpineProvenanceVerifier
+from runtime.business_autonomy.execution_support import DecisionEventSpineProvenanceVerifier
 from application.business_autonomy.execution_subject import business_execution_fingerprint
 from application.business_autonomy.policy import AutonomyPolicyDecision
 from application.business_autonomy.registry import BusinessAdapterRegistry
@@ -31,7 +31,7 @@ from core.utils.canonical import payload_hash as canonical_payload_hash
 ROOT = Path(__file__).resolve().parents[2]
 CONTRACTS = ROOT / "application" / "business_autonomy" / "contracts.py"
 SERVICE = ROOT / "application" / "business_autonomy" / "service.py"
-PROVENANCE = ROOT / "application" / "business_autonomy" / "decision_provenance.py"
+PROVENANCE = ROOT / "runtime" / "business_autonomy" / "execution_support.py"
 BOOTSTRAP = ROOT / "runtime" / "business_autonomy" / "bootstrap.py"
 POLICY = ROOT / "application" / "business_autonomy" / "policy.py"
 
@@ -615,7 +615,7 @@ def test_production_business_autonomy_wires_canonical_decision_provenance() -> N
     support = (ROOT / "runtime" / "business_autonomy" / "execution_support.py").read_text(
         encoding="utf-8"
     )
-    assert "build_decision_provenance_verifier" in source
+    assert "DecisionEventSpineProvenanceVerifier" in source
     assert "event_store=ontology_event_store" in source
     assert "decision_provenance_verifier=" in source
     assert "DecisionEventSpineProvenanceVerifier" in support

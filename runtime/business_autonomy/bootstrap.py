@@ -99,7 +99,7 @@ from runtime.business_autonomy.distributed_state import (
     FilePlanningMemoryDocumentPort,
 )
 from runtime.business_autonomy.execution_support import (
-    build_decision_provenance_verifier,
+    DecisionEventSpineProvenanceVerifier,
     build_execution_runtime,
     build_provider_quota_runtime,
     ensure_business_route,
@@ -746,7 +746,7 @@ def build_business_autonomy_guarded_service(*, business_id: str = 'external_busi
         autonomy_policy=BusinessAutonomyPolicy(capability_registry),
         audit_sink=audit,
         agent_identity_registry=agent_identity_registry,
-        decision_provenance_verifier=build_decision_provenance_verifier(
+        decision_provenance_verifier=DecisionEventSpineProvenanceVerifier(
             event_store=ontology_event_store
         ),
     )
