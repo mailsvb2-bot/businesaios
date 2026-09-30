@@ -340,7 +340,8 @@ def provider_runtime_metrics_truth_map(
         measured: list[dict[str, Any]] = []
         for raw_row in rows:
             row = dict(raw_row)
-            if str(row.get("mode") or "").strip().lower() != "live" or row.get("transport_latency_ms") is None:
+            raw_latency = row.get("transport_latency_ms")
+            if str(row.get("mode") or "").strip().lower() != "live" or raw_latency is None:
                 continue
             observed_at = _provider_history_timestamp(row.get("recorded_at_utc"))
             if observed_at is None:
@@ -350,19 +351,16 @@ def provider_runtime_metrics_truth_map(
                 raise ValueError("provider history recorded_at_utc is unexpectedly in the future")
             if age_seconds > window:
                 continue
-            row["_observed_at_utc"] = observed_at
-            measured.append(row)
-        for row in measured:
-            raw_latency = row.get("transport_latency_ms")
             if isinstance(raw_latency, bool):
                 raise ValueError("provider history transport_latency_ms must be a finite non-negative number")
             try:
-                latency_value = float(raw_latency)
+                row["transport_latency_ms"] = float(raw_latency)
             except (TypeError, ValueError) as exc:
                 raise ValueError("provider history transport_latency_ms must be a finite non-negative number") from exc
-            if not isfinite(latency_value) or latency_value < 0.0:
+            if not isfinite(row["transport_latency_ms"]) or row["transport_latency_ms"] < 0.0:
                 raise ValueError("provider history transport_latency_ms must be a finite non-negative number")
-            row["transport_latency_ms"] = latency_value
+            row["_observed_at_utc"] = observed_at
+            measured.append(row)
         if not measured:
             continue
         latencies = [float(row["transport_latency_ms"]) for row in measured]
