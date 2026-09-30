@@ -1,6 +1,6 @@
 # Business Discovery / Canonical Business Intake — foundation
 
-Status: BD0–BD2 canonical foundation locked; BD3 authenticated workspace/API in progress; BD4 canonical Goal/Constraint orchestration implemented
+Status: BD0–BD2 canonical foundation locked; BD3 authenticated workspace/API in progress; BD4 implemented; BD5 canonical provider-evidence reconciliation implemented
 Branch: `canon/business-discovery-ui-foundation`
 Purpose: preserve and implement the missing canonical user-facing intake that feeds the existing BusinessAIOS World Model without creating a second brain.
 
@@ -90,6 +90,22 @@ Business Discovery does not own a goal or constraint schema. Authenticated owner
 HTTP surfaces:
 - `GET/POST /business-workspace/discovery/goals`
 - `GET/POST /business-workspace/discovery/constraints`
+
+## BD5 canonical provider reconciliation
+
+Provider reconciliation reuses canonical Provider Runtime Evidence and the existing `StateSynthesisEngine` / `StateConflictResolver`; it does not introduce a second truth or conflict engine.
+
+- the reconciliation command accepts only an immutable `evidence_id`, never a browser-supplied provider value;
+- Evidence must belong to the same tenant/business, be `provider_sync`, accepted, and explicitly bound to `mode=live` plus its operation;
+- provider adapters may expose normalized `metadata.business_observations` entries; Business Discovery validates every entry against the same BD1 field contract before state projection;
+- the latest durable owner assertion is replayed as a candidate beside the provider observation so matching values become `VERIFIED` and differing values remain visibly `CONFLICTED`;
+- both owner and provider evidence remain durable; State conflict evidence references preserve the comparison lineage;
+- reconciliation replay is idempotent by canonical provider Evidence identity.
+
+HTTP surface:
+- `POST /business-workspace/discovery/provider-evidence/{evidence_id}/reconcile`
+
+This route cannot fabricate a provider observation: evidence lacking a canonical `business_observations` projection fails closed. Provider-specific extraction remains owned by the provider adapter/runtime that observed the external system.
 
 ## Target vertical slice
 

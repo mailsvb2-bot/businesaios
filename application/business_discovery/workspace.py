@@ -10,6 +10,10 @@ from application.business_discovery.owner_assertion_ingress import (
     OwnerBusinessAssertion,
     OwnerBusinessAssertionIngress,
 )
+from application.business_discovery.provider_observation_ingress import (
+    ProviderBusinessObservationIngress,
+    ProviderObservationIngressResult,
+)
 from application.business_goal import BusinessGoalRegistry
 from runtime.state import StateSynthesisEngine
 from runtime.state.state_contract import StateFieldRecord, StateSynthesizedSnapshot
@@ -53,6 +57,7 @@ class BusinessDiscoveryWorkspace:
         state_engine: StateSynthesisEngine,
         goal_registry: BusinessGoalRegistry | None = None,
         constraint_registry: BusinessConstraintRegistry | None = None,
+        provider_observation_ingress: ProviderBusinessObservationIngress | None = None,
     ) -> None:
         if state_engine.snapshot_store is None:
             raise ValueError("canonical durable StateSnapshotStore is required")
@@ -60,6 +65,7 @@ class BusinessDiscoveryWorkspace:
         self._state = state_engine
         self._goals = goal_registry
         self._constraints = constraint_registry
+        self._provider_observations = provider_observation_ingress
 
     def describe(self, *, tenant_id: str, business_id: str) -> dict[str, Any]:
         tenant = _required(tenant_id, "tenant_id")
@@ -99,6 +105,24 @@ class BusinessDiscoveryWorkspace:
             business_id=assertion.business_id,
         )
         view["assertion"] = _result_payload(result)
+        return view
+
+    def reconcile_provider_evidence(
+        self,
+        *,
+        tenant_id: str,
+        business_id: str,
+        evidence_id: str,
+    ) -> dict[str, Any]:
+        if self._provider_observations is None:
+            raise RuntimeError("canonical provider observation ingress is not configured")
+        result = self._provider_observations.reconcile(
+            tenant_id=_required(tenant_id, "tenant_id"),
+            business_id=_required(business_id, "business_id"),
+            evidence_id=_required(evidence_id, "evidence_id"),
+        )
+        view = self.describe(tenant_id=tenant_id, business_id=business_id)
+        view["provider_reconciliation"] = _provider_result_payload(result)
         return view
 
     def list_goals(self, *, tenant_id: str, business_id: str) -> list[dict[str, Any]]:
@@ -247,6 +271,9 @@ class BusinessDiscoveryWorkspace:
             "status": status,
             "covered": covered,
             "owner_asserted": owner_asserted,
+            "provider_observed": _is_provider_observed(record=record, spec=spec),
+            "epistemic_status": None if record is None else record.meta.get("epistemic_status"),
+            "provider_key": None if record is None else record.meta.get("provider_key"),
             "value": None if record is None else record.value,
             "source": None if record is None else record.source,
             "observed_at_ms": None if record is None else record.observed_at_ms,
@@ -292,6 +319,19 @@ def _is_owner_asserted(
     )
 
 
+def _is_provider_observed(
+    *,
+    record: StateFieldRecord | None,
+    spec: DiscoveryFieldSpec,
+) -> bool:
+    if record is None:
+        return False
+    return (
+        str(record.meta.get("business_discovery_field_key") or "") == spec.key
+        and str(record.meta.get("observation_role") or "") == "PROVIDER_OBSERVED"
+    )
+
+
 def _is_covered(record: StateFieldRecord | None) -> bool:
     return record is not None and str(record.value_kind) not in _NON_COVERING_VALUE_KINDS
 
@@ -325,6 +365,17 @@ def _progress(fields: tuple[dict[str, Any], ...]) -> BusinessDiscoveryProgress:
         complete=covered == total,
         next_field_key=next_key,
     )
+
+
+def _provider_result_payload(result: ProviderObservationIngressResult) -> dict[str, Any]:
+    return {
+        "evidence_id": result.evidence_id,
+        "state_id": result.state_id,
+        "observed_fields": list(result.observed_fields),
+        "verified_fields": list(result.verified_fields),
+        "conflicted_fields": list(result.conflicted_fields),
+        "replayed": result.replayed,
+    }
 
 
 def _result_payload(result: OwnerAssertionIngressResult) -> dict[str, Any]:

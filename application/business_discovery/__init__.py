@@ -12,6 +12,11 @@ from application.business_discovery.owner_assertion_ingress import (
     OwnerBusinessAssertion,
     OwnerBusinessAssertionIngress,
 )
+from application.business_discovery.provider_observation_ingress import (
+    CANON_BUSINESS_DISCOVERY_PROVIDER_OBSERVATION_INGRESS,
+    ProviderBusinessObservationIngress,
+    ProviderObservationIngressResult,
+)
 from application.business_discovery.workspace import (
     CANON_BUSINESS_DISCOVERY_WORKSPACE,
     BusinessDiscoveryProgress,
@@ -21,6 +26,7 @@ from application.business_discovery.workspace import (
 __all__ = [
     "CANON_BUSINESS_DISCOVERY_CONTRACT",
     "CANON_BUSINESS_DISCOVERY_OWNER_ASSERTION_INGRESS",
+    "CANON_BUSINESS_DISCOVERY_PROVIDER_OBSERVATION_INGRESS",
     "CANON_BUSINESS_DISCOVERY_WORKSPACE",
     "DISCOVERY_FIELDS",
     "DiscoveryFieldSpec",
@@ -30,6 +36,8 @@ __all__ = [
     "OwnerAssertionIngressResult",
     "OwnerBusinessAssertion",
     "OwnerBusinessAssertionIngress",
+    "ProviderBusinessObservationIngress",
+    "ProviderObservationIngressResult",
     "discovery_field_spec",
     "normalize_discovery_value",
 ]

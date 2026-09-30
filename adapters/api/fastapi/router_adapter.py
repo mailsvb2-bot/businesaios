@@ -17,7 +17,11 @@ from adapters.api.fastapi.router_support import (
     tenant_registry_has_records,
 )
 from application.business_constraint import BusinessConstraintRegistry
-from application.business_discovery import BusinessDiscoveryWorkspace, OwnerBusinessAssertionIngress
+from application.business_discovery import (
+    BusinessDiscoveryWorkspace,
+    OwnerBusinessAssertionIngress,
+    ProviderBusinessObservationIngress,
+)
 from application.business_goal import BusinessGoalRegistry
 from application.process_discovery import (
     CanonicalBlueprintLedger,
@@ -246,10 +250,11 @@ def create_api_router(*, application_service: object, dependency_container: Fast
             from runtime.state.state_snapshot_store import build_canonical_state_synthesis_engine
 
             discovery_state_engine = build_canonical_state_synthesis_engine()
+            discovery_evidence_store = dependency_container.canonical_evidence_store()
             business_discovery_workspace = BusinessDiscoveryWorkspace(
                 ingress=OwnerBusinessAssertionIngress(
                     event_store=canonical_business_event_store,
-                    evidence_store=dependency_container.canonical_evidence_store(),
+                    evidence_store=discovery_evidence_store,
                     state_engine=discovery_state_engine,
                     idempotency_store=dependency_container.api_idempotency_store,
                 ),
@@ -261,6 +266,11 @@ def create_api_router(*, application_service: object, dependency_container: Fast
                 constraint_registry=BusinessConstraintRegistry(
                     event_store=canonical_business_event_store,
                     idempotency_store=dependency_container.api_idempotency_store,
+                ),
+                provider_observation_ingress=ProviderBusinessObservationIngress(
+                    event_store=canonical_business_event_store,
+                    evidence_store=discovery_evidence_store,
+                    state_engine=discovery_state_engine,
                 ),
             )
     process_workspace = None

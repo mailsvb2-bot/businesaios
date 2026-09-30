@@ -103,6 +103,36 @@ def register_business_workspace_discovery_routes(
         )
         return workspace.describe(tenant_id=tenant_id, business_id=business_id)
 
+    @router.post(
+        "/business-workspace/discovery/provider-evidence/{evidence_id}/reconcile",
+        tags=["business-workspace"],
+    )
+    async def reconcile_discovery_provider_evidence(
+        request: Request,
+        evidence_id: str,
+    ) -> dict[str, Any]:
+        _, tenant_id, business_id = business_owner_scope(
+            request=request,
+            auth_bundle=auth_bundle,
+            required_scope="provider_control_plane",
+        )
+        try:
+            return workspace.reconcile_provider_evidence(
+                tenant_id=tenant_id,
+                business_id=business_id,
+                evidence_id=evidence_id,
+            )
+        except LookupError as exc:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="provider_evidence_not_found",
+            ) from exc
+        except ValueError as exc:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail=str(exc),
+            ) from exc
+
     @router.get("/business-workspace/discovery/goals", tags=["business-workspace"])
     async def discovery_goals(request: Request) -> dict[str, Any]:
         _, tenant_id, business_id = business_owner_scope(
