@@ -3,7 +3,10 @@ from __future__ import annotations
 import ast
 from pathlib import Path
 
-from canon.business_ontology_inventory import (\n    OwnershipAuditStatus,\n    ontology_ownership_by_entity,\n)
+from canon.business_ontology_inventory import (
+    OwnershipAuditStatus,
+    ontology_ownership_by_entity,
+)
 
 ROOT = Path(__file__).resolve().parents[2]
 DISCOVERY_ROOT = ROOT / "application" / "business_discovery"
