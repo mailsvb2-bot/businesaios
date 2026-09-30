@@ -7,6 +7,7 @@ from application.business_autonomy.contracts import (
     BusinessCapability,
     BusinessExecutionRequest,
     BusinessExecutionResult,
+    ExternalExecutionRequest,
     IntegrationMode,
 )
 
@@ -23,3 +24,5 @@ class ExternalBusinessAdapter(Protocol):
     def declared_capabilities(self) -> Sequence[BusinessCapability]: ...
 
     async def execute(self, request: BusinessExecutionRequest) -> BusinessExecutionResult: ...
+
+    async def execute_intent(self, request: ExternalExecutionRequest) -> BusinessExecutionResult: ...
