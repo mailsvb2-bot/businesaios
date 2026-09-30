@@ -2,9 +2,12 @@ from __future__ import annotations
 
 from collections.abc import Mapping
 from dataclasses import dataclass
+from time import time
 from typing import Any
 
 from core.events.event_types import DECISION_PROPOSED
+from core.utils.canonical import payload_hash as canonical_payload_hash
+from governance.persistence_codec import to_jsonable
 
 CANON_EXTERNAL_DECISION_PROVENANCE = True
 _DECISION_EVENT_SOURCE = "application.decision_runtime"
@@ -57,6 +60,9 @@ class DecisionEventSpineProvenanceVerifier:
         payload = _mapping(event.get("payload"))
         decision = _mapping(payload.get("decision"))
 
+        as_dict = getattr(intent, "as_dict", None)
+        if not callable(as_dict):
+            raise ValueError("canonical ActionIntent projection is required")
         expected = {
             "tenant_id": tenant_id,
             "business_id": _text(getattr(intent, "business_id", "")),
@@ -66,6 +72,7 @@ class DecisionEventSpineProvenanceVerifier:
             "agent_id": _text(getattr(intent, "agent_id", "")),
             "action_type": _text(getattr(intent, "capability_target", "")),
             "action_intent_id": _text(getattr(intent, "intent_id", "")),
+            "action_intent_fingerprint": canonical_payload_hash(to_jsonable(as_dict())),
             "decision_payload_hash": _text(getattr(intent, "payload_hash", "")),
         }
         actual = {
@@ -77,6 +84,7 @@ class DecisionEventSpineProvenanceVerifier:
             "agent_id": _text(payload.get("agent_id")),
             "action_type": _text(decision.get("action_type")),
             "action_intent_id": _text(decision.get("action_intent_id")),
+            "action_intent_fingerprint": _text(decision.get("action_intent_fingerprint")),
             "decision_payload_hash": _text(decision.get("decision_payload_hash")),
         }
         mismatches = sorted(key for key, value in expected.items() if actual.get(key) != value)
@@ -84,6 +92,12 @@ class DecisionEventSpineProvenanceVerifier:
             raise ValueError(
                 "canonical decision provenance mismatch: " + ",".join(mismatches)
             )
+        issued_at_ms = int(decision.get("issued_at_ms") or 0)
+        expires_at_ms = int(decision.get("expires_at_ms") or 0)
+        if issued_at_ms <= 0 or expires_at_ms <= issued_at_ms:
+            raise ValueError("canonical decision provenance lifetime is invalid")
+        if int(time() * 1000) >= expires_at_ms:
+            raise ValueError("canonical decision provenance is expired")
         event_id = _text(event.get("event_id"))
         if not event_id:
             raise ValueError("canonical decision provenance event_id is required")
