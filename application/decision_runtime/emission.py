@@ -12,8 +12,8 @@ from contracts.event_store import (
     supports_event_store,
 )
 from core.events.event_types import DECISION_PROPOSED
-from core.utils.canonical import payload_hash as canonical_payload_hash
 from core.observability.throttled_logger import exception_throttled
+from core.utils.canonical import payload_hash as canonical_payload_hash
 from governance.persistence_codec import to_jsonable
 from runtime.events.world_model_events import build_world_model_pinned_event
 
