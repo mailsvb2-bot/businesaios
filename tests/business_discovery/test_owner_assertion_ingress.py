@@ -179,6 +179,60 @@ def test_owner_assertion_same_idempotency_key_cannot_move_to_another_field(tmp_p
     assert len(evidence.list_for_tenant(tenant_id="tenant-1")) == 1
 
 
+def test_owner_assertion_same_idempotency_key_cannot_change_observation_time(tmp_path) -> None:
+    ingress, events, evidence, _ = _ingress(tmp_path)
+    ingress.ingest(
+        assertion=_assertion(),
+        idempotency_key="owner-form-1",
+        recorded_at_ms=1_700_000_000_100,
+    )
+
+    with pytest.raises(ValueError, match="different assertion"):
+        ingress.ingest(
+            assertion=_assertion(observed_at_ms=1_700_000_000_001),
+            idempotency_key="owner-form-1",
+            recorded_at_ms=1_700_000_000_200,
+        )
+
+    assert len(
+        list(
+            events.iter_events(
+                tenant_id="tenant-1",
+                start_ms=0,
+                event_type=BUSINESS_FACT_EVENT_TYPE,
+            )
+        )
+    ) == 1
+    assert len(evidence.list_for_tenant(tenant_id="tenant-1")) == 1
+
+
+def test_owner_assertion_same_idempotency_key_cannot_change_occurrence_time(tmp_path) -> None:
+    ingress, events, evidence, _ = _ingress(tmp_path)
+    ingress.ingest(
+        assertion=_assertion(occurred_at_ms=1_699_999_999_900),
+        idempotency_key="owner-form-1",
+        recorded_at_ms=1_700_000_000_100,
+    )
+
+    with pytest.raises(ValueError, match="different assertion"):
+        ingress.ingest(
+            assertion=_assertion(occurred_at_ms=1_699_999_999_800),
+            idempotency_key="owner-form-1",
+            recorded_at_ms=1_700_000_000_200,
+        )
+
+    assert len(
+        list(
+            events.iter_events(
+                tenant_id="tenant-1",
+                start_ms=0,
+                event_type=BUSINESS_FACT_EVENT_TYPE,
+            )
+        )
+    ) == 1
+    assert len(evidence.list_for_tenant(tenant_id="tenant-1")) == 1
+
+
 def test_owner_assertion_unknown_is_fact_semantics_not_parallel_epistemic_layer(tmp_path) -> None:
     ingress, _, _, snapshots = _ingress(tmp_path)
 
