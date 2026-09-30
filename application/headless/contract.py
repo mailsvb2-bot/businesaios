@@ -143,6 +143,7 @@ class HeadlessExecutionContract:
         owner_path_service: Any | None = None,
         agent_identity_registry: Any | None = None,
         task_registry: Any | None = None,
+        provider_quota_guard: Any | None = None,
     ) -> None:
         try:
             validate_headless_decision_core(decision_core)
@@ -155,6 +156,7 @@ class HeadlessExecutionContract:
         self._state_mapper = state_mapper
         self._agent_identity_registry = agent_identity_registry
         self._task_registry = task_registry
+        self._provider_quota_guard = provider_quota_guard
         self._feedback_reader = feedback_reader
         self._stop_policy = stop_policy or HeadlessStopPolicy()
         self._ledger = ledger

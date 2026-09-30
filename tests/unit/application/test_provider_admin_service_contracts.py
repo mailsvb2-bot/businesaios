@@ -1,11 +1,13 @@
 from __future__ import annotations
 
+from dataclasses import replace
 from pathlib import Path
 
 from application.business_autonomy.business_connector_framework import ConnectorOnboardingService, StaticTrustOnboarding
 from application.business_autonomy.distributed_capability_trust_registry import DistributedBusinessRegistry
 from application.business_autonomy.provider_admin_contract import ProviderCredentialSubmission
 from application.business_autonomy.provider_admin_service import ProviderAdminService
+from connectors.platform.connector_quota_guard import ConnectorQuotaGuard
 from runtime.business_autonomy.bootstrap import (
     StaticGovernanceEnablement,
     StaticPersistenceSurface,
@@ -15,6 +17,7 @@ from runtime.business_autonomy.distributed_state import FileDistributedDocumentS
 from runtime.business_autonomy.provider_activation_store import FileProviderActivationStore
 from security.connector_secret_scope import ConnectorSecretScope
 from security.secret_vault import InMemorySecretVault
+from tenancy.tenant_quota_guard import InMemoryTenantQuotaCounterStore
 
 ROOT = Path(__file__).resolve().parents[3]
 
@@ -130,3 +133,34 @@ def test_provider_admin_service_uses_single_owner_messaging_metadata_builder():
     text = path.read_text(encoding="utf-8")
     assert "messaging_binding_to_metadata(messaging_binding)" in text
     assert "'required_capabilities': dict(messaging_binding.required_capabilities)" not in text
+
+
+def test_provider_runtime_metrics_truth_persists_across_runtime_instances(tmp_path):
+    service, _registry = _service(tmp_path)
+    first = service._live_sync_runtime()
+    second = service._live_sync_runtime()
+    assert first is not second
+    assert first.observability is service.runtime_observability
+    assert second.observability is service.runtime_observability
+    service.runtime_observability.record_sync(
+        tenant_id='tenant-a', provider_key='telegram_bot', operation='message_send',
+        status='live_executed', accepted=True, mode='live', latency_ms=42.0,
+    )
+    truth = service.provider_runtime_metrics_truth(
+        tenant_id='tenant-a', provider_key='telegram_bot', window_seconds=3600,
+    )
+    assert truth['reliability'] == 1.0
+    assert truth['error_rate'] == 0.0
+    assert truth['latency_ms'] == 42.0
+    assert truth['sample_count'] == 1
+
+def test_provider_admin_live_runtime_reuses_injected_connector_quota_guard(tmp_path):
+    service, _registry = _service(tmp_path)
+    quota_guard = ConnectorQuotaGuard(
+        per_connector_hour_limit=1,
+        counter_store=InMemoryTenantQuotaCounterStore(),
+    )
+    service = replace(service, connector_quota_guard=quota_guard)
+    runtime = service._live_sync_runtime()
+    assert runtime.connector_quota_guard is quota_guard
+

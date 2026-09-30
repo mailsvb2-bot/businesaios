@@ -91,6 +91,16 @@ class CapabilityHealthPolicy:
             return 'unhealthy'
         return 'unknown'
 
+    def tier_for_observed_rate(self, rate: float, *, observation_count: int) -> str:
+        if int(observation_count) < self._sufficient_evidence_attempts:
+            return 'unknown'
+        normalized = max(0.0, min(1.0, float(rate)))
+        if normalized >= 0.80:
+            return 'healthy'
+        if normalized >= 0.50:
+            return 'degraded'
+        return 'unhealthy'
+
     def _freshness(self, *, updated_at: object, now_utc: datetime | None) -> tuple[str, float]:
         observed_at = _parse_ts(updated_at)
         if observed_at is None:

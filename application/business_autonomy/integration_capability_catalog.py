@@ -3,6 +3,7 @@ from __future__ import annotations
 from collections.abc import Iterable, Mapping
 from dataclasses import dataclass, field
 from enum import Enum
+from math import isfinite
 from types import MappingProxyType
 from typing import Any
 
@@ -11,10 +12,29 @@ from application.business_autonomy.provider_catalog import (
     MESSAGING_GUARDED_WRITE_PROVIDER_KEYS,
     provider_map,
 )
+from application.business_autonomy.provider_runtime_contract import (
+    provider_sync_run_request_schema,
+    provider_sync_run_result_schema,
+    provider_webhook_ingress_request_schema,
+    provider_webhook_ingress_result_schema,
+)
+from application.capability.capability_health_policy import CapabilityHealthPolicy
+from contracts.email_outbound import email_outbound_payload_schema_v1
+from contracts.platforms.market_intelligence_contract import (
+    search_intelligence_envelope_schema,
+    search_intelligence_target_schema,
+)
+from contracts.risk import RiskLevel
+from crm.webhooks.crm_webhook_contract import crm_webhook_event_schema
+from interfaces.messaging_runtime.contracts import (
+    message_envelope_schema,
+    outbound_envelope_schema,
+)
+from interfaces.web.chat_widget.session_contract import web_chat_session_schema
 
 CANON_INTEGRATION_CAPABILITY_CATALOG = True
 CANON_CAPABILITY_ENTITY_OWNER = True
-CAPABILITY_SCHEMA_VERSION = 1
+CAPABILITY_SCHEMA_VERSION = 4
 
 
 class CapabilityStatus(str, Enum):
@@ -30,6 +50,39 @@ class CapabilitySurface(str, Enum):
     ACQUISITION = 'acquisition'
     INTERACTION = 'interaction'
     INFRASTRUCTURE = 'infrastructure'
+
+
+class CapabilityLifecycle(str, Enum):
+    DEFINED = 'defined'
+    IMPLEMENTED = 'implemented'
+    INTEGRATED = 'integrated'
+    TESTED = 'tested'
+    LIVE_VERIFIED = 'live_verified'
+    USER_AVAILABLE = 'user_available'
+    PRODUCTION_READY = 'production_ready'
+    DEGRADED = 'degraded'
+    DISABLED = 'disabled'
+    DEPRECATED = 'deprecated'
+
+
+class CapabilityHealthState(str, Enum):
+    UNKNOWN = 'unknown'
+    HEALTHY = 'healthy'
+    DEGRADED = 'degraded'
+    UNHEALTHY = 'unhealthy'
+    DISABLED = 'disabled'
+
+
+class CapabilityAvailabilityState(str, Enum):
+    UNKNOWN = 'unknown'
+    AVAILABLE = 'available'
+    DEGRADED = 'degraded'
+    UNAVAILABLE = 'unavailable'
+
+
+class ProviderCompositionMode(str, Enum):
+    ALL = 'all'
+    ANY = 'any'
 
 
 _STATUS_RANK = {
@@ -55,7 +108,16 @@ class CapabilityEvidence:
             raise ValueError('capability evidence source is required')
         if not claim:
             raise ValueError('capability evidence claim is required')
-        confidence = max(0.0, min(1.0, float(self.confidence)))
+        if isinstance(self.confidence, bool):
+            raise ValueError('capability evidence confidence must be a finite number')
+        try:
+            confidence = float(self.confidence)
+        except (TypeError, ValueError) as exc:
+            raise ValueError('capability evidence confidence must be a finite number') from exc
+        if not isfinite(confidence):
+            raise ValueError('capability evidence confidence must be a finite number')
+        if not 0.0 <= confidence <= 1.0:
+            raise ValueError('capability evidence confidence must be between 0 and 1')
         object.__setattr__(self, 'source', source)
         object.__setattr__(self, 'claim', claim)
         object.__setattr__(self, 'confidence', confidence)
@@ -74,6 +136,7 @@ class IntegrationCapability:
     owner_text: str
     next_required_step: str
     provider_keys: tuple[str, ...] = ()
+    provider_mode: ProviderCompositionMode | str = ProviderCompositionMode.ALL
     registry_sources: tuple[str, ...] = ()
     read_supported: bool = False
     write_supported: bool = False
@@ -86,6 +149,16 @@ class IntegrationCapability:
     requires_consent: bool = False
     requires_admin_surface: bool = True
     risk_level: str = 'medium'
+    input_schema: Mapping[str, Any] = field(default_factory=dict)
+    output_schema: Mapping[str, Any] = field(default_factory=dict)
+    lifecycle: CapabilityLifecycle | None = None
+    health: CapabilityHealthState | str = CapabilityHealthState.UNKNOWN
+    availability: CapabilityAvailabilityState | str = CapabilityAvailabilityState.UNKNOWN
+    cost: float | None = None
+    latency_ms: float | None = None
+    reliability: float | None = None
+    error_rate: float | None = None
+    reversible: bool = False
     evidence: tuple[CapabilityEvidence, ...] = field(default_factory=tuple)
     metadata: Mapping[str, Any] = field(default_factory=dict)
     schema_version: int = CAPABILITY_SCHEMA_VERSION
@@ -100,22 +173,84 @@ class IntegrationCapability:
         if int(self.schema_version) != CAPABILITY_SCHEMA_VERSION:
             raise ValueError('unsupported capability schema version')
         provider_keys = tuple(str(item).strip() for item in self.provider_keys if str(item).strip())
+        provider_mode = ProviderCompositionMode(self.provider_mode)
+        if provider_mode is ProviderCompositionMode.ANY and len(provider_keys) < 2:
+            raise ValueError('provider_mode=any requires at least two providers')
         registry_sources = tuple(str(item).strip() for item in self.registry_sources if str(item).strip())
         status = CapabilityStatus(self.status)
         surface = CapabilitySurface(self.surface)
         production_ready = bool(self.production_ready or status is CapabilityStatus.PRODUCTION_READY)
         if production_ready and status not in (CapabilityStatus.PRODUCTION_READY, CapabilityStatus.IMPLEMENTED):
             raise ValueError(f'production_ready cannot be true for status={status.value}')
+        lifecycle = self.lifecycle
+        if lifecycle is None:
+            lifecycle = (
+                CapabilityLifecycle.PRODUCTION_READY
+                if production_ready
+                else CapabilityLifecycle.IMPLEMENTED
+                if status in (CapabilityStatus.IMPLEMENTED, CapabilityStatus.PARTIAL)
+                else CapabilityLifecycle.DEFINED
+            )
+        lifecycle = CapabilityLifecycle(lifecycle)
+        if production_ready and lifecycle is not CapabilityLifecycle.PRODUCTION_READY:
+            raise ValueError('production_ready capability must use production_ready lifecycle')
+        health = CapabilityHealthState(self.health)
+        availability = CapabilityAvailabilityState(self.availability)
+        risk_level = RiskLevel(self.risk_level).value
+        numeric_inputs = {
+            'cost': self.cost,
+            'latency_ms': self.latency_ms,
+            'reliability': self.reliability,
+            'error_rate': self.error_rate,
+        }
+        normalized_numeric: dict[str, float | None] = {}
+        for name, value in numeric_inputs.items():
+            if value is None:
+                normalized_numeric[name] = None
+                continue
+            if isinstance(value, bool):
+                raise ValueError('capability numeric truth must not use booleans')
+            try:
+                normalized = float(value)
+            except (TypeError, ValueError) as exc:
+                raise ValueError('capability numeric truth must be finite numbers') from exc
+            if not isfinite(normalized):
+                raise ValueError('capability numeric truth must be finite numbers')
+            normalized_numeric[name] = normalized
+        cost = normalized_numeric['cost']
+        latency_ms = normalized_numeric['latency_ms']
+        reliability = normalized_numeric['reliability']
+        error_rate = normalized_numeric['error_rate']
+        if cost is not None and cost < 0.0 or latency_ms is not None and latency_ms < 0.0:
+            raise ValueError('capability cost/latency must be non-negative')
+        if reliability is not None and not 0.0 <= reliability <= 1.0:
+            raise ValueError('capability reliability must be between 0 and 1')
+        if error_rate is not None and not 0.0 <= error_rate <= 1.0:
+            raise ValueError('capability error_rate must be between 0 and 1')
         object.__setattr__(self, 'capability_id', capability_id)
         object.__setattr__(self, 'title', title)
         object.__setattr__(self, 'provider_keys', provider_keys)
+        object.__setattr__(self, 'provider_mode', provider_mode)
         object.__setattr__(self, 'registry_sources', registry_sources)
         object.__setattr__(self, 'evidence', tuple(self.evidence))
         object.__setattr__(self, 'status', status)
         object.__setattr__(self, 'surface', surface)
         object.__setattr__(self, 'production_ready', production_ready)
+        object.__setattr__(self, 'lifecycle', lifecycle)
+        object.__setattr__(self, 'input_schema', MappingProxyType(dict(self.input_schema or {})))
+        object.__setattr__(self, 'output_schema', MappingProxyType(dict(self.output_schema or {})))
+        object.__setattr__(self, 'health', health)
+        object.__setattr__(self, 'availability', availability)
+        object.__setattr__(self, 'risk_level', risk_level)
+        object.__setattr__(self, 'cost', cost)
+        object.__setattr__(self, 'latency_ms', latency_ms)
+        object.__setattr__(self, 'reliability', reliability)
+        object.__setattr__(self, 'error_rate', error_rate)
+        object.__setattr__(self, 'reversible', bool(self.reversible))
         object.__setattr__(self, 'schema_version', CAPABILITY_SCHEMA_VERSION)
         object.__setattr__(self, 'metadata', MappingProxyType(dict(self.metadata or {})))
+        if production_ready and self.contract_gaps:
+            raise ValueError(f'production_ready capability has contract gaps: {", ".join(self.contract_gaps)}')
 
     @property
     def connectable(self) -> bool:
@@ -128,6 +263,33 @@ class IntegrationCapability:
     @property
     def roadmap_only(self) -> bool:
         return not self.connectable
+
+    @property
+    def contract_gaps(self) -> tuple[str, ...]:
+        gaps: list[str] = []
+        if not self.input_schema:
+            gaps.append('input_schema')
+        if not self.output_schema:
+            gaps.append('output_schema')
+        if self.health is CapabilityHealthState.UNKNOWN:
+            gaps.append('health')
+        if self.availability is CapabilityAvailabilityState.UNKNOWN:
+            gaps.append('availability')
+        if self.cost is None:
+            gaps.append('cost')
+        if self.latency_ms is None:
+            gaps.append('latency_ms')
+        if self.reliability is None:
+            gaps.append('reliability')
+        if self.error_rate is None:
+            gaps.append('error_rate')
+        if self.connectable and not self.provider_keys:
+            gaps.append('providers')
+        return tuple(gaps)
+
+    @property
+    def contract_complete(self) -> bool:
+        return not self.contract_gaps
 
     def to_payload(self, *, active_provider_keys: Iterable[str] = ()) -> dict[str, Any]:
         active = {str(item).strip() for item in active_provider_keys if str(item).strip()}
@@ -166,7 +328,25 @@ class IntegrationCapability:
             'requires_consent': bool(self.requires_consent),
             'requires_admin_surface': bool(self.requires_admin_surface),
             'risk_level': self.risk_level,
+            'contract_complete': self.contract_complete,
+            'contract_gaps': list(self.contract_gaps),
+            'input_schema': dict(self.input_schema),
+            'output_schema': dict(self.output_schema),
+            'lifecycle': self.lifecycle.value,
+            'health': self.health.value,
+            'availability': self.availability.value,
+            'cost': self.cost,
+            'latency_ms': self.latency_ms,
+            'reliability': self.reliability,
+            'error_rate': self.error_rate,
+            'reversible': self.reversible,
+            'approval_requirements': {
+                'owner_approval': bool(self.requires_owner_approval),
+                'budget_guard': bool(self.requires_budget_guard),
+                'consent': bool(self.requires_consent),
+            },
             'provider_keys': list(self.provider_keys),
+            'provider_mode': self.provider_mode.value,
             'providers': provider_rows,
             'registry_sources': list(self.registry_sources),
             'evidence': [item.to_payload() for item in self.evidence],
@@ -178,7 +358,36 @@ def _e(source: str, claim: str, confidence: float = 1.0) -> CapabilityEvidence:
     return CapabilityEvidence(source=source, claim=claim, confidence=confidence)
 
 
+def _provider_metric_number(row: Mapping[str, Any], key: str, *, ratio: bool = False) -> float | None:
+    raw = row.get(key)
+    if raw is None:
+        return None
+    if isinstance(raw, bool):
+        raise ValueError(f'provider metric {key} must be a finite number')
+    try:
+        value = float(raw)
+    except (TypeError, ValueError) as exc:
+        raise ValueError(f'provider metric {key} must be a finite number') from exc
+    if not isfinite(value):
+        raise ValueError(f'provider metric {key} must be a finite number')
+    if value < 0.0 or (ratio and value > 1.0):
+        raise ValueError(f'provider metric {key} is out of range')
+    return value
+
+
 _BRIDGE_INTERACTION_CAPABILITY_IDS = {'instagram': 'interaction.instagram_direct', 'messenger': 'interaction.facebook_messenger'}
+
+_EMAIL_MESSAGE_SEND_INPUT_SCHEMA = email_outbound_payload_schema_v1()
+_PROVIDER_SYNC_REQUEST_INPUT_SCHEMA = provider_sync_run_request_schema()
+_PROVIDER_SYNC_RESULT_OUTPUT_SCHEMA = provider_sync_run_result_schema()
+_CRM_WEBHOOK_EVENT_INPUT_SCHEMA = crm_webhook_event_schema()
+_WEB_CHAT_SESSION_INPUT_SCHEMA = web_chat_session_schema()
+_MESSAGING_INPUT_SCHEMA = message_envelope_schema()
+_MESSAGING_OUTPUT_SCHEMA = outbound_envelope_schema()
+_PROVIDER_WEBHOOK_INPUT_SCHEMA = provider_webhook_ingress_request_schema()
+_PROVIDER_WEBHOOK_OUTPUT_SCHEMA = provider_webhook_ingress_result_schema()
+_SEARCH_INTELLIGENCE_INPUT_SCHEMA = search_intelligence_target_schema()
+_SEARCH_INTELLIGENCE_OUTPUT_SCHEMA = search_intelligence_envelope_schema()
 
 
 def _bridge_messaging_interaction_capabilities() -> tuple[IntegrationCapability, ...]:
@@ -194,13 +403,15 @@ def _bridge_messaging_interaction_capabilities() -> tuple[IntegrationCapability,
             group='Messengers',
             status=CapabilityStatus.PARTIAL,
             provider_keys=(provider_key,),
-            registry_sources=('application.business_autonomy.provider_catalog', 'runtime.business_autonomy.provider_webhook_messaging_bridge'),
+            registry_sources=('application.business_autonomy.provider_catalog', 'runtime.business_autonomy.provider_webhook_messaging_bridge', 'interfaces.messaging_runtime.contracts'),
             read_supported=True,
             write_supported=provider_key in MESSAGING_GUARDED_WRITE_PROVIDER_KEYS,
             verify_supported=True,
             requires_credentials=True,
             requires_webhook=True,
             risk_level='medium',
+            input_schema=_MESSAGING_INPUT_SCHEMA,
+            output_schema=_MESSAGING_OUTPUT_SCHEMA if provider_key in MESSAGING_GUARDED_WRITE_PROVIDER_KEYS else {},
             owner_text=(f'{provider.title} уже имеет signed inbound и approval-gated guarded outbound через единый canonical messaging runtime; live production readiness отдельно не доказана.' if provider_key in MESSAGING_GUARDED_WRITE_PROVIDER_KEYS else f'{provider.title} уже имеет signed provider-webhook bridge через единый canonical messaging runtime; native vendor API и outbound ещё не доказаны.'),
             next_required_step=('Доказать live credentials/probe, delivery receipts, rate-limit/retry evidence и только затем повышать live/production readiness.' if provider_key in MESSAGING_GUARDED_WRITE_PROVIDER_KEYS else 'Добавить official vendor auth/native transport, live probe, delivery receipts/rate-limit evidence и только затем отдельно сертифицировать guarded writes.'),
             evidence=(
@@ -252,6 +463,8 @@ CAPABILITIES: tuple[IntegrationCapability, ...] = (
         verify_supported=False,
         requires_webhook=True,
         risk_level='medium',
+        input_schema=_WEB_CHAT_SESSION_INPUT_SCHEMA,
+        registry_sources=('interfaces.web.chat_widget.session_contract',),
         owner_text='Есть website/chatbot surface, но нужен полноценный channel adapter через единый Conversation Router.',
         next_required_step='Сделать webchat session, identity link, transcript evidence и каноничный inbound event.',
         evidence=(_e('website/chatbot surface', 'partial web chat surface exists', 0.75),),
@@ -337,6 +550,9 @@ CAPABILITIES: tuple[IntegrationCapability, ...] = (
         write_supported=False,
         verify_supported=False,
         risk_level='medium',
+        input_schema=_SEARCH_INTELLIGENCE_INPUT_SCHEMA,
+        output_schema=_SEARCH_INTELLIGENCE_OUTPUT_SCHEMA,
+        registry_sources=('contracts.platforms.market_intelligence_contract',),
         owner_text='Market/search intelligence может помогать с аналитикой спроса, но это не полноценный acquisition connector.',
         next_required_step='Добавить real provider provenance, freshness, source evidence и lead attribution.',
         evidence=(_e('contracts/platforms/market_intelligence_provider_catalog.py', 'market intelligence catalog exists', 0.7),),
@@ -358,9 +574,12 @@ CAPABILITIES: tuple[IntegrationCapability, ...] = (
         group='Reactivation',
         status=CapabilityStatus.PARTIAL,
         provider_keys=('email_connector',),
+        registry_sources=('application.business_autonomy.provider_catalog', 'contracts.email_outbound', 'application.business_autonomy.provider_runtime_contract'),
         read_supported=False,
         write_supported=True,
         verify_supported=False,
+        input_schema=_EMAIL_MESSAGE_SEND_INPUT_SCHEMA,
+        output_schema=_PROVIDER_SYNC_RESULT_OUTPUT_SCHEMA,
         requires_credentials=True,
         requires_consent=True,
         risk_level='medium',
@@ -415,6 +634,9 @@ CAPABILITIES: tuple[IntegrationCapability, ...] = (
         requires_credentials=True,
         requires_webhook=True,
         risk_level='medium',
+        input_schema=_PROVIDER_SYNC_REQUEST_INPUT_SCHEMA,
+        output_schema=_PROVIDER_SYNC_RESULT_OUTPUT_SCHEMA,
+        registry_sources=('application.business_autonomy.provider_catalog', 'application.business_autonomy.provider_runtime_contract'),
         owner_text='CRM-контуры выглядят одними из самых зрелых: HubSpot provider, CRM actions/webhooks/onboarding.',
         next_required_step='Доказать idempotent CRM event → DecisionCore → action → evidence.',
         evidence=(_e('provider_catalog.hubspot', 'hubspot provider exists'), _e('crm providers', 'crm contour exists', 0.8)),
@@ -436,12 +658,16 @@ CAPABILITIES: tuple[IntegrationCapability, ...] = (
         group='Commerce',
         status=CapabilityStatus.PARTIAL,
         provider_keys=('shopify', 'woocommerce'),
+        provider_mode=ProviderCompositionMode.ANY,
         read_supported=True,
         write_supported=True,
         verify_supported=False,
         requires_credentials=True,
         requires_webhook=True,
         risk_level='medium',
+        input_schema=_PROVIDER_SYNC_REQUEST_INPUT_SCHEMA,
+        output_schema=_PROVIDER_SYNC_RESULT_OUTPUT_SCHEMA,
+        registry_sources=('application.business_autonomy.provider_catalog', 'application.business_autonomy.provider_runtime_contract'),
         owner_text='Shopify/WooCommerce providers есть, но marketplace acquisition и commerce integration нужно разводить явно.',
         next_required_step='Разделить commerce catalog/order sync и marketplace lead acquisition capability.',
         evidence=(_e('provider_catalog.shopify', 'shopify provider exists'), _e('provider_catalog.woocommerce', 'woocommerce provider exists')),
@@ -475,6 +701,9 @@ CAPABILITIES: tuple[IntegrationCapability, ...] = (
         requires_credentials=True,
         requires_webhook=True,
         risk_level='medium',
+        input_schema=_MESSAGING_INPUT_SCHEMA,
+        registry_sources=('application.business_autonomy.provider_catalog', 'interfaces.messaging_runtime.contracts'),
+        output_schema=_MESSAGING_OUTPUT_SCHEMA,
         owner_text='Telegram bot/runtime контур есть, но его нужно сделать единой правдой для provider catalog, runtime и admin capability map.',
         next_required_step='Синхронизировать Telegram provider/runtime/admin registry и доказать webhook/polling e2e без второго transport brain.',
         evidence=(_e('provider_catalog.telegram_bot', 'telegram provider exists'), _e('boot/config telegram files', 'telegram runtime surfaces exist', 0.8)),
@@ -493,6 +722,9 @@ CAPABILITIES: tuple[IntegrationCapability, ...] = (
         requires_webhook=True,
         requires_consent=True,
         risk_level='high',
+        input_schema=_MESSAGING_INPUT_SCHEMA,
+        registry_sources=('application.business_autonomy.provider_catalog', 'interfaces.messaging_runtime.contracts'),
+        output_schema=_MESSAGING_OUTPUT_SCHEMA,
         owner_text='WhatsApp Cloud plain-text outbound проходит через owner approval, durable provider queue и provider receipt evidence; template sends отдельно не сертифицированы.',
         next_required_step='Сохранить consent/24h policy guard и отдельно сертифицировать template policy без расширения текущего plain-text write boundary.',
         evidence=(
@@ -509,9 +741,12 @@ CAPABILITIES: tuple[IntegrationCapability, ...] = (
         group='Messaging',
         status=CapabilityStatus.IMPLEMENTED,
         provider_keys=('email_connector',),
+        registry_sources=('application.business_autonomy.provider_catalog', 'contracts.email_outbound', 'application.business_autonomy.provider_runtime_contract'),
         read_supported=False,
         write_supported=True,
         verify_supported=False,
+        input_schema=_EMAIL_MESSAGE_SEND_INPUT_SCHEMA,
+        output_schema=_PROVIDER_SYNC_RESULT_OUTPUT_SCHEMA,
         requires_credentials=True,
         requires_consent=True,
         risk_level='medium',
@@ -548,6 +783,9 @@ CAPABILITIES: tuple[IntegrationCapability, ...] = (
         verify_supported=False,
         requires_webhook=True,
         risk_level='medium',
+        input_schema=_MESSAGING_INPUT_SCHEMA,
+        output_schema=_MESSAGING_OUTPUT_SCHEMA,
+        registry_sources=('interfaces.messaging_runtime.contracts', 'interfaces.web.chat_widget.session_contract'),
         owner_text='Есть website/chatbot surface, но не доказан отдельный channel adapter.',
         next_required_step='Сделать webchat session, identity link, transcript evidence и Conversation Router binding.',
         evidence=(_e('website/chatbot surface', 'partial web chat surface exists', 0.75),),
@@ -565,6 +803,9 @@ CAPABILITIES: tuple[IntegrationCapability, ...] = (
         requires_credentials=True,
         requires_webhook=True,
         risk_level='medium',
+        input_schema=_CRM_WEBHOOK_EVENT_INPUT_SCHEMA,
+        output_schema=_PROVIDER_SYNC_RESULT_OUTPUT_SCHEMA,
+        registry_sources=('application.business_autonomy.provider_catalog', 'crm.webhooks.crm_webhook_contract', 'application.business_autonomy.provider_runtime_contract'),
         owner_text='CRM events/actions/onboarding являются одним из самых полезных контуров взаимодействия с бизнес-системами.',
         next_required_step='Доказать canonical event → decision → action → evidence без параллельного решения.',
         evidence=(_e('provider_catalog.hubspot', 'hubspot provider exists'), _e('crm providers', 'crm contour exists', 0.8)),
@@ -606,6 +847,9 @@ CAPABILITIES: tuple[IntegrationCapability, ...] = (
         requires_credentials=True,
         requires_webhook=True,
         risk_level='medium',
+        input_schema=_PROVIDER_WEBHOOK_INPUT_SCHEMA,
+        output_schema=_PROVIDER_WEBHOOK_OUTPUT_SCHEMA,
+        registry_sources=('application.business_autonomy.provider_runtime_contract', 'adapters.api.fastapi.provider_webhook_routes'),
         owner_text='Control-plane/API webhook surface может быть честным интеграционным каналом.',
         next_required_step='Усилить auth, schema validation, rate limit, idempotency и audit.',
         evidence=(_e('app/web/pages/platform_control_center.py', 'control-plane API endpoints are surfaced', 0.8),),
@@ -615,6 +859,7 @@ CAPABILITIES: tuple[IntegrationCapability, ...] = (
 
 def _validate_capability_catalog(items: tuple[IntegrationCapability, ...]) -> dict[str, IntegrationCapability]:
     by_id: dict[str, IntegrationCapability] = {}
+    providers = provider_map()
     for item in items:
         if item.capability_id in by_id:
             raise ValueError(f'duplicate capability_id: {item.capability_id}')
@@ -625,6 +870,9 @@ def _validate_capability_catalog(items: tuple[IntegrationCapability, ...]) -> di
             )
         if item.schema_version != CAPABILITY_SCHEMA_VERSION:
             raise ValueError(f'unsupported capability schema version: {item.capability_id}')
+        unknown_providers = tuple(key for key in item.provider_keys if key not in providers)
+        if unknown_providers:
+            raise ValueError(f'unknown capability providers for {item.capability_id}: {unknown_providers}')
         by_id[item.capability_id] = item
     return by_id
 
@@ -644,6 +892,190 @@ def list_integration_capabilities(
     if not include_roadmap:
         selected = tuple(item for item in selected if item.connectable)
     return tuple(sorted(selected, key=lambda item: (item.surface.value, item.group, -_STATUS_RANK[item.status], item.title)))
+
+
+
+def capability_discovery_snapshot(
+    *,
+    provider_runtime_truth: Mapping[str, Mapping[str, Any]] | None = None,
+    provider_metrics_truth: Mapping[str, Mapping[str, Any]] | None = None,
+    provider_quota_truth: Mapping[str, Mapping[str, Any]] | None = None,
+) -> tuple[dict[str, Any], ...]:
+    """Compact canonical capability truth for pre-planning discovery."""
+    runtime_truth = dict(provider_runtime_truth or {})
+    metrics_truth = dict(provider_metrics_truth or {})
+    quota_truth = dict(provider_quota_truth or {})
+    rows: list[dict[str, Any]] = []
+    live_healthy = {'probe_live_ok'}
+    health_policy = CapabilityHealthPolicy()
+    live_unhealthy = {
+        'probe_live_failed',
+        'probe_rejected_misconfigured',
+        'misconfigured',
+        'invalid_secret_shape',
+        'missing_required_secrets',
+    }
+    for item in list_integration_capabilities(include_roadmap=True):
+        provider_rows = [
+            dict(runtime_truth[key])
+            for key in item.provider_keys
+            if key in runtime_truth
+        ]
+        availability = item.availability.value
+        health = item.health.value
+        cost = item.cost
+        latency_ms = item.latency_ms
+        reliability = item.reliability
+        error_rate = item.error_rate
+        if provider_rows and item.connectable:
+            ready = [
+                row for row in provider_rows
+                if bool(row.get('connected')) and bool(row.get('onboarding_ready'))
+            ]
+            if item.provider_mode is ProviderCompositionMode.ANY:
+                availability = (
+                    CapabilityAvailabilityState.AVAILABLE.value
+                    if ready
+                    else CapabilityAvailabilityState.UNAVAILABLE.value
+                )
+            else:
+                availability = (
+                    CapabilityAvailabilityState.AVAILABLE.value
+                    if len(ready) == len(item.provider_keys)
+                    else CapabilityAvailabilityState.DEGRADED.value
+                    if ready
+                    else CapabilityAvailabilityState.UNAVAILABLE.value
+                )
+            probe_statuses = {
+                str(dict(row.get('health_probe') or {}).get('status') or '').strip()
+                for row in provider_rows
+            }
+            probe_statuses.discard('')
+            if item.provider_mode is ProviderCompositionMode.ANY:
+                if probe_statuses & live_healthy:
+                    health = CapabilityHealthState.HEALTHY.value
+                elif probe_statuses & live_unhealthy:
+                    health = CapabilityHealthState.UNHEALTHY.value
+            elif probe_statuses and probe_statuses <= live_healthy:
+                health = CapabilityHealthState.HEALTHY.value
+            elif probe_statuses & live_unhealthy:
+                health = (
+                    CapabilityHealthState.DEGRADED.value
+                    if probe_statuses & live_healthy
+                    else CapabilityHealthState.UNHEALTHY.value
+                )
+        elif provider_rows:
+            # A connected provider cannot promote an unimplemented/contract-only
+            # business capability. Provider readiness is necessary, not sufficient.
+            availability = CapabilityAvailabilityState.UNAVAILABLE.value
+        quota_rows = [dict(quota_truth[key]) for key in item.provider_keys if key in quota_truth]
+        if item.connectable and quota_rows:
+            quota_by_provider = {str(row.get('provider_key') or '').strip(): row for row in quota_rows}
+            if item.provider_mode is ProviderCompositionMode.ANY:
+                candidate_keys = {str(row.get('provider_key') or '').strip() for row in ready} if provider_rows else set(item.provider_keys)
+                if candidate_keys and not any(bool(quota_by_provider.get(key, {}).get('allowed')) for key in candidate_keys if key in quota_by_provider):
+                    availability = CapabilityAvailabilityState.UNAVAILABLE.value
+            elif len(quota_rows) == len(item.provider_keys) and any(not bool(row.get('allowed')) for row in quota_rows):
+                availability = CapabilityAvailabilityState.UNAVAILABLE.value
+        metric_rows = [dict(metrics_truth[key]) for key in item.provider_keys if key in metrics_truth]
+        if item.connectable and metric_rows:
+            ready_keys = {str(row.get('provider_key') or '').strip() for row in ready} if provider_rows else set()
+            effective_metric_rows = (
+                [row for row in metric_rows if str(row.get('provider_key') or '').strip() in ready_keys]
+                if item.provider_mode is ProviderCompositionMode.ANY and ready_keys
+                else metric_rows
+            )
+            reliability_values = [value for row in effective_metric_rows if (value := _provider_metric_number(row, 'reliability', ratio=True)) is not None]
+            latency_values = [value for row in effective_metric_rows if (value := _provider_metric_number(row, 'latency_ms')) is not None]
+            error_values = [value for row in effective_metric_rows if (value := _provider_metric_number(row, 'error_rate', ratio=True)) is not None]
+            complete_metrics = (
+                bool(effective_metric_rows)
+                if item.provider_mode is ProviderCompositionMode.ANY
+                else len(effective_metric_rows) == len(item.provider_keys)
+            )
+            if reliability_values and complete_metrics:
+                reliability = max(reliability_values) if item.provider_mode is ProviderCompositionMode.ANY else min(reliability_values)
+            if latency_values and complete_metrics:
+                latency_ms = min(latency_values) if item.provider_mode is ProviderCompositionMode.ANY else max(latency_values)
+            if error_values and complete_metrics:
+                error_rate = min(error_values) if item.provider_mode is ProviderCompositionMode.ANY else max(error_values)
+            metric_health = [
+                health_policy.tier_for_observed_rate(
+                    _provider_metric_number(row, 'reliability', ratio=True),
+                    observation_count=int(row.get('sample_count') or 0),
+                )
+                for row in effective_metric_rows
+                if row.get('reliability') is not None
+            ]
+            if complete_metrics and metric_health and all(value != 'unknown' for value in metric_health):
+                if item.provider_mode is ProviderCompositionMode.ANY:
+                    observed_health = (
+                        CapabilityHealthState.HEALTHY.value
+                        if CapabilityHealthState.HEALTHY.value in metric_health
+                        else CapabilityHealthState.DEGRADED.value
+                        if CapabilityHealthState.DEGRADED.value in metric_health
+                        else CapabilityHealthState.UNHEALTHY.value
+                    )
+                else:
+                    observed_health = (
+                        CapabilityHealthState.UNHEALTHY.value
+                        if CapabilityHealthState.UNHEALTHY.value in metric_health
+                        else CapabilityHealthState.DEGRADED.value
+                        if CapabilityHealthState.DEGRADED.value in metric_health
+                        else CapabilityHealthState.HEALTHY.value
+                    )
+                health_rank = {
+                    CapabilityHealthState.UNKNOWN.value: 4,
+                    CapabilityHealthState.HEALTHY.value: 3,
+                    CapabilityHealthState.DEGRADED.value: 2,
+                    CapabilityHealthState.UNHEALTHY.value: 1,
+                    CapabilityHealthState.DISABLED.value: 0,
+                }
+                if health == CapabilityHealthState.UNKNOWN.value or health_rank[observed_health] < health_rank[health]:
+                    health = observed_health
+        gaps = list(item.contract_gaps)
+        if health != CapabilityHealthState.UNKNOWN.value and 'health' in gaps:
+            gaps.remove('health')
+        if availability != CapabilityAvailabilityState.UNKNOWN.value and 'availability' in gaps:
+            gaps.remove('availability')
+        if latency_ms is not None and 'latency_ms' in gaps:
+            gaps.remove('latency_ms')
+        if reliability is not None and 'reliability' in gaps:
+            gaps.remove('reliability')
+        if error_rate is not None and 'error_rate' in gaps:
+            gaps.remove('error_rate')
+        rows.append({
+            'capability_id': item.capability_id,
+            'schema_version': item.schema_version,
+            'registry_sources': list(item.registry_sources),
+            'evidence': [entry.to_payload() for entry in item.evidence],
+            'lifecycle': item.lifecycle.value,
+            'status': item.status.value,
+            'provider_keys': list(item.provider_keys),
+            'provider_mode': item.provider_mode.value,
+            'provider_runtime': provider_rows,
+            'provider_metrics': metric_rows,
+            'provider_quota': quota_rows,
+            'read_supported': bool(item.read_supported),
+            'write_supported': bool(item.write_supported),
+            'verify_supported': bool(item.verify_supported),
+            'health': health,
+            'availability': availability,
+            'risk': item.risk_level,
+            'contract_complete': not gaps,
+            'contract_gaps': gaps,
+            'cost': cost,
+            'latency_ms': latency_ms,
+            'reliability': reliability,
+            'error_rate': error_rate,
+            'reversible': item.reversible,
+            'approval_requirements': {
+                'owner_approval': bool(item.requires_owner_approval),
+                'budget_guard': bool(item.requires_budget_guard),
+                'consent': bool(item.requires_consent),
+            },
+        })
+    return tuple(rows)
 
 
 def capability_map() -> dict[str, IntegrationCapability]:
@@ -694,9 +1126,14 @@ __all__ = [
     'CapabilityEvidence',
     'CapabilityStatus',
     'CapabilitySurface',
+    'CapabilityLifecycle',
+    'CapabilityHealthState',
+    'CapabilityAvailabilityState',
+    'ProviderCompositionMode',
     'IntegrationCapability',
     'CAPABILITIES',
     'capability_map',
+    'capability_discovery_snapshot',
     'list_integration_capabilities',
     'list_integration_capability_payloads',
     'summarize_integration_capabilities',

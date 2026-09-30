@@ -6,7 +6,6 @@ from typing import Any
 
 CANON_PROVIDER_RUNTIME_CONTRACT = True
 
-
 @dataclass(frozen=True)
 class ProviderHealthProbeResult:
     provider_key: str
@@ -15,7 +14,6 @@ class ProviderHealthProbeResult:
     reason: str
     metadata: Mapping[str, Any] = field(default_factory=dict)
 
-
 @dataclass(frozen=True)
 class ProviderWebhookContract:
     provider_key: str
@@ -23,9 +21,6 @@ class ProviderWebhookContract:
     header_names: tuple[str, ...]
     enabled: bool
     metadata: Mapping[str, Any] = field(default_factory=dict)
-
-
-
 
 @dataclass(frozen=True)
 class ProviderWebhookReplayDecision:
@@ -36,6 +31,29 @@ class ProviderWebhookReplayDecision:
     owner_id: str
     metadata: Mapping[str, Any] = field(default_factory=dict)
 
+def provider_sync_run_request_schema() -> dict[str, object]:
+    return {"type": "object", "required": ["operation", "mode"], "properties": {"operation": {"type": "string", "minLength": 1}, "mode": {"type": "string", "minLength": 1}, "payload": {"type": "object"}}, "additionalProperties": False}
+
+def provider_webhook_ingress_request_schema() -> dict[str, object]:
+    return {"type": "object", "required": ["provider_key", "headers", "body", "event_key"], "properties": {"provider_key": {"type": "string", "minLength": 1}, "headers": {"type": "object"}, "body": {}, "event_key": {"type": "string", "minLength": 1}, "topic": {"type": "string"}, "owner_id": {"type": "string", "minLength": 1}}, "additionalProperties": False}
+
+def provider_webhook_ingress_result_schema() -> dict[str, object]:
+    return {"type": "object", "required": ["provider_key", "event_key", "accepted", "status", "metadata"], "properties": {"provider_key": {"type": "string", "minLength": 1}, "event_key": {"type": "string", "minLength": 1}, "accepted": {"type": "boolean"}, "status": {"type": "string", "minLength": 1}, "metadata": {"type": "object"}}, "additionalProperties": False}
+
+def provider_sync_run_result_schema() -> dict[str, object]:
+    return {
+        "type": "object",
+        "required": ["provider_key", "operation", "mode", "status", "accepted", "metadata"],
+        "properties": {
+            "provider_key": {"type": "string", "minLength": 1},
+            "operation": {"type": "string", "minLength": 1},
+            "mode": {"type": "string", "minLength": 1},
+            "status": {"type": "string", "minLength": 1},
+            "accepted": {"type": "boolean"},
+            "metadata": {"type": "object"},
+        },
+        "additionalProperties": False,
+    }
 
 @dataclass(frozen=True)
 class ProviderSyncRunResult:
@@ -46,7 +64,6 @@ class ProviderSyncRunResult:
     accepted: bool
     metadata: Mapping[str, Any] = field(default_factory=dict)
 
-
 @dataclass(frozen=True)
 class ProviderWebhookIngressResult:
     provider_key: str
@@ -55,7 +72,6 @@ class ProviderWebhookIngressResult:
     status: str
     metadata: Mapping[str, Any] = field(default_factory=dict)
 
-
 @dataclass(frozen=True)
 class ProviderSecretLifecycleResult:
     provider_key: str
@@ -63,16 +79,12 @@ class ProviderSecretLifecycleResult:
     status: str
     metadata: Mapping[str, Any] = field(default_factory=dict)
 
-
-
-
 @dataclass(frozen=True)
 class ProviderSecretCompromiseResult:
     provider_key: str
     action: str
     status: str
     metadata: Mapping[str, Any] = field(default_factory=dict)
-
 
 @dataclass(frozen=True)
 class ProviderScheduledSyncResult:
@@ -82,8 +94,6 @@ class ProviderScheduledSyncResult:
     status: str
     metadata: Mapping[str, Any] = field(default_factory=dict)
 
-
-
 @dataclass(frozen=True)
 class ProviderLiveProbeResult:
     provider_key: str
@@ -91,7 +101,6 @@ class ProviderLiveProbeResult:
     status: str
     ok: bool
     metadata: Mapping[str, Any] = field(default_factory=dict)
-
 
 @dataclass(frozen=True)
 class ProviderPaginationRunResult:
@@ -102,7 +111,6 @@ class ProviderPaginationRunResult:
     accepted: bool
     metadata: Mapping[str, Any] = field(default_factory=dict)
 
-
 @dataclass(frozen=True)
 class ProviderOperationPlan:
     provider_key: str
@@ -112,14 +120,17 @@ class ProviderOperationPlan:
     webhook_enabled: bool
     metadata: Mapping[str, Any] = field(default_factory=dict)
 
-
 __all__ = [
     'CANON_PROVIDER_RUNTIME_CONTRACT',
     'ProviderHealthProbeResult',
     'ProviderWebhookContract',
     'ProviderWebhookReplayDecision',
     'ProviderSyncRunResult',
+    'provider_sync_run_request_schema',
+    'provider_sync_run_result_schema',
     'ProviderWebhookIngressResult',
+    'provider_webhook_ingress_request_schema',
+    'provider_webhook_ingress_result_schema',
     'ProviderSecretLifecycleResult',
     'ProviderSecretCompromiseResult',
     'ProviderScheduledSyncResult',

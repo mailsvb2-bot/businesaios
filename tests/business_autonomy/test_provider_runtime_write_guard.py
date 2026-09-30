@@ -241,8 +241,16 @@ def test_slack_discord_approved_queue_execution_is_one_shot_and_replay_safe(tmp_
         assert store.get(tenant_id='tenant-a', job_id=first.job_id).max_attempts == 1
         report = queue.tick(provider_registry={provider_key: provider}, tenant_id='tenant-a', job_id=first.job_id)
         assert report['succeeded'] == 1 and len(transport.calls) == 1
-        history = runtime.sync_history.list_for_provider(tenant_id='tenant-a', business_id=business_id, provider_key=provider_key, limit=10)
-        assert history and history[0]['parsed_response']['resource_id'] == resource_id
+        history_by_job = runtime.sync_history.find_for_queue_jobs(
+            tenant_id='tenant-a',
+            business_id=business_id,
+            provider_key=provider_key,
+            queue_job_ids=(first.job_id,),
+        )
+        history_row = history_by_job[first.job_id]
+        assert history_row['status'] == 'live_executed'
+        assert history_row['accepted'] is True
+        assert history_row['parsed_response']['resource_id'] == resource_id
 
 
 def test_vk_approved_execution_is_one_shot_across_queue_replays_and_retention(tmp_path: Path) -> None:

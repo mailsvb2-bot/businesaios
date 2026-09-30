@@ -35,6 +35,7 @@ def test_capability_inventory_names_release_managed_definition_owner() -> None:
     assert row.storage_owner == "application.business_autonomy.integration_capability_catalog"
     assert row.allowed_writers == ("application.business_autonomy.integration_capability_catalog",)
     assert row.allowed_readers == (
+        "application.autonomy.autonomy_state_assembly",
         "application.business_autonomy.provider_truth_matrix",
         "application.public_site.landing_content",
     )
@@ -47,7 +48,7 @@ def test_capability_entity_owner_marker_is_unique() -> None:
 
 
 def test_release_catalog_ids_and_schema_are_unique_and_surface_bound() -> None:
-    assert CAPABILITY_SCHEMA_VERSION == 1
+    assert CAPABILITY_SCHEMA_VERSION == 4
     ids = tuple(item.capability_id for item in CAPABILITIES)
     assert len(ids) == len(set(ids))
     assert capability_map().keys() == set(ids)

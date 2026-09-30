@@ -1,10 +1,16 @@
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from datetime import datetime, timezone
 
+from core.finance.money import quantity_decimal
 from core.tenancy.normalization import require_tenant_id
-from tenancy.tenant_quota_guard import QuotaDimension, TenantQuotaGuard
+from tenancy.tenant_quota_guard import (
+    InMemoryTenantQuotaCounterStore,
+    QuotaDimension,
+    TenantQuotaCounterStore,
+    TenantQuotaGuard,
+)
 
 
 CANON_CONNECTOR_QUOTA_GUARD = True
@@ -25,27 +31,22 @@ class ConnectorQuotaVerdict:
     retry_after_seconds: int | None = None
 
 
-@dataclass
-class _LocalConnectorCounter:
-    tenant_id: str
-    connector_id: str
-    window_key: str
-    used: float = 0.0
-    updated_at: datetime = field(default_factory=utc_now)
-
-
 class ConnectorQuotaGuard:
     def __init__(
         self,
         *,
         quota_guard: TenantQuotaGuard | None = None,
         per_connector_hour_limit: float | None = None,
+        counter_store: TenantQuotaCounterStore | None = None,
     ) -> None:
         if per_connector_hour_limit is not None and float(per_connector_hour_limit) <= 0:
             raise ValueError('per_connector_hour_limit must be > 0 when provided')
-        self._quota_guard = quota_guard or TenantQuotaGuard()
+        inherited_store = None if quota_guard is None else quota_guard.counter_store
+        if counter_store is not None and inherited_store is not None and counter_store is not inherited_store:
+            raise ValueError("quota_guard and connector quota must share one counter_store")
+        self._counter_store = counter_store or inherited_store or InMemoryTenantQuotaCounterStore()
+        self._quota_guard = quota_guard or TenantQuotaGuard(counter_store=self._counter_store)
         self._per_connector_hour_limit = None if per_connector_hour_limit is None else float(per_connector_hour_limit)
-        self._local_counters: dict[tuple[str, str, str], _LocalConnectorCounter] = {}
 
     def check(self, *, tenant_id: str, connector_id: str, requested_calls: float = 1.0) -> ConnectorQuotaVerdict:
         tid = require_tenant_id(tenant_id)
@@ -55,7 +56,6 @@ class ConnectorQuotaGuard:
             raise ValueError('connector_id is required')
         if amount <= 0:
             raise ValueError('requested_calls must be > 0')
-        self._prune_stale_windows()
         tenant_verdict = self._quota_guard.check(
             tenant_id=tid,
             dimension=QuotaDimension.CONNECTOR_CALLS_PER_HOUR.value,
@@ -95,9 +95,7 @@ class ConnectorQuotaGuard:
             dimension=QuotaDimension.CONNECTOR_CALLS_PER_HOUR.value,
             amount=amount,
         )
-        counter = self._counter_for(tenant_id=tid, connector_id=cid)
-        counter.used += amount
-        counter.updated_at = utc_now()
+        self._consume_local(tenant_id=tid, connector_id=cid, amount=amount)
         local_remaining = self._local_remaining(tenant_id=tid, connector_id=cid)
         remaining_candidates = [value for value in (tenant_post.remaining, local_remaining) if value is not None]
         remaining = min(remaining_candidates) if remaining_candidates else None
@@ -114,25 +112,33 @@ class ConnectorQuotaGuard:
     def _window_key(self) -> str:
         return datetime.now(timezone.utc).strftime('%Y%m%d%H')
 
-    def _counter_for(self, *, tenant_id: str, connector_id: str) -> _LocalConnectorCounter:
-        key = (tenant_id, connector_id, self._window_key())
-        counter = self._local_counters.get(key)
-        if counter is None:
-            counter = _LocalConnectorCounter(tenant_id=tenant_id, connector_id=connector_id, window_key=key[2])
-            self._local_counters[key] = counter
-        return counter
+    @staticmethod
+    def _counter_key(connector_id: str) -> str:
+        return f"connector:{connector_id}:calls_per_hour"
+
+    def _local_used(self, *, tenant_id: str, connector_id: str) -> float:
+        state = self._counter_store.get(
+            tenant_id=tenant_id,
+            counter_key=self._counter_key(connector_id),
+            window_key=self._window_key(),
+        )
+        return 0.0 if state is None else float(state.used)
+
+    def _consume_local(self, *, tenant_id: str, connector_id: str, amount: float) -> None:
+        window_key = self._window_key()
+        counter_key = self._counter_key(connector_id)
+        self._counter_store.increment(
+            tenant_id=tenant_id,
+            counter_key=counter_key,
+            window_key=window_key,
+            amount=quantity_decimal(amount, name="requested_calls"),
+            updated_at=utc_now(),
+        )
 
     def _local_remaining(self, *, tenant_id: str, connector_id: str) -> float | None:
         if self._per_connector_hour_limit is None:
             return None
-        counter = self._counter_for(tenant_id=tenant_id, connector_id=connector_id)
-        return max(0.0, self._per_connector_hour_limit - float(counter.used))
-
-    def _prune_stale_windows(self) -> None:
-        current_window = self._window_key()
-        stale = [key for key in self._local_counters if key[2] != current_window]
-        for key in stale:
-            self._local_counters.pop(key, None)
+        return max(0.0, self._per_connector_hour_limit - self._local_used(tenant_id=tenant_id, connector_id=connector_id))
 
 
 __all__ = [

@@ -10,6 +10,7 @@ from connectors.platform.connector_contract import ConnectorRequest, ConnectorVe
 from connectors.platform.connector_fallback_router import plan_connector_candidates
 from connectors.platform.connector_health_monitor import ConnectorHealthMonitor, ConnectorHealthSample
 from connectors.platform.connector_observability import ConnectorExecutionEvent, ConnectorObservability
+from connectors.platform.connector_quota_guard import ConnectorQuotaGuard
 from connectors.platform.connector_registry import ConnectorRegistry, ConnectorRegistryEntry
 from connectors.platform.connector_retry_policy import ConnectorRetryPolicy, RetryClassification, RetryContext
 from connectors.platform.connector_timeout_policy import ConnectorTimeoutPolicy
@@ -49,7 +50,20 @@ class ConnectorFailoverResult:
 
 
 class ConnectorFailoverRouter:
-    def __init__(self, *, registry: ConnectorRegistry, version_registry: ConnectorVersionRegistry | None = None, health_monitor: ConnectorHealthMonitor | None = None, circuit_breaker: ConnectorCircuitBreaker | None = None, retry_policy: ConnectorRetryPolicy | None = None, timeout_policy: ConnectorTimeoutPolicy | None = None, observability: ConnectorObservability | None = None, sleep_fn: Callable[[RetryClassification], None] | None = None, allow_replacement_version_failover: bool = False) -> None:
+    def __init__(
+        self,
+        *,
+        registry: ConnectorRegistry,
+        version_registry: ConnectorVersionRegistry | None = None,
+        health_monitor: ConnectorHealthMonitor | None = None,
+        circuit_breaker: ConnectorCircuitBreaker | None = None,
+        retry_policy: ConnectorRetryPolicy | None = None,
+        timeout_policy: ConnectorTimeoutPolicy | None = None,
+        observability: ConnectorObservability | None = None,
+        quota_guard: ConnectorQuotaGuard | None = None,
+        sleep_fn: Callable[[RetryClassification], None] | None = None,
+        allow_replacement_version_failover: bool = False,
+    ) -> None:
         self._registry = registry
         self._version_registry = version_registry
         self._health_monitor = health_monitor
@@ -57,6 +71,7 @@ class ConnectorFailoverRouter:
         self._retry_policy = retry_policy or ConnectorRetryPolicy()
         self._timeout_policy = timeout_policy or ConnectorTimeoutPolicy()
         self._observability = observability
+        self._quota_guard = quota_guard
         self._sleep = sleep_fn or self._retry_policy.maybe_sleep
         self._allow_replacement_version_failover = bool(allow_replacement_version_failover)
 
@@ -131,6 +146,50 @@ class ConnectorFailoverRouter:
                 raise ValueError('connector retry max_attempts must be > 0')
             attempt_no = 1
             while True:
+                if self._quota_guard is not None and not dry_run:
+                    quota = self._quota_guard.consume(
+                        tenant_id=tenant_id,
+                        connector_id=entry.connector_id,
+                        requested_calls=1.0,
+                    )
+                    if not quota.allowed:
+                        attempts.append(
+                            self._attempt_row(
+                                entry=entry,
+                                operation=operation,
+                                route_index=route_index,
+                                attempt=attempt_no,
+                                phase=phase,
+                                outcome='blocked',
+                                reason='connector_quota_exceeded',
+                                duration_ms=0.0,
+                                breaker_state=permit_state,
+                                metadata={
+                                    'quota_reason': quota.reason,
+                                    'quota_remaining': quota.remaining,
+                                },
+                            )
+                        )
+                        self._record_observability(
+                            tenant_id=tenant_id,
+                            entry=entry,
+                            operation=operation,
+                            phase=phase,
+                            status='connector_quota_exceeded',
+                            trace_id=trace_id,
+                            duration_ms=0.0,
+                            fallback_depth=route_index,
+                            payload={
+                                'attempt': attempt_no,
+                                'route_index': route_index,
+                                'breaker_state': permit_state,
+                                'quota_reason': quota.reason,
+                                'quota_remaining': quota.remaining,
+                            },
+                        )
+                        raise PermissionError(
+                            f'connector quota exceeded for tenant={tenant_id} connector={entry.connector_id}: {quota.reason}'
+                        )
                 started = monotonic()
                 prior_call_attempted = True
                 try:

@@ -4,6 +4,7 @@ from collections.abc import Iterable
 from typing import Any
 
 from application.business_autonomy.integration_capability_catalog import (
+    CAPABILITY_SCHEMA_VERSION,
     CapabilitySurface,
     list_integration_capability_payloads,
     summarize_integration_capabilities,
@@ -37,6 +38,7 @@ def build_public_capabilities_payload(*, include_roadmap: bool = True) -> dict[s
     capabilities = list_integration_capability_payloads(include_roadmap=include_roadmap)
     return {
         'source_of_truth': 'application.business_autonomy.integration_capability_catalog',
+        'capabilities_schema_version': CAPABILITY_SCHEMA_VERSION,
         'include_roadmap': bool(include_roadmap),
         'summary': summarize_integration_capabilities(),
         'surfaces': {
