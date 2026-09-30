@@ -15,8 +15,8 @@ from application.business_autonomy.contracts import (
     BusinessExecutionResult,
     BusinessGoalEnvelope,
     CapabilityKind,
-    ExternalExecutionRequest,
     ExecutionVerdict,
+    ExternalExecutionRequest,
     IntegrationMode,
 )
 from application.business_autonomy.protocol import ExternalBusinessAdapter
