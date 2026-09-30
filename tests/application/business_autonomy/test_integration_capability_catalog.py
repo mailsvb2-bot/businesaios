@@ -27,16 +27,6 @@ from crm.webhooks.crm_webhook_contract import crm_webhook_event_schema
 from interfaces.messaging_runtime.contracts import message_envelope_schema, outbound_envelope_schema
 from interfaces.web.chat_widget.session_contract import web_chat_session_schema
 
-def _assert_owned_schema(capability_id, source, input_schema, output_schema):
-    capability = capability_map()[capability_id]
-    assert source in capability.registry_sources
-    assert dict(capability.input_schema) == input_schema
-    assert dict(capability.output_schema) == output_schema
-    assert "input_schema" not in capability.contract_gaps
-    if output_schema:
-        assert "output_schema" not in capability.contract_gaps
-
-
 def test_capability_catalog_exposes_honest_statuses():
     capabilities = capability_map()
 
@@ -349,20 +339,24 @@ def test_email_capability_schema_reuses_canonical_outbound_and_runtime_contract_
     assert email.output_schema["properties"]["accepted"] == {"type": "boolean"}
     assert set(email.contract_gaps) == {"health", "availability", "cost", "latency_ms", "reliability", "error_rate"}
 
-def test_provider_sync_capabilities_reuse_canonical_request_and_result_schemas():
-    request_schema = provider_sync_run_request_schema()
-    result_schema = provider_sync_run_result_schema()
-    for capability_id in ("acquisition.crm_reactivation", "acquisition.commerce_marketplaces"):
-        capability = capability_map()[capability_id]
-        assert "application.business_autonomy.provider_runtime_contract" in capability.registry_sources
-        assert dict(capability.input_schema) == request_schema
-        assert dict(capability.output_schema) == result_schema
-        assert "input_schema" not in capability.contract_gaps
-        assert "output_schema" not in capability.contract_gaps
-    crm_events = capability_map()["interaction.crm_events"]
-    assert "crm.webhooks.crm_webhook_contract" in crm_events.registry_sources
-    assert dict(crm_events.input_schema) == crm_webhook_event_schema()
-    assert dict(crm_events.output_schema) == result_schema
+@pytest.mark.parametrize(
+    ("capability_id", "source", "input_schema", "output_schema", "output_gap"),
+    [
+        ("acquisition.crm_reactivation", "application.business_autonomy.provider_runtime_contract", provider_sync_run_request_schema(), provider_sync_run_result_schema(), False),
+        ("acquisition.commerce_marketplaces", "application.business_autonomy.provider_runtime_contract", provider_sync_run_request_schema(), provider_sync_run_result_schema(), False),
+        ("interaction.crm_events", "crm.webhooks.crm_webhook_contract", crm_webhook_event_schema(), provider_sync_run_result_schema(), False),
+        ("acquisition.web_chat_widget", "interfaces.web.chat_widget.session_contract", web_chat_session_schema(), {}, True),
+        ("interaction.webhook_api", "application.business_autonomy.provider_runtime_contract", provider_webhook_ingress_request_schema(), provider_webhook_ingress_result_schema(), False),
+        ("acquisition.seo_intelligence", "contracts.platforms.market_intelligence_contract", search_intelligence_target_schema(), search_intelligence_envelope_schema(), False),
+    ],
+)
+def test_capability_schema_ownership(capability_id, source, input_schema, output_schema, output_gap):
+    capability = capability_map()[capability_id]
+    assert source in capability.registry_sources
+    assert dict(capability.input_schema) == input_schema
+    assert dict(capability.output_schema) == output_schema
+    assert "input_schema" not in capability.contract_gaps
+    assert ("output_schema" in capability.contract_gaps) is output_gap
 
 def test_messaging_capabilities_reuse_canonical_runtime_envelopes():
     inbound, outbound = message_envelope_schema(), outbound_envelope_schema()
@@ -386,25 +380,7 @@ def test_messaging_capabilities_reuse_canonical_runtime_envelopes():
         else:
             assert dict(capability.output_schema) == {}
 
-def test_web_chat_acquisition_reuses_session_contract_without_forging_output_schema():
-    capability = capability_map()["acquisition.web_chat_widget"]
-    assert "interfaces.web.chat_widget.session_contract" in capability.registry_sources
-    assert dict(capability.input_schema) == web_chat_session_schema()
-    assert dict(capability.output_schema) == {}
-    assert "input_schema" not in capability.contract_gaps
-    assert "output_schema" in capability.contract_gaps
-
-def test_webhook_api_reuses_provider_ingress_contract():
-    _assert_owned_schema(
-        "interaction.webhook_api", "application.business_autonomy.provider_runtime_contract",
-        provider_webhook_ingress_request_schema(), provider_webhook_ingress_result_schema(),
-    )
-
-def test_seo_intelligence_reuses_canonical_market_intelligence_schemas():
-    _assert_owned_schema(
-        "acquisition.seo_intelligence", "contracts.platforms.market_intelligence_contract",
-        search_intelligence_target_schema(), search_intelligence_envelope_schema(),
-    )
+def test_seo_schema_is_scoped_to_search_intelligence():
     capability = capability_map()["acquisition.seo_intelligence"]
     assert capability.input_schema["properties"]["source_family"] == {"const": "search_intelligence"}
     assert capability.output_schema["properties"]["source_family"] == {"const": "search_intelligence"}
