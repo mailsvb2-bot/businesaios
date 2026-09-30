@@ -200,6 +200,21 @@ class BusinessAutonomyService:
                     timeout_seconds=delegated_request.timeout_seconds,
                 )
             )
+            if (
+                result.business_id != intent.business_id
+                or result.goal_id != intent.goal_id
+                or result.execution_id != delegated_request.correlation_id
+            ):
+                return BusinessExecutionResult(
+                    verdict=ExecutionVerdict.REJECTED,
+                    business_id=intent.business_id,
+                    goal_id=intent.goal_id,
+                    execution_id=delegated_request.correlation_id,
+                    message="Managed external result does not match sovereign execution scope.",
+                    delegated_to_domain_engine=False,
+                    adapter_name=adapter.adapter_name,
+                    metadata={"reason": "external_result_scope_mismatch"},
+                )
         else:
             result = await adapter.execute(delegated_request)
         if self._audit_sink is not None and hasattr(self._audit_sink, "record"):
