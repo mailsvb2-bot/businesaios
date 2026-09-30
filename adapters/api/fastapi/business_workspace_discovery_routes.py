@@ -13,6 +13,34 @@ from application.business_discovery import (
 )
 
 CANON_BUSINESS_WORKSPACE_DISCOVERY_ROUTES = True
+_ALLOWED_GOAL_KEYS = frozenset(
+    {
+        "confirmed",
+        "goal_id",
+        "goal_kind",
+        "target_key",
+        "metric",
+        "baseline",
+        "target",
+        "deadline_at_ms",
+        "constraint_ids",
+        "parent_goal_id",
+        "priority",
+    }
+)
+_ALLOWED_CONSTRAINT_KEYS = frozenset(
+    {
+        "confirmed",
+        "constraint_id",
+        "constraint_kind",
+        "severity",
+        "subject_type",
+        "subject_id",
+        "state_key",
+        "comparison",
+        "threshold",
+    }
+)
 _ALLOWED_ASSERTION_KEYS = frozenset(
     {
         "field_key",
@@ -74,6 +102,147 @@ def register_business_workspace_discovery_routes(
             required_scope="provider_control_plane",
         )
         return workspace.describe(tenant_id=tenant_id, business_id=business_id)
+
+    @router.get("/business-workspace/discovery/goals", tags=["business-workspace"])
+    async def discovery_goals(request: Request) -> dict[str, Any]:
+        _, tenant_id, business_id = business_owner_scope(
+            request=request,
+            auth_bundle=auth_bundle,
+            required_scope="provider_control_plane",
+        )
+        return {
+            "tenant_id": tenant_id,
+            "business_id": business_id,
+            "goals": workspace.list_goals(tenant_id=tenant_id, business_id=business_id),
+        }
+
+    @router.post("/business-workspace/discovery/goals", tags=["business-workspace"])
+    async def create_discovery_goal(request: Request) -> dict[str, Any]:
+        principal, tenant_id, business_id = business_owner_scope(
+            request=request,
+            auth_bundle=auth_bundle,
+            required_scope="provider_control_plane",
+        )
+        body = await json_body(request)
+        extra = set(body).difference(_ALLOWED_GOAL_KEYS)
+        if extra:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail="business_discovery_unknown_goal_fields",
+            )
+        key = _idempotency_key(request)
+        if not key:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail="idempotency_key_required",
+            )
+        confirmed = body.get("confirmed")
+        if not isinstance(confirmed, bool):
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail="confirmed_must_be_boolean",
+            )
+        constraint_ids = body.get("constraint_ids") or ()
+        if isinstance(constraint_ids, str) or not isinstance(constraint_ids, list | tuple):
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail="constraint_ids_must_be_array",
+            )
+        try:
+            goal = workspace.create_goal(
+                tenant_id=tenant_id,
+                business_id=business_id,
+                actor_id=_actor_id(principal),
+                idempotency_key=key,
+                confirmed=confirmed,
+                goal_id=str(body.get("goal_id") or ""),
+                goal_kind=str(body.get("goal_kind") or ""),
+                target_key=body.get("target_key"),
+                metric=body.get("metric"),
+                baseline=body.get("baseline"),
+                target=body.get("target"),
+                deadline_at_ms=_optional_int(body, "deadline_at_ms"),
+                constraint_ids=tuple(str(item) for item in constraint_ids),
+                parent_goal_id=body.get("parent_goal_id"),
+                priority=50 if body.get("priority") is None else body.get("priority"),
+                occurred_at_ms=int(time.time() * 1000),
+            )
+        except (TypeError, ValueError) as exc:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail=str(exc),
+            ) from exc
+        return {"tenant_id": tenant_id, "business_id": business_id, "goal": goal}
+
+    @router.get("/business-workspace/discovery/constraints", tags=["business-workspace"])
+    async def discovery_constraints(request: Request) -> dict[str, Any]:
+        _, tenant_id, business_id = business_owner_scope(
+            request=request,
+            auth_bundle=auth_bundle,
+            required_scope="provider_control_plane",
+        )
+        return {
+            "tenant_id": tenant_id,
+            "business_id": business_id,
+            "constraints": workspace.list_constraints(
+                tenant_id=tenant_id,
+                business_id=business_id,
+            ),
+        }
+
+    @router.post("/business-workspace/discovery/constraints", tags=["business-workspace"])
+    async def create_discovery_constraint(request: Request) -> dict[str, Any]:
+        principal, tenant_id, business_id = business_owner_scope(
+            request=request,
+            auth_bundle=auth_bundle,
+            required_scope="provider_control_plane",
+        )
+        body = await json_body(request)
+        extra = set(body).difference(_ALLOWED_CONSTRAINT_KEYS)
+        if extra:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail="business_discovery_unknown_constraint_fields",
+            )
+        key = _idempotency_key(request)
+        if not key:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail="idempotency_key_required",
+            )
+        confirmed = body.get("confirmed")
+        if not isinstance(confirmed, bool):
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail="confirmed_must_be_boolean",
+            )
+        try:
+            constraint = workspace.create_constraint(
+                tenant_id=tenant_id,
+                business_id=business_id,
+                actor_id=_actor_id(principal),
+                idempotency_key=key,
+                confirmed=confirmed,
+                constraint_id=str(body.get("constraint_id") or ""),
+                constraint_kind=str(body.get("constraint_kind") or ""),
+                severity=str(body.get("severity") or "hard"),
+                subject_type=body.get("subject_type"),
+                subject_id=body.get("subject_id"),
+                state_key=body.get("state_key"),
+                comparison=body.get("comparison"),
+                threshold=body.get("threshold"),
+                occurred_at_ms=int(time.time() * 1000),
+            )
+        except (TypeError, ValueError) as exc:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail=str(exc),
+            ) from exc
+        return {
+            "tenant_id": tenant_id,
+            "business_id": business_id,
+            "constraint": constraint,
+        }
 
     @router.post("/business-workspace/discovery/assertions", tags=["business-workspace"])
     async def record_discovery_assertion(request: Request) -> dict[str, Any]:

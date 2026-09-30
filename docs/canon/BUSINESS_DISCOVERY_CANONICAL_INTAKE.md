@@ -1,6 +1,6 @@
 # Business Discovery / Canonical Business Intake — foundation
 
-Status: BD0 ownership audit locked; BD1 owner-assertion ingress and BD2 semantic-state projection in progress
+Status: BD0–BD2 canonical foundation locked; BD3 authenticated workspace/API in progress; BD4 canonical Goal/Constraint orchestration implemented
 Branch: `canon/business-discovery-ui-foundation`
 Purpose: preserve and implement the missing canonical user-facing intake that feeds the existing BusinessAIOS World Model without creating a second brain.
 
@@ -76,6 +76,20 @@ Known owner answers are fail-closed and normalized before Evidence/EventStore wr
 - epistemic unknown is represented only by `unknown=true` with no concrete value, never by an overloaded string value.
 
 This contract intentionally does not invent a new finance owner. It only validates the shape of owner assertions before those assertions enter the canonical Evidence/Event/State path.
+
+## BD4 canonical Goal/Constraint orchestration
+
+Business Discovery does not own a goal or constraint schema. Authenticated owner commands delegate directly to `BusinessGoalRegistry` and `BusinessConstraintRegistry` over the same canonical Business EventStore and idempotency owner.
+
+- canonical Goal/Constraint creation requires explicit `confirmed=true`;
+- authenticated principal identity is recorded as the goal owner / event actor and cannot be supplied by request JSON;
+- ambiguous free-text intent is not silently converted into a canonical goal;
+- goal constraint links are validated by the existing `BusinessGoalRegistry`;
+- replay and identity conflicts remain governed by the existing lifecycle registries.
+
+HTTP surfaces:
+- `GET/POST /business-workspace/discovery/goals`
+- `GET/POST /business-workspace/discovery/constraints`
 
 ## Target vertical slice
 

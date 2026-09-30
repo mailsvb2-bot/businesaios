@@ -1,14 +1,17 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from dataclasses import asdict
 from typing import Any
 
+from application.business_constraint import BusinessConstraintRegistry
 from application.business_discovery.contracts import DISCOVERY_FIELDS, DiscoveryFieldSpec
 from application.business_discovery.owner_assertion_ingress import (
     OwnerAssertionIngressResult,
     OwnerBusinessAssertion,
     OwnerBusinessAssertionIngress,
 )
+from application.business_goal import BusinessGoalRegistry
 from runtime.state import StateSynthesisEngine
 from runtime.state.state_contract import StateFieldRecord, StateSynthesizedSnapshot
 
@@ -49,11 +52,15 @@ class BusinessDiscoveryWorkspace:
         *,
         ingress: OwnerBusinessAssertionIngress,
         state_engine: StateSynthesisEngine,
+        goal_registry: BusinessGoalRegistry | None = None,
+        constraint_registry: BusinessConstraintRegistry | None = None,
     ) -> None:
         if state_engine.snapshot_store is None:
             raise ValueError("canonical durable StateSnapshotStore is required")
         self._ingress = ingress
         self._state = state_engine
+        self._goals = goal_registry
+        self._constraints = constraint_registry
 
     def describe(self, *, tenant_id: str, business_id: str) -> dict[str, Any]:
         tenant = _required(tenant_id, "tenant_id")
@@ -95,6 +102,128 @@ class BusinessDiscoveryWorkspace:
         view["assertion"] = _result_payload(result)
         return view
 
+    def list_goals(self, *, tenant_id: str, business_id: str) -> list[dict[str, Any]]:
+        if self._goals is None:
+            raise RuntimeError("canonical BusinessGoalRegistry is not configured")
+        return [
+            _jsonable_dataclass(item)
+            for item in self._goals.list_for_business(
+                tenant_id=_required(tenant_id, "tenant_id"),
+                business_id=_required(business_id, "business_id"),
+            )
+        ]
+
+    def create_goal(
+        self,
+        *,
+        tenant_id: str,
+        business_id: str,
+        actor_id: str,
+        idempotency_key: str,
+        confirmed: bool,
+        goal_id: str,
+        goal_kind: str,
+        target_key: str | None = None,
+        metric: str | None = None,
+        baseline: float | None = None,
+        target: float | None = None,
+        deadline_at_ms: int | None = None,
+        constraint_ids: tuple[str, ...] = (),
+        parent_goal_id: str | None = None,
+        priority: int = 50,
+        occurred_at_ms: int | None = None,
+    ) -> dict[str, Any]:
+        if confirmed is not True:
+            raise ValueError("explicit owner confirmation is required for canonical goal creation")
+        if self._goals is None:
+            raise RuntimeError("canonical BusinessGoalRegistry is not configured")
+        actor = _required(actor_id, "actor_id")
+        goal = self._goals.create(
+            tenant_id=_required(tenant_id, "tenant_id"),
+            business_id=_required(business_id, "business_id"),
+            goal_id=_required(goal_id, "goal_id"),
+            idempotency_key=_required(idempotency_key, "idempotency_key"),
+            goal_kind=_required(goal_kind, "goal_kind"),
+            target_key=target_key,
+            metric=metric,
+            baseline=baseline,
+            target=target,
+            deadline_at_ms=deadline_at_ms,
+            owner_id=actor,
+            constraint_ids=constraint_ids,
+            parent_goal_id=parent_goal_id,
+            priority=priority,
+            occurred_at_ms=occurred_at_ms,
+            event_metadata={
+                "actor_id": actor,
+                "ingress": "business_discovery",
+                "owner_confirmed": True,
+            },
+        )
+        return _jsonable_dataclass(goal)
+
+    def list_constraints(
+        self,
+        *,
+        tenant_id: str,
+        business_id: str,
+    ) -> list[dict[str, Any]]:
+        if self._constraints is None:
+            raise RuntimeError("canonical BusinessConstraintRegistry is not configured")
+        return [
+            _jsonable_dataclass(item)
+            for item in self._constraints.list_for_business(
+                tenant_id=_required(tenant_id, "tenant_id"),
+                business_id=_required(business_id, "business_id"),
+            )
+        ]
+
+    def create_constraint(
+        self,
+        *,
+        tenant_id: str,
+        business_id: str,
+        actor_id: str,
+        idempotency_key: str,
+        confirmed: bool,
+        constraint_id: str,
+        constraint_kind: str,
+        severity: str = "hard",
+        subject_type: str | None = None,
+        subject_id: str | None = None,
+        state_key: str | None = None,
+        comparison: str | None = None,
+        threshold: float | None = None,
+        occurred_at_ms: int | None = None,
+    ) -> dict[str, Any]:
+        if confirmed is not True:
+            raise ValueError(
+                "explicit owner confirmation is required for canonical constraint creation"
+            )
+        if self._constraints is None:
+            raise RuntimeError("canonical BusinessConstraintRegistry is not configured")
+        actor = _required(actor_id, "actor_id")
+        constraint = self._constraints.create(
+            tenant_id=_required(tenant_id, "tenant_id"),
+            business_id=_required(business_id, "business_id"),
+            constraint_id=_required(constraint_id, "constraint_id"),
+            idempotency_key=_required(idempotency_key, "idempotency_key"),
+            constraint_kind=_required(constraint_kind, "constraint_kind"),
+            severity=severity,
+            subject_type=subject_type,
+            subject_id=subject_id,
+            state_key=state_key,
+            comparison=comparison,
+            threshold=threshold,
+            occurred_at_ms=occurred_at_ms,
+            event_metadata={
+                "actor_id": actor,
+                "ingress": "business_discovery",
+                "owner_confirmed": True,
+            },
+        )
+        return _jsonable_dataclass(constraint)
+
     @staticmethod
     def _field_view(
         *,
@@ -126,6 +255,18 @@ class BusinessDiscoveryWorkspace:
                 else [str(item.evidence_id) for item in record.evidence_refs]
             ),
         }
+
+
+def _jsonable_dataclass(value: object) -> dict[str, Any]:
+    payload = asdict(value)
+    return {
+        key: (
+            item.value
+            if hasattr(item, "value") and isinstance(getattr(item, "value"), str)
+            else item
+        )
+        for key, item in payload.items()
+    }
 
 
 def _required(value: object, name: str) -> str:

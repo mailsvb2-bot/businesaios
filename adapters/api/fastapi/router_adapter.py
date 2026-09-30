@@ -16,7 +16,9 @@ from adapters.api.fastapi.router_support import (
     resolve_metrics,
     tenant_registry_has_records,
 )
+from application.business_constraint import BusinessConstraintRegistry
 from application.business_discovery import BusinessDiscoveryWorkspace, OwnerBusinessAssertionIngress
+from application.business_goal import BusinessGoalRegistry
 from application.process_discovery import (
     CanonicalBlueprintLedger,
     CanonicalProcessEvidenceStore,
@@ -252,6 +254,14 @@ def create_api_router(*, application_service: object, dependency_container: Fast
                     idempotency_store=dependency_container.api_idempotency_store,
                 ),
                 state_engine=discovery_state_engine,
+                goal_registry=BusinessGoalRegistry(
+                    event_store=canonical_business_event_store,
+                    idempotency_store=dependency_container.api_idempotency_store,
+                ),
+                constraint_registry=BusinessConstraintRegistry(
+                    event_store=canonical_business_event_store,
+                    idempotency_store=dependency_container.api_idempotency_store,
+                ),
             )
     process_workspace = None
     process_request_idempotency = None
