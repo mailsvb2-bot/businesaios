@@ -320,7 +320,6 @@ class OwnerBusinessAssertionIngress:
                 "business_discovery_field_key": field_spec.key,
                 "epistemic_status": "OWNER_ASSERTED",
                 "actor_id": str(durable.actor_id or ""),
-                "business_fact_provenance": provenance,
             },
         )
         return self._state.synthesize(
