@@ -3,6 +3,7 @@ from __future__ import annotations
 from collections.abc import Sequence
 from dataclasses import dataclass
 
+from application.business_autonomy.decision_provenance import DecisionEventSpineProvenanceVerifier
 from runtime.business_autonomy.distributed_state import FileRegionRouteState
 from runtime.execution.distributed_execution_plane import (
     DistributedExecutionPlanner,
@@ -41,6 +42,10 @@ class FleetPressureGovernor:
 class BusinessAutonomyExecutionRuntime:
     planner: DistributedExecutionPlanner
     region_plane: RegionOwnershipPlane
+
+
+def build_decision_provenance_verifier(*, event_store: object) -> DecisionEventSpineProvenanceVerifier:
+    return DecisionEventSpineProvenanceVerifier(event_store=event_store)
 
 
 def build_execution_runtime(*, route_state: FileRegionRouteState) -> BusinessAutonomyExecutionRuntime:
@@ -97,6 +102,7 @@ __all__ = [
     "BusinessAutonomyExecutionRuntime",
     "FleetPressureGovernor",
     "StaticReplayRecovery",
+    "build_decision_provenance_verifier",
     "build_execution_runtime",
     "build_provider_quota_runtime",
     "ensure_provider_quota_tenant",

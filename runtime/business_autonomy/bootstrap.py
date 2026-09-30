@@ -57,7 +57,6 @@ from application.business_autonomy.contracts import (
     ExecutionVerdict,
     IntegrationMode,
 )
-from application.business_autonomy.decision_provenance import DecisionEventSpineProvenanceVerifier
 from application.business_autonomy.distributed_capability_trust_registry import DistributedBusinessRegistry
 from application.business_autonomy.evidence_projection import ExternalBusinessFactIngress
 from application.business_autonomy.guarded_service import BusinessAutonomyGuardedService
@@ -100,6 +99,7 @@ from runtime.business_autonomy.distributed_state import (
     FilePlanningMemoryDocumentPort,
 )
 from runtime.business_autonomy.execution_support import (
+    build_decision_provenance_verifier,
     build_execution_runtime,
     build_provider_quota_runtime,
     ensure_business_route,
@@ -746,8 +746,8 @@ def build_business_autonomy_guarded_service(*, business_id: str = 'external_busi
         autonomy_policy=BusinessAutonomyPolicy(capability_registry),
         audit_sink=audit,
         agent_identity_registry=agent_identity_registry,
-        decision_provenance_verifier=DecisionEventSpineProvenanceVerifier(
-            ontology_event_store
+        decision_provenance_verifier=build_decision_provenance_verifier(
+            event_store=ontology_event_store
         ),
     )
     from application.business_autonomy.guards import BusinessBlastRadiusGuard, BusinessBudgetGuard
