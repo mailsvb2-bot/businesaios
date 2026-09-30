@@ -15,6 +15,7 @@ from application.business_autonomy.contracts import (
     ExecutionVerdict,
     IntegrationMode,
 )
+from application.business_autonomy.decision_provenance import DecisionEventSpineProvenanceVerifier
 from application.business_autonomy.execution_subject import business_execution_fingerprint
 from application.business_autonomy.policy import AutonomyPolicyDecision
 from application.business_autonomy.registry import BusinessAdapterRegistry
@@ -125,13 +126,31 @@ class _AgentRegistry:
         return object()
 
 
-def _service(adapter, *, mode, agent_registry=None):
+class _ProvenanceVerifier:
+    def __init__(self, error: Exception | None = None):
+        self.error = error
+        self.calls = []
+
+    def assert_intent_provenance(self, intent):
+        self.calls.append(intent)
+        if self.error is not None:
+            raise self.error
+        return f"decision-event:{intent.decision_id}"
+
+
+_DEFAULT_PROVENANCE = object()
+
+
+def _service(adapter, *, mode, agent_registry=None, provenance_verifier=_DEFAULT_PROVENANCE):
     registry = BusinessAdapterRegistry()
     registry.register(adapter)
+    if provenance_verifier is _DEFAULT_PROVENANCE:
+        provenance_verifier = _ProvenanceVerifier()
     return BusinessAutonomyService(
         adapter_registry=registry,
         autonomy_policy=_Policy(mode),
         agent_identity_registry=agent_registry,
+        decision_provenance_verifier=provenance_verifier,
     )
 
 
@@ -274,6 +293,35 @@ async def test_managed_external_execution_rejects_correlation_scope_mismatch():
 
 
 @pytest.mark.asyncio
+async def test_managed_external_execution_fails_closed_without_decision_provenance():
+    adapter = _Adapter()
+    result = await _service(
+        adapter,
+        mode=IntegrationMode.POLICY_GUARDED_DELEGATED,
+        agent_registry=_AgentRegistry(),
+        provenance_verifier=None,
+    ).execute(_request(intent=_intent()))
+    assert result.verdict is ExecutionVerdict.REJECTED
+    assert result.metadata["reason"] == "missing_decision_provenance_verifier"
+    assert adapter.intent_calls == []
+
+
+@pytest.mark.asyncio
+async def test_managed_external_execution_rejects_conflicting_decision_provenance():
+    adapter = _Adapter()
+    result = await _service(
+        adapter,
+        mode=IntegrationMode.POLICY_GUARDED_DELEGATED,
+        agent_registry=_AgentRegistry(),
+        provenance_verifier=_ProvenanceVerifier(ValueError("payload hash mismatch")),
+    ).execute(_request(intent=_intent()))
+    assert result.verdict is ExecutionVerdict.REJECTED
+    assert result.metadata["reason"] == "decision_provenance_denied"
+    assert result.metadata["failure_type"] == "ValueError"
+    assert adapter.intent_calls == []
+
+
+@pytest.mark.asyncio
 async def test_managed_external_execution_rechecks_agent_authorization_before_adapter():
     adapter = _Adapter()
     registry = _AgentRegistry(PermissionError("agent delegation chain contains revoked identity"))
@@ -388,6 +436,71 @@ async def test_managed_external_execution_rejects_tenant_scope_mismatch():
     assert result.verdict is ExecutionVerdict.REJECTED
     assert result.metadata["reason"] == "action_intent_scope_mismatch"
     assert adapter.intent_calls == []
+
+
+class _DecisionEventStore:
+    def __init__(self, events):
+        self.events = list(events)
+
+    def iter_events(self, *, tenant_id, start_ms, event_type):
+        del start_ms
+        return [
+            event
+            for event in self.events
+            if event.get("tenant_id") == tenant_id
+            and event.get("event_type") == event_type
+        ]
+
+
+def test_decision_event_spine_provenance_binds_exact_sovereign_lineage():
+    intent = _intent()
+    event = {
+        "event_id": "event-1",
+        "tenant_id": "tenant-1",
+        "source": "application.decision_runtime",
+        "event_type": "decision.proposed",
+        "decision_id": "decision-1",
+        "correlation_id": "corr-1",
+        "payload": {
+            "business_id": "business-1",
+            "agent_id": "agent-1",
+            "decision": {
+                "decision_id": "decision-1",
+                "action_type": "send_message@v1",
+                "decision_payload_hash": intent.payload_hash,
+                "action_intent_id": "intent:decision-1",
+                "goal_id": "goal-1",
+            },
+        },
+    }
+    verifier = DecisionEventSpineProvenanceVerifier(_DecisionEventStore([event]))
+    assert verifier.assert_intent_provenance(intent) == "event-1"
+
+
+def test_decision_event_spine_provenance_rejects_payload_hash_drift():
+    intent = _intent()
+    event = {
+        "event_id": "event-1",
+        "tenant_id": "tenant-1",
+        "source": "application.decision_runtime",
+        "event_type": "decision.proposed",
+        "decision_id": "decision-1",
+        "correlation_id": "corr-1",
+        "payload": {
+            "business_id": "business-1",
+            "agent_id": "agent-1",
+            "decision": {
+                "decision_id": "decision-1",
+                "action_type": "send_message@v1",
+                "decision_payload_hash": "0" * 64,
+                "action_intent_id": "intent:decision-1",
+                "goal_id": "goal-1",
+            },
+        },
+    }
+    verifier = DecisionEventSpineProvenanceVerifier(_DecisionEventStore([event]))
+    with pytest.raises(ValueError, match="decision_payload_hash"):
+        verifier.assert_intent_provenance(intent)
 
 
 def test_execution_fingerprint_changes_when_sovereign_intent_changes():
