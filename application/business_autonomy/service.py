@@ -14,8 +14,8 @@ from application.business_autonomy.contracts import (
     CapabilityKind,
     ExecutionVerdict,
     ExternalExecutionRequest,
-    MANAGED_EXTERNAL_EXECUTION_MODES,
 )
+from application.business_autonomy.contracts import MANAGED_EXTERNAL_EXECUTION_MODES
 from application.business_autonomy.guards import BusinessBlastRadiusGuard, BusinessBudgetGuard
 from application.business_autonomy.non_ai_onboarding_mode import NonAiOperatingMode
 from application.business_autonomy.onboarding_contract import BusinessOnboardingRequest
