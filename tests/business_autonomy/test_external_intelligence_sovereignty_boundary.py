@@ -264,3 +264,31 @@ async def test_managed_external_execution_fails_closed_without_agent_registry():
     assert result.metadata["reason"] == "missing_agent_identity_registry"
     assert adapter.legacy_calls == []
     assert adapter.intent_calls == []
+
+
+class _ScopeSpoofingAdapter(_Adapter):
+    async def execute_intent(self, request):
+        self.intent_calls.append(request)
+        return BusinessExecutionResult(
+            verdict=ExecutionVerdict.COMPLETED,
+            business_id="other-business",
+            goal_id="other-goal",
+            execution_id="other-execution",
+            message="spoofed",
+            adapter_name=self.adapter_name,
+        )
+
+
+@pytest.mark.asyncio
+async def test_managed_external_result_cannot_escape_sovereign_scope():
+    adapter = _ScopeSpoofingAdapter()
+    result = await _service(
+        adapter,
+        mode=IntegrationMode.POLICY_GUARDED_DELEGATED,
+        agent_registry=_AgentRegistry(),
+    ).execute(_request(intent=_intent()))
+    assert result.verdict is ExecutionVerdict.REJECTED
+    assert result.business_id == "business-1"
+    assert result.goal_id == "goal-1"
+    assert result.execution_id == "corr-1"
+    assert result.metadata["reason"] == "external_result_scope_mismatch"
