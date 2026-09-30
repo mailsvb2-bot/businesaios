@@ -49,6 +49,11 @@ def business_execution_subject(request: BusinessExecutionRequest) -> dict[str, A
         "constraints": constraints,
         "integration_mode": str(request.integration_mode.value),
         "idempotency_key": str(request.idempotency_key or request.correlation_id or "").strip(),
+        "action_intent": (
+            to_jsonable(request.action_intent.as_dict())
+            if request.action_intent is not None
+            else None
+        ),
     }
     return to_jsonable(subject)
 
