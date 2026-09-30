@@ -14,8 +14,8 @@ from application.ontology.event_fact_lifecycle import (
 )
 from contracts.event_store import BUSINESS_FACT_EVENT_TYPE, BusinessFactV1, EventStore, supports_event_store
 from reliability.idempotency_contract import IdempotencyStore
-from runtime.state import StateSynthesisEngine, StateSynthesisRequest, semantic_observation
-from runtime.state.state_contract import StateEvidenceRef, StateSynthesizedSnapshot
+from runtime.state import StateSynthesisEngine, StateSynthesisRequest
+from runtime.state.state_contract import StateEvidenceRef, StateObservation, StateSynthesizedSnapshot
 from storage.evidence_store import EvidenceRecord, EvidenceStore
 
 CANON_BUSINESS_DISCOVERY_OWNER_ASSERTION_INGRESS = True
@@ -262,18 +262,18 @@ class OwnerBusinessAssertionIngress:
     ) -> StateSynthesizedSnapshot:
         provenance = dict(durable.provenance)
         payload = dict(durable.payload)
-        observation = semantic_observation(
+        observation = StateObservation(
             field_path=field_spec.field_path,
             value=payload.get("value"),
             source=str(durable.source),
             observed_at_ms=int(durable.observed_at_ms),
             occurred_at_ms=int(durable.event_time_ms),
             recorded_at_ms=int(durable.recorded_at_ms or durable.observed_at_ms),
-            kind=("unknown" if bool(payload.get("unknown")) else "fact"),
             confidence=float(provenance.get("confidence", _OWNER_ASSERTION_CONFIDENCE)),
             authoritative=bool(provenance.get("authoritative", False)),
             source_priority=int(provenance.get("source_priority", _OWNER_ASSERTION_SOURCE_PRIORITY)),
             valid_from_ms=int(provenance.get("valid_from_ms", durable.event_time_ms)),
+            unknown=bool(payload.get("unknown")),
             evidence_refs=(
                 StateEvidenceRef(
                     evidence_id=evidence_id,
@@ -285,6 +285,7 @@ class OwnerBusinessAssertionIngress:
                     },
                 ),
             ),
+            semantic_kind="fact",
             tenant_id=durable.tenant_id,
             business_id=durable.business_id,
             meta={
