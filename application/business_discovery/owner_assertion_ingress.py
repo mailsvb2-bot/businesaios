@@ -241,13 +241,20 @@ class OwnerBusinessAssertionIngress:
             business_id=business_id,
         )
         if replayed and base_snapshot is not None:
-            return OwnerAssertionIngressResult(
-                fact_id=durable.fact_id,
-                evidence_id=evidence_id,
-                state_id=base_snapshot.state_id,
-                field_path=spec.field_path,
-                replayed=True,
+            projected_field = base_snapshot.fields.get(spec.field_path)
+            projected_fact_id = (
+                str(projected_field.meta.get("business_discovery_fact_id") or "")
+                if projected_field is not None
+                else ""
             )
+            if projected_fact_id == durable.fact_id:
+                return OwnerAssertionIngressResult(
+                    fact_id=durable.fact_id,
+                    evidence_id=evidence_id,
+                    state_id=base_snapshot.state_id,
+                    field_path=spec.field_path,
+                    replayed=True,
+                )
 
         snapshot = self._project_fact(
             durable=durable,
