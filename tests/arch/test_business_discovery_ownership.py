@@ -69,3 +69,14 @@ def test_owner_assertion_ingress_uses_existing_fact_evidence_and_state_owners() 
     assert "class BusinessProfileStore" not in source
     assert "class DiscoveryStore" not in source
     assert "class WorldModel" not in source
+
+
+def test_business_discovery_http_route_is_projection_only() -> None:
+    route = (ROOT / "adapters/api/fastapi/business_workspace_discovery_routes.py").read_text(
+        encoding="utf-8"
+    )
+    assert "business_owner_scope" in route
+    assert "BusinessDiscoveryWorkspace" in route
+    assert "EventFactLifecycleWriter" not in route
+    assert "EvidenceStore" not in route
+    assert "StateSynthesisEngine" not in route
