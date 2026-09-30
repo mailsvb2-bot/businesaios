@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from collections.abc import Mapping
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from typing import Any
 
 from application.business_autonomy.channel_adapter_registry import TypedChannelAdapterRegistry
@@ -26,6 +26,7 @@ from application.business_autonomy.registry import (
     BusinessCapabilityRegistry,
     RegisteredBusinessCapabilities,
 )
+from core.utils.canonical import payload_hash as canonical_payload_hash
 
 
 @dataclass(frozen=True)
@@ -139,6 +140,7 @@ class BusinessAutonomyService:
             if (
                 intent.business_id != request.envelope.business_id
                 or intent.goal_id != request.envelope.goal_id
+                or intent.correlation_id != delegated_request.correlation_id
                 or (envelope_tenant_id and intent.tenant_id != envelope_tenant_id)
             ):
                 return BusinessExecutionResult(
@@ -150,6 +152,17 @@ class BusinessAutonomyService:
                     delegated_to_domain_engine=False,
                     adapter_name=adapter.adapter_name,
                     metadata={"reason": "action_intent_scope_mismatch"},
+                )
+            if canonical_payload_hash(intent.parameters_copy()) != intent.payload_hash:
+                return BusinessExecutionResult(
+                    verdict=ExecutionVerdict.REJECTED,
+                    business_id=request.envelope.business_id,
+                    goal_id=request.envelope.goal_id,
+                    execution_id=request.correlation_id,
+                    message="Managed external execution intent payload hash is invalid.",
+                    delegated_to_domain_engine=False,
+                    adapter_name=adapter.adapter_name,
+                    metadata={"reason": "action_intent_payload_hash_mismatch"},
                 )
             if self._agent_identity_registry is None:
                 return BusinessExecutionResult(
@@ -219,6 +232,16 @@ class BusinessAutonomyService:
                     adapter_name=adapter.adapter_name,
                     metadata={"reason": "external_result_scope_mismatch"},
                 )
+            result = replace(
+                result,
+                metadata={
+                    **dict(result.metadata or {}),
+                    "external_output_role": "execution_result_evidence",
+                    "decision_authority": False,
+                    "sovereign_decision_id": intent.decision_id,
+                    "sovereign_action_intent_id": intent.intent_id,
+                },
+            )
         else:
             result = await adapter.execute(delegated_request)
         if self._audit_sink is not None and hasattr(self._audit_sink, "record"):
