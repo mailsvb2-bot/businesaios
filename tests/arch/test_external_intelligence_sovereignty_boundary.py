@@ -46,3 +46,16 @@ def test_external_execution_contract_owner_reuses_action_intent_v2() -> None:
         if isinstance(node, ast.AnnAssign) and isinstance(node.target, ast.Name)
     }
     assert annotations["action_intent"] == "ActionIntentV2"
+
+
+
+def test_managed_boundary_revalidates_intent_integrity_before_external_effect() -> None:
+    source = SERVICE.read_text(encoding="utf-8")
+    assert "canonical_payload_hash(intent.parameters_copy()) != intent.payload_hash" in source
+    assert "intent.correlation_id != delegated_request.correlation_id" in source
+
+
+def test_managed_external_outputs_are_explicitly_non_authoritative() -> None:
+    source = SERVICE.read_text(encoding="utf-8")
+    assert '"external_output_role": "execution_result_evidence"' in source
+    assert '"decision_authority": False' in source
