@@ -8,6 +8,8 @@ from application.business_autonomy.contracts import ExternalExecutionRequest
 ROOT = Path(__file__).resolve().parents[2]
 CONTRACTS = ROOT / "application" / "business_autonomy" / "contracts.py"
 SERVICE = ROOT / "application" / "business_autonomy" / "service.py"
+PROVENANCE = ROOT / "application" / "business_autonomy" / "decision_provenance.py"
+BOOTSTRAP = ROOT / "runtime" / "business_autonomy" / "bootstrap.py"
 
 
 def test_managed_external_request_has_no_business_goal_envelope_field() -> None:
@@ -59,3 +61,22 @@ def test_managed_external_outputs_are_explicitly_non_authoritative() -> None:
     source = SERVICE.read_text(encoding="utf-8")
     assert '"external_output_role": "execution_result_evidence"' in source
     assert '"decision_authority": False' in source
+
+
+
+def test_managed_provenance_reuses_event_spine_without_second_crypto_verifier() -> None:
+    source = PROVENANCE.read_text(encoding="utf-8")
+    assert "DECISION_PROPOSED" in source
+    assert "decision_payload_hash" in source
+    assert "action_intent_id" in source
+    assert "decision_crypto" not in source
+    assert "verify_signed_material" not in source
+    assert "signature_gate" not in source
+
+
+def test_production_business_autonomy_wires_canonical_decision_provenance() -> None:
+    source = BOOTSTRAP.read_text(encoding="utf-8")
+    assert "DecisionEventSpineProvenanceVerifier" in source
+    assert "DecisionEventSpineProvenanceVerifier(" in source
+    assert "ontology_event_store" in source
+    assert "decision_provenance_verifier=" in source
