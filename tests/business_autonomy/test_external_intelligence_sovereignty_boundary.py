@@ -20,21 +20,29 @@ from application.business_autonomy.policy import AutonomyPolicyDecision
 from application.business_autonomy.registry import BusinessAdapterRegistry
 from application.business_autonomy.service import BusinessAutonomyService
 from contracts.action_intent import ActionIntentV2
+from core.utils.canonical import payload_hash as canonical_payload_hash
 
 
-def _intent(*, business_id: str = "business-1", goal_id: str = "goal-1") -> ActionIntentV2:
+def _intent(
+    *,
+    business_id: str = "business-1",
+    goal_id: str = "goal-1",
+    correlation_id: str = "corr-1",
+    payload_hash: str | None = None,
+) -> ActionIntentV2:
+    parameters = {"recipient": "user-1", "text": "sovereign text"}
     return ActionIntentV2.from_projection(
         action_id="action:decision-1",
         intent_id="intent:decision-1",
         tenant_id="tenant-1",
         business_id=business_id,
         decision_id="decision-1",
-        correlation_id="corr-1",
+        correlation_id=correlation_id,
         goal_id=goal_id,
         agent_id="agent-1",
         capability_target="send_message@v1",
-        parameters={"recipient": "user-1", "text": "sovereign text"},
-        payload_hash="a" * 64,
+        parameters=parameters,
+        payload_hash=payload_hash or canonical_payload_hash(parameters),
         channel="telegram",
     )
 
@@ -240,6 +248,32 @@ async def test_channel_managed_projection_comes_from_action_intent_not_original_
 
 
 @pytest.mark.asyncio
+async def test_managed_external_execution_rejects_forged_payload_hash():
+    adapter = _Adapter()
+    result = await _service(
+        adapter,
+        mode=IntegrationMode.POLICY_GUARDED_DELEGATED,
+        agent_registry=_AgentRegistry(),
+    ).execute(_request(intent=_intent(payload_hash="f" * 64)))
+    assert result.verdict is ExecutionVerdict.REJECTED
+    assert result.metadata["reason"] == "action_intent_payload_hash_mismatch"
+    assert adapter.intent_calls == []
+
+
+@pytest.mark.asyncio
+async def test_managed_external_execution_rejects_correlation_scope_mismatch():
+    adapter = _Adapter()
+    result = await _service(
+        adapter,
+        mode=IntegrationMode.POLICY_GUARDED_DELEGATED,
+        agent_registry=_AgentRegistry(),
+    ).execute(_request(intent=_intent(correlation_id="other-correlation")))
+    assert result.verdict is ExecutionVerdict.REJECTED
+    assert result.metadata["reason"] == "action_intent_scope_mismatch"
+    assert adapter.intent_calls == []
+
+
+@pytest.mark.asyncio
 async def test_managed_external_execution_rechecks_agent_authorization_before_adapter():
     adapter = _Adapter()
     registry = _AgentRegistry(PermissionError("agent delegation chain contains revoked identity"))
@@ -266,6 +300,39 @@ async def test_managed_external_execution_fails_closed_without_agent_registry():
     assert result.metadata["reason"] == "missing_agent_identity_registry"
     assert adapter.legacy_calls == []
     assert adapter.intent_calls == []
+
+
+class _DecisionClaimingAdapter(_Adapter):
+    async def execute_intent(self, request):
+        result = await super().execute_intent(request)
+        return BusinessExecutionResult(
+            verdict=result.verdict,
+            business_id=result.business_id,
+            goal_id=result.goal_id,
+            execution_id=result.execution_id,
+            message=result.message,
+            adapter_name=result.adapter_name,
+            metadata={
+                "decision_authority": True,
+                "next_action": "replace_business_strategy",
+            },
+        )
+
+
+@pytest.mark.asyncio
+async def test_managed_external_output_is_evidence_only_even_if_provider_claims_decision_authority():
+    adapter = _DecisionClaimingAdapter()
+    result = await _service(
+        adapter,
+        mode=IntegrationMode.POLICY_GUARDED_DELEGATED,
+        agent_registry=_AgentRegistry(),
+    ).execute(_request(intent=_intent()))
+    assert result.verdict is ExecutionVerdict.COMPLETED
+    assert result.metadata["decision_authority"] is False
+    assert result.metadata["external_output_role"] == "execution_result_evidence"
+    assert result.metadata["sovereign_decision_id"] == "decision-1"
+    assert result.metadata["sovereign_action_intent_id"] == "intent:decision-1"
+    assert result.metadata["next_action"] == "replace_business_strategy"
 
 
 class _ScopeSpoofingAdapter(_Adapter):
@@ -310,7 +377,7 @@ async def test_managed_external_execution_rejects_tenant_scope_mismatch():
         agent_id="agent-1",
         capability_target="send_message@v1",
         parameters={"recipient": "user-1", "text": "sovereign text"},
-        payload_hash="b" * 64,
+        payload_hash=canonical_payload_hash({"recipient": "user-1", "text": "sovereign text"}),
         channel="telegram",
     )
     result = await _service(
@@ -336,7 +403,9 @@ def test_execution_fingerprint_changes_when_sovereign_intent_changes():
         agent_id="agent-1",
         capability_target="send_message@v1",
         parameters={"recipient": "user-1", "text": "different sovereign text"},
-        payload_hash="c" * 64,
+        payload_hash=canonical_payload_hash(
+            {"recipient": "user-1", "text": "different sovereign text"}
+        ),
         channel="telegram",
     )
     second = _request(intent=second_intent)
