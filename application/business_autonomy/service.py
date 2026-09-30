@@ -133,9 +133,13 @@ class BusinessAutonomyService:
                     adapter_name=adapter.adapter_name,
                     metadata={"reason": "missing_action_intent"},
                 )
+            envelope_tenant_id = str(
+                request.envelope.metadata.get("tenant_id") or ""
+            ).strip()
             if (
                 intent.business_id != request.envelope.business_id
                 or intent.goal_id != request.envelope.goal_id
+                or (envelope_tenant_id and intent.tenant_id != envelope_tenant_id)
             ):
                 return BusinessExecutionResult(
                     verdict=ExecutionVerdict.REJECTED,
