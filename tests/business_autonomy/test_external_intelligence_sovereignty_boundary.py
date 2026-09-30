@@ -452,54 +452,65 @@ class _DecisionEventStore:
         ]
 
 
-def test_decision_event_spine_provenance_binds_exact_sovereign_lineage():
-    intent = _intent()
-    event = {
+def _decision_event_for_intent(intent: ActionIntentV2, **decision_patch):
+    decision = {
+        "decision_id": intent.decision_id,
+        "action_type": intent.capability_target,
+        "decision_payload_hash": intent.payload_hash,
+        "action_intent_id": intent.intent_id,
+        "action_intent_fingerprint": canonical_payload_hash(intent.as_dict()),
+        "goal_id": intent.goal_id,
+        "issued_at_ms": 1,
+        "expires_at_ms": 4_102_444_800_000,
+    }
+    decision.update(decision_patch)
+    return {
         "event_id": "event-1",
-        "tenant_id": "tenant-1",
+        "tenant_id": intent.tenant_id,
         "source": "application.decision_runtime",
         "event_type": "decision.proposed",
-        "decision_id": "decision-1",
-        "correlation_id": "corr-1",
+        "decision_id": intent.decision_id,
+        "correlation_id": intent.correlation_id,
         "payload": {
-            "business_id": "business-1",
-            "agent_id": "agent-1",
-            "decision": {
-                "decision_id": "decision-1",
-                "action_type": "send_message@v1",
-                "decision_payload_hash": intent.payload_hash,
-                "action_intent_id": "intent:decision-1",
-                "goal_id": "goal-1",
-            },
+            "business_id": intent.business_id,
+            "agent_id": intent.agent_id,
+            "decision": decision,
         },
     }
-    verifier = DecisionEventSpineProvenanceVerifier(_DecisionEventStore([event]))
+
+
+def test_decision_event_spine_provenance_binds_exact_sovereign_lineage():
+    intent = _intent()
+    verifier = DecisionEventSpineProvenanceVerifier(
+        _DecisionEventStore([_decision_event_for_intent(intent)])
+    )
     assert verifier.assert_intent_provenance(intent) == "event-1"
 
 
 def test_decision_event_spine_provenance_rejects_payload_hash_drift():
     intent = _intent()
-    event = {
-        "event_id": "event-1",
-        "tenant_id": "tenant-1",
-        "source": "application.decision_runtime",
-        "event_type": "decision.proposed",
-        "decision_id": "decision-1",
-        "correlation_id": "corr-1",
-        "payload": {
-            "business_id": "business-1",
-            "agent_id": "agent-1",
-            "decision": {
-                "decision_id": "decision-1",
-                "action_type": "send_message@v1",
-                "decision_payload_hash": "0" * 64,
-                "action_intent_id": "intent:decision-1",
-                "goal_id": "goal-1",
-            },
-        },
-    }
+    event = _decision_event_for_intent(intent, decision_payload_hash="0" * 64)
     verifier = DecisionEventSpineProvenanceVerifier(_DecisionEventStore([event]))
     with pytest.raises(ValueError, match="decision_payload_hash"):
+        verifier.assert_intent_provenance(intent)
+
+
+def test_decision_event_spine_provenance_rejects_full_intent_semantic_drift():
+    intent = _intent()
+    event = _decision_event_for_intent(
+        intent,
+        action_intent_fingerprint="0" * 64,
+    )
+    verifier = DecisionEventSpineProvenanceVerifier(_DecisionEventStore([event]))
+    with pytest.raises(ValueError, match="action_intent_fingerprint"):
+        verifier.assert_intent_provenance(intent)
+
+
+def test_decision_event_spine_provenance_rejects_expired_signed_decision():
+    intent = _intent()
+    event = _decision_event_for_intent(intent, expires_at_ms=2)
+    verifier = DecisionEventSpineProvenanceVerifier(_DecisionEventStore([event]))
+    with pytest.raises(ValueError, match="expired"):
         verifier.assert_intent_provenance(intent)
 
 
