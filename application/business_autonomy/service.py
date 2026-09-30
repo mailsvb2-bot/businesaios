@@ -49,6 +49,7 @@ class BusinessAutonomyService:
         blast_radius_guard: BusinessBlastRadiusGuard | None = None,
         budget_guard: BusinessBudgetGuard | None = None,
         agent_identity_registry: AgentIdentityRegistry | None = None,
+        decision_provenance_verifier: object | None = None,
     ) -> None:
         self._adapter_registry = adapter_registry or BusinessAdapterRegistry()
         self._capability_registry = BusinessCapabilityRegistry()
@@ -58,6 +59,7 @@ class BusinessAutonomyService:
         self._blast_radius_guard = blast_radius_guard or BusinessBlastRadiusGuard()
         self._budget_guard = budget_guard or BusinessBudgetGuard()
         self._agent_identity_registry = agent_identity_registry
+        self._decision_provenance_verifier = decision_provenance_verifier
 
     def onboard(self, request: BusinessOnboardingRequest) -> BusinessAutonomyOnboardingResult:
         identity = _identity_from_onboarding_request(request)
@@ -164,6 +166,50 @@ class BusinessAutonomyService:
                     adapter_name=adapter.adapter_name,
                     metadata={"reason": "action_intent_payload_hash_mismatch"},
                 )
+            provenance_verifier = self._decision_provenance_verifier
+            assert_provenance = getattr(
+                provenance_verifier,
+                "assert_intent_provenance",
+                None,
+            )
+            if not callable(assert_provenance):
+                return BusinessExecutionResult(
+                    verdict=ExecutionVerdict.REJECTED,
+                    business_id=request.envelope.business_id,
+                    goal_id=request.envelope.goal_id,
+                    execution_id=request.correlation_id,
+                    message="Managed external execution requires canonical decision provenance.",
+                    delegated_to_domain_engine=False,
+                    adapter_name=adapter.adapter_name,
+                    metadata={"reason": "missing_decision_provenance_verifier"},
+                )
+            try:
+                provenance_event_id = str(assert_provenance(intent) or "").strip()
+            except (LookupError, RuntimeError, ValueError) as exc:
+                return BusinessExecutionResult(
+                    verdict=ExecutionVerdict.REJECTED,
+                    business_id=request.envelope.business_id,
+                    goal_id=request.envelope.goal_id,
+                    execution_id=request.correlation_id,
+                    message=str(exc),
+                    delegated_to_domain_engine=False,
+                    adapter_name=adapter.adapter_name,
+                    metadata={
+                        "reason": "decision_provenance_denied",
+                        "failure_type": type(exc).__name__,
+                    },
+                )
+            if not provenance_event_id:
+                return BusinessExecutionResult(
+                    verdict=ExecutionVerdict.REJECTED,
+                    business_id=request.envelope.business_id,
+                    goal_id=request.envelope.goal_id,
+                    execution_id=request.correlation_id,
+                    message="Canonical decision provenance event is empty.",
+                    delegated_to_domain_engine=False,
+                    adapter_name=adapter.adapter_name,
+                    metadata={"reason": "decision_provenance_denied"},
+                )
             if self._agent_identity_registry is None:
                 return BusinessExecutionResult(
                     verdict=ExecutionVerdict.REJECTED,
@@ -240,6 +286,7 @@ class BusinessAutonomyService:
                     "decision_authority": False,
                     "sovereign_decision_id": intent.decision_id,
                     "sovereign_action_intent_id": intent.intent_id,
+                    "sovereign_provenance_event_id": provenance_event_id,
                 },
             )
         else:
