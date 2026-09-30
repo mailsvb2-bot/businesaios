@@ -159,22 +159,33 @@ class OwnerBusinessAssertionIngress:
         )
         correlation_id = str(assertion.correlation_id or "").strip() or None
 
-        existing_for_key = self._fact_writer.find_existing_for_key(
+        existing_for_key = self._find_existing_key_binding(
             tenant_id=tenant_id,
             business_id=business_id,
-            entity_id=business_id,
-            operation="assert",
             idempotency_key=user_key,
-            fact_type=spec.fact_type,
-            event_metadata={"actor_id": actor_id},
         )
         replayed = existing_for_key is not None
         if existing_for_key is not None:
             durable = business_fact_from_event(existing_for_key)
-            if dict(durable.payload) != payload:
+            if (
+                str(durable.actor_id or "") != actor_id
+                or durable.fact_type != spec.fact_type
+                or dict(durable.payload) != payload
+            ):
                 raise ValueError(
                     "business discovery idempotency key is already bound to a different assertion"
                 )
+            if not self._fact_writer.repair_existing(
+                tenant_id=tenant_id,
+                business_id=business_id,
+                entity_id=business_id,
+                operation="assert",
+                idempotency_key=user_key,
+                fact_type=durable.fact_type,
+                payload=dict(durable.payload),
+                event_metadata={"actor_id": actor_id},
+            ):
+                raise RuntimeError("business discovery durable fact lost idempotency claim")
             evidence_id = _evidence_id(durable.fact_id)
             self._require_evidence(
                 durable=durable,
@@ -315,6 +326,45 @@ class OwnerBusinessAssertionIngress:
                 },
             )
         )
+
+    def _find_existing_key_binding(
+        self,
+        *,
+        tenant_id: str,
+        business_id: str,
+        idempotency_key: str,
+    ) -> dict[str, Any] | None:
+        matched: dict[str, Any] | None = None
+        for raw_event in self._events.iter_events(
+            tenant_id=tenant_id,
+            start_ms=0,
+            event_type=BUSINESS_FACT_EVENT_TYPE,
+        ):
+            event = dict(raw_event)
+            envelope = dict(event.get("payload") or {})
+            if str(event.get("source") or "") != _OWNER_ASSERTION_SOURCE:
+                continue
+            if str(envelope.get("business_id") or "") != business_id:
+                continue
+            if str(envelope.get("entity_id") or "") != business_id:
+                continue
+            persisted_payload = dict(envelope.get("payload") or {})
+            expected_id = self._fact_writer.fact_id_for(
+                tenant_id=tenant_id,
+                business_id=business_id,
+                entity_id=business_id,
+                operation="assert",
+                idempotency_key=idempotency_key,
+                payload=persisted_payload,
+            )
+            if str(event.get("event_id") or "") != expected_id:
+                continue
+            if matched is not None:
+                raise RuntimeError(
+                    "multiple business discovery facts match one idempotency key"
+                )
+            matched = event
+        return matched
 
     def _find_fact(self, *, tenant_id: str, fact_id: str) -> BusinessFactV1 | None:
         matched: BusinessFactV1 | None = None
