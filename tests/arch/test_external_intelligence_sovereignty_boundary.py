@@ -10,6 +10,7 @@ CONTRACTS = ROOT / "application" / "business_autonomy" / "contracts.py"
 SERVICE = ROOT / "application" / "business_autonomy" / "service.py"
 PROVENANCE = ROOT / "application" / "business_autonomy" / "decision_provenance.py"
 BOOTSTRAP = ROOT / "runtime" / "business_autonomy" / "bootstrap.py"
+POLICY = ROOT / "application" / "business_autonomy" / "policy.py"
 
 
 def test_managed_external_request_has_no_business_goal_envelope_field() -> None:
@@ -80,3 +81,14 @@ def test_production_business_autonomy_wires_canonical_decision_provenance() -> N
     assert "DecisionEventSpineProvenanceVerifier(" in source
     assert "ontology_event_store" in source
     assert "decision_provenance_verifier=" in source
+
+def test_intelligent_domain_owners_are_forced_through_managed_mode() -> None:
+    source = POLICY.read_text(encoding="utf-8")
+    for capability in ("CapabilityKind.DOMAIN_AI", "CapabilityKind.DOMAIN_PLANNER", "CapabilityKind.DOMAIN_SCHEDULER"):
+        assert capability in source
+    domain_branch = source.index("if has_domain_owner:")
+    managed_mode = source.index("IntegrationMode.POLICY_GUARDED_DELEGATED", domain_branch)
+    low_autonomy = source.index("IntegrationMode.LOW_AUTONOMY", managed_mode)
+    supervised = source.index("IntegrationMode.SUPERVISED", low_autonomy)
+    assert domain_branch < managed_mode < low_autonomy < supervised
+
