@@ -92,3 +92,12 @@ def test_intelligent_domain_owners_are_forced_through_managed_mode() -> None:
     supervised = source.index("IntegrationMode.SUPERVISED", low_autonomy)
     assert domain_branch < managed_mode < low_autonomy < supervised
 
+
+def test_managed_provenance_binds_full_intent_and_signed_lifetime() -> None:
+    provenance = PROVENANCE.read_text(encoding="utf-8")
+    emission = (ROOT / "application" / "decision_runtime" / "emission.py").read_text(encoding="utf-8")
+    assert "action_intent_fingerprint" in emission
+    assert "expires_at_ms" in emission
+    assert "action_intent_fingerprint" in provenance
+    assert "canonical decision provenance is expired" in provenance
+
