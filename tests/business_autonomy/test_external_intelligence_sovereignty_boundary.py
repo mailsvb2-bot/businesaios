@@ -103,12 +103,25 @@ class _Adapter:
         )
 
 
-def _service(adapter, *, mode):
+class _AgentRegistry:
+    def __init__(self, error: Exception | None = None):
+        self.error = error
+        self.calls = []
+
+    def assert_execution_authorized(self, **kwargs):
+        self.calls.append(dict(kwargs))
+        if self.error is not None:
+            raise self.error
+        return object()
+
+
+def _service(adapter, *, mode, agent_registry=None):
     registry = BusinessAdapterRegistry()
     registry.register(adapter)
     return BusinessAutonomyService(
         adapter_registry=registry,
         autonomy_policy=_Policy(mode),
+        agent_identity_registry=agent_registry,
     )
 
 
@@ -127,12 +140,21 @@ async def test_managed_external_execution_fails_closed_without_action_intent():
 @pytest.mark.asyncio
 async def test_managed_external_execution_uses_only_narrow_intent_surface():
     adapter = _Adapter()
+    agent_registry = _AgentRegistry()
     result = await _service(
-        adapter, mode=IntegrationMode.POLICY_GUARDED_DELEGATED
+        adapter,
+        mode=IntegrationMode.POLICY_GUARDED_DELEGATED,
+        agent_registry=agent_registry,
     ).execute(_request(intent=_intent()))
     assert result.verdict is ExecutionVerdict.COMPLETED
     assert adapter.legacy_calls == []
     assert len(adapter.intent_calls) == 1
+    assert agent_registry.calls == [{
+        "tenant_id": "tenant-1",
+        "business_id": "business-1",
+        "agent_id": "agent-1",
+        "capability": "send_message@v1",
+    }]
     external = adapter.intent_calls[0]
     assert external.action_intent.capability_target == "send_message@v1"
     assert external.action_intent.parameters_copy()["text"] == "sovereign text"
@@ -143,7 +165,9 @@ async def test_managed_external_execution_uses_only_narrow_intent_surface():
 async def test_managed_external_execution_rejects_intent_scope_mismatch():
     adapter = _Adapter()
     result = await _service(
-        adapter, mode=IntegrationMode.POLICY_GUARDED_DELEGATED
+        adapter,
+        mode=IntegrationMode.POLICY_GUARDED_DELEGATED,
+        agent_registry=_AgentRegistry(),
     ).execute(_request(intent=_intent(goal_id="other-goal")))
     assert result.verdict is ExecutionVerdict.REJECTED
     assert result.metadata["reason"] == "action_intent_scope_mismatch"
@@ -199,7 +223,9 @@ async def test_channel_managed_projection_comes_from_action_intent_not_original_
         capabilities=(BusinessCapability(kind=CapabilityKind.DOMAIN_AI),),
     )
     result = await _service(
-        adapter, mode=IntegrationMode.POLICY_GUARDED_DELEGATED
+        adapter,
+        mode=IntegrationMode.POLICY_GUARDED_DELEGATED,
+        agent_registry=_AgentRegistry(),
     ).execute(_request(intent=_intent()))
     assert result.verdict is ExecutionVerdict.COMPLETED
     envelope, projected_request = channel.calls[0]
@@ -209,3 +235,32 @@ async def test_channel_managed_projection_comes_from_action_intent_not_original_
     assert projected_request.envelope.goal_type == "send_message@v1"
     assert projected_request.envelope.goal_payload["text"] == "sovereign text"
     assert projected_request.action_intent is not None
+
+
+@pytest.mark.asyncio
+async def test_managed_external_execution_rechecks_agent_authorization_before_adapter():
+    adapter = _Adapter()
+    registry = _AgentRegistry(PermissionError("agent delegation chain contains revoked identity"))
+    result = await _service(
+        adapter,
+        mode=IntegrationMode.POLICY_GUARDED_DELEGATED,
+        agent_registry=registry,
+    ).execute(_request(intent=_intent()))
+    assert result.verdict is ExecutionVerdict.REJECTED
+    assert result.metadata["reason"] == "agent_authorization_denied"
+    assert adapter.legacy_calls == []
+    assert adapter.intent_calls == []
+
+
+@pytest.mark.asyncio
+async def test_managed_external_execution_fails_closed_without_agent_registry():
+    adapter = _Adapter()
+    result = await _service(
+        adapter,
+        mode=IntegrationMode.POLICY_GUARDED_DELEGATED,
+        agent_registry=None,
+    ).execute(_request(intent=_intent()))
+    assert result.verdict is ExecutionVerdict.REJECTED
+    assert result.metadata["reason"] == "missing_agent_identity_registry"
+    assert adapter.legacy_calls == []
+    assert adapter.intent_calls == []
