@@ -69,6 +69,7 @@ from application.business_autonomy.persistence import (
     PersistentBusinessOperatorOverridePolicy,
     PersistentBusinessPlanningMemorySink,
 )
+from application.business_autonomy.decision_provenance import DecisionEventSpineProvenanceVerifier
 from application.business_autonomy.policy import BusinessAutonomyPolicy, BusinessTrustPolicy
 from application.business_autonomy.provider_admin_service import ProviderAdminService
 from application.business_autonomy.registry import (
@@ -745,6 +746,9 @@ def build_business_autonomy_guarded_service(*, business_id: str = 'external_busi
         autonomy_policy=BusinessAutonomyPolicy(capability_registry),
         audit_sink=audit,
         agent_identity_registry=agent_identity_registry,
+        decision_provenance_verifier=DecisionEventSpineProvenanceVerifier(
+            ontology_event_store
+        ),
     )
     from application.business_autonomy.guards import BusinessBlastRadiusGuard, BusinessBudgetGuard
 
