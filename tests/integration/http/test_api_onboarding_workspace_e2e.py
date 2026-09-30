@@ -127,6 +127,9 @@ def test_real_api_onboarding_issues_owner_session_and_opens_workspace(tmp_path) 
             status, anonymous_workspace = _request(port, "/business-workspace/providers", headers=secure_headers)
             assert status == 401, anonymous_workspace
             assert anonymous_workspace["detail"] == "missing_authentication"
+            status, anonymous_discovery = _request(port, "/business-workspace/discovery", headers=secure_headers)
+            assert status == 401, anonymous_discovery
+            assert anonymous_discovery["detail"] == "missing_authentication"
             status, anonymous_businesses = _request(port, "/public-site/owner/businesses", headers=secure_headers)
             assert status == 401, anonymous_businesses
             assert anonymous_businesses["detail"] == "owner_account_session_required"
@@ -230,6 +233,67 @@ def test_real_api_onboarding_issues_owner_session_and_opens_workspace(tmp_path) 
             assert chosen["customer_selectable"] is True
             assert chosen["read_supported"] is True
             assert chosen["write_actions_enabled"] is False
+
+            status, discovery = _request(
+                port,
+                "/business-workspace/discovery",
+                headers=owner_headers,
+            )
+            assert status == 200, discovery
+            assert discovery["tenant_id"] == cta["tenant_id"]
+            assert discovery["business_id"] == cta["business_id"]
+            assert discovery["schema_version"] == "business_discovery_workspace@v1"
+            assert discovery["progress"]["total_fields"] == len(discovery["fields"])
+
+            discovery_assertion = {
+                "field_key": "identity.display_name",
+                "value": "Canonical API E2E Business",
+                "observed_at_ms": 1_700_000_000_000,
+                "correlation_id": "api-e2e-discovery-1",
+            }
+            discovery_headers = {
+                **owner_headers,
+                "X-Idempotency-Key": "api-e2e-discovery-display-name-1",
+            }
+            status, discovery_updated = _request(
+                port,
+                "/business-workspace/discovery/assertions",
+                method="POST",
+                headers=discovery_headers,
+                payload=discovery_assertion,
+            )
+            assert status == 200, discovery_updated
+            asserted = next(
+                item
+                for item in discovery_updated["fields"]
+                if item["key"] == "identity.display_name"
+            )
+            assert asserted["value"] == "Canonical API E2E Business"
+            assert asserted["owner_asserted"] is True
+            assert asserted["covered"] is True
+            assert discovery_updated["assertion"]["replayed"] is False
+            first_discovery_fact_id = discovery_updated["assertion"]["fact_id"]
+
+            status, discovery_replayed = _request(
+                port,
+                "/business-workspace/discovery/assertions",
+                method="POST",
+                headers=discovery_headers,
+                payload=discovery_assertion,
+            )
+            assert status == 200, discovery_replayed
+            assert discovery_replayed["assertion"]["replayed"] is True
+            assert discovery_replayed["assertion"]["fact_id"] == first_discovery_fact_id
+
+            status, discovery_conflict = _request(
+                port,
+                "/business-workspace/discovery/assertions",
+                method="POST",
+                headers=discovery_headers,
+                payload={**discovery_assertion, "value": "Forged Replay Business"},
+            )
+            assert status == 422, discovery_conflict
+            assert "different assertion" in discovery_conflict["detail"]
 
             status, approvals = _request(
                 port,

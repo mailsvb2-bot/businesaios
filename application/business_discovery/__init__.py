@@ -12,6 +12,11 @@ from application.business_discovery.owner_assertion_ingress import (
     OwnerBusinessAssertion,
     OwnerBusinessAssertionIngress,
 )
+from application.business_discovery.workspace import (
+    CANON_BUSINESS_DISCOVERY_WORKSPACE,
+    BusinessDiscoveryProgress,
+    BusinessDiscoveryWorkspace,
+)
 
 __all__ = [
     "CANON_BUSINESS_DISCOVERY_CONTRACT",
@@ -28,9 +33,3 @@ __all__ = [
     "discovery_field_spec",
     "normalize_discovery_value",
 ]
-
-from application.business_discovery.workspace import (
-    CANON_BUSINESS_DISCOVERY_WORKSPACE,
-    BusinessDiscoveryProgress,
-    BusinessDiscoveryWorkspace,
-)
