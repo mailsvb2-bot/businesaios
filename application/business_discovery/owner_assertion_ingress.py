@@ -171,6 +171,8 @@ class OwnerBusinessAssertionIngress:
                 str(durable.actor_id or "") != actor_id
                 or durable.fact_type != spec.fact_type
                 or dict(durable.payload) != payload
+                or int(durable.event_time_ms) != occurred_at_ms
+                or int(durable.observed_at_ms) != observed_at_ms
             ):
                 raise ValueError(
                     "business discovery idempotency key is already bound to a different assertion"
