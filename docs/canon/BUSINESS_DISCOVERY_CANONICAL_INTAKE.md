@@ -1,6 +1,6 @@
 # Business Discovery / Canonical Business Intake — foundation
 
-Status: BD0–BD2 canonical foundation locked; BD3 authenticated workspace/API in progress; BD4 implemented; BD5 canonical provider-evidence reconciliation implemented
+Status: BD0–BD5 implemented; BD6 legacy onboarding migration and BD7 final vertical-slice acceptance remain
 Branch: `canon/business-discovery-ui-foundation`
 Purpose: preserve and implement the missing canonical user-facing intake that feeds the existing BusinessAIOS World Model without creating a second brain.
 
@@ -76,6 +76,22 @@ Known owner answers are fail-closed and normalized before Evidence/EventStore wr
 - epistemic unknown is represented only by `unknown=true` with no concrete value, never by an overloaded string value.
 
 This contract intentionally does not invent a new finance owner. It only validates the shape of owner assertions before those assertions enter the canonical Evidence/Event/State path.
+
+## BD3 authenticated adaptive workspace UI
+
+The owner workspace now renders a dedicated `BusinessDiscoveryPanel` backed only by the authenticated Business Discovery API.
+
+- progress is calculated from the server snapshot; React state is only a view/command buffer;
+- one uncovered field is shown at a time using the canonical `value_kind` contract;
+- known answers use a fresh request idempotency key and carry the browser observation timestamp;
+- `Не знаю` records canonical unknown semantics; `Пропустить сейчас` records nothing and intentionally returns after refresh;
+- covered facts show server-derived epistemic status: owner asserted, provider observed, verified or conflicted;
+- no discovery answer, owner API key or provider secret is persisted in localStorage, sessionStorage or IndexedDB;
+- the canonical Playwright owner-workspace scenario answers the actual next field returned by the server and proves the answer survives a browser reload/session resume, so later BD6 seeding cannot make the E2E depend on a hardcoded first question.
+
+Frontend surface:
+- `frontend/src/BusinessDiscoveryPanel.jsx`
+- `frontend/src/BusinessDiscoveryPanel.css`
 
 ## BD4 canonical Goal/Constraint orchestration
 

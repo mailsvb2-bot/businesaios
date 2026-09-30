@@ -1,0 +1,148 @@
+.discovery-panel {
+  display: grid;
+  gap: 18px;
+}
+
+.discovery-percent {
+  min-width: 64px;
+  padding: 10px 14px;
+  border: 1px solid var(--border, #d9dde5);
+  border-radius: 999px;
+  text-align: center;
+  font-weight: 700;
+}
+
+.discovery-progress {
+  display: grid;
+  gap: 7px;
+}
+
+.discovery-progress-track {
+  height: 9px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: rgba(127, 127, 127, 0.14);
+}
+
+.discovery-progress-track > span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: currentColor;
+  transition: width 180ms ease;
+}
+
+.discovery-question {
+  display: grid;
+  gap: 14px;
+  padding: 18px;
+  border: 1px solid var(--border, #d9dde5);
+  border-radius: 16px;
+}
+
+.discovery-question h3 {
+  margin: 3px 0 6px;
+}
+
+.discovery-question p {
+  margin: 0;
+}
+
+.discovery-money-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(110px, 0.35fr);
+  gap: 12px;
+}
+
+.discovery-format-note {
+  grid-column: 1 / -1;
+}
+
+.discovery-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.discovery-complete {
+  display: grid;
+  gap: 8px;
+  padding: 16px;
+  border: 1px solid var(--border, #d9dde5);
+  border-radius: 14px;
+}
+
+.discovery-known-facts summary {
+  cursor: pointer;
+}
+
+.discovery-known-facts summary strong {
+  margin-left: 6px;
+}
+
+.discovery-fact-list {
+  display: grid;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.discovery-fact-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  padding: 12px 0;
+  border-top: 1px solid var(--border, #d9dde5);
+}
+
+.discovery-fact-row > div {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.discovery-status {
+  flex: 0 0 auto;
+  padding: 6px 9px;
+  border-radius: 999px;
+  font-size: 0.78rem;
+  font-weight: 700;
+  background: rgba(127, 127, 127, 0.12);
+}
+
+.discovery-status.verified {
+  background: rgba(38, 151, 91, 0.14);
+}
+
+.discovery-status.conflict {
+  background: rgba(196, 91, 44, 0.14);
+}
+
+.discovery-status.provider {
+  background: rgba(55, 115, 189, 0.14);
+}
+
+.discovery-status.owner {
+  background: rgba(132, 94, 194, 0.14);
+}
+
+@media (max-width: 640px) {
+  .discovery-money-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .discovery-format-note {
+    grid-column: auto;
+  }
+
+  .discovery-fact-row {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .discovery-progress-track > span {
+    transition: none;
+  }
+}

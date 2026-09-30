@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { AcquisitionPlanner } from "./AcquisitionPlanner.jsx";
 import { BusinessIntelligencePanel } from "./BusinessIntelligencePanel.jsx";
+import { BusinessDiscoveryPanel } from "./BusinessDiscoveryPanel.jsx";
 import { DiscoverBuildMeasurePanel } from "./DiscoverBuildMeasurePanel.jsx";
 
 const DEFAULT_API = import.meta.env.VITE_API_BASE || "https://api.businessaios.ru";
@@ -335,6 +336,7 @@ function Workspace({ data, apiBase, businesses, onRestart, onRetryAccess, onSwit
   const processObservationsUrl = `${baseApi}/business-workspace/process-observations`;
   const processOpportunitiesUrl = `${baseApi}/business-workspace/process-opportunities`;
   const processBlueprintsUrl = `${baseApi}/business-workspace/process-blueprints`;
+  const discoveryUrl = `${baseApi}/business-workspace/discovery`;
   const authHeaders = useMemo(() => (apiKey ? { "X-API-Key": apiKey } : {}), [apiKey]);
   const selectedKeys = useMemo(() => new Set(integrations.map((item) => item.provider_key)), [integrations]);
   const [catalog, setCatalog] = useState([]);
@@ -933,6 +935,22 @@ function Workspace({ data, apiBase, businesses, onRestart, onRetryAccess, onSwit
     requestAnimationFrame(() => document.getElementById(target)?.scrollIntoView({ behavior: "smooth", block: "start" }));
   }, []);
 
+  const loadBusinessDiscovery = useCallback(async () => {
+    if (!apiKey) throw new Error("owner_session_required");
+    return getJson(discoveryUrl, authHeaders);
+  }, [apiKey, authHeaders, discoveryUrl]);
+
+  const assertBusinessDiscovery = useCallback(async (payload, requestKey) => {
+    if (!apiKey) throw new Error("owner_session_required");
+    const key = String(requestKey || "").trim();
+    if (!key) throw new Error("business_discovery_idempotency_key_required");
+    return postJson(
+      `${discoveryUrl}/assertions`,
+      payload || {},
+      { ...authHeaders, "X-Idempotency-Key": key },
+    );
+  }, [apiKey, authHeaders, discoveryUrl]);
+
   const runAdvisoryGoal = useCallback(async (goal) => {
     if (!apiKey) throw new Error("owner_session_required");
     return postJson(goalExecuteUrl, {
@@ -1045,6 +1063,13 @@ function Workspace({ data, apiBase, businesses, onRestart, onRetryAccess, onSwit
         <article className="summary-card"><span className="summary-icon">⌁</span><div><small>Источники</small><strong>{providers.filter((row) => row.connected).length} подключено / {integrations.length} выбрано</strong></div></article>
         <article className="summary-card"><span className="summary-icon">◇</span><div><small>Режим</small><strong>{data.user_functionality?.autonomy_mode_label || "Советник"}</strong></div></article>
       </section>
+
+      <BusinessDiscoveryPanel
+        key={`discovery-${data.business_id}`}
+        enabled={Boolean(apiKey)}
+        onLoad={loadBusinessDiscovery}
+        onAssert={assertBusinessDiscovery}
+      />
 
       <section className="panel first-value-panel" aria-live="polite">
         <div className="panel-title-row">
