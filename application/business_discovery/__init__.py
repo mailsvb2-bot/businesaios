@@ -6,6 +6,13 @@ from application.business_discovery.contracts import (
     discovery_field_spec,
     normalize_discovery_value,
 )
+from application.business_discovery.legacy_onboarding_migration import (
+    CANON_BUSINESS_DISCOVERY_LEGACY_ONBOARDING_MIGRATION,
+    LegacyOnboardingField,
+    LegacyOnboardingMigrationResult,
+    LegacyOnboardingMigrator,
+    legacy_onboarding_fields,
+)
 from application.business_discovery.owner_assertion_ingress import (
     CANON_BUSINESS_DISCOVERY_OWNER_ASSERTION_INGRESS,
     OwnerAssertionIngressResult,
@@ -25,6 +32,7 @@ from application.business_discovery.workspace import (
 
 __all__ = [
     "CANON_BUSINESS_DISCOVERY_CONTRACT",
+    "CANON_BUSINESS_DISCOVERY_LEGACY_ONBOARDING_MIGRATION",
     "CANON_BUSINESS_DISCOVERY_OWNER_ASSERTION_INGRESS",
     "CANON_BUSINESS_DISCOVERY_PROVIDER_OBSERVATION_INGRESS",
     "CANON_BUSINESS_DISCOVERY_WORKSPACE",
@@ -33,11 +41,15 @@ __all__ = [
     "DiscoveryValueKind",
     "BusinessDiscoveryProgress",
     "BusinessDiscoveryWorkspace",
+    "LegacyOnboardingField",
+    "LegacyOnboardingMigrationResult",
+    "LegacyOnboardingMigrator",
     "OwnerAssertionIngressResult",
     "OwnerBusinessAssertion",
     "OwnerBusinessAssertionIngress",
     "ProviderBusinessObservationIngress",
     "ProviderObservationIngressResult",
     "discovery_field_spec",
+    "legacy_onboarding_fields",
     "normalize_discovery_value",
 ]
