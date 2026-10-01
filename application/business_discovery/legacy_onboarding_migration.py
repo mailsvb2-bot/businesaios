@@ -76,7 +76,7 @@ class LegacyOnboardingEventReader:
         if not user:
             raise ValueError("user_id is required")
 
-        latest: tuple[int, int, Mapping[str, Any]] | None = None
+        latest: tuple[int, int, object] | None = None
         ordinal = 0
         for raw_event in self._events.iter_events(
             tenant_id=tenant,
@@ -95,15 +95,15 @@ class LegacyOnboardingEventReader:
             if isinstance(timestamp, bool) or not isinstance(timestamp, int) or timestamp <= 0:
                 raise ValueError("legacy onboarding event timestamp must be a positive integer")
             value = payload.get("value")
-            if not isinstance(value, Mapping):
-                continue
-            candidate = (int(timestamp), ordinal, dict(value))
+            candidate = (int(timestamp), ordinal, value)
             if latest is None or candidate[:2] >= latest[:2]:
                 latest = candidate
 
         if latest is None:
             return None
         observed_at_ms, _, session = latest
+        if not isinstance(session, Mapping):
+            return None
         return LegacyOnboardingSnapshot(
             settings={_LEGACY_SETTINGS_KEY: dict(session)},
             observed_at_ms=observed_at_ms,
