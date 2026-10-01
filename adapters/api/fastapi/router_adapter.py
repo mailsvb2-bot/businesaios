@@ -19,6 +19,8 @@ from adapters.api.fastapi.router_support import (
 from application.business_constraint import BusinessConstraintRegistry
 from application.business_discovery import (
     BusinessDiscoveryWorkspace,
+    LegacyOnboardingEventReader,
+    LegacyOnboardingMigrator,
     OwnerBusinessAssertionIngress,
     ProviderBusinessObservationIngress,
 )
@@ -251,13 +253,14 @@ def create_api_router(*, application_service: object, dependency_container: Fast
 
             discovery_state_engine = build_canonical_state_synthesis_engine()
             discovery_evidence_store = dependency_container.canonical_evidence_store()
+            discovery_owner_ingress = OwnerBusinessAssertionIngress(
+                event_store=canonical_business_event_store,
+                evidence_store=discovery_evidence_store,
+                state_engine=discovery_state_engine,
+                idempotency_store=dependency_container.api_idempotency_store,
+            )
             business_discovery_workspace = BusinessDiscoveryWorkspace(
-                ingress=OwnerBusinessAssertionIngress(
-                    event_store=canonical_business_event_store,
-                    evidence_store=discovery_evidence_store,
-                    state_engine=discovery_state_engine,
-                    idempotency_store=dependency_container.api_idempotency_store,
-                ),
+                ingress=discovery_owner_ingress,
                 state_engine=discovery_state_engine,
                 goal_registry=BusinessGoalRegistry(
                     event_store=canonical_business_event_store,
@@ -271,6 +274,12 @@ def create_api_router(*, application_service: object, dependency_container: Fast
                     event_store=canonical_business_event_store,
                     evidence_store=discovery_evidence_store,
                     state_engine=discovery_state_engine,
+                ),
+                legacy_onboarding_reader=LegacyOnboardingEventReader(
+                    event_store=canonical_business_event_store,
+                ),
+                legacy_onboarding_migrator=LegacyOnboardingMigrator(
+                    ingress=discovery_owner_ingress,
                 ),
             )
     process_workspace = None
