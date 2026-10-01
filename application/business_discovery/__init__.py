@@ -8,9 +8,11 @@ from application.business_discovery.contracts import (
 )
 from application.business_discovery.legacy_onboarding_migration import (
     CANON_BUSINESS_DISCOVERY_LEGACY_ONBOARDING_MIGRATION,
+    LegacyOnboardingEventReader,
     LegacyOnboardingField,
     LegacyOnboardingMigrationResult,
     LegacyOnboardingMigrator,
+    LegacyOnboardingSnapshot,
     legacy_onboarding_fields,
 )
 from application.business_discovery.owner_assertion_ingress import (
@@ -41,9 +43,11 @@ __all__ = [
     "DiscoveryValueKind",
     "BusinessDiscoveryProgress",
     "BusinessDiscoveryWorkspace",
+    "LegacyOnboardingEventReader",
     "LegacyOnboardingField",
     "LegacyOnboardingMigrationResult",
     "LegacyOnboardingMigrator",
+    "LegacyOnboardingSnapshot",
     "OwnerAssertionIngressResult",
     "OwnerBusinessAssertion",
     "OwnerBusinessAssertionIngress",
