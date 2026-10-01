@@ -96,12 +96,22 @@ def register_business_workspace_discovery_routes(
 ) -> None:
     @router.get("/business-workspace/discovery", tags=["business-workspace"])
     async def discovery_workspace(request: Request) -> dict[str, Any]:
-        _, tenant_id, business_id = business_owner_scope(
+        principal, tenant_id, business_id = business_owner_scope(
             request=request,
             auth_bundle=auth_bundle,
             required_scope="provider_control_plane",
         )
-        return workspace.describe(tenant_id=tenant_id, business_id=business_id)
+        try:
+            return workspace.describe(
+                tenant_id=tenant_id,
+                business_id=business_id,
+                actor_id=_actor_id(principal),
+            )
+        except ValueError as exc:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail=str(exc),
+            ) from exc
 
     @router.post(
         "/business-workspace/discovery/provider-evidence/{evidence_id}/reconcile",
