@@ -3,10 +3,12 @@ from __future__ import annotations
 import pytest
 
 from application.business_discovery.legacy_onboarding_migration import (
+    LegacyOnboardingEventReader,
     LegacyOnboardingMigrator,
     legacy_onboarding_fields,
 )
 from application.business_discovery.owner_assertion_ingress import OwnerBusinessAssertionIngress
+from application.business_discovery.workspace import BusinessDiscoveryWorkspace
 from reliability.idempotency_store import InMemoryIdempotencyStore
 from runtime.platform.event_store.memory_event_store import MemoryEventStore
 from runtime.state import StateSynthesisEngine
@@ -181,3 +183,170 @@ def test_legacy_migration_fails_closed_on_recognized_invalid_business_values(dia
         legacy_onboarding_fields(
             {"autopilot:session": {"stage": "running", "diag": diag}}
         )
+
+
+
+def _legacy_setting_event(*, tenant_id: str, user_id: str, timestamp_ms: int, what: str) -> dict:
+    return {
+        "event_id": f"legacy-setting:{tenant_id}:{user_id}:{timestamp_ms}",
+        "tenant_id": tenant_id,
+        "user_id": user_id,
+        "source": "user_state",
+        "event_type": "user_setting_set",
+        "timestamp_ms": timestamp_ms,
+        "decision_id": "legacy-decision",
+        "correlation_id": "legacy-correlation",
+        "payload": {
+            "tenant_id": tenant_id,
+            "key": "autopilot:session",
+            "value": {
+                "stage": "running",
+                "diag": {
+                    "what": what,
+                    "avg_check_rub": 5200,
+                    "margin_pct": 35,
+                },
+            },
+        },
+    }
+
+
+def test_legacy_event_reader_selects_latest_exact_tenant_user_snapshot() -> None:
+    events = MemoryEventStore()
+    events.append_event(
+        _legacy_setting_event(
+            tenant_id="tenant-1",
+            user_id="owner-1",
+            timestamp_ms=1_700_000_000_000,
+            what="Старое значение",
+        )
+    )
+    events.append_event(
+        _legacy_setting_event(
+            tenant_id="tenant-1",
+            user_id="other-owner",
+            timestamp_ms=1_700_000_000_500,
+            what="Чужой пользователь",
+        )
+    )
+    events.append_event(
+        _legacy_setting_event(
+            tenant_id="tenant-2",
+            user_id="owner-1",
+            timestamp_ms=1_700_000_000_600,
+            what="Чужой tenant",
+        )
+    )
+    events.append_event(
+        _legacy_setting_event(
+            tenant_id="tenant-1",
+            user_id="owner-1",
+            timestamp_ms=1_700_000_001_000,
+            what="Актуальное значение",
+        )
+    )
+
+    snapshot = LegacyOnboardingEventReader(event_store=events).read(
+        tenant_id="tenant-1",
+        user_id="owner-1",
+    )
+
+    assert snapshot is not None
+    assert snapshot.observed_at_ms == 1_700_000_001_000
+    assert snapshot.settings["autopilot:session"]["diag"]["what"] == "Актуальное значение"
+
+
+def test_authenticated_workspace_read_migrates_durable_legacy_session_once(tmp_path) -> None:
+    events = MemoryEventStore()
+    events.append_event(
+        _legacy_setting_event(
+            tenant_id="tenant-1",
+            user_id="owner-1",
+            timestamp_ms=1_700_000_000_000,
+            what="Legacy B2B offer",
+        )
+    )
+    state = StateSynthesisEngine(
+        snapshot_store=FileStateSnapshotStore(tmp_path / "state")
+    )
+    ingress = OwnerBusinessAssertionIngress(
+        event_store=events,
+        evidence_store=InMemoryEvidenceStore(),
+        state_engine=state,
+        idempotency_store=InMemoryIdempotencyStore(),
+    )
+    workspace = BusinessDiscoveryWorkspace(
+        ingress=ingress,
+        state_engine=state,
+        legacy_onboarding_reader=LegacyOnboardingEventReader(event_store=events),
+        legacy_onboarding_migrator=LegacyOnboardingMigrator(ingress=ingress),
+    )
+
+    first = workspace.describe(
+        tenant_id="tenant-1",
+        business_id="business-1",
+        actor_id="owner-1",
+    )
+    offer = next(item for item in first["fields"] if item["key"] == "offer.summary")
+    average_check = next(
+        item for item in first["fields"] if item["key"] == "economics.average_check"
+    )
+    assert offer["value"] == "Legacy B2B offer"
+    assert offer["owner_asserted"] is True
+    assert offer["observed_at_ms"] == 1_700_000_000_000
+    assert average_check["value"] == {"amount_minor": 520_000, "currency": "RUB"}
+
+    second = workspace.describe(
+        tenant_id="tenant-1",
+        business_id="business-1",
+        actor_id="owner-1",
+    )
+    assert second["state_id"] == first["state_id"]
+
+    owner_facts = [
+        event
+        for event in events.iter_events(
+            tenant_id="tenant-1",
+            start_ms=0,
+            event_type="business_fact_v1",
+        )
+        if str(event.get("source") or "") == "business_discovery.owner_assertion"
+    ]
+    assert len(owner_facts) == 3
+
+
+def test_workspace_does_not_migrate_another_users_legacy_session(tmp_path) -> None:
+    events = MemoryEventStore()
+    events.append_event(
+        _legacy_setting_event(
+            tenant_id="tenant-1",
+            user_id="other-owner",
+            timestamp_ms=1_700_000_000_000,
+            what="Чужая бизнес-истина",
+        )
+    )
+    state = StateSynthesisEngine(
+        snapshot_store=FileStateSnapshotStore(tmp_path / "state")
+    )
+    ingress = OwnerBusinessAssertionIngress(
+        event_store=events,
+        evidence_store=InMemoryEvidenceStore(),
+        state_engine=state,
+        idempotency_store=InMemoryIdempotencyStore(),
+    )
+    workspace = BusinessDiscoveryWorkspace(
+        ingress=ingress,
+        state_engine=state,
+        legacy_onboarding_reader=LegacyOnboardingEventReader(event_store=events),
+        legacy_onboarding_migrator=LegacyOnboardingMigrator(ingress=ingress),
+    )
+
+    view = workspace.describe(
+        tenant_id="tenant-1",
+        business_id="business-1",
+        actor_id="owner-1",
+    )
+
+    offer = next(item for item in view["fields"] if item["key"] == "offer.summary")
+    assert offer["value"] is None
+    assert offer["covered"] is False
