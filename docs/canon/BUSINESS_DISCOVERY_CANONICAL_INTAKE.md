@@ -1,6 +1,6 @@
 # Business Discovery / Canonical Business Intake — foundation
 
-Status: BD0–BD5 implemented; BD6 legacy onboarding migration and BD7 final vertical-slice acceptance remain
+Status: BD0–BD7 implemented; legacy onboarding business truth is migrated one-way into canonical Business Discovery and the duplicate Python authority is retired
 Branch: `canon/business-discovery-ui-foundation`
 Purpose: preserve and implement the missing canonical user-facing intake that feeds the existing BusinessAIOS World Model without creating a second brain.
 
@@ -283,8 +283,12 @@ The discovery experience should be adaptive rather than a single giant form:
 - preserve evidence lineage
 
 ### BD6 — legacy onboarding migration
-- migrate useful fields from `core/autopilot/onboarding`
-- remove duplicate ownership after parity tests
+- useful persisted `autopilot:session.diag` values are projected one-way by `application.business_discovery.legacy_onboarding_migration`;
+- migration writes only through the existing `OwnerBusinessAssertionIngress`, therefore Evidence, BusinessFact and State remain canonical;
+- the compatibility reader accepts both the historical `Diagnostics` shape and the later Telegram `avg_check_rub` alias;
+- historical default zero/unknown placeholders are not promoted to business truth before the persisted stage proves the question was answered;
+- migration is deterministic and idempotent; replay with changed semantics fails closed instead of silently rewriting history;
+- the former `core.autopilot.onboarding` Python package is retired after parity tests; its tombstone documents the canonical replacement.
 
 ### BD7 — E2E acceptance
 - owner answer → fact/evidence → World Model → DecisionCore
