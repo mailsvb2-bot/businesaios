@@ -1,7 +1,7 @@
 # External Intelligence Sovereignty Boundary — Workstream Plan
 
-Status: implementation active; canonical managed-execution boundary implemented, acceptance closure in progress  
-Branch: `canon/external-intelligence-sovereignty-boundary`  
+Status: implementation complete; production-adapter acceptance proof added; exact-head release verification pending  
+Branch: `canon/external-intelligence-sovereignty-closure`  
 Base: `main`
 
 ## Goal
@@ -22,9 +22,9 @@ This must be provider-agnostic. ClientPlatform will be one consumer, not the arc
 
 Do not create a second Decision Core, policy engine, capability registry, execution engine, delegation registry, or provider truth source.
 
-## Confirmed gap
+## Resolved gap
 
-The generic external adapter path still accepts a broad `BusinessExecutionRequest` containing a `BusinessGoalEnvelope`:
+The original generic external adapter path accepted a broad `BusinessExecutionRequest` containing a `BusinessGoalEnvelope`:
 
 ```text
 BusinessGoalEnvelope
@@ -33,7 +33,7 @@ BusinessGoalEnvelope
   -> BusinessExecutionResult
 ```
 
-That is broader than the canonical execution-only ActionIntent boundary and can permit delegated-domain systems to reinterpret a business goal.
+That surface was broader than the canonical execution-only ActionIntent boundary and could permit delegated-domain systems to reinterpret a business goal. Managed intelligent execution now crosses the boundary only through `ExternalExecutionRequest(ActionIntentV2)`; the legacy broad request remains limited to non-managed compatibility modes.
 
 ## Target architecture
 
@@ -102,6 +102,51 @@ The workstream is complete only when:
 - ClientPlatform and any future intelligent SaaS can plug into the same boundary;
 - no second owner/source of truth is introduced;
 - exact-head release gates are green.
+
+## Production-adapter acceptance evidence
+
+The final acceptance gap is covered by
+`tests/integration/test_external_intelligence_sovereignty_production_adapter.py`.
+
+The proof uses the production `LiveApiBusinessChannelAdapter` and its real injected
+transport contract rather than the unit-test `_Adapter`. It verifies the complete
+governed path:
+
+```text
+canonical decision.proposed provenance
+  -> ActionIntentV2
+  -> AgentIdentity runtime re-authorization
+  -> BusinessAutonomy policy forces POLICY_GUARDED_DELEGATED
+  -> ChannelBackedBusinessAdapter sovereign projection
+  -> LiveApiBusinessChannelAdapter
+  -> external provider transport
+  -> provider evidence/result
+  -> non-authoritative result normalization
+  -> guarded evidence sink + planning feedback sink
+```
+
+The provider is deliberately allowed to return a decision-like
+`provider_proposed_next_action` and to claim `decision_authority=True`.
+BusinessAIOS preserves the proposal only as evidence, overwrites
+`decision_authority=False`, marks the output as
+`execution_result_evidence`, and performs no autonomous follow-up call.
+
+The same proof also asserts that the original broad business goal is not forwarded
+to the provider: the production adapter receives only the parameters projected
+from the approved immutable `ActionIntentV2`.
+
+Local acceptance evidence on the closure branch:
+
+- production-adapter integration proof: green;
+- external-intelligence sovereignty suite: green;
+- AGI no-second-brain architecture lock: green;
+- canonical anti-second-brain rules: green;
+- second-brain alias scan: green;
+- Ruff on the new integration proof: green;
+- Python compile check on the new integration proof: green.
+
+Exact-head GitHub release gates remain the final merge prerequisite and must not be
+bypassed.
 
 ## Scheduling
 
