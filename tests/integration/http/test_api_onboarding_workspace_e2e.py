@@ -249,7 +249,7 @@ def test_real_api_onboarding_issues_owner_session_and_opens_workspace(tmp_path) 
             discovery_assertion = {
                 "field_key": "identity.display_name",
                 "value": "Canonical API E2E Business",
-                "observed_at_ms": 1_700_000_000_000,
+                "observed_at_ms": int(time.time() * 1000),
                 "correlation_id": "api-e2e-discovery-1",
             }
             discovery_headers = {
