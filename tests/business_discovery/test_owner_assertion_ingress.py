@@ -196,7 +196,7 @@ def test_owner_assertion_rejects_observation_from_after_recording_time(tmp_path)
             event_type=BUSINESS_FACT_EVENT_TYPE,
         )
     ) == []
-    assert evidence.list_for_tenant(tenant_id="tenant-1") == []
+    assert evidence.list_for_tenant(tenant_id="tenant-1") == ()
     assert snapshots.load_latest(tenant_id="tenant-1", business_id="business-1") is None
 
 
