@@ -337,7 +337,7 @@ def test_authenticated_workspace_read_migrates_durable_legacy_session_once(tmp_p
         for event in events.iter_events(
             tenant_id="tenant-1",
             start_ms=0,
-            event_type="business_fact_v1",
+            event_type=BUSINESS_FACT_EVENT_TYPE,
         )
         if str(event.get("source") or "") == "business_discovery.owner_assertion"
     ]
