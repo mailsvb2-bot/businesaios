@@ -257,6 +257,34 @@ def test_legacy_event_reader_selects_latest_exact_tenant_user_snapshot() -> None
     assert snapshot.settings["autopilot:session"]["diag"]["what"] == "Актуальное значение"
 
 
+def test_legacy_event_reader_respects_latest_explicit_session_clear() -> None:
+    events = MemoryEventStore()
+    events.append_event(
+        _legacy_setting_event(
+            tenant_id="tenant-1",
+            user_id="owner-1",
+            timestamp_ms=1_700_000_000_000,
+            what="Старое значение",
+        )
+    )
+    cleared = _legacy_setting_event(
+        tenant_id="tenant-1",
+        user_id="owner-1",
+        timestamp_ms=1_700_000_001_000,
+        what="ignored",
+    )
+    cleared["payload"]["value"] = None
+    events.append_event(cleared)
+
+    assert (
+        LegacyOnboardingEventReader(event_store=events).read(
+            tenant_id="tenant-1",
+            user_id="owner-1",
+        )
+        is None
+    )
+
+
 def test_authenticated_workspace_read_migrates_durable_legacy_session_once(tmp_path) -> None:
     events = MemoryEventStore()
     events.append_event(
