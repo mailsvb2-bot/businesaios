@@ -8,18 +8,13 @@ from typing import Any
 
 import pytest
 
+from application.business_discovery.contracts import DISCOVERY_FIELDS, DiscoveryValueKind
+from application.business_discovery.owner_assertion_ingress import OwnerBusinessAssertion
 from application.capability.capability_matrix import CapabilityMatrix
 from boot.factories.governance_chain_factory import build_governance_chain
 from boot.registrations.simple_singletons import ActionBudget, KillSwitch, RewardGuard, RiskEngine, SimulationGate
 from boot.runtime_service_specs import RUNTIME_SERVICE_SPECS
 from core.actions.catalog import build_catalog
-from core.autopilot.onboarding.schema import BudgetChoice, Diagnostics, HasClientsChoice
-from core.autopilot.onboarding.state_machine import (
-    OnboardingSession,
-    OnboardingStep,
-    advance_with_callback,
-    advance_with_text,
-)
 from crm.onboarding.crm_connection_state_machine import _ALLOWED, CrmConnectionStateMachine
 from execution.action_catalog import get_action_spec, known_action_types
 from runtime.boot.actions_registry import BUILTIN_HANDLER_ACTIONS, INLINE_ALLOWLIST, SPECS
@@ -223,24 +218,67 @@ def test_every_finite_user_flow_state_and_transition() -> None:
         crm_cases += 1
     assert crm_cases == 36
 
-    text_stages = {OnboardingStep.DIAG_WHAT, OnboardingStep.DIAG_AVG_CHECK, OnboardingStep.DIAG_MARGIN, OnboardingStep.DIAG_REGION}
-    onboarding_cases = 0
-    for stage in OnboardingStep:
-        session = OnboardingSession(stage=stage, goal="profit_7d", diag=Diagnostics())
-        assert advance_with_text(session, "") is None
-        result = advance_with_text(session, "100")
-        assert (result is not None) is (stage in text_stages)
-        onboarding_cases += 2
+    def discovery_sample(kind: DiscoveryValueKind, allowed_values: tuple[str, ...]) -> Any:
+        if kind is DiscoveryValueKind.TEXT:
+            return "sample"
+        if kind is DiscoveryValueKind.MONEY_MINOR:
+            return {"amount_minor": 10_000, "currency": "RUB"}
+        if kind is DiscoveryValueKind.PERCENTAGE:
+            return 25
+        if kind is DiscoveryValueKind.CLIENT_PRESENCE:
+            return allowed_values[0]
+        raise AssertionError(f"unhandled discovery value kind: {kind}")
 
-    callback_sessions = OnboardingSession(stage=OnboardingStep.DIAG_HAS_CLIENTS, goal="profit_7d", diag=Diagnostics())
-    callbacks = [
-        *(f"autopilot:has_clients:{choice.value}" for choice in HasClientsChoice),
-        *(f"autopilot:budget:{choice.value}" for choice in BudgetChoice),
-        "autopilot:pick_channel:internal", "autopilot:pick_channel:external", "autopilot:pick_channel:unknown",
-        "autopilot:ads_connect:vk", "autopilot:ads_connect:yandex", "autopilot:unknown:value",
-    ]
-    for callback in callbacks:
-        result = advance_with_callback(callback_sessions, callback)
-        assert (result is None) is callback.startswith("autopilot:unknown:")
-        onboarding_cases += 1
-    assert onboarding_cases == 37
+    discovery_cases = 0
+    for index, (field_key, spec) in enumerate(DISCOVERY_FIELDS.items(), start=1):
+        value = discovery_sample(DiscoveryValueKind(spec.value_kind), spec.allowed_values)
+        known = OwnerBusinessAssertion(
+            tenant_id="tenant-1",
+            business_id="business-1",
+            actor_id="owner-1",
+            field_key=field_key,
+            value=value,
+            observed_at_ms=1_700_000_000_000 + index,
+        )
+        assert known.validate() == spec
+        assert known.normalized_value() is not None
+        discovery_cases += 1
+
+        unknown = OwnerBusinessAssertion(
+            tenant_id="tenant-1",
+            business_id="business-1",
+            actor_id="owner-1",
+            field_key=field_key,
+            value=None,
+            observed_at_ms=1_700_000_100_000 + index,
+            unknown=True,
+        )
+        assert unknown.validate() == spec
+        assert unknown.normalized_value() is None
+        discovery_cases += 1
+
+        with pytest.raises(ValueError, match="unknown assertion"):
+            OwnerBusinessAssertion(
+                tenant_id="tenant-1",
+                business_id="business-1",
+                actor_id="owner-1",
+                field_key=field_key,
+                value=value,
+                observed_at_ms=1_700_000_200_000 + index,
+                unknown=True,
+            ).validate()
+        discovery_cases += 1
+
+    with pytest.raises(ValueError, match="unsupported business discovery field"):
+        OwnerBusinessAssertion(
+            tenant_id="tenant-1",
+            business_id="business-1",
+            actor_id="owner-1",
+            field_key="__unsupported__",
+            value="sample",
+            observed_at_ms=1_700_000_300_000,
+        ).validate()
+    discovery_cases += 1
+
+    assert len(DISCOVERY_FIELDS) == 11
+    assert discovery_cases == 34
