@@ -9,6 +9,7 @@ from application.business_discovery.owner_assertion_ingress import (
     OwnerBusinessAssertion,
     OwnerBusinessAssertionIngress,
 )
+from contracts.event_store import EventStore, supports_event_store
 
 CANON_BUSINESS_DISCOVERY_LEGACY_ONBOARDING_MIGRATION = True
 _LEGACY_SETTINGS_KEY = "autopilot:session"
@@ -40,6 +41,73 @@ class LegacyOnboardingField:
 class LegacyOnboardingMigrationResult:
     migrated: tuple[str, ...]
     assertions: tuple[OwnerAssertionIngressResult, ...]
+
+
+@dataclass(frozen=True)
+class LegacyOnboardingSnapshot:
+    settings: Mapping[str, Any]
+    observed_at_ms: int
+
+
+class LegacyOnboardingEventReader:
+    """Read the latest durable legacy onboarding setting for one owner.
+
+    The reader is intentionally narrow: it reads only the canonical
+    user_setting_set event for autopilot:session within the exact tenant/user
+    scope and preserves the source event timestamp so migration replays remain
+    deterministic.
+    """
+
+    def __init__(self, *, event_store: EventStore) -> None:
+        if not supports_event_store(event_store):
+            raise ValueError("canonical EventStore is required")
+        self._events = event_store
+
+    def read(
+        self,
+        *,
+        tenant_id: str,
+        user_id: str,
+    ) -> LegacyOnboardingSnapshot | None:
+        tenant = str(tenant_id or "").strip()
+        user = str(user_id or "").strip()
+        if not tenant:
+            raise ValueError("tenant_id is required")
+        if not user:
+            raise ValueError("user_id is required")
+
+        latest: tuple[int, int, Mapping[str, Any]] | None = None
+        ordinal = 0
+        for raw_event in self._events.iter_events(
+            tenant_id=tenant,
+            start_ms=0,
+            user_id=user,
+            event_type="user_setting_set",
+        ):
+            ordinal += 1
+            event = dict(raw_event)
+            payload = event.get("payload")
+            if not isinstance(payload, Mapping):
+                continue
+            if str(payload.get("key") or "").strip() != _LEGACY_SETTINGS_KEY:
+                continue
+            timestamp = event.get("timestamp_ms")
+            if isinstance(timestamp, bool) or not isinstance(timestamp, int) or timestamp <= 0:
+                raise ValueError("legacy onboarding event timestamp must be a positive integer")
+            value = payload.get("value")
+            if not isinstance(value, Mapping):
+                continue
+            candidate = (int(timestamp), ordinal, dict(value))
+            if latest is None or candidate[:2] >= latest[:2]:
+                latest = candidate
+
+        if latest is None:
+            return None
+        observed_at_ms, _, session = latest
+        return LegacyOnboardingSnapshot(
+            settings={_LEGACY_SETTINGS_KEY: dict(session)},
+            observed_at_ms=observed_at_ms,
+        )
 
 
 def _mapping(value: object) -> Mapping[str, Any]:
@@ -183,8 +251,10 @@ class LegacyOnboardingMigrator:
 
 __all__ = [
     "CANON_BUSINESS_DISCOVERY_LEGACY_ONBOARDING_MIGRATION",
+    "LegacyOnboardingEventReader",
     "LegacyOnboardingField",
     "LegacyOnboardingMigrationResult",
     "LegacyOnboardingMigrator",
+    "LegacyOnboardingSnapshot",
     "legacy_onboarding_fields",
 ]
