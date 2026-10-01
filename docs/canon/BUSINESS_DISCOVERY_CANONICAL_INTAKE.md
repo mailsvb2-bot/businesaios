@@ -283,7 +283,7 @@ The discovery experience should be adaptive rather than a single giant form:
 - preserve evidence lineage
 
 ### BD6 — legacy onboarding migration
-- useful persisted `autopilot:session.diag` values are projected one-way by `application.business_discovery.legacy_onboarding_migration`;
+- useful persisted `autopilot:session.diag` values are projected one-way by `application.business_discovery.workspace`;
 - the authenticated Business Discovery GET path is wired to the canonical `user_setting_set` EventStore source using exact tenant + authenticated owner identity before rendering the workspace;
 - the source event timestamp is preserved, so exact replay is deterministic and a genuinely newer legacy session appends new canonical history instead of rewriting the old assertion;
 - an explicit later clear of `autopilot:session` suppresses migration and cannot resurrect an older session;

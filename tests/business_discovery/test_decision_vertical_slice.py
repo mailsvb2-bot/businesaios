@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import time
 
-from application.business_discovery import (
+from application.business_discovery.ingress import (
     OwnerBusinessAssertion,
     OwnerBusinessAssertionIngress,
     ProviderBusinessObservationIngress,

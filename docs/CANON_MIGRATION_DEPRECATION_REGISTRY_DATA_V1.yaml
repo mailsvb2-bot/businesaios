@@ -10,6 +10,6 @@ migrations:
     from_paths:
       - core/autopilot/onboarding/README.md
     to_paths:
-      - application/business_discovery/legacy_onboarding_migration.py
-      - application/business_discovery/owner_assertion_ingress.py
-    canonical_target: application.business_discovery.OwnerBusinessAssertionIngress
+      - application/business_discovery/workspace.py
+      - application/business_discovery/ingress.py
+    canonical_target: application.business_discovery.ingress.OwnerBusinessAssertionIngress

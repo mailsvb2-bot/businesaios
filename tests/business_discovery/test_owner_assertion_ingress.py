@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import pytest
 
-from application.business_discovery import (
+from application.business_discovery.ingress import (
     OwnerBusinessAssertion,
     OwnerBusinessAssertionIngress,
 )

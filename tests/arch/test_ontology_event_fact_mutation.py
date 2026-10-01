@@ -35,7 +35,7 @@ SHARED_EVENT_FACT_OWNERS = (
     Path("application/document/registry.py"),
 )
 EXTERNAL_FACT_INGRESS = Path("application/business_autonomy/evidence_projection.py")
-BUSINESS_DISCOVERY_FACT_INGRESS = Path("application/business_discovery/owner_assertion_ingress.py")
+BUSINESS_DISCOVERY_FACT_INGRESS = Path("application/business_discovery/ingress.py")
 AGENT_IDENTITY_EVENT_FACT_OWNER = Path("application/business_autonomy/registry.py")
 DIRECT_BUSINESS_FACT_MUTATION_OWNERS = (OWNER, CUSTOMER_DIRECT_OWNER)
 SPECIAL_EVENT_STORE_WRITER_MODULES = (

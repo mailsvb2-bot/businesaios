@@ -3,11 +3,11 @@ from __future__ import annotations
 import pytest
 
 from application.business_constraint import BusinessConstraintRegistry
-from application.business_discovery import (
-    BusinessDiscoveryWorkspace,
+from application.business_discovery.ingress import (
     OwnerBusinessAssertion,
     OwnerBusinessAssertionIngress,
 )
+from application.business_discovery.workspace import BusinessDiscoveryWorkspace
 from application.business_goal import BusinessGoalRegistry
 from contracts.event_store import BUSINESS_FACT_EVENT_TYPE
 from reliability.idempotency_store import InMemoryIdempotencyStore

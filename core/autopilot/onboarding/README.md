@@ -7,7 +7,7 @@ migration on 2026-10-01.
 Persisted legacy `autopilot:session.diag` payloads remain readable for migration,
 but they are not a source of business truth. The one-way compatibility reader is:
 
-- `application/business_discovery/legacy_onboarding_migration.py`
+- `application/business_discovery/workspace.py`
 
 All migrated business facts are written through
 `OwnerBusinessAssertionIngress` into the canonical Evidence / BusinessFact /

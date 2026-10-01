@@ -17,12 +17,14 @@ from adapters.api.fastapi.router_support import (
     tenant_registry_has_records,
 )
 from application.business_constraint import BusinessConstraintRegistry
-from application.business_discovery import (
+from application.business_discovery.ingress import (
+    OwnerBusinessAssertionIngress,
+    ProviderBusinessObservationIngress,
+)
+from application.business_discovery.workspace import (
     BusinessDiscoveryWorkspace,
     LegacyOnboardingEventReader,
     LegacyOnboardingMigrator,
-    OwnerBusinessAssertionIngress,
-    ProviderBusinessObservationIngress,
 )
 from application.business_goal import BusinessGoalRegistry
 from application.process_discovery import (

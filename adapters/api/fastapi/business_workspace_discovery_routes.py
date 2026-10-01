@@ -7,10 +7,8 @@ from typing import Any
 from fastapi import APIRouter, HTTPException, Request, status
 
 from adapters.api.fastapi.router_support import business_owner_scope, json_body
-from application.business_discovery import (
-    BusinessDiscoveryWorkspace,
-    OwnerBusinessAssertion,
-)
+from application.business_discovery.ingress import OwnerBusinessAssertion
+from application.business_discovery.workspace import BusinessDiscoveryWorkspace
 
 CANON_BUSINESS_WORKSPACE_DISCOVERY_ROUTES = True
 _ALLOWED_GOAL_KEYS = frozenset(

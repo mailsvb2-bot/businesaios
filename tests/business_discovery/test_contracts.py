@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import pytest
 
-from application.business_discovery import (
+from application.business_discovery.contracts import (
     DiscoveryValueKind,
     discovery_field_spec,
     normalize_discovery_value,

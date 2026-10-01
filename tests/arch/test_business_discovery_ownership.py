@@ -63,7 +63,7 @@ def test_business_discovery_has_no_parallel_truth_store_or_domain_registry() -> 
 
 
 def test_owner_assertion_ingress_uses_existing_fact_evidence_and_state_owners() -> None:
-    source = (DISCOVERY_ROOT / "owner_assertion_ingress.py").read_text(encoding="utf-8")
+    source = (DISCOVERY_ROOT / "ingress.py").read_text(encoding="utf-8")
 
     assert "EventFactLifecycleWriter" in source
     assert "EvidenceStore" in source
@@ -90,7 +90,7 @@ def test_legacy_onboarding_python_authority_is_retired_after_canonical_migration
     assert (legacy_root / "README.md").exists()
     assert tuple(legacy_root.glob("*.py")) == ()
 
-    migration = DISCOVERY_ROOT / "legacy_onboarding_migration.py"
+    migration = DISCOVERY_ROOT / "workspace.py"
     source = migration.read_text(encoding="utf-8")
     assert "OwnerBusinessAssertionIngress" in source
     assert "OwnerBusinessAssertion(" in source

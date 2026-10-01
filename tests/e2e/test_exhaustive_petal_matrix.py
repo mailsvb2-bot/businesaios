@@ -9,7 +9,7 @@ from typing import Any
 import pytest
 
 from application.business_discovery.contracts import DISCOVERY_FIELDS, DiscoveryValueKind
-from application.business_discovery.owner_assertion_ingress import OwnerBusinessAssertion
+from application.business_discovery.ingress import OwnerBusinessAssertion
 from application.capability.capability_matrix import CapabilityMatrix
 from boot.factories.governance_chain_factory import build_governance_chain
 from boot.registrations.simple_singletons import ActionBudget, KillSwitch, RewardGuard, RiskEngine, SimulationGate

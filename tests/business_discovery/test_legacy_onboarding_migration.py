@@ -2,13 +2,13 @@ from __future__ import annotations
 
 import pytest
 
-from application.business_discovery.legacy_onboarding_migration import (
+from application.business_discovery.ingress import OwnerBusinessAssertionIngress
+from application.business_discovery.workspace import (
+    BusinessDiscoveryWorkspace,
     LegacyOnboardingEventReader,
     LegacyOnboardingMigrator,
     legacy_onboarding_fields,
 )
-from application.business_discovery.owner_assertion_ingress import OwnerBusinessAssertionIngress
-from application.business_discovery.workspace import BusinessDiscoveryWorkspace
 from contracts.event_store import BUSINESS_FACT_EVENT_TYPE
 from reliability.idempotency_store import InMemoryIdempotencyStore
 from runtime.platform.event_store.memory_event_store import MemoryEventStore
