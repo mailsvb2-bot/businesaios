@@ -238,7 +238,9 @@ class LegacyOnboardingMigrator:
                     occurred_at_ms=int(observed_at_ms),
                     correlation_id=_MIGRATION_NAMESPACE,
                 ),
-                idempotency_key=f"{_MIGRATION_NAMESPACE}:{item.field_key}",
+                idempotency_key=(
+                    f"{_MIGRATION_NAMESPACE}:{int(observed_at_ms)}:{item.field_key}"
+                ),
                 recorded_at_ms=recorded_at_ms,
             )
             migrated.append(item.field_key)
