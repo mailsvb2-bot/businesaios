@@ -1,7 +1,7 @@
 # External Intelligence Sovereignty Boundary — Workstream Plan
 
-Status: implementation complete; production-adapter acceptance proof added; exact-head release verification pending  
-Branch: `canon/external-intelligence-sovereignty-closure`  
+Status: implementation complete; production-adapter acceptance proof added; exact-head release verification is a mandatory merge gate
+Branch: `canon/external-intelligence-sovereignty-closure`
 Base: `main`
 
 ## Goal
