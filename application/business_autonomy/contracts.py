@@ -100,7 +100,6 @@ MANAGED_EXTERNAL_EXECUTION_MODES = frozenset({
 @dataclass(frozen=True)
 class ExternalExecutionRequest:
     """Narrow managed boundary: immutable sovereign intent plus execution metadata only."""
-
     action_intent: ActionIntentV2
     integration_mode: IntegrationMode
     correlation_id: str = ""
