@@ -1,1 +1,15 @@
-migrations: []
+migrations:
+  - migration_id: business-discovery-legacy-onboarding-v1
+    kind: legacy_removal
+    scope: business-discovery legacy onboarding business truth
+    reason: retire duplicate Diagnostics/state-machine authority after one-way parity migration into canonical owner assertions
+    owner: application.business_discovery
+    created_on: "2026-10-01"
+    target_date: "2026-10-01"
+    status: completed
+    from_paths:
+      - core/autopilot/onboarding/README.md
+    to_paths:
+      - application/business_discovery/workspace.py
+      - application/business_discovery/ingress.py
+    canonical_target: application.business_discovery.ingress.OwnerBusinessAssertionIngress

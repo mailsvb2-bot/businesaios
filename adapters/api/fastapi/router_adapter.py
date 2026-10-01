@@ -16,6 +16,17 @@ from adapters.api.fastapi.router_support import (
     resolve_metrics,
     tenant_registry_has_records,
 )
+from application.business_constraint import BusinessConstraintRegistry
+from application.business_discovery.ingress import (
+    OwnerBusinessAssertionIngress,
+    ProviderBusinessObservationIngress,
+)
+from application.business_discovery.workspace import (
+    BusinessDiscoveryWorkspace,
+    LegacyOnboardingEventReader,
+    LegacyOnboardingMigrator,
+)
+from application.business_goal import BusinessGoalRegistry
 from application.process_discovery import (
     CanonicalBlueprintLedger,
     CanonicalProcessEvidenceStore,
@@ -233,6 +244,46 @@ def create_api_router(*, application_service: object, dependency_container: Fast
     )
     queue_ops_handlers = QueueOpsRouteHandlers()
     telemetry_event_store = dependency_container.telemetry_event_store() if dependency_container is not None else None
+    business_discovery_workspace = None
+    if dependency_container is not None:
+        canonical_business_event_store = dependency_container.canonical_business_event_store()
+        if (
+            canonical_business_event_store is not None
+            and dependency_container.api_idempotency_store is not None
+        ):
+            from runtime.state.state_snapshot_store import build_canonical_state_synthesis_engine
+
+            discovery_state_engine = build_canonical_state_synthesis_engine()
+            discovery_evidence_store = dependency_container.canonical_evidence_store()
+            discovery_owner_ingress = OwnerBusinessAssertionIngress(
+                event_store=canonical_business_event_store,
+                evidence_store=discovery_evidence_store,
+                state_engine=discovery_state_engine,
+                idempotency_store=dependency_container.api_idempotency_store,
+            )
+            business_discovery_workspace = BusinessDiscoveryWorkspace(
+                ingress=discovery_owner_ingress,
+                state_engine=discovery_state_engine,
+                goal_registry=BusinessGoalRegistry(
+                    event_store=canonical_business_event_store,
+                    idempotency_store=dependency_container.api_idempotency_store,
+                ),
+                constraint_registry=BusinessConstraintRegistry(
+                    event_store=canonical_business_event_store,
+                    idempotency_store=dependency_container.api_idempotency_store,
+                ),
+                provider_observation_ingress=ProviderBusinessObservationIngress(
+                    event_store=canonical_business_event_store,
+                    evidence_store=discovery_evidence_store,
+                    state_engine=discovery_state_engine,
+                ),
+                legacy_onboarding_reader=LegacyOnboardingEventReader(
+                    event_store=canonical_business_event_store,
+                ),
+                legacy_onboarding_migrator=LegacyOnboardingMigrator(
+                    ingress=discovery_owner_ingress,
+                ),
+            )
     process_workspace = None
     process_request_idempotency = None
     if telemetry_event_store is not None:
@@ -297,6 +348,7 @@ def create_api_router(*, application_service: object, dependency_container: Fast
         client_outcome_handlers=client_outcome_handlers,
         process_workspace=process_workspace,
         process_request_idempotency=process_request_idempotency,
+        business_discovery_workspace=business_discovery_workspace,
     )
     register_control_plane_routes(
         router=router,

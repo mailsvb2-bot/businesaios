@@ -72,11 +72,12 @@ class DecisionAGIWorldModel(CanonicalDecisionWorldModel):
         kind: str = DECISION_AGI_WORLD_MODEL_KIND,
         base_kind: str = DEFAULT_BASE_WORLD_MODEL_KIND,
         world_model_service: WorldModelService | None = None,
+        state_snapshot_store=None,
         reasoning_engine: AGIReasoningEngine | None = None,
     ) -> None:
         self._agi_kind = str(kind or DECISION_AGI_WORLD_MODEL_KIND).strip().lower() or DECISION_AGI_WORLD_MODEL_KIND
         self._base_kind = str(base_kind or DEFAULT_BASE_WORLD_MODEL_KIND).strip().lower() or DEFAULT_BASE_WORLD_MODEL_KIND
-        super().__init__(store=store, kind=self._base_kind)
+        super().__init__(store=store, kind=self._base_kind, state_snapshot_store=state_snapshot_store)
         self._world_model_service = world_model_service or WorldModelService()
         self._reasoning_engine = reasoning_engine or AGIReasoningEngine()
 

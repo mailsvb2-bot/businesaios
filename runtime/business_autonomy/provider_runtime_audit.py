@@ -84,7 +84,13 @@ class ProviderRuntimeAuditRecorder:
                 privacy_class='internal',
                 retention_policy='provider_runtime_evidence',
                 lineage=lineage,
-                payload={'status': status, 'metadata': dict(metadata or {})},
+                payload={
+                    'status': status,
+                    'operation': str(operation),
+                    'mode': str(mode),
+                    'accepted': bool(accepted),
+                    'metadata': dict(metadata or {}),
+                },
                 refs=tuple(
                     dict.fromkeys(
                         value
@@ -100,6 +106,8 @@ class ProviderRuntimeAuditRecorder:
                 labels={
                     'provider_key': provider_key,
                     'business_id': str(business_id),
+                    'operation': str(operation),
+                    'mode': str(mode),
                     **({'decision_id': str(provenance['decision_id'])} if provenance else {}),
                 },
             )

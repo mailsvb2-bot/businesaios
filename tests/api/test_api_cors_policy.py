@@ -15,7 +15,7 @@ def _preflight(client: TestClient, origin: str):
         headers={
             "Origin": origin,
             "Access-Control-Request-Method": "POST",
-            "Access-Control-Request-Headers": "content-type,x-api-key",
+            "Access-Control-Request-Headers": "content-type,x-api-key,x-idempotency-key",
         },
     )
 
@@ -33,7 +33,9 @@ def test_default_staging_ui_origin_gets_credentialed_cors(monkeypatch) -> None:
     assert response.headers["access-control-allow-origin"] == STAGING_UI_ORIGIN
     assert response.headers["access-control-allow-credentials"] == "true"
     assert "POST" in response.headers["access-control-allow-methods"]
-    assert "x-api-key" in response.headers["access-control-allow-headers"].lower()
+    allowed_headers = response.headers["access-control-allow-headers"].lower()
+    assert "x-api-key" in allowed_headers
+    assert "x-idempotency-key" in allowed_headers
     assert "origin" in response.headers["vary"].lower()
 
 

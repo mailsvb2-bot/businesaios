@@ -35,6 +35,32 @@ async function hasNoHorizontalOverflow(page) {
   return page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth + 1);
 }
 
+async function answerNextDiscoveryQuestion(page, discovery) {
+  const next = (Array.isArray(discovery?.fields) ? discovery.fields : []).find((field) => !field?.covered);
+  if (!next) return null;
+  const panel = page.locator(`[data-discovery-field-key="${next.key}"]`);
+  await expect(panel).toBeVisible();
+
+  if (next.value_kind === "money_minor") {
+    await panel.getByLabel("Сумма в минимальных единицах").fill("125000");
+    await panel.getByLabel("Валюта").fill("RUB");
+  } else if (next.value_kind === "percentage") {
+    await panel.locator('input[inputmode="decimal"]').fill("32.5");
+  } else if (next.value_kind === "client_presence") {
+    await panel.locator("select").selectOption("yes");
+  } else {
+    await panel.locator("input").first().fill(`Browser discovery ${next.key}`);
+  }
+
+  const assertionPromise = page.waitForResponse((response) =>
+    response.url().includes("/api/business-workspace/discovery/assertions")
+      && response.request().method() === "POST");
+  await panel.getByRole("button", { name: "Сохранить ответ" }).click();
+  const assertionResponse = await assertionPromise;
+  expect(assertionResponse.status()).toBe(200);
+  return { fieldKey: next.key, payload: await assertionResponse.json() };
+}
+
 test(canonicalScenario.title, async ({ page }, testInfo) => {
   const { businessName, email } = projectIdentity(testInfo.project.name);
   await page.goto("/");
@@ -60,6 +86,7 @@ test(canonicalScenario.title, async ({ page }, testInfo) => {
   await page.getByRole("button", { name: /Советник/ }).click();
   const ctaResponsePromise = page.waitForResponse((response) => response.url().includes("/api/public-site/cta/start") && response.request().method() === "POST");
   const workspaceResponsePromise = page.waitForResponse((response) => response.url().includes("/api/business-workspace/providers") && response.request().method() === "GET");
+  const discoveryResponsePromise = page.waitForResponse((response) => response.url().includes("/api/business-workspace/discovery") && response.request().method() === "GET");
   await page.getByRole("button", { name: /Создать мой BusinessAIOS/ }).click();
 
   const ctaResponse = await ctaResponsePromise;
@@ -75,6 +102,20 @@ test(canonicalScenario.title, async ({ page }, testInfo) => {
   const workspace = await workspaceResponse.json();
   expect(workspace.scope_source).toBe("authenticated_owner_session");
   expect(workspace.write_actions_enabled).toBe(false);
+
+  const discoveryResponse = await discoveryResponsePromise;
+  expect(discoveryResponse.status()).toBe(200);
+  const discovery = await discoveryResponse.json();
+  expect(discovery.schema_version).toBe("business_discovery_workspace@v1");
+  await expect(page.getByRole("heading", { name: "Знакомство с бизнесом" })).toBeVisible();
+  const answeredDiscovery = await answerNextDiscoveryQuestion(page, discovery);
+  if (answeredDiscovery) {
+    expect(answeredDiscovery.payload?.assertion?.fact_id).toBeTruthy();
+    const answeredField = answeredDiscovery.payload?.fields?.find((field) => field.key === answeredDiscovery.fieldKey);
+    expect(answeredField?.owner_asserted).toBe(true);
+    await page.locator("details.discovery-known-facts").evaluate((node) => { node.open = true; });
+    await expect(page.locator(".discovery-status.owner").filter({ hasText: "Со слов владельца" }).first()).toBeVisible();
+  }
 
   await expect(page.getByRole("heading", { name: businessName, level: 1 })).toBeVisible();
   await expect(page.getByText("Только чтение", { exact: true })).toBeVisible();
@@ -112,6 +153,7 @@ test(canonicalScenario.title, async ({ page }, testInfo) => {
 
   const resumedStatusPromise = page.waitForResponse((response) => response.url().includes(`/api/public-site/cta/${cta.intake_id}`) && response.request().method() === "GET");
   const resumedWorkspacePromise = page.waitForResponse((response) => response.url().includes("/api/business-workspace/providers") && response.request().method() === "GET");
+  const resumedDiscoveryPromise = page.waitForResponse((response) => response.url().includes("/api/business-workspace/discovery") && response.request().method() === "GET");
   await page.reload();
 
   const resumedStatusResponse = await resumedStatusPromise;
@@ -126,6 +168,17 @@ test(canonicalScenario.title, async ({ page }, testInfo) => {
   const resumedWorkspace = await resumedWorkspaceResponse.json();
   expect(resumedWorkspace.scope_source).toBe("authenticated_owner_session");
   expect(resumedWorkspace.write_actions_enabled).toBe(false);
+
+  const resumedDiscoveryResponse = await resumedDiscoveryPromise;
+  expect(resumedDiscoveryResponse.status()).toBe(200);
+  const resumedDiscovery = await resumedDiscoveryResponse.json();
+  if (answeredDiscovery) {
+    const restoredField = (resumedDiscovery.fields || []).find((field) => field.key === answeredDiscovery.fieldKey);
+    expect(restoredField?.covered).toBe(true);
+    expect(restoredField?.owner_asserted).toBe(true);
+    await page.locator("details.discovery-known-facts").evaluate((node) => { node.open = true; });
+    await expect(page.locator(".discovery-status.owner").filter({ hasText: "Со слов владельца" }).first()).toBeVisible();
+  }
 
   await expect(page.getByRole("heading", { name: businessName, level: 1 })).toBeVisible();
   await expect(page.getByText(/Не удалось восстановить защищённый вход/)).toHaveCount(0);

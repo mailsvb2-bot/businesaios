@@ -70,7 +70,7 @@ def _configure_browser_cors(app: object) -> None:
         allow_origins=list(_api_cors_allowed_origins()),
         allow_credentials=True,
         allow_methods=['GET', 'POST', 'OPTIONS'],
-        allow_headers=['Content-Type', 'X-API-Key'],
+        allow_headers=['Content-Type', 'X-API-Key', 'X-Idempotency-Key'],
     )
 
 

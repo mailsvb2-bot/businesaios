@@ -40,7 +40,7 @@ def verify_boot_world_model_integrity(*, world_model: Any) -> Dict[str, Any]:
     }
 
 
-def build_and_verify_default_world_model(*, event_log: Any | None = None, store: Any | None = None) -> Any:
+def build_and_verify_default_world_model(*, event_log: Any | None = None, store: Any | None = None, state_snapshot_store: Any | None = None) -> Any:
     """Build the canonical world model for boot.
 
     event_log is accepted for backward-compatible boot wiring only; the
@@ -49,7 +49,7 @@ def build_and_verify_default_world_model(*, event_log: Any | None = None, store:
     model implementation.
     """
     _ = event_log
-    world_model = build_default_world_model(store=store)
+    world_model = build_default_world_model(store=store, state_snapshot_store=state_snapshot_store)
     verify_boot_world_model_integrity(world_model=world_model)
     return world_model
 

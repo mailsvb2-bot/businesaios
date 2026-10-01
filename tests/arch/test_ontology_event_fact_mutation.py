@@ -35,6 +35,7 @@ SHARED_EVENT_FACT_OWNERS = (
     Path("application/document/registry.py"),
 )
 EXTERNAL_FACT_INGRESS = Path("application/business_autonomy/evidence_projection.py")
+BUSINESS_DISCOVERY_FACT_INGRESS = Path("application/business_discovery/ingress.py")
 AGENT_IDENTITY_EVENT_FACT_OWNER = Path("application/business_autonomy/registry.py")
 DIRECT_BUSINESS_FACT_MUTATION_OWNERS = (OWNER, CUSTOMER_DIRECT_OWNER)
 SPECIAL_EVENT_STORE_WRITER_MODULES = (
@@ -98,9 +99,17 @@ def test_shared_event_fact_writer_consumers_are_review_locked() -> None:
         (
             *SHARED_EVENT_FACT_OWNERS,
             EXTERNAL_FACT_INGRESS,
+            BUSINESS_DISCOVERY_FACT_INGRESS,
             AGENT_IDENTITY_EVENT_FACT_OWNER,
         )
     )
+
+
+def test_business_discovery_event_fact_ingress_is_review_locked() -> None:
+    source = (ROOT / BUSINESS_DISCOVERY_FACT_INGRESS).read_text(encoding="utf-8")
+    assert "CANON_BUSINESS_DISCOVERY_OWNER_ASSERTION_INGRESS = True" in source
+    assert "EventFactLifecycleWriter" in source
+    assert "BusinessFactV1(" not in source
 
 
 def test_agent_identity_event_fact_owner_is_review_locked() -> None:
