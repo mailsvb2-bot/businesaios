@@ -31,6 +31,33 @@ def test_http_boot_surface_reuses_explicit_system_surface() -> None:
     assert http_surface.config_surface is config
 
 
+class _CanonicalBusinessEventStoreStub:
+    def append_event(self, event: dict) -> None:
+        return None
+
+    def iter_events(
+        self,
+        *,
+        tenant_id: str,
+        start_ms: int,
+        end_ms: int | None = None,
+        user_id: str | None = None,
+        event_type: str | None = None,
+    ):
+        return ()
+
+    def count_events(
+        self,
+        *,
+        tenant_id: str,
+        start_ms: int,
+        end_ms: int,
+        user_id: str | None = None,
+        event_type: str | None = None,
+    ) -> int:
+        return 0
+
+
 class _ClosableBusinessEventStoreStack:
     def __init__(self) -> None:
         self.closed = False
@@ -42,7 +69,7 @@ class _ClosableBusinessEventStoreStack:
 def test_system_boot_surface_wires_and_owns_canonical_business_event_store(monkeypatch) -> None:
     from runtime.business_autonomy import ontology_runtime
 
-    event_store = object()
+    event_store = _CanonicalBusinessEventStoreStub()
     stack = _ClosableBusinessEventStoreStack()
     monkeypatch.setattr(
         ontology_runtime,
