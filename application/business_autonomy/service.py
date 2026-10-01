@@ -1,28 +1,32 @@
 from __future__ import annotations
 
 from collections.abc import Mapping
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from typing import Any
 
 from application.business_autonomy.channel_adapter_registry import TypedChannelAdapterRegistry
 from application.business_autonomy.channel_backed_adapter import ChannelBackedBusinessAdapter
 from application.business_autonomy.channel_contracts import ChannelIdentity, ChannelKind
 from application.business_autonomy.contracts import (
+    MANAGED_EXTERNAL_EXECUTION_MODES,
     BusinessCapability,
     BusinessExecutionRequest,
     BusinessExecutionResult,
     CapabilityKind,
     ExecutionVerdict,
+    ExternalExecutionRequest,
 )
 from application.business_autonomy.guards import BusinessBlastRadiusGuard, BusinessBudgetGuard
 from application.business_autonomy.non_ai_onboarding_mode import NonAiOperatingMode
 from application.business_autonomy.onboarding_contract import BusinessOnboardingRequest
 from application.business_autonomy.policy import BusinessAutonomyPolicy
 from application.business_autonomy.registry import (
+    AgentIdentityRegistry,
     BusinessAdapterRegistry,
     BusinessCapabilityRegistry,
     RegisteredBusinessCapabilities,
 )
+from core.utils.canonical import payload_hash as canonical_payload_hash
 
 
 @dataclass(frozen=True)
@@ -44,6 +48,8 @@ class BusinessAutonomyService:
         channel_registry: TypedChannelAdapterRegistry | None = None,
         blast_radius_guard: BusinessBlastRadiusGuard | None = None,
         budget_guard: BusinessBudgetGuard | None = None,
+        agent_identity_registry: AgentIdentityRegistry | None = None,
+        decision_provenance_verifier: object | None = None,
     ) -> None:
         self._adapter_registry = adapter_registry or BusinessAdapterRegistry()
         self._capability_registry = BusinessCapabilityRegistry()
@@ -52,6 +58,8 @@ class BusinessAutonomyService:
         self._channel_registry = channel_registry or TypedChannelAdapterRegistry()
         self._blast_radius_guard = blast_radius_guard or BusinessBlastRadiusGuard()
         self._budget_guard = budget_guard or BusinessBudgetGuard()
+        self._agent_identity_registry = agent_identity_registry
+        self._decision_provenance_verifier = decision_provenance_verifier
 
     def onboard(self, request: BusinessOnboardingRequest) -> BusinessAutonomyOnboardingResult:
         identity = _identity_from_onboarding_request(request)
@@ -101,6 +109,7 @@ class BusinessAutonomyService:
             correlation_id=request.correlation_id,
             idempotency_key=request.idempotency_key,
             timeout_seconds=request.timeout_seconds,
+            action_intent=request.action_intent,
         )
         supported_modes = tuple(adapter.supported_modes())
         if delegated_request.integration_mode not in supported_modes:
@@ -114,7 +123,174 @@ class BusinessAutonomyService:
                 adapter_name=adapter.adapter_name,
                 metadata={"supported_modes": [item.value for item in supported_modes]},
             )
-        result = await adapter.execute(delegated_request)
+        if delegated_request.integration_mode in MANAGED_EXTERNAL_EXECUTION_MODES:
+            intent = delegated_request.action_intent
+            if intent is None:
+                return BusinessExecutionResult(
+                    verdict=ExecutionVerdict.REJECTED,
+                    business_id=request.envelope.business_id,
+                    goal_id=request.envelope.goal_id,
+                    execution_id=request.correlation_id,
+                    message="Managed external execution requires sovereign ActionIntentV2.",
+                    delegated_to_domain_engine=False,
+                    adapter_name=adapter.adapter_name,
+                    metadata={"reason": "missing_action_intent"},
+                )
+            envelope_tenant_id = str(
+                request.envelope.metadata.get("tenant_id") or ""
+            ).strip()
+            if (
+                intent.business_id != request.envelope.business_id
+                or intent.goal_id != request.envelope.goal_id
+                or intent.correlation_id != delegated_request.correlation_id
+                or (envelope_tenant_id and intent.tenant_id != envelope_tenant_id)
+            ):
+                return BusinessExecutionResult(
+                    verdict=ExecutionVerdict.REJECTED,
+                    business_id=request.envelope.business_id,
+                    goal_id=request.envelope.goal_id,
+                    execution_id=request.correlation_id,
+                    message="Managed external execution intent does not match business goal scope.",
+                    delegated_to_domain_engine=False,
+                    adapter_name=adapter.adapter_name,
+                    metadata={"reason": "action_intent_scope_mismatch"},
+                )
+            if canonical_payload_hash(intent.parameters_copy()) != intent.payload_hash:
+                return BusinessExecutionResult(
+                    verdict=ExecutionVerdict.REJECTED,
+                    business_id=request.envelope.business_id,
+                    goal_id=request.envelope.goal_id,
+                    execution_id=request.correlation_id,
+                    message="Managed external execution intent payload hash is invalid.",
+                    delegated_to_domain_engine=False,
+                    adapter_name=adapter.adapter_name,
+                    metadata={"reason": "action_intent_payload_hash_mismatch"},
+                )
+            provenance_verifier = self._decision_provenance_verifier
+            assert_provenance = getattr(
+                provenance_verifier,
+                "assert_intent_provenance",
+                None,
+            )
+            if not callable(assert_provenance):
+                return BusinessExecutionResult(
+                    verdict=ExecutionVerdict.REJECTED,
+                    business_id=request.envelope.business_id,
+                    goal_id=request.envelope.goal_id,
+                    execution_id=request.correlation_id,
+                    message="Managed external execution requires canonical decision provenance.",
+                    delegated_to_domain_engine=False,
+                    adapter_name=adapter.adapter_name,
+                    metadata={"reason": "missing_decision_provenance_verifier"},
+                )
+            try:
+                provenance_event_id = str(assert_provenance(intent) or "").strip()
+            except (LookupError, RuntimeError, ValueError) as exc:
+                return BusinessExecutionResult(
+                    verdict=ExecutionVerdict.REJECTED,
+                    business_id=request.envelope.business_id,
+                    goal_id=request.envelope.goal_id,
+                    execution_id=request.correlation_id,
+                    message=str(exc),
+                    delegated_to_domain_engine=False,
+                    adapter_name=adapter.adapter_name,
+                    metadata={
+                        "reason": "decision_provenance_denied",
+                        "failure_type": type(exc).__name__,
+                    },
+                )
+            if not provenance_event_id:
+                return BusinessExecutionResult(
+                    verdict=ExecutionVerdict.REJECTED,
+                    business_id=request.envelope.business_id,
+                    goal_id=request.envelope.goal_id,
+                    execution_id=request.correlation_id,
+                    message="Canonical decision provenance event is empty.",
+                    delegated_to_domain_engine=False,
+                    adapter_name=adapter.adapter_name,
+                    metadata={"reason": "decision_provenance_denied"},
+                )
+            if self._agent_identity_registry is None:
+                return BusinessExecutionResult(
+                    verdict=ExecutionVerdict.REJECTED,
+                    business_id=request.envelope.business_id,
+                    goal_id=request.envelope.goal_id,
+                    execution_id=request.correlation_id,
+                    message="Managed external execution requires AgentIdentity runtime authorization.",
+                    delegated_to_domain_engine=False,
+                    adapter_name=adapter.adapter_name,
+                    metadata={"reason": "missing_agent_identity_registry"},
+                )
+            try:
+                self._agent_identity_registry.assert_execution_authorized(
+                    tenant_id=intent.tenant_id,
+                    business_id=intent.business_id,
+                    agent_id=intent.agent_id,
+                    capability=intent.capability_target,
+                )
+            except (LookupError, PermissionError, ValueError) as exc:
+                return BusinessExecutionResult(
+                    verdict=ExecutionVerdict.REJECTED,
+                    business_id=request.envelope.business_id,
+                    goal_id=request.envelope.goal_id,
+                    execution_id=request.correlation_id,
+                    message=str(exc),
+                    delegated_to_domain_engine=False,
+                    adapter_name=adapter.adapter_name,
+                    metadata={
+                        "reason": "agent_authorization_denied",
+                        "failure_type": type(exc).__name__,
+                    },
+                )
+            execute_intent = getattr(adapter, "execute_intent", None)
+            if not callable(execute_intent):
+                return BusinessExecutionResult(
+                    verdict=ExecutionVerdict.REJECTED,
+                    business_id=request.envelope.business_id,
+                    goal_id=request.envelope.goal_id,
+                    execution_id=request.correlation_id,
+                    message="Adapter does not implement sovereign intent execution boundary.",
+                    delegated_to_domain_engine=False,
+                    adapter_name=adapter.adapter_name,
+                    metadata={"reason": "managed_intent_boundary_unsupported"},
+                )
+            result = await execute_intent(
+                ExternalExecutionRequest(
+                    action_intent=intent,
+                    integration_mode=delegated_request.integration_mode,
+                    correlation_id=delegated_request.correlation_id,
+                    idempotency_key=delegated_request.idempotency_key,
+                    timeout_seconds=delegated_request.timeout_seconds,
+                )
+            )
+            if (
+                result.business_id != intent.business_id
+                or result.goal_id != intent.goal_id
+                or result.execution_id != delegated_request.correlation_id
+            ):
+                return BusinessExecutionResult(
+                    verdict=ExecutionVerdict.REJECTED,
+                    business_id=intent.business_id,
+                    goal_id=intent.goal_id,
+                    execution_id=delegated_request.correlation_id,
+                    message="Managed external result does not match sovereign execution scope.",
+                    delegated_to_domain_engine=False,
+                    adapter_name=adapter.adapter_name,
+                    metadata={"reason": "external_result_scope_mismatch"},
+                )
+            result = replace(
+                result,
+                metadata={
+                    **dict(result.metadata or {}),
+                    "external_output_role": "execution_result_evidence",
+                    "decision_authority": False,
+                    "sovereign_decision_id": intent.decision_id,
+                    "sovereign_action_intent_id": intent.intent_id,
+                    "sovereign_provenance_event_id": provenance_event_id,
+                },
+            )
+        else:
+            result = await adapter.execute(delegated_request)
         if self._audit_sink is not None and hasattr(self._audit_sink, "record"):
             self._audit_sink.record(event_type="business_autonomy_result", business_id=result.business_id, goal_id=result.goal_id, detail={"verdict": result.verdict.value, "adapter_name": result.adapter_name})
         return result

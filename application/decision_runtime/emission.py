@@ -13,6 +13,8 @@ from contracts.event_store import (
 )
 from core.events.event_types import DECISION_PROPOSED
 from core.observability.throttled_logger import exception_throttled
+from core.utils.canonical import payload_hash as canonical_payload_hash
+from governance.persistence_codec import to_jsonable
 from runtime.events.world_model_events import build_world_model_pinned_event
 
 logger = logging.getLogger(__name__)
@@ -184,6 +186,13 @@ def _build_event(*, envelope: Any, action_intent: Any) -> dict[str, Any]:
     issued_at_ms = int(getattr(decision, "issued_at_ms", 0) or 0)
     if issued_at_ms <= 0:
         raise DecisionEventProjectionConflict("decision issued_at_ms is required")
+    expires_at_ms = int(getattr(decision, "expires_at_ms", 0) or 0)
+    if expires_at_ms <= issued_at_ms:
+        raise DecisionEventProjectionConflict("decision expires_at_ms must follow issued_at_ms")
+    as_dict = getattr(action_intent, "as_dict", None)
+    if not callable(as_dict):
+        raise DecisionEventProjectionConflict("action intent canonical projection is required")
+    action_intent_fingerprint = canonical_payload_hash(to_jsonable(as_dict()))
 
     intent_payload = (
         action_intent.payload_copy()
@@ -214,6 +223,9 @@ def _build_event(*, envelope: Any, action_intent: Any) -> dict[str, Any]:
         "state_hash": str(getattr(decision, "state_hash", "") or "").strip() or None,
         "decision_payload_hash": str(getattr(envelope, "payload_hash", "") or "").strip() or None,
         "action_intent_id": intent_id,
+        "action_intent_fingerprint": action_intent_fingerprint,
+        "issued_at_ms": issued_at_ms,
+        "expires_at_ms": expires_at_ms,
         "objective_name": str(getattr(action_intent, "objective_name", "") or "").strip() or None,
     }
     if goal_id is not None:

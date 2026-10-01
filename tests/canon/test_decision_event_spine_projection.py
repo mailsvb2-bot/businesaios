@@ -13,6 +13,7 @@ from application.decision_runtime.emission import (
 from contracts.action_intent import ActionIntentV1
 from contracts.event_store import canonical_business_event_contract
 from core.events.event_types import DECISION_PROPOSED
+from core.utils.canonical import payload_hash as canonical_payload_hash
 from runtime.platform.event_store.memory_event_store import MemoryEventStore
 
 
@@ -86,6 +87,9 @@ def test_decision_proposed_is_canonical_idempotent_and_pii_minimal() -> None:
         "state_hash": "state-hash-1",
         "decision_payload_hash": "a" * 64,
         "action_intent_id": "intent:decision-1",
+        "action_intent_fingerprint": canonical_payload_hash(intent.as_dict()),
+        "issued_at_ms": 1234,
+        "expires_at_ms": 2234,
         "objective_name": "profit_adjusted_growth",
     }
     assert "recipient" not in canonical["payload"]
