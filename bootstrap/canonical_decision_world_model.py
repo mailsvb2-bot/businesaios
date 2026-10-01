@@ -12,6 +12,7 @@ from bootstrap.canonical_decision_world_model_ltv import CanonicalLtvEnricher, L
 from bootstrap.canonical_decision_world_model_pricing import enrich_pricing
 from bootstrap.canonical_decision_world_model_resolvers import safe_dict
 from ports.world_model import DecisionWorldModelPort
+from runtime.state.state_contract import StateSnapshotStorePort
 
 
 class CanonicalDecisionWorldModel(DecisionWorldModelPort):
@@ -27,8 +28,10 @@ class CanonicalDecisionWorldModel(DecisionWorldModelPort):
         *,
         store: Optional[WorldModelStorePort] = None,
         kind: str = "hybrid@v1",
+        state_snapshot_store: StateSnapshotStorePort | None = None,
     ) -> None:
         self._store = store or build_world_model_store()
+        self._state_snapshot_store = state_snapshot_store
         self._kind = str(kind or "hybrid@v1").strip().lower()
         self._ltv = CanonicalLtvEnricher()
 
@@ -60,6 +63,23 @@ class CanonicalDecisionWorldModel(DecisionWorldModelPort):
         merged_meta["world_model"] = "canonical_decision_world_model@v1"
         merged_meta["world_model_kind"] = self._kind
 
+        semantic_view = getattr(state, "world_model_semantics", None)
+        tenant_id = str(getattr(state, "tenant_id", "") or meta.get("tenant_id") or "").strip()
+        business_id = str(meta.get("business_id") or product.get("business_id") or "").strip()
+        if semantic_view is not None and tenant_id and business_id:
+            if semantic_view.tenant_id != tenant_id or semantic_view.business_id != business_id:
+                raise ValueError("world_model_semantics scope mismatch")
+        if self._state_snapshot_store is not None and tenant_id and business_id:
+            snapshot = self._state_snapshot_store.load_latest(
+                tenant_id=tenant_id,
+                business_id=business_id,
+            )
+            if snapshot is not None:
+                if snapshot.tenant_id != tenant_id or snapshot.business_id != business_id:
+                    raise ValueError("canonical state snapshot scope mismatch")
+                semantic_view = snapshot.semantic_view
+                merged_meta["canonical_business_state_id"] = snapshot.state_id
+
         if self._kind in {"pricing@v1", "hybrid@v1", "hybrid"}:
             merged_economy, merged_meta = enrich_pricing(
                 state=state,
@@ -69,4 +89,7 @@ class CanonicalDecisionWorldModel(DecisionWorldModelPort):
                 store=self._store,
             )
 
-        return replace(state, economy=merged_economy, meta=merged_meta)
+        updates = {"economy": merged_economy, "meta": merged_meta}
+        if hasattr(state, "world_model_semantics"):
+            updates["world_model_semantics"] = semantic_view
+        return replace(state, **updates)

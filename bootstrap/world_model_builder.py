@@ -16,13 +16,17 @@ from bootstrap.canonical_decision_world_model import CanonicalDecisionWorldModel
 from bootstrap.decision_agi_world_model import DecisionAGIWorldModel
 from runtime.boot.env import env_str
 from ports.world_model import DecisionWorldModelPort
+from runtime.state.state_contract import StateSnapshotStorePort
+from runtime.state.state_snapshot_store import FileStateSnapshotStore, canonical_state_snapshot_root
 from bootstrap.pricing_world_model_loader import load_pricing_world_model_for, load_pricing_world_model_with_metadata_for
 
 
 def build_default_world_model(
     *,
     store: Optional[WorldModelStorePort] = None,
+    state_snapshot_store: StateSnapshotStorePort | None = None,
 ) -> DecisionWorldModelPort:
+    state_snapshot_store = state_snapshot_store or FileStateSnapshotStore(canonical_state_snapshot_root())
     kind = env_str("WORLD_MODEL_KIND", "hybrid@v1").strip().lower()
     if kind in {"decision_agi@v1", "agi@v1", "agi", "decision_agi"}:
         base_kind = env_str("DECISION_AGI_BASE_WORLD_MODEL_KIND", "hybrid@v1").strip().lower() or "hybrid@v1"
@@ -30,9 +34,10 @@ def build_default_world_model(
             store=store,
             kind=kind,
             base_kind=base_kind,
+            state_snapshot_store=state_snapshot_store,
         )
     else:
-        model = CanonicalDecisionWorldModel(store=store, kind=kind)
+        model = CanonicalDecisionWorldModel(store=store, kind=kind, state_snapshot_store=state_snapshot_store)
     _validate_decision_world_model(model)
     return model
 
