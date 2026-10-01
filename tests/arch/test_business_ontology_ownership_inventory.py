@@ -10,7 +10,6 @@ from canon.business_ontology_inventory import (
     ontology_ownership_by_entity,
 )
 
-
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 
 
