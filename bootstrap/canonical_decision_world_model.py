@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from runtime.state.state_contract import StateSnapshotStorePort
+
 CANON_BOOT_WIRING_ONLY = True
 CANON_BOOT_CLUSTER_FINAL_OWNER = True
 
@@ -12,7 +14,6 @@ from bootstrap.canonical_decision_world_model_ltv import CanonicalLtvEnricher, L
 from bootstrap.canonical_decision_world_model_pricing import enrich_pricing
 from bootstrap.canonical_decision_world_model_resolvers import safe_dict
 from ports.world_model import DecisionWorldModelPort
-from runtime.state.state_contract import StateSnapshotStorePort
 
 
 class CanonicalDecisionWorldModel(DecisionWorldModelPort):
@@ -66,9 +67,16 @@ class CanonicalDecisionWorldModel(DecisionWorldModelPort):
         semantic_view = getattr(state, "world_model_semantics", None)
         tenant_id = str(getattr(state, "tenant_id", "") or meta.get("tenant_id") or "").strip()
         business_id = str(meta.get("business_id") or product.get("business_id") or "").strip()
-        if semantic_view is not None and tenant_id and business_id:
-            if semantic_view.tenant_id != tenant_id or semantic_view.business_id != business_id:
-                raise ValueError("world_model_semantics scope mismatch")
+        if (
+            semantic_view is not None
+            and tenant_id
+            and business_id
+            and (
+                semantic_view.tenant_id != tenant_id
+                or semantic_view.business_id != business_id
+            )
+        ):
+            raise ValueError("world_model_semantics scope mismatch")
         if self._state_snapshot_store is not None and tenant_id and business_id:
             snapshot = self._state_snapshot_store.load_latest(
                 tenant_id=tenant_id,
