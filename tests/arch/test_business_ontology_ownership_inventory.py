@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import importlib.util
+from pathlib import Path
 
 from canon.business_ontology_inventory import (
     BUSINESS_ONTOLOGY_OWNERSHIP_AUDIT,
@@ -8,6 +9,14 @@ from canon.business_ontology_inventory import (
     OwnershipAuditStatus,
     ontology_ownership_by_entity,
 )
+
+
+PROJECT_ROOT = Path(__file__).resolve().parents[2]
+
+
+def _repo_module_exists(module: str) -> bool:
+    module_path = PROJECT_ROOT.joinpath(*module.split("."))
+    return module_path.with_suffix(".py").is_file() or module_path.is_dir()
 
 
 def test_business_ontology_inventory_covers_every_canon_entity_once() -> None:
@@ -35,9 +44,9 @@ def test_done_storage_and_reader_writer_modules_are_real() -> None:
     for row in BUSINESS_ONTOLOGY_OWNERSHIP_AUDIT:
         if row.status is not OwnershipAuditStatus.DONE:
             continue
-        assert importlib.util.find_spec(row.storage_owner) is not None, row
+        assert _repo_module_exists(row.storage_owner), row
         for module in (*row.allowed_writers, *row.allowed_readers):
-            assert importlib.util.find_spec(module) is not None, (row, module)
+            assert _repo_module_exists(module), (row, module)
 
 
 def test_inventory_never_claims_unresolved_entity_has_authoritative_owner() -> None:
