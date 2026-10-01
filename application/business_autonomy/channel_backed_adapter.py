@@ -13,8 +13,10 @@ from application.business_autonomy.contracts import (
     BusinessCapability,
     BusinessExecutionRequest,
     BusinessExecutionResult,
+    BusinessGoalEnvelope,
     CapabilityKind,
     ExecutionVerdict,
+    ExternalExecutionRequest,
     IntegrationMode,
 )
 from application.business_autonomy.protocol import ExternalBusinessAdapter
@@ -128,6 +130,45 @@ class ChannelBackedBusinessAdapter(ExternalBusinessAdapter):
             metadata=dict(request.envelope.metadata),
         )
         return await self.channel_adapter.execute(envelope=envelope, request=request)
+
+    async def execute_intent(self, request: ExternalExecutionRequest) -> BusinessExecutionResult:
+        intent = request.action_intent
+        if intent.business_id != self.identity.business_id or intent.tenant_id != self.identity.tenant_id:
+            raise PermissionError("managed action intent does not match channel identity scope")
+        metadata = {
+            "managed_external_intent": True,
+            "action_id": intent.action_id,
+            "intent_id": intent.intent_id,
+            "decision_id": intent.decision_id,
+            "agent_id": intent.agent_id,
+            "payload_hash": intent.payload_hash,
+        }
+        envelope = ChannelExecutionEnvelope(
+            identity=self.identity,
+            route_key=f"{self.identity.tenant_id}:{self.identity.business_id}",
+            operation=intent.capability_target,
+            payload=intent.parameters_copy(),
+            metadata=metadata,
+        )
+        compatibility_request = BusinessExecutionRequest(
+            envelope=BusinessGoalEnvelope(
+                business_id=intent.business_id,
+                goal_id=intent.goal_id,
+                goal_type=intent.capability_target,
+                goal_payload=intent.parameters_copy(),
+                requested_by=intent.agent_id,
+                metadata=metadata,
+            ),
+            integration_mode=request.integration_mode,
+            correlation_id=request.correlation_id,
+            idempotency_key=request.idempotency_key,
+            timeout_seconds=request.timeout_seconds,
+            action_intent=intent,
+        )
+        return await self.channel_adapter.execute(
+            envelope=envelope,
+            request=compatibility_request,
+        )
 
 
 def _coerce_channel_kind(value: str | ChannelKind | None) -> ChannelKind:

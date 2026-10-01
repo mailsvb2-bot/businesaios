@@ -174,6 +174,7 @@ def _decision_event(*, intent, issued_at_ms: int = 1000) -> dict:
         correlation_id=intent.correlation_id,
         action=intent.action_type,
         issued_at_ms=issued_at_ms,
+        expires_at_ms=issued_at_ms + 60_000,
         issuer_id="businesaios-core",
         policy_id="policy-test",
         snapshot_id="snapshot-test",

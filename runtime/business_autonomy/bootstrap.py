@@ -99,6 +99,7 @@ from runtime.business_autonomy.distributed_state import (
     FilePlanningMemoryDocumentPort,
 )
 from runtime.business_autonomy.execution_support import (
+    DecisionEventSpineProvenanceVerifier,
     build_execution_runtime,
     build_provider_quota_runtime,
     ensure_business_route,
@@ -736,10 +737,18 @@ def build_business_autonomy_guarded_service(*, business_id: str = 'external_busi
             envelope_metadata={'tenant_id': tenant_id, 'admin_read_model_seed': True},
         )
 
+    agent_identity_registry = AgentIdentityRegistry(
+        event_store=ontology_event_store,
+        idempotency_store=distributed['idempotency'],
+    )
     autonomy_service = BusinessAutonomyService(
         adapter_registry=adapter_registry,
         autonomy_policy=BusinessAutonomyPolicy(capability_registry),
         audit_sink=audit,
+        agent_identity_registry=agent_identity_registry,
+        decision_provenance_verifier=DecisionEventSpineProvenanceVerifier(
+            event_store=ontology_event_store
+        ),
     )
     from application.business_autonomy.guards import BusinessBlastRadiusGuard, BusinessBudgetGuard
 
@@ -765,10 +774,7 @@ def build_business_autonomy_guarded_service(*, business_id: str = 'external_busi
         ),
     )
     service._distributed_business_registry = distributed_registry
-    service._agent_identity_registry = AgentIdentityRegistry(
-        event_store=ontology_event_store,
-        idempotency_store=distributed['idempotency'],
-    )
+    service._agent_identity_registry = agent_identity_registry
     service._typed_channel_registry = typed_registry
     service._operator_admin_plane = UnifiedOperatorAdminPlane(BusinessAutonomyFleetReadModel(distributed_registry))
     service._execution_runtime = build_execution_runtime(route_state=distributed['region_state'])

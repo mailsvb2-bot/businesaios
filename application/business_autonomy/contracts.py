@@ -7,6 +7,7 @@ from math import isfinite
 from types import MappingProxyType
 from typing import Any
 
+from contracts.action_intent import ActionIntentV2
 from contracts.business_constraints import ConstraintSeverity
 
 
@@ -90,6 +91,33 @@ class BusinessExecutionResult:
     metadata: Mapping[str, Any] = field(default_factory=dict)
 
 
+MANAGED_EXTERNAL_EXECUTION_MODES = frozenset({
+    IntegrationMode.DELEGATED_DOMAIN,
+    IntegrationMode.POLICY_GUARDED_DELEGATED,
+})
+
+
+@dataclass(frozen=True)
+class ExternalExecutionRequest:
+    """Narrow managed boundary: immutable sovereign intent plus execution metadata only."""
+    action_intent: ActionIntentV2
+    integration_mode: IntegrationMode
+    correlation_id: str = ""
+    idempotency_key: str = ""
+    timeout_seconds: int | None = None
+
+    def __post_init__(self) -> None:
+        if self.integration_mode not in MANAGED_EXTERNAL_EXECUTION_MODES:
+            raise ValueError("external managed execution requires delegated integration mode")
+        issues = self.action_intent.validate_contract()
+        if issues:
+            raise ValueError(f"invalid managed action intent: {','.join(issues)}")
+        if not self.correlation_id:
+            object.__setattr__(self, "correlation_id", self.action_intent.correlation_id)
+        if not self.idempotency_key:
+            object.__setattr__(self, "idempotency_key", self.action_intent.action_id)
+
+
 @dataclass(frozen=True)
 class BusinessExecutionRequest:
     envelope: BusinessGoalEnvelope
@@ -97,6 +125,7 @@ class BusinessExecutionRequest:
     correlation_id: str = ""
     idempotency_key: str = ""
     timeout_seconds: int | None = None
+    action_intent: ActionIntentV2 | None = None
 
     def __post_init__(self) -> None:
         if not self.correlation_id:

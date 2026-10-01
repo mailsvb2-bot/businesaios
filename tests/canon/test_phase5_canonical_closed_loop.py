@@ -40,6 +40,7 @@ class _Decision:
     action: str
     payload: dict[str, Any]
     issued_at_ms: int
+    expires_at_ms: int
     issuer_id: str = "phase5-test-sovereign"
     policy_id: str = "policy:phase5"
     snapshot_id: str = "snapshot:phase5"
@@ -86,6 +87,7 @@ class _SemanticDecisionIssuer:
                 action=action,
                 payload=payload,
                 issued_at_ms=2_000 + self.calls,
+                expires_at_ms=62_000 + self.calls,
             )
         )
 

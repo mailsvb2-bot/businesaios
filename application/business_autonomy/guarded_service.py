@@ -99,6 +99,7 @@ class BusinessAutonomyGuardedService:
                 correlation_id=request.correlation_id,
                 idempotency_key=request.idempotency_key,
                 timeout_seconds=request.timeout_seconds,
+                action_intent=request.action_intent,
             )
 
         budget = self._budget_guard.evaluate(effective_request)
