@@ -5,6 +5,10 @@ from typing import Any
 
 from application.business_constraint import BusinessConstraintRegistry
 from application.business_discovery.contracts import DISCOVERY_FIELDS, DiscoveryFieldSpec
+from application.business_discovery.legacy_onboarding_migration import (
+    LegacyOnboardingEventReader,
+    LegacyOnboardingMigrator,
+)
 from application.business_discovery.owner_assertion_ingress import (
     OwnerAssertionIngressResult,
     OwnerBusinessAssertion,
@@ -58,6 +62,8 @@ class BusinessDiscoveryWorkspace:
         goal_registry: BusinessGoalRegistry | None = None,
         constraint_registry: BusinessConstraintRegistry | None = None,
         provider_observation_ingress: ProviderBusinessObservationIngress | None = None,
+        legacy_onboarding_reader: LegacyOnboardingEventReader | None = None,
+        legacy_onboarding_migrator: LegacyOnboardingMigrator | None = None,
     ) -> None:
         if state_engine.snapshot_store is None:
             raise ValueError("canonical durable StateSnapshotStore is required")
@@ -66,10 +72,27 @@ class BusinessDiscoveryWorkspace:
         self._goals = goal_registry
         self._constraints = constraint_registry
         self._provider_observations = provider_observation_ingress
+        if (legacy_onboarding_reader is None) != (legacy_onboarding_migrator is None):
+            raise ValueError("legacy onboarding reader and migrator must be configured together")
+        self._legacy_onboarding_reader = legacy_onboarding_reader
+        self._legacy_onboarding_migrator = legacy_onboarding_migrator
 
-    def describe(self, *, tenant_id: str, business_id: str) -> dict[str, Any]:
+    def describe(
+        self,
+        *,
+        tenant_id: str,
+        business_id: str,
+        actor_id: str | None = None,
+    ) -> dict[str, Any]:
         tenant = _required(tenant_id, "tenant_id")
         business = _required(business_id, "business_id")
+        actor = str(actor_id or "").strip()
+        if actor:
+            self._migrate_legacy_onboarding(
+                tenant_id=tenant,
+                business_id=business,
+                actor_id=actor,
+            )
         snapshot = self._state.snapshot_store.load_latest(
             tenant_id=tenant,
             business_id=business,
@@ -103,6 +126,7 @@ class BusinessDiscoveryWorkspace:
         view = self.describe(
             tenant_id=assertion.tenant_id,
             business_id=assertion.business_id,
+            actor_id=assertion.actor_id,
         )
         view["assertion"] = _result_payload(result)
         return view
@@ -250,6 +274,29 @@ class BusinessDiscoveryWorkspace:
             },
         )
         return _jsonable_dataclass(constraint)
+
+    def _migrate_legacy_onboarding(
+        self,
+        *,
+        tenant_id: str,
+        business_id: str,
+        actor_id: str,
+    ) -> None:
+        if self._legacy_onboarding_reader is None or self._legacy_onboarding_migrator is None:
+            return
+        snapshot = self._legacy_onboarding_reader.read(
+            tenant_id=tenant_id,
+            user_id=actor_id,
+        )
+        if snapshot is None:
+            return
+        self._legacy_onboarding_migrator.migrate(
+            settings=snapshot.settings,
+            tenant_id=tenant_id,
+            business_id=business_id,
+            actor_id=actor_id,
+            observed_at_ms=snapshot.observed_at_ms,
+        )
 
     @staticmethod
     def _field_view(
