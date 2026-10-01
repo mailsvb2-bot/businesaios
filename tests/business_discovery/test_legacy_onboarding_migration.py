@@ -344,6 +344,59 @@ def test_authenticated_workspace_read_migrates_durable_legacy_session_once(tmp_p
     assert len(owner_facts) == 3
 
 
+def test_workspace_migrates_a_newer_legacy_session_as_new_history(tmp_path) -> None:
+    events = MemoryEventStore()
+    events.append_event(
+        _legacy_setting_event(
+            tenant_id="tenant-1",
+            user_id="owner-1",
+            timestamp_ms=1_700_000_000_000,
+            what="Первая версия",
+        )
+    )
+    state = StateSynthesisEngine(
+        snapshot_store=FileStateSnapshotStore(tmp_path / "state")
+    )
+    ingress = OwnerBusinessAssertionIngress(
+        event_store=events,
+        evidence_store=InMemoryEvidenceStore(),
+        state_engine=state,
+        idempotency_store=InMemoryIdempotencyStore(),
+    )
+    workspace = BusinessDiscoveryWorkspace(
+        ingress=ingress,
+        state_engine=state,
+        legacy_onboarding_reader=LegacyOnboardingEventReader(event_store=events),
+        legacy_onboarding_migrator=LegacyOnboardingMigrator(ingress=ingress),
+    )
+
+    first = workspace.describe(
+        tenant_id="tenant-1",
+        business_id="business-1",
+        actor_id="owner-1",
+    )
+    first_offer = next(item for item in first["fields"] if item["key"] == "offer.summary")
+    assert first_offer["value"] == "Первая версия"
+
+    events.append_event(
+        _legacy_setting_event(
+            tenant_id="tenant-1",
+            user_id="owner-1",
+            timestamp_ms=1_700_000_010_000,
+            what="Новая версия",
+        )
+    )
+    second = workspace.describe(
+        tenant_id="tenant-1",
+        business_id="business-1",
+        actor_id="owner-1",
+    )
+    second_offer = next(item for item in second["fields"] if item["key"] == "offer.summary")
+    assert second_offer["value"] == "Новая версия"
+    assert second_offer["observed_at_ms"] == 1_700_000_010_000
+    assert second["state_id"] != first["state_id"]
+
+
 def test_workspace_does_not_migrate_another_users_legacy_session(tmp_path) -> None:
     events = MemoryEventStore()
     events.append_event(
