@@ -131,7 +131,7 @@ def test_provider_evidence_conflict_remains_visible_and_provider_evidence_wins(t
     conflict = next(
         item for item in snapshot.conflicts if item.field_path == "business.profile.industry"
     )
-    assert {candidate.source for candidate in conflict.candidates} == {
+    assert set(conflict.candidate_sources) == {
         "business_discovery.owner_assertion",
         "provider:hubspot",
     }
