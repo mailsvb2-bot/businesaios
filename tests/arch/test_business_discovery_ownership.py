@@ -96,3 +96,18 @@ def test_legacy_onboarding_python_authority_is_retired_after_canonical_migration
     assert "OwnerBusinessAssertion(" in source
     assert "class DiscoveryStore" not in source
     assert "class BusinessProfileStore" not in source
+
+
+def test_legacy_onboarding_migration_is_wired_into_authenticated_production_workspace() -> None:
+    router = (ROOT / "adapters" / "api" / "fastapi" / "router_adapter.py").read_text(
+        encoding="utf-8"
+    )
+    route = (
+        ROOT / "adapters" / "api" / "fastapi" / "business_workspace_discovery_routes.py"
+    ).read_text(encoding="utf-8")
+
+    assert "LegacyOnboardingEventReader" in router
+    assert "LegacyOnboardingMigrator" in router
+    assert "legacy_onboarding_reader=LegacyOnboardingEventReader(" in router
+    assert "legacy_onboarding_migrator=LegacyOnboardingMigrator(" in router
+    assert "actor_id=_actor_id(principal)" in route
