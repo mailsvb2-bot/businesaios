@@ -83,3 +83,16 @@ def test_business_discovery_http_route_is_projection_only() -> None:
     assert "EventFactLifecycleWriter" not in route
     assert "EvidenceStore" not in route
     assert "StateSynthesisEngine" not in route
+
+
+def test_legacy_onboarding_python_authority_is_retired_after_canonical_migration() -> None:
+    legacy_root = ROOT / "core" / "autopilot" / "onboarding"
+    assert (legacy_root / "README.md").exists()
+    assert tuple(legacy_root.glob("*.py")) == ()
+
+    migration = DISCOVERY_ROOT / "legacy_onboarding_migration.py"
+    source = migration.read_text(encoding="utf-8")
+    assert "OwnerBusinessAssertionIngress" in source
+    assert "OwnerBusinessAssertion(" in source
+    assert "class DiscoveryStore" not in source
+    assert "class BusinessProfileStore" not in source
