@@ -284,10 +284,13 @@ The discovery experience should be adaptive rather than a single giant form:
 
 ### BD6 — legacy onboarding migration
 - useful persisted `autopilot:session.diag` values are projected one-way by `application.business_discovery.legacy_onboarding_migration`;
+- the authenticated Business Discovery GET path is wired to the canonical `user_setting_set` EventStore source using exact tenant + authenticated owner identity before rendering the workspace;
+- the source event timestamp is preserved, so exact replay is deterministic and a genuinely newer legacy session appends new canonical history instead of rewriting the old assertion;
+- an explicit later clear of `autopilot:session` suppresses migration and cannot resurrect an older session;
 - migration writes only through the existing `OwnerBusinessAssertionIngress`, therefore Evidence, BusinessFact and State remain canonical;
 - the compatibility reader accepts both the historical `Diagnostics` shape and the later Telegram `avg_check_rub` alias;
 - historical default zero/unknown placeholders are not promoted to business truth before the persisted stage proves the question was answered;
-- migration is deterministic and idempotent; replay with changed semantics fails closed instead of silently rewriting history;
+- same-source-event replay is idempotent; changed semantics bound to the same source event fail closed instead of silently rewriting history;
 - the former `core.autopilot.onboarding` Python package is retired after parity tests; its tombstone documents the canonical replacement.
 
 ### BD7 — E2E acceptance
