@@ -22,6 +22,11 @@ class LLMTaskContext:
     metrics: Json = field(default_factory=dict)
     constraints: Json = field(default_factory=dict)
 
+    context_provenance: Json = field(default_factory=dict)
+    context_evidence_ids: Json = field(default_factory=dict)
+    context_privacy_classes: Json = field(default_factory=dict)
+    context_observed_at: Json = field(default_factory=dict)
+
     correlation_key: str = ""
 
 
