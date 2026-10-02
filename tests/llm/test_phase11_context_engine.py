@@ -9,6 +9,7 @@ from core.llm import (
     ContextBudgetExceeded,
     ContextBuilder,
     ContextFact,
+    ContextFreshnessViolation,
     ContextPrivacyViolation,
     ContextRequirement,
     ContextSource,
@@ -59,7 +60,7 @@ def test_context_builder_selects_only_required_information_with_provenance() -> 
     assert bundle.provenance()["business"]["evidence_ids"] == ["ev-business"]
 
 
-def test_context_builder_fails_closed_on_privacy_and_token_budget() -> None:
+def test_context_builder_fails_closed_on_privacy_token_and_freshness_budgets() -> None:
     builder = ContextBuilder()
     requirement = [ContextRequirement(ContextSource.WORLD_MODEL, "business")]
     restricted = {
@@ -95,6 +96,23 @@ def test_context_builder_fails_closed_on_privacy_and_token_budget() -> None:
             requirements=requirement,
             world_model=oversized,
             budget=ContextBudget(token_budget=2),
+        )
+
+    stale = {
+        "business": ContextFact(
+            key="business",
+            value={"category": "clinic"},
+            source="world_model.business",
+            observed_at=100.0,
+        )
+    }
+    with pytest.raises(ContextFreshnessViolation):
+        builder.build(
+            task="offer.generate",
+            requirements=requirement,
+            world_model=stale,
+            budget=ContextBudget(token_budget=200, max_age_seconds=60.0),
+            now_s=200.0,
         )
 
 
