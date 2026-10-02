@@ -116,6 +116,16 @@ def test_context_builder_fails_closed_on_privacy_token_and_freshness_budgets() -
         )
 
 
+def test_critical_context_requires_evidence() -> None:
+    with pytest.raises(ValueError, match="critical context requires evidence_ids"):
+        ContextFact(
+            key="business",
+            value={"category": "clinic"},
+            source="world_model.business",
+            critical=True,
+        )
+
+
 class _CaptureGateway:
     def __init__(self) -> None:
         self.request: LLMRequest | None = None
@@ -150,6 +160,7 @@ def test_llm_agent_uses_minimal_context_prompt_versions_and_provenance() -> None
             "constraints": "constraint.owner",
         },
         context_evidence_ids={"business": ("ev-business",)},
+        context_critical_fields=("business",),
     )
 
     result = agent.run_task(TaskType.OFFER_GENERATE, context)
@@ -179,3 +190,25 @@ def test_llm_agent_uses_minimal_context_prompt_versions_and_provenance() -> None
         == "world_model.business"
     )
     assert result.meta["prompt_versions"]["task"] == "offer.generate.v1"
+
+
+def test_llm_agent_enforces_freshness_budget_on_real_request_path() -> None:
+    gateway = _CaptureGateway()
+    agent = LLMAgent(
+        gateway,
+        LLMAgentConfig(
+            default_model="configured-model",
+            context_max_age_seconds=60.0,
+        ),
+        clock=lambda: 200.0,
+    )
+    context = LLMTaskContext(
+        tenant_id="tenant-a",
+        business={"category": "clinic"},
+        context_observed_at={"business": 100.0},
+    )
+
+    with pytest.raises(ContextFreshnessViolation):
+        agent.run_task(TaskType.OFFER_GENERATE, context)
+
+    assert gateway.request is None
