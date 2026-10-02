@@ -110,6 +110,7 @@ def test_outcome_projection_is_idempotent_and_carries_canonical_lineage() -> Non
     assert len(events) == 1
     assert events[0]["decision_id"] == "decision-event"
     contract = canonical_business_event_contract(events[0])
+    assert contract["schema_version"] == 2
     assert contract["business_id"] == "biz-1"
     assert contract["correlation_id"] == "correlation-event"
     assert contract["causation_id"] == "intent:decision-event"
@@ -229,6 +230,7 @@ def test_outcome_projection_replays_pre_phase13_event_without_rewriting_it() -> 
     legacy_payload = dict(store[0]["payload"])
     legacy_payload.pop("outcome_taxonomy", None)
     legacy_payload.pop("attribution", None)
+    legacy_payload["schema_version"] = 1
     store[0]["payload"] = legacy_payload
     legacy_snapshot = dict(store[0])
     legacy_snapshot["payload"] = dict(legacy_payload)
@@ -238,6 +240,15 @@ def test_outcome_projection_replays_pre_phase13_event_without_rewriting_it() -> 
     assert dict(store[0]) == legacy_snapshot
     assert "outcome_taxonomy" not in store[0]["payload"]
     assert "attribution" not in store[0]["payload"]
+    assert store[0]["payload"]["schema_version"] == 1
+
+    store[0]["payload"]["schema_version"] = 2
+    with pytest.raises(
+        BusinessOutcomeEventProjectionConflict,
+        match="conflicts with canonical evidence",
+    ):
+        projector.project(record)
+    store[0]["payload"]["schema_version"] = 1
 
     store[0]["payload"]["outcome"]["status"] = "forged"
     with pytest.raises(

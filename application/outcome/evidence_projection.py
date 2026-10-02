@@ -45,10 +45,10 @@ def _event_contract_matches(existing_event: dict[str, Any], expected_event: dict
     if "outcome_taxonomy" in existing_payload or "attribution" in existing_payload:
         return False
 
-    legacy_expected_payload = _mapping(expected.get("payload"))
+    legacy_expected_payload = {**_mapping(expected.get("payload")), "schema_version": 1}
     legacy_expected_payload.pop("outcome_taxonomy", None)
     legacy_expected_payload.pop("attribution", None)
-    legacy_expected = {**expected, "payload": legacy_expected_payload}
+    legacy_expected = {**expected, "schema_version": 1, "payload": legacy_expected_payload}
     return existing == legacy_expected
 
 
@@ -230,7 +230,7 @@ class BusinessOutcomeEventSpineProjector:
         attribution = _validated_attribution(normalized, outcome)
         timestamp_ms, event_id = int(normalized.created_at.timestamp() * 1000), f"closed-loop-outcome:{normalized.evidence_id}"
         event_payload = {
-            "schema_version": 1,
+            "schema_version": 2,
             "business_id": normalized.business_id,
             "occurred_at_ms": timestamp_ms,
             "recorded_at_ms": timestamp_ms,
