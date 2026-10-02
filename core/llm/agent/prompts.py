@@ -5,9 +5,95 @@ from typing import Any
 
 from core.llm.agent.contracts import LLMTaskContext
 from core.llm.agent.tasks import TaskType
+from core.llm.context import (
+    ContextBudget,
+    ContextBuilder,
+    ContextBundle,
+    ContextFact,
+    ContextRequirement,
+    ContextSource,
+)
+
+SYSTEM_PROMPT_VERSION = "growth.system.v1"
+TASK_PROMPT_VERSIONS = {task: f"{task.value}.v1" for task in TaskType}
+
+_TASK_CONTEXT_FIELDS: dict[TaskType, tuple[str, ...]] = {
+    TaskType.ADS_CREATIVE_GENERATE: ("business", "offer", "audience", "campaign", "constraints"),
+    TaskType.ADS_CREATIVE_CRITIQUE: ("business", "offer", "audience", "campaign", "constraints"),
+    TaskType.ADS_PLAN_BUILD: ("business", "offer", "audience", "campaign", "metrics", "constraints"),
+    TaskType.ADS_ANALYTICS_SUMMARY: ("business", "campaign", "metrics", "constraints"),
+    TaskType.OFFER_GENERATE: ("business", "offer", "audience", "constraints"),
+    TaskType.OFFER_RISK_REDUCE: ("business", "offer", "audience", "constraints"),
+    TaskType.PRICING_SUGGEST: ("business", "offer", "audience", "metrics", "constraints"),
+    TaskType.LANDING_COPY_GENERATE: ("business", "offer", "audience", "constraints"),
+    TaskType.LANDING_COPY_IMPROVE: ("business", "offer", "audience", "constraints"),
+}
+
+
+def prompt_versions_for(task: TaskType) -> tuple[str, str]:
+    return SYSTEM_PROMPT_VERSION, TASK_PROMPT_VERSIONS[task]
+
+
+def _context_fact(ctx: LLMTaskContext, key: str, value: Any) -> ContextFact:
+    evidence_raw = ctx.context_evidence_ids.get(key, ())
+    if isinstance(evidence_raw, str):
+        evidence_ids = (evidence_raw,) if evidence_raw else ()
+    else:
+        evidence_ids = tuple(str(item) for item in (evidence_raw or ()) if str(item))
+    observed_raw = ctx.context_observed_at.get(key)
+    observed_at = float(observed_raw) if observed_raw is not None else None
+    return ContextFact(
+        key=key,
+        value=value,
+        source=str(ctx.context_provenance.get(key) or "task_context"),
+        evidence_ids=evidence_ids,
+        observed_at=observed_at,
+        privacy_class=str(ctx.context_privacy_classes.get(key) or "internal"),
+        critical=key in ctx.context_critical_fields,
+    )
+
+
+def build_context_bundle(
+    task: TaskType,
+    ctx: LLMTaskContext,
+    *,
+    token_budget: int = 4_000,
+    privacy_budget: frozenset[str] | None = None,
+    max_age_seconds: float | None = None,
+    now_s: float | None = None,
+) -> ContextBundle:
+    fields = _TASK_CONTEXT_FIELDS[task]
+    world_model: dict[str, ContextFact] = {}
+    constraints: dict[str, ContextFact] = {}
+    requirements: list[ContextRequirement] = []
+
+    for key in fields:
+        value = getattr(ctx, key)
+        if not value:
+            continue
+        fact = _context_fact(ctx, key, value)
+        source = ContextSource.CONSTRAINT if key == "constraints" else ContextSource.WORLD_MODEL
+        target = constraints if source is ContextSource.CONSTRAINT else world_model
+        target[key] = fact
+        requirements.append(ContextRequirement(source=source, key=key))
+
+    return ContextBuilder().build(
+        task=task.value,
+        requirements=requirements,
+        world_model=world_model,
+        constraints=constraints,
+        budget=ContextBudget(
+            token_budget=token_budget,
+            privacy_budget=privacy_budget
+            or frozenset({"public", "internal", "confidential"}),
+            max_age_seconds=max_age_seconds,
+        ),
+        now_s=now_s,
+    )
 
 
 def build_system_prompt(task: TaskType, locale: str) -> str:
+    _ = task
     base = {
         "ru": (
             "Ты — помощник по маркетингу и росту. "
@@ -27,18 +113,13 @@ def build_system_prompt(task: TaskType, locale: str) -> str:
     return base.get(locale, base["ru"])
 
 
-def build_user_prompt(task: TaskType, ctx: LLMTaskContext) -> str:
-    payload: dict[str, Any] = {
-        "tenant_id": ctx.tenant_id,
-        "user_id": ctx.user_id,
-        "product_id": ctx.product_id,
-        "business": ctx.business,
-        "offer": ctx.offer,
-        "audience": ctx.audience,
-        "campaign": ctx.campaign,
-        "metrics": ctx.metrics,
-        "constraints": ctx.constraints,
-    }
+def build_user_prompt(
+    task: TaskType,
+    ctx: LLMTaskContext,
+    *,
+    context_bundle: ContextBundle | None = None,
+) -> str:
+    payload = (context_bundle or build_context_bundle(task, ctx)).as_payload()
 
     if task == TaskType.ADS_CREATIVE_GENERATE:
         return (
@@ -106,3 +187,13 @@ def build_user_prompt(task: TaskType, ctx: LLMTaskContext) -> str:
         )
 
     return f"INPUT:\n{json.dumps(payload, ensure_ascii=False)}"
+
+
+__all__ = [
+    "SYSTEM_PROMPT_VERSION",
+    "TASK_PROMPT_VERSIONS",
+    "build_context_bundle",
+    "build_system_prompt",
+    "build_user_prompt",
+    "prompt_versions_for",
+]
