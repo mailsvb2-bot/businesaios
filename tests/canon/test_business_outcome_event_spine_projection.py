@@ -209,3 +209,31 @@ def test_outcome_projection_rejects_tampered_canonical_attribution_lineage() -> 
         BusinessOutcomeEventSpineProjector(MemoryEventStore()).project(
             replace(record, payload=payload)
         )
+
+def test_outcome_projection_replays_pre_phase13_event_without_rewriting_it() -> None:
+    store = MemoryEventStore()
+    projector = BusinessOutcomeEventSpineProjector(store)
+    record = _record()
+    event_id = projector.project(record)
+    assert event_id is not None
+
+    legacy_payload = dict(store[0]["payload"])
+    legacy_payload.pop("outcome_taxonomy", None)
+    legacy_payload.pop("attribution", None)
+    store[0]["payload"] = legacy_payload
+    legacy_snapshot = dict(store[0])
+    legacy_snapshot["payload"] = dict(legacy_payload)
+
+    assert projector.project(record) == event_id
+    assert len(store) == 1
+    assert dict(store[0]) == legacy_snapshot
+    assert "outcome_taxonomy" not in store[0]["payload"]
+    assert "attribution" not in store[0]["payload"]
+
+    store[0]["payload"]["outcome"]["status"] = "forged"
+    with pytest.raises(
+        BusinessOutcomeEventProjectionConflict,
+        match="conflicts with canonical evidence",
+    ):
+        projector.project(record)
+

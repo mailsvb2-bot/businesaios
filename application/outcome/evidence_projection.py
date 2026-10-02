@@ -29,6 +29,29 @@ def _mapping(value: object) -> dict[str, Any]:
     return dict(value) if isinstance(value, Mapping) else {}
 
 
+def _event_contract_matches(existing_event: dict[str, Any], expected_event: dict[str, Any]) -> bool:
+    """Accept exact Phase 13 events or the exact pre-Phase-13 persisted shape.
+
+    Older outcome.observed rows did not contain the derived outcome taxonomy or
+    attribution projection. Replay after upgrade must not rewrite those rows,
+    but every pre-existing field must still match the canonical evidence.
+    """
+    existing = canonical_business_event_contract(existing_event)
+    expected = canonical_business_event_contract(expected_event)
+    if existing == expected:
+        return True
+
+    existing_payload = _mapping(existing.get("payload"))
+    if "outcome_taxonomy" in existing_payload or "attribution" in existing_payload:
+        return False
+
+    legacy_expected_payload = _mapping(expected.get("payload"))
+    legacy_expected_payload.pop("outcome_taxonomy", None)
+    legacy_expected_payload.pop("attribution", None)
+    legacy_expected = {**expected, "payload": legacy_expected_payload}
+    return existing == legacy_expected
+
+
 def _validated_attribution(record: EvidenceRecord, outcome: BusinessOutcomeV1) -> dict[str, Any]:
     attribution = _mapping(record.payload.get("attribution"))
     if not attribution:
@@ -207,14 +230,14 @@ class BusinessOutcomeEventSpineProjector:
         if len(matches) > 1:
             raise BusinessOutcomeEventProjectionConflict("multiple Event Spine rows share one outcome projection id")
         if matches:
-            if canonical_business_event_contract(matches[0]) != canonical_business_event_contract(event):
+            if not _event_contract_matches(matches[0], event):
                 raise BusinessOutcomeEventProjectionConflict("outcome Event Spine projection conflicts with canonical evidence")
             return event_id
         try:
             self._events.append_event(event)
         except Exception:
             matches = self._matches(normalized, event_id)
-            if not matches or canonical_business_event_contract(matches[0]) != canonical_business_event_contract(event):
+            if not matches or not _event_contract_matches(matches[0], event):
                 raise
             return event_id
         matches = self._matches(normalized, event_id)
