@@ -210,6 +210,7 @@ def test_outcome_projection_rejects_tampered_canonical_attribution_lineage() -> 
             replace(record, payload=payload)
         )
 
+
 def test_outcome_projection_replays_pre_phase13_event_without_rewriting_it() -> None:
     store = MemoryEventStore()
     projector = BusinessOutcomeEventSpineProjector(store)
