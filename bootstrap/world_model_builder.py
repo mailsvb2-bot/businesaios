@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+from runtime.state.state_contract import StateSnapshotStorePort
+from runtime.state.state_snapshot_store import FileStateSnapshotStore, canonical_state_snapshot_root
+
 
 CANON_WORLD_MODEL_BUILDER_FINAL_OWNER = True
 CANON_BOOT_WIRING_ONLY = True
@@ -16,8 +19,6 @@ from bootstrap.canonical_decision_world_model import CanonicalDecisionWorldModel
 from bootstrap.decision_agi_world_model import DecisionAGIWorldModel
 from runtime.boot.env import env_str
 from ports.world_model import DecisionWorldModelPort
-from runtime.state.state_contract import StateSnapshotStorePort
-from runtime.state.state_snapshot_store import FileStateSnapshotStore, canonical_state_snapshot_root
 from bootstrap.pricing_world_model_loader import load_pricing_world_model_for, load_pricing_world_model_with_metadata_for
 
 

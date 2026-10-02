@@ -154,7 +154,7 @@ def normalize_discovery_value(spec: DiscoveryFieldSpec, value: Any) -> Any:
         return {"amount_minor": amount, "currency": currency}
 
     if kind is DiscoveryValueKind.PERCENTAGE:
-        if isinstance(value, bool) or not isinstance(value, (int, float)):
+        if isinstance(value, bool) or not isinstance(value, int | float):
             raise ValueError(f"{spec.key} must be a number from 0 to 100")
         normalized = float(value)
         if not math.isfinite(normalized) or normalized < 0.0 or normalized > 100.0:
