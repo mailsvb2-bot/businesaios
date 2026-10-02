@@ -23,6 +23,8 @@ class LLMRequest:
     max_tokens: int = 450
     timeout_s: float = 20.0
     metadata: dict[str, Any] | None = None
+    model_profile_id: str | None = None
+    prompt_versions: dict[str, str] | None = None
 
 
 @dataclass(frozen=True)
@@ -43,8 +45,8 @@ class LLMResponse:
     def text(self) -> str:
         """Compatibility alias for older code paths.
 
-        Canonical field name is ``content``.  Keep ``text`` as a read-only
-        alias so legacy callers do not fork a second response shape.
+        Canonical field name is content. Keep text as a read-only alias so
+        legacy callers do not fork a second response shape.
         """
         return str(self.content or "")
 
