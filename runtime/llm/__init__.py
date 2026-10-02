@@ -6,6 +6,16 @@ from collections.abc import Callable
 
 from core.llm import (
     LLMClient,
+    ModelCapability,
+    ModelCapabilityRegistry,
+    ModelEvaluation,
+    ModelPolicy,
+    ModelProfile,
+    ModelProvider,
+    ModelRouteDecision,
+    ModelRouteRequest,
+    ModelRouter,
+    RoutedLLMClient,
     build_anthropic_client,
     build_gigachat_client,
     build_openai_compat,
@@ -68,7 +78,7 @@ def resolve_runtime_llm_settings(
 ) -> tuple[str, str, str, str, str | None]:
     """Resolve provider settings without forking mapping logic.
 
-    ``read_value(name, default)`` may read from env, settings, or a merged source.
+    read_value(name, default) may read from env, settings, or a merged source.
     This keeps provider defaults and key selection canonical while allowing both
     runtime boot and sealed actions to supply their own configuration source.
     """
@@ -87,7 +97,10 @@ def resolve_runtime_llm_settings(
         api_key = str(read_value(legacy_key, api_key) or "").strip() or api_key
         model = str(model_override or read_value(legacy_model, model) or "").strip() or model
 
-    anthropic_version = str(read_value("ANTHROPIC_VERSION", "2023-06-01") or "").strip() or "2023-06-01"
+    anthropic_version = (
+        str(read_value("ANTHROPIC_VERSION", "2023-06-01") or "").strip()
+        or "2023-06-01"
+    )
     return normalized, base_url, api_key, model, anthropic_version
 
 
@@ -159,12 +172,22 @@ def build_runtime_llm_client(
 
 
 __all__ = [
-    'CANON_RUNTIME_LLM_NAMESPACE',
+    "CANON_RUNTIME_LLM_NAMESPACE",
     "LLMClient",
     "LLMMessage",
     "LLMRequest",
     "LLMAgent",
     "LLMAgentConfig",
+    "ModelCapability",
+    "ModelCapabilityRegistry",
+    "ModelEvaluation",
+    "ModelPolicy",
+    "ModelProfile",
+    "ModelProvider",
+    "ModelRouteDecision",
+    "ModelRouteRequest",
+    "ModelRouter",
+    "RoutedLLMClient",
     "Transport",
     "normalize_provider",
     "resolve_runtime_llm_settings",
@@ -172,8 +195,5 @@ __all__ = [
 ]
 
 CANON_RUNTIME_LLM_NAMESPACE = True
-
-
-
 
 install_public_api_alias(__name__)
