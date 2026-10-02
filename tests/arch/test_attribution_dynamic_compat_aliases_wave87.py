@@ -29,3 +29,15 @@ def test_attribution_compat_modules_are_physical_pure_reexports() -> None:
         assert "class " not in text
         assert "def " not in text
         assert "__file__ =" not in text
+
+
+def test_phase13_keeps_one_canonical_attribution_engine_owner() -> None:
+    assert catalog.CANON_ATTRIBUTION_ENGINE is True
+    root = Path(__file__).resolve().parents[2]
+    owners = []
+    for path in root.rglob("*.py"):
+        if ".git" in path.parts or "tests" in path.parts:
+            continue
+        if "class AttributionEngine:" in path.read_text(encoding="utf-8", errors="ignore"):
+            owners.append(path.relative_to(root).as_posix())
+    assert owners == ["attribution/catalog.py"]

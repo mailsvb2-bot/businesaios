@@ -2,8 +2,8 @@ from __future__ import annotations
 
 from application.business_goal import BusinessGoalRegistry
 from application.headless.models import GoalExecutionRequest
-from execution.headless_boot import build_headless_runtime
 from core.ai import _reset_decision_core_singleton_for_tests
+from execution.headless_boot import build_headless_runtime
 from reliability.idempotency_store import InMemoryIdempotencyStore
 
 
@@ -81,6 +81,14 @@ def test_goal_bound_headless_closed_loop_uses_v2_and_preserves_goal_lineage(
     assert outcomes
     assert decisions[-1]["payload"]["decision"]["goal_id"] == "goal-profit"
     assert outcomes[-1]["payload"]["goal_id"] == "goal-profit"
+    attribution = dict(outcomes[-1]["payload"]["attribution"]["payload"])
+    assert attribution["model"] == "canonical_lineage_v1"
+    assert attribution["chain"]["goal"] == "goal-profit"
+    assert attribution["chain"]["decision"] == step.decision_id
+    assert attribution["chain"]["action"] == outcome["action_id"]
+    assert attribution["chain"]["outcome"] == outcome["outcome_id"]
+    assert attribution["causality_level"] == "correlated"
+    assert attribution["complete_chain"] is False
 
 
 def test_headless_boot_persists_phase7_capability_budgets_across_restart(

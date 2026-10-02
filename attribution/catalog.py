@@ -6,6 +6,24 @@ from hashlib import sha256
 
 from shared.kinded_payloads import build_kinded_payload
 
+CANON_ATTRIBUTION_ENGINE = True
+CANONICAL_CAUSALITY_LEVELS = (
+    "correlated",
+    "likely_contributed",
+    "strongly_attributed",
+    "experimentally_validated",
+)
+CANONICAL_ATTRIBUTION_CHAIN = (
+    "goal",
+    "decision",
+    "action",
+    "interaction",
+    "customer",
+    "conversion",
+    "payment",
+    "outcome",
+)
+
 
 def _as_float(value: object, default: float = 0.0) -> float:
     try:
@@ -53,6 +71,71 @@ class AttributionAudit:
 
 
 class AttributionEngine:
+    def attribute_canonical(self, payload: Mapping[str, object]) -> dict:
+        """Build one evidence-bound Phase 13 attribution projection.
+
+        The caller supplies canonical identifiers. Missing links remain explicit;
+        causality is never upgraded from correlation without stronger evidence.
+        """
+        data = dict(payload or {})
+        chain_input = data.get("chain")
+        chain_source = dict(chain_input) if isinstance(chain_input, Mapping) else {}
+        chain = {
+            key: str(chain_source.get(key) or data.get(f"{key}_id") or "").strip()
+            for key in CANONICAL_ATTRIBUTION_CHAIN
+        }
+        missing_chain = tuple(key for key, value in chain.items() if not value)
+        def refs(name: str) -> tuple[str, ...]:
+            return tuple(
+                dict.fromkeys(
+                    str(item).strip()
+                    for item in data.get(name) or ()
+                    if str(item).strip()
+                )
+            )
+
+        evidence_refs = refs("evidence_refs")
+        attribution_proof_refs = refs("attribution_proof_refs")
+        experiment_evidence_refs = refs("experiment_evidence_refs")
+        complete_chain = not missing_chain
+        verified = bool(data.get("verified"))
+        attribution_verified = bool(data.get("attribution_verified"))
+        experiment_validated = bool(data.get("experiment_validated"))
+        experiment_id = str(data.get("experiment_id") or "").strip()
+        causality_level = "correlated"
+        if complete_chain and verified and evidence_refs:
+            causality_level = "likely_contributed"
+        if causality_level == "likely_contributed" and attribution_verified and attribution_proof_refs:
+            causality_level = "strongly_attributed"
+        if (
+            complete_chain
+            and verified
+            and evidence_refs
+            and experiment_id
+            and experiment_validated
+            and experiment_evidence_refs
+        ):
+            causality_level = "experimentally_validated"
+        return build_kinded_payload(
+            "attribution_result",
+            {
+                "model": "canonical_lineage_v1",
+                "tenant_id": str(data.get("tenant_id") or "").strip(),
+                "business_id": str(data.get("business_id") or "").strip(),
+                "chain": chain,
+                "complete_chain": complete_chain,
+                "missing_chain": list(missing_chain),
+                "causality_level": causality_level,
+                "verified": verified,
+                "attribution_verified": attribution_verified,
+                "experiment_id": experiment_id or None,
+                "experiment_validated": experiment_validated,
+                "evidence_refs": list(evidence_refs),
+                "attribution_proof_refs": list(attribution_proof_refs),
+                "experiment_evidence_refs": list(experiment_evidence_refs),
+            },
+        )
+
     def _normalize_touchpoints(self, payload: Mapping[str, object]) -> list[Touchpoint]:
         raw = payload.get('touchpoints') or []
         touchpoints = [Touchpoint.from_mapping(item) for item in raw if isinstance(item, Mapping)]

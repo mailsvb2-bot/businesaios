@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from dataclasses import replace
 from datetime import UTC, datetime
 
 import pytest
@@ -9,6 +10,7 @@ from application.outcome.evidence_projection import (
     BusinessOutcomeEventProjectionConflict,
     BusinessOutcomeEventSpineProjector,
 )
+from attribution.attribution_engine import AttributionEngine
 from contracts.action_intent import ActionIntentV1
 from contracts.business_outcome import BusinessOutcomeV1
 from contracts.event_store import canonical_business_event_contract
@@ -174,3 +176,36 @@ def test_outcome_projection_preserves_legacy_payload_shape_without_goal() -> Non
     ]
     assert len(events) == 1
     assert "goal_id" not in events[0]["payload"]
+
+
+def test_outcome_projection_rejects_tampered_canonical_attribution_lineage() -> None:
+    record = _record()
+    attribution = AttributionEngine().attribute_canonical(
+        {
+            "tenant_id": record.tenant_id,
+            "business_id": record.business_id,
+            "goal_id": "goal-event",
+            "decision_id": "decision-event",
+            "action_id": "action-event",
+            "interaction_id": "interaction-1",
+            "customer_id": "customer-1",
+            "conversion_id": "conversion-1",
+            "payment_id": "payment-1",
+            "outcome_id": "outcome:action-event",
+            "verified": True,
+            "attribution_verified": True,
+            "evidence_refs": ("world-evidence-1",),
+        }
+    )
+    payload = dict(record.payload)
+    tampered = dict(attribution)
+    tampered_payload = dict(tampered["payload"])
+    tampered_chain = dict(tampered_payload["chain"])
+    tampered_chain["decision"] = "decision-forged"
+    tampered_payload["chain"] = tampered_chain
+    tampered["payload"] = tampered_payload
+    payload["attribution"] = tampered
+    with pytest.raises(BusinessOutcomeEventProjectionConflict, match="lineage conflicts"):
+        BusinessOutcomeEventSpineProjector(MemoryEventStore()).project(
+            replace(record, payload=payload)
+        )

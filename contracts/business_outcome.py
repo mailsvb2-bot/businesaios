@@ -6,6 +6,13 @@ from math import isfinite
 from typing import Any
 
 CANON_BUSINESS_OUTCOME_CONTRACT = True
+BUSINESS_OUTCOME_TAXONOMY = (
+    "technical",
+    "operational",
+    "customer",
+    "financial",
+    "strategic",
+)
 
 
 def _dict(value: object) -> dict[str, Any]:
@@ -65,6 +72,15 @@ class BusinessOutcomeV1:
         data = dict(feedback or {})
         goal_eval = _dict(data.get("goal_evaluation"))
         revenue = _dict(data.get("revenue_outcome"))
+        metrics = _dict(data.get("normalized_outcome"))
+        for key in ("interaction_id", "customer_id", "conversion_id"):
+            value = str(data.get(key) or "").strip()
+            if value and not str(metrics.get(key) or "").strip():
+                metrics[key] = value
+        for key in ("payment_id", "invoice_id", "order_id"):
+            value = str(revenue.get(key) or "").strip()
+            if value and not str(metrics.get(key) or "").strip():
+                metrics[key] = value
         outcome = cls(
             f"outcome:{action_id}", tenant_id.strip(), business_id.strip(), run_id.strip(),
             intent_id.strip(), decision_id.strip(), action_id.strip(), action_type.strip(),
@@ -76,7 +92,7 @@ class BusinessOutcomeV1:
             bool(revenue.get("verified")), str(data.get("evidence_status") or data.get("verification_status") or "unknown"),
             str(_dict(data.get("execution_feedback")).get("source_of_truth") or "feedback_contract"),
             tuple(str(value) for value in data.get("external_refs") or () if str(value).strip()),
-            _dict(data.get("normalized_outcome")),
+            metrics,
             evidence_refs=tuple(dict.fromkeys(str(value).strip() for value in evidence_refs if str(value).strip())),
             derived_fact_ref=str(derived_fact_ref or "").strip(),
         )
@@ -88,6 +104,22 @@ class BusinessOutcomeV1:
             raise ValueError("invalid business outcome identity")
         return outcome
 
+    def taxonomy(self) -> tuple[str, ...]:
+        """Return deterministic Phase 13 outcome categories without rewriting V1 storage."""
+        metrics = _dict(self.metrics)
+        categories: list[str] = []
+        if self.attempted or self.executed or self.verified:
+            categories.append("technical")
+        if self.executed or self.verified:
+            categories.append("operational")
+        if any(str(metrics.get(key) or "").strip() for key in ("customer_id", "conversion_id", "customer_impact")):
+            categories.append("customer")
+        if self.revenue_amount is not None or any(str(metrics.get(key) or "").strip() for key in ("payment_id", "invoice_id", "order_id")):
+            categories.append("financial")
+        if self.goal_achieved or self.goal_terminal:
+            categories.append("strategic")
+        return tuple(categories)
+
     def as_dict(self) -> dict[str, Any]:
         return {
             **self.__dict__,
@@ -97,4 +129,4 @@ class BusinessOutcomeV1:
         }
 
 
-__all__ = ["CANON_BUSINESS_OUTCOME_CONTRACT", "BusinessOutcomeV1"]
+__all__ = ["BUSINESS_OUTCOME_TAXONOMY", "CANON_BUSINESS_OUTCOME_CONTRACT", "BusinessOutcomeV1"]
