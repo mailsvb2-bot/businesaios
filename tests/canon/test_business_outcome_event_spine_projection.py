@@ -198,10 +198,18 @@ def test_outcome_projection_rejects_tampered_canonical_attribution_lineage() -> 
         }
     )
     payload = dict(record.payload)
+    outcome_body = dict(payload["business_outcome"])
+    outcome_body["metrics"] = {
+        "interaction_id": "interaction-1",
+        "customer_id": "customer-1",
+        "conversion_id": "conversion-1",
+        "payment_id": "payment-1",
+    }
+    payload["business_outcome"] = outcome_body
     tampered = dict(attribution)
     tampered_payload = dict(tampered["payload"])
     tampered_chain = dict(tampered_payload["chain"])
-    tampered_chain["decision"] = "decision-forged"
+    tampered_chain["payment"] = "payment-forged"
     tampered_payload["chain"] = tampered_chain
     tampered["payload"] = tampered_payload
     payload["attribution"] = tampered

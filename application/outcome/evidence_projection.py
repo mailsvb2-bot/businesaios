@@ -80,10 +80,32 @@ def _validated_attribution(record: EvidenceRecord, outcome: BusinessOutcomeV1) -
     record_refs = set(record.refs)
     if any(ref not in record_refs for ref in (*evidence_refs, *attribution_proof_refs, *experiment_evidence_refs)):
         raise BusinessOutcomeProjectionConflict("canonical attribution evidence conflicts with evidence record")
+    intent = _mapping(record.payload.get("action_intent"))
+    intent_schema = int(intent.get("schema_version") or 0)
+    parameters = _mapping(intent.get("parameters") if intent_schema == 2 else intent.get("payload"))
+    meta = _mapping(parameters.get("meta"))
+    metrics = _mapping(outcome.metrics)
+
+    def expected_node(name: str) -> str:
+        values = {
+            str(source.get(f"{name}_id") or "").strip()
+            for source in (metrics, parameters, meta)
+            if str(source.get(f"{name}_id") or "").strip()
+        }
+        if len(values) > 1:
+            raise BusinessOutcomeProjectionConflict(
+                f"canonical attribution {name} source conflicts with persisted evidence"
+            )
+        return next(iter(values), "")
+
     expected = {
         "goal": str(dict(record.labels).get("goal_id") or "").strip(),
         "decision": outcome.decision_id,
         "action": outcome.action_id,
+        "interaction": expected_node("interaction"),
+        "customer": expected_node("customer"),
+        "conversion": expected_node("conversion"),
+        "payment": expected_node("payment"),
         "outcome": outcome.outcome_id,
     }
     if any(value and str(chain.get(key) or "") != value for key, value in expected.items()):
