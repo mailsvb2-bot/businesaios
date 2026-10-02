@@ -202,6 +202,11 @@ def test_business_outcome_exposes_phase13_taxonomy_without_rewriting_v1_body() -
     assert "outcome_taxonomy" not in outcome.as_dict()
 
 
+def test_phase13_taxonomy_does_not_invent_financial_outcome_from_zero_default() -> None:
+    outcome = replace(_outcome(), revenue_amount=0.0, revenue_verified=False, metrics={})
+    assert outcome.taxonomy() == ("technical", "operational", "strategic")
+
+
 def test_phase13_attribution_flows_from_canonical_evidence_into_event_spine() -> None:
     evidence_store = InMemoryEvidenceStore()
     event_store = MemoryEventStore()

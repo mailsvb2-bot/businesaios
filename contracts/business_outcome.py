@@ -114,7 +114,7 @@ class BusinessOutcomeV1:
             categories.append("operational")
         if any(str(metrics.get(key) or "").strip() for key in ("customer_id", "conversion_id", "customer_impact")):
             categories.append("customer")
-        if self.revenue_amount is not None or any(str(metrics.get(key) or "").strip() for key in ("payment_id", "invoice_id", "order_id")):
+        if self.revenue_verified or self.revenue_amount not in (None, 0.0) or any(str(metrics.get(key) or "").strip() for key in ("payment_id", "invoice_id", "order_id")):
             categories.append("financial")
         if self.goal_achieved or self.goal_terminal:
             categories.append("strategic")
