@@ -85,6 +85,7 @@ class AttributionEngine:
             for key in CANONICAL_ATTRIBUTION_CHAIN
         }
         missing_chain = tuple(key for key, value in chain.items() if not value)
+
         def refs(name: str) -> tuple[str, ...]:
             return tuple(
                 dict.fromkeys(
