@@ -49,6 +49,7 @@ def _context_fact(ctx: LLMTaskContext, key: str, value: Any) -> ContextFact:
         evidence_ids=evidence_ids,
         observed_at=observed_at,
         privacy_class=str(ctx.context_privacy_classes.get(key) or "internal"),
+        critical=key in ctx.context_critical_fields,
     )
 
 
@@ -58,6 +59,8 @@ def build_context_bundle(
     *,
     token_budget: int = 4_000,
     privacy_budget: frozenset[str] | None = None,
+    max_age_seconds: float | None = None,
+    now_s: float | None = None,
 ) -> ContextBundle:
     fields = _TASK_CONTEXT_FIELDS[task]
     world_model: dict[str, ContextFact] = {}
@@ -83,7 +86,9 @@ def build_context_bundle(
             token_budget=token_budget,
             privacy_budget=privacy_budget
             or frozenset({"public", "internal", "confidential"}),
+            max_age_seconds=max_age_seconds,
         ),
+        now_s=now_s,
     )
 
 
@@ -114,10 +119,7 @@ def build_user_prompt(
     *,
     context_bundle: ContextBundle | None = None,
 ) -> str:
-    payload = (
-        context_bundle
-        or build_context_bundle(task, ctx)
-    ).as_payload()
+    payload = (context_bundle or build_context_bundle(task, ctx)).as_payload()
 
     if task == TaskType.ADS_CREATIVE_GENERATE:
         return (
