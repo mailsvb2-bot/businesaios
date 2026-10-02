@@ -102,7 +102,7 @@ class CapitalAllocationEngine:
             correlation_id=correlation_id,
             payload=payload or {},
         )
-        recommendations = self._selector.select(context)
+        recommendations = self._selector.build_recommendations(context)
         return ensure_economics_recommendations(recommendations)
 
     def rank_options(
