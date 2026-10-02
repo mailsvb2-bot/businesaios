@@ -26,6 +26,7 @@ class LLMTaskContext:
     context_evidence_ids: Json = field(default_factory=dict)
     context_privacy_classes: Json = field(default_factory=dict)
     context_observed_at: Json = field(default_factory=dict)
+    context_critical_fields: tuple[str, ...] = ()
 
     correlation_key: str = ""
 
