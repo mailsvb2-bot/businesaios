@@ -2,12 +2,12 @@ from __future__ import annotations
 
 from collections.abc import Mapping
 from dataclasses import dataclass, field, replace
-from enum import Enum
+from enum import StrEnum
 
 from core.llm.contracts import LLMClient, LLMRequest, LLMResponse
 
 
-class ModelCapability(str, Enum):
+class ModelCapability(StrEnum):
     REASONING = "reasoning"
     VISION = "vision"
     AUDIO = "audio"
@@ -238,9 +238,12 @@ class ModelRouter:
             return False
         if profile.privacy_class not in policy.allowed_privacy_classes:
             return False
-        if request.jurisdiction != "*" and "*" not in profile.jurisdictions:
-            if request.jurisdiction not in profile.jurisdictions:
-                return False
+        if (
+            request.jurisdiction != "*"
+            and "*" not in profile.jurisdictions
+            and request.jurisdiction not in profile.jurisdictions
+        ):
+            return False
         if profile.quality_score < policy.min_quality_score:
             return False
         if profile.risk_score > policy.max_risk_score:
