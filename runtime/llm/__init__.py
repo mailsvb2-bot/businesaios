@@ -2,7 +2,8 @@
 
 from __future__ import annotations
 
-from collections.abc import Callable
+from collections.abc import Callable, Mapping
+from dataclasses import replace
 
 from core.llm import (
     LLMClient,
@@ -13,16 +14,15 @@ from core.llm import (
     ModelProfile,
     ModelProvider,
     ModelRouteDecision,
-    ModelRouteRequest,
     ModelRouter,
-    RoutedLLMClient,
+    ModelRouteRequest,
     build_anthropic_client,
     build_gigachat_client,
     build_openai_compat,
     build_yandexgpt_client,
 )
 from core.llm.agent.agent import LLMAgent, LLMAgentConfig
-from core.llm.contracts import LLMMessage, LLMRequest
+from core.llm.contracts import LLMMessage, LLMRequest, LLMResponse
 from runtime.public_api_alias import install_public_api_alias
 
 Transport = Callable[[str, str, dict[str, object], int], dict[str, object]]
@@ -169,6 +169,81 @@ def build_runtime_llm_client(
             timeout_s=int(timeout_s or 20),
         )
     raise RuntimeError(f"llm_provider_unsupported:{normalized}")
+
+
+
+class RoutedLLMClient:
+    """Runtime adapter: pure core routing plus the actual provider call."""
+
+    def __init__(
+        self,
+        *,
+        router: ModelRouter,
+        clients_by_profile_id: Mapping[str, LLMClient],
+        policy: ModelPolicy,
+    ) -> None:
+        self._router = router
+        self._clients = dict(clients_by_profile_id)
+        self._policy = policy
+
+    @staticmethod
+    def _route_request(req: LLMRequest) -> ModelRouteRequest:
+        metadata = dict(req.metadata or {})
+        raw_capabilities = metadata.get("required_model_capabilities") or ()
+        return ModelRouteRequest(
+            required_capabilities=frozenset(ModelCapability(str(value)) for value in raw_capabilities),
+            context_tokens=int(metadata.get("context_tokens") or 0),
+            estimated_input_tokens=int(metadata.get("estimated_input_tokens") or 0),
+            estimated_output_tokens=int(metadata.get("estimated_output_tokens") or req.max_tokens or 0),
+            privacy_class=str(metadata.get("privacy_class") or "internal"),
+            jurisdiction=str(metadata.get("jurisdiction") or "*"),
+            preferred_profile_id=str(metadata["preferred_model_profile_id"]) if metadata.get("preferred_model_profile_id") else req.model_profile_id,
+            pinned_profile_id=str(metadata["pinned_model_profile_id"]) if metadata.get("pinned_model_profile_id") else None,
+        )
+
+    @staticmethod
+    def _request_for_profile(req: LLMRequest, decision: ModelRouteDecision) -> LLMRequest:
+        metadata = dict(req.metadata or {})
+        metadata.update({
+            "model_profile_id": decision.profile.profile_id,
+            "model_provider": decision.profile.provider,
+            "model_version": decision.profile.model_version,
+            "model_policy_id": decision.policy_id,
+            "model_policy_version": decision.policy_version,
+            "model_fallback_from_profile_id": decision.fallback_from_profile_id,
+        })
+        return replace(req, model=decision.profile.model, model_profile_id=decision.profile.profile_id, metadata=metadata)
+
+    @staticmethod
+    def _response_with_route(response: LLMResponse, decision: ModelRouteDecision) -> LLMResponse:
+        raw = dict(response.raw or {})
+        raw["model_route"] = {
+            "profile_id": decision.profile.profile_id,
+            "provider": decision.profile.provider,
+            "model": decision.profile.model,
+            "model_version": decision.profile.model_version,
+            "estimated_cost": decision.estimated_cost,
+            "policy_id": decision.policy_id,
+            "policy_version": decision.policy_version,
+            "fallback_from_profile_id": decision.fallback_from_profile_id,
+        }
+        return replace(response, raw=raw)
+
+    def _client_for(self, decision: ModelRouteDecision) -> LLMClient:
+        try:
+            return self._clients[decision.profile.profile_id]
+        except KeyError as exc:
+            raise RuntimeError(f"model client is not registered for profile: {decision.profile.profile_id}") from exc
+
+    def generate_sync(self, req: LLMRequest) -> LLMResponse:
+        decision = self._router.route(self._route_request(req), policy=self._policy)
+        response = self._client_for(decision).generate_sync(self._request_for_profile(req, decision))
+        return self._response_with_route(response, decision)
+
+    async def generate(self, req: LLMRequest) -> LLMResponse:
+        decision = self._router.route(self._route_request(req), policy=self._policy)
+        response = await self._client_for(decision).generate(self._request_for_profile(req, decision))
+        return self._response_with_route(response, decision)
 
 
 __all__ = [

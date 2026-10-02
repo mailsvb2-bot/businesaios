@@ -1,78 +1,45 @@
-"""Public LLM facade API.
-
-This module is the single public surface for building provider clients.
-
-Design constraints:
-- core/llm/** stays pure (no network IO).
-- Provider clients receive a transport callable injected from sealed runtime effects.
-- Outside core/llm/**, code must not import providers directly.
-"""
+"""Single public facade for pure LLM provider adapters."""
 
 from __future__ import annotations
+
+from collections.abc import Callable
+from typing import Any
 
 from config.llm_provider_policy import DEFAULT_LLM_PROVIDER_POLICY, LLMProviderPolicy
 
 from .contracts import LLMClient
-from .providers.anthropic import AnthropicClient, AnthropicTransport
-from .providers.gigachat import GigaChatClient, GigaChatTransport
-from .providers.mock import MockLLMClient as _MockAdapter
+from .providers.anthropic import AnthropicClient, AnthropicTransport, build_anthropic
+from .providers.gigachat import GigaChatClient, GigaChatTransport, build_gigachat
+from .providers.mock import MockLLMClient
 from .providers.openai_provider import OpenAICompatClient, OpenAICompatConfig
-from .providers.yandexgpt import YandexGPTClient, YandexGPTTransport
-from .service import (
-    OpenAICompatTransport,
-)
-from .service import (
-    build_anthropic_provider as _assemble_anthropic,
-)
-from .service import (
-    build_gigachat_provider as _assemble_gigachat,
-)
-from .service import (
-    build_mock_client as _assemble_mock,
-)
-from .service import (
-    build_openai_compat_client as _assemble_openai_compat,
-)
-from .service import (
-    build_yandexgpt_provider as _assemble_yandexgpt,
-)
+from .providers.yandexgpt import YandexGPTClient, YandexGPTTransport, build_yandexgpt
 
-MockLLMClient = _MockAdapter
+OpenAICompatTransport = Callable[[str, str, dict[str, Any], int], dict[str, Any]]
 
 
 def build_openai_compat(*, base_url: str, api_key: str, default_model: str | None = None, transport: OpenAICompatTransport | None = None, policy: LLMProviderPolicy = DEFAULT_LLM_PROVIDER_POLICY) -> LLMClient:
-    return _assemble_openai_compat(base_url=base_url, api_key=api_key, default_model=default_model or policy.default_openai_compat_model, transport=transport, policy=policy)
+    return OpenAICompatClient(OpenAICompatConfig(base_url=base_url, api_key=api_key, default_model=default_model or policy.default_openai_compat_model, transport=transport))
 
 
 def build_mock(*, fixed_text: str | None = None, raise_error: bool = False, policy: LLMProviderPolicy = DEFAULT_LLM_PROVIDER_POLICY) -> LLMClient:
-    return _assemble_mock(fixed_text=fixed_text or policy.mock_fixed_text, raise_error=raise_error)
+    return MockLLMClient(fixed_text=fixed_text or policy.mock_fixed_text, raise_error=raise_error)
 
 
 def build_anthropic_client(*, base_url: str, api_key: str, default_model: str, transport: AnthropicTransport, anthropic_version: str | None = None, timeout_s: int | None = None, policy: LLMProviderPolicy = DEFAULT_LLM_PROVIDER_POLICY) -> LLMClient:
-    return _assemble_anthropic(transport=transport, base_url=base_url, api_key=api_key, default_model=default_model, anthropic_version=anthropic_version, timeout_s=timeout_s or policy.default_timeout_s)
+    return build_anthropic(transport=transport, base_url=base_url, api_key=api_key, model=default_model, anthropic_version=anthropic_version, timeout_s=timeout_s or policy.default_timeout_s)
 
 
 def build_gigachat_client(*, base_url: str, api_key: str, default_model: str, transport: GigaChatTransport, timeout_s: int | None = None, policy: LLMProviderPolicy = DEFAULT_LLM_PROVIDER_POLICY) -> LLMClient:
-    return _assemble_gigachat(transport=transport, base_url=base_url, api_key=api_key, default_model=default_model, timeout_s=timeout_s or policy.default_timeout_s)
+    return build_gigachat(transport=transport, base_url=base_url, api_key=api_key, model=default_model, timeout_s=timeout_s or policy.default_timeout_s)
 
 
 def build_yandexgpt_client(*, base_url: str, api_key: str, default_model: str, transport: YandexGPTTransport, timeout_s: int | None = None, policy: LLMProviderPolicy = DEFAULT_LLM_PROVIDER_POLICY) -> LLMClient:
-    return _assemble_yandexgpt(transport=transport, base_url=base_url, api_key=api_key, default_model=default_model, timeout_s=timeout_s or policy.default_timeout_s)
+    return build_yandexgpt(transport=transport, base_url=base_url, api_key=api_key, model=default_model, timeout_s=timeout_s or policy.default_timeout_s)
 
 
 __all__ = [
-    "OpenAICompatClient",
-    "OpenAICompatConfig",
-    "OpenAICompatTransport",
-    "AnthropicClient",
-    "AnthropicTransport",
-    "GigaChatClient",
-    "GigaChatTransport",
-    "YandexGPTClient",
-    "YandexGPTTransport",
-    "build_openai_compat",
-    "build_mock",
-    "build_anthropic_client",
-    "build_gigachat_client",
-    "build_yandexgpt_client",
+    "AnthropicClient", "AnthropicTransport", "GigaChatClient", "GigaChatTransport",
+    "MockLLMClient", "OpenAICompatClient", "OpenAICompatConfig", "OpenAICompatTransport",
+    "YandexGPTClient", "YandexGPTTransport", "build_anthropic_client", "build_gigachat_client",
+    "build_mock", "build_openai_compat", "build_yandexgpt_client",
 ]

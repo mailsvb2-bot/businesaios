@@ -11,10 +11,10 @@ from core.llm import (
     ModelEvaluation,
     ModelPolicy,
     ModelProfile,
-    ModelRouteRequest,
     ModelRouter,
-    RoutedLLMClient,
+    ModelRouteRequest,
 )
+from runtime.llm import RoutedLLMClient
 
 
 def _profile(

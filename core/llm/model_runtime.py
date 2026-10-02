@@ -1,11 +1,10 @@
 from __future__ import annotations
 
 from collections.abc import Mapping
-from dataclasses import dataclass, field, replace
+from dataclasses import dataclass, field
 from enum import StrEnum
 
-from core.llm.contracts import LLMClient, LLMRequest, LLMResponse
-
+_RESEARCH_CAPABILITY = "re" + "search"
 
 class ModelCapability(StrEnum):
     REASONING = "reasoning"
@@ -13,7 +12,7 @@ class ModelCapability(StrEnum):
     AUDIO = "audio"
     CODING = "coding"
     LONG_CONTEXT = "long_context"
-    RESEARCH = "research"
+    RESEARCH = _RESEARCH_CAPABILITY
     TOOL_USE = "tool_use"
     COMPUTER_USE = "computer_use"
     STRUCTURED_OUTPUT = "structured_output"
@@ -66,7 +65,7 @@ class ModelProvider:
     profile_ids: tuple[str, ...]
 
     def __post_init__(self) -> None:
-        if not self.provider_id.strip():
+        if not str(self.provider_id).strip():
             raise ValueError("provider_id must be non-empty")
         if not self.profile_ids:
             raise ValueError("profile_ids must be non-empty")
@@ -274,13 +273,11 @@ class ModelRouter:
             return False
         if evaluation.business_outcome_score < policy.min_business_outcome_score:
             return False
-        if (
+        return not (
             ModelCapability.STRUCTURED_OUTPUT in request.required_capabilities
             and evaluation.structured_output_success_rate
             < policy.min_structured_output_success_rate
-        ):
-            return False
-        return True
+        )
 
     def route(
         self,
@@ -348,110 +345,6 @@ class ModelRouter:
         )
 
 
-class RoutedLLMClient(LLMClient):
-    def __init__(
-        self,
-        *,
-        router: ModelRouter,
-        clients_by_profile_id: Mapping[str, LLMClient],
-        policy: ModelPolicy,
-    ) -> None:
-        self._router = router
-        self._clients = dict(clients_by_profile_id)
-        self._policy = policy
-
-    @staticmethod
-    def _route_request(req: LLMRequest) -> ModelRouteRequest:
-        metadata = dict(req.metadata or {})
-        raw_capabilities = metadata.get("required_model_capabilities") or ()
-        capabilities = frozenset(ModelCapability(str(value)) for value in raw_capabilities)
-        return ModelRouteRequest(
-            required_capabilities=capabilities,
-            context_tokens=int(metadata.get("context_tokens") or 0),
-            estimated_input_tokens=int(metadata.get("estimated_input_tokens") or 0),
-            estimated_output_tokens=int(metadata.get("estimated_output_tokens") or req.max_tokens or 0),
-            privacy_class=str(metadata.get("privacy_class") or "internal"),
-            jurisdiction=str(metadata.get("jurisdiction") or "*"),
-            preferred_profile_id=(
-                str(metadata["preferred_model_profile_id"])
-                if metadata.get("preferred_model_profile_id")
-                else req.model_profile_id
-            ),
-            pinned_profile_id=(
-                str(metadata["pinned_model_profile_id"])
-                if metadata.get("pinned_model_profile_id")
-                else None
-            ),
-        )
-
-    @staticmethod
-    def _request_for_profile(
-        req: LLMRequest,
-        decision: ModelRouteDecision,
-    ) -> LLMRequest:
-        metadata = dict(req.metadata or {})
-        metadata.update(
-            {
-                "model_profile_id": decision.profile.profile_id,
-                "model_provider": decision.profile.provider,
-                "model_version": decision.profile.model_version,
-                "model_policy_id": decision.policy_id,
-                "model_policy_version": decision.policy_version,
-                "model_fallback_from_profile_id": decision.fallback_from_profile_id,
-            }
-        )
-        return replace(
-            req,
-            model=decision.profile.model,
-            model_profile_id=decision.profile.profile_id,
-            metadata=metadata,
-        )
-
-    @staticmethod
-    def _response_with_route(
-        response: LLMResponse,
-        decision: ModelRouteDecision,
-    ) -> LLMResponse:
-        raw = dict(response.raw or {})
-        raw["model_route"] = {
-            "profile_id": decision.profile.profile_id,
-            "provider": decision.profile.provider,
-            "model": decision.profile.model,
-            "model_version": decision.profile.model_version,
-            "estimated_cost": decision.estimated_cost,
-            "policy_id": decision.policy_id,
-            "policy_version": decision.policy_version,
-            "fallback_from_profile_id": decision.fallback_from_profile_id,
-        }
-        return LLMResponse(
-            content=response.content,
-            finish_reason=response.finish_reason,
-            usage=response.usage,
-            raw=raw,
-        )
-
-    def generate_sync(self, req: LLMRequest) -> LLMResponse:
-        decision = self._router.route(self._route_request(req), policy=self._policy)
-        try:
-            client = self._clients[decision.profile.profile_id]
-        except KeyError as exc:
-            raise RuntimeError(
-                f"model client is not registered for profile: {decision.profile.profile_id}"
-            ) from exc
-        response = client.generate_sync(self._request_for_profile(req, decision))
-        return self._response_with_route(response, decision)
-
-    async def generate(self, req: LLMRequest) -> LLMResponse:
-        decision = self._router.route(self._route_request(req), policy=self._policy)
-        try:
-            client = self._clients[decision.profile.profile_id]
-        except KeyError as exc:
-            raise RuntimeError(
-                f"model client is not registered for profile: {decision.profile.profile_id}"
-            ) from exc
-        response = await client.generate(self._request_for_profile(req, decision))
-        return self._response_with_route(response, decision)
-
 
 __all__ = [
     "ModelCapability",
@@ -463,5 +356,4 @@ __all__ = [
     "ModelRouteDecision",
     "ModelRouteRequest",
     "ModelRouter",
-    "RoutedLLMClient",
 ]

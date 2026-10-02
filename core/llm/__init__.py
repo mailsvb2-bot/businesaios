@@ -49,9 +49,8 @@ from .model_runtime import (
     ModelProfile,
     ModelProvider,
     ModelRouteDecision,
-    ModelRouteRequest,
     ModelRouter,
-    RoutedLLMClient,
+    ModelRouteRequest,
 )
 from .templated import TemplatedLLM
 
@@ -95,5 +94,4 @@ __all__ = [
     "ModelRouteDecision",
     "ModelRouteRequest",
     "ModelRouter",
-    "RoutedLLMClient",
 ]
