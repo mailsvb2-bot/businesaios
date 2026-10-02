@@ -10,6 +10,7 @@ from application.outcome import (
     BusinessOutcomeProjectionConflict,
 )
 from contracts.business_outcome import BusinessOutcomeV1
+from runtime.platform.event_store.memory_event_store import MemoryEventStore
 from storage.evidence_store import EvidenceStore, InMemoryEvidenceStore, SqliteEvidenceStore
 from storage.sqlite_fallback import SqliteSessionFactory
 
@@ -193,3 +194,98 @@ def test_business_outcome_projection_survives_sqlite_restart(tmp_path) -> None:
         business_id=expected.business_id,
         outcome_id=expected.outcome_id,
     ) == expected
+
+
+def test_business_outcome_exposes_phase13_taxonomy_without_rewriting_v1_body() -> None:
+    outcome = _outcome()
+    assert outcome.taxonomy() == ("technical", "operational", "financial", "strategic")
+    assert "outcome_taxonomy" not in outcome.as_dict()
+
+
+def test_phase13_taxonomy_does_not_invent_financial_outcome_from_zero_default() -> None:
+    outcome = replace(_outcome(), revenue_amount=0.0, revenue_verified=False, metrics={})
+    assert outcome.taxonomy() == ("technical", "operational", "strategic")
+
+
+def test_phase13_attribution_flows_from_canonical_evidence_into_event_spine() -> None:
+    evidence_store = InMemoryEvidenceStore()
+    event_store = MemoryEventStore()
+    outcome = replace(
+        _outcome(),
+        metrics={"converted": True, "customer_id": "customer-1", "conversion_id": "conversion-1", "payment_id": "payment-1"},
+    )
+    action_intent = {
+        "schema_version": 2,
+        "action_id": outcome.action_id,
+        "intent_id": outcome.intent_id,
+        "tenant_id": outcome.tenant_id,
+        "business_id": outcome.business_id,
+        "decision_id": outcome.decision_id,
+        "correlation_id": "correlation-1",
+        "goal_id": "goal-1",
+        "agent_id": "agent-1",
+        "capability_target": outcome.action_type,
+        "channel": "email",
+        "parameters": {
+            "interaction_id": "interaction-1",
+            "customer_id": "customer-1",
+            "conversion_id": "conversion-1",
+        },
+        "evidence_refs": ["evidence-world-1"],
+    }
+    feedback = {
+        "business_outcome": outcome.as_dict(),
+        "action_intent": action_intent,
+        "interaction_id": "interaction-1",
+        "customer_id": "customer-1",
+        "conversion_id": "conversion-1",
+        "revenue_outcome": {"payment_id": "payment-1"},
+        "attribution_verified": True,
+        "attribution_proof_refs": ["proof:provider-1"],
+    }
+    service = EvidencePersistenceService(
+        evidence_store=evidence_store,
+        event_store=event_store,
+    )
+    artifacts = service.persist(
+        tenant_id=outcome.tenant_id,
+        business_id=outcome.business_id,
+        run_id=outcome.run_id,
+        goal=outcome.goal,
+        goal_id="goal-1",
+        step_index=0,
+        action={"action_type": outcome.action_type, "action_id": outcome.action_id},
+        execution_result={"executed": True, "source_of_truth": outcome.source_of_truth},
+        verification_result={
+            "verified": True,
+            "verification": {"status": "verified", "external_refs": ["proof:provider-1"]},
+        },
+        world_state_before={},
+        world_state_after={},
+        final_feedback=feedback,
+    )
+    assert artifacts.persistence_receipt is not None
+    record = evidence_store.list_for_tenant(tenant_id=outcome.tenant_id)[0]
+    attribution = record.payload["attribution"]["payload"]
+    assert attribution["complete_chain"] is True
+    assert attribution["causality_level"] == "strongly_attributed"
+    assert attribution["chain"] == {
+        "goal": "goal-1",
+        "decision": outcome.decision_id,
+        "action": outcome.action_id,
+        "interaction": "interaction-1",
+        "customer": "customer-1",
+        "conversion": "conversion-1",
+        "payment": "payment-1",
+        "outcome": outcome.outcome_id,
+    }
+    events = list(
+        event_store.iter_events(
+            tenant_id=outcome.tenant_id,
+            start_ms=0,
+            event_type="outcome.observed",
+        )
+    )
+    assert len(events) == 1
+    assert events[0]["payload"]["attribution"] == record.payload["attribution"]
+    assert events[0]["payload"]["outcome_taxonomy"] == list(outcome.taxonomy())

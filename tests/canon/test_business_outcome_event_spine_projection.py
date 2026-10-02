@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from dataclasses import replace
 from datetime import UTC, datetime
 
 import pytest
@@ -9,6 +10,7 @@ from application.outcome.evidence_projection import (
     BusinessOutcomeEventProjectionConflict,
     BusinessOutcomeEventSpineProjector,
 )
+from attribution.attribution_engine import AttributionEngine
 from contracts.action_intent import ActionIntentV1
 from contracts.business_outcome import BusinessOutcomeV1
 from contracts.event_store import canonical_business_event_contract
@@ -108,6 +110,7 @@ def test_outcome_projection_is_idempotent_and_carries_canonical_lineage() -> Non
     assert len(events) == 1
     assert events[0]["decision_id"] == "decision-event"
     contract = canonical_business_event_contract(events[0])
+    assert contract["schema_version"] == 2
     assert contract["business_id"] == "biz-1"
     assert contract["correlation_id"] == "correlation-event"
     assert contract["causation_id"] == "intent:decision-event"
@@ -174,3 +177,83 @@ def test_outcome_projection_preserves_legacy_payload_shape_without_goal() -> Non
     ]
     assert len(events) == 1
     assert "goal_id" not in events[0]["payload"]
+
+
+def test_outcome_projection_rejects_tampered_canonical_attribution_lineage() -> None:
+    record = _record()
+    attribution = AttributionEngine().attribute_canonical(
+        {
+            "tenant_id": record.tenant_id,
+            "business_id": record.business_id,
+            "goal_id": "goal-event",
+            "decision_id": "decision-event",
+            "action_id": "action-event",
+            "interaction_id": "interaction-1",
+            "customer_id": "customer-1",
+            "conversion_id": "conversion-1",
+            "payment_id": "payment-1",
+            "outcome_id": "outcome:action-event",
+            "verified": True,
+            "attribution_verified": True,
+            "evidence_refs": ("world-evidence-1",),
+        }
+    )
+    payload = dict(record.payload)
+    outcome_body = dict(payload["business_outcome"])
+    outcome_body["metrics"] = {
+        "interaction_id": "interaction-1",
+        "customer_id": "customer-1",
+        "conversion_id": "conversion-1",
+        "payment_id": "payment-1",
+    }
+    payload["business_outcome"] = outcome_body
+    tampered = dict(attribution)
+    tampered_payload = dict(tampered["payload"])
+    tampered_chain = dict(tampered_payload["chain"])
+    tampered_chain["payment"] = "payment-forged"
+    tampered_payload["chain"] = tampered_chain
+    tampered["payload"] = tampered_payload
+    payload["attribution"] = tampered
+    with pytest.raises(BusinessOutcomeEventProjectionConflict, match="lineage conflicts"):
+        BusinessOutcomeEventSpineProjector(MemoryEventStore()).project(
+            replace(record, payload=payload)
+        )
+
+
+def test_outcome_projection_replays_pre_phase13_event_without_rewriting_it() -> None:
+    store = MemoryEventStore()
+    projector = BusinessOutcomeEventSpineProjector(store)
+    record = _record()
+    event_id = projector.project(record)
+    assert event_id is not None
+
+    legacy_payload = dict(store[0]["payload"])
+    legacy_payload.pop("outcome_taxonomy", None)
+    legacy_payload.pop("attribution", None)
+    legacy_payload["schema_version"] = 1
+    store[0]["payload"] = legacy_payload
+    legacy_snapshot = dict(store[0])
+    legacy_snapshot["payload"] = dict(legacy_payload)
+
+    assert projector.project(record) == event_id
+    assert len(store) == 1
+    assert dict(store[0]) == legacy_snapshot
+    assert "outcome_taxonomy" not in store[0]["payload"]
+    assert "attribution" not in store[0]["payload"]
+    assert store[0]["payload"]["schema_version"] == 1
+
+    store[0]["payload"]["schema_version"] = 2
+    with pytest.raises(
+        BusinessOutcomeEventProjectionConflict,
+        match="conflicts with canonical evidence",
+    ):
+        projector.project(record)
+    store[0]["payload"]["schema_version"] = 1
+
+    store[0]["payload"]["outcome"]["status"] = "forged"
+    with pytest.raises(
+        BusinessOutcomeEventProjectionConflict,
+        match="conflicts with canonical evidence",
+    ):
+        projector.project(record)
+

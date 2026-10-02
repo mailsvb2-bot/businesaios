@@ -18,6 +18,7 @@ from application.outcome.evidence_projection import (
     OUTCOME_OBSERVED_EVENT_TYPE,
     BusinessOutcomeEventSpineProjector,
 )
+from attribution.catalog import AttributionEngine
 from execution.canonical_persistence_vocabulary import (
     canonical_memory_record,
     canonical_persistence_outcome_record,
@@ -50,6 +51,14 @@ def _safe_dict(value: object) -> dict[str, Any]:
 
 def _text(value: object) -> str:
     return str(value or '').strip()
+
+
+def _first_text(*values: object) -> str:
+    for value in values:
+        text = _text(value)
+        if text:
+            return text
+    return ""
 
 
 def _utc_now() -> datetime:
@@ -195,6 +204,72 @@ class EvidencePersistenceService:
     def _canonical_evidence_id(*, persistence_key: str) -> str:
         return str(uuid5(NAMESPACE_URL, f"businesaios:evidence-persistence:{persistence_key}"))
 
+    @staticmethod
+    def _canonical_attribution_projection(
+        *,
+        tenant_id: str,
+        business_id: str,
+        goal_id: str,
+        business_outcome: Mapping[str, Any],
+        action_intent: Mapping[str, Any],
+        feedback: Mapping[str, Any],
+        evidence_refs: tuple[str, ...],
+    ) -> dict[str, Any]:
+        outcome = dict(business_outcome or {})
+        intent = dict(action_intent or {})
+        data = dict(feedback or {})
+        metrics = _safe_dict(outcome.get("metrics"))
+        normalized = _safe_dict(data.get("normalized_outcome"))
+        revenue = _safe_dict(data.get("revenue_outcome"))
+        intent_schema = int(intent.get("schema_version") or 0)
+        parameters = _safe_dict(intent.get("parameters") if intent_schema == 2 else intent.get("payload"))
+        meta = _safe_dict(parameters.get("meta"))
+
+        def identifier(name: str, *extra: object) -> str:
+            return _first_text(
+                data.get(name),
+                metrics.get(name),
+                normalized.get(name),
+                revenue.get(name),
+                parameters.get(name),
+                meta.get(name),
+                *extra,
+            )
+
+        def proof_refs(name: str) -> tuple[str, ...]:
+            raw = data.get(name)
+            if raw is None:
+                raw = normalized.get(name)
+            if isinstance(raw, str):
+                raw = (raw,)
+            if not isinstance(raw, list | tuple | set):
+                return ()
+            return tuple(dict.fromkeys(_text(item) for item in raw if _text(item)))
+
+        return AttributionEngine().attribute_canonical(
+            {
+                "tenant_id": tenant_id,
+                "business_id": business_id,
+                "goal_id": _first_text(goal_id, intent.get("goal_id"), meta.get("canonical_goal_id")),
+                "decision_id": _first_text(intent.get("decision_id"), outcome.get("decision_id")),
+                "action_id": _first_text(intent.get("action_id"), outcome.get("action_id")),
+                "interaction_id": identifier("interaction_id"),
+                "customer_id": identifier("customer_id"),
+                "conversion_id": identifier("conversion_id"),
+                "payment_id": identifier("payment_id"),
+                "outcome_id": _text(outcome.get("outcome_id")),
+                "verified": bool(outcome.get("verified")),
+                "attribution_verified": data.get("attribution_verified") is True
+                or normalized.get("attribution_verified") is True,
+                "experiment_id": identifier("experiment_id"),
+                "experiment_validated": data.get("experiment_validated") is True
+                or normalized.get("experiment_validated") is True,
+                "evidence_refs": evidence_refs,
+                "attribution_proof_refs": proof_refs("attribution_proof_refs"),
+                "experiment_evidence_refs": proof_refs("experiment_evidence_refs"),
+            }
+        )
+
     def _persist_canonical_evidence(
         self,
         *,
@@ -256,6 +331,22 @@ class EvidencePersistenceService:
         evidence_id = self._canonical_evidence_id(persistence_key=persistence_key)
         created_at = _utc_now()
         existing = self._evidence_store.get(tenant_id=str(tenant_id), evidence_id=evidence_id)
+        existing_attribution = (
+            _safe_dict(existing.payload.get("attribution")) if existing is not None else {}
+        )
+        attribution: dict[str, Any] = {}
+        if business_outcome and action_intent and (existing is None or existing_attribution):
+            attribution = self._canonical_attribution_projection(
+                tenant_id=str(tenant_id),
+                business_id=str(business_id),
+                goal_id=_first_text(persisted_goal_id, signed_goal_id),
+                business_outcome=business_outcome,
+                action_intent=action_intent,
+                feedback=feedback,
+                evidence_refs=refs,
+            )
+            if existing_attribution and existing_attribution != attribution:
+                raise ValueError("canonical attribution replay conflicts with persisted evidence")
         if existing is not None:
             created_at = existing.created_at
         record = EvidenceRecord(
@@ -280,6 +371,7 @@ class EvidencePersistenceService:
                 'outcome': outcome,
                 **({'action_intent': action_intent} if action_intent else {}),
                 **({'business_outcome': business_outcome} if business_outcome else {}),
+                **({"attribution": attribution} if attribution else {}),
                 'verification': _compact_verification_payload(verification, action=action, execution_receipt=execution),
                 'evidence': _compact_evidence_payload(verification),
             },

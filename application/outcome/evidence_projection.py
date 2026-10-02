@@ -3,6 +3,7 @@ from __future__ import annotations
 from collections.abc import Mapping
 from typing import Any
 
+from attribution.catalog import CANONICAL_ATTRIBUTION_CHAIN, CANONICAL_CAUSALITY_LEVELS
 from contracts.business_outcome import BusinessOutcomeV1
 from contracts.event_store import canonical_business_event_contract
 from storage.evidence_store import EvidenceRecord, EvidenceStore
@@ -26,6 +27,102 @@ BusinessOutcomeEventProjectionConflict = BusinessOutcomeProjectionConflict
 
 def _mapping(value: object) -> dict[str, Any]:
     return dict(value) if isinstance(value, Mapping) else {}
+
+
+def _event_contract_matches(existing_event: dict[str, Any], expected_event: dict[str, Any]) -> bool:
+    """Accept exact Phase 13 events or the exact pre-Phase-13 persisted shape.
+
+    Older outcome.observed rows did not contain the derived outcome taxonomy or
+    attribution projection. Replay after upgrade must not rewrite those rows,
+    but every pre-existing field must still match the canonical evidence.
+    """
+    existing = canonical_business_event_contract(existing_event)
+    expected = canonical_business_event_contract(expected_event)
+    if existing == expected:
+        return True
+
+    existing_payload = _mapping(existing.get("payload"))
+    if "outcome_taxonomy" in existing_payload or "attribution" in existing_payload:
+        return False
+
+    legacy_expected_payload = {**_mapping(expected.get("payload")), "schema_version": 1}
+    legacy_expected_payload.pop("outcome_taxonomy", None)
+    legacy_expected_payload.pop("attribution", None)
+    legacy_expected = {**expected, "schema_version": 1, "payload": legacy_expected_payload}
+    return existing == legacy_expected
+
+
+def _validated_attribution(record: EvidenceRecord, outcome: BusinessOutcomeV1) -> dict[str, Any]:
+    attribution = _mapping(record.payload.get("attribution"))
+    if not attribution:
+        return {}
+    if str(attribution.get("kind") or "") != "attribution_result":
+        raise BusinessOutcomeProjectionConflict("canonical attribution kind is invalid")
+    payload = _mapping(attribution.get("payload"))
+    chain = _mapping(payload.get("chain"))
+    if str(payload.get("model") or "") != "canonical_lineage_v1":
+        raise BusinessOutcomeProjectionConflict("canonical attribution model is invalid")
+    if str(payload.get("tenant_id") or "") != record.tenant_id or str(payload.get("business_id") or "") != record.business_id:
+        raise BusinessOutcomeProjectionConflict("canonical attribution scope conflicts with evidence")
+    missing = [key for key in CANONICAL_ATTRIBUTION_CHAIN if not str(chain.get(key) or "").strip()]
+    if list(payload.get("missing_chain") or []) != missing or bool(payload.get("complete_chain")) != (not missing):
+        raise BusinessOutcomeProjectionConflict("canonical attribution completeness is inconsistent")
+    level = str(payload.get("causality_level") or "")
+    if level not in CANONICAL_CAUSALITY_LEVELS:
+        raise BusinessOutcomeProjectionConflict("canonical attribution causality level is invalid")
+    evidence_refs = tuple(str(item).strip() for item in payload.get("evidence_refs") or () if str(item).strip())
+    attribution_proof_refs = tuple(
+        str(item).strip() for item in payload.get("attribution_proof_refs") or () if str(item).strip()
+    )
+    experiment_evidence_refs = tuple(
+        str(item).strip() for item in payload.get("experiment_evidence_refs") or () if str(item).strip()
+    )
+    record_refs = set(record.refs)
+    if any(ref not in record_refs for ref in (*evidence_refs, *attribution_proof_refs, *experiment_evidence_refs)):
+        raise BusinessOutcomeProjectionConflict("canonical attribution evidence conflicts with evidence record")
+    intent = _mapping(record.payload.get("action_intent"))
+    intent_schema = int(intent.get("schema_version") or 0)
+    parameters = _mapping(intent.get("parameters") if intent_schema == 2 else intent.get("payload"))
+    meta = _mapping(parameters.get("meta"))
+    metrics = _mapping(outcome.metrics)
+
+    def expected_node(name: str) -> str:
+        values = {
+            str(source.get(f"{name}_id") or "").strip()
+            for source in (metrics, parameters, meta)
+            if str(source.get(f"{name}_id") or "").strip()
+        }
+        if len(values) > 1:
+            raise BusinessOutcomeProjectionConflict(
+                f"canonical attribution {name} source conflicts with persisted evidence"
+            )
+        return next(iter(values), "")
+
+    expected = {
+        "goal": str(dict(record.labels).get("goal_id") or "").strip(),
+        "decision": outcome.decision_id,
+        "action": outcome.action_id,
+        "interaction": expected_node("interaction"),
+        "customer": expected_node("customer"),
+        "conversion": expected_node("conversion"),
+        "payment": expected_node("payment"),
+        "outcome": outcome.outcome_id,
+    }
+    if any(value and str(chain.get(key) or "") != value for key, value in expected.items()):
+        raise BusinessOutcomeProjectionConflict("canonical attribution lineage conflicts with outcome")
+    if level != "correlated" and (missing or not bool(payload.get("verified")) or not evidence_refs):
+        raise BusinessOutcomeProjectionConflict("canonical attribution overstates causal evidence")
+    if level == "strongly_attributed" and (
+        not bool(payload.get("attribution_verified")) or not attribution_proof_refs
+    ):
+        raise BusinessOutcomeProjectionConflict("strong attribution requires explicit attribution proof")
+    if level == "experimentally_validated" and (
+        not bool(payload.get("experiment_validated"))
+        or not str(payload.get("experiment_id") or "").strip()
+        or not experiment_evidence_refs
+    ):
+        raise BusinessOutcomeProjectionConflict("experimental attribution requires experiment evidence")
+    return attribution
 
 
 def _project_record(record: EvidenceRecord) -> BusinessOutcomeV1:
@@ -130,8 +227,19 @@ class BusinessOutcomeEventSpineProjector:
                 if evidence_goal_id and evidence_goal_id != intent_goal_id:
                     raise BusinessOutcomeEventProjectionConflict("action intent goal identity conflicts with canonical outcome")
             correlation_id = str(intent.get("correlation_id") or "").strip() or None
+        attribution = _validated_attribution(normalized, outcome)
         timestamp_ms, event_id = int(normalized.created_at.timestamp() * 1000), f"closed-loop-outcome:{normalized.evidence_id}"
-        event_payload = {"schema_version": 1, "business_id": normalized.business_id, "occurred_at_ms": timestamp_ms, "recorded_at_ms": timestamp_ms, "causation_id": outcome.intent_id, "evidence_ids": [normalized.evidence_id], "outcome": outcome.as_dict()}
+        event_payload = {
+            "schema_version": 2,
+            "business_id": normalized.business_id,
+            "occurred_at_ms": timestamp_ms,
+            "recorded_at_ms": timestamp_ms,
+            "causation_id": outcome.intent_id,
+            "evidence_ids": [normalized.evidence_id],
+            "outcome": outcome.as_dict(),
+            "outcome_taxonomy": list(outcome.taxonomy()),
+            **({"attribution": attribution} if attribution else {}),
+        }
         goal_id = str(dict(normalized.labels).get("goal_id") or "").strip()
         if goal_id:
             event_payload["goal_id"] = goal_id
@@ -144,14 +252,14 @@ class BusinessOutcomeEventSpineProjector:
         if len(matches) > 1:
             raise BusinessOutcomeEventProjectionConflict("multiple Event Spine rows share one outcome projection id")
         if matches:
-            if canonical_business_event_contract(matches[0]) != canonical_business_event_contract(event):
+            if not _event_contract_matches(matches[0], event):
                 raise BusinessOutcomeEventProjectionConflict("outcome Event Spine projection conflicts with canonical evidence")
             return event_id
         try:
             self._events.append_event(event)
         except Exception:
             matches = self._matches(normalized, event_id)
-            if not matches or canonical_business_event_contract(matches[0]) != canonical_business_event_contract(event):
+            if not matches or not _event_contract_matches(matches[0], event):
                 raise
             return event_id
         matches = self._matches(normalized, event_id)
