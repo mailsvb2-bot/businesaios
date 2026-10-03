@@ -14,10 +14,11 @@ from application.effects.effect_outcome_vocabulary import (
 from application.evidence.evidence_feedback_state import (
     apply_feedback_to_world_state as _apply_feedback_world_state,
 )
-from application.outcome.evaluation import CalibrationEngine, EvaluationEngine
 from application.outcome.evidence_projection import (
     OUTCOME_OBSERVED_EVENT_TYPE,
     BusinessOutcomeEventSpineProjector,
+    CalibrationEngine,
+    EvaluationEngine,
 )
 from attribution.catalog import AttributionEngine
 from execution.canonical_persistence_vocabulary import (
