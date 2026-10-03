@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import copy
 import logging
 from collections.abc import Mapping
 from threading import Lock, Thread
@@ -249,12 +250,24 @@ class DecisionCore:
         return None if candidate is None else self._shadow_observer.observe(state=state, production_envelope=production_envelope, candidate_policy=candidate)
 
     def dispatch_shadow(self, **observation) -> bool:
-        if self._shadow_observer is None or not self._shadow_busy.acquire(blocking=False): return False
+        if self._shadow_observer is None or not self._shadow_busy.acquire(blocking=False):
+            return False
+        try:
+            frozen_observation = copy.deepcopy(observation)
+        except Exception:
+            self._shadow_busy.release()
+            return False
+
         def run() -> None:
-            try: self.observe_shadow(**observation)
-            except Exception: pass
-            finally: self._shadow_busy.release()
-        Thread(target=run, name="decision-shadow-observer", daemon=True).start(); return True
+            try:
+                self.observe_shadow(**frozen_observation)
+            except Exception:
+                pass
+            finally:
+                self._shadow_busy.release()
+
+        Thread(target=run, name="decision-shadow-observer", daemon=True).start()
+        return True
 
     def shadow_rollout_status(self, candidate_policy_id: str) -> dict[str, bool]:
         from core.policies.staged_rollout import RolloutGuard
