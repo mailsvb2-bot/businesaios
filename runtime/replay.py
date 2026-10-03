@@ -145,7 +145,11 @@ def _assert_no_future_leakage(*, state: WorldStateV1, issued_at_ms: int) -> None
     if int(semantics.generated_at_ms) > int(issued_at_ms):
         raise RuntimeError("HISTORICAL_REPLAY_FUTURE_STATE")
     for record in semantics.records:
-        if int(record.observed_at_ms) > int(issued_at_ms) or int(record.recorded_at_ms) > int(issued_at_ms):
+        if (
+            int(record.occurred_at_ms) > int(issued_at_ms)
+            or int(record.observed_at_ms) > int(issued_at_ms)
+            or int(record.recorded_at_ms) > int(issued_at_ms)
+        ):
             raise RuntimeError("HISTORICAL_REPLAY_FUTURE_STATE")
 
 
