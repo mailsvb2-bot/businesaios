@@ -373,3 +373,74 @@ def test_historical_replay_uses_canonical_durable_archive_and_snapshot_stores(
     assert result["historical_source"] == "decision_snapshot"
     assert result["context_match"] is True
     assert result["future_leakage"] is False
+
+
+def test_historical_replay_accepts_canonical_non_noop_idempotency_key() -> None:
+    state, env, archive, snapshots, keyring = _historical_fixture()
+    decision = Decision(
+        **{
+            **dict(env.decision.__dict__),
+            "action": "send_message@v1",
+            "payload": {
+                **dict(env.decision.payload),
+                "idempotency_key": "decision:decision-historical",
+            },
+        }
+    )
+    signed = signed_envelope_from_decision(decision=decision, keyring=keyring)
+    archive.put(signed)
+    candidate = ReplayCandidate()
+
+    result = _historical_engine(
+        archive,
+        snapshots,
+        keyring,
+        candidate,
+    ).replay_challenger(decision.decision_id, candidate.id)
+
+    assert result["historical_replay"] is True
+    assert result["production_action"] == "send_message@v1"
+    assert result["context_match"] is True
+
+
+def test_historical_replay_rejects_business_scoped_snapshot_without_business_id() -> None:
+    state = WorldStateV1(
+        schema_version=1,
+        user={"user_id": "u-1"},
+        session={},
+        product={"product_id": "p-1"},
+        economy={},
+        timestamp_ms=100,
+        tenant_id="t-1",
+        user_id="u-1",
+    )
+    state_bytes = state.canonical_bytes()
+    decision = Decision(
+        decision_id="decision-businessless-state",
+        issuer_id="businesaios-core",
+        issued_at_ms=200,
+        expires_at_ms=300,
+        policy_id="active@v1",
+        action="noop@v1",
+        payload={"tenant_id": "t-1", "business_id": "b-1"},
+        snapshot_id="snapshot-businessless-state",
+        state_hash=sha256_hex(state_bytes),
+        correlation_id="correlation-businessless-state",
+        state_schema_version=1,
+        action_schema_version=1,
+        envelope_version=1,
+    )
+    keyring = Keyring({"k1": {"secret": b"s1", "revoked": False}}, "k1")
+    archive = MemoryDecisionArchive()
+    archive.put(signed_envelope_from_decision(decision=decision, keyring=keyring))
+    snapshots = MemorySnapshotStore()
+    snapshots.put(decision.snapshot_id, state_bytes)
+    candidate = ReplayCandidate()
+
+    with pytest.raises(RuntimeError, match="HISTORICAL_REPLAY_BUSINESS_ID_MISSING"):
+        _historical_engine(
+            archive,
+            snapshots,
+            keyring,
+            candidate,
+        ).replay_challenger(decision.decision_id, candidate.id)
