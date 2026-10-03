@@ -102,12 +102,12 @@ def _historical_fixture(*, state_timestamp_ms: int = 100):
     archive.put(env)
     snapshots = MemorySnapshotStore()
     snapshots.put(decision.snapshot_id, state_bytes)
-    return state, env, archive, snapshots
+    return state, env, archive, snapshots, keyring
 
 
 def test_historical_replay_uses_exact_signed_decision_snapshot() -> None:
-    state, env, archive, snapshots = _historical_fixture()
-    result = HistoricalReplayEngine(archive, snapshots).replay_challenger(
+    state, env, archive, snapshots, keyring = _historical_fixture()
+    result = HistoricalReplayEngine(archive, snapshots, keyring=keyring).replay_challenger(
         env.decision.decision_id,
         ReplayCandidate(),
     )
@@ -125,11 +125,11 @@ def test_historical_replay_uses_exact_signed_decision_snapshot() -> None:
 
 
 def test_historical_replay_rejects_tampered_snapshot() -> None:
-    _state, env, archive, snapshots = _historical_fixture()
+    _state, env, archive, snapshots, keyring = _historical_fixture()
     snapshots.put(env.decision.snapshot_id, b'{"tampered":true}')
 
     with pytest.raises(RuntimeError, match="HISTORICAL_REPLAY_SNAPSHOT_HASH_MISMATCH"):
-        HistoricalReplayEngine(archive, snapshots).replay_challenger(
+        HistoricalReplayEngine(archive, snapshots, keyring=keyring).replay_challenger(
             env.decision.decision_id,
             ReplayCandidate(),
         )
@@ -169,20 +169,20 @@ def test_historical_replay_rejects_future_state() -> None:
     snapshots.put(decision.snapshot_id, state_bytes)
 
     with pytest.raises(RuntimeError, match="HISTORICAL_REPLAY_FUTURE_STATE"):
-        HistoricalReplayEngine(archive, snapshots).replay_challenger(
+        HistoricalReplayEngine(archive, snapshots, keyring=keyring).replay_challenger(
             decision.decision_id,
             ReplayCandidate(),
         )
 
 
 def test_historical_replay_rejects_noncanonical_candidate() -> None:
-    _state, env, archive, snapshots = _historical_fixture()
+    _state, env, archive, snapshots, keyring = _historical_fixture()
 
     class ForeignCandidate:
         id = "foreign@v1"
 
     with pytest.raises(ValueError, match="HISTORICAL_REPLAY_CANDIDATE_NOT_CANONICAL"):
-        HistoricalReplayEngine(archive, snapshots).replay_challenger(
+        HistoricalReplayEngine(archive, snapshots, keyring=keyring).replay_challenger(
             env.decision.decision_id,
             ForeignCandidate(),
         )
@@ -245,7 +245,55 @@ def test_historical_replay_rejects_future_semantic_observation() -> None:
     snapshots.put(decision.snapshot_id, state_bytes)
 
     with pytest.raises(RuntimeError, match="HISTORICAL_REPLAY_FUTURE_STATE"):
-        HistoricalReplayEngine(archive, snapshots).replay_challenger(
+        HistoricalReplayEngine(archive, snapshots, keyring=keyring).replay_challenger(
             decision.decision_id,
+            ReplayCandidate(),
+        )
+
+
+def test_historical_replay_rejects_state_hash_tampering_even_with_matching_snapshot() -> None:
+    state, env, archive, snapshots, keyring = _historical_fixture()
+    tampered_state = WorldStateV1(
+        schema_version=state.schema_version,
+        user=dict(state.user),
+        session=dict(state.session),
+        product=dict(state.product),
+        economy={"expected_reward": 999.0},
+        timestamp_ms=state.timestamp_ms,
+        tenant_id=state.tenant_id,
+        meta=dict(state.meta),
+        user_id=state.user_id,
+        safe_mode=state.safe_mode,
+        capital=state.capital,
+        horizon_state=state.horizon_state,
+        behavior=state.behavior,
+        price_constraints=state.price_constraints,
+        deployment_proposal=state.deployment_proposal,
+        manual_override=state.manual_override,
+        world_model_semantics=state.world_model_semantics,
+    )
+    tampered_bytes = tampered_state.canonical_bytes()
+    tampered_decision = Decision(
+        **{
+            **dict(env.decision.__dict__),
+            "state_hash": sha256_hex(tampered_bytes),
+        }
+    )
+    from core.ai.decision import DecisionEnvelope
+
+    archive.put(
+        DecisionEnvelope(
+            decision=tampered_decision,
+            payload_hash=env.payload_hash,
+            signature=env.signature,
+            kid=env.kid,
+            envelope_version=env.envelope_version,
+        )
+    )
+    snapshots.put(tampered_decision.snapshot_id, tampered_bytes)
+
+    with pytest.raises(RuntimeError, match="HISTORICAL_REPLAY_SIGNATURE_INVALID"):
+        HistoricalReplayEngine(archive, snapshots, keyring=keyring).replay_challenger(
+            tampered_decision.decision_id,
             ReplayCandidate(),
         )
