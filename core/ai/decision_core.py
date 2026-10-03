@@ -17,6 +17,7 @@ from contracts.executable_action import ExecutableAction
 from core.decision_core_contract import CANONICAL_DECISION_CORE_IMPORT_PATH
 from core.utils.canonical import payload_hash as canonical_payload_hash
 from kernel.decision_signer import DecisionSigner
+from kernel.world_state import world_state_from_canonical_bytes
 from ports.world_model import DecisionWorldModelPort
 
 logger = logging.getLogger(__name__)
@@ -249,18 +250,31 @@ class DecisionCore:
         candidate = None if self._shadow_observer is None else self._selector.resolve_shadow_policy(state, production_policy_id=str(production_policy_id))
         return None if candidate is None else self._shadow_observer.observe(state=state, production_envelope=production_envelope, candidate_policy=candidate)
 
-    def dispatch_shadow(self, **observation) -> bool:
+    def dispatch_shadow(
+        self,
+        *,
+        state_snapshot_bytes: bytes,
+        production_envelope,
+        production_policy_id: str,
+    ) -> bool:
         if self._shadow_observer is None or not self._shadow_busy.acquire(blocking=False):
             return False
         try:
-            frozen_observation = copy.deepcopy(observation)
+            frozen_state_bytes = bytes(state_snapshot_bytes)
+            frozen_envelope = copy.deepcopy(production_envelope)
+            frozen_policy_id = str(production_policy_id)
         except Exception:
             self._shadow_busy.release()
             return False
 
         def run() -> None:
             try:
-                self.observe_shadow(**frozen_observation)
+                frozen_state = world_state_from_canonical_bytes(frozen_state_bytes)
+                self.observe_shadow(
+                    state=frozen_state,
+                    production_envelope=frozen_envelope,
+                    production_policy_id=frozen_policy_id,
+                )
             except Exception:
                 pass
             finally:
