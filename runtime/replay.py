@@ -163,11 +163,23 @@ def _assert_identity_matches(*, state: WorldStateV1, payload: dict[str, Any]) ->
     if tenant_id and tenant_id != str(state.tenant_id):
         raise RuntimeError("HISTORICAL_REPLAY_TENANT_MISMATCH")
     business_id = str(payload.get("business_id") or "").strip()
-    state_business_id = str(dict(state.product or {}).get("business_id") or dict(state.meta or {}).get("business_id") or "").strip()
+    state_business_id = str(
+        dict(state.product or {}).get("business_id")
+        or dict(state.meta or {}).get("business_id")
+        or ""
+    ).strip()
     if business_id and not state_business_id:
         raise RuntimeError("HISTORICAL_REPLAY_BUSINESS_ID_MISSING")
     if business_id and business_id != state_business_id:
         raise RuntimeError("HISTORICAL_REPLAY_BUSINESS_MISMATCH")
+
+    semantics = state.world_model_semantics
+    if semantics is None:
+        return
+    if tenant_id and str(semantics.tenant_id) != tenant_id:
+        raise RuntimeError("HISTORICAL_REPLAY_SEMANTIC_TENANT_MISMATCH")
+    if business_id and str(semantics.business_id) != business_id:
+        raise RuntimeError("HISTORICAL_REPLAY_SEMANTIC_BUSINESS_MISMATCH")
 
 
 __all__ = [
