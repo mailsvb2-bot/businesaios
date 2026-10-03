@@ -98,7 +98,7 @@ class OutcomeNormalizer:
 
     @staticmethod
     def _to_optional_float(value: Any) -> float | None:
-        if isinstance(value, bool) or value in {None, ""}:
+        if isinstance(value, bool) or value is None or value == "":
             return None
         try:
             number = float(value)
