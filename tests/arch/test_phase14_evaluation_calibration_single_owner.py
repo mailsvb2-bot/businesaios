@@ -19,7 +19,7 @@ def _production_owners(symbol: str) -> list[str]:
 
 
 def test_phase14_evaluation_and_calibration_have_single_canonical_owner() -> None:
-    expected = ["application/outcome/evaluation.py"]
+    expected = ["application/outcome/evidence_projection.py"]
     assert _production_owners("EvaluationEngine") == expected
     assert _production_owners("CalibrationEngine") == expected
 
