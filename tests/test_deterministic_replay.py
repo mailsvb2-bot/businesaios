@@ -51,12 +51,20 @@ class ReplayRegistry:
         )
 
 
-def _historical_engine(archive, snapshots, keyring, candidate):
+class ReplaySchemas:
+    def validate(self, action: str, _payload) -> None:
+        if action != "send_message@v1":
+            raise ValueError("unsupported replay action")
+
+
+def _historical_engine(archive, snapshots, keyring, candidate, *, tenant_id: str = "t-1"):
     return HistoricalReplayEngine(
         archive,
         snapshots,
         keyring=keyring,
         policy_registry=ReplayRegistry(candidate),
+        tenant_id=tenant_id,
+        schemas=ReplaySchemas(),
     )
 
 
@@ -344,6 +352,8 @@ def test_historical_replay_rejects_unregistered_candidate_id() -> None:
         snapshots,
         keyring=keyring,
         policy_registry=ReplayRegistry(None),
+        tenant_id="t-1",
+        schemas=ReplaySchemas(),
     )
 
     with pytest.raises(ValueError, match="HISTORICAL_REPLAY_CANDIDATE_NOT_REGISTERED"):
@@ -367,6 +377,8 @@ def test_historical_replay_uses_canonical_durable_archive_and_snapshot_stores(
                 snapshots,
                 keyring=keyring,
                 policy_registry=ReplayRegistry(candidate),
+                tenant_id="t-1",
+                schemas=ReplaySchemas(),
             ).replay_challenger(env.decision.decision_id, candidate.id)
 
     assert result["historical_replay"] is True
@@ -507,4 +519,38 @@ def test_historical_replay_rejects_future_occurred_at_even_if_observed_earlier()
         _historical_engine(archive, snapshots, keyring, candidate).replay_challenger(
             decision.decision_id,
             candidate.id,
+        )
+
+
+def test_historical_replay_rejects_cross_tenant_before_snapshot_read() -> None:
+    _state, env, archive, _snapshots, keyring = _historical_fixture()
+
+    class ForbiddenSnapshotRead:
+        def get(self, _snapshot_id: str):
+            raise AssertionError("cross-tenant replay must stop before snapshot read")
+
+    engine = HistoricalReplayEngine(
+        archive,
+        ForbiddenSnapshotRead(),
+        keyring=keyring,
+        policy_registry=ReplayRegistry(ReplayCandidate()),
+        tenant_id="t-2",
+        schemas=ReplaySchemas(),
+    )
+
+    with pytest.raises(RuntimeError, match="HISTORICAL_REPLAY_TENANT_SCOPE_MISMATCH"):
+        engine.replay_challenger(env.decision.decision_id, ReplayCandidate.id)
+
+
+def test_historical_replay_requires_schema_registry() -> None:
+    _state, _env, archive, snapshots, keyring = _historical_fixture()
+
+    with pytest.raises(TypeError, match="HISTORICAL_REPLAY_SCHEMA_REGISTRY_REQUIRED"):
+        HistoricalReplayEngine(
+            archive,
+            snapshots,
+            keyring=keyring,
+            policy_registry=ReplayRegistry(ReplayCandidate()),
+            tenant_id="t-1",
+            schemas=None,
         )
