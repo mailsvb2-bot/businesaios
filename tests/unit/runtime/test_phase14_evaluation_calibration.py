@@ -171,3 +171,12 @@ def test_phase14_calibration_rejects_lineage_mismatch() -> None:
             outcome=_outcome(),
             action_intent={**_intent(), "decision_id": "forged"},
         )
+
+    with pytest.raises(ValueError, match="action_type conflicts"):
+        CalibrationEngine.observation(
+            outcome=_outcome(),
+            action_intent={
+                **_intent(),
+                "capability_target": "create_invoice",
+            },
+        )
