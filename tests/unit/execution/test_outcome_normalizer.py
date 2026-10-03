@@ -49,3 +49,16 @@ def test_outcome_normalizer_preserves_phase14_observed_signals() -> None:
     assert outcome["complaint_observed"] is True
     assert outcome["human_override"] is True
     assert outcome["human_override_observed"] is True
+
+
+def test_outcome_normalizer_ignores_malformed_phase14_optional_metrics() -> None:
+    outcome = OutcomeNormalizer().normalize(
+        output={
+            "margin": {"unexpected": "mapping"},
+            "latency_ms": ["not", "numeric"],
+        },
+        payload=None,
+    )
+
+    assert "margin" not in outcome
+    assert "latency_ms" not in outcome
