@@ -3,14 +3,14 @@ from __future__ import annotations
 from collections.abc import Mapping
 from typing import Any
 
-from attribution.catalog import CANONICAL_ATTRIBUTION_CHAIN, CANONICAL_CAUSALITY_LEVELS
-from contracts.business_outcome import BusinessOutcomeV1
-from contracts.event_store import canonical_business_event_contract
 from application.outcome.evaluation import (
     BusinessEvaluationReport,
     CalibrationEngine,
     EvaluationEngine,
 )
+from attribution.catalog import CANONICAL_ATTRIBUTION_CHAIN, CANONICAL_CAUSALITY_LEVELS
+from contracts.business_outcome import BusinessOutcomeV1
+from contracts.event_store import canonical_business_event_contract
 from storage.evidence_store import EvidenceRecord, EvidenceStore
 
 CANON_BUSINESS_OUTCOME_EVIDENCE_PROJECTION = True
