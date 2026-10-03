@@ -18,6 +18,7 @@ from core.policies.selector import PolicySelector
 from core.policies.shadow import ShadowDecisionLedger, ShadowEvaluator
 from core.policies.staged_rollout import RolloutGuard, RolloutStage, StagedRollout
 from core.reward.reward_engine import RewardEngine
+from kernel.world_state import WorldStateV1
 from runtime._internal.effects_actions import policy_actions
 
 
@@ -142,15 +143,73 @@ def test_shadow_failures_are_evidence_not_production_failures() -> None:
     assert row["status"] == "evaluated"
 
 
+def _shadow_state(*, nested_value: int = 1) -> WorldStateV1:
+    return WorldStateV1(
+        schema_version=1,
+        user={"user_id": "u-1"},
+        session={},
+        product={"business_id": "b-1"},
+        economy={},
+        timestamp_ms=1,
+        tenant_id="t-1",
+        meta={"nested": {"value": nested_value}},
+        user_id="u-1",
+    )
+
+
 def test_shadow_dispatch_is_bounded_and_never_delays_production() -> None:
     from core.ai.decision_core import DecisionCore
+
     started, release, finished = Event(), Event(), Event()
-    core = DecisionCore.__new__(DecisionCore); core._shadow_busy = Lock()
+    core = DecisionCore.__new__(DecisionCore)
+    core._shadow_busy = Lock()
     core._shadow_observer = object()
     core.observe_shadow = lambda **_kwargs: (started.set(), release.wait(1.0), finished.set())
-    before = time.perf_counter(); assert core.dispatch_shadow(state={}, production_envelope=envelope(), production_policy_id="active@v1") is True
+    before = time.perf_counter()
+    assert core.dispatch_shadow(
+        state_snapshot_bytes=_shadow_state().canonical_bytes(),
+        production_envelope=envelope(),
+        production_policy_id="active@v1",
+    ) is True
     assert time.perf_counter() - before < 0.1 and started.wait(0.2)
-    assert core.dispatch_shadow(state={}, production_envelope=envelope(), production_policy_id="active@v1") is False
+    assert core.dispatch_shadow(
+        state_snapshot_bytes=_shadow_state().canonical_bytes(),
+        production_envelope=envelope(),
+        production_policy_id="active@v1",
+    ) is False
+    release.set()
+    assert finished.wait(0.2)
+
+
+def test_shadow_state_decode_runs_off_the_production_request_path(monkeypatch) -> None:
+    import core.ai.decision_core as decision_core_module
+    from core.ai.decision_core import DecisionCore
+
+    entered, release, finished = Event(), Event(), Event()
+
+    def delayed_decode(_raw):
+        entered.set()
+        release.wait(1.0)
+        return _shadow_state()
+
+    monkeypatch.setattr(
+        decision_core_module,
+        "world_state_from_canonical_bytes",
+        delayed_decode,
+    )
+    core = DecisionCore.__new__(DecisionCore)
+    core._shadow_busy = Lock()
+    core._shadow_observer = object()
+    core.observe_shadow = lambda **_kwargs: finished.set()
+
+    before = time.perf_counter()
+    assert core.dispatch_shadow(
+        state_snapshot_bytes=b"already-produced-immutable-snapshot",
+        production_envelope=envelope(),
+        production_policy_id="active@v1",
+    ) is True
+    assert time.perf_counter() - before < 0.1
+    assert entered.wait(0.2)
     release.set()
     assert finished.wait(0.2)
 
@@ -160,7 +219,8 @@ def test_shadow_dispatch_freezes_state_and_envelope_before_background_thread() -
 
     entered, release, finished = Event(), Event(), Event()
     seen = {}
-    state = {"nested": {"value": 1}}
+    state = _shadow_state()
+    state_bytes = state.canonical_bytes()
     production = envelope()
     core = DecisionCore.__new__(DecisionCore)
     core._shadow_busy = Lock()
@@ -175,18 +235,18 @@ def test_shadow_dispatch_freezes_state_and_envelope_before_background_thread() -
 
     core.observe_shadow = observe_shadow
     assert core.dispatch_shadow(
-        state=state,
+        state_snapshot_bytes=state_bytes,
         production_envelope=production,
         production_policy_id="active@v1",
     ) is True
     assert entered.wait(0.2)
 
-    state["nested"]["value"] = 99
+    state.meta["nested"]["value"] = 99
     production.decision.payload["amount"] = 999.0
     release.set()
 
     assert finished.wait(0.2)
-    assert seen["state"]["nested"]["value"] == 1
+    assert seen["state"].meta["nested"]["value"] == 1
     assert seen["payload"]["amount"] == 100.0
 
 
@@ -370,7 +430,7 @@ def test_canonical_decision_run_invokes_shadow_on_enriched_constrained_state(mon
     result = decision_run.run_decision(core=core, state={"stage": "raw"}, envelope_version=1, logger=object())
 
     assert result is built_envelope
-    assert observed["state"] == {"stage": "constrained"}
+    assert observed["state_snapshot_bytes"] == b"{}"
     assert observed["production_envelope"] is built_envelope
     assert observed["production_policy_id"] == production.id
 
