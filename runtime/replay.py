@@ -110,7 +110,7 @@ class HistoricalReplayEngine:
         state = _world_state_from_snapshot(snapshot_bytes)
         if int(state.schema_version) != int(decision.state_schema_version):
             raise RuntimeError("HISTORICAL_REPLAY_STATE_SCHEMA_MISMATCH")
-        if state.canonical_bytes() != snapshot_bytes:
+        if snapshot_bytes != state.canonical_bytes():
             raise RuntimeError("HISTORICAL_REPLAY_SNAPSHOT_NONCANONICAL")
         _assert_no_future_leakage(state=state, issued_at_ms=int(decision.issued_at_ms))
         _assert_identity_matches(state=state, payload=dict(decision.payload or {}))
