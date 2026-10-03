@@ -461,7 +461,12 @@ class CalibrationEngine:
     ) -> CalibrationObservation | None:
         body = _mapping(outcome)
         intent = _mapping(action_intent)
-        if not body or not intent or not bool(body.get("goal_terminal")):
+        if (
+            not body
+            or not intent
+            or not bool(body.get("goal_terminal"))
+            or not bool(body.get("attempted"))
+        ):
             return None
         confidence = _probability(
             intent.get("confidence"),
