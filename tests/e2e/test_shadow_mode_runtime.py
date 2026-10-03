@@ -511,3 +511,27 @@ def test_online_evaluation_compatibility_exports_remain_available() -> None:
     assert LiveRewardTracking().track([1.0, 3.0]) == 2.0
     assert LiveSafetyEval().evaluate("c", {"violations": 0.25}).metrics["live_safety"] == 0.75
     assert ShadowEval().evaluate("c", {"shadow_score": 0.4}).metrics["shadow_score"] == 0.4
+
+
+def test_shadow_dispatch_releases_lock_when_thread_start_fails(monkeypatch) -> None:
+    import core.ai.decision_core as decision_core_module
+    from core.ai.decision_core import DecisionCore
+
+    def failing_thread(**_kwargs):
+        def fail_start():
+            raise RuntimeError("native thread unavailable")
+
+        return SimpleNamespace(start=fail_start)
+
+    monkeypatch.setattr(decision_core_module, "Thread", failing_thread)
+    core = DecisionCore.__new__(DecisionCore)
+    core._shadow_busy = Lock()
+    core._shadow_observer = object()
+
+    assert core.dispatch_shadow(
+        state_snapshot_bytes=_shadow_state().canonical_bytes(),
+        production_envelope=envelope(),
+        production_policy_id="active@v1",
+    ) is False
+    assert core._shadow_busy.acquire(blocking=False) is True
+    core._shadow_busy.release()
