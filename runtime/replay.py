@@ -13,6 +13,7 @@ from collections.abc import Mapping
 from typing import Any
 
 from canon.anti_second_brain_rules import SHADOW_POLICY_MODULE_PREFIX
+from contracts.tenant_identity import require_tenant_id
 from contracts.world_model_semantics import world_model_semantic_view_from_dict
 from core.policies.shadow import ShadowEvaluator
 from core.utils.canonical import sha256_hex
@@ -44,11 +45,23 @@ class ReplayEngine:
 class HistoricalReplayEngine:
     """Evaluate a challenger against the exact state used by a past Decision."""
 
-    def __init__(self, decision_archive, snapshot_store, *, keyring: Any, policy_registry: Any, schemas: Any = None):
+    def __init__(
+        self,
+        decision_archive,
+        snapshot_store,
+        *,
+        keyring: Any,
+        policy_registry: Any,
+        tenant_id: str,
+        schemas: Any,
+    ):
         self._archive = decision_archive
         self._snapshots = snapshot_store
         self._keyring = keyring
         self._policy_registry = policy_registry
+        self._tenant_id = require_tenant_id(tenant_id)
+        if not callable(getattr(schemas, "validate", None)):
+            raise TypeError("HISTORICAL_REPLAY_SCHEMA_REGISTRY_REQUIRED")
         self._shadow = ShadowEvaluator(ledger=None, schemas=schemas)
 
     def replay_challenger(self, decision_id: str, candidate_policy_id: str) -> dict[str, Any]:
@@ -69,6 +82,11 @@ class HistoricalReplayEngine:
             kid=str(env.kid),
         ):
             raise RuntimeError("HISTORICAL_REPLAY_SIGNATURE_INVALID")
+        decision_tenant_id = str(dict(decision.payload or {}).get("tenant_id") or "").strip()
+        if not decision_tenant_id:
+            raise RuntimeError("HISTORICAL_REPLAY_TENANT_ID_MISSING")
+        if decision_tenant_id != self._tenant_id:
+            raise RuntimeError("HISTORICAL_REPLAY_TENANT_SCOPE_MISMATCH")
         candidate_id = str(candidate_policy_id or "").strip()
         if not candidate_id:
             raise ValueError("HISTORICAL_REPLAY_CANDIDATE_ID_REQUIRED")
