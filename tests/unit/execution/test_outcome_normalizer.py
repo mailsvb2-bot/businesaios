@@ -21,3 +21,31 @@ def test_outcome_normalizer_fail_closed_defaults() -> None:
     assert outcome["revenue"] == 0.0
     assert outcome["converted"] is False
     assert outcome["responded"] is False
+
+
+def test_outcome_normalizer_preserves_phase14_observed_signals() -> None:
+    normalizer = OutcomeNormalizer()
+    outcome = normalizer.normalize(
+        output={
+            "revenue": 0,
+            "converted": False,
+            "margin": "14.5",
+            "retention_rate": "0.72",
+            "actual_cost": "5",
+            "latency_ms": "125",
+            "complaint": False,
+            "human_override": True,
+        },
+        payload=None,
+    )
+
+    assert outcome["revenue_observed"] is True
+    assert outcome["conversion_observed"] is True
+    assert outcome["margin"] == 14.5
+    assert outcome["retention_rate"] == 0.72
+    assert outcome["actual_cost"] == 5.0
+    assert outcome["latency_ms"] == 125.0
+    assert outcome["complaint"] is False
+    assert outcome["complaint_observed"] is True
+    assert outcome["human_override"] is True
+    assert outcome["human_override_observed"] is True
