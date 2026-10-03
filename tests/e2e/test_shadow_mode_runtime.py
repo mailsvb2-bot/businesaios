@@ -102,6 +102,23 @@ def test_shadow_observation_uses_copy_and_never_describes_an_effect() -> None:
     assert events.rows[0]["event_type"] == SHADOW_DECISION_EVALUATED
 
 
+def test_shadow_context_mismatch_is_evidence_and_candidate_is_not_run() -> None:
+    events = MemoryEvents()
+    evaluator = ShadowEvaluator(ShadowDecisionLedger(events), Schemas())
+    candidate = Candidate()
+    candidate.propose = lambda _state: (_ for _ in ()).throw(AssertionError("candidate must not run"))
+    env = envelope()
+    env.decision.state_hash = "different-production-state"
+
+    row = evaluator.observe({"value": 1}, env, candidate)
+
+    assert row["status"] == "invalid"
+    assert row["context_match"] is False
+    assert row["context_error"] == "state_hash_mismatch"
+    assert row["candidate_action"] == ""
+    assert evaluator.metrics()["critical_violations"] == 1
+
+
 def test_shadow_validates_the_same_normalized_payload_as_production() -> None:
     class TenantSchema:
         def validate(self, _action, payload):
