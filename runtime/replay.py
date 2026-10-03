@@ -40,13 +40,14 @@ class ReplayEngine:
 class HistoricalReplayEngine:
     """Evaluate a challenger against the exact state used by a past Decision."""
 
-    def __init__(self, decision_archive, snapshot_store, *, keyring: Any, schemas: Any = None):
+    def __init__(self, decision_archive, snapshot_store, *, keyring: Any, policy_registry: Any, schemas: Any = None):
         self._archive = decision_archive
         self._snapshots = snapshot_store
         self._keyring = keyring
+        self._policy_registry = policy_registry
         self._shadow = ShadowEvaluator(ledger=None, schemas=schemas)
 
-    def replay_challenger(self, decision_id: str, candidate_policy: Any) -> dict[str, Any]:
+    def replay_challenger(self, decision_id: str, candidate_policy_id: str) -> dict[str, Any]:
         env = self._archive.get(str(decision_id))
         if env is None:
             raise KeyError(f"decision_not_found: {decision_id}")
@@ -64,9 +65,20 @@ class HistoricalReplayEngine:
             kid=str(env.kid),
         ):
             raise RuntimeError("HISTORICAL_REPLAY_SIGNATURE_INVALID")
-        candidate_id = str(getattr(candidate_policy, "id", "") or "").strip()
+        candidate_id = str(candidate_policy_id or "").strip()
+        if not candidate_id:
+            raise ValueError("HISTORICAL_REPLAY_CANDIDATE_ID_REQUIRED")
+        resolver = getattr(self._policy_registry, "maybe_get", None)
+        if not callable(resolver):
+            raise TypeError("HISTORICAL_REPLAY_POLICY_REGISTRY_INVALID")
+        candidate_policy = resolver(candidate_id)
+        if candidate_policy is None:
+            raise ValueError("HISTORICAL_REPLAY_CANDIDATE_NOT_REGISTERED")
+        resolved_id = str(getattr(candidate_policy, "id", "") or "").strip()
+        if resolved_id != candidate_id:
+            raise ValueError("HISTORICAL_REPLAY_CANDIDATE_ID_MISMATCH")
         candidate_module = str(getattr(type(candidate_policy), "__module__", "") or "")
-        if not candidate_id or not candidate_module.startswith(SHADOW_POLICY_MODULE_PREFIX):
+        if not candidate_module.startswith(SHADOW_POLICY_MODULE_PREFIX):
             raise ValueError("HISTORICAL_REPLAY_CANDIDATE_NOT_CANONICAL")
 
         snapshot = self._snapshots.get(str(decision.snapshot_id))
