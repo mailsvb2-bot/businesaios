@@ -185,7 +185,7 @@ def run_decision(
         )
         try:
             core.dispatch_shadow(
-                state=state,
+                state_snapshot_bytes=built.state_bytes,
                 production_envelope=built.envelope,
                 production_policy_id=str(getattr(policy, "id", "")),
             )

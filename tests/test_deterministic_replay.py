@@ -1,5 +1,71 @@
+from types import SimpleNamespace
+
+import pytest
+
+from contracts.world_model_semantics import (
+    WorldModelSemanticRecordV1,
+    WorldModelSemanticViewV1,
+)
+from core.ai.decision import Decision
 from core.ai.decision_archive import MemoryDecisionArchive
-from runtime.replay import ReplayEngine
+from core.ai.snapshot_store import MemorySnapshotStore
+from core.security.keyring import Keyring
+from core.utils.canonical import sha256_hex
+from kernel.decision_crypto import signed_envelope_from_decision
+from kernel.world_state import WorldStateV1
+from observability.platform.decision_archive.sqlite_decision_archive import (
+    SqliteDecisionArchive,
+)
+from observability.platform.snapshot_store.sqlite_snapshot_store import (
+    SqliteSnapshotStore,
+)
+from runtime.replay import HistoricalReplayEngine, ReplayEngine
+
+
+class ReplayCandidate:
+    __module__ = "core.policies.phase15_replay_fixture"
+    id = "candidate@v2"
+
+    def propose(self, state):
+        return SimpleNamespace(
+            action="send_message@v1",
+            payload={
+                "expected_reward": float(state.economy.get("expected_reward") or 0.0),
+                "expected_cost": 2.0,
+                "risk_score": 0.1,
+            },
+        )
+
+
+class ReplayRegistry:
+    def __init__(self, candidate) -> None:
+        self._candidate = candidate
+
+    def maybe_get(self, candidate_policy_id: str):
+        candidate = self._candidate
+        return (
+            candidate
+            if candidate is not None
+            and str(getattr(candidate, "id", "")) == str(candidate_policy_id)
+            else None
+        )
+
+
+class ReplaySchemas:
+    def validate(self, action: str, _payload) -> None:
+        if action != "send_message@v1":
+            raise ValueError("unsupported replay action")
+
+
+def _historical_engine(archive, snapshots, keyring, candidate, *, tenant_id: str = "t-1"):
+    return HistoricalReplayEngine(
+        archive,
+        snapshots,
+        keyring=keyring,
+        policy_registry=ReplayRegistry(candidate),
+        tenant_id=tenant_id,
+        schemas=ReplaySchemas(),
+    )
 
 
 def test_deterministic_replay():
@@ -7,7 +73,7 @@ def test_deterministic_replay():
     engine = ReplayEngine(archive)
 
     # Store a bit-exact envelope and replay it.
-    from core.ai.decision import Decision, DecisionEnvelope
+    from core.ai.decision import DecisionEnvelope
 
     env = DecisionEnvelope(
         decision=Decision(
@@ -36,3 +102,605 @@ def test_deterministic_replay():
     d1 = engine.replay("decision_1")
     d2 = engine.replay("decision_1")
     assert d1 == d2
+
+
+def _historical_fixture(*, state_timestamp_ms: int = 100):
+    state = WorldStateV1(
+        schema_version=1,
+        user={"user_id": "u-1"},
+        session={"channel": "test"},
+        product={"product_id": "p-1", "business_id": "b-1"},
+        economy={"expected_reward": 3.0},
+        timestamp_ms=state_timestamp_ms,
+        tenant_id="t-1",
+        user_id="u-1",
+    )
+    state_bytes = state.canonical_bytes()
+    decision = Decision(
+        decision_id="decision-historical",
+        issuer_id="businesaios-core",
+        issued_at_ms=200,
+        expires_at_ms=300,
+        policy_id="active@v1",
+        action="noop@v1",
+        payload={
+            "tenant_id": "t-1",
+            "business_id": "b-1",
+            "actor_id": "u-1",
+            "expected_cost": 1.0,
+        },
+        snapshot_id="snapshot-historical",
+        state_hash=sha256_hex(state_bytes),
+        correlation_id="correlation-historical",
+        state_schema_version=1,
+        action_schema_version=1,
+        envelope_version=1,
+    )
+    keyring = Keyring({"k1": {"secret": b"s1", "revoked": False}}, "k1")
+    env = signed_envelope_from_decision(decision=decision, keyring=keyring)
+    archive = MemoryDecisionArchive()
+    archive.put(env)
+    snapshots = MemorySnapshotStore()
+    snapshots.put(decision.snapshot_id, state_bytes)
+    return state, env, archive, snapshots, keyring
+
+
+def test_historical_replay_uses_exact_signed_decision_snapshot() -> None:
+    state, env, archive, snapshots, keyring = _historical_fixture()
+    candidate = ReplayCandidate()
+    result = _historical_engine(archive, snapshots, keyring, candidate).replay_challenger(
+        env.decision.decision_id,
+        candidate.id,
+    )
+
+    assert result["historical_replay"] is True
+    assert result["historical_source"] == "decision_snapshot"
+    assert result["future_leakage"] is False
+    assert result["external_effect"] is False
+    assert result["writes_outbox"] is False
+    assert result["context_match"] is True
+    assert result["state_hash"] == env.decision.state_hash
+    assert result["snapshot_id"] == env.decision.snapshot_id
+    assert result["historical_state_timestamp_ms"] == state.timestamp_ms
+    assert result["candidate_action"] == "send_message@v1"
+
+
+def test_historical_replay_rejects_tampered_snapshot() -> None:
+    _state, env, archive, snapshots, keyring = _historical_fixture()
+    snapshots.put(env.decision.snapshot_id, b'{"tampered":true}')
+    candidate = ReplayCandidate()
+
+    with pytest.raises(RuntimeError, match="HISTORICAL_REPLAY_SNAPSHOT_HASH_MISMATCH"):
+        _historical_engine(archive, snapshots, keyring, candidate).replay_challenger(
+            env.decision.decision_id,
+            candidate.id,
+        )
+
+
+def test_historical_replay_rejects_future_state() -> None:
+    state = WorldStateV1(
+        schema_version=1,
+        user={"user_id": "u-1"},
+        session={},
+        product={"business_id": "b-1"},
+        economy={},
+        timestamp_ms=201,
+        tenant_id="t-1",
+        user_id="u-1",
+    )
+    state_bytes = state.canonical_bytes()
+    decision = Decision(
+        decision_id="decision-future",
+        issuer_id="businesaios-core",
+        issued_at_ms=200,
+        expires_at_ms=300,
+        policy_id="active@v1",
+        action="noop@v1",
+        payload={"tenant_id": "t-1", "business_id": "b-1"},
+        snapshot_id="snapshot-future",
+        state_hash=sha256_hex(state_bytes),
+        correlation_id="correlation-future",
+        state_schema_version=1,
+        action_schema_version=1,
+        envelope_version=1,
+    )
+    keyring = Keyring({"k1": {"secret": b"s1", "revoked": False}}, "k1")
+    archive = MemoryDecisionArchive()
+    archive.put(signed_envelope_from_decision(decision=decision, keyring=keyring))
+    snapshots = MemorySnapshotStore()
+    snapshots.put(decision.snapshot_id, state_bytes)
+
+    candidate = ReplayCandidate()
+    with pytest.raises(RuntimeError, match="HISTORICAL_REPLAY_FUTURE_STATE"):
+        _historical_engine(archive, snapshots, keyring, candidate).replay_challenger(
+            decision.decision_id,
+            candidate.id,
+        )
+
+
+def test_historical_replay_rejects_noncanonical_candidate() -> None:
+    _state, env, archive, snapshots, keyring = _historical_fixture()
+
+    class ForeignCandidate:
+        id = "foreign@v1"
+
+    foreign = ForeignCandidate()
+    with pytest.raises(ValueError, match="HISTORICAL_REPLAY_CANDIDATE_NOT_CANONICAL"):
+        _historical_engine(archive, snapshots, keyring, foreign).replay_challenger(
+            env.decision.decision_id,
+            foreign.id,
+        )
+
+
+def test_historical_replay_rejects_future_semantic_observation() -> None:
+    record = WorldModelSemanticRecordV1(
+        record_id="record-1",
+        tenant_id="t-1",
+        business_id="b-1",
+        epistemic_type="fact",
+        key="revenue",
+        value=10,
+        source="test",
+        occurred_at_ms=100,
+        observed_at_ms=201,
+        recorded_at_ms=201,
+        confidence=1.0,
+        authoritative=True,
+        provenance_hash="proof",
+    )
+    semantics = WorldModelSemanticViewV1(
+        state_id="state-1",
+        tenant_id="t-1",
+        business_id="b-1",
+        generated_at_ms=150,
+        records=(record,),
+    )
+    state = WorldStateV1(
+        schema_version=1,
+        user={"user_id": "u-1"},
+        session={},
+        product={"business_id": "b-1"},
+        economy={},
+        timestamp_ms=100,
+        tenant_id="t-1",
+        user_id="u-1",
+        world_model_semantics=semantics,
+    )
+    state_bytes = state.canonical_bytes()
+    decision = Decision(
+        decision_id="decision-future-semantic",
+        issuer_id="businesaios-core",
+        issued_at_ms=200,
+        expires_at_ms=300,
+        policy_id="active@v1",
+        action="noop@v1",
+        payload={"tenant_id": "t-1", "business_id": "b-1"},
+        snapshot_id="snapshot-future-semantic",
+        state_hash=sha256_hex(state_bytes),
+        correlation_id="correlation-future-semantic",
+        state_schema_version=1,
+        action_schema_version=1,
+        envelope_version=1,
+    )
+    keyring = Keyring({"k1": {"secret": b"s1", "revoked": False}}, "k1")
+    archive = MemoryDecisionArchive()
+    archive.put(signed_envelope_from_decision(decision=decision, keyring=keyring))
+    snapshots = MemorySnapshotStore()
+    snapshots.put(decision.snapshot_id, state_bytes)
+    candidate = ReplayCandidate()
+
+    with pytest.raises(RuntimeError, match="HISTORICAL_REPLAY_FUTURE_STATE"):
+        _historical_engine(archive, snapshots, keyring, candidate).replay_challenger(
+            decision.decision_id,
+            candidate.id,
+        )
+
+
+def test_historical_replay_rejects_state_hash_tampering_even_with_matching_snapshot() -> None:
+    state, env, archive, snapshots, keyring = _historical_fixture()
+    tampered_state = WorldStateV1(
+        schema_version=state.schema_version,
+        user=dict(state.user),
+        session=dict(state.session),
+        product=dict(state.product),
+        economy={"expected_reward": 999.0},
+        timestamp_ms=state.timestamp_ms,
+        tenant_id=state.tenant_id,
+        meta=dict(state.meta),
+        user_id=state.user_id,
+        safe_mode=state.safe_mode,
+        capital=state.capital,
+        horizon_state=state.horizon_state,
+        behavior=state.behavior,
+        price_constraints=state.price_constraints,
+        deployment_proposal=state.deployment_proposal,
+        manual_override=state.manual_override,
+        world_model_semantics=state.world_model_semantics,
+    )
+    tampered_bytes = tampered_state.canonical_bytes()
+    tampered_decision = Decision(
+        **{
+            **dict(env.decision.__dict__),
+            "state_hash": sha256_hex(tampered_bytes),
+        }
+    )
+    from core.ai.decision import DecisionEnvelope
+
+    archive.put(
+        DecisionEnvelope(
+            decision=tampered_decision,
+            payload_hash=env.payload_hash,
+            signature=env.signature,
+            kid=env.kid,
+            envelope_version=env.envelope_version,
+        )
+    )
+    snapshots.put(tampered_decision.snapshot_id, tampered_bytes)
+    candidate = ReplayCandidate()
+
+    with pytest.raises(RuntimeError, match="HISTORICAL_REPLAY_SIGNATURE_INVALID"):
+        _historical_engine(archive, snapshots, keyring, candidate).replay_challenger(
+            tampered_decision.decision_id,
+            candidate.id,
+        )
+
+
+def test_historical_replay_rejects_unregistered_candidate_id() -> None:
+    _state, env, archive, snapshots, keyring = _historical_fixture()
+    engine = HistoricalReplayEngine(
+        archive,
+        snapshots,
+        keyring=keyring,
+        policy_registry=ReplayRegistry(None),
+        tenant_id="t-1",
+        schemas=ReplaySchemas(),
+    )
+
+    with pytest.raises(ValueError, match="HISTORICAL_REPLAY_CANDIDATE_NOT_REGISTERED"):
+        engine.replay_challenger(env.decision.decision_id, "candidate@missing")
+
+
+def test_historical_replay_uses_canonical_durable_archive_and_snapshot_stores(
+    tmp_path,
+) -> None:
+    state, env, _archive, _snapshots, keyring = _historical_fixture()
+    candidate = ReplayCandidate()
+    archive_path = str(tmp_path / "decisions.db")
+    snapshot_path = str(tmp_path / "snapshots.db")
+
+    with SqliteDecisionArchive(archive_path, tenant_id="t-1") as archive:
+        archive.put(env)
+        with SqliteSnapshotStore(snapshot_path, tenant_id="t-1") as snapshots:
+            snapshots.put(env.decision.snapshot_id, state.canonical_bytes())
+            result = HistoricalReplayEngine(
+                archive,
+                snapshots,
+                keyring=keyring,
+                policy_registry=ReplayRegistry(candidate),
+                tenant_id="t-1",
+                schemas=ReplaySchemas(),
+            ).replay_challenger(env.decision.decision_id, candidate.id)
+
+    assert result["historical_replay"] is True
+    assert result["historical_source"] == "decision_snapshot"
+    assert result["context_match"] is True
+    assert result["future_leakage"] is False
+
+
+def test_historical_replay_accepts_canonical_non_noop_idempotency_key() -> None:
+    state, env, archive, snapshots, keyring = _historical_fixture()
+    decision = Decision(
+        **{
+            **dict(env.decision.__dict__),
+            "action": "send_message@v1",
+            "payload": {
+                **dict(env.decision.payload),
+                "idempotency_key": "decision:decision-historical",
+            },
+        }
+    )
+    signed = signed_envelope_from_decision(decision=decision, keyring=keyring)
+    archive.put(signed)
+    candidate = ReplayCandidate()
+
+    result = _historical_engine(
+        archive,
+        snapshots,
+        keyring,
+        candidate,
+    ).replay_challenger(decision.decision_id, candidate.id)
+
+    assert result["historical_replay"] is True
+    assert result["production_action"] == "send_message@v1"
+    assert result["context_match"] is True
+
+
+def test_historical_replay_rejects_business_scoped_snapshot_without_business_id() -> None:
+    state = WorldStateV1(
+        schema_version=1,
+        user={"user_id": "u-1"},
+        session={},
+        product={"product_id": "p-1"},
+        economy={},
+        timestamp_ms=100,
+        tenant_id="t-1",
+        user_id="u-1",
+    )
+    state_bytes = state.canonical_bytes()
+    decision = Decision(
+        decision_id="decision-businessless-state",
+        issuer_id="businesaios-core",
+        issued_at_ms=200,
+        expires_at_ms=300,
+        policy_id="active@v1",
+        action="noop@v1",
+        payload={"tenant_id": "t-1", "business_id": "b-1"},
+        snapshot_id="snapshot-businessless-state",
+        state_hash=sha256_hex(state_bytes),
+        correlation_id="correlation-businessless-state",
+        state_schema_version=1,
+        action_schema_version=1,
+        envelope_version=1,
+    )
+    keyring = Keyring({"k1": {"secret": b"s1", "revoked": False}}, "k1")
+    archive = MemoryDecisionArchive()
+    archive.put(signed_envelope_from_decision(decision=decision, keyring=keyring))
+    snapshots = MemorySnapshotStore()
+    snapshots.put(decision.snapshot_id, state_bytes)
+    candidate = ReplayCandidate()
+
+    with pytest.raises(RuntimeError, match="HISTORICAL_REPLAY_BUSINESS_ID_MISSING"):
+        _historical_engine(
+            archive,
+            snapshots,
+            keyring,
+            candidate,
+        ).replay_challenger(decision.decision_id, candidate.id)
+
+
+def test_historical_replay_rejects_future_occurred_at_even_if_observed_earlier() -> None:
+    record = WorldModelSemanticRecordV1(
+        record_id="record-future-occurred",
+        tenant_id="t-1",
+        business_id="b-1",
+        epistemic_type="fact",
+        key="revenue",
+        value=10,
+        source="test",
+        occurred_at_ms=201,
+        observed_at_ms=150,
+        recorded_at_ms=150,
+        confidence=1.0,
+        authoritative=True,
+        provenance_hash="proof",
+    )
+    semantics = WorldModelSemanticViewV1(
+        state_id="state-future-occurred",
+        tenant_id="t-1",
+        business_id="b-1",
+        generated_at_ms=150,
+        records=(record,),
+    )
+    state = WorldStateV1(
+        schema_version=1,
+        user={"user_id": "u-1"},
+        session={},
+        product={"business_id": "b-1"},
+        economy={},
+        timestamp_ms=150,
+        tenant_id="t-1",
+        user_id="u-1",
+        world_model_semantics=semantics,
+    )
+    state_bytes = state.canonical_bytes()
+    decision = Decision(
+        decision_id="decision-future-occurred",
+        issuer_id="businesaios-core",
+        issued_at_ms=200,
+        expires_at_ms=300,
+        policy_id="active@v1",
+        action="noop@v1",
+        payload={"tenant_id": "t-1", "business_id": "b-1"},
+        snapshot_id="snapshot-future-occurred",
+        state_hash=sha256_hex(state_bytes),
+        correlation_id="correlation-future-occurred",
+        state_schema_version=1,
+        action_schema_version=1,
+        envelope_version=1,
+    )
+    keyring = Keyring({"k1": {"secret": b"s1", "revoked": False}}, "k1")
+    archive = MemoryDecisionArchive()
+    archive.put(signed_envelope_from_decision(decision=decision, keyring=keyring))
+    snapshots = MemorySnapshotStore()
+    snapshots.put(decision.snapshot_id, state_bytes)
+    candidate = ReplayCandidate()
+
+    with pytest.raises(RuntimeError, match="HISTORICAL_REPLAY_FUTURE_STATE"):
+        _historical_engine(archive, snapshots, keyring, candidate).replay_challenger(
+            decision.decision_id,
+            candidate.id,
+        )
+
+
+def test_historical_replay_rejects_cross_tenant_before_snapshot_read() -> None:
+    _state, env, archive, _snapshots, keyring = _historical_fixture()
+
+    class ForbiddenSnapshotRead:
+        def get(self, _snapshot_id: str):
+            raise AssertionError("cross-tenant replay must stop before snapshot read")
+
+    engine = HistoricalReplayEngine(
+        archive,
+        ForbiddenSnapshotRead(),
+        keyring=keyring,
+        policy_registry=ReplayRegistry(ReplayCandidate()),
+        tenant_id="t-2",
+        schemas=ReplaySchemas(),
+    )
+
+    with pytest.raises(RuntimeError, match="HISTORICAL_REPLAY_TENANT_SCOPE_MISMATCH"):
+        engine.replay_challenger(env.decision.decision_id, ReplayCandidate.id)
+
+
+def test_historical_replay_requires_schema_registry() -> None:
+    _state, _env, archive, snapshots, keyring = _historical_fixture()
+
+    with pytest.raises(TypeError, match="HISTORICAL_REPLAY_SCHEMA_REGISTRY_REQUIRED"):
+        HistoricalReplayEngine(
+            archive,
+            snapshots,
+            keyring=keyring,
+            policy_registry=ReplayRegistry(ReplayCandidate()),
+            tenant_id="t-1",
+            schemas=None,
+        )
+
+
+def test_historical_replay_preserves_explicit_zero_semantic_timestamps() -> None:
+    record = WorldModelSemanticRecordV1(
+        record_id="record-zero-recorded",
+        tenant_id="t-1",
+        business_id="b-1",
+        epistemic_type="fact",
+        key="revenue",
+        value=10,
+        source="test",
+        occurred_at_ms=100,
+        observed_at_ms=150,
+        recorded_at_ms=0,
+        confidence=1,
+        authoritative=True,
+        provenance_hash="proof",
+    )
+    semantics = WorldModelSemanticViewV1(
+        state_id="state-zero-recorded",
+        tenant_id="t-1",
+        business_id="b-1",
+        generated_at_ms=150,
+        records=(record,),
+    )
+    state = WorldStateV1(
+        schema_version=1,
+        user={"user_id": "u-1"},
+        session={},
+        product={"business_id": "b-1"},
+        economy={"expected_reward": 3.0},
+        timestamp_ms=150,
+        tenant_id="t-1",
+        user_id="u-1",
+        world_model_semantics=semantics,
+    )
+    state_bytes = state.canonical_bytes()
+    decision = Decision(
+        decision_id="decision-zero-recorded",
+        issuer_id="businesaios-core",
+        issued_at_ms=200,
+        expires_at_ms=300,
+        policy_id="active@v1",
+        action="noop@v1",
+        payload={
+            "tenant_id": "t-1",
+            "business_id": "b-1",
+            "actor_id": "u-1",
+            "expected_cost": 1.0,
+        },
+        snapshot_id="snapshot-zero-recorded",
+        state_hash=sha256_hex(state_bytes),
+        correlation_id="correlation-zero-recorded",
+        state_schema_version=1,
+        action_schema_version=1,
+        envelope_version=1,
+    )
+    keyring = Keyring({"k1": {"secret": b"s1", "revoked": False}}, "k1")
+    archive = MemoryDecisionArchive()
+    archive.put(signed_envelope_from_decision(decision=decision, keyring=keyring))
+    snapshots = MemorySnapshotStore()
+    snapshots.put(decision.snapshot_id, state_bytes)
+    candidate = ReplayCandidate()
+
+    result = _historical_engine(
+        archive,
+        snapshots,
+        keyring,
+        candidate,
+    ).replay_challenger(decision.decision_id, candidate.id)
+
+    assert result["historical_replay"] is True
+    assert result["context_match"] is True
+    assert result["state_hash"] == decision.state_hash
+
+
+@pytest.mark.parametrize(
+    ("semantic_tenant_id", "semantic_business_id", "expected_error"),
+    [
+        ("t-2", "b-1", "HISTORICAL_REPLAY_SEMANTIC_TENANT_MISMATCH"),
+        ("t-1", "b-2", "HISTORICAL_REPLAY_SEMANTIC_BUSINESS_MISMATCH"),
+    ],
+)
+def test_historical_replay_rejects_semantic_view_identity_mismatch(
+    semantic_tenant_id: str,
+    semantic_business_id: str,
+    expected_error: str,
+) -> None:
+    record = WorldModelSemanticRecordV1(
+        record_id="record-semantic-identity",
+        tenant_id=semantic_tenant_id,
+        business_id=semantic_business_id,
+        epistemic_type="fact",
+        key="revenue",
+        value=10,
+        source="test",
+        occurred_at_ms=100,
+        observed_at_ms=100,
+        recorded_at_ms=100,
+        confidence=1.0,
+        authoritative=True,
+        provenance_hash="proof",
+    )
+    semantics = WorldModelSemanticViewV1(
+        state_id="state-semantic-identity",
+        tenant_id=semantic_tenant_id,
+        business_id=semantic_business_id,
+        generated_at_ms=100,
+        records=(record,),
+    )
+    state = WorldStateV1(
+        schema_version=1,
+        user={"user_id": "u-1"},
+        session={},
+        product={"business_id": "b-1"},
+        economy={},
+        timestamp_ms=100,
+        tenant_id="t-1",
+        user_id="u-1",
+        world_model_semantics=semantics,
+    )
+    state_bytes = state.canonical_bytes()
+    decision = Decision(
+        decision_id=f"decision-{semantic_tenant_id}-{semantic_business_id}",
+        issuer_id="businesaios-core",
+        issued_at_ms=200,
+        expires_at_ms=300,
+        policy_id="active@v1",
+        action="noop@v1",
+        payload={"tenant_id": "t-1", "business_id": "b-1"},
+        snapshot_id=f"snapshot-{semantic_tenant_id}-{semantic_business_id}",
+        state_hash=sha256_hex(state_bytes),
+        correlation_id="correlation-semantic-identity",
+        state_schema_version=1,
+        action_schema_version=1,
+        envelope_version=1,
+    )
+    keyring = Keyring({"k1": {"secret": b"s1", "revoked": False}}, "k1")
+    archive = MemoryDecisionArchive()
+    archive.put(signed_envelope_from_decision(decision=decision, keyring=keyring))
+    snapshots = MemorySnapshotStore()
+    snapshots.put(decision.snapshot_id, state_bytes)
+
+    with pytest.raises(RuntimeError, match=expected_error):
+        _historical_engine(
+            archive,
+            snapshots,
+            keyring,
+            ReplayCandidate(),
+        ).replay_challenger(decision.decision_id, ReplayCandidate.id)
