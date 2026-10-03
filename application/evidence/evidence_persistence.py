@@ -14,6 +14,7 @@ from application.effects.effect_outcome_vocabulary import (
 from application.evidence.evidence_feedback_state import (
     apply_feedback_to_world_state as _apply_feedback_world_state,
 )
+from application.outcome.evaluation import CalibrationEngine, EvaluationEngine
 from application.outcome.evidence_projection import (
     OUTCOME_OBSERVED_EVENT_TYPE,
     BusinessOutcomeEventSpineProjector,
@@ -36,7 +37,6 @@ from execution.evidence_persistence_feedback import (
     refs_from_verification as _refs_from_verification,
 )
 from execution.evidence_persistence_reliability import EvidencePersistenceReliabilitySupport
-from application.outcome.evaluation import CalibrationEngine, EvaluationEngine
 from storage.evidence_store import EvidenceRecord, EvidenceStore
 
 CANON_EVIDENCE_PERSISTENCE = True
