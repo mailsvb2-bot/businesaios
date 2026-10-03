@@ -62,3 +62,33 @@ def test_outcome_normalizer_ignores_malformed_phase14_optional_metrics() -> None
 
     assert "margin" not in outcome
     assert "latency_ms" not in outcome
+
+
+def test_outcome_normalizer_marks_numeric_metrics_observed_only_after_valid_parsing() -> None:
+    outcome = OutcomeNormalizer().normalize(
+        output={
+            "revenue": None,
+            "conversion_rate": "N/A",
+            "converted": "unknown",
+        },
+        payload=None,
+    )
+
+    assert outcome["revenue"] == 0.0
+    assert outcome["converted"] is False
+    assert "revenue_observed" not in outcome
+    assert "conversion_observed" not in outcome
+
+
+def test_outcome_normalizer_marks_explicit_valid_zero_and_false_as_observed() -> None:
+    outcome = OutcomeNormalizer().normalize(
+        output={
+            "revenue": 0,
+            "conversion_rate": 0,
+            "converted": False,
+        },
+        payload=None,
+    )
+
+    assert outcome["revenue_observed"] is True
+    assert outcome["conversion_observed"] is True
