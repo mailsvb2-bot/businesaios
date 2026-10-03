@@ -554,3 +554,77 @@ def test_historical_replay_requires_schema_registry() -> None:
             tenant_id="t-1",
             schemas=None,
         )
+
+
+def test_historical_replay_preserves_explicit_zero_semantic_timestamps() -> None:
+    record = WorldModelSemanticRecordV1(
+        record_id="record-zero-recorded",
+        tenant_id="t-1",
+        business_id="b-1",
+        epistemic_type="fact",
+        key="revenue",
+        value=10,
+        source="test",
+        occurred_at_ms=100,
+        observed_at_ms=150,
+        recorded_at_ms=0,
+        confidence=1,
+        authoritative=True,
+        provenance_hash="proof",
+    )
+    semantics = WorldModelSemanticViewV1(
+        state_id="state-zero-recorded",
+        tenant_id="t-1",
+        business_id="b-1",
+        generated_at_ms=150,
+        records=(record,),
+    )
+    state = WorldStateV1(
+        schema_version=1,
+        user={"user_id": "u-1"},
+        session={},
+        product={"business_id": "b-1"},
+        economy={"expected_reward": 3.0},
+        timestamp_ms=150,
+        tenant_id="t-1",
+        user_id="u-1",
+        world_model_semantics=semantics,
+    )
+    state_bytes = state.canonical_bytes()
+    decision = Decision(
+        decision_id="decision-zero-recorded",
+        issuer_id="businesaios-core",
+        issued_at_ms=200,
+        expires_at_ms=300,
+        policy_id="active@v1",
+        action="noop@v1",
+        payload={
+            "tenant_id": "t-1",
+            "business_id": "b-1",
+            "actor_id": "u-1",
+            "expected_cost": 1.0,
+        },
+        snapshot_id="snapshot-zero-recorded",
+        state_hash=sha256_hex(state_bytes),
+        correlation_id="correlation-zero-recorded",
+        state_schema_version=1,
+        action_schema_version=1,
+        envelope_version=1,
+    )
+    keyring = Keyring({"k1": {"secret": b"s1", "revoked": False}}, "k1")
+    archive = MemoryDecisionArchive()
+    archive.put(signed_envelope_from_decision(decision=decision, keyring=keyring))
+    snapshots = MemorySnapshotStore()
+    snapshots.put(decision.snapshot_id, state_bytes)
+    candidate = ReplayCandidate()
+
+    result = _historical_engine(
+        archive,
+        snapshots,
+        keyring,
+        candidate,
+    ).replay_challenger(decision.decision_id, candidate.id)
+
+    assert result["historical_replay"] is True
+    assert result["context_match"] is True
+    assert result["state_hash"] == decision.state_hash
