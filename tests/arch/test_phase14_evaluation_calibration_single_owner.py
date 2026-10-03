@@ -1,18 +1,19 @@
 from __future__ import annotations
 
+import re
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
 
 
 def _production_owners(symbol: str) -> list[str]:
-    needle = f"class {symbol}:"
+    pattern = re.compile(rf"^class\s+{re.escape(symbol)}\b", re.MULTILINE)
     owners: list[str] = []
     for path in ROOT.rglob("*.py"):
         relative = path.relative_to(ROOT).as_posix()
-        if relative.startswith("tests/"):
+        if relative.startswith((".git/", ".venv/", "venv/", "tests/")):
             continue
-        if needle in path.read_text(encoding="utf-8"):
+        if pattern.search(path.read_text(encoding="utf-8", errors="ignore")):
             owners.append(relative)
     return sorted(owners)
 
