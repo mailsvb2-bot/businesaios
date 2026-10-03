@@ -2,11 +2,14 @@ from types import SimpleNamespace
 
 import pytest
 
+from contracts.world_model_semantics import (
+    WorldModelSemanticRecordV1,
+    WorldModelSemanticViewV1,
+)
 from core.ai.decision import Decision
 from core.ai.decision_archive import MemoryDecisionArchive
 from core.ai.snapshot_store import MemorySnapshotStore
 from core.security.keyring import Keyring
-from contracts.world_model_semantics import WorldModelSemanticRecordV1, WorldModelSemanticViewV1
 from core.utils.canonical import sha256_hex
 from kernel.decision_crypto import signed_envelope_from_decision
 from kernel.world_state import WorldStateV1
@@ -26,6 +29,29 @@ class ReplayCandidate:
                 "risk_score": 0.1,
             },
         )
+
+
+class ReplayRegistry:
+    def __init__(self, candidate) -> None:
+        self._candidate = candidate
+
+    def maybe_get(self, candidate_policy_id: str):
+        candidate = self._candidate
+        return (
+            candidate
+            if candidate is not None
+            and str(getattr(candidate, "id", "")) == str(candidate_policy_id)
+            else None
+        )
+
+
+def _historical_engine(archive, snapshots, keyring, candidate):
+    return HistoricalReplayEngine(
+        archive,
+        snapshots,
+        keyring=keyring,
+        policy_registry=ReplayRegistry(candidate),
+    )
 
 
 def test_deterministic_replay():
@@ -107,9 +133,10 @@ def _historical_fixture(*, state_timestamp_ms: int = 100):
 
 def test_historical_replay_uses_exact_signed_decision_snapshot() -> None:
     state, env, archive, snapshots, keyring = _historical_fixture()
-    result = HistoricalReplayEngine(archive, snapshots, keyring=keyring).replay_challenger(
+    candidate = ReplayCandidate()
+    result = _historical_engine(archive, snapshots, keyring, candidate).replay_challenger(
         env.decision.decision_id,
-        ReplayCandidate(),
+        candidate.id,
     )
 
     assert result["historical_replay"] is True
@@ -168,10 +195,11 @@ def test_historical_replay_rejects_future_state() -> None:
     snapshots = MemorySnapshotStore()
     snapshots.put(decision.snapshot_id, state_bytes)
 
+    candidate = ReplayCandidate()
     with pytest.raises(RuntimeError, match="HISTORICAL_REPLAY_FUTURE_STATE"):
-        HistoricalReplayEngine(archive, snapshots, keyring=keyring).replay_challenger(
+        _historical_engine(archive, snapshots, keyring, candidate).replay_challenger(
             decision.decision_id,
-            ReplayCandidate(),
+            candidate.id,
         )
 
 
@@ -181,10 +209,11 @@ def test_historical_replay_rejects_noncanonical_candidate() -> None:
     class ForeignCandidate:
         id = "foreign@v1"
 
+    foreign = ForeignCandidate()
     with pytest.raises(ValueError, match="HISTORICAL_REPLAY_CANDIDATE_NOT_CANONICAL"):
-        HistoricalReplayEngine(archive, snapshots, keyring=keyring).replay_challenger(
+        _historical_engine(archive, snapshots, keyring, foreign).replay_challenger(
             env.decision.decision_id,
-            ForeignCandidate(),
+            foreign.id,
         )
 
 
@@ -243,11 +272,12 @@ def test_historical_replay_rejects_future_semantic_observation() -> None:
     archive.put(signed_envelope_from_decision(decision=decision, keyring=keyring))
     snapshots = MemorySnapshotStore()
     snapshots.put(decision.snapshot_id, state_bytes)
+    candidate = ReplayCandidate()
 
     with pytest.raises(RuntimeError, match="HISTORICAL_REPLAY_FUTURE_STATE"):
-        HistoricalReplayEngine(archive, snapshots, keyring=keyring).replay_challenger(
+        _historical_engine(archive, snapshots, keyring, candidate).replay_challenger(
             decision.decision_id,
-            ReplayCandidate(),
+            candidate.id,
         )
 
 
@@ -291,9 +321,23 @@ def test_historical_replay_rejects_state_hash_tampering_even_with_matching_snaps
         )
     )
     snapshots.put(tampered_decision.snapshot_id, tampered_bytes)
+    candidate = ReplayCandidate()
 
     with pytest.raises(RuntimeError, match="HISTORICAL_REPLAY_SIGNATURE_INVALID"):
-        HistoricalReplayEngine(archive, snapshots, keyring=keyring).replay_challenger(
+        _historical_engine(archive, snapshots, keyring, candidate).replay_challenger(
             tampered_decision.decision_id,
-            ReplayCandidate(),
+            candidate.id,
         )
+
+
+def test_historical_replay_rejects_unregistered_candidate_id() -> None:
+    _state, env, archive, snapshots, keyring = _historical_fixture()
+    engine = HistoricalReplayEngine(
+        archive,
+        snapshots,
+        keyring=keyring,
+        policy_registry=ReplayRegistry(None),
+    )
+
+    with pytest.raises(ValueError, match="HISTORICAL_REPLAY_CANDIDATE_NOT_REGISTERED"):
+        engine.replay_challenger(env.decision.decision_id, "candidate@missing")
