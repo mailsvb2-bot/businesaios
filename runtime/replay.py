@@ -16,7 +16,11 @@ from canon.anti_second_brain_rules import SHADOW_POLICY_MODULE_PREFIX
 from contracts.world_model_semantics import world_model_semantic_view_from_dict
 from core.policies.shadow import ShadowEvaluator
 from core.utils.canonical import sha256_hex
-from kernel.decision_crypto import load_keyring_secret, verify_signed_material
+from kernel.decision_crypto import (
+    assert_envelope_signature_surface,
+    load_keyring_secret,
+    verify_signed_material,
+)
 from kernel.world_state import WorldStateV1
 from runtime.decision import DecisionEnvelope
 
@@ -51,7 +55,7 @@ class HistoricalReplayEngine:
         env = self._archive.get(str(decision_id))
         if env is None:
             raise KeyError(f"decision_not_found: {decision_id}")
-        env.verify()
+        assert_envelope_signature_surface(env)
         decision = env.decision
         try:
             secret = load_keyring_secret(keyring=self._keyring, kid=str(env.kid))
@@ -151,7 +155,9 @@ def _assert_identity_matches(*, state: WorldStateV1, payload: dict[str, Any]) ->
         raise RuntimeError("HISTORICAL_REPLAY_TENANT_MISMATCH")
     business_id = str(payload.get("business_id") or "").strip()
     state_business_id = str(dict(state.product or {}).get("business_id") or dict(state.meta or {}).get("business_id") or "").strip()
-    if business_id and state_business_id and business_id != state_business_id:
+    if business_id and not state_business_id:
+        raise RuntimeError("HISTORICAL_REPLAY_BUSINESS_ID_MISSING")
+    if business_id and business_id != state_business_id:
         raise RuntimeError("HISTORICAL_REPLAY_BUSINESS_MISMATCH")
 
 
