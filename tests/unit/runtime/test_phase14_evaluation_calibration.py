@@ -4,7 +4,7 @@ import math
 
 import pytest
 
-from application.outcome.evaluation import (
+from application.outcome import (
     BUSINESS_EVALUATION_METRICS,
     CalibrationEngine,
     EvaluationEngine,
