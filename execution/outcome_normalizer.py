@@ -75,9 +75,24 @@ class OutcomeNormalizer:
                 normalized[key] = value
                 normalized[marker] = True
 
-        if "revenue" in data:
+        revenue_value = (
+            self._to_optional_float(data.get("revenue"))
+            if "revenue" in data
+            else None
+        )
+        if revenue_value is not None:
             normalized["revenue_observed"] = True
-        if "converted" in data or "conversion_rate" in data:
+        conversion_rate_value = (
+            self._to_optional_float(data.get("conversion_rate"))
+            if "conversion_rate" in data
+            else None
+        )
+        converted_value = (
+            self._to_optional_bool(data.get("converted"))
+            if "converted" in data
+            else None
+        )
+        if conversion_rate_value is not None or converted_value is not None:
             normalized["conversion_observed"] = True
         return normalized
 
