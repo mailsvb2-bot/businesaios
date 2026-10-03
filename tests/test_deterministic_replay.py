@@ -6,6 +6,7 @@ from core.ai.decision import Decision
 from core.ai.decision_archive import MemoryDecisionArchive
 from core.ai.snapshot_store import MemorySnapshotStore
 from core.security.keyring import Keyring
+from contracts.world_model_semantics import WorldModelSemanticRecordV1, WorldModelSemanticViewV1
 from core.utils.canonical import sha256_hex
 from kernel.decision_crypto import signed_envelope_from_decision
 from kernel.world_state import WorldStateV1
@@ -184,4 +185,67 @@ def test_historical_replay_rejects_noncanonical_candidate() -> None:
         HistoricalReplayEngine(archive, snapshots).replay_challenger(
             env.decision.decision_id,
             ForeignCandidate(),
+        )
+
+
+def test_historical_replay_rejects_future_semantic_observation() -> None:
+    record = WorldModelSemanticRecordV1(
+        record_id="record-1",
+        tenant_id="t-1",
+        business_id="b-1",
+        epistemic_type="fact",
+        key="revenue",
+        value=10,
+        source="test",
+        occurred_at_ms=100,
+        observed_at_ms=201,
+        recorded_at_ms=201,
+        confidence=1.0,
+        authoritative=True,
+        provenance_hash="proof",
+    )
+    semantics = WorldModelSemanticViewV1(
+        state_id="state-1",
+        tenant_id="t-1",
+        business_id="b-1",
+        generated_at_ms=150,
+        records=(record,),
+    )
+    state = WorldStateV1(
+        schema_version=1,
+        user={"user_id": "u-1"},
+        session={},
+        product={"business_id": "b-1"},
+        economy={},
+        timestamp_ms=100,
+        tenant_id="t-1",
+        user_id="u-1",
+        world_model_semantics=semantics,
+    )
+    state_bytes = state.canonical_bytes()
+    decision = Decision(
+        decision_id="decision-future-semantic",
+        issuer_id="businesaios-core",
+        issued_at_ms=200,
+        expires_at_ms=300,
+        policy_id="active@v1",
+        action="noop@v1",
+        payload={"tenant_id": "t-1", "business_id": "b-1"},
+        snapshot_id="snapshot-future-semantic",
+        state_hash=sha256_hex(state_bytes),
+        correlation_id="correlation-future-semantic",
+        state_schema_version=1,
+        action_schema_version=1,
+        envelope_version=1,
+    )
+    keyring = Keyring({"k1": {"secret": b"s1", "revoked": False}}, "k1")
+    archive = MemoryDecisionArchive()
+    archive.put(signed_envelope_from_decision(decision=decision, keyring=keyring))
+    snapshots = MemorySnapshotStore()
+    snapshots.put(decision.snapshot_id, state_bytes)
+
+    with pytest.raises(RuntimeError, match="HISTORICAL_REPLAY_FUTURE_STATE"):
+        HistoricalReplayEngine(archive, snapshots).replay_challenger(
+            decision.decision_id,
+            ReplayCandidate(),
         )
