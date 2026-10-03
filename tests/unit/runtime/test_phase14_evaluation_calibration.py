@@ -143,6 +143,19 @@ def test_phase14_calibration_excludes_unresolved_outcomes() -> None:
     assert observation is None
 
 
+def test_phase14_calibration_excludes_unattempted_terminal_outcomes() -> None:
+    observation = CalibrationEngine.observation(
+        outcome=_outcome(
+            attempted=False,
+            executed=False,
+            goal_terminal=True,
+            goal_achieved=False,
+        ),
+        action_intent=_intent(confidence=0.9),
+    )
+    assert observation is None
+
+
 @pytest.mark.parametrize("confidence", [True, math.nan, math.inf, -0.1, 1.1])
 def test_phase14_calibration_rejects_invalid_confidence(confidence: object) -> None:
     with pytest.raises(ValueError):
