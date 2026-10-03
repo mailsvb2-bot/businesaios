@@ -144,14 +144,50 @@ def test_shadow_failures_are_evidence_not_production_failures() -> None:
 
 def test_shadow_dispatch_is_bounded_and_never_delays_production() -> None:
     from core.ai.decision_core import DecisionCore
-    started, release = Event(), Event()
+    started, release, finished = Event(), Event(), Event()
     core = DecisionCore.__new__(DecisionCore); core._shadow_busy = Lock()
     core._shadow_observer = object()
-    core.observe_shadow = lambda **_kwargs: (started.set(), release.wait(1.0))
+    core.observe_shadow = lambda **_kwargs: (started.set(), release.wait(1.0), finished.set())
     before = time.perf_counter(); assert core.dispatch_shadow(state={}, production_envelope=envelope(), production_policy_id="active@v1") is True
     assert time.perf_counter() - before < 0.1 and started.wait(0.2)
     assert core.dispatch_shadow(state={}, production_envelope=envelope(), production_policy_id="active@v1") is False
     release.set()
+    assert finished.wait(0.2)
+
+
+def test_shadow_dispatch_freezes_state_and_envelope_before_background_thread() -> None:
+    from core.ai.decision_core import DecisionCore
+
+    entered, release, finished = Event(), Event(), Event()
+    seen = {}
+    state = {"nested": {"value": 1}}
+    production = envelope()
+    core = DecisionCore.__new__(DecisionCore)
+    core._shadow_busy = Lock()
+    core._shadow_observer = object()
+
+    def observe_shadow(**kwargs):
+        entered.set()
+        release.wait(1.0)
+        seen["state"] = kwargs["state"]
+        seen["payload"] = kwargs["production_envelope"].decision.payload
+        finished.set()
+
+    core.observe_shadow = observe_shadow
+    assert core.dispatch_shadow(
+        state=state,
+        production_envelope=production,
+        production_policy_id="active@v1",
+    ) is True
+    assert entered.wait(0.2)
+
+    state["nested"]["value"] = 99
+    production.decision.payload["amount"] = 999.0
+    release.set()
+
+    assert finished.wait(0.2)
+    assert seen["state"]["nested"]["value"] == 1
+    assert seen["payload"]["amount"] == 100.0
 
 
 def test_outcome_attribution_is_explicit_and_event_backed() -> None:
