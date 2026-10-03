@@ -16,6 +16,7 @@ from canon.anti_second_brain_rules import SHADOW_POLICY_MODULE_PREFIX
 from contracts.world_model_semantics import world_model_semantic_view_from_dict
 from core.policies.shadow import ShadowEvaluator
 from core.utils.canonical import sha256_hex
+from kernel.decision_crypto import load_keyring_secret, verify_signed_material
 from kernel.world_state import WorldStateV1
 from runtime.decision import DecisionEnvelope
 
@@ -39,9 +40,10 @@ class ReplayEngine:
 class HistoricalReplayEngine:
     """Evaluate a challenger against the exact state used by a past Decision."""
 
-    def __init__(self, decision_archive, snapshot_store, *, schemas: Any = None):
+    def __init__(self, decision_archive, snapshot_store, *, keyring: Any, schemas: Any = None):
         self._archive = decision_archive
         self._snapshots = snapshot_store
+        self._keyring = keyring
         self._shadow = ShadowEvaluator(ledger=None, schemas=schemas)
 
     def replay_challenger(self, decision_id: str, candidate_policy: Any) -> dict[str, Any]:
@@ -50,6 +52,18 @@ class HistoricalReplayEngine:
             raise KeyError(f"decision_not_found: {decision_id}")
         env.verify()
         decision = env.decision
+        try:
+            secret = load_keyring_secret(keyring=self._keyring, kid=str(env.kid))
+        except RuntimeError as exc:
+            raise RuntimeError("HISTORICAL_REPLAY_SIGNATURE_UNVERIFIABLE") from exc
+        if not verify_signed_material(
+            decision=decision,
+            payload_hash_value=str(env.payload_hash),
+            signature=str(env.signature),
+            secret=secret,
+            kid=str(env.kid),
+        ):
+            raise RuntimeError("HISTORICAL_REPLAY_SIGNATURE_INVALID")
         candidate_id = str(getattr(candidate_policy, "id", "") or "").strip()
         candidate_module = str(getattr(type(candidate_policy), "__module__", "") or "")
         if not candidate_id or not candidate_module.startswith(SHADOW_POLICY_MODULE_PREFIX):
