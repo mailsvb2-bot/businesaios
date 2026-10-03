@@ -6,6 +6,11 @@ from typing import Any
 from attribution.catalog import CANONICAL_ATTRIBUTION_CHAIN, CANONICAL_CAUSALITY_LEVELS
 from contracts.business_outcome import BusinessOutcomeV1
 from contracts.event_store import canonical_business_event_contract
+from runtime.platform.support.evaluation.business import (
+    BusinessEvaluationReport,
+    CalibrationEngine,
+    EvaluationEngine,
+)
 from storage.evidence_store import EvidenceRecord, EvidenceStore
 
 CANON_BUSINESS_OUTCOME_EVIDENCE_PROJECTION = True
@@ -202,6 +207,103 @@ class BusinessOutcomeEvidenceProjector:
         return sum(1 for row in self._evidence.list_for_tenant(tenant_id=tenant_id, limit=limit) if self._is_outcome_record(row, business_id=business_id) and not _mapping(row.payload.get("business_outcome")))
 
 
+class BusinessOutcomeEvaluationProjector:
+    """Read-only Phase 14 evaluation/calibration over canonical Outcome evidence."""
+
+    def __init__(self, evidence_store: EvidenceStore) -> None:
+        self._evidence = evidence_store
+        self._outcomes = BusinessOutcomeEvidenceProjector(evidence_store)
+        self._evaluation = EvaluationEngine()
+        self._calibration = CalibrationEngine()
+
+    def evaluate_business(
+        self,
+        *,
+        tenant_id: str,
+        business_id: str,
+        limit: int = 1000,
+    ) -> BusinessEvaluationReport:
+        outcomes = self._outcomes.list_for_business(
+            tenant_id=tenant_id,
+            business_id=business_id,
+            limit=limit,
+        )
+        records_by_outcome: dict[str, list[EvidenceRecord]] = {}
+        for record in self._evidence.list_for_tenant(
+            tenant_id=tenant_id,
+            limit=limit,
+        ):
+            if not BusinessOutcomeEvidenceProjector._is_outcome_record(
+                record,
+                business_id=business_id,
+            ):
+                continue
+            if not _mapping(record.payload.get("business_outcome")):
+                continue
+            outcome_id = str(record.lineage.get("outcome") or "").strip()
+            records_by_outcome.setdefault(outcome_id, []).append(record)
+
+        evaluations = []
+        observations = []
+        for outcome in outcomes:
+            records = records_by_outcome.get(outcome.outcome_id, [])
+            if not records:
+                raise BusinessOutcomeProjectionConflict(
+                    "canonical outcome evaluation lost its evidence row"
+                )
+
+            evaluation = self._evaluation.evaluate(outcome.as_dict())
+            expected_evaluation = evaluation.to_dict()
+            for record in records:
+                persisted = _mapping(record.payload.get("evaluation"))
+                if persisted and persisted != expected_evaluation:
+                    raise BusinessOutcomeProjectionConflict(
+                        "canonical evaluation conflicts with business outcome"
+                    )
+            evaluations.append(evaluation)
+
+            intents = [
+                _mapping(record.payload.get("action_intent"))
+                for record in records
+                if _mapping(record.payload.get("action_intent"))
+            ]
+            action_intent: dict[str, Any] = {}
+            if intents:
+                action_intent = intents[0]
+                if any(item != action_intent for item in intents[1:]):
+                    raise BusinessOutcomeProjectionConflict(
+                        "canonical calibration action intent is ambiguous"
+                    )
+
+            observation = (
+                self._calibration.observation(
+                    outcome=outcome.as_dict(),
+                    action_intent=action_intent,
+                )
+                if action_intent
+                else None
+            )
+            expected_observation = (
+                observation.to_dict() if observation is not None else {}
+            )
+            for record in records:
+                persisted = _mapping(
+                    record.payload.get("calibration_observation")
+                )
+                if persisted and persisted != expected_observation:
+                    raise BusinessOutcomeProjectionConflict(
+                        "canonical calibration conflicts with business outcome"
+                    )
+            if observation is not None:
+                observations.append(observation)
+
+        calibration = self._calibration.evaluate(observations)
+        return self._evaluation.aggregate(
+            evaluations,
+            calibration=calibration,
+        )
+
+
 class BusinessOutcomeEventSpineProjector:
     def __init__(self, event_store: Any) -> None:
         self._events = event_store
@@ -270,4 +372,4 @@ class BusinessOutcomeEventSpineProjector:
         return event_id
 
 
-__all__ = ["BusinessOutcomeBodyUnavailable", "BusinessOutcomeEvidenceProjector", "BusinessOutcomeEventProjectionConflict", "BusinessOutcomeEventSpineProjector", "BusinessOutcomeProjectionConflict", "CANON_BUSINESS_OUTCOME_EVIDENCE_PROJECTION", "CANON_BUSINESS_OUTCOME_EVENT_SPINE_PROJECTION", "OUTCOME_OBSERVED_EVENT_TYPE"]
+__all__ = ["BusinessOutcomeBodyUnavailable", "BusinessOutcomeEvidenceProjector", "BusinessOutcomeEvaluationProjector", "BusinessOutcomeEventProjectionConflict", "BusinessOutcomeEventSpineProjector", "BusinessOutcomeProjectionConflict", "CANON_BUSINESS_OUTCOME_EVIDENCE_PROJECTION", "CANON_BUSINESS_OUTCOME_EVENT_SPINE_PROJECTION", "OUTCOME_OBSERVED_EVENT_TYPE"]
