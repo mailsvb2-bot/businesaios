@@ -280,7 +280,12 @@ class DecisionCore:
             finally:
                 self._shadow_busy.release()
 
-        Thread(target=run, name="decision-shadow-observer", daemon=True).start()
+        thread = Thread(target=run, name="decision-shadow-observer", daemon=True)
+        try:
+            thread.start()
+        except Exception:
+            self._shadow_busy.release()
+            return False
         return True
 
     def shadow_rollout_status(self, candidate_policy_id: str) -> dict[str, bool]:
