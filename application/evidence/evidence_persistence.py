@@ -36,6 +36,7 @@ from execution.evidence_persistence_feedback import (
     refs_from_verification as _refs_from_verification,
 )
 from execution.evidence_persistence_reliability import EvidencePersistenceReliabilitySupport
+from runtime.platform.support.evaluation.business import CalibrationEngine, EvaluationEngine
 from storage.evidence_store import EvidenceRecord, EvidenceStore
 
 CANON_EVIDENCE_PERSISTENCE = True
@@ -334,6 +335,14 @@ class EvidencePersistenceService:
         existing_attribution = (
             _safe_dict(existing.payload.get("attribution")) if existing is not None else {}
         )
+        existing_evaluation = (
+            _safe_dict(existing.payload.get("evaluation")) if existing is not None else {}
+        )
+        existing_calibration = (
+            _safe_dict(existing.payload.get("calibration_observation"))
+            if existing is not None
+            else {}
+        )
         attribution: dict[str, Any] = {}
         if business_outcome and action_intent and (existing is None or existing_attribution):
             attribution = self._canonical_attribution_projection(
@@ -347,6 +356,25 @@ class EvidencePersistenceService:
             )
             if existing_attribution and existing_attribution != attribution:
                 raise ValueError("canonical attribution replay conflicts with persisted evidence")
+
+        evaluation: dict[str, Any] = {}
+        if business_outcome and (existing is None or existing_evaluation):
+            evaluation = EvaluationEngine().evaluate(business_outcome).to_dict()
+            if existing_evaluation and existing_evaluation != evaluation:
+                raise ValueError("canonical evaluation replay conflicts with persisted evidence")
+
+        calibration_observation: dict[str, Any] = {}
+        if business_outcome and action_intent and (existing is None or existing_calibration):
+            observation = CalibrationEngine.observation(
+                outcome=business_outcome,
+                action_intent=action_intent,
+            )
+            if observation is not None:
+                calibration_observation = observation.to_dict()
+            if existing_calibration and existing_calibration != calibration_observation:
+                raise ValueError(
+                    "canonical calibration replay conflicts with persisted evidence"
+                )
         if existing is not None:
             created_at = existing.created_at
         record = EvidenceRecord(
@@ -372,6 +400,12 @@ class EvidencePersistenceService:
                 **({'action_intent': action_intent} if action_intent else {}),
                 **({'business_outcome': business_outcome} if business_outcome else {}),
                 **({"attribution": attribution} if attribution else {}),
+                **({"evaluation": evaluation} if evaluation else {}),
+                **(
+                    {"calibration_observation": calibration_observation}
+                    if calibration_observation
+                    else {}
+                ),
                 'verification': _compact_verification_payload(verification, action=action, execution_receipt=execution),
                 'evidence': _compact_evidence_payload(verification),
             },
