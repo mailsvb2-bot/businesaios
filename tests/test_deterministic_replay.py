@@ -13,6 +13,12 @@ from core.security.keyring import Keyring
 from core.utils.canonical import sha256_hex
 from kernel.decision_crypto import signed_envelope_from_decision
 from kernel.world_state import WorldStateV1
+from observability.platform.decision_archive.sqlite_decision_archive import (
+    SqliteDecisionArchive,
+)
+from observability.platform.snapshot_store.sqlite_snapshot_store import (
+    SqliteSnapshotStore,
+)
 from runtime.replay import HistoricalReplayEngine, ReplayEngine
 
 
@@ -342,3 +348,28 @@ def test_historical_replay_rejects_unregistered_candidate_id() -> None:
 
     with pytest.raises(ValueError, match="HISTORICAL_REPLAY_CANDIDATE_NOT_REGISTERED"):
         engine.replay_challenger(env.decision.decision_id, "candidate@missing")
+
+
+def test_historical_replay_uses_canonical_durable_archive_and_snapshot_stores(
+    tmp_path,
+) -> None:
+    state, env, _archive, _snapshots, keyring = _historical_fixture()
+    candidate = ReplayCandidate()
+    archive_path = str(tmp_path / "decisions.db")
+    snapshot_path = str(tmp_path / "snapshots.db")
+
+    with SqliteDecisionArchive(archive_path, tenant_id="t-1") as archive:
+        archive.put(env)
+        with SqliteSnapshotStore(snapshot_path, tenant_id="t-1") as snapshots:
+            snapshots.put(env.decision.snapshot_id, state.canonical_bytes())
+            result = HistoricalReplayEngine(
+                archive,
+                snapshots,
+                keyring=keyring,
+                policy_registry=ReplayRegistry(candidate),
+            ).replay_challenger(env.decision.decision_id, candidate.id)
+
+    assert result["historical_replay"] is True
+    assert result["historical_source"] == "decision_snapshot"
+    assert result["context_match"] is True
+    assert result["future_leakage"] is False
