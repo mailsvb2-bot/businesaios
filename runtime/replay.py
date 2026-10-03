@@ -8,13 +8,10 @@ re-route production, execute effects, or query current business state.
 
 from __future__ import annotations
 
-import json
-from collections.abc import Mapping
 from typing import Any
 
 from canon.anti_second_brain_rules import SHADOW_POLICY_MODULE_PREFIX
 from contracts.tenant_identity import require_tenant_id
-from contracts.world_model_semantics import world_model_semantic_view_from_dict
 from core.policies.shadow import ShadowEvaluator
 from core.utils.canonical import sha256_hex
 from kernel.decision_crypto import (
@@ -22,7 +19,7 @@ from kernel.decision_crypto import (
     load_keyring_secret,
     verify_signed_material,
 )
-from kernel.world_state import WorldStateV1
+from kernel.world_state import WorldStateV1, world_state_from_canonical_bytes
 from runtime.decision import DecisionEnvelope
 
 CANON_RUNTIME_REPLAY_THIN_SURFACE = True
@@ -139,18 +136,8 @@ class HistoricalReplayEngine:
 
 def _world_state_from_snapshot(snapshot_bytes: bytes) -> WorldStateV1:
     try:
-        payload = json.loads(snapshot_bytes.decode("utf-8"))
-    except (UnicodeDecodeError, json.JSONDecodeError) as exc:
-        raise RuntimeError("HISTORICAL_REPLAY_SNAPSHOT_INVALID") from exc
-    if not isinstance(payload, Mapping):
-        raise RuntimeError("HISTORICAL_REPLAY_SNAPSHOT_INVALID")
-    data = dict(payload)
-    semantics = data.get("world_model_semantics")
-    if isinstance(semantics, Mapping):
-        data["world_model_semantics"] = world_model_semantic_view_from_dict(semantics)
-    try:
-        return WorldStateV1(**data)
-    except (TypeError, ValueError) as exc:
+        return world_state_from_canonical_bytes(snapshot_bytes)
+    except ValueError as exc:
         raise RuntimeError("HISTORICAL_REPLAY_SNAPSHOT_INVALID") from exc
 
 
