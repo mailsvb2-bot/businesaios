@@ -490,6 +490,12 @@ class CalibrationEngine:
         outcome_action_id = str(body.get("action_id") or "").strip()
         if intent_action_id and intent_action_id != outcome_action_id:
             raise ValueError("calibration action_id conflicts with canonical outcome")
+        intent_action_type = str(
+            intent.get("action_type") or intent.get("capability_target") or ""
+        ).strip()
+        outcome_action_type = str(body.get("action_type") or "").strip()
+        if intent_action_type and intent_action_type != outcome_action_type:
+            raise ValueError("calibration action_type conflicts with canonical outcome")
 
         outcome_id = str(body.get("outcome_id") or "").strip()
         decision_id = str(body.get("decision_id") or "").strip()
