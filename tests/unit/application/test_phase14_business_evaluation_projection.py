@@ -195,3 +195,25 @@ def test_phase14_projection_rejects_tampered_persisted_evaluation() -> None:
             tenant_id="tenant-14",
             business_id="business-14",
         )
+
+
+def test_phase14_projection_rejects_tampered_persisted_calibration() -> None:
+    source = InMemoryEvidenceStore()
+    _persist(source)
+    record = source.list_for_tenant(tenant_id="tenant-14")[0]
+    payload = dict(record.payload)
+    calibration = dict(payload["calibration_observation"])
+    calibration["confidence"] = 0.01
+    payload["calibration_observation"] = calibration
+
+    tampered = InMemoryEvidenceStore()
+    tampered.append(replace(record, payload=payload))
+
+    with pytest.raises(
+        BusinessOutcomeProjectionConflict,
+        match="calibration conflicts",
+    ):
+        BusinessOutcomeEvaluationProjector(tampered).evaluate_business(
+            tenant_id="tenant-14",
+            business_id="business-14",
+        )
