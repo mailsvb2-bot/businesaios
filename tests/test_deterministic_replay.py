@@ -154,11 +154,12 @@ def test_historical_replay_uses_exact_signed_decision_snapshot() -> None:
 def test_historical_replay_rejects_tampered_snapshot() -> None:
     _state, env, archive, snapshots, keyring = _historical_fixture()
     snapshots.put(env.decision.snapshot_id, b'{"tampered":true}')
+    candidate = ReplayCandidate()
 
     with pytest.raises(RuntimeError, match="HISTORICAL_REPLAY_SNAPSHOT_HASH_MISMATCH"):
-        HistoricalReplayEngine(archive, snapshots, keyring=keyring).replay_challenger(
+        _historical_engine(archive, snapshots, keyring, candidate).replay_challenger(
             env.decision.decision_id,
-            ReplayCandidate(),
+            candidate.id,
         )
 
 
