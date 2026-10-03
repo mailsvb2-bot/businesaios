@@ -119,7 +119,11 @@ class AutonomyFeedbackStep:
         feedback.setdefault("intent_id", str(getattr(executable_action, "intent_id", "") or ""))
         feedback.setdefault("decision_id", str(getattr(envelope.decision, "decision_id", "") or ""))
         feedback.setdefault("correlation_id", str(getattr(envelope.decision, "correlation_id", "") or getattr(result, "correlation_id", "") or ""))
-        evaluation_outcome = dict(normalized_outcome)
+        evaluation_outcome = self._safe_dict(
+            feedback.get("normalized_outcome")
+        )
+        for key, value in normalized_outcome.items():
+            evaluation_outcome.setdefault(key, value)
         evaluation_outcome.setdefault(
             "policy_violation",
             bool(autonomy_decision.blocked_by_policy),
@@ -131,7 +135,7 @@ class AutonomyFeedbackStep:
                 not bool(action_result.executed),
             )
             evaluation_outcome.setdefault("execution_failure_observed", True)
-        feedback.setdefault("normalized_outcome", evaluation_outcome)
+        feedback["normalized_outcome"] = evaluation_outcome
         feedback.setdefault("goal_id", getattr(request, "goal_id", None))
         feedback.setdefault("autonomy_tier", request.autonomy_tier)
         feedback.setdefault("approval_required", bool(autonomy_decision.approval_required))
