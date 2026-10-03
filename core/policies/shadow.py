@@ -5,6 +5,7 @@ from application.decision_policy.policy_stage import propose_action
 from application.decision_runtime.flow import build_payload
 from core.events.event_types import SHADOW_DECISION_EVALUATED, SHADOW_OUTCOME_ATTRIBUTED, SHADOW_PRODUCTION_OUTCOME_OBSERVED
 CANON_SHADOW_EVIDENCE_ONLY = True
+CANON_PHASE15_SHADOW_SAME_CONTEXT = True
 class _Trace:
     def try_add_step(self, **_kwargs: Any) -> None: pass
 def _float(value: Any) -> float:
@@ -12,7 +13,10 @@ def _float(value: Any) -> float:
     except (TypeError, ValueError): return 0.0
 def _data(event: Any) -> dict[str, Any]: return event if isinstance(event, dict) else vars(event)
 def _payload(event: Any) -> dict[str, Any]: return dict(_data(event).get("payload") or {})
-def _digest(value: Any) -> str: return hashlib.sha256(json.dumps(value, sort_keys=True, separators=(",", ":"), default=str).encode()).hexdigest()
+def _digest(value: Any) -> str:
+    canonical = getattr(value, "canonical_bytes", None)
+    raw = canonical() if callable(canonical) else json.dumps(value, sort_keys=True, separators=(",", ":"), default=str).encode()
+    return hashlib.sha256(raw).hexdigest()
 class ShadowDecisionLedger:
     """Evidence-only ledger. It never selects, signs, executes, or deploys decisions."""
     def __init__(self, event_log: Any) -> None: self.event_log = event_log
@@ -52,7 +56,7 @@ class ShadowDecisionLedger:
             elif kind == SHADOW_OUTCOME_ATTRIBUTED and row.get("counterfactual") is True: outcomes.append(row)
         total = len(decisions); latencies = sorted(_float(row.get("latency_ms")) for row in decisions)
         avg = lambda key, rows: sum(_float(row.get(key)) for row in rows) / len(rows) if rows else 0.0
-        return {"decision_count": total, "production_outcome_count": len(production), "outcome_count": len(outcomes), "error_rate": sum(row.get("status") != "evaluated" for row in decisions) / total if total else 1.0, "disagreement_rate": sum(row.get("candidate_action") != row.get("production_action") for row in decisions) / total if total else 1.0, "critical_violations": sum(bool(row.get("schema_error") or row.get("error")) for row in decisions), "p95_latency_ms": latencies[int((len(latencies) - 1) * 0.95)] if latencies else 0.0, "average_cost_increase": avg("cost_increase", decisions), "average_regret": avg("regret", outcomes)}
+        return {"decision_count": total, "production_outcome_count": len(production), "outcome_count": len(outcomes), "error_rate": sum(row.get("status") != "evaluated" for row in decisions) / total if total else 1.0, "disagreement_rate": sum(row.get("candidate_action") != row.get("production_action") for row in decisions) / total if total else 1.0, "critical_violations": sum(bool(row.get("schema_error") or row.get("context_error") or row.get("error")) for row in decisions), "p95_latency_ms": latencies[int((len(latencies) - 1) * 0.95)] if latencies else 0.0, "average_cost_increase": avg("cost_increase", decisions), "average_regret": avg("regret", outcomes)}
 class ShadowEvaluator:
     """Runs a configured candidate beside DecisionCore and records evidence only."""
     def __init__(self, ledger: ShadowDecisionLedger | None = None, schemas: Any = None) -> None: self.ledger, self.schemas = ledger, schemas
@@ -62,10 +66,15 @@ class ShadowEvaluator:
         errors = total = 0
         for state, expected in dataset: errors += fn(state) != expected; total += 1
         return errors / total if total else 1.0
-    def observe(self, state: Any, production_envelope: Any, candidate_policy: Any):
-        if candidate_policy is None or self.ledger is None: return None
+    def simulate(self, state: Any, production_envelope: Any, candidate_policy: Any):
+        if candidate_policy is None: return None
         decision, started = production_envelope.decision, time.perf_counter_ns()
-        row = {"status": "evaluated", "production_policy_id": str(decision.policy_id), "candidate_policy_id": str(getattr(candidate_policy, "id", "")), "production_action": str(decision.action), "state_hash": _digest(state), "production_payload_hash": _digest(decision.payload), "production_cost": _float(decision.payload.get("expected_cost")), "simulation": True, "observe_only": True, "writes_outbox": False, "external_effect": False, "decision_authority": "DecisionCore"}
+        state_hash = _digest(state); expected_state_hash = str(getattr(decision, "state_hash", "") or "")
+        row = {"status": "evaluated", "production_policy_id": str(decision.policy_id), "candidate_policy_id": str(getattr(candidate_policy, "id", "")), "production_action": str(decision.action), "state_hash": state_hash, "production_state_hash": expected_state_hash, "context_match": not expected_state_hash or state_hash == expected_state_hash, "production_payload_hash": _digest(decision.payload), "production_cost": _float(decision.payload.get("expected_cost")), "simulation": True, "observe_only": True, "writes_outbox": False, "external_effect": False, "decision_authority": "DecisionCore"}
+        if expected_state_hash and state_hash != expected_state_hash:
+            row.update(status="invalid", context_error="state_hash_mismatch", candidate_action="", cost_increase=0.0)
+            row["latency_ms"] = (time.perf_counter_ns() - started) / 1_000_000
+            return row
         try:
             candidate = propose_action(policy=candidate_policy, state=copy.deepcopy(state), trace=_Trace())
             action = str(getattr(candidate, "action", "")); production_payload = dict(decision.payload or {})
@@ -77,6 +86,11 @@ class ShadowEvaluator:
                 except Exception as exc: row.update(status="invalid", schema_error=exc.__class__.__name__)
         except Exception as exc: row.update(status="failed", error=exc.__class__.__name__, candidate_action="", cost_increase=0.0)
         row["latency_ms"] = (time.perf_counter_ns() - started) / 1_000_000
+        return row
+    def observe(self, state: Any, production_envelope: Any, candidate_policy: Any):
+        if candidate_policy is None or self.ledger is None: return None
+        row = self.simulate(state, production_envelope, candidate_policy)
+        if row is None: return None
         try: return self.ledger.record(production_envelope, row)
         except Exception: return row
     def record_production_outcome(self, decision_id: str, actual_reward: float): return None if self.ledger is None else self.ledger.record_production_outcome(decision_id, actual_reward)
