@@ -34,7 +34,6 @@ CANON_EXPERIMENT_EVENT_STORE_REPOSITORY = True
 _SOURCE = "core.experiments"
 _EXPERIMENT_REPOSITORY_LOCK = RLock()
 _OVERLAP_REGISTRY_KEY_PREFIX = "experiment.overlap_registry.v1"
-_OVERLAP_RESERVATION_TTL_MS = 60_000
 _BLOCKING_OVERLAP_STATUSES = {
     ExperimentStatus.DRAFT,
     ExperimentStatus.ACTIVE,
@@ -244,14 +243,11 @@ class EventStoreExperimentRepository(_ScopedEventRepository):
                 raise RuntimeError("EXPERIMENT_OVERLAP_REGISTRY_CORRUPT")
             if experiment_id in known_ids or state != "pending":
                 continue
-            if reserved_at_ms > now_ms + _OVERLAP_RESERVATION_TTL_MS:
-                raise RuntimeError("EXPERIMENT_OVERLAP_REGISTRY_CORRUPT")
-            if now_ms - reserved_at_ms <= _OVERLAP_RESERVATION_TTL_MS:
-                claims[str(token)] = {
-                    "experiment_id": experiment_id,
-                    "state": "pending",
-                    "reserved_at_ms": reserved_at_ms,
-                }
+            claims[str(token)] = {
+                "experiment_id": experiment_id,
+                "state": "pending",
+                "reserved_at_ms": reserved_at_ms,
+            }
         return claims
 
     def _compare_and_set_overlap_registry(self, expected, claims) -> bool:
