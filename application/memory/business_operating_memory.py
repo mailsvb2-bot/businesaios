@@ -569,7 +569,6 @@ class FileBusinessOperatingMemoryStore:
         self.root_dir.mkdir(parents=True, exist_ok=True)
         if self.compactor is None:
             from application.memory.business_memory_compactor import BusinessMemoryCompactor
-
             self.compactor = BusinessMemoryCompactor(policy=self.policy)
 
     def _load_unlocked(self, *, tenant_id: str, business_id: str) -> BusinessOperatingMemory:
@@ -839,8 +838,10 @@ class FileBusinessOperatingMemoryStore:
         return self.compactor.compact(updated) if self.compactor is not None else updated
 
     def _target_path(self, *, tenant_id: str, business_id: str) -> Path:
-        if len(_text(tenant_id)) > 128 or len(_text(business_id)) > 128: raise ValueError("persisted scope mismatch: noncanonical business memory scope")
+        if len(_text(tenant_id)) > 128 or len(_text(business_id)) > 128:
+            raise ValueError("persisted scope mismatch: noncanonical business memory scope")
         return self.root_dir / _safe_key(tenant_id, fallback="default") / f"{_safe_key(business_id, fallback='business')}.json"
+
     def _merge_recent_runs(
         self,
         *,
@@ -1055,7 +1056,6 @@ class FileBusinessOperatingMemoryStore:
         elif final_feedback.get("error"):
             parts.append(self.policy.sanitize_text(final_feedback.get("error"), max_length=64))
         return " | ".join(part for part in parts if part)
-
 
 CANON_BUSINESS_MEMORY_V2 = True
 MEMORY_LIFECYCLE = ("create", "validate", "refresh", "supersede", "expire", "archive", "forget")
