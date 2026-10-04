@@ -279,7 +279,7 @@ def _result_dict(result: ExperimentResult) -> dict:
 
 class EventStoreResultRepository(_ScopedEventRepository):
     def _records(self, experiment_id: str) -> list[tuple[int, ExperimentResult]]:
-        records: list[tuple[int, ExperimentResult]] = []
+        records: dict[int, ExperimentResult] = {}
         fingerprints: dict[int, str] = {}
         for payload in self._payloads(EXPERIMENT_RESULT_RECORDED):
             raw = dict(payload.get("result") or {})
@@ -292,8 +292,8 @@ class EventStoreResultRepository(_ScopedEventRepository):
             if previous is not None and previous != fingerprint:
                 raise RuntimeError("EXPERIMENT_RESULT_CONFLICT")
             fingerprints[revision] = fingerprint
-            records.append((revision, result))
-        return sorted(records, key=lambda item: item[0])
+            records[revision] = result
+        return sorted(records.items(), key=lambda item: item[0])
 
     def save(self, result: ExperimentResult) -> ExperimentResult:
         records = self._records(result.experiment_id)
