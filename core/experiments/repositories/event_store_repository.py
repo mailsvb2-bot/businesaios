@@ -1,7 +1,9 @@
 from __future__ import annotations
 
+import hashlib
 import time
-from dataclasses import asdict
+from dataclasses import asdict, replace
+from uuid import uuid4
 
 from contracts.event_store import append_event_strict, iter_events_strict
 from core.events.event_types import (
@@ -46,13 +48,13 @@ class _ScopedEventRepository:
             event_type=event_type,
         )
 
-    def _append(self, *, event_type: str, entity_id: str, body: dict) -> None:
+    def _append(self, *, event_type: str, entity_id: str, body: dict, event_id: str | None = None) -> None:
         now_ms = int(time.time() * 1000)
         append_event_strict(
             self._event_store,
             tenant_id=self._tenant_id,
             event={
-                "event_id": f"{event_type}:{entity_id}:{now_ms}",
+                "event_id": str(event_id or f"{event_type}:{entity_id}:{uuid4().hex}"),
                 "tenant_id": self._tenant_id,
                 "source": _SOURCE,
                 "event_type": event_type,
@@ -142,45 +144,75 @@ def _plan_from_dict(data: dict) -> ExperimentPlan:
 
 
 class EventStoreExperimentRepository(_ScopedEventRepository):
+    def _latest(self) -> dict[str, tuple[int, ExperimentPlan]]:
+        latest: dict[str, tuple[int, ExperimentPlan]] = {}
+        conflicts: set[tuple[str, int]] = set()
+        fingerprints: dict[tuple[str, int], str] = {}
+        for payload in self._payloads(EXPERIMENT_STATE_CHANGED):
+            plan = _plan_from_dict(dict(payload.get("plan") or {}))
+            revision = int(payload.get("revision") or 1)
+            key = (plan.experiment_id, revision)
+            fingerprint = hashlib.sha256(repr(_plan_dict(plan)).encode("utf-8")).hexdigest()
+            previous = fingerprints.get(key)
+            if previous is not None and previous != fingerprint:
+                conflicts.add(key)
+            fingerprints[key] = fingerprint
+            current = latest.get(plan.experiment_id)
+            if current is None or revision > current[0]:
+                latest[plan.experiment_id] = (revision, plan)
+        if conflicts:
+            raise RuntimeError("EXPERIMENT_STATE_CONFLICT")
+        return latest
+
     def save(self, plan: ExperimentPlan) -> ExperimentPlan:
-        if self.get(plan.experiment_id) == plan:
-            return plan
+        current = self._latest().get(plan.experiment_id)
+        if current is not None:
+            revision, existing = current
+            if existing == plan:
+                return plan
+            if replace(plan, status=existing.status) != existing:
+                raise ValueError("experiment plan identity collision")
+            next_revision = revision + 1
+        else:
+            next_revision = 1
         self._append(
             event_type=EXPERIMENT_STATE_CHANGED,
             entity_id=plan.experiment_id,
-            body={"plan": _plan_dict(plan)},
+            body={"revision": next_revision, "plan": _plan_dict(plan)},
         )
         return plan
 
     def get(self, experiment_id: str) -> ExperimentPlan | None:
-        found = None
-        for payload in self._payloads(EXPERIMENT_STATE_CHANGED):
-            plan = _plan_from_dict(dict(payload.get("plan") or {}))
-            if plan.experiment_id == str(experiment_id):
-                found = plan
-        return found
+        current = self._latest().get(str(experiment_id))
+        return None if current is None else current[1]
 
     def list_all(self):
-        latest: dict[str, ExperimentPlan] = {}
-        for payload in self._payloads(EXPERIMENT_STATE_CHANGED):
-            plan = _plan_from_dict(dict(payload.get("plan") or {}))
-            latest[plan.experiment_id] = plan
-        return list(latest.values())
+        return [item[1] for item in self._latest().values()]
 
 
 class EventStoreAssignmentRepository(_ScopedEventRepository):
     def save(self, assignment: ExperimentAssignment) -> ExperimentAssignment:
         existing = self.find_by_subject(assignment.experiment_id, assignment.subject_id)
         if existing is not None:
-            if existing != assignment:
-                raise ValueError("experiment subject assignment is immutable")
             return existing
-        self._append(
-            event_type=EXPERIMENT_ASSIGNMENT_RECORDED,
-            entity_id=assignment.assignment_id,
-            body={"assignment": asdict(assignment)},
-        )
-        return assignment
+        token = hashlib.sha256(
+            f"{self._tenant_id}:{self._business_id}:{assignment.experiment_id}:{assignment.subject_id}".encode("utf-8")
+        ).hexdigest()
+        event_id = f"experiment.assignment:{token}"
+        try:
+            self._append(
+                event_type=EXPERIMENT_ASSIGNMENT_RECORDED,
+                entity_id=assignment.assignment_id,
+                event_id=event_id,
+                body={"assignment": asdict(assignment)},
+            )
+        except Exception:
+            winner = self.find_by_subject(assignment.experiment_id, assignment.subject_id)
+            if winner is not None:
+                return winner
+            raise
+        winner = self.find_by_subject(assignment.experiment_id, assignment.subject_id)
+        return assignment if winner is None else winner
 
     def list_by_experiment(self, experiment_id: str):
         return [
