@@ -38,10 +38,7 @@ def _experiment_id(*, payload: Mapping[str, object], tenant_id: str, business_id
 
 def _variants(payload: Mapping[str, object]):
     if "variants" not in payload:
-        return [
-            ("control", VariantRole.CONTROL, 0.5),
-            ("treatment", VariantRole.TREATMENT, 0.5),
-        ]
+        return [("control", VariantRole.CONTROL, 0.5), ("treatment", VariantRole.TREATMENT, 0.5)]
     raw = payload["variants"]
     if not isinstance(raw, list):
         raise ValueError("create_experiment variants must be a list")
@@ -49,11 +46,9 @@ def _variants(payload: Mapping[str, object]):
     for item in raw:
         if not isinstance(item, Mapping):
             raise ValueError("create_experiment variant must be an object")
-        out.append((
-            _required(item, "name"),
-            VariantRole(_required(item, "role")),
-            float(item.get("traffic_share")),
-        ))
+        out.append(
+            (_required(item, "name"), VariantRole(_required(item, "role")), float(item.get("traffic_share")))
+        )
     return out
 
 
@@ -89,8 +84,8 @@ def handle_create_experiment(payload: dict, effects, env, *, event_store):
     body = dict(payload or {})
     tenant_id = _required(body, "tenant_id")
     business_id = _required(body, "business_id")
-    contract = getattr(decision, "contract_v2", None)
-    contract = dict(contract) if isinstance(contract, Mapping) else {}
+    contract_value = getattr(decision, "contract_v2", None)
+    contract = dict(contract_value) if isinstance(contract_value, Mapping) else {}
     contract_business_id = str(contract.get("business_id") or "").strip()
     if contract_business_id and contract_business_id != business_id:
         raise PermissionError("CREATE_EXPERIMENT_BUSINESS_ID_MISMATCH")
@@ -99,12 +94,12 @@ def handle_create_experiment(payload: dict, effects, env, *, event_store):
         raise RuntimeError("CREATE_EXPERIMENT_DECISION_ID_REQUIRED")
     correlation_id = str(getattr(decision, "correlation_id", "") or "").strip()
     metadata = {str(k): str(v) for k, v in dict(body.get("metadata") or {}).items()}
-    metadata.update({
-        "decision_id": decision_id,
-        "correlation_id": correlation_id,
-        "launch_path": "RuntimeExecutor",
-        "policy_governed": "true",
-    })
+    metadata.update(
+        decision_id=decision_id,
+        correlation_id=correlation_id,
+        launch_path="RuntimeExecutor",
+        policy_governed="true",
+    )
     plan = ExperimentPlanBuilder().build(
         experiment_id=_experiment_id(
             payload=body, tenant_id=tenant_id, business_id=business_id, decision_id=decision_id
@@ -113,11 +108,9 @@ def handle_create_experiment(payload: dict, effects, env, *, event_store):
         hypothesis=_required(body, "hypothesis"),
         subject_key=str(body["subject_key"]).strip() if "subject_key" in body else "customer",
         audience_key=str(body["audience_key"]).strip() if "audience_key" in body else "all",
-        owner=(
-            str(body["owner"]).strip()
-            if "owner" in body
-            else str(getattr(decision, "issuer_id", "") or "system").strip()
-        ),
+        owner=str(body["owner"]).strip()
+        if "owner" in body
+        else str(getattr(decision, "issuer_id", "") or "system").strip(),
         variant_definitions=_variants(body),
         metric_definitions=_metrics(body),
         minimum_sample_size=int(body["minimum_sample_size"]) if "minimum_sample_size" in body else 100,
