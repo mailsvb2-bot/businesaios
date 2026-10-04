@@ -19,6 +19,7 @@ from application.memory.business_memory_taxonomy import BusinessMemoryTaxonomy, 
 from application.memory.business_operating_memory_types import (
     AntiPatternRecord,
     BusinessMemoryRunRecord,
+    DurableMemoryRecord,
     MemoryTrendSnapshot,
     PatternEvidence,
     SignalMemoryRecord,
@@ -34,6 +35,9 @@ from execution.business_memory_store_support import (
 )
 from execution.business_memory_store_support import (
     dedupe_recent_runs as _dedupe_recent_runs_owner,
+)
+from execution.business_memory_store_support import (
+    durable_memory_record_from_row as _durable_memory_record_from_row_owner,
 )
 from execution.business_memory_store_support import (
     migrate_business_memory_payload as _migrate_business_memory_payload_owner,
@@ -260,6 +264,7 @@ class BusinessOperatingMemory:
     active_goals: tuple[str, ...] = ()
     operating_constraints: dict[str, str] = field(default_factory=dict)
     learned_preferences: dict[str, str] = field(default_factory=dict)
+    durable_memory: tuple[DurableMemoryRecord, ...] = ()
     signal_memory: tuple[SignalMemoryRecord, ...] = ()
     recurring_failures: tuple[PatternEvidence, ...] = ()
     recurring_wins: tuple[PatternEvidence, ...] = ()
@@ -282,6 +287,7 @@ class BusinessOperatingMemory:
             "active_goals": list(self.active_goals),
             "operating_constraints": dict(self.operating_constraints),
             "learned_preferences": dict(self.learned_preferences),
+            "durable_memory": [asdict(item) for item in self.durable_memory],
             "signal_memory": [asdict(item) for item in self.signal_memory],
             "recurring_failures": [asdict(item) for item in self.recurring_failures],
             "recurring_wins": [asdict(item) for item in self.recurring_wins],
@@ -447,12 +453,14 @@ class BusinessOperatingMemory:
         migrated = _migrate_business_memory_payload(payload, policy=canonical_policy)
         raw_last_run = migrated.get("last_run")
         raw_recent_runs = migrated.get("recent_runs") or []
+        raw_durable_memory = migrated.get("durable_memory") or []
         raw_signals = migrated.get("signal_memory") or []
         raw_failures = migrated.get("recurring_failures") or []
         raw_wins = migrated.get("recurring_wins") or []
         raw_anti = migrated.get("anti_patterns") or []
         raw_trends = migrated.get("trends")
         recent_runs = _dedupe_recent_runs(tuple(_run_record_from_row(row, policy=canonical_policy) for row in raw_recent_runs if isinstance(row, Mapping)))
+        durable_memory = tuple(_durable_memory_record_from_row_owner(row, policy=canonical_policy) for row in raw_durable_memory if isinstance(row, Mapping))
         signal_memory = tuple(_signal_record_from_row(row, policy=canonical_policy) for row in raw_signals if isinstance(row, Mapping))
         recurring_failures = tuple(_pattern_from_row(row, policy=canonical_policy) for row in raw_failures if isinstance(row, Mapping))
         recurring_wins = tuple(_pattern_from_row(row, policy=canonical_policy) for row in raw_wins if isinstance(row, Mapping))
@@ -467,6 +475,7 @@ class BusinessOperatingMemory:
             active_goals=canonical_policy.sanitize_goal_list(list(migrated.get("active_goals") or [])),
             operating_constraints=canonical_policy.sanitize_mapping(migrated.get("operating_constraints"), limit=canonical_policy.max_constraint_fields),
             learned_preferences=canonical_policy.sanitize_mapping(migrated.get("learned_preferences"), limit=canonical_policy.max_preferences),
+            durable_memory=durable_memory,
             signal_memory=signal_memory,
             recurring_failures=recurring_failures,
             recurring_wins=recurring_wins,
@@ -502,6 +511,7 @@ def _reconcile_memory_invariants(memory: BusinessOperatingMemory, *, policy: Bus
         active_goals=policy.sanitize_goal_list(memory.active_goals),
         operating_constraints=policy.sanitize_mapping(memory.operating_constraints, limit=policy.max_constraint_fields),
         learned_preferences=policy.sanitize_mapping(memory.learned_preferences, limit=policy.max_preferences),
+        durable_memory=tuple(memory.durable_memory),
         signal_memory=tuple(memory.signal_memory[: int(policy.max_signals)]),
         recurring_failures=tuple(memory.recurring_failures[: int(policy.max_failures)]),
         recurring_wins=tuple(memory.recurring_wins[: int(policy.max_wins)]),
@@ -711,6 +721,7 @@ class FileBusinessOperatingMemoryStore:
             active_goals=tuple(self._merge_active_goals(current=current, goal=goal)),
             operating_constraints=self._merge_constraints(current=current, constraints=constraints),
             learned_preferences=self._merge_preferences(current=current, profile=profile, meta=meta),
+            durable_memory=current.durable_memory,
             signal_memory=tuple(self._merge_signals(current=current, signals=signals, run_id=run_id, recorded_at=recorded_at, replay_run_id=replay_run_id)),
             recurring_failures=tuple(
                 self._merge_patterns(
