@@ -176,6 +176,30 @@ def test_runtime_handler_does_not_replace_explicit_null_structures(field, messag
         )
 
 
+@pytest.mark.parametrize("traffic_share", ["nan", "inf", "-inf"])
+def test_runtime_handler_rejects_non_finite_variant_traffic_before_persistence(traffic_share):
+    store = MemoryEventStore()
+    variants = [
+        {"name": "control", "role": "control", "traffic_share": traffic_share},
+        {"name": "treatment", "role": "treatment", "traffic_share": 0.5},
+    ]
+
+    with pytest.raises(ExperimentValidationError, match="traffic_share must be finite"):
+        handle_create_experiment(
+            _payload(variants=variants),
+            None,
+            _env(),
+            event_store=store,
+        )
+
+    assert list(
+        store.iter_events(
+            tenant_id="tenant-1",
+            event_type="experiment.state_changed@v1",
+        )
+    ) == []
+
+
 def test_runtime_execution_verification_accepts_persisted_internal_experiment():
     store = MemoryEventStore()
     env = _env()
