@@ -52,13 +52,10 @@ def transition_memory(
     evidence = tuple(dict.fromkeys((*current.provenance, *provenance)))
     if action in {"validate", "refresh"} and not evidence:
         raise ValueError("validated durable memory requires provenance")
-    rows[index] = replace(
-        current,
-        status=action,
-        provenance=() if action == "forget" else evidence,
-        value="" if action == "forget" else current.value,
-        updated_at=updated_at or current.updated_at,
-    )
+    if action == "forget":
+        rows.pop(index)
+    else:
+        rows[index] = replace(current, status=action, provenance=evidence, updated_at=updated_at or current.updated_at)
     return replace(memory, durable_memory=tuple(rows))
 
 
