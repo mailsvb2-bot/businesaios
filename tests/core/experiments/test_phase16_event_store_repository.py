@@ -8,7 +8,7 @@ import pytest
 
 from core.experiments.builders.experiment_plan_builder import ExperimentPlanBuilder
 from core.experiments.enums import MetricDirection, VariantRole
-from core.experiments.errors import ExperimentOverlapViolation, ExperimentValidationError
+from core.experiments.errors import ExperimentOverlapViolation, ExperimentValidationError, ResultValidationError
 from core.experiments.repositories.event_store_repository import EventStoreExperimentRepository, EventStoreResultRepository
 from runtime.experiments import build_experiments_service
 from runtime.platform.event_store.memory_event_store import MemoryEventStore
@@ -149,6 +149,51 @@ def test_result_and_experiment_decision_survive_service_reconstruction():
     assert restored == summary
     assert persisted_plan is not None
     assert persisted_plan.status.value == "evaluated"
+
+
+@pytest.mark.parametrize(
+    ("field", "value"),
+    [
+        ("control_value", float("nan")),
+        ("control_value", float("inf")),
+        ("treatment_value", float("nan")),
+        ("treatment_value", float("inf")),
+    ],
+)
+def test_non_finite_metric_values_are_rejected_before_result_persistence(field, value):
+    store = MemoryEventStore()
+    service = _service(store)
+    active = service.register_experiment(
+        _plan(experiment_id=f"exp_non_finite_{field}")
+    )
+    kwargs = {
+        "experiment_id": active.experiment_id,
+        "primary_metric_key": "conversion_rate",
+        "control_exposures": 300,
+        "control_conversions": 30,
+        "treatment_exposures": 300,
+        "treatment_conversions": 60,
+        "control_value": 0.0,
+        "treatment_value": 0.0,
+    }
+    kwargs[field] = value
+
+    with pytest.raises(ResultValidationError, match="must be finite"):
+        service.evaluate_from_snapshots(**kwargs)
+
+    assert list(
+        store.iter_events(
+            tenant_id="tenant-1",
+            event_type="experiment.result_recorded@v1",
+        )
+    ) == []
+    persisted = EventStoreExperimentRepository(
+        store,
+        tenant_id="tenant-1",
+        business_id="business-1",
+    ).get(active.experiment_id)
+    assert persisted is not None
+    assert persisted.status.value == "active"
 
 
 def test_result_repository_uses_explicit_revision_order_not_event_id_order():
