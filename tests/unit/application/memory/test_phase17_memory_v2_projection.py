@@ -268,3 +268,91 @@ def test_persisted_external_candidate_stays_quarantined_across_restart_until_val
         provenance=("source-proof",),
     )
     assert project_business_memory_v2(validated)["durable_memory"][0]["memory_id"] == "mem-q"
+
+
+
+def test_execution_write_and_lifecycle_write_do_not_lose_each_other(tmp_path):
+    store = FileBusinessOperatingMemoryStore(root_dir=tmp_path / "memory")
+    candidate = DurableMemoryRecord(
+        memory_id="mem-shared",
+        memory_type="semantic",
+        key="customer_signal",
+        value="validated later",
+    )
+
+    def remember():
+        return store.remember_execution(
+            tenant_id="tenant-shared",
+            business_id="business-shared",
+            run_id="run-shared",
+            goal="grow",
+            completed=True,
+            stop_reason="goal_reached",
+            final_feedback={"goal_score": 0.9, "goal_reached": True},
+            step_count=1,
+            profile={"segment": "services"},
+            constraints={},
+            signals=[],
+            meta={},
+            channel="headless",
+            region="eu",
+            product_name="BusinessAIOS",
+        )
+
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        futures = [
+            pool.submit(remember),
+            pool.submit(
+                persist_memory_candidate,
+                store,
+                tenant_id="tenant-shared",
+                business_id="business-shared",
+                record=candidate,
+            ),
+        ]
+        for future in futures:
+            future.result()
+
+    loaded = store.load(tenant_id="tenant-shared", business_id="business-shared")
+    assert loaded.total_runs == 1
+    assert loaded.recent_runs[0].run_id == "run-shared"
+    assert {item.memory_id for item in loaded.durable_memory} == {"mem-shared"}
+
+
+def test_full_lifecycle_supports_supersede_expire_archive_and_forget(tmp_path):
+    memory = add_memory_candidate(
+        _memory(tmp_path),
+        DurableMemoryRecord(
+            memory_id="mem-life",
+            memory_type="semantic",
+            key="offer",
+            value="v1",
+            provenance=("run-1",),
+        ),
+    )
+    validated = transition_memory(memory, memory_id="mem-life", transition="validate")
+    superseded = transition_memory(validated, memory_id="mem-life", transition="supersede")
+    archived = transition_memory(superseded, memory_id="mem-life", transition="archive")
+    forgotten = transition_memory(archived, memory_id="mem-life", transition="forget")
+    assert forgotten.durable_memory == ()
+
+    expiring = transition_memory(validated, memory_id="mem-life", transition="expire")
+    assert expiring.durable_memory[0].status == "expire"
+    assert transition_memory(expiring, memory_id="mem-life", transition="archive").durable_memory[0].status == "archive"
+
+
+def test_schema_v2_memory_migrates_to_v3_without_inventing_durable_memory(tmp_path):
+    root = tmp_path / "memory"
+    target = root / "tenant-old"
+    target.mkdir(parents=True)
+    (target / "business-old.json").write_text(
+        '{"schema_version":2,"tenant_id":"tenant-old","business_id":"business-old","business_profile":{"segment":"legacy"}}',
+        encoding="utf-8",
+    )
+    loaded = FileBusinessOperatingMemoryStore(root_dir=root).load(
+        tenant_id="tenant-old",
+        business_id="business-old",
+    )
+    assert loaded.schema_version == 3
+    assert loaded.business_profile == {"segment": "legacy"}
+    assert loaded.durable_memory == ()
