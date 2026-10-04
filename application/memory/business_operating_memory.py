@@ -665,7 +665,53 @@ class FileBusinessOperatingMemoryStore:
         recorded_at: str | None = None,
         canonical_run_artifact: dict[str, Any] | None = None,
     ) -> BusinessOperatingMemory:
-        current = self.load(tenant_id=tenant_id, business_id=business_id)
+        return self.mutate(
+            tenant_id=tenant_id,
+            business_id=business_id,
+            transform=lambda current: self._remember_execution_from_current(
+                current,
+                tenant_id=tenant_id,
+                business_id=business_id,
+                run_id=run_id,
+                goal=goal,
+                completed=completed,
+                stop_reason=stop_reason,
+                final_feedback=final_feedback,
+                step_count=step_count,
+                profile=profile,
+                constraints=constraints,
+                signals=signals,
+                meta=meta,
+                channel=channel,
+                region=region,
+                product_name=product_name,
+                recorded_at=recorded_at,
+                canonical_run_artifact=canonical_run_artifact,
+            ),
+        )
+
+    def _remember_execution_from_current(
+        self,
+        current: BusinessOperatingMemory,
+        *,
+        tenant_id: str,
+        business_id: str,
+        run_id: str,
+        goal: str,
+        completed: bool,
+        stop_reason: str,
+        final_feedback: dict[str, Any],
+        step_count: int,
+        profile: dict[str, Any],
+        constraints: dict[str, Any],
+        signals: list[dict[str, Any]],
+        meta: dict[str, Any],
+        channel: str,
+        region: str,
+        product_name: str,
+        recorded_at: str | None = None,
+        canonical_run_artifact: dict[str, Any] | None = None,
+    ) -> BusinessOperatingMemory:
         canonical_memory = canonical_memory_record(
             tenant_id=tenant_id,
             business_id=business_id,
@@ -777,9 +823,7 @@ class FileBusinessOperatingMemoryStore:
             ),
         )
 
-        updated = self.compactor.compact(updated) if self.compactor is not None else updated
-        self.save(updated)
-        return self.load(tenant_id=tenant_id, business_id=business_id)
+        return self.compactor.compact(updated) if self.compactor is not None else updated
 
     def _target_path(self, *, tenant_id: str, business_id: str) -> Path:
         return self.root_dir / _safe_key(tenant_id, fallback="default") / f"{_safe_key(business_id, fallback='business')}.json"
