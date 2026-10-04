@@ -48,7 +48,16 @@ class _ScopedEventRepository:
             event_type=event_type,
         )
 
-    def _append(self, *, event_type: str, entity_id: str, body: dict, event_id: str | None = None) -> None:
+    def _append(
+        self,
+        *,
+        event_type: str,
+        entity_id: str,
+        body: dict,
+        event_id: str | None = None,
+        decision_id: str | None = None,
+        correlation_id: str | None = None,
+    ) -> None:
         now_ms = int(time.time() * 1000)
         append_event_strict(
             self._event_store,
@@ -59,6 +68,8 @@ class _ScopedEventRepository:
                 "source": _SOURCE,
                 "event_type": event_type,
                 "timestamp_ms": now_ms,
+                "decision_id": decision_id,
+                "correlation_id": correlation_id,
                 "payload": {
                     "schema_version": 1,
                     "business_id": self._business_id,
@@ -179,6 +190,8 @@ class EventStoreExperimentRepository(_ScopedEventRepository):
             event_type=EXPERIMENT_STATE_CHANGED,
             entity_id=plan.experiment_id,
             body={"revision": next_revision, "plan": _plan_dict(plan)},
+            decision_id=str(plan.metadata.get("decision_id") or "") or None,
+            correlation_id=str(plan.metadata.get("correlation_id") or "") or None,
         )
         return plan
 
@@ -205,6 +218,7 @@ class EventStoreAssignmentRepository(_ScopedEventRepository):
                 entity_id=assignment.assignment_id,
                 event_id=event_id,
                 body={"assignment": asdict(assignment)},
+                correlation_id=assignment.correlation_id,
             )
         except Exception:
             winner = self.find_by_subject(assignment.experiment_id, assignment.subject_id)
