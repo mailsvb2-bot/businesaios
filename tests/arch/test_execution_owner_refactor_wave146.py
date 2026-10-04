@@ -2,11 +2,12 @@ from pathlib import Path
 
 
 def test_business_memory_projection_owner_exists() -> None:
-    text = Path('execution/business_memory_projection.py').read_text(encoding='utf-8')
-    assert 'CANON_BUSINESS_MEMORY_PROJECTION_OWNER = True' in text
-    owner_text = Path('execution/business_operating_memory.py').read_text(encoding='utf-8')
-    assert '_project_business_memory_contract_bundle_owner' in owner_text
-    assert '_project_business_memory_meta_payloads_owner' in owner_text
+    shim = Path('execution/business_memory_projection.py').read_text(encoding='utf-8')
+    assert 'CANON_BUSINESS_MEMORY_PROJECTION_COMPAT_SHIM = True' in shim
+    assert 'CANON_BUSINESS_MEMORY_PROJECTION_FINAL_OWNER = "application.memory.business_operating_memory"' in shim
+    owner = Path('application/memory/business_operating_memory.py').read_text(encoding='utf-8')
+    assert 'def project_business_memory_contract_bundle(' in owner
+    assert 'def project_business_memory_meta_payloads(' in owner
 
 
 def test_approval_gate_fingerprint_owner_exists() -> None:
