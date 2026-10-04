@@ -7,12 +7,13 @@ from execution.business_memory_policy import BusinessMemoryPolicy
 from execution.business_operating_memory_types import (
     AntiPatternRecord,
     BusinessMemoryRunRecord,
+    DurableMemoryRecord,
     MemoryTrendSnapshot,
     PatternEvidence,
     SignalMemoryRecord,
 )
 
-BUSINESS_MEMORY_SCHEMA_VERSION = 2
+BUSINESS_MEMORY_SCHEMA_VERSION = 3
 CANON_BUSINESS_MEMORY_STORE_SUPPORT = True
 
 
@@ -155,6 +156,25 @@ def run_record_from_row(row: Mapping[str, Any], *, policy: BusinessMemoryPolicy)
     )
 
 
+def durable_memory_record_from_row(row: Mapping[str, Any], *, policy: BusinessMemoryPolicy) -> DurableMemoryRecord:
+    return DurableMemoryRecord(
+        memory_id=policy.sanitize_text(row.get("memory_id"), max_length=128),
+        memory_type=policy.sanitize_text(row.get("memory_type") or "semantic", max_length=32) or "semantic",
+        key=policy.sanitize_text(row.get("key"), max_length=160),
+        value=policy.sanitize_text(row.get("value"), max_length=policy.max_summary_length),
+        status=policy.sanitize_text(row.get("status") or "create", max_length=16) or "create",
+        provenance=policy.sanitize_run_ids(row.get("provenance") or []),
+        confidence=policy.normalize_confidence(row.get("confidence")),
+        sample_size=policy.clamp_non_negative_int(row.get("sample_size")),
+        external=bool(row.get("external")),
+        portable=bool(row.get("portable")),
+        anonymized=bool(row.get("anonymized")),
+        created_at=optional_text(policy, row.get("created_at"), max_length=64),
+        updated_at=optional_text(policy, row.get("updated_at"), max_length=64),
+        supersedes=optional_text(policy, row.get("supersedes"), max_length=128),
+    )
+
+
 def trend_from_row(row: Mapping[str, Any], *, policy: BusinessMemoryPolicy) -> MemoryTrendSnapshot:
     return MemoryTrendSnapshot(
         window_size=policy.clamp_non_negative_int(row.get("window_size") or row.get("rolling_window"), default=0),
@@ -226,6 +246,7 @@ def migrate_business_memory_payload(payload: dict[str, Any], *, policy: Business
     migrated["recurring_wins"] = safe_rows(migrated.get("recurring_wins"))
     migrated["anti_patterns"] = safe_rows(migrated.get("anti_patterns"))
     migrated["recent_runs"] = safe_rows(migrated.get("recent_runs"))
+    migrated["durable_memory"] = safe_rows(migrated.get("durable_memory"))
     migrated["last_feedback"] = policy.sanitize_feedback_payload(safe_mapping(migrated.get("last_feedback")))
     migrated["trends"] = safe_mapping(migrated.get("trends")) if isinstance(migrated.get("trends"), Mapping) else None
     migrated["last_run"] = safe_mapping(migrated.get("last_run")) if isinstance(migrated.get("last_run"), Mapping) else None
