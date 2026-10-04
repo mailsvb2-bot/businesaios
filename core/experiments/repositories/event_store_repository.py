@@ -215,7 +215,6 @@ class EventStoreExperimentRepository(_ScopedEventRepository):
         raw_registry,
         *,
         existing_plans: list[ExperimentPlan],
-        now_ms: int,
     ) -> dict[str, dict[str, object]]:
         claims: dict[str, dict[str, object]] = {}
         known_ids = {plan.experiment_id for plan in existing_plans}
@@ -264,11 +263,9 @@ class EventStoreExperimentRepository(_ScopedEventRepository):
     def _reconcile_overlap_registry(self) -> None:
         for _ in range(16):
             raw = self._read_overlap_registry()
-            now_ms = int(time.time() * 1000)
             claims = self._reconciled_overlap_claims(
                 raw,
                 existing_plans=self.list_all(),
-                now_ms=now_ms,
             )
             value = {"schema_version": 1, "claims": claims}
             if raw == value or self._compare_and_set_overlap_registry(raw, claims):
@@ -298,7 +295,6 @@ class EventStoreExperimentRepository(_ScopedEventRepository):
                 claims = self._reconciled_overlap_claims(
                     raw,
                     existing_plans=existing_plans,
-                    now_ms=now_ms,
                 )
                 for token in candidate_tokens:
                     claim = claims.get(token)
