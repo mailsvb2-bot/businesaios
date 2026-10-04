@@ -1,7 +1,8 @@
 from __future__ import annotations
 
-import pytest
 from dataclasses import replace
+
+import pytest
 
 from core.experiments.builders.experiment_plan_builder import ExperimentPlanBuilder
 from core.experiments.enums import MetricDirection, VariantRole
