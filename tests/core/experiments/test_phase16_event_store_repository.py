@@ -271,6 +271,58 @@ def test_concurrent_overlapping_registrations_admit_exactly_one_experiment():
     }
 
 
+def test_sqlite_duplicate_append_race_recovers_identical_persisted_winner(tmp_path, monkeypatch):
+    path = tmp_path / "phase16-idempotent-race.sqlite3"
+    with SqliteEventStore(str(path)) as store:
+        winner_repo = EventStoreExperimentRepository(
+            store,
+            tenant_id="tenant-1",
+            business_id="business-1",
+        )
+        racing_repo = EventStoreExperimentRepository(
+            store,
+            tenant_id="tenant-1",
+            business_id="business-1",
+        )
+        plan = _plan(experiment_id="exp_sqlite_idempotent_race")
+
+        def _append_after_competing_winner(**_kwargs):
+            winner_repo.save(plan)
+            raise RuntimeError("simulated duplicate append")
+
+        monkeypatch.setattr(racing_repo, "_append", _append_after_competing_winner)
+
+        assert racing_repo.save(plan) == plan
+        events = list(
+            store.iter_events(
+                tenant_id="tenant-1",
+                event_type="experiment.state_changed@v1",
+            )
+        )
+        assert len(events) == 1
+
+
+def test_revision_identity_is_unambiguous_across_colon_bearing_scopes(tmp_path):
+    path = tmp_path / "phase16-revision-identity.sqlite3"
+    plan = _plan(experiment_id="exp_structured_revision_identity")
+    with SqliteEventStore(str(path)) as store:
+        first = EventStoreExperimentRepository(
+            store,
+            tenant_id="a:b",
+            business_id="c",
+        )
+        second = EventStoreExperimentRepository(
+            store,
+            tenant_id="a",
+            business_id="b:c",
+        )
+
+        assert first.save(plan) == plan
+        assert second.save(plan) == plan
+        assert first.get(plan.experiment_id) == plan
+        assert second.get(plan.experiment_id) == plan
+
+
 def test_authorized_experiment_identity_cannot_be_rewritten():
     store = MemoryEventStore()
     repo = EventStoreExperimentRepository(
