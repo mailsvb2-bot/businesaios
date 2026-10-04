@@ -6,6 +6,7 @@ from dataclasses import asdict, replace
 from uuid import uuid4
 
 from contracts.event_store import append_event_strict, iter_events_strict
+from core.utils.canonical import payload_hash
 from core.events.event_types import (
     EXPERIMENT_ASSIGNMENT_RECORDED,
     EXPERIMENT_RESULT_RECORDED,
@@ -163,7 +164,7 @@ class EventStoreExperimentRepository(_ScopedEventRepository):
             plan = _plan_from_dict(dict(payload.get("plan") or {}))
             revision = int(payload.get("revision") or 1)
             key = (plan.experiment_id, revision)
-            fingerprint = hashlib.sha256(repr(_plan_dict(plan)).encode("utf-8")).hexdigest()
+            fingerprint = payload_hash(_plan_dict(plan))
             previous = fingerprints.get(key)
             if previous is not None and previous != fingerprint:
                 conflicts.add(key)
@@ -277,25 +278,40 @@ def _result_dict(result: ExperimentResult) -> dict:
 
 
 class EventStoreResultRepository(_ScopedEventRepository):
+    def _records(self, experiment_id: str) -> list[tuple[int, ExperimentResult]]:
+        records: list[tuple[int, ExperimentResult]] = []
+        fingerprints: dict[int, str] = {}
+        for payload in self._payloads(EXPERIMENT_RESULT_RECORDED):
+            raw = dict(payload.get("result") or {})
+            if str(raw.get("experiment_id") or "") != str(experiment_id):
+                continue
+            result = _result_from_dict(raw)
+            revision = int(payload.get("revision") or 1)
+            fingerprint = payload_hash(_result_dict(result))
+            previous = fingerprints.get(revision)
+            if previous is not None and previous != fingerprint:
+                raise RuntimeError("EXPERIMENT_RESULT_CONFLICT")
+            fingerprints[revision] = fingerprint
+            records.append((revision, result))
+        return sorted(records, key=lambda item: item[0])
+
     def save(self, result: ExperimentResult) -> ExperimentResult:
-        for existing in self.list_by_experiment(result.experiment_id):
+        records = self._records(result.experiment_id)
+        for _, existing in records:
             if existing.result_id == result.result_id:
                 if existing != result:
                     raise ValueError("experiment result identity collision")
                 return existing
+        next_revision = records[-1][0] + 1 if records else 1
         self._append(
             event_type=EXPERIMENT_RESULT_RECORDED,
             entity_id=result.result_id,
-            body={"result": _result_dict(result)},
+            body={"revision": next_revision, "result": _result_dict(result)},
         )
         return result
 
     def list_by_experiment(self, experiment_id: str):
-        return [
-            _result_from_dict(dict(payload["result"]))
-            for payload in self._payloads(EXPERIMENT_RESULT_RECORDED)
-            if str(dict(payload.get("result") or {}).get("experiment_id") or "") == str(experiment_id)
-        ]
+        return [result for _, result in self._records(experiment_id)]
 
     def get_latest(self, experiment_id: str) -> ExperimentResult | None:
         items = self.list_by_experiment(experiment_id)
