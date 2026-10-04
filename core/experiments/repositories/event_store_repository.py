@@ -3,6 +3,7 @@ from __future__ import annotations
 import hashlib
 import time
 from dataclasses import asdict, replace
+from threading import RLock
 from uuid import uuid4
 
 from contracts.event_store import append_event_strict, iter_events_strict
@@ -30,6 +31,21 @@ from core.utils.canonical import payload_hash
 
 CANON_EXPERIMENT_EVENT_STORE_REPOSITORY = True
 _SOURCE = "core.experiments"
+_EXPERIMENT_REPOSITORY_LOCK = RLock()
+
+
+def _revision_event_id(
+    *,
+    kind: str,
+    tenant_id: str,
+    business_id: str,
+    entity_id: str,
+    revision: int,
+) -> str:
+    token = hashlib.sha256(
+        f"{kind}:{tenant_id}:{business_id}:{entity_id}:{int(revision)}".encode("utf-8")
+    ).hexdigest()
+    return f"experiment.{kind}:{token}"
 
 
 class _ScopedEventRepository:
@@ -176,25 +192,58 @@ class EventStoreExperimentRepository(_ScopedEventRepository):
             raise RuntimeError("EXPERIMENT_STATE_CONFLICT")
         return latest
 
+    def _revision(self, experiment_id: str, revision: int) -> ExperimentPlan | None:
+        found = None
+        fingerprint = None
+        for payload in self._payloads(EXPERIMENT_STATE_CHANGED):
+            plan = _plan_from_dict(dict(payload.get("plan") or {}))
+            if plan.experiment_id != str(experiment_id):
+                continue
+            if int(payload.get("revision") or 1) != int(revision):
+                continue
+            current_fingerprint = payload_hash(_plan_dict(plan))
+            if fingerprint is not None and current_fingerprint != fingerprint:
+                raise RuntimeError("EXPERIMENT_STATE_CONFLICT")
+            fingerprint = current_fingerprint
+            found = plan
+        return found
+
     def save(self, plan: ExperimentPlan) -> ExperimentPlan:
-        current = self._latest().get(plan.experiment_id)
-        if current is not None:
-            revision, existing = current
-            if existing == plan:
-                return plan
-            if replace(plan, status=existing.status) != existing:
+        with _EXPERIMENT_REPOSITORY_LOCK:
+            current = self._latest().get(plan.experiment_id)
+            if current is not None:
+                revision, existing = current
+                if existing == plan:
+                    return plan
+                if replace(plan, status=existing.status) != existing:
+                    raise ValueError("experiment plan identity collision")
+                next_revision = revision + 1
+            else:
+                next_revision = 1
+            event_id = _revision_event_id(
+                kind="state",
+                tenant_id=self._tenant_id,
+                business_id=self._business_id,
+                entity_id=plan.experiment_id,
+                revision=next_revision,
+            )
+            try:
+                self._append(
+                    event_type=EXPERIMENT_STATE_CHANGED,
+                    entity_id=plan.experiment_id,
+                    event_id=event_id,
+                    body={"revision": next_revision, "plan": _plan_dict(plan)},
+                    decision_id=str(plan.metadata.get("decision_id") or "") or None,
+                    correlation_id=str(plan.metadata.get("correlation_id") or "") or None,
+                )
+            except Exception as exc:
+                raise ValueError("experiment plan identity collision") from exc
+            persisted = self._revision(plan.experiment_id, next_revision)
+            if persisted is None:
+                raise RuntimeError("EXPERIMENT_STATE_APPEND_NOT_OBSERVED")
+            if persisted != plan:
                 raise ValueError("experiment plan identity collision")
-            next_revision = revision + 1
-        else:
-            next_revision = 1
-        self._append(
-            event_type=EXPERIMENT_STATE_CHANGED,
-            entity_id=plan.experiment_id,
-            body={"revision": next_revision, "plan": _plan_dict(plan)},
-            decision_id=str(plan.metadata.get("decision_id") or "") or None,
-            correlation_id=str(plan.metadata.get("correlation_id") or "") or None,
-        )
-        return plan
+            return persisted
 
     def get(self, experiment_id: str) -> ExperimentPlan | None:
         current = self._latest().get(str(experiment_id))
@@ -296,19 +345,36 @@ class EventStoreResultRepository(_ScopedEventRepository):
         return sorted(records.items(), key=lambda item: item[0])
 
     def save(self, result: ExperimentResult) -> ExperimentResult:
-        records = self._records(result.experiment_id)
-        for _, existing in records:
-            if existing.result_id == result.result_id:
-                if existing != result:
-                    raise ValueError("experiment result identity collision")
-                return existing
-        next_revision = records[-1][0] + 1 if records else 1
-        self._append(
-            event_type=EXPERIMENT_RESULT_RECORDED,
-            entity_id=result.result_id,
-            body={"revision": next_revision, "result": _result_dict(result)},
-        )
-        return result
+        with _EXPERIMENT_REPOSITORY_LOCK:
+            records = self._records(result.experiment_id)
+            for _, existing in records:
+                if existing.result_id == result.result_id:
+                    if existing != result:
+                        raise ValueError("experiment result identity collision")
+                    return existing
+            next_revision = records[-1][0] + 1 if records else 1
+            event_id = _revision_event_id(
+                kind="result",
+                tenant_id=self._tenant_id,
+                business_id=self._business_id,
+                entity_id=result.experiment_id,
+                revision=next_revision,
+            )
+            try:
+                self._append(
+                    event_type=EXPERIMENT_RESULT_RECORDED,
+                    entity_id=result.result_id,
+                    event_id=event_id,
+                    body={"revision": next_revision, "result": _result_dict(result)},
+                )
+            except Exception as exc:
+                raise ValueError("experiment result revision collision") from exc
+            persisted = dict(self._records(result.experiment_id)).get(next_revision)
+            if persisted is None:
+                raise RuntimeError("EXPERIMENT_RESULT_APPEND_NOT_OBSERVED")
+            if persisted != result:
+                raise ValueError("experiment result revision collision")
+            return persisted
 
     def list_by_experiment(self, experiment_id: str):
         return [result for _, result in self._records(experiment_id)]
