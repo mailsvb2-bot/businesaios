@@ -42,9 +42,13 @@ _BLOCKING_OVERLAP_STATUSES = {
 
 
 def _overlap_token(plan: ExperimentPlan, overlap_key: str) -> str:
-    return hashlib.sha256(
-        f"{plan.subject_key}\x1f{plan.audience_key}\x1f{overlap_key}".encode("utf-8")
-    ).hexdigest()
+    return payload_hash(
+        {
+            "subject_key": plan.subject_key,
+            "audience_key": plan.audience_key,
+            "overlap_key": str(overlap_key),
+        }
+    )
 
 
 def _overlap_tokens(plan: ExperimentPlan) -> tuple[str, ...]:
@@ -59,9 +63,15 @@ def _revision_event_id(
     entity_id: str,
     revision: int,
 ) -> str:
-    token = hashlib.sha256(
-        f"{kind}:{tenant_id}:{business_id}:{entity_id}:{int(revision)}".encode("utf-8")
-    ).hexdigest()
+    token = payload_hash(
+        {
+            "kind": str(kind),
+            "tenant_id": str(tenant_id),
+            "business_id": str(business_id),
+            "entity_id": str(entity_id),
+            "revision": int(revision),
+        }
+    )
     return f"experiment.{kind}:{token}"
 
 
@@ -386,7 +396,12 @@ class EventStoreExperimentRepository(_ScopedEventRepository):
                     correlation_id=str(plan.metadata.get("correlation_id") or "") or None,
                 )
             except Exception as exc:
-                raise ValueError("experiment plan identity collision") from exc
+                persisted = self._revision(plan.experiment_id, next_revision)
+                if persisted is not None:
+                    if persisted == plan:
+                        return persisted
+                    raise ValueError("experiment plan identity collision") from exc
+                raise
             persisted = self._revision(plan.experiment_id, next_revision)
             if persisted is None:
                 raise RuntimeError("EXPERIMENT_STATE_APPEND_NOT_OBSERVED")
@@ -407,9 +422,14 @@ class EventStoreAssignmentRepository(_ScopedEventRepository):
         existing = self.find_by_subject(assignment.experiment_id, assignment.subject_id)
         if existing is not None:
             return existing
-        token = hashlib.sha256(
-            f"{self._tenant_id}:{self._business_id}:{assignment.experiment_id}:{assignment.subject_id}".encode("utf-8")
-        ).hexdigest()
+        token = payload_hash(
+            {
+                "tenant_id": self._tenant_id,
+                "business_id": self._business_id,
+                "experiment_id": assignment.experiment_id,
+                "subject_id": assignment.subject_id,
+            }
+        )
         event_id = f"experiment.assignment:{token}"
         try:
             self._append(
@@ -517,7 +537,12 @@ class EventStoreResultRepository(_ScopedEventRepository):
                     body={"revision": next_revision, "result": _result_dict(result)},
                 )
             except Exception as exc:
-                raise ValueError("experiment result revision collision") from exc
+                persisted = dict(self._records(result.experiment_id)).get(next_revision)
+                if persisted is not None:
+                    if persisted == result:
+                        return persisted
+                    raise ValueError("experiment result revision collision") from exc
+                raise
             persisted = dict(self._records(result.experiment_id)).get(next_revision)
             if persisted is None:
                 raise RuntimeError("EXPERIMENT_RESULT_APPEND_NOT_OBSERVED")
