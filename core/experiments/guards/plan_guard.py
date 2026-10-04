@@ -19,6 +19,8 @@ class ExperimentPlanGuard:
             raise ExperimentValidationError("owner must be non-empty")
         if plan.minimum_sample_size <= 0:
             raise ExperimentValidationError("minimum_sample_size must be > 0")
+        if plan.duration_days <= 0:
+            raise ExperimentValidationError("duration_days must be > 0")
         if len(plan.variants) != 2:
             raise ExperimentValidationError("exactly two variants are required")
         if not plan.metrics:

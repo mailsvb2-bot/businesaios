@@ -1,0 +1,400 @@
+from __future__ import annotations
+
+from concurrent.futures import ThreadPoolExecutor
+from dataclasses import replace
+from threading import Barrier
+
+import pytest
+
+from core.experiments.builders.experiment_plan_builder import ExperimentPlanBuilder
+from core.experiments.enums import MetricDirection, VariantRole
+from core.experiments.errors import ExperimentOverlapViolation, ExperimentValidationError, ResultValidationError
+from core.experiments.repositories.event_store_repository import EventStoreExperimentRepository, EventStoreResultRepository
+from runtime.experiments import build_experiments_service
+from runtime.platform.event_store.memory_event_store import MemoryEventStore
+from runtime.platform.event_store.sqlite_event_store import SqliteEventStore
+
+
+def _plan(*, experiment_id: str = "exp_phase16", duration_days: int = 21):
+    return ExperimentPlanBuilder().build(
+        experiment_id=experiment_id,
+        name="Phase 16 price test",
+        hypothesis="A bounded offer change improves conversion",
+        subject_key="customer",
+        audience_key="eligible",
+        owner="growth",
+        variant_definitions=[
+            ("control", VariantRole.CONTROL, 0.5),
+            ("treatment", VariantRole.TREATMENT, 0.5),
+        ],
+        metric_definitions=[
+            ("conversion_rate", MetricDirection.INCREASE, 0.01, False),
+            ("complaint_rate", MetricDirection.DECREASE, 0.0, True),
+        ],
+        minimum_sample_size=100,
+        duration_days=duration_days,
+        overlap_keys=["offer:main"],
+    )
+
+
+def _service(store, *, tenant_id="tenant-1", business_id="business-1"):
+    return build_experiments_service(
+        event_store=store,
+        tenant_id=tenant_id,
+        business_id=business_id,
+    )
+
+
+def test_phase16_plan_covers_required_duration_and_rejects_invalid_duration():
+    plan = _plan(duration_days=30)
+    assert plan.duration_days == 30
+    with pytest.raises(ExperimentValidationError, match="duration_days"):
+        _plan(experiment_id="exp_bad_duration", duration_days=0)
+
+
+def test_event_store_experiment_survives_service_reconstruction():
+    store = MemoryEventStore()
+    active = _service(store).register_experiment(_plan())
+
+    restored = EventStoreExperimentRepository(
+        store,
+        tenant_id="tenant-1",
+        business_id="business-1",
+    ).get(active.experiment_id)
+
+    assert restored == active
+    assert restored is not None
+    assert restored.status.value == "active"
+    assert restored.duration_days == 21
+
+
+def test_experiment_survives_real_sqlite_close_and_reopen(tmp_path):
+    path = tmp_path / "phase16-events.sqlite3"
+    with SqliteEventStore(str(path)) as store:
+        active = _service(store).register_experiment(
+            _plan(experiment_id="exp_phase16_restart")
+        )
+
+    with SqliteEventStore(str(path)) as reopened:
+        restored = EventStoreExperimentRepository(
+            reopened,
+            tenant_id="tenant-1",
+            business_id="business-1",
+        ).get(active.experiment_id)
+
+    assert restored == active
+    assert restored is not None
+    assert restored.duration_days == 21
+
+
+def test_event_store_experiment_is_tenant_and_business_isolated():
+    store = MemoryEventStore()
+    active = _service(store).register_experiment(_plan())
+
+    assert EventStoreExperimentRepository(
+        store,
+        tenant_id="tenant-2",
+        business_id="business-1",
+    ).get(active.experiment_id) is None
+    assert EventStoreExperimentRepository(
+        store,
+        tenant_id="tenant-1",
+        business_id="business-2",
+    ).get(active.experiment_id) is None
+
+
+def test_assignment_is_idempotent_across_service_reconstruction():
+    store = MemoryEventStore()
+    service = _service(store)
+    active = service.register_experiment(_plan())
+    first = service.assign_subject(
+        experiment_id=active.experiment_id,
+        subject_id="customer-1",
+        correlation_id="corr-1",
+        assigned_at="2026-10-04T10:00:00Z",
+    )
+
+    restarted = _service(store)
+    second = restarted.assign_subject(
+        experiment_id=active.experiment_id,
+        subject_id="customer-1",
+        correlation_id="corr-retry",
+        assigned_at="2026-10-04T10:05:00Z",
+    )
+
+    assert second == first
+
+
+def test_result_and_experiment_decision_survive_service_reconstruction():
+    store = MemoryEventStore()
+    service = _service(store)
+    active = service.register_experiment(_plan())
+    summary = service.evaluate_from_snapshots(
+        experiment_id=active.experiment_id,
+        primary_metric_key="conversion_rate",
+        control_exposures=300,
+        control_conversions=30,
+        treatment_exposures=300,
+        treatment_conversions=60,
+    )
+
+    restarted = _service(store)
+    restored = restarted.evaluate(active.experiment_id, "conversion_rate")
+    persisted_plan = EventStoreExperimentRepository(
+        store,
+        tenant_id="tenant-1",
+        business_id="business-1",
+    ).get(active.experiment_id)
+
+    assert restored == summary
+    assert persisted_plan is not None
+    assert persisted_plan.status.value == "evaluated"
+
+
+@pytest.mark.parametrize(
+    ("field", "value"),
+    [
+        ("control_value", float("nan")),
+        ("control_value", float("inf")),
+        ("treatment_value", float("nan")),
+        ("treatment_value", float("inf")),
+    ],
+)
+def test_non_finite_metric_values_are_rejected_before_result_persistence(field, value):
+    store = MemoryEventStore()
+    service = _service(store)
+    active = service.register_experiment(
+        _plan(experiment_id=f"exp_non_finite_{field}")
+    )
+    kwargs = {
+        "experiment_id": active.experiment_id,
+        "primary_metric_key": "conversion_rate",
+        "control_exposures": 300,
+        "control_conversions": 30,
+        "treatment_exposures": 300,
+        "treatment_conversions": 60,
+        "control_value": 0.0,
+        "treatment_value": 0.0,
+    }
+    kwargs[field] = value
+
+    with pytest.raises(ResultValidationError, match="must be finite"):
+        service.evaluate_from_snapshots(**kwargs)
+
+    assert list(
+        store.iter_events(
+            tenant_id="tenant-1",
+            event_type="experiment.result_recorded@v1",
+        )
+    ) == []
+    persisted = EventStoreExperimentRepository(
+        store,
+        tenant_id="tenant-1",
+        business_id="business-1",
+    ).get(active.experiment_id)
+    assert persisted is not None
+    assert persisted.status.value == "active"
+
+
+def test_result_repository_uses_explicit_revision_order_not_event_id_order():
+    store = MemoryEventStore()
+    service = _service(store)
+    active = service.register_experiment(_plan(experiment_id="exp_result_revision"))
+    service.evaluate_from_snapshots(
+        experiment_id=active.experiment_id,
+        primary_metric_key="conversion_rate",
+        control_exposures=300,
+        control_conversions=30,
+        treatment_exposures=300,
+        treatment_conversions=60,
+    )
+    repository = EventStoreResultRepository(
+        store,
+        tenant_id="tenant-1",
+        business_id="business-1",
+    )
+    first = repository.get_latest(active.experiment_id)
+    assert first is not None
+    second = replace(first, result_id="res_phase16_second", uplift=first.uplift + 0.01)
+    repository.save(second)
+
+    restarted = EventStoreResultRepository(
+        store,
+        tenant_id="tenant-1",
+        business_id="business-1",
+    )
+    assert restarted.get_latest(active.experiment_id) == second
+    revisions = [
+        int((event.get("payload") or {}).get("revision") or 0)
+        for event in store.iter_events(
+            tenant_id="tenant-1",
+            event_type="experiment.result_recorded@v1",
+        )
+    ]
+    assert revisions == [1, 2]
+
+
+
+def test_concurrent_conflicting_experiment_writers_do_not_corrupt_stream():
+    store = MemoryEventStore()
+    first_repo = EventStoreExperimentRepository(
+        store,
+        tenant_id="tenant-1",
+        business_id="business-1",
+    )
+    second_repo = EventStoreExperimentRepository(
+        store,
+        tenant_id="tenant-1",
+        business_id="business-1",
+    )
+    first = _plan(experiment_id="exp_concurrent_state")
+    second = replace(first, hypothesis="A conflicting concurrent hypothesis")
+    barrier = Barrier(2)
+
+    def _write(repository, plan):
+        barrier.wait()
+        try:
+            return ("ok", repository.save(plan))
+        except ValueError as exc:
+            return ("error", str(exc))
+
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        futures = [
+            pool.submit(_write, first_repo, first),
+            pool.submit(_write, second_repo, second),
+        ]
+        outcomes = [future.result() for future in futures]
+
+    assert sorted(status for status, _ in outcomes) == ["error", "ok"]
+    persisted = first_repo.get(first.experiment_id)
+    assert persisted in (first, second)
+    events = list(
+        store.iter_events(
+            tenant_id="tenant-1",
+            event_type="experiment.state_changed@v1",
+        )
+    )
+    assert len(events) == 1
+    assert int(events[0]["payload"]["revision"]) == 1
+
+
+def test_concurrent_overlapping_registrations_admit_exactly_one_experiment():
+    store = MemoryEventStore()
+    first_service = _service(store)
+    second_service = _service(store)
+    first = _plan(experiment_id="exp_overlap_first")
+    second = replace(
+        _plan(experiment_id="exp_overlap_second"),
+        hypothesis="A concurrent overlapping hypothesis",
+    )
+    barrier = Barrier(2)
+
+    def _register(service, plan):
+        barrier.wait()
+        try:
+            return ("ok", service.register_experiment(plan))
+        except ExperimentOverlapViolation as exc:
+            return ("overlap", str(exc))
+
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        futures = [
+            pool.submit(_register, first_service, first),
+            pool.submit(_register, second_service, second),
+        ]
+        outcomes = [future.result() for future in futures]
+
+    assert sorted(status for status, _ in outcomes) == ["ok", "overlap"]
+    persisted = EventStoreExperimentRepository(
+        store,
+        tenant_id="tenant-1",
+        business_id="business-1",
+    ).list_all()
+    assert len(persisted) == 1
+    assert persisted[0].experiment_id in {
+        first.experiment_id,
+        second.experiment_id,
+    }
+
+
+def test_sqlite_duplicate_append_race_recovers_identical_persisted_winner(tmp_path, monkeypatch):
+    path = tmp_path / "phase16-idempotent-race.sqlite3"
+    with SqliteEventStore(str(path)) as store:
+        winner_repo = EventStoreExperimentRepository(
+            store,
+            tenant_id="tenant-1",
+            business_id="business-1",
+        )
+        racing_repo = EventStoreExperimentRepository(
+            store,
+            tenant_id="tenant-1",
+            business_id="business-1",
+        )
+        plan = _plan(experiment_id="exp_sqlite_idempotent_race")
+
+        def _append_after_competing_winner(**_kwargs):
+            winner_repo.save(plan)
+            raise RuntimeError("simulated duplicate append")
+
+        monkeypatch.setattr(racing_repo, "_append", _append_after_competing_winner)
+
+        assert racing_repo.save(plan) == plan
+        events = list(
+            store.iter_events(
+                tenant_id="tenant-1",
+                event_type="experiment.state_changed@v1",
+            )
+        )
+        assert len(events) == 1
+
+
+def test_revision_identity_is_unambiguous_across_colon_bearing_scopes(tmp_path):
+    path = tmp_path / "phase16-revision-identity.sqlite3"
+    plan = _plan(experiment_id="exp_structured_revision_identity")
+    with SqliteEventStore(str(path)) as store:
+        first = EventStoreExperimentRepository(
+            store,
+            tenant_id="a:b",
+            business_id="c",
+        )
+        second = EventStoreExperimentRepository(
+            store,
+            tenant_id="a",
+            business_id="b:c",
+        )
+
+        assert first.save(plan) == plan
+        assert second.save(plan) == plan
+        assert first.get(plan.experiment_id) == plan
+        assert second.get(plan.experiment_id) == plan
+
+
+def test_authorized_experiment_identity_cannot_be_rewritten():
+    store = MemoryEventStore()
+    repo = EventStoreExperimentRepository(
+        store,
+        tenant_id="tenant-1",
+        business_id="business-1",
+    )
+    service = _service(store)
+    active = service.register_experiment(_plan())
+    changed = ExperimentPlanBuilder().build(
+        experiment_id=active.experiment_id,
+        name=active.name,
+        hypothesis="silently changed after authorization",
+        subject_key=active.subject_key,
+        audience_key=active.audience_key,
+        owner=active.owner,
+        variant_definitions=[
+            ("control", VariantRole.CONTROL, 0.5),
+            ("treatment", VariantRole.TREATMENT, 0.5),
+        ],
+        metric_definitions=[
+            ("conversion_rate", MetricDirection.INCREASE, 0.01, False),
+        ],
+        minimum_sample_size=100,
+        duration_days=active.duration_days,
+        overlap_keys=list(active.overlap_keys),
+    )
+
+    with pytest.raises(ValueError, match="identity collision"):
+        repo.save(changed)

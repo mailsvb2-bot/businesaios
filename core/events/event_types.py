@@ -94,6 +94,9 @@ GROWTH_HYPOTHESIS_CREATED = "growth_hypothesis_created@v1"
 GROWTH_HYPOTHESIS_SCORED = "growth_hypothesis_scored@v1"
 GROWTH_HYPOTHESIS_STATE = "growth_hypothesis_state@v1"
 GROWTH_EXPERIMENT_CREATED = "growth_experiment_created@v1"
+EXPERIMENT_STATE_CHANGED = "experiment.state_changed@v1"
+EXPERIMENT_ASSIGNMENT_RECORDED = "experiment.assignment_recorded@v1"
+EXPERIMENT_RESULT_RECORDED = "experiment.result_recorded@v1"
 
 PAYMENT_CREATE_ATTEMPTED = "payment_create_attempted"
 PAYMENT_CREATED = "payment_created"
@@ -260,6 +263,9 @@ KNOWN_EVENT_TYPES: set[str] = {
     GROWTH_HYPOTHESIS_SCORED,
     GROWTH_HYPOTHESIS_STATE,
     GROWTH_EXPERIMENT_CREATED,
+    EXPERIMENT_STATE_CHANGED,
+    EXPERIMENT_ASSIGNMENT_RECORDED,
+    EXPERIMENT_RESULT_RECORDED,
     PAYMENT_CREATE_ATTEMPTED,
     PAYMENT_CREATED,
     PAYMENT_CREATE_FAILED,

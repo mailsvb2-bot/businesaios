@@ -9,9 +9,18 @@ def _action() -> ExecutableAction:
 
 
 def test_internal_runners_share_accepted_contract() -> None:
-    for runner in (NotifyOwnerRunner(), RollbackRunner(), CreateExperimentRunner()):
+    for runner in (NotifyOwnerRunner(), RollbackRunner()):
         result = runner.run(_action())
         assert result.status == 'accepted'
         assert result.payload['attempted'] is True
         assert result.payload['executed'] is True
         assert result.payload['verified'] is False
+
+
+def test_legacy_create_experiment_runner_fails_closed() -> None:
+    try:
+        CreateExperimentRunner().run(_action())
+    except RuntimeError as exc:
+        assert str(exc) == 'CREATE_EXPERIMENT_REQUIRES_CANONICAL_RUNTIME_ACTION'
+    else:
+        raise AssertionError('legacy create experiment runner must fail closed')

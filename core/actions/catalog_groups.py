@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from core.actions.names import ACTION_ADS_APPLY_EXECUTE_V1, ACTION_AI_CEO_PLAN_V1
+from core.actions.names import ACTION_ADS_APPLY_EXECUTE_V1, ACTION_AI_CEO_PLAN_V1, ACTION_CREATE_EXPERIMENT_V1
 from core.ai.schema_registry import DecisionSchema
 
 from .catalog_entry import CatalogEntry
@@ -133,6 +133,13 @@ def growth_catalog() -> dict[str, CatalogEntry]:
         "pricing_select@v1": _entry("pricing_select@v1", 1, required={"tenant_id", "product_id", "user_id"}, optional={"candidates", "evidence", "channel", "channel_policy"}, field_types={"tenant_id": str, "product_id": str, "user_id": str, "candidates": list, "evidence": dict, "channel": str, "channel_policy": dict}),
         "reward_observe@v1": _entry("reward_observe@v1", 1, required={"tenant_id", "user_id"}, optional={"metrics", "lookback_days", "channel", "channel_policy"}, field_types={"tenant_id": str, "user_id": str, "metrics": dict, "lookback_days": int, "channel": str, "channel_policy": dict}),
         "growth_propose@v1": _entry("growth_propose@v1", 1, required={"tenant_id", "user_id"}, optional={"objective", "signals", "goal", "n", "model", "callback_query_id", "channel", "channel_policy"}, field_types={"tenant_id": str, "user_id": str, "objective": str, "signals": dict, "goal": dict, "n": int, "model": str, "callback_query_id": str, "channel": str, "channel_policy": dict}),
+        ACTION_CREATE_EXPERIMENT_V1: _entry(
+            ACTION_CREATE_EXPERIMENT_V1,
+            1,
+            required={"tenant_id", "business_id", "name", "hypothesis"},
+            optional={"experiment_id", "subject_key", "audience_key", "owner", "variants", "metrics", "primary_metric", "minimum_sample_size", "duration_days", "overlap_keys", "metadata"},
+            field_types={"tenant_id": str, "business_id": str, "name": str, "hypothesis": str, "experiment_id": str, "subject_key": str, "audience_key": str, "owner": str, "variants": list, "metrics": list, "primary_metric": str, "minimum_sample_size": int, "duration_days": int, "overlap_keys": list, "metadata": dict},
+        ),
         "profit_sprint_onboarding_start@v1": _entry("profit_sprint_onboarding_start@v1", 1, required={"tenant_id", "user_id"}, optional={"product_id", "callback_query_id", "channel", "channel_policy"}, field_types={"tenant_id": str, "user_id": str, "product_id": str, "callback_query_id": str, "channel": str, "channel_policy": dict}),
         "profit_sprint_onboarding_text@v1": _entry("profit_sprint_onboarding_text@v1", 1, required={"tenant_id", "user_id"}, optional={"product_id", "text", "value", "answer", "step", "field", "question", "callback_query_id", "channel", "channel_policy"}, field_types={"tenant_id": str, "user_id": str, "product_id": str, "text": str, "value": str, "answer": str, "step": str, "field": str, "question": str, "callback_query_id": str, "channel": str, "channel_policy": dict}),
         "profit_sprint_onboarding_lead_source@v1": _entry("profit_sprint_onboarding_lead_source@v1", 1, required={"tenant_id", "user_id"}, optional={"product_id", "lead_source", "value", "source", "callback_query_id", "channel", "channel_policy"}, field_types={"tenant_id": str, "user_id": str, "product_id": str, "lead_source": str, "value": str, "source": str, "callback_query_id": str, "channel": str, "channel_policy": dict}),

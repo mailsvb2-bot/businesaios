@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from runtime.experiments import ACTION_CREATE_EXPERIMENT_V1
 from runtime.handlers import ActionHandlerRegistry
 
 CANON_BOOT_WIRING_ONLY = True
@@ -13,6 +14,7 @@ def register_growth_handlers(*, handlers: ActionHandlerRegistry, event_store, be
         handle_behavior_graph_path,
         handle_behavior_graph_reset,
     )
+    from runtime.handlers.experiments_build import handle_create_experiment as _create_experiment
     from runtime.handlers.growth_propose import handle_growth_propose as _growth_propose
     from runtime.handlers.growth_strategy_backlog import handle_growth_strategy_backlog as _growth_backlog
     from runtime.handlers.growth_strategy_generate import handle_growth_strategy_generate as _growth_generate
@@ -30,6 +32,13 @@ def register_growth_handlers(*, handlers: ActionHandlerRegistry, event_store, be
     )
     from runtime.handlers.profit_sprint_onboarding import (
         handle_onboarding_text as _ps_text,
+    )
+
+    handlers.register(
+        ACTION_CREATE_EXPERIMENT_V1,
+        lambda payload, effects, env: _create_experiment(
+            payload, effects, env, event_store=event_store
+        ),
     )
 
     handlers.register("profit_sprint_onboarding_start@v1", _ps_start)

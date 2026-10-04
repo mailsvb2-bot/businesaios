@@ -65,6 +65,13 @@ class ExperimentsService:
 
     def register_experiment(self, plan: ExperimentPlan) -> ExperimentPlan:
         self._plan_guard.validate_for_registration(plan)
+        atomic_register = getattr(
+            self._experiment_repository,
+            "register_with_overlap_guard",
+            None,
+        )
+        if callable(atomic_register):
+            return atomic_register(plan, self._guard.overlap_guard)
         self._guard.overlap_guard.ensure_no_overlap(
             candidate_plan=plan,
             existing_plans=self._experiment_repository.list_all(),

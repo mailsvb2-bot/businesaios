@@ -1,7 +1,9 @@
 from __future__ import annotations
 
-from execution.action_contracts import ActionSpec
 import re
+
+from core.actions.names import ACTION_CREATE_EXPERIMENT_V1
+from execution.action_contracts import ActionSpec
 
 from execution.market_intelligence_action_specs import build_market_intelligence_action_specs
 from execution.revenue_os_action_specs import build_revenue_os_action_specs
@@ -45,12 +47,12 @@ _ACTION_SPECS: dict[str, ActionSpec] = {
         notes=('google ads contour is the primary ads effector path', 'production connector path is not proven prod-ready'),
     ),
     'create_experiment': ActionSpec(
-        action_type='create_experiment',
+        action_type=ACTION_CREATE_EXPERIMENT_V1,
         action_class='internal_execution',
         externally_verified=False,
         reversible=True,
         prod_ready=True,
-        notes=('internal runner exists', 'verification is internal, not external'),
+        notes=('canonical RuntimeExecutor handler persists to Event Store', 'legacy internal runner fails closed'),
     ),
     'create_landing_page': ActionSpec(
         action_type='create_landing_page',

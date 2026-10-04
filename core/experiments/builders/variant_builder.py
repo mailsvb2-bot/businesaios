@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import math
 from collections.abc import Iterable
 
 from core.experiments.enums import VariantRole
@@ -19,6 +20,8 @@ class VariantBuilder:
                 raise ExperimentValidationError("variant name must be non-empty")
             if clean_name in seen_names:
                 raise ExperimentValidationError(f"duplicate variant name: {clean_name}")
+            if not math.isfinite(traffic_share):
+                raise ExperimentValidationError("variant traffic_share must be finite")
             if traffic_share <= 0.0:
                 raise ExperimentValidationError("variant traffic_share must be > 0")
 
