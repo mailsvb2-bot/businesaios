@@ -8,6 +8,7 @@ from core.experiments.errors import ExperimentValidationError
 from core.experiments.repositories.event_store_repository import EventStoreExperimentRepository
 from runtime.boot.experiments_boot import build_experiments_service
 from runtime.platform.event_store.memory_event_store import MemoryEventStore
+from runtime.platform.event_store.sqlite_event_store import SqliteEventStore
 
 
 def _plan(*, experiment_id: str = "exp_phase16", duration_days: int = 21):
@@ -60,6 +61,26 @@ def test_event_store_experiment_survives_service_reconstruction():
     assert restored == active
     assert restored is not None
     assert restored.status.value == "active"
+    assert restored.duration_days == 21
+
+
+
+def test_experiment_survives_real_sqlite_close_and_reopen(tmp_path):
+    path = tmp_path / "phase16-events.sqlite3"
+    with SqliteEventStore(str(path)) as store:
+        active = _service(store).register_experiment(
+            _plan(experiment_id="exp_phase16_restart")
+        )
+
+    with SqliteEventStore(str(path)) as reopened:
+        restored = EventStoreExperimentRepository(
+            reopened,
+            tenant_id="tenant-1",
+            business_id="business-1",
+        ).get(active.experiment_id)
+
+    assert restored == active
+    assert restored is not None
     assert restored.duration_days == 21
 
 
