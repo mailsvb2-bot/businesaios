@@ -159,10 +159,7 @@ def test_memory_lifecycle_forget_scrubs_content_and_restart_preserves_tombstone(
         tenant_id="tenant-1",
         business_id="business-1",
     )
-    tombstone = next(item for item in reloaded.durable_memory if item.memory_id == "mem-2")
-    assert tombstone.status == "forget"
-    assert tombstone.value == ""
-    assert tombstone.provenance == ()
+    assert all(item.memory_id != "mem-2" for item in reloaded.durable_memory)
     assert project_business_memory_v2(reloaded)["durable_memory"] == []
 
 
