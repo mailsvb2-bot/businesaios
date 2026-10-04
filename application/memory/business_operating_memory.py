@@ -580,8 +580,8 @@ class FileBusinessOperatingMemoryStore:
             payload = json.loads(path.read_text(encoding="utf-8"))
         except (json.JSONDecodeError, OSError):
             return BusinessOperatingMemory.empty(tenant_id=tenant_id, business_id=business_id)
-        if _safe_int(payload.get("schema_version"), default=BUSINESS_MEMORY_SCHEMA_VERSION) > BUSINESS_MEMORY_SCHEMA_VERSION:
-            raise ValueError("unsupported future business memory schema")
+        if _safe_int(payload.get("schema_version"), default=BUSINESS_MEMORY_SCHEMA_VERSION) > BUSINESS_MEMORY_SCHEMA_VERSION or (_text(payload.get("tenant_id")), _text(payload.get("business_id"))) != (_text(tenant_id), _text(business_id)):
+            raise ValueError("unsupported future business memory schema or persisted scope mismatch")
         memory = BusinessOperatingMemory.from_dict(payload, policy=self.policy)
         return self.compactor.compact(memory) if self.compactor is not None else memory
 
@@ -602,7 +602,7 @@ class FileBusinessOperatingMemoryStore:
     def _write_unlocked(self, memory: BusinessOperatingMemory) -> Path:
         target = self._target_path(tenant_id=memory.tenant_id, business_id=memory.business_id)
         target.parent.mkdir(parents=True, exist_ok=True)
-        compacted = self.compactor.compact(memory) if self.compactor is not None else memory
+        compacted = self.compactor.compact(BusinessOperatingMemory.from_dict(memory.to_dict(), policy=self.policy)) if self.compactor is not None else BusinessOperatingMemory.from_dict(memory.to_dict(), policy=self.policy)
         payload = json.dumps(compacted.to_dict(), ensure_ascii=False, indent=2, sort_keys=True)
         fd, temp_name = tempfile.mkstemp(prefix=".business_memory_", suffix=".json", dir=str(target.parent))
         try:
