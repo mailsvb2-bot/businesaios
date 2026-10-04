@@ -6,7 +6,6 @@ from dataclasses import asdict, replace
 from uuid import uuid4
 
 from contracts.event_store import append_event_strict, iter_events_strict
-from core.utils.canonical import payload_hash
 from core.events.event_types import (
     EXPERIMENT_ASSIGNMENT_RECORDED,
     EXPERIMENT_RESULT_RECORDED,
@@ -27,6 +26,7 @@ from core.experiments.types import (
     VariantMetricSnapshot,
     VariantSpec,
 )
+from core.utils.canonical import payload_hash
 
 CANON_EXPERIMENT_EVENT_STORE_REPOSITORY = True
 _SOURCE = "core.experiments"
