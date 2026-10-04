@@ -109,6 +109,7 @@ def project_portable_memory(memory: BusinessOperatingMemory, *, allow_global: bo
 def project_business_memory_v2(memory: BusinessOperatingMemory) -> dict[str, Any]:
     scope = {"tenant_id": memory.tenant_id, "business_id": memory.business_id}
     procedural = []
+    failure_counts = {item.key: item.count for item in memory.recurring_failures}
     for kind, rows in (
         ("success_pattern", memory.recurring_wins),
         ("failure_pattern", memory.recurring_failures),
@@ -120,7 +121,7 @@ def project_business_memory_v2(memory: BusinessOperatingMemory) -> dict[str, Any
                 "kind": kind,
                 "key": data.get("key", ""),
                 "evidence": list(data.get("source_run_ids") or []),
-                "sample_size": int(data.get("count") or len(data.get("source_run_ids") or [])),
+                "sample_size": int(data.get("count") or failure_counts.get(data.get("key", "")) or len(data.get("source_run_ids") or [])),
                 "scope": scope,
                 "confidence": float(data.get("confidence") or 0.0),
                 "freshness": float(data.get("freshness") or 0.0),
