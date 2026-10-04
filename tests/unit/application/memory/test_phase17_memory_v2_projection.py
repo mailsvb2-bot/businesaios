@@ -2,11 +2,14 @@ from __future__ import annotations
 
 import subprocess
 import sys
+from concurrent.futures import ThreadPoolExecutor
 
 from application.memory.business_memory_v2 import (
     MEMORY_LIFECYCLE,
     add_memory_candidate,
     project_business_memory_v2,
+    persist_memory_candidate,
+    persist_memory_transition,
     project_memory_knowledge_graph,
     project_portable_memory,
     transition_memory,
@@ -213,3 +216,55 @@ def test_memory_candidate_identity_is_idempotent_but_collision_fails(tmp_path):
         assert "collision" in str(exc)
     else:
         raise AssertionError("memory identity collision was accepted")
+
+
+
+def test_atomic_memory_mutation_preserves_concurrent_candidates(tmp_path):
+    store = FileBusinessOperatingMemoryStore(root_dir=tmp_path / "memory")
+    records = [
+        DurableMemoryRecord(memory_id=f"mem-race-{idx}", memory_type="semantic", key=f"k-{idx}", value=f"v-{idx}")
+        for idx in range(2)
+    ]
+
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        list(pool.map(
+            lambda record: persist_memory_candidate(
+                store,
+                tenant_id="tenant-race",
+                business_id="business-race",
+                record=record,
+            ),
+            records,
+        ))
+
+    loaded = store.load(tenant_id="tenant-race", business_id="business-race")
+    assert {item.memory_id for item in loaded.durable_memory} == {"mem-race-0", "mem-race-1"}
+
+
+def test_persisted_external_candidate_stays_quarantined_across_restart_until_validation(tmp_path):
+    store = FileBusinessOperatingMemoryStore(root_dir=tmp_path / "memory")
+    persist_memory_candidate(
+        store,
+        tenant_id="tenant-q",
+        business_id="business-q",
+        record=DurableMemoryRecord(
+            memory_id="mem-q",
+            memory_type="semantic",
+            key="external_signal",
+            value="untrusted",
+            external=True,
+        ),
+    )
+    restarted = FileBusinessOperatingMemoryStore(root_dir=tmp_path / "memory")
+    quarantined = restarted.load(tenant_id="tenant-q", business_id="business-q")
+    assert project_business_memory_v2(quarantined)["durable_memory"] == []
+
+    validated = persist_memory_transition(
+        restarted,
+        tenant_id="tenant-q",
+        business_id="business-q",
+        memory_id="mem-q",
+        transition="validate",
+        provenance=("source-proof",),
+    )
+    assert project_business_memory_v2(validated)["durable_memory"][0]["memory_id"] == "mem-q"
