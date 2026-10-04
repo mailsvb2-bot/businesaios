@@ -580,7 +580,7 @@ class FileBusinessOperatingMemoryStore:
             payload = json.loads(path.read_text(encoding="utf-8"))
         except (json.JSONDecodeError, OSError):
             return BusinessOperatingMemory.empty(tenant_id=tenant_id, business_id=business_id)
-        if _safe_int(payload.get("schema_version"), default=BUSINESS_MEMORY_SCHEMA_VERSION) > BUSINESS_MEMORY_SCHEMA_VERSION or (_text(payload.get("tenant_id")), _text(payload.get("business_id"))) != (_text(tenant_id), _text(business_id)):
+        if _safe_int(payload.get("schema_version"), default=BUSINESS_MEMORY_SCHEMA_VERSION) > BUSINESS_MEMORY_SCHEMA_VERSION or len(_text(tenant_id)) > 128 or len(_text(business_id)) > 128 or (_text(payload.get("tenant_id")), _text(payload.get("business_id"))) != (_text(tenant_id), _text(business_id)):
             raise ValueError("unsupported future business memory schema or persisted scope mismatch")
         memory = BusinessOperatingMemory.from_dict(payload, policy=self.policy)
         return self.compactor.compact(memory) if self.compactor is not None else memory
@@ -1071,8 +1071,8 @@ _ALLOWED_MEMORY_TRANSITIONS = {
 }
 
 
-def add_memory_candidate(memory: BusinessOperatingMemory, record: DurableMemoryRecord) -> BusinessOperatingMemory:
-    record = replace(record, memory_id=_text(record.memory_id)[:128], key=_text(record.key)[:160])
+def add_memory_candidate(memory: BusinessOperatingMemory, record: DurableMemoryRecord, *, policy: BusinessMemoryPolicy | None = None) -> BusinessOperatingMemory:
+    record = _durable_memory_record_from_row_owner({**asdict(record), "status": record.status if record.status == "create" else "__invalid__"}, policy=policy or BusinessMemoryPolicy())
     if record.status != "create" or not record.memory_id or not record.key:
         raise ValueError("new memory candidate must start in create state" if record.status != "create" else "memory candidate requires memory_id and key")
     existing = next((item for item in memory.durable_memory if item.memory_id == record.memory_id), None)
@@ -1093,7 +1093,7 @@ def transition_memory(
 ) -> BusinessOperatingMemory:
     action = str(transition or "").strip()
     rows = list(memory.durable_memory)
-    index = next((i for i, item in enumerate(rows) if item.memory_id == memory_id), None)
+    index = next((i for i, item in enumerate(rows) if item.memory_id == _text(memory_id)[:128]), None)
     if index is None:
         raise KeyError(memory_id)
     current = rows[index]
@@ -1119,7 +1119,7 @@ def persist_memory_candidate(
     return store.mutate(
         tenant_id=tenant_id,
         business_id=business_id,
-        transform=lambda memory: add_memory_candidate(memory, record),
+        transform=lambda memory: add_memory_candidate(memory, record, policy=store.policy),
     )
 
 
