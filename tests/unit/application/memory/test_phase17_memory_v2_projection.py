@@ -588,11 +588,9 @@ def test_mismatched_persisted_scope_fails_closed_without_cross_scope_rewrite(tmp
     source.write_text(source_payload, encoding="utf-8")
     target.write_text(target_payload, encoding="utf-8")
 
+    store = FileBusinessOperatingMemoryStore(root_dir=root)
     try:
-        FileBusinessOperatingMemoryStore(root_dir=root).load(
-            tenant_id="tenant-a",
-            business_id="business-a",
-        )
+        store.load(tenant_id="tenant-a", business_id="business-a")
     except ValueError as exc:
         assert "persisted scope mismatch" in str(exc)
     else:
@@ -600,6 +598,8 @@ def test_mismatched_persisted_scope_fails_closed_without_cross_scope_rewrite(tmp
 
     assert source.read_text(encoding="utf-8") == source_payload
     assert target.read_text(encoding="utf-8") == target_payload
+    assert store.list_businesses(tenant_id="tenant-a") == ()
+    assert store.list_businesses() == (("tenant-b", "business-b"),)
 
 
 def test_persistence_boundary_sanitizes_oversized_durable_memory_fields(tmp_path):
