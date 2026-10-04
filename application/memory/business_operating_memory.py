@@ -745,7 +745,6 @@ class FileBusinessOperatingMemoryStore:
             str(canonical_memory.get("verification_status") or feedback_payload.get("verification_status") or "unknown"),
         )
         feedback_payload = self.policy.sanitize_feedback_payload(feedback_payload)
-
         fingerprint = self.matcher.build_fingerprint(
             goal=goal,
             profile=dict(profile or {}),
@@ -1056,6 +1055,7 @@ class FileBusinessOperatingMemoryStore:
         elif final_feedback.get("error"):
             parts.append(self.policy.sanitize_text(final_feedback.get("error"), max_length=64))
         return " | ".join(part for part in parts if part)
+
 
 CANON_BUSINESS_MEMORY_V2 = True
 MEMORY_LIFECYCLE = ("create", "validate", "refresh", "supersede", "expire", "archive", "forget")
