@@ -62,6 +62,14 @@ def test_governed_runtime_handler_persists_real_experiment():
     assert result["policy_governed"] is True
     assert plan.hypothesis == _payload()["hypothesis"]
     assert plan.duration_days == 14
+    state_event = list(
+        store.iter_events(
+            tenant_id="tenant-1",
+            event_type="experiment.state_changed@v1",
+        )
+    )[0]
+    assert state_event["decision_id"] == "decision-exp-1"
+    assert state_event["correlation_id"] == "corr-exp-1"
 
 
 def test_same_authorized_decision_is_idempotent():
