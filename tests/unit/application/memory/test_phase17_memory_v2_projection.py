@@ -662,6 +662,56 @@ def test_persistence_boundary_sanitizes_oversized_durable_memory_fields(tmp_path
     assert loaded.durable_memory[0].memory_id == "memory-oversized"
 
 
+
+def test_persisted_payload_matches_compactor_byte_budget(tmp_path):
+    store = FileBusinessOperatingMemoryStore(root_dir=tmp_path / "serialized-budget")
+    memory = BusinessOperatingMemory(
+        schema_version=3,
+        tenant_id="tenant-1",
+        business_id="business-1",
+        durable_memory=tuple(
+            DurableMemoryRecord(
+                memory_id=f"memory-{index}",
+                memory_type="semantic",
+                key=("k" * 150) + str(index),
+                value=("v" * 500) + str(index),
+                provenance=tuple(f"proof-{index}-{proof}-" + ("p" * 100) for proof in range(8)),
+            )
+            for index in range(24)
+        ),
+    )
+    canonical = BusinessOperatingMemory.from_dict(memory.to_dict(), policy=store.policy)
+    assert store.compactor is not None
+    _compacted, report = store.compactor.compact_with_report(canonical)
+
+    path = store.save(memory)
+
+    assert path.stat().st_size == report.approx_payload_bytes
+    assert path.stat().st_size <= report.hard_payload_bytes
+
+
+def test_noncanonical_scope_is_rejected_before_first_mutation_write(tmp_path):
+    root = tmp_path / "first-write-scope"
+    store = FileBusinessOperatingMemoryStore(root_dir=root)
+    try:
+        persist_memory_candidate(
+            store,
+            tenant_id="t" * 129,
+            business_id="business-1",
+            record=DurableMemoryRecord(
+                memory_id="scope-check",
+                memory_type="semantic",
+                key="scope-check",
+                value="must not persist",
+            ),
+        )
+    except ValueError as exc:
+        assert "noncanonical business memory scope" in str(exc)
+    else:
+        raise AssertionError("noncanonical first-write scope was accepted")
+
+    assert tuple(root.rglob("*.json")) == ()
+
 def test_persist_candidate_retry_is_idempotent_after_sanitization(tmp_path):
     store = FileBusinessOperatingMemoryStore(root_dir=tmp_path / "retry-sanitized")
     record = DurableMemoryRecord(
