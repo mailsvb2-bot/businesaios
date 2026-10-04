@@ -3,7 +3,10 @@ from __future__ import annotations
 import subprocess
 import sys
 from concurrent.futures import ThreadPoolExecutor
+from types import SimpleNamespace
 
+from application.autonomy.autonomy_state_assembly import AutonomyStateAssembly
+from application.memory.business_memory_state_adapter import BusinessMemoryStateAdapter
 from application.memory.business_memory_v2 import (
     MEMORY_LIFECYCLE,
     add_memory_candidate,
@@ -16,6 +19,7 @@ from application.memory.business_memory_v2 import (
 )
 from application.memory.business_operating_memory import BusinessOperatingMemory, FileBusinessOperatingMemoryStore
 from application.memory.business_operating_memory_types import AntiPatternRecord, DurableMemoryRecord, PatternEvidence
+from kernel.world_state import WorldStateV1
 
 
 def _memory(tmp_path):
@@ -388,3 +392,79 @@ def test_anti_pattern_sample_size_uses_originating_failure_count_not_capped_refs
     anti = next(item for item in view["procedural_memory"] if item["kind"] == "anti_pattern")
     assert anti["sample_size"] == 10
     assert len(anti["evidence"]) == 8
+
+
+
+def test_state_assembly_prefers_canonical_store_over_stale_legacy_memory_context(tmp_path):
+    store = FileBusinessOperatingMemoryStore(root_dir=tmp_path / "memory")
+    persist_memory_candidate(
+        store,
+        tenant_id="tenant-live",
+        business_id="business-live",
+        record=DurableMemoryRecord(
+            memory_id="mem-live",
+            memory_type="semantic",
+            key="validated_fact",
+            value="store truth",
+        ),
+    )
+    persist_memory_transition(
+        store,
+        tenant_id="tenant-live",
+        business_id="business-live",
+        memory_id="mem-live",
+        transition="validate",
+        provenance=("proof-1",),
+    )
+
+    class Mapper:
+        def to_world_state(self, *, request, step_index, previous_feedback):
+            return WorldStateV1(
+                schema_version=1,
+                user={"user_id": "u1"},
+                session={"channel": "headless"},
+                product={"business_id": request.business_id},
+                economy={},
+                timestamp_ms=1,
+                tenant_id=request.tenant_id,
+                meta={},
+                behavior={"goal": request.goal},
+            )
+
+    class Trace:
+        run_id = "run-live"
+
+        def record(self, **kwargs):
+            return None
+
+    contract = SimpleNamespace(
+        _state_mapper=Mapper(),
+        _business_memory_state_adapter=BusinessMemoryStateAdapter(store=store),
+        _capability_health_registry=None,
+        _capability_health_scoring_service=None,
+        _event_store=None,
+        _provider_quota_guard=None,
+        _state_store=None,
+    )
+    request = SimpleNamespace(
+        tenant_id="tenant-live",
+        business_id="business-live",
+        goal="grow",
+        goal_id=None,
+        meta={},
+    )
+    state = AutonomyStateAssembly(contract=contract).assemble_state(
+        request=request,
+        trace=Trace(),
+        step_index=0,
+        previous_feedback={},
+        business_memory_context={
+            "tenant_id": "tenant-live",
+            "business_id": "business-live",
+            "business_profile": {"stale": "legacy"},
+        },
+    )
+
+    durable = state.meta["business_memory_v2"]["durable_memory"]
+    assert durable[0]["memory_id"] == "mem-live"
+    assert durable[0]["value"] == "store truth"
