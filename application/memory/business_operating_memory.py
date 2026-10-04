@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 import os
 import tempfile
-from collections.abc import Iterable, Mapping
+from collections.abc import Callable, Iterable, Mapping
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import Any
@@ -572,7 +572,7 @@ class FileBusinessOperatingMemoryStore:
 
             self.compactor = BusinessMemoryCompactor(policy=self.policy)
 
-    def load(self, *, tenant_id: str, business_id: str) -> BusinessOperatingMemory:
+    def _load_unlocked(self, *, tenant_id: str, business_id: str) -> BusinessOperatingMemory:
         path = self._target_path(tenant_id=tenant_id, business_id=business_id)
         if not path.exists():
             return BusinessOperatingMemory.empty(tenant_id=tenant_id, business_id=business_id)
@@ -583,27 +583,45 @@ class FileBusinessOperatingMemoryStore:
         memory = BusinessOperatingMemory.from_dict(payload, policy=self.policy)
         return self.compactor.compact(memory) if self.compactor is not None else memory
 
-    def save(self, memory: BusinessOperatingMemory) -> Path:
+    def load(self, *, tenant_id: str, business_id: str) -> BusinessOperatingMemory:
+        return self._load_unlocked(tenant_id=tenant_id, business_id=business_id)
+
+    def _write_unlocked(self, memory: BusinessOperatingMemory) -> Path:
         target = self._target_path(tenant_id=memory.tenant_id, business_id=memory.business_id)
         target.parent.mkdir(parents=True, exist_ok=True)
         compacted = self.compactor.compact(memory) if self.compactor is not None else memory
         payload = json.dumps(compacted.to_dict(), ensure_ascii=False, indent=2, sort_keys=True)
-        with FileBusinessMemoryLock(
-            target_path=target,
-            timeout_seconds=float(self.policy.save_lock_timeout_seconds),
-            retry_delay_seconds=float(self.policy.save_lock_retry_delay_seconds),
-        ):
-            fd, temp_name = tempfile.mkstemp(prefix=".business_memory_", suffix=".json", dir=str(target.parent))
-            try:
-                with os.fdopen(fd, "w", encoding="utf-8") as handle:
-                    handle.write(payload)
-                    handle.flush()
-                    os.fsync(handle.fileno())
-                os.replace(temp_name, target)
-            finally:
-                if os.path.exists(temp_name):
-                    os.unlink(temp_name)
+        fd, temp_name = tempfile.mkstemp(prefix=".business_memory_", suffix=".json", dir=str(target.parent))
+        try:
+            with os.fdopen(fd, "w", encoding="utf-8") as handle:
+                handle.write(payload)
+                handle.flush()
+                os.fsync(handle.fileno())
+            os.replace(temp_name, target)
+        finally:
+            if os.path.exists(temp_name):
+                os.unlink(temp_name)
         return target
+
+    def save(self, memory: BusinessOperatingMemory) -> Path:
+        target = self._target_path(tenant_id=memory.tenant_id, business_id=memory.business_id)
+        with FileBusinessMemoryLock(target_path=target, timeout_seconds=float(self.policy.save_lock_timeout_seconds), retry_delay_seconds=float(self.policy.save_lock_retry_delay_seconds)):
+            return self._write_unlocked(memory)
+
+    def mutate(
+        self,
+        *,
+        tenant_id: str,
+        business_id: str,
+        transform: Callable[[BusinessOperatingMemory], BusinessOperatingMemory],
+    ) -> BusinessOperatingMemory:
+        target = self._target_path(tenant_id=tenant_id, business_id=business_id)
+        with FileBusinessMemoryLock(target_path=target, timeout_seconds=float(self.policy.save_lock_timeout_seconds), retry_delay_seconds=float(self.policy.save_lock_retry_delay_seconds)):
+            updated = transform(self._load_unlocked(tenant_id=tenant_id, business_id=business_id))
+            if updated.tenant_id != tenant_id or updated.business_id != business_id:
+                raise ValueError("business memory mutation changed scope")
+            self._write_unlocked(updated)
+            return self._load_unlocked(tenant_id=tenant_id, business_id=business_id)
 
     def list_businesses(self, *, tenant_id: str | None = None) -> tuple[tuple[str, str], ...]:
         if tenant_id is not None:
