@@ -63,7 +63,9 @@ def test_governed_runtime_handler_persists_real_experiment():
     ).get(result["experiment_id"])
 
     assert plan is not None
-    assert result["status"] == "active"
+    assert result["ok"] is True
+    assert result["status"] == "verified"
+    assert result["experiment_status"] == "active"
     assert result["policy_governed"] is True
     assert plan.hypothesis == _payload()["hypothesis"]
     assert plan.duration_days == 14
