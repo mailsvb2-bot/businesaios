@@ -39,7 +39,7 @@ def test_phase16_reuses_event_spine_not_parallel_database():
 
 def test_phase16_autonomous_launch_cannot_use_legacy_runner():
     runtime_handler = (
-        ROOT / "runtime/handlers/experiments_create.py"
+        ROOT / "runtime/handlers/experiments_build.py"
     ).read_text(encoding="utf-8")
     legacy = (
         ROOT / "execution/runners/internal/create_experiment.py"
