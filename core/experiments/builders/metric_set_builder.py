@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import math
+
 from collections.abc import Iterable
 
 from core.experiments.enums import MetricDirection
@@ -18,6 +20,8 @@ class MetricSetBuilder:
                 raise ExperimentValidationError("metric_key must be non-empty")
             if clean_key in seen:
                 raise ExperimentValidationError(f"duplicate metric_key: {clean_key}")
+            if not math.isfinite(mde):
+                raise ExperimentValidationError("minimum_detectable_effect must be finite")
             if mde < 0.0:
                 raise ExperimentValidationError("minimum_detectable_effect must be >= 0")
             seen.add(clean_key)
