@@ -1,8 +1,14 @@
-"""Experimentation package."""
+"""Legacy experiment payload helpers.
+
+Canonical Experiment lifecycle/state/evaluation lives in ``core.experiments``.
+This package is a stateless compatibility surface only: it builds kinded payloads
+and owns no experiment state, policy decision, execution, or persistence.
+"""
 
 from shared.kinded_payloads import build_kinded_payload
 
-CANON_EXPERIMENTATION_PACKAGE_OWNER = True
+CANON_EXPERIMENTATION_PACKAGE_OWNER = False
+CANON_EXPERIMENTATION_COMPAT_SHIM = True
 
 class AbTest:
     def build(self, payload: dict) -> dict:
@@ -24,21 +30,27 @@ class CreativeTest:
     def build(self, payload: dict) -> dict:
         return build_kinded_payload("creative_test", payload)
 
-class Experiment:
+class LegacyExperimentPayloadBuilder:
     def build(self, payload: dict) -> dict:
         return build_kinded_payload("experiment", payload)
 
-class ExperimentEvaluator:
+Experiment = LegacyExperimentPayloadBuilder
+
+class LegacyExperimentPayloadEvaluator:
     def evaluate(self, payload: dict) -> dict:
         return build_kinded_payload("experiment_result", payload)
+
+ExperimentEvaluator = LegacyExperimentPayloadEvaluator
 
 class ExperimentGuardrails:
     def evaluate(self, payload: dict) -> dict:
         return build_kinded_payload("experiment_guardrails_result", payload)
 
-class ExperimentRegistry:
+class LegacyExperimentPayloadRegistry:
     def register(self, payload: dict) -> dict:
         return build_kinded_payload("experiment_registry", payload)
+
+ExperimentRegistry = LegacyExperimentPayloadRegistry
 
 class ExperimentScheduler:
     def schedule(self, payload: dict) -> dict:
@@ -57,6 +69,7 @@ class WinnerPromotionPolicy:
         return build_kinded_payload("winner_promotion", payload)
 
 __all__ = [
+    "CANON_EXPERIMENTATION_COMPAT_SHIM",
     "CANON_EXPERIMENTATION_PACKAGE_OWNER",
     "AbTest",
     "AudienceTest",
