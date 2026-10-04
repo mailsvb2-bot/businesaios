@@ -2,6 +2,13 @@ from __future__ import annotations
 
 from typing import Any
 
+from core.experiments.repositories.event_store_repository import (
+    EventStoreAssignmentRepository,
+    EventStoreExperimentRepository,
+    EventStoreResultRepository,
+)
+from core.experiments.service import ExperimentsService
+
 from config.live_canary_policy import (
     DEFAULT_LIVE_CANARY_POLICY,
     LiveCanaryPolicy,
@@ -16,6 +23,28 @@ from runtime.experiments.watchdog import (
     LiveCanaryWatchdogSupervisor,
 )
 
+
+CANON_EXPERIMENTS_RUNTIME_WIRING = True
+
+
+def build_experiments_service(
+    *,
+    event_store,
+    tenant_id: str,
+    business_id: str,
+) -> ExperimentsService:
+    """Bind the canonical Experiment Engine to the existing Event Store."""
+
+    scope = {
+        "event_store": event_store,
+        "tenant_id": str(tenant_id or "").strip(),
+        "business_id": str(business_id or "").strip(),
+    }
+    return ExperimentsService(
+        experiment_repository=EventStoreExperimentRepository(**scope),
+        assignment_repository=EventStoreAssignmentRepository(**scope),
+        result_repository=EventStoreResultRepository(**scope),
+    )
 
 def attach_live_canary(
     core: Any,
@@ -109,7 +138,9 @@ def detach_live_canary(core: Any) -> None:
 
 
 __all__ = [
+    "CANON_EXPERIMENTS_RUNTIME_WIRING",
     "attach_live_canary",
+    "build_experiments_service",
     "bind_live_canary_executor",
     "detach_live_canary",
     "start_live_canary_runtime",
