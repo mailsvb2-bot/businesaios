@@ -45,12 +45,12 @@ _ACTION_SPECS: dict[str, ActionSpec] = {
         notes=('google ads contour is the primary ads effector path', 'production connector path is not proven prod-ready'),
     ),
     'create_experiment': ActionSpec(
-        action_type='create_experiment',
+        action_type='create_experiment@v1',
         action_class='internal_execution',
         externally_verified=False,
         reversible=True,
         prod_ready=True,
-        notes=('internal runner exists', 'verification is internal, not external'),
+        notes=('canonical RuntimeExecutor handler persists to Event Store', 'legacy internal runner fails closed'),
     ),
     'create_landing_page': ActionSpec(
         action_type='create_landing_page',
