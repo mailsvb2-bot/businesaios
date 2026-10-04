@@ -157,13 +157,17 @@ def run_record_from_row(row: Mapping[str, Any], *, policy: BusinessMemoryPolicy)
 
 
 def durable_memory_record_from_row(row: Mapping[str, Any], *, policy: BusinessMemoryPolicy) -> DurableMemoryRecord:
+    provenance = policy.sanitize_run_ids(row.get("provenance") or [])
+    status = policy.sanitize_text(row.get("status") or "create", max_length=16) or "create"
+    if status in {"validate", "refresh"} and not provenance:
+        status = "create"
     return DurableMemoryRecord(
         memory_id=policy.sanitize_text(row.get("memory_id"), max_length=128),
         memory_type=policy.sanitize_text(row.get("memory_type") or "semantic", max_length=32) or "semantic",
         key=policy.sanitize_text(row.get("key"), max_length=160),
         value=policy.sanitize_text(row.get("value"), max_length=policy.max_summary_length),
-        status=policy.sanitize_text(row.get("status") or "create", max_length=16) or "create",
-        provenance=policy.sanitize_run_ids(row.get("provenance") or []),
+        status=status,
+        provenance=provenance,
         confidence=policy.normalize_confidence(row.get("confidence")),
         sample_size=policy.clamp_non_negative_int(row.get("sample_size")),
         external=bool(row.get("external")),
