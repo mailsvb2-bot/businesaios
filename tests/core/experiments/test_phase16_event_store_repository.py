@@ -1,11 +1,12 @@
 from __future__ import annotations
 
 import pytest
+from dataclasses import replace
 
 from core.experiments.builders.experiment_plan_builder import ExperimentPlanBuilder
 from core.experiments.enums import MetricDirection, VariantRole
 from core.experiments.errors import ExperimentValidationError
-from core.experiments.repositories.event_store_repository import EventStoreExperimentRepository
+from core.experiments.repositories.event_store_repository import EventStoreExperimentRepository, EventStoreResultRepository
 from runtime.boot.experiments_boot import build_experiments_service
 from runtime.platform.event_store.memory_event_store import MemoryEventStore
 from runtime.platform.event_store.sqlite_event_store import SqliteEventStore
@@ -146,6 +147,45 @@ def test_result_and_experiment_decision_survive_service_reconstruction():
     assert restored == summary
     assert persisted_plan is not None
     assert persisted_plan.status.value == "evaluated"
+
+
+
+def test_result_repository_uses_explicit_revision_order_not_event_id_order():
+    store = MemoryEventStore()
+    service = _service(store)
+    active = service.register_experiment(_plan(experiment_id="exp_result_revision"))
+    service.evaluate_from_snapshots(
+        experiment_id=active.experiment_id,
+        primary_metric_key="conversion_rate",
+        control_exposures=300,
+        control_conversions=30,
+        treatment_exposures=300,
+        treatment_conversions=60,
+    )
+    repository = EventStoreResultRepository(
+        store,
+        tenant_id="tenant-1",
+        business_id="business-1",
+    )
+    first = repository.get_latest(active.experiment_id)
+    assert first is not None
+    second = replace(first, result_id="res_phase16_second", uplift=first.uplift + 0.01)
+    repository.save(second)
+
+    restarted = EventStoreResultRepository(
+        store,
+        tenant_id="tenant-1",
+        business_id="business-1",
+    )
+    assert restarted.get_latest(active.experiment_id) == second
+    revisions = [
+        int((event.get("payload") or {}).get("revision") or 0)
+        for event in store.iter_events(
+            tenant_id="tenant-1",
+            event_type="experiment.result_recorded@v1",
+        )
+    ]
+    assert revisions == [1, 2]
 
 
 def test_authorized_experiment_identity_cannot_be_rewritten():
