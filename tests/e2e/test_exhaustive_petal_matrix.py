@@ -76,9 +76,9 @@ def test_every_declared_action_schema_accepts_only_its_contract() -> None:
             with pytest.raises(ValueError):
                 schema.validate(payload)  # type: ignore[arg-type]
             cases += 1
-    # Five pricing/Offer mutations gained a required typed business_id field.
-    # Each adds one missing-key and one wrong-type rejection case: +10 total.
-    assert cases == 903
+    # The Phase 16 create_experiment action adds one fully typed runtime schema.
+    # Its required/optional/type/additional/payload checks add 24 matrix cases.
+    assert cases == 927
 
 
 def test_every_runtime_handler_and_compatibility_import_door_resolves() -> None:
@@ -101,7 +101,7 @@ def test_every_runtime_handler_and_compatibility_import_door_resolves() -> None:
         for export_name in exports:
             assert hasattr(module, export_name), (module_name, export_name)
             cases += 1
-    assert len(SPECS) == 59
+    assert len(SPECS) == 60
     assert cases == 1016
 
 
