@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import math
+
 from core.experiments.errors import ResultValidationError
 
 
@@ -29,6 +31,8 @@ class SnapshotInputGuard:
             raise ResultValidationError("control_conversions must be <= control_exposures")
         if treatment_conversions > treatment_exposures:
             raise ResultValidationError("treatment_conversions must be <= treatment_exposures")
+        if not math.isfinite(control_value) or not math.isfinite(treatment_value):
+            raise ResultValidationError("experiment metric values must be finite")
         if control_value < 0.0:
             raise ResultValidationError("control_value must be >= 0")
         if treatment_value < 0.0:
