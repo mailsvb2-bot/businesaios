@@ -222,7 +222,7 @@ def test_concurrent_conflicting_experiment_writers_do_not_corrupt_stream():
 
     assert sorted(status for status, _ in outcomes) == ["error", "ok"]
     persisted = first_repo.get(first.experiment_id)
-    assert persisted in {first, second}
+    assert persisted in (first, second)
     events = list(
         store.iter_events(
             tenant_id="tenant-1",
