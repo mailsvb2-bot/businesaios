@@ -7,17 +7,19 @@ from types import SimpleNamespace
 
 from application.autonomy.autonomy_state_assembly import AutonomyStateAssembly
 from application.memory.business_memory_state_adapter import BusinessMemoryStateAdapter
-from application.memory.business_memory_v2 import (
+from application.memory.business_operating_memory import (
     MEMORY_LIFECYCLE,
+    BusinessMemoryCompactor,
+    BusinessOperatingMemory,
+    FileBusinessOperatingMemoryStore,
     add_memory_candidate,
-    project_business_memory_v2,
     persist_memory_candidate,
     persist_memory_transition,
+    project_business_memory_v2,
     project_memory_knowledge_graph,
     project_portable_memory,
     transition_memory,
 )
-from application.memory.business_operating_memory import BusinessOperatingMemory, FileBusinessOperatingMemoryStore
 from application.memory.business_operating_memory_types import AntiPatternRecord, DurableMemoryRecord, PatternEvidence
 from kernel.world_state import WorldStateV1
 
@@ -56,7 +58,7 @@ def test_memory_v2_imports_in_fresh_process_without_runtime_policy_cycle():
             sys.executable,
             "-c",
             (
-                "from application.memory.business_memory_v2 import project_business_memory_v2; "
+                "from application.memory.business_operating_memory import project_business_memory_v2; "
                 "from runtime.platform.business_memory.policy import BusinessMemoryPolicy; "
                 "policy = BusinessMemoryPolicy(); "
                 "assert policy.max_active_channels == 12; "
@@ -468,3 +470,107 @@ def test_state_assembly_prefers_canonical_store_over_stale_legacy_memory_context
     durable = state.meta["business_memory_v2"]["durable_memory"]
     assert durable[0]["memory_id"] == "mem-live"
     assert durable[0]["value"] == "store truth"
+
+
+
+def test_blank_provenance_cannot_activate_or_survive_reload(tmp_path):
+    memory = add_memory_candidate(
+        _memory(tmp_path),
+        DurableMemoryRecord(
+            memory_id="mem-blank",
+            memory_type="semantic",
+            key="external",
+            value="claim",
+            external=True,
+        ),
+    )
+    try:
+        transition_memory(memory, memory_id="mem-blank", transition="validate", provenance=("   ",))
+    except ValueError as exc:
+        assert "requires provenance" in str(exc)
+    else:
+        raise AssertionError("blank provenance activated memory")
+
+    root = tmp_path / "crafted"
+    target = root / "tenant-1"
+    target.mkdir(parents=True)
+    (target / "business-1.json").write_text(
+        '{"schema_version":3,"tenant_id":"tenant-1","business_id":"business-1","durable_memory":[{"memory_id":"mem-crafted","memory_type":"semantic","key":"external","value":"claim","status":"validate","provenance":["   "],"external":true}]}',
+        encoding="utf-8",
+    )
+    loaded = FileBusinessOperatingMemoryStore(root_dir=root).load(
+        tenant_id="tenant-1",
+        business_id="business-1",
+    )
+    crafted = next(item for item in loaded.durable_memory if item.memory_id == "mem-crafted")
+    assert crafted.status == "create"
+    assert crafted.provenance == ()
+    assert project_business_memory_v2(loaded)["durable_memory"] == []
+
+
+def test_quarantine_cannot_evict_validated_memory_during_compaction():
+    active = DurableMemoryRecord(
+        memory_id="trusted",
+        memory_type="semantic",
+        key="trusted",
+        value="verified",
+        status="validate",
+        provenance=("proof",),
+    )
+    quarantine = tuple(
+        DurableMemoryRecord(
+            memory_id=f"q-{idx}",
+            memory_type="semantic",
+            key=f"q-{idx}",
+            value="untrusted",
+            external=True,
+        )
+        for idx in range(80)
+    )
+    memory = BusinessOperatingMemory(
+        schema_version=3,
+        tenant_id="tenant-1",
+        business_id="business-1",
+        durable_memory=quarantine + (active,),
+    )
+    compacted = BusinessMemoryCompactor().compact(memory)
+    assert any(item.memory_id == "trusted" for item in compacted.durable_memory)
+    assert len(compacted.durable_memory) <= 64
+
+
+def test_read_time_migration_is_persisted_atomically(tmp_path):
+    root = tmp_path / "persist-migration"
+    target = root / "tenant-old"
+    target.mkdir(parents=True)
+    path = target / "business-old.json"
+    path.write_text(
+        '{"schema_version":2,"tenant_id":"tenant-old","business_id":"business-old","business_profile":{"segment":"legacy"}}',
+        encoding="utf-8",
+    )
+    FileBusinessOperatingMemoryStore(root_dir=root).load(
+        tenant_id="tenant-old",
+        business_id="business-old",
+    )
+    persisted = __import__("json").loads(path.read_text(encoding="utf-8"))
+    assert persisted["schema_version"] == 3
+    assert persisted["durable_memory"] == []
+
+
+def test_legacy_context_injection_does_not_claim_memory_v2_without_canonical_store():
+    adapter = BusinessMemoryStateAdapter(store=None)
+    state = WorldStateV1(
+        schema_version=1,
+        user={"user_id": "u1"},
+        session={"channel": "headless"},
+        product={"business_id": "business-1"},
+        economy={},
+        timestamp_ms=1,
+        tenant_id="tenant-1",
+        meta={},
+        behavior={"goal": "grow"},
+    )
+    enriched = adapter.inject_context(
+        world_state=state,
+        memory_context={"tenant_id": "tenant-1", "business_id": "business-1"},
+    )
+    assert "business_memory_v2" not in enriched.meta
