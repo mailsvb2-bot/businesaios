@@ -131,3 +131,34 @@ def test_runtime_handler_rejects_explicit_zero_limits(field):
             _env(),
             event_store=store,
         )
+
+
+@pytest.mark.parametrize(
+    ("field", "value", "message"),
+    [
+        ("subject_key", "", "subject_key"),
+        ("audience_key", "", "audience_key"),
+        ("owner", "", "owner"),
+    ],
+)
+def test_runtime_handler_does_not_replace_explicit_blank_identity_fields(field, value, message):
+    store = MemoryEventStore()
+    with pytest.raises(ExperimentValidationError, match=message):
+        handle_create_experiment(
+            _payload(**{field: value}),
+            None,
+            _env(),
+            event_store=store,
+        )
+
+
+@pytest.mark.parametrize(("field", "message"), [("variants", "variants must be a list"), ("metrics", "metrics must be a list")])
+def test_runtime_handler_does_not_replace_explicit_null_structures(field, message):
+    store = MemoryEventStore()
+    with pytest.raises(ValueError, match=message):
+        handle_create_experiment(
+            _payload(**{field: None}),
+            None,
+            _env(),
+            event_store=store,
+        )
