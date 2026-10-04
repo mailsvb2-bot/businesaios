@@ -41,13 +41,11 @@ _BLOCKING_OVERLAP_STATUSES = {
 
 
 def _overlap_token(plan: ExperimentPlan, overlap_key: str) -> str:
-    return payload_hash(
-        {
-            "subject_key": plan.subject_key,
-            "audience_key": plan.audience_key,
-            "overlap_key": str(overlap_key),
-        }
-    )
+    return payload_hash({
+        "subject_key": plan.subject_key,
+        "audience_key": plan.audience_key,
+        "overlap_key": str(overlap_key),
+    })
 
 
 def _overlap_tokens(plan: ExperimentPlan) -> tuple[str, ...]:
@@ -62,15 +60,13 @@ def _revision_event_id(
     entity_id: str,
     revision: int,
 ) -> str:
-    token = payload_hash(
-        {
-            "kind": str(kind),
-            "tenant_id": str(tenant_id),
-            "business_id": str(business_id),
-            "entity_id": str(entity_id),
-            "revision": int(revision),
-        }
-    )
+    token = payload_hash({
+        "kind": str(kind),
+        "tenant_id": str(tenant_id),
+        "business_id": str(business_id),
+        "entity_id": str(entity_id),
+        "revision": int(revision),
+    })
     return f"experiment.{kind}:{token}"
 
 
@@ -234,11 +230,7 @@ class EventStoreExperimentRepository(_ScopedEventRepository):
                 previous = claims.get(token)
                 if previous is not None and previous.get("experiment_id") != plan.experiment_id:
                     raise RuntimeError("EXPERIMENT_OVERLAP_STATE_CONFLICT")
-                claims[token] = {
-                    "experiment_id": plan.experiment_id,
-                    "state": "active",
-                    "reserved_at_ms": 0,
-                }
+                claims[token] = {"experiment_id": plan.experiment_id, "state": "active"}
 
         raw_claims = dict((raw_registry or {}).get("claims") or {})
         for token, value in raw_claims.items():
@@ -246,16 +238,11 @@ class EventStoreExperimentRepository(_ScopedEventRepository):
                 raise RuntimeError("EXPERIMENT_OVERLAP_REGISTRY_CORRUPT")
             experiment_id = str(value.get("experiment_id") or "").strip()
             state = str(value.get("state") or "").strip()
-            reserved_at_ms = int(value.get("reserved_at_ms") or 0)
-            if not experiment_id or state not in {"pending", "active"} or reserved_at_ms < 0:
+            if not experiment_id or state not in {"pending", "active"}:
                 raise RuntimeError("EXPERIMENT_OVERLAP_REGISTRY_CORRUPT")
             if experiment_id in known_ids or state != "pending":
                 continue
-            claims[str(token)] = {
-                "experiment_id": experiment_id,
-                "state": "pending",
-                "reserved_at_ms": reserved_at_ms,
-            }
+            claims[str(token)] = {"experiment_id": experiment_id, "state": "pending"}
         return claims
 
     def _compare_and_set_overlap_registry(self, expected, claims) -> bool:
@@ -272,10 +259,7 @@ class EventStoreExperimentRepository(_ScopedEventRepository):
     def _reconcile_overlap_registry(self) -> None:
         for _ in range(16):
             raw = self._read_overlap_registry()
-            claims = self._reconciled_overlap_claims(
-                raw,
-                existing_plans=self.list_all(),
-            )
+            claims = self._reconciled_overlap_claims(raw, existing_plans=self.list_all())
             value = {"schema_version": 1, "claims": claims}
             if raw == value or self._compare_and_set_overlap_registry(raw, claims):
                 return
@@ -300,11 +284,7 @@ class EventStoreExperimentRepository(_ScopedEventRepository):
                     existing_plans=existing_plans,
                 )
                 raw = self._read_overlap_registry()
-                now_ms = int(time.time() * 1000)
-                claims = self._reconciled_overlap_claims(
-                    raw,
-                    existing_plans=existing_plans,
-                )
+                claims = self._reconciled_overlap_claims(raw, existing_plans=existing_plans)
                 for token in candidate_tokens:
                     claim = claims.get(token)
                     if claim is not None and claim.get("experiment_id") != active.experiment_id:
@@ -317,7 +297,6 @@ class EventStoreExperimentRepository(_ScopedEventRepository):
                         claims[token] = {
                             "experiment_id": active.experiment_id,
                             "state": "pending",
-                            "reserved_at_ms": now_ms,
                         }
                 if not self._compare_and_set_overlap_registry(raw, claims):
                     continue
@@ -421,14 +400,12 @@ class EventStoreAssignmentRepository(_ScopedEventRepository):
         existing = self.find_by_subject(assignment.experiment_id, assignment.subject_id)
         if existing is not None:
             return existing
-        token = payload_hash(
-            {
-                "tenant_id": self._tenant_id,
-                "business_id": self._business_id,
-                "experiment_id": assignment.experiment_id,
-                "subject_id": assignment.subject_id,
-            }
-        )
+        token = payload_hash({
+            "tenant_id": self._tenant_id,
+            "business_id": self._business_id,
+            "experiment_id": assignment.experiment_id,
+            "subject_id": assignment.subject_id,
+        })
         event_id = f"experiment.assignment:{token}"
         try:
             self._append(
