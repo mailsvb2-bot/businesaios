@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from runtime.boot.economics_boot import CANON_BOOT_WIRING_ONLY as ECONOMICS_BOOT
-from runtime.boot.experiments_boot import CANON_BOOT_WIRING_ONLY as EXPERIMENTS_BOOT
+from runtime.experiments.wiring import CANON_EXPERIMENTS_RUNTIME_WIRING as EXPERIMENTS_BOOT
 from runtime.boot.finance_boot import CANON_BOOT_WIRING_ONLY as FINANCE_BOOT
 from runtime.boot.governance_boot import CANON_BOOT_WIRING_ONLY as GOVERNANCE_BOOT
 from runtime.boot.human_governance_boot import CANON_BOOT_WIRING_ONLY as HUMAN_GOVERNANCE_BOOT
