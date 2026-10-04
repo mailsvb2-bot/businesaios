@@ -575,6 +575,60 @@ def test_future_schema_load_fails_closed_without_rewrite(tmp_path):
     assert path.read_text(encoding="utf-8") == original
 
 
+def test_mismatched_persisted_scope_fails_closed_without_cross_scope_rewrite(tmp_path):
+    root = tmp_path / "scope-mismatch"
+    source_dir = root / "tenant-a"
+    target_dir = root / "tenant-b"
+    source_dir.mkdir(parents=True)
+    target_dir.mkdir(parents=True)
+    source = source_dir / "business-a.json"
+    target = target_dir / "business-b.json"
+    source_payload = '{"schema_version":2,"tenant_id":"tenant-b","business_id":"business-b","business_profile":{"source":"wrong-scope"}}'
+    target_payload = '{"schema_version":3,"tenant_id":"tenant-b","business_id":"business-b","business_profile":{"source":"legitimate"}}'
+    source.write_text(source_payload, encoding="utf-8")
+    target.write_text(target_payload, encoding="utf-8")
+
+    try:
+        FileBusinessOperatingMemoryStore(root_dir=root).load(
+            tenant_id="tenant-a",
+            business_id="business-a",
+        )
+    except ValueError as exc:
+        assert "persisted scope mismatch" in str(exc)
+    else:
+        raise AssertionError("mismatched persisted scope was accepted")
+
+    assert source.read_text(encoding="utf-8") == source_payload
+    assert target.read_text(encoding="utf-8") == target_payload
+
+
+def test_persistence_boundary_sanitizes_oversized_durable_memory_fields(tmp_path):
+    root = tmp_path / "durable-ceiling"
+    store = FileBusinessOperatingMemoryStore(root_dir=root)
+    memory = add_memory_candidate(
+        BusinessOperatingMemory.empty(tenant_id="tenant-1", business_id="business-1"),
+        DurableMemoryRecord(
+            memory_id="memory-oversized",
+            memory_type="semantic",
+            key="oversized",
+            value="x" * 100_000,
+            provenance=tuple(f"proof-{index}-" + ("y" * 300) for index in range(100)),
+        ),
+    )
+
+    path = store.save(memory)
+    assert path.stat().st_size <= store.policy.approx_hard_payload_bytes
+    persisted = __import__("json").loads(path.read_text(encoding="utf-8"))
+    durable = persisted["durable_memory"][0]
+    assert len(durable["value"]) <= store.policy.max_summary_length
+    assert len(durable["provenance"]) <= store.policy.max_source_run_ids
+    assert all(len(item) <= 128 for item in durable["provenance"])
+
+    loaded = store.load(tenant_id="tenant-1", business_id="business-1")
+    assert loaded.durable_memory[0].status == "create"
+    assert loaded.durable_memory[0].memory_id == "memory-oversized"
+
+
 def test_candidate_identity_is_normalized_before_validation_and_collision():
     memory = BusinessOperatingMemory.empty(tenant_id="tenant-1", business_id="business-1")
     try:
