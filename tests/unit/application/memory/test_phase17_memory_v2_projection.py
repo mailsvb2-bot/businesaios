@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+import subprocess
+import sys
+
 from application.memory.business_memory_v2 import (
     MEMORY_LIFECYCLE,
     project_business_memory_v2,
@@ -34,6 +37,26 @@ def _memory(tmp_path):
         recorded_at="2026-10-04T00:00:00Z",
     )
     return store.load(tenant_id="tenant-1", business_id="business-1")
+
+
+def test_memory_v2_imports_in_fresh_process_without_runtime_policy_cycle():
+    probe = subprocess.run(
+        [
+            sys.executable,
+            "-c",
+            (
+                "from application.memory.business_memory_v2 import project_business_memory_v2; "
+                "from runtime.platform.business_memory.policy import BusinessMemoryPolicy; "
+                "policy = BusinessMemoryPolicy(); "
+                "assert policy.max_active_channels == 12; "
+                "assert policy.max_verified_outcomes == 20"
+            ),
+        ],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert probe.returncode == 0, probe.stderr
 
 
 def test_memory_v2_separates_canonical_memory_domains_without_copying_external_owners(tmp_path):
