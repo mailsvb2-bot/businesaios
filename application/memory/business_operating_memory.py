@@ -651,7 +651,7 @@ class FileBusinessOperatingMemoryStore:
             except (json.JSONDecodeError, OSError):
                 continue
             key = (_text(payload.get("tenant_id")), _text(payload.get("business_id")))
-            if key in seen or not all(key):
+            if key in seen or not all(key) or self._target_path(tenant_id=key[0], business_id=key[1]) != item:
                 continue
             seen.add(key)
             result.append(key)
