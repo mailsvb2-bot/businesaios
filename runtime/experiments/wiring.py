@@ -28,16 +28,10 @@ CANON_EXPERIMENTS_RUNTIME_WIRING = True
 
 
 def build_experiments_service(
-    *,
-    event_store,
-    tenant_id: str,
-    business_id: str,
+    *, event_store, tenant_id: str, business_id: str
 ) -> ExperimentsService:
-    """Bind the canonical Experiment Engine to the existing Event Store."""
-
     scope = {
-        "event_store": event_store,
-        "tenant_id": str(tenant_id or "").strip(),
+        "event_store": event_store, "tenant_id": str(tenant_id or "").strip(),
         "business_id": str(business_id or "").strip(),
     }
     return ExperimentsService(
