@@ -63,6 +63,7 @@ class BusinessMemoryPolicy:
     max_failures: int = 16
     max_wins: int = 16
     max_anti_patterns: int = 16
+    max_durable_memory_records: int = 64
 
     max_profile_fields: int = 64
     max_constraint_fields: int = 64
