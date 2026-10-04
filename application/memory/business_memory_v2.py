@@ -3,7 +3,7 @@ from __future__ import annotations
 from dataclasses import asdict, replace
 from typing import Any
 
-from application.memory.business_operating_memory import BusinessOperatingMemory
+from application.memory.business_operating_memory import BusinessOperatingMemory, FileBusinessOperatingMemoryStore
 from application.memory.business_operating_memory_types import DurableMemoryRecord
 
 CANON_BUSINESS_MEMORY_V2 = True
@@ -57,6 +57,43 @@ def transition_memory(
     else:
         rows[index] = replace(current, status=action, provenance=evidence, updated_at=updated_at or current.updated_at)
     return replace(memory, durable_memory=tuple(rows))
+
+
+def persist_memory_candidate(
+    store: FileBusinessOperatingMemoryStore,
+    *,
+    tenant_id: str,
+    business_id: str,
+    record: DurableMemoryRecord,
+) -> BusinessOperatingMemory:
+    return store.mutate(
+        tenant_id=tenant_id,
+        business_id=business_id,
+        transform=lambda memory: add_memory_candidate(memory, record),
+    )
+
+
+def persist_memory_transition(
+    store: FileBusinessOperatingMemoryStore,
+    *,
+    tenant_id: str,
+    business_id: str,
+    memory_id: str,
+    transition: str,
+    provenance: tuple[str, ...] = (),
+    updated_at: str | None = None,
+) -> BusinessOperatingMemory:
+    return store.mutate(
+        tenant_id=tenant_id,
+        business_id=business_id,
+        transform=lambda memory: transition_memory(
+            memory,
+            memory_id=memory_id,
+            transition=transition,
+            provenance=provenance,
+            updated_at=updated_at,
+        ),
+    )
 
 
 def project_portable_memory(memory: BusinessOperatingMemory, *, allow_global: bool = False) -> list[dict[str, Any]]:
@@ -143,5 +180,6 @@ def project_memory_knowledge_graph(memory: BusinessOperatingMemory) -> dict[str,
 
 __all__ = [
     "CANON_BUSINESS_MEMORY_V2", "MEMORY_LIFECYCLE", "add_memory_candidate", "transition_memory",
-    "project_business_memory_v2", "project_memory_knowledge_graph", "project_portable_memory",
+    "persist_memory_candidate", "persist_memory_transition", "project_business_memory_v2",
+    "project_memory_knowledge_graph", "project_portable_memory",
 ]
