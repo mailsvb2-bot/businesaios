@@ -53,6 +53,23 @@ class AntiPatternRecord:
     reason: str = ""
 
 @dataclass(frozen=True)
+class DurableMemoryRecord:
+    memory_id: str
+    memory_type: str
+    key: str
+    value: str
+    status: str = "create"
+    provenance: tuple[str, ...] = ()
+    confidence: float = 0.0
+    sample_size: int = 0
+    external: bool = False
+    portable: bool = False
+    anonymized: bool = False
+    created_at: str | None = None
+    updated_at: str | None = None
+    supersedes: str | None = None
+
+@dataclass(frozen=True)
 class MemoryTrendSnapshot:
     window_size: int
     goal_score_trend: str
