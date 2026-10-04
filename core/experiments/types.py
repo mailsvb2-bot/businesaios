@@ -41,6 +41,7 @@ class ExperimentPlan:
     variants: list[VariantSpec]
     metrics: list[MetricDefinition]
     minimum_sample_size: int
+    duration_days: int = 14
     overlap_keys: list[str] = field(default_factory=list)
     metadata: dict[str, str] = field(default_factory=dict)
 
