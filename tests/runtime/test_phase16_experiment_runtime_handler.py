@@ -5,6 +5,8 @@ from types import SimpleNamespace
 import pytest
 
 from core.actions.names import ACTION_CREATE_EXPERIMENT_V1
+from core.actions.catalog import build_schema_registry
+from core.experiments.errors import ExperimentValidationError
 from core.experiments.repositories.event_store_repository import EventStoreExperimentRepository
 from execution.runners.internal.create_experiment import Runner as LegacyCreateExperimentRunner
 from runtime.boot.actions_registry import get_spec, handler_actions
@@ -45,6 +47,9 @@ def test_create_experiment_is_registered_on_canonical_runtime_action_surface():
     assert spec.execution_category == "internal_bookkeeping"
     assert spec.external_confirmation_mode == "not_required"
     assert spec.requires_idempotency_key is True
+    schema = build_schema_registry().get(ACTION_CREATE_EXPERIMENT_V1, 1)
+    assert schema is not None
+    assert {"tenant_id", "business_id", "name", "hypothesis"} <= schema.required
 
 
 def test_governed_runtime_handler_persists_real_experiment():
@@ -114,3 +119,15 @@ def test_runtime_handler_rejects_business_identity_drift():
 def test_legacy_internal_runner_fails_closed():
     with pytest.raises(RuntimeError, match="CANONICAL_RUNTIME_ACTION"):
         LegacyCreateExperimentRunner().run(object())
+
+
+@pytest.mark.parametrize("field", ["minimum_sample_size", "duration_days"])
+def test_runtime_handler_rejects_explicit_zero_limits(field):
+    store = MemoryEventStore()
+    with pytest.raises(ExperimentValidationError):
+        handle_create_experiment(
+            _payload(**{field: 0}),
+            None,
+            _env(),
+            event_store=store,
+        )
