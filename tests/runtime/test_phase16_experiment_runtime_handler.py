@@ -10,6 +10,7 @@ from core.experiments.errors import ExperimentValidationError
 from core.experiments.repositories.event_store_repository import EventStoreExperimentRepository
 from execution.runners.internal.create_experiment import Runner as LegacyCreateExperimentRunner
 from runtime.boot.actions_registry import get_spec, handler_actions
+from runtime.execution.execution_contract_lock import verify_execution_contract
 from runtime.handlers.experiments_create import handle_create_experiment
 from runtime.platform.event_store.memory_event_store import MemoryEventStore
 
@@ -164,3 +165,25 @@ def test_runtime_handler_does_not_replace_explicit_null_structures(field, messag
             _env(),
             event_store=store,
         )
+
+
+def test_runtime_execution_verification_accepts_persisted_internal_experiment():
+    store = MemoryEventStore()
+    env = _env()
+    env.decision.payload = _payload()
+    env.decision.issued_at_ms = 1_750_000_000_000
+    output = handle_create_experiment(
+        env.decision.payload,
+        None,
+        env,
+        event_store=store,
+    )
+
+    verified = verify_execution_contract(
+        executor=SimpleNamespace(_reliability=None, _evidence_verifier=None),
+        env=env,
+        output=output,
+    )
+
+    assert verified.verified is True
+    assert verified.verification["status"] == "verified"
