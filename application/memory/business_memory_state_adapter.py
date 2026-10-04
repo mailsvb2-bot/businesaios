@@ -3,7 +3,6 @@ from __future__ import annotations
 from dataclasses import dataclass, field, replace
 from typing import Any
 
-from application.memory.business_memory_v2 import project_business_memory_v2
 from application.memory.business_operating_memory import (
     BusinessMemoryPolicy,
     BusinessOperatingMemory,
@@ -11,6 +10,7 @@ from application.memory.business_operating_memory import (
     canonicalize_business_memory_payload,
     project_business_memory_contract_bundle,
     project_business_memory_meta_payloads,
+    project_business_memory_v2,
 )
 from kernel.world_state import WorldStateV1
 
@@ -36,7 +36,6 @@ class BusinessMemoryStateAdapter:
 
     def inject_context(self, *, world_state: WorldStateV1, memory_context: dict[str, Any] | None) -> WorldStateV1:
         meta_payloads = project_business_memory_meta_payloads(memory_context, policy=self.policy)
-        meta_payloads["business_memory_v2"] = project_business_memory_v2(self._rehydrate_memory(memory_context))
         meta = dict(world_state.meta or {})
         meta.update(meta_payloads)
         return replace(world_state, meta=meta)
