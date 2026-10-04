@@ -556,6 +556,55 @@ def test_read_time_migration_is_persisted_atomically(tmp_path):
     assert persisted["durable_memory"] == []
 
 
+def test_future_schema_load_fails_closed_without_rewrite(tmp_path):
+    root = tmp_path / "future-schema"
+    target = root / "tenant-future"
+    target.mkdir(parents=True)
+    path = target / "business-future.json"
+    original = '{"schema_version":4,"tenant_id":"tenant-future","business_id":"business-future","future_only":{"keep":true}}'
+    path.write_text(original, encoding="utf-8")
+    try:
+        FileBusinessOperatingMemoryStore(root_dir=root).load(
+            tenant_id="tenant-future",
+            business_id="business-future",
+        )
+    except ValueError as exc:
+        assert "unsupported future business memory schema" in str(exc)
+    else:
+        raise AssertionError("future memory schema was silently downgraded")
+    assert path.read_text(encoding="utf-8") == original
+
+
+def test_candidate_identity_is_normalized_before_validation_and_collision():
+    memory = BusinessOperatingMemory.empty(tenant_id="tenant-1", business_id="business-1")
+    try:
+        add_memory_candidate(
+            memory,
+            DurableMemoryRecord(memory_id="   ", memory_type="semantic", key="valid", value="claim"),
+        )
+    except ValueError as exc:
+        assert "requires memory_id and key" in str(exc)
+    else:
+        raise AssertionError("blank normalized memory_id was accepted")
+
+    prefix = "m" * 128
+    normalized = add_memory_candidate(
+        memory,
+        DurableMemoryRecord(memory_id=f"{prefix}A", memory_type="semantic", key="  normalized key  ", value="first"),
+    )
+    assert normalized.durable_memory[0].memory_id == prefix
+    assert normalized.durable_memory[0].key == "normalized key"
+    try:
+        add_memory_candidate(
+            normalized,
+            DurableMemoryRecord(memory_id=f"{prefix}B", memory_type="semantic", key="other", value="second"),
+        )
+    except ValueError as exc:
+        assert "memory_id collision" in str(exc)
+    else:
+        raise AssertionError("normalized memory_id collision was accepted")
+
+
 def test_legacy_context_injection_does_not_claim_memory_v2_without_canonical_store():
     adapter = BusinessMemoryStateAdapter(store=None)
     state = WorldStateV1(
