@@ -603,7 +603,7 @@ class FileBusinessOperatingMemoryStore:
         target = self._target_path(tenant_id=memory.tenant_id, business_id=memory.business_id)
         target.parent.mkdir(parents=True, exist_ok=True)
         compacted = self.compactor.compact(BusinessOperatingMemory.from_dict(memory.to_dict(), policy=self.policy)) if self.compactor is not None else BusinessOperatingMemory.from_dict(memory.to_dict(), policy=self.policy)
-        payload = json.dumps(compacted.to_dict(), ensure_ascii=False, indent=2, sort_keys=True)
+        payload = json.dumps(compacted.to_dict(), ensure_ascii=False, sort_keys=True, separators=(",", ":"))
         fd, temp_name = tempfile.mkstemp(prefix=".business_memory_", suffix=".json", dir=str(target.parent))
         try:
             with os.fdopen(fd, "w", encoding="utf-8") as handle:
@@ -651,7 +651,7 @@ class FileBusinessOperatingMemoryStore:
             except (json.JSONDecodeError, OSError):
                 continue
             key = (_text(payload.get("tenant_id")), _text(payload.get("business_id")))
-            if key in seen or not all(key) or self._target_path(tenant_id=key[0], business_id=key[1]) != item:
+            if key in seen or not all(key) or max(map(len, key)) > 128 or self._target_path(tenant_id=key[0], business_id=key[1]) != item:
                 continue
             seen.add(key)
             result.append(key)
@@ -839,8 +839,8 @@ class FileBusinessOperatingMemoryStore:
         return self.compactor.compact(updated) if self.compactor is not None else updated
 
     def _target_path(self, *, tenant_id: str, business_id: str) -> Path:
+        if len(_text(tenant_id)) > 128 or len(_text(business_id)) > 128: raise ValueError("persisted scope mismatch: noncanonical business memory scope")
         return self.root_dir / _safe_key(tenant_id, fallback="default") / f"{_safe_key(business_id, fallback='business')}.json"
-
     def _merge_recent_runs(
         self,
         *,
