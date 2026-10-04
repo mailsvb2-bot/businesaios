@@ -6,6 +6,7 @@ from pathlib import Path
 MEMORY_FILES = [
     Path("application/memory/business_operating_memory.py"),
     Path("application/memory/business_memory_compactor.py"),
+    Path("application/memory/business_memory_v2.py"),
     Path("execution/business_operating_memory.py"),
     Path("execution/business_memory_projection.py"),
     Path("execution/business_memory_compactor.py"),
