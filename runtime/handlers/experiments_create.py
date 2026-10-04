@@ -121,8 +121,10 @@ def handle_create_experiment(payload: dict, effects, env, *, event_store):
     )
     active = service.register_experiment(plan)
     return {
+        "ok": True,
+        "status": "verified",
         "experiment_id": active.experiment_id,
-        "status": active.status.value,
+        "experiment_status": active.status.value,
         "hypothesis": active.hypothesis,
         "duration_days": active.duration_days,
         "decision_id": decision_id,
