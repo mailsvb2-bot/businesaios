@@ -99,7 +99,7 @@ def test_business_memory_payloads_are_explicitly_evidence_only() -> None:
 
     checked_files = [
         Path("application/memory/business_operating_memory.py"),
-        Path("execution/business_memory_projection.py"),
+        Path("application/memory/business_memory_v2.py"),
     ]
 
     missing: list[str] = []
