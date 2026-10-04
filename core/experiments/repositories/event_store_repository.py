@@ -19,6 +19,7 @@ from core.experiments.enums import (
     RolloutDecision,
     VariantRole,
 )
+from core.experiments.errors import ExperimentOverlapViolation
 from core.experiments.types import (
     ExperimentAssignment,
     ExperimentPlan,
@@ -32,6 +33,23 @@ from core.utils.canonical import payload_hash
 CANON_EXPERIMENT_EVENT_STORE_REPOSITORY = True
 _SOURCE = "core.experiments"
 _EXPERIMENT_REPOSITORY_LOCK = RLock()
+_OVERLAP_REGISTRY_KEY_PREFIX = "experiment.overlap_registry.v1"
+_OVERLAP_RESERVATION_TTL_MS = 60_000
+_BLOCKING_OVERLAP_STATUSES = {
+    ExperimentStatus.DRAFT,
+    ExperimentStatus.ACTIVE,
+    ExperimentStatus.PAUSED,
+}
+
+
+def _overlap_token(plan: ExperimentPlan, overlap_key: str) -> str:
+    return hashlib.sha256(
+        f"{plan.subject_key}\x1f{plan.audience_key}\x1f{overlap_key}".encode("utf-8")
+    ).hexdigest()
+
+
+def _overlap_tokens(plan: ExperimentPlan) -> tuple[str, ...]:
+    return tuple(sorted({_overlap_token(plan, str(key)) for key in plan.overlap_keys}))
 
 
 def _revision_event_id(
@@ -172,6 +190,145 @@ def _plan_from_dict(data: dict) -> ExperimentPlan:
 
 
 class EventStoreExperimentRepository(_ScopedEventRepository):
+    def _overlap_registry_key(self) -> str:
+        return f"{_OVERLAP_REGISTRY_KEY_PREFIX}:{self._business_id}"
+
+    def _overlap_registry_io(self):
+        getter = getattr(self._event_store, "get_setting", None)
+        compare_and_set = getattr(self._event_store, "compare_and_set_setting", None)
+        if not callable(getter) or not callable(compare_and_set):
+            raise RuntimeError("EXPERIMENT_OVERLAP_CAS_REQUIRED")
+        return getter, compare_and_set
+
+    def _read_overlap_registry(self):
+        getter, _ = self._overlap_registry_io()
+        raw = getter(tenant_id=self._tenant_id, key=self._overlap_registry_key())
+        if raw is None:
+            return None
+        if not isinstance(raw, dict) or int(raw.get("schema_version") or 0) != 1:
+            raise RuntimeError("EXPERIMENT_OVERLAP_REGISTRY_CORRUPT")
+        if not isinstance(raw.get("claims"), dict):
+            raise RuntimeError("EXPERIMENT_OVERLAP_REGISTRY_CORRUPT")
+        return raw
+
+    def _reconciled_overlap_claims(
+        self,
+        raw_registry,
+        *,
+        existing_plans: list[ExperimentPlan],
+        now_ms: int,
+    ) -> dict[str, dict[str, object]]:
+        claims: dict[str, dict[str, object]] = {}
+        known_ids = {plan.experiment_id for plan in existing_plans}
+        for plan in existing_plans:
+            if plan.status not in _BLOCKING_OVERLAP_STATUSES:
+                continue
+            for token in _overlap_tokens(plan):
+                previous = claims.get(token)
+                if previous is not None and previous.get("experiment_id") != plan.experiment_id:
+                    raise RuntimeError("EXPERIMENT_OVERLAP_STATE_CONFLICT")
+                claims[token] = {
+                    "experiment_id": plan.experiment_id,
+                    "state": "active",
+                    "reserved_at_ms": 0,
+                }
+
+        raw_claims = dict((raw_registry or {}).get("claims") or {})
+        for token, value in raw_claims.items():
+            if not isinstance(value, dict):
+                raise RuntimeError("EXPERIMENT_OVERLAP_REGISTRY_CORRUPT")
+            experiment_id = str(value.get("experiment_id") or "").strip()
+            state = str(value.get("state") or "").strip()
+            reserved_at_ms = int(value.get("reserved_at_ms") or 0)
+            if not experiment_id or state not in {"pending", "active"} or reserved_at_ms < 0:
+                raise RuntimeError("EXPERIMENT_OVERLAP_REGISTRY_CORRUPT")
+            if experiment_id in known_ids or state != "pending":
+                continue
+            if reserved_at_ms > now_ms + _OVERLAP_RESERVATION_TTL_MS:
+                raise RuntimeError("EXPERIMENT_OVERLAP_REGISTRY_CORRUPT")
+            if now_ms - reserved_at_ms <= _OVERLAP_RESERVATION_TTL_MS:
+                claims[str(token)] = {
+                    "experiment_id": experiment_id,
+                    "state": "pending",
+                    "reserved_at_ms": reserved_at_ms,
+                }
+        return claims
+
+    def _compare_and_set_overlap_registry(self, expected, claims) -> bool:
+        _, compare_and_set = self._overlap_registry_io()
+        return bool(
+            compare_and_set(
+                tenant_id=self._tenant_id,
+                key=self._overlap_registry_key(),
+                expected=expected,
+                value={"schema_version": 1, "claims": claims},
+            )
+        )
+
+    def _reconcile_overlap_registry(self) -> None:
+        for _ in range(16):
+            raw = self._read_overlap_registry()
+            now_ms = int(time.time() * 1000)
+            claims = self._reconciled_overlap_claims(
+                raw,
+                existing_plans=self.list_all(),
+                now_ms=now_ms,
+            )
+            value = {"schema_version": 1, "claims": claims}
+            if raw == value or self._compare_and_set_overlap_registry(raw, claims):
+                return
+        raise RuntimeError("EXPERIMENT_OVERLAP_REGISTRY_CONTENTION")
+
+    def register_with_overlap_guard(self, plan: ExperimentPlan, overlap_guard) -> ExperimentPlan:
+        active = replace(plan, status=ExperimentStatus.ACTIVE)
+        if not active.overlap_keys:
+            with _EXPERIMENT_REPOSITORY_LOCK:
+                overlap_guard.ensure_no_overlap(
+                    candidate_plan=active,
+                    existing_plans=self.list_all(),
+                )
+                return self.save(active)
+
+        with _EXPERIMENT_REPOSITORY_LOCK:
+            candidate_tokens = _overlap_tokens(active)
+            for _ in range(16):
+                existing_plans = self.list_all()
+                overlap_guard.ensure_no_overlap(
+                    candidate_plan=active,
+                    existing_plans=existing_plans,
+                )
+                raw = self._read_overlap_registry()
+                now_ms = int(time.time() * 1000)
+                claims = self._reconciled_overlap_claims(
+                    raw,
+                    existing_plans=existing_plans,
+                    now_ms=now_ms,
+                )
+                for token in candidate_tokens:
+                    claim = claims.get(token)
+                    if claim is not None and claim.get("experiment_id") != active.experiment_id:
+                        raise ExperimentOverlapViolation(
+                            f"experiment overlap detected with {claim.get('experiment_id')}"
+                        )
+                for token in candidate_tokens:
+                    claim = claims.get(token)
+                    if claim is None or claim.get("state") != "active":
+                        claims[token] = {
+                            "experiment_id": active.experiment_id,
+                            "state": "pending",
+                            "reserved_at_ms": now_ms,
+                        }
+                if not self._compare_and_set_overlap_registry(raw, claims):
+                    continue
+                try:
+                    persisted = self.save(active)
+                except Exception:
+                    self._reconcile_overlap_registry()
+                    raise
+                self._reconcile_overlap_registry()
+                return persisted
+        raise RuntimeError("EXPERIMENT_OVERLAP_REGISTRY_CONTENTION")
+
     def _latest(self) -> dict[str, tuple[int, ExperimentPlan]]:
         latest: dict[str, tuple[int, ExperimentPlan]] = {}
         conflicts: set[tuple[str, int]] = set()
