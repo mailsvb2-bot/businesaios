@@ -107,8 +107,8 @@ def handle_create_experiment(payload: dict, effects, env, *, event_store):
         owner=str(body.get("owner") or getattr(decision, "issuer_id", "") or "system").strip(),
         variant_definitions=_variants(body),
         metric_definitions=_metrics(body),
-        minimum_sample_size=int(body.get("minimum_sample_size") or 100),
-        duration_days=int(body.get("duration_days") or 14),
+        minimum_sample_size=int(body["minimum_sample_size"]) if "minimum_sample_size" in body else 100,
+        duration_days=int(body["duration_days"]) if "duration_days" in body else 14,
         overlap_keys=[str(item) for item in body.get("overlap_keys", [])],
         metadata=metadata,
     )
