@@ -40,7 +40,7 @@ SPEC_ROWS: tuple[tuple[str, str, bool, str, int, int], ...] = (
     ("behavior_graph_reset@v1", "runtime.handlers.behavior_graph:handle_behavior_graph_reset", True, "general", 30, 30),
     ("capture_payment@v1", "runtime.handlers_ops:handle_capture_payment", True, "payments", 60, 30),
     ("create_payment_and_send_link@v1", "runtime.handlers_ops:handle_create_payment_and_send_link", True, "payments", 60, 30),
-    (ACTION_CREATE_EXPERIMENT_V1, "runtime.handlers.experiments_create:handle_create_experiment", True, "general", 30, 15),
+    (ACTION_CREATE_EXPERIMENT_V1, "runtime.handlers.experiments_build:handle_create_experiment", True, "general", 30, 15),
     ("deploy_policy@v1", "runtime.handlers_ops:handle_deploy_policy", True, "general", 120, 60),
     ("emit_event@v1", "runtime.boot.system_builder:inline", True, "general", 120, 60),
     ("grant_access@v1", "runtime.handlers_ops:handle_grant_access", True, "payments", 60, 30),
