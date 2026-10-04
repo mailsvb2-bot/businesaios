@@ -1152,7 +1152,7 @@ def project_portable_memory(memory: BusinessOperatingMemory, *, allow_global: bo
     return [
         {"memory_type": row.memory_type, "key": row.key, "value": row.value, "confidence": row.confidence, "sample_size": row.sample_size}
         for row in memory.durable_memory
-        if row.status in _ACTIVE_MEMORY_STATES and row.portable and row.anonymized
+        if row.status in _ACTIVE_MEMORY_STATES and row.provenance and row.portable and row.anonymized
     ]
 
 
