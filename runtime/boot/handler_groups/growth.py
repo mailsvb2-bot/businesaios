@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from core.actions.names import ACTION_CREATE_EXPERIMENT_V1
+from runtime.experiments import ACTION_CREATE_EXPERIMENT_V1
 from runtime.handlers import ActionHandlerRegistry
 
 CANON_BOOT_WIRING_ONLY = True
@@ -14,7 +14,7 @@ def register_growth_handlers(*, handlers: ActionHandlerRegistry, event_store, be
         handle_behavior_graph_path,
         handle_behavior_graph_reset,
     )
-    from runtime.handlers.experiments_create import handle_create_experiment as _create_experiment
+    from runtime.handlers.experiments_build import handle_create_experiment as _create_experiment
     from runtime.handlers.growth_propose import handle_growth_propose as _growth_propose
     from runtime.handlers.growth_strategy_backlog import handle_growth_strategy_backlog as _growth_backlog
     from runtime.handlers.growth_strategy_generate import handle_growth_strategy_generate as _growth_generate
