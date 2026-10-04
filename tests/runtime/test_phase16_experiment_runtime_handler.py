@@ -200,6 +200,34 @@ def test_runtime_handler_rejects_non_finite_variant_traffic_before_persistence(t
     ) == []
 
 
+@pytest.mark.parametrize("mde", ["nan", "inf", "-inf"])
+def test_runtime_handler_rejects_non_finite_metric_effect_before_persistence(mde):
+    store = MemoryEventStore()
+    metrics = [
+        {
+            "metric_key": "conversion_rate",
+            "direction": "increase",
+            "minimum_detectable_effect": mde,
+            "guardrail": False,
+        }
+    ]
+
+    with pytest.raises(ExperimentValidationError, match="minimum_detectable_effect must be finite"):
+        handle_create_experiment(
+            _payload(metrics=metrics),
+            None,
+            _env(),
+            event_store=store,
+        )
+
+    assert list(
+        store.iter_events(
+            tenant_id="tenant-1",
+            event_type="experiment.state_changed@v1",
+        )
+    ) == []
+
+
 def test_runtime_execution_verification_accepts_persisted_internal_experiment():
     store = MemoryEventStore()
     env = _env()
