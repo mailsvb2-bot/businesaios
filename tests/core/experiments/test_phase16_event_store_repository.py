@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import replace
+from threading import Barrier
 
 import pytest
 
@@ -64,7 +66,6 @@ def test_event_store_experiment_survives_service_reconstruction():
     assert restored is not None
     assert restored.status.value == "active"
     assert restored.duration_days == 21
-
 
 
 def test_experiment_survives_real_sqlite_close_and_reopen(tmp_path):
@@ -150,7 +151,6 @@ def test_result_and_experiment_decision_survive_service_reconstruction():
     assert persisted_plan.status.value == "evaluated"
 
 
-
 def test_result_repository_uses_explicit_revision_order_not_event_id_order():
     store = MemoryEventStore()
     service = _service(store)
@@ -187,6 +187,50 @@ def test_result_repository_uses_explicit_revision_order_not_event_id_order():
         )
     ]
     assert revisions == [1, 2]
+
+
+
+def test_concurrent_conflicting_experiment_writers_do_not_corrupt_stream():
+    store = MemoryEventStore()
+    first_repo = EventStoreExperimentRepository(
+        store,
+        tenant_id="tenant-1",
+        business_id="business-1",
+    )
+    second_repo = EventStoreExperimentRepository(
+        store,
+        tenant_id="tenant-1",
+        business_id="business-1",
+    )
+    first = _plan(experiment_id="exp_concurrent_state")
+    second = replace(first, hypothesis="A conflicting concurrent hypothesis")
+    barrier = Barrier(2)
+
+    def _write(repository, plan):
+        barrier.wait()
+        try:
+            return ("ok", repository.save(plan))
+        except ValueError as exc:
+            return ("error", str(exc))
+
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        futures = [
+            pool.submit(_write, first_repo, first),
+            pool.submit(_write, second_repo, second),
+        ]
+        outcomes = [future.result() for future in futures]
+
+    assert sorted(status for status, _ in outcomes) == ["error", "ok"]
+    persisted = first_repo.get(first.experiment_id)
+    assert persisted in {first, second}
+    events = list(
+        store.iter_events(
+            tenant_id="tenant-1",
+            event_type="experiment.state_changed@v1",
+        )
+    )
+    assert len(events) == 1
+    assert int(events[0]["payload"]["revision"]) == 1
 
 
 def test_authorized_experiment_identity_cannot_be_rewritten():
