@@ -156,7 +156,7 @@ class BusinessMemoryCompactor:
                 memory.learned_preferences,
                 limit=self.policy.max_preferences,
             ),
-            durable_memory=tuple(memory.durable_memory[: int(self.policy.max_durable_memory_records)]),
+            durable_memory=self._compact_durable_memory(memory.durable_memory, limit=int(self.policy.max_durable_memory_records)),
             signal_memory=tuple(signal_memory),
             recurring_failures=tuple(recurring_failures),
             recurring_wins=tuple(recurring_wins),
@@ -170,6 +170,14 @@ class BusinessMemoryCompactor:
             failed_runs=self.policy.clamp_non_negative_int(memory.failed_runs),
             average_goal_score=self.policy.clamp_goal_score(memory.average_goal_score),
         )
+
+    @staticmethod
+    def _compact_durable_memory(rows: Iterable[Any], *, limit: int) -> tuple[Any, ...]:
+        items = list(rows)
+        active = [item for item in items if getattr(item, "status", "") in {"validate", "refresh"}]
+        retained = [item for item in items if getattr(item, "status", "") not in {"create", "validate", "refresh"}]
+        quarantine = [item for item in items if getattr(item, "status", "") == "create"]
+        return tuple((active + retained + quarantine)[: max(0, int(limit))])
 
     def _compact_recent_runs(self, rows: Iterable[BusinessMemoryRunRecord]) -> list[BusinessMemoryRunRecord]:
         result: list[BusinessMemoryRunRecord] = []
@@ -420,7 +428,7 @@ class BusinessMemoryCompactor:
             active_goals=tuple(list(memory.active_goals)[:6]),
             operating_constraints=dict(list(memory.operating_constraints.items())[:16]),
             learned_preferences=dict(list(memory.learned_preferences.items())[:12]),
-            durable_memory=tuple(list(memory.durable_memory)[:16]),
+            durable_memory=self._compact_durable_memory(memory.durable_memory, limit=16),
             signal_memory=tuple(list(memory.signal_memory)[:8]),
             recurring_failures=tuple(list(memory.recurring_failures)[:8]),
             recurring_wins=tuple(list(memory.recurring_wins)[:8]),
