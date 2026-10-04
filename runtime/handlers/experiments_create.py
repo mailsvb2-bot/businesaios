@@ -28,12 +28,12 @@ def _experiment_id(*, payload: Mapping[str, object], tenant_id: str, business_id
 
 
 def _variants(payload: Mapping[str, object]):
-    raw = payload.get("variants")
-    if raw is None:
+    if "variants" not in payload:
         return [
             ("control", VariantRole.CONTROL, 0.5),
             ("treatment", VariantRole.TREATMENT, 0.5),
         ]
+    raw = payload["variants"]
     if not isinstance(raw, list):
         raise ValueError("create_experiment variants must be a list")
     out = []
@@ -49,12 +49,12 @@ def _variants(payload: Mapping[str, object]):
 
 
 def _metrics(payload: Mapping[str, object]):
-    raw = payload.get("metrics")
-    if raw is None:
+    if "metrics" not in payload:
         key = str(payload.get("primary_metric") or "").strip()
         if not key:
             raise ValueError("create_experiment requires metrics or primary_metric")
         return [(key, MetricDirection.INCREASE, 0.0, False)]
+    raw = payload["metrics"]
     if not isinstance(raw, list):
         raise ValueError("create_experiment metrics must be a list")
     out = []
@@ -102,9 +102,13 @@ def handle_create_experiment(payload: dict, effects, env, *, event_store):
         ),
         name=_required(body, "name"),
         hypothesis=_required(body, "hypothesis"),
-        subject_key=str(body.get("subject_key") or "customer").strip(),
-        audience_key=str(body.get("audience_key") or "all").strip(),
-        owner=str(body.get("owner") or getattr(decision, "issuer_id", "") or "system").strip(),
+        subject_key=str(body["subject_key"]).strip() if "subject_key" in body else "customer",
+        audience_key=str(body["audience_key"]).strip() if "audience_key" in body else "all",
+        owner=(
+            str(body["owner"]).strip()
+            if "owner" in body
+            else str(getattr(decision, "issuer_id", "") or "system").strip()
+        ),
         variant_definitions=_variants(body),
         metric_definitions=_metrics(body),
         minimum_sample_size=int(body["minimum_sample_size"]) if "minimum_sample_size" in body else 100,
