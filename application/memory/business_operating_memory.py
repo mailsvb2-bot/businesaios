@@ -605,6 +605,7 @@ class FileBusinessOperatingMemoryStore:
 
     def save(self, memory: BusinessOperatingMemory) -> Path:
         target = self._target_path(tenant_id=memory.tenant_id, business_id=memory.business_id)
+        target.parent.mkdir(parents=True, exist_ok=True)
         with FileBusinessMemoryLock(target_path=target, timeout_seconds=float(self.policy.save_lock_timeout_seconds), retry_delay_seconds=float(self.policy.save_lock_retry_delay_seconds)):
             return self._write_unlocked(memory)
 
@@ -616,6 +617,7 @@ class FileBusinessOperatingMemoryStore:
         transform: Callable[[BusinessOperatingMemory], BusinessOperatingMemory],
     ) -> BusinessOperatingMemory:
         target = self._target_path(tenant_id=tenant_id, business_id=business_id)
+        target.parent.mkdir(parents=True, exist_ok=True)
         with FileBusinessMemoryLock(target_path=target, timeout_seconds=float(self.policy.save_lock_timeout_seconds), retry_delay_seconds=float(self.policy.save_lock_retry_delay_seconds)):
             updated = transform(self._load_unlocked(tenant_id=tenant_id, business_id=business_id))
             if updated.tenant_id != tenant_id or updated.business_id != business_id:
