@@ -4,7 +4,7 @@ import json
 import os
 import tempfile
 from collections.abc import Callable, Iterable, Mapping
-from dataclasses import asdict, dataclass, field
+from dataclasses import asdict, dataclass, field, replace
 from pathlib import Path
 from typing import Any
 
@@ -584,7 +584,19 @@ class FileBusinessOperatingMemoryStore:
         return self.compactor.compact(memory) if self.compactor is not None else memory
 
     def load(self, *, tenant_id: str, business_id: str) -> BusinessOperatingMemory:
-        return self._load_unlocked(tenant_id=tenant_id, business_id=business_id)
+        target = self._target_path(tenant_id=tenant_id, business_id=business_id)
+        if not target.exists():
+            return BusinessOperatingMemory.empty(tenant_id=tenant_id, business_id=business_id)
+        target.parent.mkdir(parents=True, exist_ok=True)
+        with FileBusinessMemoryLock(target_path=target, timeout_seconds=float(self.policy.save_lock_timeout_seconds), retry_delay_seconds=float(self.policy.save_lock_retry_delay_seconds)):
+            memory = self._load_unlocked(tenant_id=tenant_id, business_id=business_id)
+            try:
+                persisted = json.loads(target.read_text(encoding="utf-8"))
+            except (json.JSONDecodeError, OSError):
+                return memory
+            if persisted != memory.to_dict():
+                self._write_unlocked(memory)
+            return memory
 
     def _write_unlocked(self, memory: BusinessOperatingMemory) -> Path:
         target = self._target_path(tenant_id=memory.tenant_id, business_id=memory.business_id)
@@ -1043,6 +1055,176 @@ class FileBusinessOperatingMemoryStore:
             parts.append(self.policy.sanitize_text(final_feedback.get("error"), max_length=64))
         return " | ".join(part for part in parts if part)
 
+
+CANON_BUSINESS_MEMORY_V2 = True
+MEMORY_LIFECYCLE = ("create", "validate", "refresh", "supersede", "expire", "archive", "forget")
+_ACTIVE_MEMORY_STATES = frozenset({"validate", "refresh"})
+_ALLOWED_MEMORY_TRANSITIONS = {
+    "create": frozenset({"validate", "forget"}),
+    "validate": frozenset({"refresh", "supersede", "expire", "archive", "forget"}),
+    "refresh": frozenset({"refresh", "supersede", "expire", "archive", "forget"}),
+    "supersede": frozenset({"archive", "forget"}),
+    "expire": frozenset({"archive", "forget"}),
+    "archive": frozenset({"forget"}),
+    "forget": frozenset(),
+}
+
+
+def add_memory_candidate(memory: BusinessOperatingMemory, record: DurableMemoryRecord) -> BusinessOperatingMemory:
+    if record.status != "create":
+        raise ValueError("new memory candidate must start in create state")
+    if not record.memory_id or not record.key:
+        raise ValueError("memory candidate requires memory_id and key")
+    existing = next((item for item in memory.durable_memory if item.memory_id == record.memory_id), None)
+    if existing is not None:
+        if existing == record:
+            return memory
+        raise ValueError("memory_id collision")
+    return replace(memory, durable_memory=(record, *memory.durable_memory))
+
+
+def transition_memory(
+    memory: BusinessOperatingMemory,
+    *,
+    memory_id: str,
+    transition: str,
+    provenance: tuple[str, ...] = (),
+    updated_at: str | None = None,
+) -> BusinessOperatingMemory:
+    action = str(transition or "").strip()
+    rows = list(memory.durable_memory)
+    index = next((i for i, item in enumerate(rows) if item.memory_id == memory_id), None)
+    if index is None:
+        raise KeyError(memory_id)
+    current = rows[index]
+    if action not in _ALLOWED_MEMORY_TRANSITIONS.get(current.status, frozenset()):
+        raise ValueError(f"invalid memory transition: {current.status}->{action}")
+    evidence = tuple(_dedupe((*current.provenance, *provenance)))
+    if action in _ACTIVE_MEMORY_STATES and not evidence:
+        raise ValueError("validated durable memory requires provenance")
+    if action == "forget":
+        rows.pop(index)
+    else:
+        rows[index] = replace(current, status=action, provenance=evidence, updated_at=updated_at or current.updated_at)
+    return replace(memory, durable_memory=tuple(rows))
+
+
+def persist_memory_candidate(
+    store: FileBusinessOperatingMemoryStore,
+    *,
+    tenant_id: str,
+    business_id: str,
+    record: DurableMemoryRecord,
+) -> BusinessOperatingMemory:
+    return store.mutate(
+        tenant_id=tenant_id,
+        business_id=business_id,
+        transform=lambda memory: add_memory_candidate(memory, record),
+    )
+
+
+def persist_memory_transition(
+    store: FileBusinessOperatingMemoryStore,
+    *,
+    tenant_id: str,
+    business_id: str,
+    memory_id: str,
+    transition: str,
+    provenance: tuple[str, ...] = (),
+    updated_at: str | None = None,
+) -> BusinessOperatingMemory:
+    return store.mutate(
+        tenant_id=tenant_id,
+        business_id=business_id,
+        transform=lambda memory: transition_memory(
+            memory,
+            memory_id=memory_id,
+            transition=transition,
+            provenance=provenance,
+            updated_at=updated_at,
+        ),
+    )
+
+
+def project_portable_memory(memory: BusinessOperatingMemory, *, allow_global: bool = False) -> list[dict[str, Any]]:
+    if not allow_global:
+        return []
+    return [
+        {"memory_type": row.memory_type, "key": row.key, "value": row.value, "confidence": row.confidence, "sample_size": row.sample_size}
+        for row in memory.durable_memory
+        if row.status in _ACTIVE_MEMORY_STATES and row.portable and row.anonymized
+    ]
+
+
+def project_business_memory_v2(memory: BusinessOperatingMemory) -> dict[str, Any]:
+    scope = {"tenant_id": memory.tenant_id, "business_id": memory.business_id}
+    failure_counts = {item.key: item.count for item in memory.recurring_failures}
+    procedural: list[dict[str, Any]] = []
+    for kind, rows in (
+        ("success_pattern", memory.recurring_wins),
+        ("failure_pattern", memory.recurring_failures),
+        ("anti_pattern", memory.anti_patterns),
+    ):
+        for item in rows:
+            data = asdict(item)
+            procedural.append({
+                "kind": kind,
+                "key": data.get("key", ""),
+                "evidence": list(data.get("source_run_ids") or []),
+                "sample_size": int(data.get("count") or failure_counts.get(data.get("key", "")) or len(data.get("source_run_ids") or [])),
+                "scope": scope,
+                "confidence": float(data.get("confidence") or 0.0),
+                "freshness": float(data.get("freshness") or 0.0),
+            })
+    durable = [asdict(row) for row in memory.durable_memory if row.status in _ACTIVE_MEMORY_STATES and row.provenance]
+    evidence_refs = sorted({ref for item in procedural for ref in item["evidence"] if str(ref).strip()})
+    return {
+        "schema_version": 2,
+        "scope": scope,
+        "operational_state": {"owner": "WorldModel", "stored_here": False},
+        "episodic_memory": [asdict(run) for run in memory.recent_runs],
+        "semantic_memory": {
+            "business_profile": dict(memory.business_profile),
+            "signals": [asdict(item) for item in memory.signal_memory],
+            "trends": None if memory.trends is None else asdict(memory.trends),
+        },
+        "procedural_memory": procedural,
+        "business_preferences": dict(memory.learned_preferences),
+        "durable_memory": durable,
+        "evidence_store": {"owner": "EvidenceStore", "stored_here": False, "refs": evidence_refs},
+        "strategic_memory": [
+            {
+                "run_id": run.run_id,
+                "tried": run.summary,
+                "why": run.goal,
+                "conditions": dict(run.fingerprint),
+                "result": "completed" if run.completed else run.stop_reason,
+                "why_abandoned": "" if run.completed else run.stop_reason,
+                "recorded_at": run.recorded_at,
+            }
+            for run in memory.recent_runs
+        ],
+        "lifecycle": list(MEMORY_LIFECYCLE),
+        "evidence_only": True,
+        "must_not_issue_decision": True,
+        "must_not_unlock_effects": True,
+    }
+
+
+def project_memory_knowledge_graph(memory: BusinessOperatingMemory) -> dict[str, Any]:
+    view = project_business_memory_v2(memory)
+    nodes = [{"id": f"business:{memory.business_id}", "kind": "business"}]
+    nodes.extend({"id": f"procedure:{row['kind']}:{row['key']}", "kind": row["kind"]} for row in view["procedural_memory"])
+    nodes.extend({"id": f"memory:{row['memory_id']}", "kind": row["memory_type"]} for row in view["durable_memory"])
+    return {
+        "projection_only": True,
+        "source_of_truth": False,
+        "scope": view["scope"],
+        "nodes": nodes,
+        "edges": [{"from": f"business:{memory.business_id}", "to": node["id"], "relation": "has_memory"} for node in nodes[1:]],
+    }
+
+
 __all__ = [
     "BUSINESS_MEMORY_SCHEMA_VERSION",
     "BusinessMemoryCompactionReport",
@@ -1062,4 +1244,13 @@ __all__ = [
     "project_business_memory_feedback_snapshot",
     "project_business_memory_summary",
     "project_business_memory_governance_summary",
+    "CANON_BUSINESS_MEMORY_V2",
+    "MEMORY_LIFECYCLE",
+    "add_memory_candidate",
+    "transition_memory",
+    "persist_memory_candidate",
+    "persist_memory_transition",
+    "project_business_memory_v2",
+    "project_memory_knowledge_graph",
+    "project_portable_memory",
 ]
