@@ -48,9 +48,18 @@ def test_create_experiment_is_registered_on_canonical_runtime_action_surface():
     assert spec.execution_category == "internal_bookkeeping"
     assert spec.external_confirmation_mode == "not_required"
     assert spec.requires_idempotency_key is True
-    schema = build_schema_registry().get(ACTION_CREATE_EXPERIMENT_V1, 1)
-    assert schema is not None
-    assert {"tenant_id", "business_id", "name", "hypothesis"} <= schema.required
+    schema_registry = build_schema_registry()
+    assert schema_registry.latest_version(ACTION_CREATE_EXPERIMENT_V1) == 1
+    assert schema_registry.validate(
+        ACTION_CREATE_EXPERIMENT_V1,
+        {
+            "tenant_id": "tenant-1",
+            "business_id": "business-1",
+            "name": "Experiment",
+            "hypothesis": "Treatment improves the primary metric",
+        },
+        version=1,
+    ) == 1
 
 
 def test_governed_runtime_handler_persists_real_experiment():
