@@ -10,7 +10,7 @@ from core.experiments.builders.experiment_plan_builder import ExperimentPlanBuil
 from core.experiments.enums import MetricDirection, VariantRole
 from core.experiments.errors import ExperimentValidationError
 from core.experiments.repositories.event_store_repository import EventStoreExperimentRepository, EventStoreResultRepository
-from runtime.boot.experiments_boot import build_experiments_service
+from runtime.experiments import build_experiments_service
 from runtime.platform.event_store.memory_event_store import MemoryEventStore
 from runtime.platform.event_store.sqlite_event_store import SqliteEventStore
 
