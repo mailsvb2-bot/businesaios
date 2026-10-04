@@ -32,11 +32,13 @@ class ExperimentPlanBuilder:
         variant_definitions: Iterable[tuple[str, VariantRole, float]],
         metric_definitions: Iterable[tuple[str, MetricDirection, float, bool]],
         minimum_sample_size: int,
+        duration_days: int = 14,
+        experiment_id: str | None = None,
         overlap_keys: list[str] | None = None,
         metadata: dict[str, str] | None = None,
     ) -> ExperimentPlan:
         plan = ExperimentPlan(
-            experiment_id=new_experiment_id(),
+            experiment_id=str(experiment_id or new_experiment_id()).strip(),
             name=name.strip(),
             hypothesis=hypothesis.strip(),
             subject_key=subject_key.strip(),
@@ -46,6 +48,7 @@ class ExperimentPlanBuilder:
             variants=self._variant_builder.build(variant_definitions),
             metrics=self._metric_builder.build(metric_definitions),
             minimum_sample_size=minimum_sample_size,
+            duration_days=int(duration_days),
             overlap_keys=[item.strip() for item in (overlap_keys or [])],
             metadata={str(key): str(value) for key, value in dict(metadata or {}).items()},
         )
