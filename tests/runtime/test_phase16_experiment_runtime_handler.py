@@ -11,7 +11,7 @@ from core.experiments.repositories.event_store_repository import EventStoreExper
 from execution.runners.internal.create_experiment import Runner as LegacyCreateExperimentRunner
 from runtime.boot.actions_registry import get_spec, handler_actions
 from runtime.execution.execution_contract_lock import verify_execution_contract
-from runtime.handlers.experiments_create import handle_create_experiment
+from runtime.handlers.experiments_build import handle_create_experiment
 from runtime.platform.event_store.memory_event_store import MemoryEventStore
 
 
