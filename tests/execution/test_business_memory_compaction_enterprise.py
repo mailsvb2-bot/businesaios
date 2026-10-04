@@ -186,7 +186,7 @@ def test_business_memory_store_list_businesses_deduplicates(tmp_path) -> None:
     target = tmp_path / "memory" / "tenant-1"
     target.mkdir(parents=True)
     payload = {"tenant_id": "tenant-1", "business_id": "biz-1"}
-    for name in ("a.json", "b.json"):
+    for name in ("biz-1.json", "legacy-copy.json"):
         (target / name).write_text(json.dumps(payload), encoding="utf-8")
 
     assert store.list_businesses(tenant_id="tenant-1") == (("tenant-1", "biz-1"),)
