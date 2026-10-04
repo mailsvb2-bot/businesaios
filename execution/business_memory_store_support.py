@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-from typing import Any
 from collections.abc import Iterable, Mapping
+from typing import Any
 
 from execution.business_memory_policy import BusinessMemoryPolicy
 from execution.business_operating_memory_types import (
