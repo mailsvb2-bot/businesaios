@@ -7,7 +7,11 @@ from runtime.package_alias_namespace import build_package_alias_namespace
 CANON_RUNTIME_PACKAGE_ALIAS_NAMESPACE = True
 
 _PUBLIC_ATTRS = {
+    "ACTION_CREATE_EXPERIMENT_V1": ("core.actions.names", "ACTION_CREATE_EXPERIMENT_V1"),
     "Experiment": ("core.experiments.contracts", "Experiment"),
+    "ExperimentPlanBuilder": ("core.experiments.builders.experiment_plan_builder", "ExperimentPlanBuilder"),
+    "MetricDirection": ("core.experiments.enums", "MetricDirection"),
+    "VariantRole": ("core.experiments.enums", "VariantRole"),
     "ExperimentResult": ("core.experiments.contracts", "ExperimentResult"),
     "LiveCanaryCoordinator": (
         "runtime.experiments.live_canary",
@@ -29,6 +33,10 @@ _PUBLIC_ATTRS = {
         "runtime.experiments.wiring",
         "attach_live_canary",
     ),
+    "build_experiments_service": (
+        "runtime.experiments.wiring",
+        "build_experiments_service",
+    ),
     "build_experiment": (
         "core.experiments.builders.experiment_plan_builder",
         "build_experiment",
@@ -44,6 +52,10 @@ _PUBLIC_ATTRS = {
     "explain_experiment_result": (
         "core.experiments.explainers.experiment_result_explainer",
         "explain_experiment_result",
+    ),
+    "validate_prefixed_id": (
+        "core.experiments.ids",
+        "validate_prefixed_id",
     ),
     "record_live_canary_business_outcome": (
         "runtime.experiments.hooks",
