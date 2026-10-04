@@ -8,7 +8,7 @@ import pytest
 
 from core.experiments.builders.experiment_plan_builder import ExperimentPlanBuilder
 from core.experiments.enums import MetricDirection, VariantRole
-from core.experiments.errors import ExperimentValidationError
+from core.experiments.errors import ExperimentOverlapViolation, ExperimentValidationError
 from core.experiments.repositories.event_store_repository import EventStoreExperimentRepository, EventStoreResultRepository
 from runtime.experiments import build_experiments_service
 from runtime.platform.event_store.memory_event_store import MemoryEventStore
@@ -231,6 +231,44 @@ def test_concurrent_conflicting_experiment_writers_do_not_corrupt_stream():
     )
     assert len(events) == 1
     assert int(events[0]["payload"]["revision"]) == 1
+
+
+def test_concurrent_overlapping_registrations_admit_exactly_one_experiment():
+    store = MemoryEventStore()
+    first_service = _service(store)
+    second_service = _service(store)
+    first = _plan(experiment_id="exp_overlap_first")
+    second = replace(
+        _plan(experiment_id="exp_overlap_second"),
+        hypothesis="A concurrent overlapping hypothesis",
+    )
+    barrier = Barrier(2)
+
+    def _register(service, plan):
+        barrier.wait()
+        try:
+            return ("ok", service.register_experiment(plan))
+        except ExperimentOverlapViolation as exc:
+            return ("overlap", str(exc))
+
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        futures = [
+            pool.submit(_register, first_service, first),
+            pool.submit(_register, second_service, second),
+        ]
+        outcomes = [future.result() for future in futures]
+
+    assert sorted(status for status, _ in outcomes) == ["ok", "overlap"]
+    persisted = EventStoreExperimentRepository(
+        store,
+        tenant_id="tenant-1",
+        business_id="business-1",
+    ).list_all()
+    assert len(persisted) == 1
+    assert persisted[0].experiment_id in {
+        first.experiment_id,
+        second.experiment_id,
+    }
 
 
 def test_authorized_experiment_identity_cannot_be_rewritten():
