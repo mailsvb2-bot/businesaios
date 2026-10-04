@@ -602,6 +602,39 @@ def test_mismatched_persisted_scope_fails_closed_without_cross_scope_rewrite(tmp
     assert store.list_businesses() == (("tenant-b", "business-b"),)
 
 
+def test_noncanonical_long_requested_scope_cannot_rewrite_truncated_scope(tmp_path):
+    root = tmp_path / "long-scope"
+    long_tenant = "t" * 129
+    canonical_tenant = "t" * 128
+    source_dir = root / long_tenant
+    target_dir = root / canonical_tenant
+    source_dir.mkdir(parents=True)
+    target_dir.mkdir(parents=True)
+    source = source_dir / "business-a.json"
+    target = target_dir / "business-a.json"
+    source_payload = (
+        '{"schema_version":2,"tenant_id":"' + long_tenant
+        + '","business_id":"business-a","business_profile":{"source":"long-scope"}}'
+    )
+    target_payload = (
+        '{"schema_version":3,"tenant_id":"' + canonical_tenant
+        + '","business_id":"business-a","business_profile":{"source":"legitimate"}}'
+    )
+    source.write_text(source_payload, encoding="utf-8")
+    target.write_text(target_payload, encoding="utf-8")
+
+    store = FileBusinessOperatingMemoryStore(root_dir=root)
+    try:
+        store.load(tenant_id=long_tenant, business_id="business-a")
+    except ValueError as exc:
+        assert "persisted scope mismatch" in str(exc)
+    else:
+        raise AssertionError("noncanonical long scope was accepted")
+
+    assert source.read_text(encoding="utf-8") == source_payload
+    assert target.read_text(encoding="utf-8") == target_payload
+
+
 def test_persistence_boundary_sanitizes_oversized_durable_memory_fields(tmp_path):
     root = tmp_path / "durable-ceiling"
     store = FileBusinessOperatingMemoryStore(root_dir=root)
@@ -629,6 +662,37 @@ def test_persistence_boundary_sanitizes_oversized_durable_memory_fields(tmp_path
     assert loaded.durable_memory[0].memory_id == "memory-oversized"
 
 
+def test_persist_candidate_retry_is_idempotent_after_sanitization(tmp_path):
+    store = FileBusinessOperatingMemoryStore(root_dir=tmp_path / "retry-sanitized")
+    record = DurableMemoryRecord(
+        memory_id="retry-oversized",
+        memory_type="semantic",
+        key="retry-key",
+        value="x" * 100_000,
+        provenance=tuple(f"proof-{index}-" + ("y" * 300) for index in range(100)),
+    )
+
+    first = persist_memory_candidate(
+        store,
+        tenant_id="tenant-1",
+        business_id="business-1",
+        record=record,
+    )
+    second = persist_memory_candidate(
+        store,
+        tenant_id="tenant-1",
+        business_id="business-1",
+        record=record,
+    )
+
+    assert second == first
+    assert len(second.durable_memory) == 1
+    durable = second.durable_memory[0]
+    assert len(durable.value) <= store.policy.max_summary_length
+    assert len(durable.provenance) <= store.policy.max_source_run_ids
+    assert all(len(item) <= 128 for item in durable.provenance)
+
+
 def test_candidate_identity_is_normalized_before_validation_and_collision():
     memory = BusinessOperatingMemory.empty(tenant_id="tenant-1", business_id="business-1")
     try:
@@ -648,6 +712,13 @@ def test_candidate_identity_is_normalized_before_validation_and_collision():
     )
     assert normalized.durable_memory[0].memory_id == prefix
     assert normalized.durable_memory[0].key == "normalized key"
+    transitioned = transition_memory(
+        normalized,
+        memory_id=f"{prefix}A",
+        transition="validate",
+        provenance=("proof",),
+    )
+    assert transitioned.durable_memory[0].status == "validate"
     try:
         add_memory_candidate(
             normalized,
