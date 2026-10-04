@@ -580,6 +580,8 @@ class FileBusinessOperatingMemoryStore:
             payload = json.loads(path.read_text(encoding="utf-8"))
         except (json.JSONDecodeError, OSError):
             return BusinessOperatingMemory.empty(tenant_id=tenant_id, business_id=business_id)
+        if _safe_int(payload.get("schema_version"), default=BUSINESS_MEMORY_SCHEMA_VERSION) > BUSINESS_MEMORY_SCHEMA_VERSION:
+            raise ValueError("unsupported future business memory schema")
         memory = BusinessOperatingMemory.from_dict(payload, policy=self.policy)
         return self.compactor.compact(memory) if self.compactor is not None else memory
 
@@ -587,7 +589,6 @@ class FileBusinessOperatingMemoryStore:
         target = self._target_path(tenant_id=tenant_id, business_id=business_id)
         if not target.exists():
             return BusinessOperatingMemory.empty(tenant_id=tenant_id, business_id=business_id)
-        target.parent.mkdir(parents=True, exist_ok=True)
         with FileBusinessMemoryLock(target_path=target, timeout_seconds=float(self.policy.save_lock_timeout_seconds), retry_delay_seconds=float(self.policy.save_lock_retry_delay_seconds)):
             memory = self._load_unlocked(tenant_id=tenant_id, business_id=business_id)
             try:
@@ -1071,10 +1072,9 @@ _ALLOWED_MEMORY_TRANSITIONS = {
 
 
 def add_memory_candidate(memory: BusinessOperatingMemory, record: DurableMemoryRecord) -> BusinessOperatingMemory:
-    if record.status != "create":
-        raise ValueError("new memory candidate must start in create state")
-    if not record.memory_id or not record.key:
-        raise ValueError("memory candidate requires memory_id and key")
+    record = _durable_memory_record_from_row_owner(asdict(record), policy=BusinessMemoryPolicy())
+    if record.status != "create" or not record.memory_id or not record.key:
+        raise ValueError("new memory candidate must start in create state" if record.status != "create" else "memory candidate requires memory_id and key")
     existing = next((item for item in memory.durable_memory if item.memory_id == record.memory_id), None)
     if existing is not None:
         if existing == record:
