@@ -1072,7 +1072,7 @@ _ALLOWED_MEMORY_TRANSITIONS = {
 
 
 def add_memory_candidate(memory: BusinessOperatingMemory, record: DurableMemoryRecord) -> BusinessOperatingMemory:
-    record = _durable_memory_record_from_row_owner(asdict(record), policy=BusinessMemoryPolicy())
+    record = replace(record, memory_id=_text(record.memory_id)[:128], key=_text(record.key)[:160])
     if record.status != "create" or not record.memory_id or not record.key:
         raise ValueError("new memory candidate must start in create state" if record.status != "create" else "memory candidate requires memory_id and key")
     existing = next((item for item in memory.durable_memory if item.memory_id == record.memory_id), None)
