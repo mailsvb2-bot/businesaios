@@ -53,3 +53,21 @@ def test_phase16_autonomous_launch_cannot_use_legacy_runner():
     assert "policy_governed" in runtime_handler
     assert "CREATE_EXPERIMENT_REQUIRES_CANONICAL_RUNTIME_ACTION" in legacy
     assert "ACTION_CREATE_EXPERIMENT_V1" in catalog
+
+
+def test_phase16_legacy_experiment_surfaces_are_compatibility_only():
+    legacy_package = (ROOT / "experimentation/__init__.py").read_text(encoding="utf-8")
+    legacy_result = (ROOT / "contracts/experiment_result.py").read_text(encoding="utf-8")
+
+    assert "CANON_EXPERIMENTATION_PACKAGE_OWNER = False" in legacy_package
+    assert "CANON_EXPERIMENTATION_COMPAT_SHIM = True" in legacy_package
+    assert "class Experiment:" not in legacy_package
+    assert "class ExperimentRegistry:" not in legacy_package
+    assert "class ExperimentEvaluator:" not in legacy_package
+    assert "CANON_COMPAT_SHIM = True" in legacy_result
+    assert "class ExperimentResult:" not in legacy_result
+    assert "ExperimentResult = LegacyExperimentResult" in legacy_result
+
+
+def test_phase16_canonical_result_has_one_physical_class_owner():
+    assert _class_owners("ExperimentResult") == ["core/experiments/types.py"]
