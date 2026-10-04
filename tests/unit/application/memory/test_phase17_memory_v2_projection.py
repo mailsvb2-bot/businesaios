@@ -14,8 +14,8 @@ from application.memory.business_memory_v2 import (
     project_portable_memory,
     transition_memory,
 )
-from application.memory.business_operating_memory import FileBusinessOperatingMemoryStore
-from application.memory.business_operating_memory_types import DurableMemoryRecord
+from application.memory.business_operating_memory import BusinessOperatingMemory, FileBusinessOperatingMemoryStore
+from application.memory.business_operating_memory_types import AntiPatternRecord, DurableMemoryRecord, PatternEvidence
 
 
 def _memory(tmp_path):
@@ -356,3 +356,35 @@ def test_schema_v2_memory_migrates_to_v3_without_inventing_durable_memory(tmp_pa
     assert loaded.schema_version == 3
     assert loaded.business_profile == {"segment": "legacy"}
     assert loaded.durable_memory == ()
+
+
+
+def test_anti_pattern_sample_size_uses_originating_failure_count_not_capped_refs():
+    memory = BusinessOperatingMemory(
+        schema_version=3,
+        tenant_id="tenant-1",
+        business_id="business-1",
+        recurring_failures=(
+            PatternEvidence(
+                key="timeout",
+                count=10,
+                confidence=0.9,
+                frequency=0.8,
+                freshness=1.0,
+                source_run_ids=tuple(f"run-{idx}" for idx in range(8)),
+            ),
+        ),
+        anti_patterns=(
+            AntiPatternRecord(
+                key="timeout",
+                confidence=0.9,
+                frequency=0.8,
+                freshness=1.0,
+                source_run_ids=tuple(f"run-{idx}" for idx in range(8)),
+            ),
+        ),
+    )
+    view = project_business_memory_v2(memory)
+    anti = next(item for item in view["procedural_memory"] if item["kind"] == "anti_pattern")
+    assert anti["sample_size"] == 10
+    assert len(anti["evidence"]) == 8
