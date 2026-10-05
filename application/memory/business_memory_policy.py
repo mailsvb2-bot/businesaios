@@ -15,7 +15,7 @@ def _text(value: object) -> str:
 
 def _safe_int(value: object, *, default: int) -> int:
     try:
-        parsed = int(value)
+        parsed = int(default) if isinstance(value, bool) else int(value)
     except (TypeError, ValueError):
         return int(default)
     return int(parsed) if parsed >= 0 else int(default)
@@ -23,9 +23,10 @@ def _safe_int(value: object, *, default: int) -> int:
 
 def _safe_float(value: object, *, default: float) -> float:
     try:
-        return float(value)
+        parsed = float(default) if isinstance(value, bool) else float(value)
     except (TypeError, ValueError):
         return float(default)
+    return float(default) if parsed != parsed or parsed in (float("inf"), float("-inf")) else parsed
 
 
 def _dedupe_preserve_order(values: Sequence[str]) -> list[str]:
@@ -63,11 +64,11 @@ class BusinessMemoryPolicy:
     max_failures: int = 16
     max_wins: int = 16
     max_anti_patterns: int = 16
-
+    max_durable_memory_records: int = 64
+    max_durable_memory_sample_size: int = 1_000_000_000
     max_profile_fields: int = 64
     max_constraint_fields: int = 64
     max_preferences: int = 32
-
     max_text_length: int = 256
     max_summary_length: int = 512
     max_key_length: int = 96
@@ -76,7 +77,6 @@ class BusinessMemoryPolicy:
     max_nested_mapping_items: int = 12
     max_nested_sequence_items: int = 12
     max_nested_depth: int = 2
-
     min_pattern_frequency: int = 2
     confidence_cap: float = 0.99
     freshness_half_life_runs: int = 8
@@ -129,6 +129,8 @@ class BusinessMemoryPolicy:
         return tuple(item for item in deduped[: int(self.max_active_goals)] if item)
 
     def sanitize_run_ids(self, values: Sequence[str] | None) -> tuple[str, ...]:
+        if values is not None and (not isinstance(values, (list, tuple)) or any(not isinstance(item, str) for item in values)):
+            raise ValueError("run id references must be a list or tuple of strings")
         cleaned = [self.sanitize_text(item, max_length=128) for item in list(values or [])]
         return tuple(_dedupe_preserve_order(cleaned)[: int(self.max_source_run_ids)])
 
@@ -177,7 +179,6 @@ class BusinessMemoryPolicy:
     def sanitize_feedback_payload(self, payload: Mapping[str, Any] | None) -> dict[str, Any]:
         if not payload:
             return {}
-
         result: dict[str, Any] = {}
         for raw_key, raw_value in dict(payload).items():
             key = self.sanitize_key(raw_key)

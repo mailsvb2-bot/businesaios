@@ -34,3 +34,5 @@ def test_business_memory_is_injected_into_world_state_as_evidence_only(tmp_path)
     assert memory['must_not_unlock_effects'] is True
     assert memory['total_runs'] == 1
     assert enriched.meta['business_memory_summary']['business_profile'] == {'segment': 'services', 'channel': 'headless', 'region': 'eu'}
+    assert enriched.meta['business_memory_v2']['evidence_only'] is True
+    assert enriched.meta['business_memory_v2']['scope'] == {'tenant_id': 'tenant-1', 'business_id': 'biz-1'}

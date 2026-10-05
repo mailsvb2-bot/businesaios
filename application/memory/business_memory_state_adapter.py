@@ -10,6 +10,7 @@ from application.memory.business_operating_memory import (
     canonicalize_business_memory_payload,
     project_business_memory_contract_bundle,
     project_business_memory_meta_payloads,
+    project_business_memory_v2,
 )
 from kernel.world_state import WorldStateV1
 
@@ -44,6 +45,7 @@ class BusinessMemoryStateAdapter:
             return world_state
         memory = self.store.load(tenant_id=tenant_id, business_id=business_id)
         meta_payloads = project_business_memory_meta_payloads(memory.to_evidence_payload(), policy=self.policy)
+        meta_payloads["business_memory_v2"] = project_business_memory_v2(memory)
         meta = dict(world_state.meta or {})
         meta.update(meta_payloads)
         return replace(world_state, meta=meta)

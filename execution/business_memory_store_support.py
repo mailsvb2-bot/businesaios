@@ -1,18 +1,19 @@
 from __future__ import annotations
 
-from typing import Any
 from collections.abc import Iterable, Mapping
+from typing import Any
 
 from execution.business_memory_policy import BusinessMemoryPolicy
 from execution.business_operating_memory_types import (
     AntiPatternRecord,
     BusinessMemoryRunRecord,
+    DurableMemoryRecord,
     MemoryTrendSnapshot,
     PatternEvidence,
     SignalMemoryRecord,
 )
 
-BUSINESS_MEMORY_SCHEMA_VERSION = 2
+BUSINESS_MEMORY_SCHEMA_VERSION = 3
 CANON_BUSINESS_MEMORY_STORE_SUPPORT = True
 
 
@@ -155,6 +156,32 @@ def run_record_from_row(row: Mapping[str, Any], *, policy: BusinessMemoryPolicy)
     )
 
 
+def durable_memory_record_from_row(row: Mapping[str, Any], *, policy: BusinessMemoryPolicy) -> DurableMemoryRecord:
+    flags = tuple(row.get(name, False) for name in ("external", "portable", "anonymized"))
+    if not all(isinstance(value, bool) for value in flags):
+        raise ValueError("durable memory flags must be boolean")
+    provenance = policy.sanitize_run_ids(row.get("provenance") or [])
+    status = policy.sanitize_text(row.get("status") or "create", max_length=16) or "create"
+    if status in {"validate", "refresh"} and not provenance:
+        status = "create"
+    return DurableMemoryRecord(
+        memory_id=policy.sanitize_text(row.get("memory_id"), max_length=128),
+        memory_type=policy.sanitize_text(row.get("memory_type") or "semantic", max_length=32) or "semantic",
+        key=policy.sanitize_text(row.get("key"), max_length=160),
+        value=policy.sanitize_text(row.get("value"), max_length=policy.max_summary_length),
+        status=status,
+        provenance=provenance,
+        confidence=policy.normalize_confidence(row.get("confidence")),
+        sample_size=min(policy.clamp_non_negative_int(row.get("sample_size")), int(policy.max_durable_memory_sample_size)),
+        external=flags[0],
+        portable=flags[1],
+        anonymized=flags[2],
+        created_at=optional_text(policy, row.get("created_at"), max_length=64),
+        updated_at=optional_text(policy, row.get("updated_at"), max_length=64),
+        supersedes=optional_text(policy, row.get("supersedes"), max_length=128),
+    )
+
+
 def trend_from_row(row: Mapping[str, Any], *, policy: BusinessMemoryPolicy) -> MemoryTrendSnapshot:
     return MemoryTrendSnapshot(
         window_size=policy.clamp_non_negative_int(row.get("window_size") or row.get("rolling_window"), default=0),
@@ -171,7 +198,6 @@ def trend_from_row(row: Mapping[str, Any], *, policy: BusinessMemoryPolicy) -> M
 def migrate_business_memory_payload(payload: dict[str, Any], *, policy: BusinessMemoryPolicy) -> dict[str, Any]:
     migrated = dict(payload or {})
     migrated["schema_version"] = BUSINESS_MEMORY_SCHEMA_VERSION
-
     if not isinstance(migrated.get("business_profile"), Mapping):
         fallback_profile = migrated.get("aggregated_business_profile")
         if not isinstance(fallback_profile, Mapping):
@@ -181,7 +207,6 @@ def migrate_business_memory_payload(payload: dict[str, Any], *, policy: Business
         migrated["operating_constraints"] = {}
     if not isinstance(migrated.get("learned_preferences"), Mapping):
         migrated["learned_preferences"] = {}
-
     if migrated.get("signal_memory") is None and migrated.get("key_signals"):
         rows: list[dict[str, Any]] = []
         for item in list(migrated.get("key_signals") or []):
@@ -202,7 +227,6 @@ def migrate_business_memory_payload(payload: dict[str, Any], *, policy: Business
             )
         migrated["signal_memory"] = rows
     migrated.pop("key_signals", None)
-
     for field_name in ("recurring_failures", "recurring_wins"):
         raw = list(migrated.get(field_name) or [])
         if raw and isinstance(raw[0], str):
@@ -226,6 +250,7 @@ def migrate_business_memory_payload(payload: dict[str, Any], *, policy: Business
     migrated["recurring_wins"] = safe_rows(migrated.get("recurring_wins"))
     migrated["anti_patterns"] = safe_rows(migrated.get("anti_patterns"))
     migrated["recent_runs"] = safe_rows(migrated.get("recent_runs"))
+    migrated["durable_memory"] = safe_rows(migrated.get("durable_memory"))
     migrated["last_feedback"] = policy.sanitize_feedback_payload(safe_mapping(migrated.get("last_feedback")))
     migrated["trends"] = safe_mapping(migrated.get("trends")) if isinstance(migrated.get("trends"), Mapping) else None
     migrated["last_run"] = safe_mapping(migrated.get("last_run")) if isinstance(migrated.get("last_run"), Mapping) else None

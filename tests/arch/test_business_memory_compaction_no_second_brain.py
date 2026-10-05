@@ -30,12 +30,12 @@ def test_business_memory_compaction_modules_do_not_import_decision_surfaces() ->
             assert marker not in text, f"{path.name} must remain evidence-only and must not reference {marker}."
 
 
-def test_business_operating_memory_reexports_single_execution_owners() -> None:
+def test_business_operating_memory_is_pure_compatibility_surface() -> None:
     text = STORE_PATH.read_text(encoding="utf-8")
-    assert "from execution.business_memory_policy import BusinessMemoryPolicy" in text
-    assert "from execution.business_memory_compactor import BusinessMemoryCompactor" in text
-    assert text.count("class BusinessMemoryPolicy") == 0
-    assert text.count("class BusinessMemoryCompactor") == 0
+    assert 'CANON_BUSINESS_OPERATING_MEMORY_FINAL_OWNER = "application.memory.business_operating_memory"' in text
+    assert "from application.memory.business_operating_memory import (" in text
+    assert "\nclass " not in text
+    assert "\ndef " not in text
 
 
 def test_business_memory_store_keeps_compaction_inside_execution_memory_boundary() -> None:
@@ -91,18 +91,22 @@ def test_execution_memory_compat_surfaces_are_pure_reexports() -> None:
         assert "\ndef " not in text
 
 
-def test_execution_memory_exports_shared_projection_helpers() -> None:
+def test_execution_memory_reexports_shared_projection_helpers_without_second_owner() -> None:
     store_text = STORE_PATH.read_text(encoding="utf-8")
-    assert "def canonicalize_business_memory_payload(" in store_text
-    assert "def project_business_memory_evidence(" in store_text
-    assert "def project_business_memory_summary(" in store_text
-    assert "def project_business_memory_governance_summary(" in store_text
-    assert "def project_business_memory_patterns(" in store_text
-    assert "def project_business_memory_profile(" in store_text
-    assert "def project_business_memory_recent_runs(" in store_text
-    assert "def project_business_memory_state_context(" in store_text
-    assert "def project_business_memory_contract_bundle(" in store_text
-    assert "def project_business_memory_meta_payloads(" in store_text
+    for name in (
+        "canonicalize_business_memory_payload",
+        "project_business_memory_evidence",
+        "project_business_memory_summary",
+        "project_business_memory_governance_summary",
+        "project_business_memory_patterns",
+        "project_business_memory_profile",
+        "project_business_memory_recent_runs",
+        "project_business_memory_state_context",
+        "project_business_memory_contract_bundle",
+        "project_business_memory_meta_payloads",
+    ):
+        assert name in store_text
+    assert "\ndef " not in store_text
 
 
 def test_headless_and_opportunity_surfaces_reuse_canonical_business_memory_helpers() -> None:
@@ -140,9 +144,10 @@ def test_owner_path_reuses_canonical_business_memory_summary_for_state_synthesis
     assert "business_memory_summary" in owner_path_text
 
 
-def test_execution_memory_exports_feedback_snapshot_helper() -> None:
+def test_execution_memory_reexports_feedback_snapshot_helper() -> None:
     store_text = STORE_PATH.read_text(encoding="utf-8")
-    assert "def project_business_memory_feedback_snapshot(" in store_text
+    assert "project_business_memory_feedback_snapshot" in store_text
+    assert "\ndef " not in store_text
 
 
 def test_meta_surfaces_reuse_canonical_business_memory_meta_payloads() -> None:

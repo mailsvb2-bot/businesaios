@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import json
 from collections.abc import Iterable
-from dataclasses import asdict, dataclass, field
+from dataclasses import asdict, dataclass, field, replace
 from typing import Any
 
 from application.memory.business_memory_policy import BusinessMemoryPolicy
@@ -25,12 +25,7 @@ def _safe_float(value: object, *, default: float = 0.0) -> float:
 
 
 def _serialize_size_bytes(payload: object) -> int:
-    encoded = json.dumps(
-        payload,
-        ensure_ascii=False,
-        sort_keys=True,
-        separators=(",", ":"),
-    ).encode("utf-8")
+    encoded = json.dumps(payload, ensure_ascii=False, sort_keys=True, separators=(",", ":")).encode("utf-8")
     return len(encoded)
 
 
@@ -63,10 +58,7 @@ class BusinessMemoryCompactor:
         compacted, _ = self.compact_with_report(memory)
         return compacted
 
-    def compact_with_report(
-        self,
-        memory: Any,
-    ) -> tuple[Any, BusinessMemoryCompactionReport]:
+    def compact_with_report(self, memory: Any) -> tuple[Any, BusinessMemoryCompactionReport]:
         recent_runs = self._compact_recent_runs(memory.recent_runs)
         signal_memory = self._compact_signals(memory.signal_memory)
         recurring_failures = self._compact_patterns(
@@ -83,7 +75,6 @@ class BusinessMemoryCompactor:
         )
         anti_patterns = self._derive_anti_patterns(recurring_failures=recurring_failures)
         trends = self._build_trends(recent_runs=recent_runs, signal_memory=signal_memory)
-
         compacted = self._rebuild_memory(
             memory=memory,
             recent_runs=recent_runs,
@@ -93,22 +84,34 @@ class BusinessMemoryCompactor:
             anti_patterns=anti_patterns,
             trends=trends,
         )
-
         approx_size = self._estimate_payload_bytes(compacted)
         trimmed_for_size_budget = False
         hard_trim_applied = False
-
         if approx_size > int(self.policy.approx_target_payload_bytes):
             compacted = self._soft_trim(compacted)
             approx_size = self._estimate_payload_bytes(compacted)
             trimmed_for_size_budget = True
-
         if approx_size > int(self.policy.approx_hard_payload_bytes):
             compacted = self._hard_trim(compacted)
             approx_size = self._estimate_payload_bytes(compacted)
             trimmed_for_size_budget = True
             hard_trim_applied = True
-
+            while approx_size > int(self.policy.approx_hard_payload_bytes):
+                reduced = replace(
+                    compacted,
+                    durable_memory=compacted.durable_memory[:-1], recent_runs=compacted.recent_runs[:-1],
+                    signal_memory=compacted.signal_memory[:-1], recurring_failures=compacted.recurring_failures[:-1],
+                    recurring_wins=compacted.recurring_wins[:-1], anti_patterns=compacted.anti_patterns[:-1],
+                    active_goals=compacted.active_goals[:-1],
+                    business_profile=dict(list(compacted.business_profile.items())[:-1]),
+                    operating_constraints=dict(list(compacted.operating_constraints.items())[:-1]),
+                    learned_preferences=dict(list(compacted.learned_preferences.items())[:-1]),
+                    last_feedback={}, last_run=None, trends=None,
+                )
+                if reduced == compacted:
+                    raise ValueError("business memory exceeds hard payload byte budget")
+                compacted = reduced
+                approx_size = self._estimate_payload_bytes(compacted)
         report = BusinessMemoryCompactionReport(
             before_recent_runs=len(memory.recent_runs),
             after_recent_runs=len(compacted.recent_runs),
@@ -121,16 +124,13 @@ class BusinessMemoryCompactor:
             before_anti_patterns=len(memory.anti_patterns),
             after_anti_patterns=len(compacted.anti_patterns),
             approx_payload_bytes=approx_size,
-            target_payload_bytes=int(self.policy.approx_target_payload_bytes),
-            hard_payload_bytes=int(self.policy.approx_hard_payload_bytes),
-            trimmed_for_size_budget=trimmed_for_size_budget,
-            hard_trim_applied=hard_trim_applied,
+            target_payload_bytes=int(self.policy.approx_target_payload_bytes), hard_payload_bytes=int(self.policy.approx_hard_payload_bytes),
+            trimmed_for_size_budget=trimmed_for_size_budget, hard_trim_applied=hard_trim_applied,
         )
         return compacted, report
 
     def _rebuild_memory(
-        self,
-        *,
+        self, *,
         memory: Any,
         recent_runs: list[BusinessMemoryRunRecord],
         signal_memory: list[SignalMemoryRecord],
@@ -156,6 +156,7 @@ class BusinessMemoryCompactor:
                 memory.learned_preferences,
                 limit=self.policy.max_preferences,
             ),
+            durable_memory=self._compact_durable_memory(memory.durable_memory, limit=int(self.policy.max_durable_memory_records)),
             signal_memory=tuple(signal_memory),
             recurring_failures=tuple(recurring_failures),
             recurring_wins=tuple(recurring_wins),
@@ -169,6 +170,14 @@ class BusinessMemoryCompactor:
             failed_runs=self.policy.clamp_non_negative_int(memory.failed_runs),
             average_goal_score=self.policy.clamp_goal_score(memory.average_goal_score),
         )
+
+    @staticmethod
+    def _compact_durable_memory(rows: Iterable[Any], *, limit: int) -> tuple[Any, ...]:
+        items = list(rows)
+        active = [item for item in items if getattr(item, "status", "") in {"validate", "refresh"}]
+        retained = [item for item in items if getattr(item, "status", "") not in {"create", "validate", "refresh"}]
+        quarantine = [item for item in items if getattr(item, "status", "") == "create"]
+        return tuple((active + retained + quarantine)[: max(0, int(limit))])
 
     def _compact_recent_runs(self, rows: Iterable[BusinessMemoryRunRecord]) -> list[BusinessMemoryRunRecord]:
         result: list[BusinessMemoryRunRecord] = []
@@ -419,6 +428,7 @@ class BusinessMemoryCompactor:
             active_goals=tuple(list(memory.active_goals)[:6]),
             operating_constraints=dict(list(memory.operating_constraints.items())[:16]),
             learned_preferences=dict(list(memory.learned_preferences.items())[:12]),
+            durable_memory=self._compact_durable_memory(memory.durable_memory, limit=16),
             signal_memory=tuple(list(memory.signal_memory)[:8]),
             recurring_failures=tuple(list(memory.recurring_failures)[:8]),
             recurring_wins=tuple(list(memory.recurring_wins)[:8]),

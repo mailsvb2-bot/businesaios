@@ -330,18 +330,10 @@ class AutonomyStateAssembly:
         state = replace(state, meta=meta)
         adapter = getattr(self._contract, "_business_memory_state_adapter", None)
         if adapter is not None:
-            inject_context = getattr(adapter, "inject_context", None)
-            if callable(inject_context):
-                state = inject_context(
-                    world_state=state,
-                    memory_context=dict(business_memory_context or {}),
-                )
+            if getattr(adapter, "store", None) is not None:
+                state = adapter.inject(world_state=state, tenant_id=request.tenant_id, business_id=request.business_id)
             else:
-                state = adapter.inject(
-                    world_state=state,
-                    tenant_id=request.tenant_id,
-                    business_id=request.business_id,
-                )
+                state = adapter.inject_context(world_state=state, memory_context=dict(business_memory_context or {}))
         goal_plan_context = dict(request.meta.get("goal_plan") or {})
         if goal_plan_context:
             meta = dict(getattr(state, "meta", {}) or {})

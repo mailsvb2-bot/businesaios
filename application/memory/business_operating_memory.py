@@ -3,8 +3,8 @@ from __future__ import annotations
 import json
 import os
 import tempfile
-from collections.abc import Iterable, Mapping
-from dataclasses import asdict, dataclass, field
+from collections.abc import Callable, Iterable, Mapping
+from dataclasses import asdict, dataclass, field, replace
 from pathlib import Path
 from typing import Any
 
@@ -19,6 +19,7 @@ from application.memory.business_memory_taxonomy import BusinessMemoryTaxonomy, 
 from application.memory.business_operating_memory_types import (
     AntiPatternRecord,
     BusinessMemoryRunRecord,
+    DurableMemoryRecord,
     MemoryTrendSnapshot,
     PatternEvidence,
     SignalMemoryRecord,
@@ -34,6 +35,9 @@ from execution.business_memory_store_support import (
 )
 from execution.business_memory_store_support import (
     dedupe_recent_runs as _dedupe_recent_runs_owner,
+)
+from execution.business_memory_store_support import (
+    durable_memory_record_from_row as _durable_memory_record_from_row_owner,
 )
 from execution.business_memory_store_support import (
     migrate_business_memory_payload as _migrate_business_memory_payload_owner,
@@ -105,7 +109,6 @@ def canonicalize_business_memory_payload(
     policy: BusinessMemoryPolicy | None = None,
 ) -> BusinessOperatingMemory:
     from runtime.platform.business_memory.second_brain_boundary import sanitize_business_memory_payload
-
     canonical_policy = policy or BusinessMemoryPolicy()
     sanitized = dict(sanitize_business_memory_payload(dict(payload or {})) or {})
     for field_name in ("recurring_failures", "recurring_wins", "anti_patterns"):
@@ -260,6 +263,7 @@ class BusinessOperatingMemory:
     active_goals: tuple[str, ...] = ()
     operating_constraints: dict[str, str] = field(default_factory=dict)
     learned_preferences: dict[str, str] = field(default_factory=dict)
+    durable_memory: tuple[DurableMemoryRecord, ...] = ()
     signal_memory: tuple[SignalMemoryRecord, ...] = ()
     recurring_failures: tuple[PatternEvidence, ...] = ()
     recurring_wins: tuple[PatternEvidence, ...] = ()
@@ -282,6 +286,7 @@ class BusinessOperatingMemory:
             "active_goals": list(self.active_goals),
             "operating_constraints": dict(self.operating_constraints),
             "learned_preferences": dict(self.learned_preferences),
+            "durable_memory": [asdict(item) for item in self.durable_memory],
             "signal_memory": [asdict(item) for item in self.signal_memory],
             "recurring_failures": [asdict(item) for item in self.recurring_failures],
             "recurring_wins": [asdict(item) for item in self.recurring_wins],
@@ -447,12 +452,17 @@ class BusinessOperatingMemory:
         migrated = _migrate_business_memory_payload(payload, policy=canonical_policy)
         raw_last_run = migrated.get("last_run")
         raw_recent_runs = migrated.get("recent_runs") or []
+        raw_durable_memory = migrated.get("durable_memory") or []
         raw_signals = migrated.get("signal_memory") or []
         raw_failures = migrated.get("recurring_failures") or []
         raw_wins = migrated.get("recurring_wins") or []
         raw_anti = migrated.get("anti_patterns") or []
         raw_trends = migrated.get("trends")
         recent_runs = _dedupe_recent_runs(tuple(_run_record_from_row(row, policy=canonical_policy) for row in raw_recent_runs if isinstance(row, Mapping)))
+        durable_memory = tuple(_durable_memory_record_from_row_owner(row, policy=canonical_policy) for row in raw_durable_memory if isinstance(row, Mapping))
+        durable_ids = tuple(item.memory_id for item in durable_memory)
+        if len(durable_ids) != len(set(durable_ids)):
+            raise ValueError("normalized durable memory_id collision")
         signal_memory = tuple(_signal_record_from_row(row, policy=canonical_policy) for row in raw_signals if isinstance(row, Mapping))
         recurring_failures = tuple(_pattern_from_row(row, policy=canonical_policy) for row in raw_failures if isinstance(row, Mapping))
         recurring_wins = tuple(_pattern_from_row(row, policy=canonical_policy) for row in raw_wins if isinstance(row, Mapping))
@@ -467,6 +477,7 @@ class BusinessOperatingMemory:
             active_goals=canonical_policy.sanitize_goal_list(list(migrated.get("active_goals") or [])),
             operating_constraints=canonical_policy.sanitize_mapping(migrated.get("operating_constraints"), limit=canonical_policy.max_constraint_fields),
             learned_preferences=canonical_policy.sanitize_mapping(migrated.get("learned_preferences"), limit=canonical_policy.max_preferences),
+            durable_memory=durable_memory,
             signal_memory=signal_memory,
             recurring_failures=recurring_failures,
             recurring_wins=recurring_wins,
@@ -502,6 +513,7 @@ def _reconcile_memory_invariants(memory: BusinessOperatingMemory, *, policy: Bus
         active_goals=policy.sanitize_goal_list(memory.active_goals),
         operating_constraints=policy.sanitize_mapping(memory.operating_constraints, limit=policy.max_constraint_fields),
         learned_preferences=policy.sanitize_mapping(memory.learned_preferences, limit=policy.max_preferences),
+        durable_memory=tuple(memory.durable_memory),
         signal_memory=tuple(memory.signal_memory[: int(policy.max_signals)]),
         recurring_failures=tuple(memory.recurring_failures[: int(policy.max_failures)]),
         recurring_wins=tuple(memory.recurring_wins[: int(policy.max_wins)]),
@@ -559,44 +571,94 @@ class FileBusinessOperatingMemoryStore:
         self.root_dir.mkdir(parents=True, exist_ok=True)
         if self.compactor is None:
             from application.memory.business_memory_compactor import BusinessMemoryCompactor
-
             self.compactor = BusinessMemoryCompactor(policy=self.policy)
 
-    def load(self, *, tenant_id: str, business_id: str) -> BusinessOperatingMemory:
+    def _read_payload_unlocked(self, *, tenant_id: str, business_id: str) -> dict[str, Any] | None:
         path = self._target_path(tenant_id=tenant_id, business_id=business_id)
         if not path.exists():
-            return BusinessOperatingMemory.empty(tenant_id=tenant_id, business_id=business_id)
+            return None
         try:
             payload = json.loads(path.read_text(encoding="utf-8"))
-        except (json.JSONDecodeError, OSError):
+        except json.JSONDecodeError as exc:
+            raise ValueError("corrupt business memory persistence") from exc
+        explicit_schema = payload.get("schema_version") if isinstance(payload, dict) and "schema_version" in payload else BUSINESS_MEMORY_SCHEMA_VERSION
+        if not isinstance(payload, dict) or ("schema_version" in payload and (isinstance(explicit_schema, bool) or not isinstance(explicit_schema, int) or explicit_schema < 1 or explicit_schema > BUSINESS_MEMORY_SCHEMA_VERSION)):
+            raise ValueError("unsupported future business memory schema or malformed schema version")
+        if len(_text(tenant_id)) > 128 or len(_text(business_id)) > 128 or (_text(payload.get("tenant_id")), _text(payload.get("business_id"))) != (_text(tenant_id), _text(business_id)):
+            raise ValueError("persisted scope mismatch")
+        return payload
+
+    def _load_unlocked(self, *, tenant_id: str, business_id: str) -> BusinessOperatingMemory:
+        payload = self._read_payload_unlocked(tenant_id=tenant_id, business_id=business_id)
+        if payload is None:
             return BusinessOperatingMemory.empty(tenant_id=tenant_id, business_id=business_id)
         memory = BusinessOperatingMemory.from_dict(payload, policy=self.policy)
         return self.compactor.compact(memory) if self.compactor is not None else memory
 
+    def load(self, *, tenant_id: str, business_id: str) -> BusinessOperatingMemory:
+        target = self._target_path(tenant_id=tenant_id, business_id=business_id)
+        if not target.exists():
+            return BusinessOperatingMemory.empty(tenant_id=tenant_id, business_id=business_id)
+        with FileBusinessMemoryLock(target_path=target, timeout_seconds=float(self.policy.save_lock_timeout_seconds), retry_delay_seconds=float(self.policy.save_lock_retry_delay_seconds)):
+            first = self._read_payload_unlocked(tenant_id=tenant_id, business_id=business_id)
+            if first is None:
+                return BusinessOperatingMemory.empty(tenant_id=tenant_id, business_id=business_id)
+            memory = BusinessOperatingMemory.from_dict(first, policy=self.policy)
+            memory = self.compactor.compact(memory) if self.compactor is not None else memory
+            second = self._read_payload_unlocked(tenant_id=tenant_id, business_id=business_id)
+            if second is None:
+                return memory
+            if second != first:
+                latest = BusinessOperatingMemory.from_dict(second, policy=self.policy)
+                return self.compactor.compact(latest) if self.compactor is not None else latest
+            if first != memory.to_dict():
+                self._write_unlocked(memory)
+            return memory
+
+    def _write_unlocked(self, memory: BusinessOperatingMemory) -> Path:
+        target = self._target_path(tenant_id=memory.tenant_id, business_id=memory.business_id)
+        target.parent.mkdir(parents=True, exist_ok=True)
+        compacted = self.compactor.compact(BusinessOperatingMemory.from_dict(memory.to_dict(), policy=self.policy)) if self.compactor is not None else BusinessOperatingMemory.from_dict(memory.to_dict(), policy=self.policy)
+        payload = json.dumps(compacted.to_dict(), ensure_ascii=False, sort_keys=True, separators=(",", ":"))
+        fd, temp_name = tempfile.mkstemp(prefix=".business_memory_", suffix=".json", dir=str(target.parent))
+        try:
+            with os.fdopen(fd, "w", encoding="utf-8") as handle:
+                handle.write(payload)
+                handle.flush()
+                os.fsync(handle.fileno())
+            os.replace(temp_name, target)
+        finally:
+            if os.path.exists(temp_name):
+                os.unlink(temp_name)
+        return target
+
     def save(self, memory: BusinessOperatingMemory) -> Path:
         target = self._target_path(tenant_id=memory.tenant_id, business_id=memory.business_id)
         target.parent.mkdir(parents=True, exist_ok=True)
-        compacted = self.compactor.compact(memory) if self.compactor is not None else memory
-        payload = json.dumps(compacted.to_dict(), ensure_ascii=False, indent=2, sort_keys=True)
-        with FileBusinessMemoryLock(
-            target_path=target,
-            timeout_seconds=float(self.policy.save_lock_timeout_seconds),
-            retry_delay_seconds=float(self.policy.save_lock_retry_delay_seconds),
-        ):
-            fd, temp_name = tempfile.mkstemp(prefix=".business_memory_", suffix=".json", dir=str(target.parent))
-            try:
-                with os.fdopen(fd, "w", encoding="utf-8") as handle:
-                    handle.write(payload)
-                    handle.flush()
-                    os.fsync(handle.fileno())
-                os.replace(temp_name, target)
-            finally:
-                if os.path.exists(temp_name):
-                    os.unlink(temp_name)
-        return target
+        with FileBusinessMemoryLock(target_path=target, timeout_seconds=float(self.policy.save_lock_timeout_seconds), retry_delay_seconds=float(self.policy.save_lock_retry_delay_seconds)):
+            if target.exists():
+                self._load_unlocked(tenant_id=memory.tenant_id, business_id=memory.business_id)
+            return self._write_unlocked(memory)
+
+    def mutate(
+        self,
+        *,
+        tenant_id: str,
+        business_id: str,
+        transform: Callable[[BusinessOperatingMemory], BusinessOperatingMemory],
+    ) -> BusinessOperatingMemory:
+        target = self._target_path(tenant_id=tenant_id, business_id=business_id)
+        target.parent.mkdir(parents=True, exist_ok=True)
+        with FileBusinessMemoryLock(target_path=target, timeout_seconds=float(self.policy.save_lock_timeout_seconds), retry_delay_seconds=float(self.policy.save_lock_retry_delay_seconds)):
+            updated = transform(self._load_unlocked(tenant_id=tenant_id, business_id=business_id))
+            if updated.tenant_id != tenant_id or updated.business_id != business_id:
+                raise ValueError("business memory mutation changed scope")
+            self._write_unlocked(updated)
+            return self._load_unlocked(tenant_id=tenant_id, business_id=business_id)
 
     def list_businesses(self, *, tenant_id: str | None = None) -> tuple[tuple[str, str], ...]:
         if tenant_id is not None:
+            self._target_path(tenant_id=tenant_id, business_id="__listing_scope_probe__")
             files = sorted((self.root_dir / _safe_key(tenant_id, fallback="default")).glob("*.json"))
         else:
             files = sorted(self.root_dir.glob("*/*.json"))
@@ -605,10 +667,11 @@ class FileBusinessOperatingMemoryStore:
         for item in files:
             try:
                 payload = json.loads(item.read_text(encoding="utf-8"))
-            except (json.JSONDecodeError, OSError):
+                key = (_text(payload.get("tenant_id")), _text(payload.get("business_id")))
+                canonical_item = self._target_path(tenant_id=key[0], business_id=key[1])
+            except (json.JSONDecodeError, OSError, ValueError):
                 continue
-            key = (_text(payload.get("tenant_id")), _text(payload.get("business_id")))
-            if key in seen or not all(key):
+            if key in seen or not all(key) or max(map(len, key)) > 128 or (tenant_id is not None and key[0] != _text(tenant_id)) or canonical_item != item:
                 continue
             seen.add(key)
             result.append(key)
@@ -635,7 +698,53 @@ class FileBusinessOperatingMemoryStore:
         recorded_at: str | None = None,
         canonical_run_artifact: dict[str, Any] | None = None,
     ) -> BusinessOperatingMemory:
-        current = self.load(tenant_id=tenant_id, business_id=business_id)
+        return self.mutate(
+            tenant_id=tenant_id,
+            business_id=business_id,
+            transform=lambda current: self._remember_execution_from_current(
+                current,
+                tenant_id=tenant_id,
+                business_id=business_id,
+                run_id=run_id,
+                goal=goal,
+                completed=completed,
+                stop_reason=stop_reason,
+                final_feedback=final_feedback,
+                step_count=step_count,
+                profile=profile,
+                constraints=constraints,
+                signals=signals,
+                meta=meta,
+                channel=channel,
+                region=region,
+                product_name=product_name,
+                recorded_at=recorded_at,
+                canonical_run_artifact=canonical_run_artifact,
+            ),
+        )
+
+    def _remember_execution_from_current(
+        self,
+        current: BusinessOperatingMemory,
+        *,
+        tenant_id: str,
+        business_id: str,
+        run_id: str,
+        goal: str,
+        completed: bool,
+        stop_reason: str,
+        final_feedback: dict[str, Any],
+        step_count: int,
+        profile: dict[str, Any],
+        constraints: dict[str, Any],
+        signals: list[dict[str, Any]],
+        meta: dict[str, Any],
+        channel: str,
+        region: str,
+        product_name: str,
+        recorded_at: str | None = None,
+        canonical_run_artifact: dict[str, Any] | None = None,
+    ) -> BusinessOperatingMemory:
         canonical_memory = canonical_memory_record(
             tenant_id=tenant_id,
             business_id=business_id,
@@ -657,7 +766,6 @@ class FileBusinessOperatingMemoryStore:
             str(canonical_memory.get("verification_status") or feedback_payload.get("verification_status") or "unknown"),
         )
         feedback_payload = self.policy.sanitize_feedback_payload(feedback_payload)
-
         fingerprint = self.matcher.build_fingerprint(
             goal=goal,
             profile=dict(profile or {}),
@@ -692,17 +800,13 @@ class FileBusinessOperatingMemoryStore:
             fingerprint=self.policy.sanitize_mapping(fingerprint.to_dict(), limit=12, value_max_length=96),
             recorded_at=self.policy.sanitize_text(recorded_at, max_length=64) or None,
         )
-
         replay_run_id = run_record.run_id if run_record.run_id and run_record.run_id in {row.run_id for row in current.recent_runs} else None
         previous_run = next((row for row in current.recent_runs if row.run_id == replay_run_id), None)
-
         total_runs = int(current.total_runs) if replay_run_id else int(current.total_runs) + 1
         completed_runs = self._next_completed_runs(current=current, replay=previous_run, now_completed=completed)
         failed_runs = self._next_failed_runs(current=current, replay=previous_run, now_completed=completed)
-
         existing_failures = self._remove_run_from_patterns(current.recurring_failures, replay_run_id=replay_run_id, total_runs=total_runs)
         existing_wins = self._remove_run_from_patterns(current.recurring_wins, replay_run_id=replay_run_id, total_runs=total_runs)
-
         updated = BusinessOperatingMemory(
             schema_version=BUSINESS_MEMORY_SCHEMA_VERSION,
             tenant_id=self.policy.sanitize_text(tenant_id, max_length=128),
@@ -711,6 +815,7 @@ class FileBusinessOperatingMemoryStore:
             active_goals=tuple(self._merge_active_goals(current=current, goal=goal)),
             operating_constraints=self._merge_constraints(current=current, constraints=constraints),
             learned_preferences=self._merge_preferences(current=current, profile=profile, meta=meta),
+            durable_memory=current.durable_memory,
             signal_memory=tuple(self._merge_signals(current=current, signals=signals, run_id=run_id, recorded_at=recorded_at, replay_run_id=replay_run_id)),
             recurring_failures=tuple(
                 self._merge_patterns(
@@ -745,13 +850,15 @@ class FileBusinessOperatingMemoryStore:
                 replay_previous_score=None if previous_run is None else float(previous_run.goal_score),
             ),
         )
-
-        updated = self.compactor.compact(updated) if self.compactor is not None else updated
-        self.save(updated)
-        return self.load(tenant_id=tenant_id, business_id=business_id)
+        return self.compactor.compact(updated) if self.compactor is not None else updated
 
     def _target_path(self, *, tenant_id: str, business_id: str) -> Path:
-        return self.root_dir / _safe_key(tenant_id, fallback="default") / f"{_safe_key(business_id, fallback='business')}.json"
+        if len(_text(tenant_id)) > 128 or len(_text(business_id)) > 128:
+            raise ValueError("persisted scope mismatch: noncanonical business memory scope")
+        target = self.root_dir / _safe_key(tenant_id, fallback="default") / f"{_safe_key(business_id, fallback='business')}.json"
+        if self.root_dir.resolve() not in target.resolve().parents:
+            raise ValueError("persisted scope mismatch: business memory path escapes root")
+        return target
 
     def _merge_recent_runs(
         self,
@@ -968,23 +1075,182 @@ class FileBusinessOperatingMemoryStore:
             parts.append(self.policy.sanitize_text(final_feedback.get("error"), max_length=64))
         return " | ".join(part for part in parts if part)
 
+
+CANON_BUSINESS_MEMORY_V2 = True
+MEMORY_LIFECYCLE = ("create", "validate", "refresh", "supersede", "expire", "archive", "forget")
+_ACTIVE_MEMORY_STATES = frozenset({"validate", "refresh"})
+_ALLOWED_MEMORY_TRANSITIONS = {
+    "create": frozenset({"validate", "forget"}),
+    "validate": frozenset({"refresh", "supersede", "expire", "archive", "forget"}),
+    "refresh": frozenset({"refresh", "supersede", "expire", "archive", "forget"}),
+    "supersede": frozenset({"archive", "forget"}),
+    "expire": frozenset({"archive", "forget"}),
+    "archive": frozenset({"forget"}),
+    "forget": frozenset(),
+}
+
+
+def add_memory_candidate(memory: BusinessOperatingMemory, record: DurableMemoryRecord, *, policy: BusinessMemoryPolicy | None = None) -> BusinessOperatingMemory:
+    record = _durable_memory_record_from_row_owner({**asdict(record), "status": record.status if record.status == "create" else "__invalid__"}, policy=policy or BusinessMemoryPolicy())
+    if record.status != "create" or not record.memory_id or not record.key:
+        raise ValueError("new memory candidate must start in create state" if record.status != "create" else "memory candidate requires memory_id and key")
+    existing = next((item for item in memory.durable_memory if item.memory_id == record.memory_id), None)
+    if existing is not None:
+        if existing == record:
+            return memory
+        raise ValueError("memory_id collision")
+    return replace(memory, durable_memory=(record, *memory.durable_memory))
+
+
+def transition_memory(
+    memory: BusinessOperatingMemory,
+    *,
+    memory_id: str,
+    transition: str,
+    provenance: tuple[str, ...] = (),
+    updated_at: str | None = None,
+) -> BusinessOperatingMemory:
+    action = str(transition or "").strip()
+    if not isinstance(provenance, (list, tuple)) or any(not isinstance(item, str) for item in provenance):
+        raise ValueError("transition provenance must be a list or tuple of strings")
+    rows = list(memory.durable_memory)
+    index = next((i for i, item in enumerate(rows) if item.memory_id == _text(memory_id)[:128]), None)
+    if index is None:
+        raise KeyError(memory_id)
+    current = rows[index]
+    if action not in _ALLOWED_MEMORY_TRANSITIONS.get(current.status, frozenset()):
+        raise ValueError(f"invalid memory transition: {current.status}->{action}")
+    evidence = tuple(_dedupe((*current.provenance, *provenance)))
+    if action in _ACTIVE_MEMORY_STATES and not evidence:
+        raise ValueError("validated durable memory requires provenance")
+    if action == "forget":
+        rows.pop(index)
+    else:
+        rows[index] = replace(current, status=action, provenance=evidence, updated_at=updated_at or current.updated_at)
+    return replace(memory, durable_memory=tuple(rows))
+
+
+def persist_memory_candidate(
+    store: FileBusinessOperatingMemoryStore,
+    *,
+    tenant_id: str,
+    business_id: str,
+    record: DurableMemoryRecord,
+) -> BusinessOperatingMemory:
+    return store.mutate(
+        tenant_id=tenant_id,
+        business_id=business_id,
+        transform=lambda memory: add_memory_candidate(memory, record, policy=store.policy),
+    )
+
+
+def persist_memory_transition(
+    store: FileBusinessOperatingMemoryStore,
+    *,
+    tenant_id: str,
+    business_id: str,
+    memory_id: str,
+    transition: str,
+    provenance: tuple[str, ...] = (),
+    updated_at: str | None = None,
+) -> BusinessOperatingMemory:
+    return store.mutate(
+        tenant_id=tenant_id,
+        business_id=business_id,
+        transform=lambda memory: transition_memory(
+            memory,
+            memory_id=memory_id,
+            transition=transition,
+            provenance=provenance,
+            updated_at=updated_at,
+        ),
+    )
+
+
+def project_portable_memory(memory: BusinessOperatingMemory, *, allow_global: bool = False) -> list[dict[str, Any]]:
+    if not allow_global:
+        return []
+    return [
+        {"memory_type": row.memory_type, "key": row.key, "value": row.value, "confidence": row.confidence, "sample_size": row.sample_size}
+        for row in memory.durable_memory
+        if row.status in _ACTIVE_MEMORY_STATES and row.provenance and row.portable and row.anonymized
+    ]
+
+
+def project_business_memory_v2(memory: BusinessOperatingMemory) -> dict[str, Any]:
+    scope = {"tenant_id": memory.tenant_id, "business_id": memory.business_id}
+    failure_counts = {item.key: item.count for item in memory.recurring_failures}
+    procedural: list[dict[str, Any]] = []
+    for kind, rows in (
+        ("success_pattern", memory.recurring_wins),
+        ("failure_pattern", memory.recurring_failures),
+        ("anti_pattern", memory.anti_patterns),
+    ):
+        for item in rows:
+            data = asdict(item)
+            procedural.append({
+                "kind": kind,
+                "key": data.get("key", ""),
+                "evidence": list(data.get("source_run_ids") or []),
+                "sample_size": int(data.get("count") or failure_counts.get(data.get("key", "")) or len(data.get("source_run_ids") or [])),
+                "scope": scope,
+                "confidence": float(data.get("confidence") or 0.0),
+                "freshness": float(data.get("freshness") or 0.0),
+            })
+    durable = [asdict(row) for row in memory.durable_memory if row.status in _ACTIVE_MEMORY_STATES and row.provenance]
+    evidence_refs = sorted({ref for item in procedural for ref in item["evidence"] if str(ref).strip()} | {ref for item in durable for ref in item.get("provenance", ()) if str(ref).strip()})
+    return {
+        "schema_version": 2,
+        "scope": scope,
+        "operational_state": {"owner": "WorldModel", "stored_here": False},
+        "episodic_memory": [asdict(run) for run in memory.recent_runs],
+        "semantic_memory": {
+            "business_profile": dict(memory.business_profile),
+            "signals": [asdict(item) for item in memory.signal_memory],
+            "trends": None if memory.trends is None else asdict(memory.trends),
+        },
+        "procedural_memory": procedural,
+        "business_preferences": dict(memory.learned_preferences),
+        "durable_memory": durable,
+        "evidence_store": {"owner": "EvidenceStore", "stored_here": False, "refs": evidence_refs},
+        "strategic_memory": [
+            {
+                "run_id": run.run_id,
+                "tried": run.summary,
+                "why": run.goal,
+                "conditions": dict(run.fingerprint),
+                "result": "completed" if run.completed else run.stop_reason,
+                "why_abandoned": "" if run.completed else run.stop_reason,
+                "recorded_at": run.recorded_at,
+            }
+            for run in memory.recent_runs
+        ],
+        "lifecycle": list(MEMORY_LIFECYCLE),
+        "evidence_only": True,
+        "must_not_issue_decision": True,
+        "must_not_unlock_effects": True,
+    }
+
+
+def project_memory_knowledge_graph(memory: BusinessOperatingMemory) -> dict[str, Any]:
+    view = project_business_memory_v2(memory)
+    nodes = [{"id": f"business:{memory.business_id}", "kind": "business"}]
+    nodes.extend({"id": f"procedure:{row['kind']}:{row['key']}", "kind": row["kind"]} for row in view["procedural_memory"])
+    nodes.extend({"id": f"memory:{row['memory_id']}", "kind": row["memory_type"]} for row in view["durable_memory"])
+    return {
+        "projection_only": True,
+        "source_of_truth": False,
+        "scope": view["scope"],
+        "nodes": nodes,
+        "edges": [{"from": f"business:{memory.business_id}", "to": node["id"], "relation": "has_memory"} for node in nodes[1:]],
+    }
+
+
 __all__ = [
-    "BUSINESS_MEMORY_SCHEMA_VERSION",
-    "BusinessMemoryCompactionReport",
-    "BusinessMemoryCompactor",
-    "BusinessMemoryPolicy",
-    "BusinessOperatingMemory",
-    "CANON_PERSISTENT_BUSINESS_OPERATING_MEMORY",
-    "FileBusinessOperatingMemoryStore",
-    "canonicalize_business_memory_payload",
-    "project_business_memory_evidence",
-    "project_business_memory_patterns",
-    "project_business_memory_profile",
-    "project_business_memory_recent_runs",
-    "project_business_memory_state_context",
-    "project_business_memory_contract_bundle",
-    "project_business_memory_meta_payloads",
-    "project_business_memory_feedback_snapshot",
-    "project_business_memory_summary",
-    "project_business_memory_governance_summary",
+    "BUSINESS_MEMORY_SCHEMA_VERSION", "BusinessMemoryCompactionReport", "BusinessMemoryCompactor", "BusinessMemoryPolicy",
+    "BusinessOperatingMemory", "CANON_PERSISTENT_BUSINESS_OPERATING_MEMORY", "FileBusinessOperatingMemoryStore", "canonicalize_business_memory_payload",
+    "project_business_memory_evidence", "project_business_memory_patterns", "project_business_memory_profile", "project_business_memory_recent_runs", "project_business_memory_state_context",
+    "project_business_memory_contract_bundle", "project_business_memory_meta_payloads", "project_business_memory_feedback_snapshot", "project_business_memory_summary",
+    "project_business_memory_governance_summary", "CANON_BUSINESS_MEMORY_V2", "MEMORY_LIFECYCLE", "add_memory_candidate",
+    "transition_memory", "persist_memory_candidate", "persist_memory_transition", "project_business_memory_v2", "project_memory_knowledge_graph", "project_portable_memory",
 ]
