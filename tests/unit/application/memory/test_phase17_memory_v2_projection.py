@@ -759,6 +759,93 @@ def test_corrupt_persisted_json_fails_closed_without_rewrite(tmp_path):
 
     assert path.read_text(encoding="utf-8") == original
 
+
+def test_scalar_provenance_cannot_activate_or_export_portable_memory():
+    payload = {
+        "schema_version": 3,
+        "tenant_id": "tenant-1",
+        "business_id": "business-1",
+        "durable_memory": [{
+            "memory_id": "portable-scalar-proof",
+            "memory_type": "semantic",
+            "key": "portable",
+            "value": "value",
+            "status": "validate",
+            "provenance": "proof",
+            "portable": True,
+            "anonymized": True,
+            "external": True,
+        }],
+    }
+    try:
+        BusinessOperatingMemory.from_dict(payload)
+    except ValueError as exc:
+        assert "run id references must be a list or tuple" in str(exc)
+    else:
+        raise AssertionError("scalar provenance was accepted as evidence references")
+
+
+def test_tenant_scoped_listing_rejects_safe_key_collision(tmp_path):
+    root = tmp_path / "tenant-list-collision"
+    store = FileBusinessOperatingMemoryStore(root_dir=root)
+    store.save(BusinessOperatingMemory.empty(tenant_id="tenant_a", business_id="business-1"))
+
+    assert store.list_businesses(tenant_id="tenant_a") == (("tenant_a", "business-1"),)
+    assert store.list_businesses(tenant_id="tenant/a") == ()
+
+
+def test_huge_sample_size_is_capped_before_payload_budget(tmp_path):
+    store = FileBusinessOperatingMemoryStore(root_dir=tmp_path / "sample-budget")
+    memory = BusinessOperatingMemory.from_dict({
+        "schema_version": 3,
+        "tenant_id": "tenant-1",
+        "business_id": "business-1",
+        "durable_memory": [
+            {
+                "memory_id": f"sample-{index}",
+                "memory_type": "semantic",
+                "key": f"key-{index}",
+                "value": "value",
+                "status": "validate",
+                "provenance": [f"proof-{index}"],
+                "sample_size": 10 ** 4000,
+            }
+            for index in range(16)
+        ],
+    })
+
+    path = store.save(memory)
+    reloaded = store.load(tenant_id="tenant-1", business_id="business-1")
+
+    assert path.stat().st_size <= store.policy.approx_hard_payload_bytes
+    assert all(item.sample_size == store.policy.max_durable_memory_sample_size for item in reloaded.durable_memory)
+
+
+def test_explicit_malformed_schema_versions_fail_closed_without_rewrite(tmp_path):
+    for index, schema_version in enumerate((None, "future", 3.5, True)):
+        root = tmp_path / f"malformed-schema-{index}"
+        target = root / "tenant-1"
+        target.mkdir(parents=True)
+        path = target / "business-1.json"
+        payload = {
+            "schema_version": schema_version,
+            "tenant_id": "tenant-1",
+            "business_id": "business-1",
+            "unknown_future_field": {"must": "survive"},
+        }
+        original = __import__("json").dumps(payload, ensure_ascii=False)
+        path.write_text(original, encoding="utf-8")
+        store = FileBusinessOperatingMemoryStore(root_dir=root)
+
+        try:
+            store.load(tenant_id="tenant-1", business_id="business-1")
+        except ValueError as exc:
+            assert "malformed schema version" in str(exc)
+        else:
+            raise AssertionError(f"explicit malformed schema {schema_version!r} was accepted")
+
+        assert path.read_text(encoding="utf-8") == original
+
 def test_persistence_boundary_sanitizes_oversized_durable_memory_fields(tmp_path):
     root = tmp_path / "durable-ceiling"
     store = FileBusinessOperatingMemoryStore(root_dir=root)
