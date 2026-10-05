@@ -49,7 +49,9 @@ def test_purge_blacklist_whitelist_keeps_payments_system_ux():
 
         def long_ux():
             started.set()
-            hold.wait(timeout=2.0)
+            # Keep the worker deterministically blocked until the test releases it.
+            # A wall-clock timeout makes this race with backlog construction on a busy CI runner.
+            hold.wait()
             with lock:
                 executed.append('UX_LONG_DONE')
 
