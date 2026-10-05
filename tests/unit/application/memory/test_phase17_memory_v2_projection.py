@@ -784,6 +784,14 @@ def test_scalar_provenance_cannot_activate_or_export_portable_memory():
     else:
         raise AssertionError("scalar provenance was accepted as evidence references")
 
+    payload["durable_memory"][0]["provenance"] = [1]
+    try:
+        BusinessOperatingMemory.from_dict(payload)
+    except ValueError as exc:
+        assert "list or tuple of strings" in str(exc)
+    else:
+        raise AssertionError("non-string persisted provenance was accepted")
+
 
 def test_tenant_scoped_listing_rejects_safe_key_collision(tmp_path):
     root = tmp_path / "tenant-list-collision"
@@ -872,6 +880,18 @@ def test_transition_rejects_scalar_provenance_before_activation():
         assert "transition provenance must be a list or tuple" in str(exc)
     else:
         raise AssertionError("scalar transition provenance was accepted")
+
+    try:
+        transition_memory(
+            memory,
+            memory_id="transition-proof-shape",
+            transition="validate",
+            provenance=(1,),
+        )
+    except ValueError as exc:
+        assert "list or tuple of strings" in str(exc)
+    else:
+        raise AssertionError("non-string transition provenance was accepted")
 
 
 def test_normalized_memory_id_collision_fails_closed_at_save_boundary(tmp_path):
