@@ -157,6 +157,9 @@ def run_record_from_row(row: Mapping[str, Any], *, policy: BusinessMemoryPolicy)
 
 
 def durable_memory_record_from_row(row: Mapping[str, Any], *, policy: BusinessMemoryPolicy) -> DurableMemoryRecord:
+    flags = tuple(row.get(name, False) for name in ("external", "portable", "anonymized"))
+    if not all(isinstance(value, bool) for value in flags):
+        raise ValueError("durable memory flags must be boolean")
     provenance = policy.sanitize_run_ids(row.get("provenance") or [])
     status = policy.sanitize_text(row.get("status") or "create", max_length=16) or "create"
     if status in {"validate", "refresh"} and not provenance:
@@ -170,9 +173,9 @@ def durable_memory_record_from_row(row: Mapping[str, Any], *, policy: BusinessMe
         provenance=provenance,
         confidence=policy.normalize_confidence(row.get("confidence")),
         sample_size=policy.clamp_non_negative_int(row.get("sample_size")),
-        external=bool(row.get("external")),
-        portable=bool(row.get("portable")),
-        anonymized=bool(row.get("anonymized")),
+        external=flags[0],
+        portable=flags[1],
+        anonymized=flags[2],
         created_at=optional_text(policy, row.get("created_at"), max_length=64),
         updated_at=optional_text(policy, row.get("updated_at"), max_length=64),
         supersedes=optional_text(policy, row.get("supersedes"), max_length=128),
@@ -195,7 +198,6 @@ def trend_from_row(row: Mapping[str, Any], *, policy: BusinessMemoryPolicy) -> M
 def migrate_business_memory_payload(payload: dict[str, Any], *, policy: BusinessMemoryPolicy) -> dict[str, Any]:
     migrated = dict(payload or {})
     migrated["schema_version"] = BUSINESS_MEMORY_SCHEMA_VERSION
-
     if not isinstance(migrated.get("business_profile"), Mapping):
         fallback_profile = migrated.get("aggregated_business_profile")
         if not isinstance(fallback_profile, Mapping):
@@ -205,7 +207,6 @@ def migrate_business_memory_payload(payload: dict[str, Any], *, policy: Business
         migrated["operating_constraints"] = {}
     if not isinstance(migrated.get("learned_preferences"), Mapping):
         migrated["learned_preferences"] = {}
-
     if migrated.get("signal_memory") is None and migrated.get("key_signals"):
         rows: list[dict[str, Any]] = []
         for item in list(migrated.get("key_signals") or []):
@@ -226,7 +227,6 @@ def migrate_business_memory_payload(payload: dict[str, Any], *, policy: Business
             )
         migrated["signal_memory"] = rows
     migrated.pop("key_signals", None)
-
     for field_name in ("recurring_failures", "recurring_wins"):
         raw = list(migrated.get(field_name) or [])
         if raw and isinstance(raw[0], str):
