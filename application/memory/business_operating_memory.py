@@ -1097,8 +1097,8 @@ def transition_memory(
     updated_at: str | None = None,
 ) -> BusinessOperatingMemory:
     action = str(transition or "").strip()
-    if not isinstance(provenance, (list, tuple)):
-        raise ValueError("transition provenance must be a list or tuple")
+    if not isinstance(provenance, (list, tuple)) or any(not isinstance(item, str) for item in provenance):
+        raise ValueError("transition provenance must be a list or tuple of strings")
     rows = list(memory.durable_memory)
     index = next((i for i, item in enumerate(rows) if item.memory_id == _text(memory_id)[:128]), None)
     if index is None:
