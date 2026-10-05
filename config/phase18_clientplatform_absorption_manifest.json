@@ -1,0 +1,252 @@
+{
+  "schema_version": 1,
+  "phase": "18",
+  "donor_repository": "mailsvb2-bot/clientplatform",
+  "donor_baseline_sha": "a4c9402c77bd284c32c47f8e7f8176e927c798bf",
+  "target_product": "BusinessAIOS",
+  "acceptance_test": "ClientPlatform may be shut down without loss of user-visible capability, UX flow, channel integration, business behavior, stored state, configuration, automation, production workflow or supported customer journey.",
+  "allowed_statuses": [
+    "inventory",
+    "mapped",
+    "implemented",
+    "parity_proven",
+    "cutover",
+    "decommissioned",
+    "obsolete"
+  ],
+  "required_donor_capabilities": [
+    "platform.directory_access_review",
+    "platform.roles_permissions",
+    "platform.account_consolidation",
+    "messaging.broadcast_publication_cohorts",
+    "support.audited_access_session",
+    "support.case_queue",
+    "analytics.business_platform_observability",
+    "runtime.settings_diagnostics",
+    "security.audit_access_review",
+    "release.deploy_rollback_forensics",
+    "billing.subscription_payment_outcomes",
+    "commerce.offerings_program_delivery",
+    "growth.goal_first_autopilot_nba",
+    "ads.connection_spend_attribution",
+    "visual.gateway_assets_review_jobs",
+    "voice.media_delivery_metrics",
+    "content.production_workspace",
+    "recovery.encrypted_backup_dr_evidence",
+    "lifecycle.referral_retention_cohorts",
+    "messenger.canonical_navigation_parity"
+  ],
+  "slices": [
+    {
+      "id": "customer.timeline",
+      "status": "implemented",
+      "canonical_owner": "crm",
+      "source_of_truth": "Business Event Spine + crm.CustomerRegistry",
+      "evidence": [
+        "docs/migrations/unified_customer_timeline_matrix.md"
+      ],
+      "runtime_dependency_removed": true
+    },
+    {
+      "id": "messaging.telegram_vk_max",
+      "status": "implemented",
+      "canonical_owner": "interfaces.messaging_runtime",
+      "source_of_truth": "canonical provider queue/runtime",
+      "evidence": [
+        "docs/migrations/unified_multimessenger_telegram_vk_max_matrix.md"
+      ],
+      "runtime_dependency_removed": true
+    },
+    {
+      "id": "email.outbound",
+      "status": "implemented",
+      "canonical_owner": "interfaces.messaging + provider runtime",
+      "source_of_truth": "provider queue + SecretVault",
+      "evidence": [
+        "docs/migrations/canonical_email_outbound_matrix.md"
+      ],
+      "runtime_dependency_removed": true
+    },
+    {
+      "id": "funnel.intelligence",
+      "status": "implemented",
+      "canonical_owner": "advisory.funnel_intelligence",
+      "source_of_truth": "canonical Decision/Memory/Attribution owners remain unchanged",
+      "evidence": [
+        "docs/migrations/funnel_intelligence_patch_v9_absorption.md"
+      ],
+      "runtime_dependency_removed": true
+    },
+    {
+      "id": "event.landing",
+      "status": "implemented",
+      "canonical_owner": "application.public_site",
+      "source_of_truth": "canonical event facts + public-site presentation contract",
+      "evidence": [
+        "application/public_site/event_landing.py",
+        "contracts/landing_page.py"
+      ],
+      "runtime_dependency_removed": true
+    },
+    {
+      "id": "platform.directory_access_review",
+      "status": "inventory",
+      "canonical_owner": null,
+      "source_of_truth": null,
+      "evidence": [],
+      "runtime_dependency_removed": false
+    },
+    {
+      "id": "platform.roles_permissions",
+      "status": "inventory",
+      "canonical_owner": null,
+      "source_of_truth": null,
+      "evidence": [],
+      "runtime_dependency_removed": false
+    },
+    {
+      "id": "platform.account_consolidation",
+      "status": "inventory",
+      "canonical_owner": null,
+      "source_of_truth": null,
+      "evidence": [],
+      "runtime_dependency_removed": false
+    },
+    {
+      "id": "messaging.broadcast_publication_cohorts",
+      "status": "inventory",
+      "canonical_owner": null,
+      "source_of_truth": null,
+      "evidence": [],
+      "runtime_dependency_removed": false
+    },
+    {
+      "id": "support.audited_access_session",
+      "status": "inventory",
+      "canonical_owner": null,
+      "source_of_truth": null,
+      "evidence": [],
+      "runtime_dependency_removed": false
+    },
+    {
+      "id": "support.case_queue",
+      "status": "inventory",
+      "canonical_owner": null,
+      "source_of_truth": null,
+      "evidence": [],
+      "runtime_dependency_removed": false
+    },
+    {
+      "id": "analytics.business_platform_observability",
+      "status": "inventory",
+      "canonical_owner": null,
+      "source_of_truth": null,
+      "evidence": [],
+      "runtime_dependency_removed": false
+    },
+    {
+      "id": "runtime.settings_diagnostics",
+      "status": "inventory",
+      "canonical_owner": null,
+      "source_of_truth": null,
+      "evidence": [],
+      "runtime_dependency_removed": false
+    },
+    {
+      "id": "security.audit_access_review",
+      "status": "inventory",
+      "canonical_owner": null,
+      "source_of_truth": null,
+      "evidence": [],
+      "runtime_dependency_removed": false
+    },
+    {
+      "id": "release.deploy_rollback_forensics",
+      "status": "inventory",
+      "canonical_owner": null,
+      "source_of_truth": null,
+      "evidence": [],
+      "runtime_dependency_removed": false
+    },
+    {
+      "id": "billing.subscription_payment_outcomes",
+      "status": "inventory",
+      "canonical_owner": null,
+      "source_of_truth": null,
+      "evidence": [],
+      "runtime_dependency_removed": false
+    },
+    {
+      "id": "commerce.offerings_program_delivery",
+      "status": "inventory",
+      "canonical_owner": null,
+      "source_of_truth": null,
+      "evidence": [],
+      "runtime_dependency_removed": false
+    },
+    {
+      "id": "growth.goal_first_autopilot_nba",
+      "status": "inventory",
+      "canonical_owner": null,
+      "source_of_truth": null,
+      "evidence": [],
+      "runtime_dependency_removed": false
+    },
+    {
+      "id": "ads.connection_spend_attribution",
+      "status": "inventory",
+      "canonical_owner": null,
+      "source_of_truth": null,
+      "evidence": [],
+      "runtime_dependency_removed": false
+    },
+    {
+      "id": "visual.gateway_assets_review_jobs",
+      "status": "inventory",
+      "canonical_owner": null,
+      "source_of_truth": null,
+      "evidence": [],
+      "runtime_dependency_removed": false
+    },
+    {
+      "id": "voice.media_delivery_metrics",
+      "status": "inventory",
+      "canonical_owner": null,
+      "source_of_truth": null,
+      "evidence": [],
+      "runtime_dependency_removed": false
+    },
+    {
+      "id": "content.production_workspace",
+      "status": "inventory",
+      "canonical_owner": null,
+      "source_of_truth": null,
+      "evidence": [],
+      "runtime_dependency_removed": false
+    },
+    {
+      "id": "recovery.encrypted_backup_dr_evidence",
+      "status": "inventory",
+      "canonical_owner": null,
+      "source_of_truth": null,
+      "evidence": [],
+      "runtime_dependency_removed": false
+    },
+    {
+      "id": "lifecycle.referral_retention_cohorts",
+      "status": "inventory",
+      "canonical_owner": null,
+      "source_of_truth": null,
+      "evidence": [],
+      "runtime_dependency_removed": false
+    },
+    {
+      "id": "messenger.canonical_navigation_parity",
+      "status": "inventory",
+      "canonical_owner": null,
+      "source_of_truth": null,
+      "evidence": [],
+      "runtime_dependency_removed": false
+    }
+  ]
+}
