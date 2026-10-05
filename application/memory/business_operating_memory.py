@@ -655,10 +655,11 @@ class FileBusinessOperatingMemoryStore:
         for item in files:
             try:
                 payload = json.loads(item.read_text(encoding="utf-8"))
-            except (json.JSONDecodeError, OSError):
+                key = (_text(payload.get("tenant_id")), _text(payload.get("business_id")))
+                canonical_item = self._target_path(tenant_id=key[0], business_id=key[1])
+            except (json.JSONDecodeError, OSError, ValueError):
                 continue
-            key = (_text(payload.get("tenant_id")), _text(payload.get("business_id")))
-            if key in seen or not all(key) or max(map(len, key)) > 128 or (tenant_id is not None and key[0] != _text(tenant_id)) or self._target_path(tenant_id=key[0], business_id=key[1]) != item:
+            if key in seen or not all(key) or max(map(len, key)) > 128 or (tenant_id is not None and key[0] != _text(tenant_id)) or canonical_item != item:
                 continue
             seen.add(key)
             result.append(key)
@@ -1241,8 +1242,7 @@ __all__ = [
     "project_business_memory_patterns", "project_business_memory_profile",
     "project_business_memory_recent_runs", "project_business_memory_state_context",
     "project_business_memory_contract_bundle", "project_business_memory_meta_payloads",
-    "project_business_memory_feedback_snapshot",
-    "project_business_memory_summary",
+    "project_business_memory_feedback_snapshot", "project_business_memory_summary",
     "project_business_memory_governance_summary",
     "CANON_BUSINESS_MEMORY_V2",
     "MEMORY_LIFECYCLE",
