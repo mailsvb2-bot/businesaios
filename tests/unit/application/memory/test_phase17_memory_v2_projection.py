@@ -635,6 +635,46 @@ def test_noncanonical_long_requested_scope_cannot_rewrite_truncated_scope(tmp_pa
     assert target.read_text(encoding="utf-8") == target_payload
 
 
+
+def test_direct_save_cannot_overwrite_colliding_scope_key(tmp_path):
+    root = tmp_path / "scope-key-collision"
+    store = FileBusinessOperatingMemoryStore(root_dir=root)
+    original = BusinessOperatingMemory.empty(
+        tenant_id="tenant-1",
+        business_id="business/a",
+    )
+    original_path = store.save(original)
+    original_bytes = original_path.read_bytes()
+
+    colliding = BusinessOperatingMemory.empty(
+        tenant_id="tenant-1",
+        business_id="business_a",
+    )
+    try:
+        store.save(colliding)
+    except ValueError as exc:
+        assert "persisted scope mismatch" in str(exc)
+    else:
+        raise AssertionError("colliding scope key overwrote another business memory")
+
+    assert original_path.read_bytes() == original_bytes
+    assert store.load(tenant_id="tenant-1", business_id="business/a").business_id == "business/a"
+
+
+def test_scope_path_escape_is_rejected_before_filesystem_write(tmp_path):
+    root = tmp_path / "path-escape"
+    store = FileBusinessOperatingMemoryStore(root_dir=root)
+    escaped = tmp_path / "business-1.json"
+
+    try:
+        store.save(BusinessOperatingMemory.empty(tenant_id="..", business_id="business-1"))
+    except ValueError as exc:
+        assert "business memory path escapes root" in str(exc)
+    else:
+        raise AssertionError("path-escaping tenant scope was accepted")
+
+    assert not escaped.exists()
+
 def test_persistence_boundary_sanitizes_oversized_durable_memory_fields(tmp_path):
     root = tmp_path / "durable-ceiling"
     store = FileBusinessOperatingMemoryStore(root_dir=root)
