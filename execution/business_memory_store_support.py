@@ -172,7 +172,7 @@ def durable_memory_record_from_row(row: Mapping[str, Any], *, policy: BusinessMe
         status=status,
         provenance=provenance,
         confidence=policy.normalize_confidence(row.get("confidence")),
-        sample_size=policy.clamp_non_negative_int(row.get("sample_size")),
+        sample_size=min(policy.clamp_non_negative_int(row.get("sample_size")), int(policy.max_durable_memory_sample_size)),
         external=flags[0],
         portable=flags[1],
         anonymized=flags[2],
