@@ -98,10 +98,13 @@
     },
     {
       "id": "platform.roles_permissions",
-      "status": "inventory",
-      "canonical_owner": null,
-      "source_of_truth": null,
-      "evidence": [],
+      "status": "mapped",
+      "canonical_owner": "governance.permission_matrix + core.users.roles",
+      "source_of_truth": "governance/permission_matrix.py",
+      "evidence": [
+        "governance/permission_matrix.py",
+        "core/users/roles.py"
+      ],
       "runtime_dependency_removed": false
     },
     {
@@ -138,42 +141,58 @@
     },
     {
       "id": "analytics.business_platform_observability",
-      "status": "inventory",
-      "canonical_owner": null,
-      "source_of_truth": null,
-      "evidence": [],
+      "status": "mapped",
+      "canonical_owner": "application.analytics + observability",
+      "source_of_truth": "application/analytics",
+      "evidence": [
+        "application/analytics/business_analytics_service.py",
+        "observability/events.py"
+      ],
       "runtime_dependency_removed": false
     },
     {
       "id": "runtime.settings_diagnostics",
-      "status": "inventory",
-      "canonical_owner": null,
-      "source_of_truth": null,
-      "evidence": [],
+      "status": "mapped",
+      "canonical_owner": "runtime.config + runtime observability",
+      "source_of_truth": "runtime/config",
+      "evidence": [
+        "runtime/config",
+        "runtime/observability"
+      ],
       "runtime_dependency_removed": false
     },
     {
       "id": "security.audit_access_review",
-      "status": "inventory",
-      "canonical_owner": null,
-      "source_of_truth": null,
-      "evidence": [],
+      "status": "mapped",
+      "canonical_owner": "governance + security",
+      "source_of_truth": "governance audit/security policy",
+      "evidence": [
+        "governance/control_plane_audit_support.py",
+        "security"
+      ],
       "runtime_dependency_removed": false
     },
     {
       "id": "release.deploy_rollback_forensics",
-      "status": "inventory",
-      "canonical_owner": null,
-      "source_of_truth": null,
-      "evidence": [],
+      "status": "mapped",
+      "canonical_owner": "release/CI operational tooling",
+      "source_of_truth": "canonical release validation",
+      "evidence": [
+        "scripts/verify_release.sh",
+        ".github/workflows/deep-release-validation.yml"
+      ],
       "runtime_dependency_removed": false
     },
     {
       "id": "billing.subscription_payment_outcomes",
-      "status": "inventory",
-      "canonical_owner": null,
-      "source_of_truth": null,
-      "evidence": [],
+      "status": "mapped",
+      "canonical_owner": "billing",
+      "source_of_truth": "billing ledger/payment owners",
+      "evidence": [
+        "billing/payment_collection.py",
+        "billing/ledger_store.py",
+        "billing/refund_orchestrator.py"
+      ],
       "runtime_dependency_removed": false
     },
     {
@@ -186,26 +205,36 @@
     },
     {
       "id": "growth.goal_first_autopilot_nba",
-      "status": "inventory",
-      "canonical_owner": null,
-      "source_of_truth": null,
-      "evidence": [],
+      "status": "mapped",
+      "canonical_owner": "core.growth",
+      "source_of_truth": "canonical growth/autopilot owner",
+      "evidence": [
+        "core/growth/autopilot_engine.py",
+        "core/growth/autopilot_flow.py"
+      ],
       "runtime_dependency_removed": false
     },
     {
       "id": "ads.connection_spend_attribution",
-      "status": "inventory",
-      "canonical_owner": null,
-      "source_of_truth": null,
-      "evidence": [],
+      "status": "mapped",
+      "canonical_owner": "core.ads + connectors.platform.ads + attribution",
+      "source_of_truth": "canonical ads/provider/attribution owners",
+      "evidence": [
+        "core/ads",
+        "connectors/platform/ads",
+        "attribution"
+      ],
       "runtime_dependency_removed": false
     },
     {
       "id": "visual.gateway_assets_review_jobs",
-      "status": "inventory",
-      "canonical_owner": null,
-      "source_of_truth": null,
-      "evidence": [],
+      "status": "mapped",
+      "canonical_owner": "runtime visual gateway + artifact/task owners",
+      "source_of_truth": "canonical visual execution boundary",
+      "evidence": [
+        "runtime/_internal/effects_domains/visual_creative_gateway.py",
+        "application/artifact/registry.py"
+      ],
       "runtime_dependency_removed": false
     },
     {
@@ -234,10 +263,13 @@
     },
     {
       "id": "lifecycle.referral_retention_cohorts",
-      "status": "inventory",
-      "canonical_owner": null,
-      "source_of_truth": null,
-      "evidence": [],
+      "status": "mapped",
+      "canonical_owner": "core.retention + attribution/partner",
+      "source_of_truth": "canonical retention owner",
+      "evidence": [
+        "core/retention",
+        "application/partner/registry.py"
+      ],
       "runtime_dependency_removed": false
     },
     {
