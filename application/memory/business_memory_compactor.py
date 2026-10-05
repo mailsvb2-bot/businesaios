@@ -25,12 +25,7 @@ def _safe_float(value: object, *, default: float = 0.0) -> float:
 
 
 def _serialize_size_bytes(payload: object) -> int:
-    encoded = json.dumps(
-        payload,
-        ensure_ascii=False,
-        sort_keys=True,
-        separators=(",", ":"),
-    ).encode("utf-8")
+    encoded = json.dumps(payload, ensure_ascii=False, sort_keys=True, separators=(",", ":")).encode("utf-8")
     return len(encoded)
 
 
@@ -104,11 +99,22 @@ class BusinessMemoryCompactor:
             approx_size = self._estimate_payload_bytes(compacted)
             trimmed_for_size_budget = True
             hard_trim_applied = True
-            while approx_size > int(self.policy.approx_hard_payload_bytes) and compacted.durable_memory:
-                compacted = replace(compacted, durable_memory=tuple(compacted.durable_memory[:-1]))
+            while approx_size > int(self.policy.approx_hard_payload_bytes):
+                reduced = replace(
+                    compacted,
+                    durable_memory=compacted.durable_memory[:-1], recent_runs=compacted.recent_runs[:-1],
+                    signal_memory=compacted.signal_memory[:-1], recurring_failures=compacted.recurring_failures[:-1],
+                    recurring_wins=compacted.recurring_wins[:-1], anti_patterns=compacted.anti_patterns[:-1],
+                    active_goals=compacted.active_goals[:-1],
+                    business_profile=dict(list(compacted.business_profile.items())[:-1]),
+                    operating_constraints=dict(list(compacted.operating_constraints.items())[:-1]),
+                    learned_preferences=dict(list(compacted.learned_preferences.items())[:-1]),
+                    last_feedback={}, last_run=None, trends=None,
+                )
+                if reduced == compacted:
+                    raise ValueError("business memory exceeds hard payload byte budget")
+                compacted = reduced
                 approx_size = self._estimate_payload_bytes(compacted)
-            if approx_size > int(self.policy.approx_hard_payload_bytes):
-                raise ValueError("business memory exceeds hard payload byte budget")
         report = BusinessMemoryCompactionReport(
             before_recent_runs=len(memory.recent_runs),
             after_recent_runs=len(compacted.recent_runs),
@@ -121,10 +127,8 @@ class BusinessMemoryCompactor:
             before_anti_patterns=len(memory.anti_patterns),
             after_anti_patterns=len(compacted.anti_patterns),
             approx_payload_bytes=approx_size,
-            target_payload_bytes=int(self.policy.approx_target_payload_bytes),
-            hard_payload_bytes=int(self.policy.approx_hard_payload_bytes),
-            trimmed_for_size_budget=trimmed_for_size_budget,
-            hard_trim_applied=hard_trim_applied,
+            target_payload_bytes=int(self.policy.approx_target_payload_bytes), hard_payload_bytes=int(self.policy.approx_hard_payload_bytes),
+            trimmed_for_size_budget=trimmed_for_size_budget, hard_trim_applied=hard_trim_applied,
         )
         return compacted, report
 
@@ -174,10 +178,8 @@ class BusinessMemoryCompactor:
     @staticmethod
     def _compact_durable_memory(rows: Iterable[Any], *, limit: int) -> tuple[Any, ...]:
         items = list(rows)
-        active = [item for item in items if getattr(item, "status", "") in {"validate", "refresh"}]
-        retained = [item for item in items if getattr(item, "status", "") not in {"create", "validate", "refresh"}]
-        quarantine = [item for item in items if getattr(item, "status", "") == "create"]
-        return tuple((active + retained + quarantine)[: max(0, int(limit))])
+        active = [item for item in items if getattr(item, "status", "") in {"validate", "refresh"}]; retained = [item for item in items if getattr(item, "status", "") not in {"create", "validate", "refresh"}]
+        quarantine = [item for item in items if getattr(item, "status", "") == "create"]; return tuple((active + retained + quarantine)[: max(0, int(limit))])
 
     def _compact_recent_runs(self, rows: Iterable[BusinessMemoryRunRecord]) -> list[BusinessMemoryRunRecord]:
         result: list[BusinessMemoryRunRecord] = []
@@ -402,10 +404,8 @@ class BusinessMemoryCompactor:
 
     def _direction(self, first: float, last: float, *, invert: bool = False) -> str:
         delta = float(last) - float(first)
-        if abs(delta) <= 1e-9:
-            return "flat"
-        if invert:
-            return "up" if delta < 0.0 else "down"
+        if abs(delta) <= 1e-9: return "flat"
+        if invert: return "up" if delta < 0.0 else "down"
         return "up" if delta > 0.0 else "down"
 
     def _soft_trim(self, memory: Any) -> Any:
