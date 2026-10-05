@@ -987,6 +987,65 @@ def test_second_load_read_corruption_fails_closed(tmp_path, monkeypatch):
     else:
         raise AssertionError("corrupt second persistence read was silently ignored")
 
+
+def test_second_snapshot_future_schema_is_not_overwritten_during_migration(tmp_path, monkeypatch):
+    root = tmp_path / "second-snapshot-future"
+    target = root / "tenant-1"
+    target.mkdir(parents=True)
+    path = target / "business-1.json"
+    path.write_text(
+        '{"schema_version":2,"tenant_id":"tenant-1","business_id":"business-1","business_profile":{"segment":"legacy"}}',
+        encoding="utf-8",
+    )
+    future = '{"schema_version":4,"tenant_id":"tenant-1","business_id":"business-1","future_only":{"keep":true}}'
+    original_read_text = path.__class__.read_text
+    original_write_text = path.__class__.write_text
+    calls = {"count": 0}
+
+    def _read_text(self, *args, **kwargs):
+        if self == path:
+            calls["count"] += 1
+            if calls["count"] == 2:
+                original_write_text(path, future, encoding="utf-8")
+                return future
+        return original_read_text(self, *args, **kwargs)
+
+    monkeypatch.setattr(path.__class__, "read_text", _read_text)
+    try:
+        FileBusinessOperatingMemoryStore(root_dir=root).load(
+            tenant_id="tenant-1",
+            business_id="business-1",
+        )
+    except ValueError as exc:
+        assert "unsupported future business memory schema" in str(exc)
+    else:
+        raise AssertionError("future second snapshot was overwritten by stale migration")
+
+    assert original_read_text(path, encoding="utf-8") == future
+
+
+def test_memory_v2_evidence_store_includes_active_durable_provenance():
+    memory = BusinessOperatingMemory(
+        schema_version=3,
+        tenant_id="tenant-1",
+        business_id="business-1",
+        durable_memory=(
+            DurableMemoryRecord(
+                memory_id="durable-proof",
+                memory_type="semantic",
+                key="claim",
+                value="value",
+                status="validate",
+                provenance=("proof-1", "proof-2"),
+            ),
+        ),
+    )
+
+    view = project_business_memory_v2(memory)
+
+    assert view["evidence_store"]["refs"] == ["proof-1", "proof-2"]
+
+
 def test_persistence_boundary_sanitizes_oversized_durable_memory_fields(tmp_path):
     root = tmp_path / "durable-ceiling"
     store = FileBusinessOperatingMemoryStore(root_dir=root)
