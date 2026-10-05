@@ -597,8 +597,8 @@ class FileBusinessOperatingMemoryStore:
             memory = self._load_unlocked(tenant_id=tenant_id, business_id=business_id)
             try:
                 persisted = json.loads(target.read_text(encoding="utf-8"))
-            except (json.JSONDecodeError, OSError):
-                return memory
+            except json.JSONDecodeError as exc:
+                raise ValueError("corrupt business memory persistence") from exc
             if persisted != memory.to_dict():
                 self._write_unlocked(memory)
             return memory
@@ -646,6 +646,7 @@ class FileBusinessOperatingMemoryStore:
 
     def list_businesses(self, *, tenant_id: str | None = None) -> tuple[tuple[str, str], ...]:
         if tenant_id is not None:
+            self._target_path(tenant_id=tenant_id, business_id="__listing_scope_probe__")
             files = sorted((self.root_dir / _safe_key(tenant_id, fallback="default")).glob("*.json"))
         else:
             files = sorted(self.root_dir.glob("*/*.json"))
@@ -1239,8 +1240,7 @@ __all__ = [
     "canonicalize_business_memory_payload", "project_business_memory_evidence",
     "project_business_memory_patterns", "project_business_memory_profile",
     "project_business_memory_recent_runs", "project_business_memory_state_context",
-    "project_business_memory_contract_bundle",
-    "project_business_memory_meta_payloads",
+    "project_business_memory_contract_bundle", "project_business_memory_meta_payloads",
     "project_business_memory_feedback_snapshot",
     "project_business_memory_summary",
     "project_business_memory_governance_summary",
