@@ -26,6 +26,8 @@ from application.memory.business_operating_memory_types import (
 )
 from execution.business_memory_store_support import (
     BUSINESS_MEMORY_SCHEMA_VERSION,
+)
+from execution.business_memory_store_support import (
     anti_pattern_from_row as _anti_pattern_from_row_owner,
 )
 from execution.business_memory_store_support import (
@@ -1226,10 +1228,8 @@ def project_memory_knowledge_graph(memory: BusinessOperatingMemory) -> dict[str,
 
 
 __all__ = [
-    "BUSINESS_MEMORY_SCHEMA_VERSION",
-    "BusinessMemoryCompactionReport",
-    "BusinessMemoryCompactor",
-    "BusinessMemoryPolicy",
+    "BUSINESS_MEMORY_SCHEMA_VERSION", "BusinessMemoryCompactionReport",
+    "BusinessMemoryCompactor", "BusinessMemoryPolicy",
     "BusinessOperatingMemory",
     "CANON_PERSISTENT_BUSINESS_OPERATING_MEMORY",
     "FileBusinessOperatingMemoryStore",
