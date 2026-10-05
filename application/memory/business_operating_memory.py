@@ -26,8 +26,6 @@ from application.memory.business_operating_memory_types import (
 )
 from execution.business_memory_store_support import (
     BUSINESS_MEMORY_SCHEMA_VERSION,
-)
-from execution.business_memory_store_support import (
     anti_pattern_from_row as _anti_pattern_from_row_owner,
 )
 from execution.business_memory_store_support import (
@@ -109,7 +107,6 @@ def canonicalize_business_memory_payload(
     policy: BusinessMemoryPolicy | None = None,
 ) -> BusinessOperatingMemory:
     from runtime.platform.business_memory.second_brain_boundary import sanitize_business_memory_payload
-
     canonical_policy = policy or BusinessMemoryPolicy()
     sanitized = dict(sanitize_business_memory_payload(dict(payload or {})) or {})
     for field_name in ("recurring_failures", "recurring_wins", "anti_patterns"):
@@ -579,8 +576,11 @@ class FileBusinessOperatingMemoryStore:
             payload = json.loads(path.read_text(encoding="utf-8"))
         except json.JSONDecodeError as exc:
             raise ValueError("corrupt business memory persistence") from exc
-        if _safe_int(payload.get("schema_version"), default=BUSINESS_MEMORY_SCHEMA_VERSION) > BUSINESS_MEMORY_SCHEMA_VERSION or len(_text(tenant_id)) > 128 or len(_text(business_id)) > 128 or (_text(payload.get("tenant_id")), _text(payload.get("business_id"))) != (_text(tenant_id), _text(business_id)):
-            raise ValueError("unsupported future business memory schema or persisted scope mismatch")
+        explicit_schema = payload.get("schema_version") if isinstance(payload, dict) and "schema_version" in payload else BUSINESS_MEMORY_SCHEMA_VERSION
+        if not isinstance(payload, dict) or ("schema_version" in payload and (isinstance(explicit_schema, bool) or not isinstance(explicit_schema, int) or explicit_schema < 1 or explicit_schema > BUSINESS_MEMORY_SCHEMA_VERSION)):
+            raise ValueError("unsupported future business memory schema or malformed schema version")
+        if len(_text(tenant_id)) > 128 or len(_text(business_id)) > 128 or (_text(payload.get("tenant_id")), _text(payload.get("business_id"))) != (_text(tenant_id), _text(business_id)):
+            raise ValueError("persisted scope mismatch")
         memory = BusinessOperatingMemory.from_dict(payload, policy=self.policy)
         return self.compactor.compact(memory) if self.compactor is not None else memory
 
@@ -652,7 +652,7 @@ class FileBusinessOperatingMemoryStore:
             except (json.JSONDecodeError, OSError):
                 continue
             key = (_text(payload.get("tenant_id")), _text(payload.get("business_id")))
-            if key in seen or not all(key) or max(map(len, key)) > 128 or self._target_path(tenant_id=key[0], business_id=key[1]) != item:
+            if key in seen or not all(key) or max(map(len, key)) > 128 or (tenant_id is not None and key[0] != _text(tenant_id)) or self._target_path(tenant_id=key[0], business_id=key[1]) != item:
                 continue
             seen.add(key)
             result.append(key)
