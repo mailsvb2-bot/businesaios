@@ -605,6 +605,9 @@ class FileBusinessOperatingMemoryStore:
             if (_text(persisted.get("tenant_id")), _text(persisted.get("business_id"))) != (_text(tenant_id), _text(business_id)):
                 raise ValueError("persisted scope mismatch")
             if persisted != memory.to_dict():
+                if latest_schema == BUSINESS_MEMORY_SCHEMA_VERSION:
+                    latest = BusinessOperatingMemory.from_dict(persisted, policy=self.policy)
+                    return self.compactor.compact(latest) if self.compactor is not None else latest
                 self._write_unlocked(memory)
             return memory
 
@@ -1240,12 +1243,9 @@ def project_memory_knowledge_graph(memory: BusinessOperatingMemory) -> dict[str,
 
 
 __all__ = [
-    "BUSINESS_MEMORY_SCHEMA_VERSION", "BusinessMemoryCompactionReport",
-    "BusinessMemoryCompactor", "BusinessMemoryPolicy", "BusinessOperatingMemory",
-    "CANON_PERSISTENT_BUSINESS_OPERATING_MEMORY", "FileBusinessOperatingMemoryStore",
-    "canonicalize_business_memory_payload", "project_business_memory_evidence",
-    "project_business_memory_patterns", "project_business_memory_profile",
-    "project_business_memory_recent_runs", "project_business_memory_state_context",
+    "BUSINESS_MEMORY_SCHEMA_VERSION", "BusinessMemoryCompactionReport", "BusinessMemoryCompactor", "BusinessMemoryPolicy",
+    "BusinessOperatingMemory", "CANON_PERSISTENT_BUSINESS_OPERATING_MEMORY", "FileBusinessOperatingMemoryStore", "canonicalize_business_memory_payload",
+    "project_business_memory_evidence", "project_business_memory_patterns", "project_business_memory_profile", "project_business_memory_recent_runs", "project_business_memory_state_context",
     "project_business_memory_contract_bundle", "project_business_memory_meta_payloads",
     "project_business_memory_feedback_snapshot", "project_business_memory_summary",
     "project_business_memory_governance_summary", "CANON_BUSINESS_MEMORY_V2",
