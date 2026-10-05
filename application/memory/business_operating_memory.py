@@ -619,6 +619,8 @@ class FileBusinessOperatingMemoryStore:
         target = self._target_path(tenant_id=memory.tenant_id, business_id=memory.business_id)
         target.parent.mkdir(parents=True, exist_ok=True)
         with FileBusinessMemoryLock(target_path=target, timeout_seconds=float(self.policy.save_lock_timeout_seconds), retry_delay_seconds=float(self.policy.save_lock_retry_delay_seconds)):
+            if target.exists():
+                self._load_unlocked(tenant_id=memory.tenant_id, business_id=memory.business_id)
             return self._write_unlocked(memory)
 
     def mutate(
@@ -779,17 +781,13 @@ class FileBusinessOperatingMemoryStore:
             fingerprint=self.policy.sanitize_mapping(fingerprint.to_dict(), limit=12, value_max_length=96),
             recorded_at=self.policy.sanitize_text(recorded_at, max_length=64) or None,
         )
-
         replay_run_id = run_record.run_id if run_record.run_id and run_record.run_id in {row.run_id for row in current.recent_runs} else None
         previous_run = next((row for row in current.recent_runs if row.run_id == replay_run_id), None)
-
         total_runs = int(current.total_runs) if replay_run_id else int(current.total_runs) + 1
         completed_runs = self._next_completed_runs(current=current, replay=previous_run, now_completed=completed)
         failed_runs = self._next_failed_runs(current=current, replay=previous_run, now_completed=completed)
-
         existing_failures = self._remove_run_from_patterns(current.recurring_failures, replay_run_id=replay_run_id, total_runs=total_runs)
         existing_wins = self._remove_run_from_patterns(current.recurring_wins, replay_run_id=replay_run_id, total_runs=total_runs)
-
         updated = BusinessOperatingMemory(
             schema_version=BUSINESS_MEMORY_SCHEMA_VERSION,
             tenant_id=self.policy.sanitize_text(tenant_id, max_length=128),
@@ -833,13 +831,15 @@ class FileBusinessOperatingMemoryStore:
                 replay_previous_score=None if previous_run is None else float(previous_run.goal_score),
             ),
         )
-
         return self.compactor.compact(updated) if self.compactor is not None else updated
 
     def _target_path(self, *, tenant_id: str, business_id: str) -> Path:
         if len(_text(tenant_id)) > 128 or len(_text(business_id)) > 128:
             raise ValueError("persisted scope mismatch: noncanonical business memory scope")
-        return self.root_dir / _safe_key(tenant_id, fallback="default") / f"{_safe_key(business_id, fallback='business')}.json"
+        target = self.root_dir / _safe_key(tenant_id, fallback="default") / f"{_safe_key(business_id, fallback='business')}.json"
+        if self.root_dir.resolve() not in target.resolve().parents:
+            raise ValueError("persisted scope mismatch: business memory path escapes root")
+        return target
 
     def _merge_recent_runs(
         self,
