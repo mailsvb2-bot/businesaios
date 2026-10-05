@@ -577,8 +577,8 @@ class FileBusinessOperatingMemoryStore:
             return BusinessOperatingMemory.empty(tenant_id=tenant_id, business_id=business_id)
         try:
             payload = json.loads(path.read_text(encoding="utf-8"))
-        except (json.JSONDecodeError, OSError):
-            return BusinessOperatingMemory.empty(tenant_id=tenant_id, business_id=business_id)
+        except json.JSONDecodeError as exc:
+            raise ValueError("corrupt business memory persistence") from exc
         if _safe_int(payload.get("schema_version"), default=BUSINESS_MEMORY_SCHEMA_VERSION) > BUSINESS_MEMORY_SCHEMA_VERSION or len(_text(tenant_id)) > 128 or len(_text(business_id)) > 128 or (_text(payload.get("tenant_id")), _text(payload.get("business_id"))) != (_text(tenant_id), _text(business_id)):
             raise ValueError("unsupported future business memory schema or persisted scope mismatch")
         memory = BusinessOperatingMemory.from_dict(payload, policy=self.policy)
