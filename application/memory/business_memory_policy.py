@@ -14,9 +14,8 @@ def _text(value: object) -> str:
 
 
 def _safe_int(value: object, *, default: int) -> int:
-    if isinstance(value, bool): return int(default)
     try:
-        parsed = int(value)
+        parsed = int(default) if isinstance(value, bool) else int(value)
     except (TypeError, ValueError):
         return int(default)
     return int(parsed) if parsed >= 0 else int(default)
@@ -24,10 +23,10 @@ def _safe_int(value: object, *, default: int) -> int:
 
 def _safe_float(value: object, *, default: float) -> float:
     try:
-        return float(value)
+        parsed = float(default) if isinstance(value, bool) else float(value)
     except (TypeError, ValueError):
         return float(default)
-    if isinstance(value, bool) or parsed != parsed or parsed in (float("inf"), float("-inf")): return float(default)
+    return float(default) if parsed != parsed or parsed in (float("inf"), float("-inf")) else parsed
 
 
 def _dedupe_preserve_order(values: Sequence[str]) -> list[str]:
@@ -114,6 +113,7 @@ class BusinessMemoryPolicy:
     ) -> dict[str, str]:
         if not payload:
             return {}
+
         result: dict[str, str] = {}
         for raw_key, raw_value in dict(payload).items():
             key = self.sanitize_key(raw_key)
