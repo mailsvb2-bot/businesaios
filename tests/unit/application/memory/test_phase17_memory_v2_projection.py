@@ -675,6 +675,58 @@ def test_scope_path_escape_is_rejected_before_filesystem_write(tmp_path):
 
     assert not escaped.exists()
 
+
+def test_persisted_durable_flags_require_real_booleans():
+    base = {
+        "schema_version": 3,
+        "tenant_id": "tenant-1",
+        "business_id": "business-1",
+        "durable_memory": [{
+            "memory_id": "portable-1",
+            "memory_type": "semantic",
+            "key": "portable",
+            "value": "value",
+            "status": "validate",
+            "provenance": ["proof-1"],
+            "portable": True,
+            "anonymized": True,
+            "external": False,
+        }],
+    }
+    for field_name, invalid_value in (
+        ("portable", "false"),
+        ("anonymized", 1),
+        ("external", 0),
+        ("portable", None),
+    ):
+        payload = __import__("copy").deepcopy(base)
+        payload["durable_memory"][0][field_name] = invalid_value
+        try:
+            BusinessOperatingMemory.from_dict(payload)
+        except ValueError as exc:
+            assert "durable memory flags must be boolean" in str(exc)
+        else:
+            raise AssertionError(f"malformed {field_name} flag was accepted")
+
+
+def test_corrupt_persisted_json_fails_closed_without_rewrite(tmp_path):
+    root = tmp_path / "corrupt-json"
+    target = root / "tenant-1"
+    target.mkdir(parents=True)
+    path = target / "business-1.json"
+    original = "{not-json"
+    path.write_text(original, encoding="utf-8")
+    store = FileBusinessOperatingMemoryStore(root_dir=root)
+
+    try:
+        store.load(tenant_id="tenant-1", business_id="business-1")
+    except ValueError as exc:
+        assert "corrupt business memory persistence" in str(exc)
+    else:
+        raise AssertionError("corrupt persisted JSON was silently accepted")
+
+    assert path.read_text(encoding="utf-8") == original
+
 def test_persistence_boundary_sanitizes_oversized_durable_memory_fields(tmp_path):
     root = tmp_path / "durable-ceiling"
     store = FileBusinessOperatingMemoryStore(root_dir=root)
