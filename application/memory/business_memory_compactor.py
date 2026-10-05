@@ -58,10 +58,7 @@ class BusinessMemoryCompactor:
         compacted, _ = self.compact_with_report(memory)
         return compacted
 
-    def compact_with_report(
-        self,
-        memory: Any,
-    ) -> tuple[Any, BusinessMemoryCompactionReport]:
+    def compact_with_report(self, memory: Any) -> tuple[Any, BusinessMemoryCompactionReport]:
         recent_runs = self._compact_recent_runs(memory.recent_runs)
         signal_memory = self._compact_signals(memory.signal_memory)
         recurring_failures = self._compact_patterns(
@@ -133,8 +130,7 @@ class BusinessMemoryCompactor:
         return compacted, report
 
     def _rebuild_memory(
-        self,
-        *,
+        self, *,
         memory: Any,
         recent_runs: list[BusinessMemoryRunRecord],
         signal_memory: list[SignalMemoryRecord],
@@ -178,8 +174,10 @@ class BusinessMemoryCompactor:
     @staticmethod
     def _compact_durable_memory(rows: Iterable[Any], *, limit: int) -> tuple[Any, ...]:
         items = list(rows)
-        active = [item for item in items if getattr(item, "status", "") in {"validate", "refresh"}]; retained = [item for item in items if getattr(item, "status", "") not in {"create", "validate", "refresh"}]
-        quarantine = [item for item in items if getattr(item, "status", "") == "create"]; return tuple((active + retained + quarantine)[: max(0, int(limit))])
+        active = [item for item in items if getattr(item, "status", "") in {"validate", "refresh"}]
+        retained = [item for item in items if getattr(item, "status", "") not in {"create", "validate", "refresh"}]
+        quarantine = [item for item in items if getattr(item, "status", "") == "create"]
+        return tuple((active + retained + quarantine)[: max(0, int(limit))])
 
     def _compact_recent_runs(self, rows: Iterable[BusinessMemoryRunRecord]) -> list[BusinessMemoryRunRecord]:
         result: list[BusinessMemoryRunRecord] = []
@@ -404,8 +402,10 @@ class BusinessMemoryCompactor:
 
     def _direction(self, first: float, last: float, *, invert: bool = False) -> str:
         delta = float(last) - float(first)
-        if abs(delta) <= 1e-9: return "flat"
-        if invert: return "up" if delta < 0.0 else "down"
+        if abs(delta) <= 1e-9:
+            return "flat"
+        if invert:
+            return "up" if delta < 0.0 else "down"
         return "up" if delta > 0.0 else "down"
 
     def _soft_trim(self, memory: Any) -> Any:
