@@ -94,6 +94,7 @@ def test_business_memory_compactor_sanitizes_feedback_and_bounds_payload() -> No
     assert len(compacted.last_feedback) <= 3
     assert len(compacted.recent_runs) <= 10
     assert report.trimmed_for_size_budget is True
+    assert report.approx_payload_bytes <= report.hard_payload_bytes
 
 
 def test_business_memory_policy_sanitizes_nested_feedback_without_second_brain_payload() -> None:
@@ -190,6 +191,21 @@ def test_business_memory_store_list_businesses_deduplicates(tmp_path) -> None:
         (target / name).write_text(json.dumps(payload), encoding="utf-8")
 
     assert store.list_businesses(tenant_id="tenant-1") == (("tenant-1", "biz-1"),)
+
+
+def test_global_business_listing_skips_path_escaping_embedded_scope(tmp_path) -> None:
+    root = tmp_path / "memory"
+    store = FileBusinessOperatingMemoryStore(root_dir=root)
+    store.save(BusinessOperatingMemory.empty(tenant_id="tenant-1", business_id="biz-1"))
+
+    tampered_dir = root / "tampered"
+    tampered_dir.mkdir(parents=True)
+    (tampered_dir / "escape.json").write_text(
+        json.dumps({"schema_version": 3, "tenant_id": "..", "business_id": "escape"}),
+        encoding="utf-8",
+    )
+
+    assert store.list_businesses() == (("tenant-1", "biz-1"),)
 
 
 def test_world_state_updater_preserves_existing_meta_and_deduplicates_history() -> None:
