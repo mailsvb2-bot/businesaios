@@ -89,6 +89,17 @@
       "runtime_dependency_removed": true
     },
     {
+      "id": "event.promotion",
+      "status": "implemented",
+      "canonical_owner": "application.campaign",
+      "source_of_truth": "canonical event identity + public event route; Campaign owner remains canonical for paid campaign lifecycle",
+      "evidence": [
+        "application/campaign/event_promotion.py",
+        "tests/unit/application/test_event_promotion_phase18.py"
+      ],
+      "runtime_dependency_removed": true
+    },
+    {
       "id": "platform.directory_access_review",
       "status": "inventory",
       "canonical_owner": null,
