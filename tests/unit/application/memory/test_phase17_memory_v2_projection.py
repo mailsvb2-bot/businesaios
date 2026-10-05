@@ -1024,6 +1024,38 @@ def test_second_snapshot_future_schema_is_not_overwritten_during_migration(tmp_p
     assert original_read_text(path, encoding="utf-8") == future
 
 
+def test_second_snapshot_current_schema_wins_over_stale_first_read(tmp_path, monkeypatch):
+    root = tmp_path / "second-snapshot-current"
+    target = root / "tenant-1"
+    target.mkdir(parents=True)
+    path = target / "business-1.json"
+    path.write_text(
+        '{"schema_version":2,"tenant_id":"tenant-1","business_id":"business-1","business_profile":{"segment":"legacy"}}',
+        encoding="utf-8",
+    )
+    current = '{"schema_version":3,"tenant_id":"tenant-1","business_id":"business-1","business_profile":{"segment":"recovered"}}'
+    original_read_text = path.__class__.read_text
+    original_write_text = path.__class__.write_text
+    calls = {"count": 0}
+
+    def _read_text(self, *args, **kwargs):
+        if self == path:
+            calls["count"] += 1
+            if calls["count"] == 2:
+                original_write_text(path, current, encoding="utf-8")
+                return current
+        return original_read_text(self, *args, **kwargs)
+
+    monkeypatch.setattr(path.__class__, "read_text", _read_text)
+    loaded = FileBusinessOperatingMemoryStore(root_dir=root).load(
+        tenant_id="tenant-1",
+        business_id="business-1",
+    )
+
+    assert loaded.business_profile["segment"] == "recovered"
+    assert original_read_text(path, encoding="utf-8") == current
+
+
 def test_memory_v2_evidence_store_includes_active_durable_provenance():
     memory = BusinessOperatingMemory(
         schema_version=3,
