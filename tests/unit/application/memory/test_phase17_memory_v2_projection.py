@@ -709,6 +709,38 @@ def test_persisted_durable_flags_require_real_booleans():
             raise AssertionError(f"malformed {field_name} flag was accepted")
 
 
+
+def test_malformed_numeric_trust_signals_fall_back_to_safe_defaults():
+    payload = {
+        "schema_version": 3,
+        "tenant_id": "tenant-1",
+        "business_id": "business-1",
+        "durable_memory": [{
+            "memory_id": "numeric-1",
+            "memory_type": "semantic",
+            "key": "numeric",
+            "value": "value",
+            "status": "validate",
+            "provenance": ["proof-1"],
+            "confidence": True,
+            "sample_size": True,
+            "portable": False,
+            "anonymized": False,
+            "external": False,
+        }],
+    }
+    memory = BusinessOperatingMemory.from_dict(payload)
+    assert memory.durable_memory[0].confidence == 0.0
+    assert memory.durable_memory[0].sample_size == 0
+
+    payload["durable_memory"][0]["confidence"] = "nan"
+    memory = BusinessOperatingMemory.from_dict(payload)
+    assert memory.durable_memory[0].confidence == 0.0
+
+    payload["durable_memory"][0]["confidence"] = "inf"
+    memory = BusinessOperatingMemory.from_dict(payload)
+    assert memory.durable_memory[0].confidence == 0.0
+
 def test_corrupt_persisted_json_fails_closed_without_rewrite(tmp_path):
     root = tmp_path / "corrupt-json"
     target = root / "tenant-1"
