@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import json
 from collections.abc import Iterable
-from dataclasses import asdict, dataclass, field
+from dataclasses import asdict, dataclass, field, replace
 from typing import Any
 
 from application.memory.business_memory_policy import BusinessMemoryPolicy
@@ -83,7 +83,6 @@ class BusinessMemoryCompactor:
         )
         anti_patterns = self._derive_anti_patterns(recurring_failures=recurring_failures)
         trends = self._build_trends(recent_runs=recent_runs, signal_memory=signal_memory)
-
         compacted = self._rebuild_memory(
             memory=memory,
             recent_runs=recent_runs,
@@ -93,22 +92,23 @@ class BusinessMemoryCompactor:
             anti_patterns=anti_patterns,
             trends=trends,
         )
-
         approx_size = self._estimate_payload_bytes(compacted)
         trimmed_for_size_budget = False
         hard_trim_applied = False
-
         if approx_size > int(self.policy.approx_target_payload_bytes):
             compacted = self._soft_trim(compacted)
             approx_size = self._estimate_payload_bytes(compacted)
             trimmed_for_size_budget = True
-
         if approx_size > int(self.policy.approx_hard_payload_bytes):
             compacted = self._hard_trim(compacted)
             approx_size = self._estimate_payload_bytes(compacted)
             trimmed_for_size_budget = True
             hard_trim_applied = True
-
+            while approx_size > int(self.policy.approx_hard_payload_bytes) and compacted.durable_memory:
+                compacted = replace(compacted, durable_memory=tuple(compacted.durable_memory[:-1]))
+                approx_size = self._estimate_payload_bytes(compacted)
+            if approx_size > int(self.policy.approx_hard_payload_bytes):
+                raise ValueError("business memory exceeds hard payload byte budget")
         report = BusinessMemoryCompactionReport(
             before_recent_runs=len(memory.recent_runs),
             after_recent_runs=len(compacted.recent_runs),
