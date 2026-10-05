@@ -954,6 +954,39 @@ def test_multibyte_durable_memory_is_trimmed_to_measured_utf8_ceiling(tmp_path):
     assert path.stat().st_size <= store.policy.approx_hard_payload_bytes
     assert len(reloaded.durable_memory) < 16
 
+
+def test_listing_path_escape_is_rejected_before_glob(tmp_path):
+    root = tmp_path / "listing-root"
+    store = FileBusinessOperatingMemoryStore(root_dir=root)
+    try:
+        store.list_businesses(tenant_id="..")
+    except ValueError as exc:
+        assert "business memory path escapes root" in str(exc)
+    else:
+        raise AssertionError("path-escaping tenant listing scope was accepted")
+
+
+def test_second_load_read_corruption_fails_closed(tmp_path, monkeypatch):
+    store = FileBusinessOperatingMemoryStore(root_dir=tmp_path / "second-read")
+    path = store.save(BusinessOperatingMemory.empty(tenant_id="tenant-1", business_id="business-1"))
+    original_read_text = path.__class__.read_text
+    calls = {"count": 0}
+
+    def _read_text(self, *args, **kwargs):
+        if self == path:
+            calls["count"] += 1
+            if calls["count"] == 2:
+                return "{not-json"
+        return original_read_text(self, *args, **kwargs)
+
+    monkeypatch.setattr(path.__class__, "read_text", _read_text)
+    try:
+        store.load(tenant_id="tenant-1", business_id="business-1")
+    except ValueError as exc:
+        assert "corrupt business memory persistence" in str(exc)
+    else:
+        raise AssertionError("corrupt second persistence read was silently ignored")
+
 def test_persistence_boundary_sanitizes_oversized_durable_memory_fields(tmp_path):
     root = tmp_path / "durable-ceiling"
     store = FileBusinessOperatingMemoryStore(root_dir=root)
