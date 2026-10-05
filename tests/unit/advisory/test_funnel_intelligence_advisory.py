@@ -1,0 +1,106 @@
+from __future__ import annotations
+
+from datetime import datetime, timedelta, timezone
+
+import pytest
+
+from advisory.funnel_intelligence import (
+    CommercialEvidence,
+    DerivedConversationStage,
+    FollowupConstraintContext,
+    ScopedInboundEvidence,
+    VerifiedOfferEvidence,
+    assess_followup_constraints,
+    assess_inbound_evidence,
+    assess_offer_evidence,
+    derive_conversation_stage,
+)
+from advisory.funnel_intelligence.source_order import compare_source_order
+
+
+def _inbound(**changes):
+    values = {
+        "tenant_id": "tenant-a",
+        "subject_id": "person-1",
+        "channel": "telegram",
+        "provider_event_id": "event-10",
+        "source_order_key": "10",
+        "text": "Interested in the offer",
+    }
+    values.update(changes)
+    return ScopedInboundEvidence(**values)
+
+
+def test_numeric_provider_order_is_not_lexicographic() -> None:
+    assert compare_source_order("10", "9") > 0
+    assert compare_source_order("010", "10") == 0
+
+
+def test_dedupe_scope_includes_tenant_channel_and_subject() -> None:
+    event = _inbound()
+    seen = {event.dedupe_key}
+    assert not assess_inbound_evidence(event, seen_dedupe_keys=seen).usable_as_new_evidence
+    other_tenant = _inbound(tenant_id="tenant-b")
+    assert assess_inbound_evidence(other_tenant, seen_dedupe_keys=seen).usable_as_new_evidence
+
+
+def test_stale_provider_order_is_rejected_as_new_evidence() -> None:
+    result = assess_inbound_evidence(_inbound(source_order_key="9"), latest_source_order_key="10")
+    assert not result.usable_as_new_evidence
+    assert result.reason == "stale_source_order"
+
+
+def test_checkout_request_does_not_project_checkout() -> None:
+    evidence = CommercialEvidence(inbound_seen=True, checkout_requested=True)
+    assert derive_conversation_stage(evidence) is DerivedConversationStage.ENGAGED
+    assert derive_conversation_stage(CommercialEvidence(checkout_created=True)) is DerivedConversationStage.CHECKOUT
+
+
+def test_payment_and_decline_are_terminal_projection_evidence() -> None:
+    assert derive_conversation_stage(CommercialEvidence(payment_confirmed=True)) is DerivedConversationStage.WON
+    assert derive_conversation_stage(CommercialEvidence(declined=True)) is DerivedConversationStage.LOST
+
+
+def test_offer_price_and_revision_fail_closed() -> None:
+    offer = VerifiedOfferEvidence("o-1", "Plan", True, revision=2)
+    result = assess_offer_evidence(offer, required_revision=1, require_price=True)
+    assert not result.usable
+    assert result.reasons == ("offer_revision_stale", "verified_price_missing")
+
+
+def test_valid_verified_offer_is_advisory_usable() -> None:
+    offer = VerifiedOfferEvidence("o-1", "Plan", True, amount_minor=9900, currency="rub", revision=3)
+    result = assess_offer_evidence(offer, required_revision=3, require_price=True)
+    assert result.usable
+    assert result.reasons == ()
+    assert offer.currency == "RUB"
+
+
+def test_followup_constraints_block_terminal_and_frequency_conditions() -> None:
+    result = assess_followup_constraints(
+        FollowupConstraintContext(paid=True, sent_24h=3, max_24h=3)
+    )
+    assert result.blocked
+    assert "payment" in result.reasons
+    assert "daily_frequency_cap" in result.reasons
+
+
+def test_followup_constraints_compute_latest_defer_and_quiet_hours() -> None:
+    now = datetime(2026, 10, 5, 22, 30, tzinfo=timezone.utc)
+    result = assess_followup_constraints(
+        FollowupConstraintContext(
+            last_sent_at=now - timedelta(minutes=10),
+            minimum_gap=timedelta(hours=2),
+        ),
+        now=now,
+        timezone_name="UTC",
+    )
+    assert result.blocked
+    assert "minimum_gap" in result.reasons
+    assert "quiet_hours" in result.reasons
+    assert result.defer_until == datetime(2026, 10, 6, 9, 0, tzinfo=timezone.utc)
+
+
+def test_invalid_partial_price_is_rejected() -> None:
+    with pytest.raises(ValueError, match="price requires amount and currency together"):
+        VerifiedOfferEvidence("o-1", "Plan", True, amount_minor=100)
