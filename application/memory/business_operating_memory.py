@@ -460,6 +460,9 @@ class BusinessOperatingMemory:
         raw_trends = migrated.get("trends")
         recent_runs = _dedupe_recent_runs(tuple(_run_record_from_row(row, policy=canonical_policy) for row in raw_recent_runs if isinstance(row, Mapping)))
         durable_memory = tuple(_durable_memory_record_from_row_owner(row, policy=canonical_policy) for row in raw_durable_memory if isinstance(row, Mapping))
+        durable_ids = tuple(item.memory_id for item in durable_memory)
+        if len(durable_ids) != len(set(durable_ids)):
+            raise ValueError("normalized durable memory_id collision")
         signal_memory = tuple(_signal_record_from_row(row, policy=canonical_policy) for row in raw_signals if isinstance(row, Mapping))
         recurring_failures = tuple(_pattern_from_row(row, policy=canonical_policy) for row in raw_failures if isinstance(row, Mapping))
         recurring_wins = tuple(_pattern_from_row(row, policy=canonical_policy) for row in raw_wins if isinstance(row, Mapping))
@@ -1094,6 +1097,8 @@ def transition_memory(
     updated_at: str | None = None,
 ) -> BusinessOperatingMemory:
     action = str(transition or "").strip()
+    if not isinstance(provenance, (list, tuple)):
+        raise ValueError("transition provenance must be a list or tuple")
     rows = list(memory.durable_memory)
     index = next((i for i, item in enumerate(rows) if item.memory_id == _text(memory_id)[:128]), None)
     if index is None:
@@ -1229,16 +1234,11 @@ def project_memory_knowledge_graph(memory: BusinessOperatingMemory) -> dict[str,
 
 __all__ = [
     "BUSINESS_MEMORY_SCHEMA_VERSION", "BusinessMemoryCompactionReport",
-    "BusinessMemoryCompactor", "BusinessMemoryPolicy",
-    "BusinessOperatingMemory",
-    "CANON_PERSISTENT_BUSINESS_OPERATING_MEMORY",
-    "FileBusinessOperatingMemoryStore",
-    "canonicalize_business_memory_payload",
-    "project_business_memory_evidence",
-    "project_business_memory_patterns",
-    "project_business_memory_profile",
-    "project_business_memory_recent_runs",
-    "project_business_memory_state_context",
+    "BusinessMemoryCompactor", "BusinessMemoryPolicy", "BusinessOperatingMemory",
+    "CANON_PERSISTENT_BUSINESS_OPERATING_MEMORY", "FileBusinessOperatingMemoryStore",
+    "canonicalize_business_memory_payload", "project_business_memory_evidence",
+    "project_business_memory_patterns", "project_business_memory_profile",
+    "project_business_memory_recent_runs", "project_business_memory_state_context",
     "project_business_memory_contract_bundle",
     "project_business_memory_meta_payloads",
     "project_business_memory_feedback_snapshot",
