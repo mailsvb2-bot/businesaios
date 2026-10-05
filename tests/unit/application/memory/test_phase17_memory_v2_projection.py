@@ -846,6 +846,94 @@ def test_explicit_malformed_schema_versions_fail_closed_without_rewrite(tmp_path
 
         assert path.read_text(encoding="utf-8") == original
 
+
+def test_transition_rejects_scalar_provenance_before_activation():
+    memory = BusinessOperatingMemory(
+        schema_version=3,
+        tenant_id="tenant-1",
+        business_id="business-1",
+        durable_memory=(
+            DurableMemoryRecord(
+                memory_id="transition-proof-shape",
+                memory_type="semantic",
+                key="proof-shape",
+                value="value",
+            ),
+        ),
+    )
+    try:
+        transition_memory(
+            memory,
+            memory_id="transition-proof-shape",
+            transition="validate",
+            provenance="proof",
+        )
+    except ValueError as exc:
+        assert "transition provenance must be a list or tuple" in str(exc)
+    else:
+        raise AssertionError("scalar transition provenance was accepted")
+
+
+def test_normalized_memory_id_collision_fails_closed_at_save_boundary(tmp_path):
+    prefix = "x" * 128
+    memory = BusinessOperatingMemory(
+        schema_version=3,
+        tenant_id="tenant-1",
+        business_id="business-1",
+        durable_memory=(
+            DurableMemoryRecord(
+                memory_id=prefix + "a",
+                memory_type="semantic",
+                key="first",
+                value="first",
+            ),
+            DurableMemoryRecord(
+                memory_id=prefix + "b",
+                memory_type="semantic",
+                key="second",
+                value="second",
+            ),
+        ),
+    )
+    store = FileBusinessOperatingMemoryStore(root_dir=tmp_path / "normalized-id-collision")
+
+    try:
+        store.save(memory)
+    except ValueError as exc:
+        assert "normalized durable memory_id collision" in str(exc)
+    else:
+        raise AssertionError("normalized duplicate memory ids were persisted")
+
+    assert tuple((tmp_path / "normalized-id-collision").rglob("*.json")) == ()
+
+
+def test_multibyte_durable_memory_is_trimmed_to_measured_utf8_ceiling(tmp_path):
+    store = FileBusinessOperatingMemoryStore(root_dir=tmp_path / "multibyte-budget")
+    memory = BusinessOperatingMemory.from_dict({
+        "schema_version": 3,
+        "tenant_id": "tenant-1",
+        "business_id": "business-1",
+        "durable_memory": [
+            {
+                "memory_id": f"emoji-{index}",
+                "memory_type": "semantic",
+                "key": "😀" * 160,
+                "value": "😀" * 512,
+                "status": "validate",
+                "provenance": [f"proof-{index}-{proof}-" + ("😀" * 100) for proof in range(8)],
+                "confidence": 0.9,
+                "sample_size": 100,
+            }
+            for index in range(16)
+        ],
+    })
+
+    path = store.save(memory)
+    reloaded = store.load(tenant_id="tenant-1", business_id="business-1")
+
+    assert path.stat().st_size <= store.policy.approx_hard_payload_bytes
+    assert len(reloaded.durable_memory) < 16
+
 def test_persistence_boundary_sanitizes_oversized_durable_memory_fields(tmp_path):
     root = tmp_path / "durable-ceiling"
     store = FileBusinessOperatingMemoryStore(root_dir=root)
