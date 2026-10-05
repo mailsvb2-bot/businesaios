@@ -599,6 +599,11 @@ class FileBusinessOperatingMemoryStore:
                 persisted = json.loads(target.read_text(encoding="utf-8"))
             except json.JSONDecodeError as exc:
                 raise ValueError("corrupt business memory persistence") from exc
+            latest_schema = persisted.get("schema_version") if isinstance(persisted, dict) and "schema_version" in persisted else BUSINESS_MEMORY_SCHEMA_VERSION
+            if not isinstance(persisted, dict) or ("schema_version" in persisted and (isinstance(latest_schema, bool) or not isinstance(latest_schema, int) or latest_schema < 1 or latest_schema > BUSINESS_MEMORY_SCHEMA_VERSION)):
+                raise ValueError("unsupported future business memory schema or malformed schema version")
+            if (_text(persisted.get("tenant_id")), _text(persisted.get("business_id"))) != (_text(tenant_id), _text(business_id)):
+                raise ValueError("persisted scope mismatch")
             if persisted != memory.to_dict():
                 self._write_unlocked(memory)
             return memory
@@ -1186,7 +1191,7 @@ def project_business_memory_v2(memory: BusinessOperatingMemory) -> dict[str, Any
                 "freshness": float(data.get("freshness") or 0.0),
             })
     durable = [asdict(row) for row in memory.durable_memory if row.status in _ACTIVE_MEMORY_STATES and row.provenance]
-    evidence_refs = sorted({ref for item in procedural for ref in item["evidence"] if str(ref).strip()})
+    evidence_refs = sorted({ref for item in procedural for ref in item["evidence"] if str(ref).strip()} | {ref for item in durable for ref in item.get("provenance", ()) if str(ref).strip()})
     return {
         "schema_version": 2,
         "scope": scope,
@@ -1243,14 +1248,9 @@ __all__ = [
     "project_business_memory_recent_runs", "project_business_memory_state_context",
     "project_business_memory_contract_bundle", "project_business_memory_meta_payloads",
     "project_business_memory_feedback_snapshot", "project_business_memory_summary",
-    "project_business_memory_governance_summary",
-    "CANON_BUSINESS_MEMORY_V2",
-    "MEMORY_LIFECYCLE",
-    "add_memory_candidate",
-    "transition_memory",
-    "persist_memory_candidate",
-    "persist_memory_transition",
-    "project_business_memory_v2",
-    "project_memory_knowledge_graph",
-    "project_portable_memory",
+    "project_business_memory_governance_summary", "CANON_BUSINESS_MEMORY_V2",
+    "MEMORY_LIFECYCLE", "add_memory_candidate",
+    "transition_memory", "persist_memory_candidate",
+    "persist_memory_transition", "project_business_memory_v2",
+    "project_memory_knowledge_graph", "project_portable_memory",
 ]
