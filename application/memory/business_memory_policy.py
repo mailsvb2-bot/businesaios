@@ -129,8 +129,8 @@ class BusinessMemoryPolicy:
         return tuple(item for item in deduped[: int(self.max_active_goals)] if item)
 
     def sanitize_run_ids(self, values: Sequence[str] | None) -> tuple[str, ...]:
-        if values is not None and not isinstance(values, (list, tuple)):
-            raise ValueError("run id references must be a list or tuple")
+        if values is not None and (not isinstance(values, (list, tuple)) or any(not isinstance(item, str) for item in values)):
+            raise ValueError("run id references must be a list or tuple of strings")
         cleaned = [self.sanitize_text(item, max_length=128) for item in list(values or [])]
         return tuple(_dedupe_preserve_order(cleaned)[: int(self.max_source_run_ids)])
 
