@@ -92,4 +92,5 @@ def test_purge_blacklist_whitelist_keeps_payments_system_ux():
         assert len(a) < 10, f'analytics not purged enough: {len(a)}'
 
     finally:
+        hold.set()
         q.stop(timeout_s=1.0)
