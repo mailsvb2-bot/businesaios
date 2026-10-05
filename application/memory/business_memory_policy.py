@@ -14,6 +14,7 @@ def _text(value: object) -> str:
 
 
 def _safe_int(value: object, *, default: int) -> int:
+    if isinstance(value, bool): return int(default)
     try:
         parsed = int(value)
     except (TypeError, ValueError):
@@ -26,6 +27,7 @@ def _safe_float(value: object, *, default: float) -> float:
         return float(value)
     except (TypeError, ValueError):
         return float(default)
+    if isinstance(value, bool) or parsed != parsed or parsed in (float("inf"), float("-inf")): return float(default)
 
 
 def _dedupe_preserve_order(values: Sequence[str]) -> list[str]:
@@ -112,7 +114,6 @@ class BusinessMemoryPolicy:
     ) -> dict[str, str]:
         if not payload:
             return {}
-
         result: dict[str, str] = {}
         for raw_key, raw_value in dict(payload).items():
             key = self.sanitize_key(raw_key)
@@ -178,7 +179,6 @@ class BusinessMemoryPolicy:
     def sanitize_feedback_payload(self, payload: Mapping[str, Any] | None) -> dict[str, Any]:
         if not payload:
             return {}
-
         result: dict[str, Any] = {}
         for raw_key, raw_value in dict(payload).items():
             key = self.sanitize_key(raw_key)
