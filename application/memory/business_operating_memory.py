@@ -573,10 +573,10 @@ class FileBusinessOperatingMemoryStore:
             from application.memory.business_memory_compactor import BusinessMemoryCompactor
             self.compactor = BusinessMemoryCompactor(policy=self.policy)
 
-    def _load_unlocked(self, *, tenant_id: str, business_id: str) -> BusinessOperatingMemory:
+    def _read_payload_unlocked(self, *, tenant_id: str, business_id: str) -> dict[str, Any] | None:
         path = self._target_path(tenant_id=tenant_id, business_id=business_id)
         if not path.exists():
-            return BusinessOperatingMemory.empty(tenant_id=tenant_id, business_id=business_id)
+            return None
         try:
             payload = json.loads(path.read_text(encoding="utf-8"))
         except json.JSONDecodeError as exc:
@@ -586,6 +586,12 @@ class FileBusinessOperatingMemoryStore:
             raise ValueError("unsupported future business memory schema or malformed schema version")
         if len(_text(tenant_id)) > 128 or len(_text(business_id)) > 128 or (_text(payload.get("tenant_id")), _text(payload.get("business_id"))) != (_text(tenant_id), _text(business_id)):
             raise ValueError("persisted scope mismatch")
+        return payload
+
+    def _load_unlocked(self, *, tenant_id: str, business_id: str) -> BusinessOperatingMemory:
+        payload = self._read_payload_unlocked(tenant_id=tenant_id, business_id=business_id)
+        if payload is None:
+            return BusinessOperatingMemory.empty(tenant_id=tenant_id, business_id=business_id)
         memory = BusinessOperatingMemory.from_dict(payload, policy=self.policy)
         return self.compactor.compact(memory) if self.compactor is not None else memory
 
@@ -594,20 +600,18 @@ class FileBusinessOperatingMemoryStore:
         if not target.exists():
             return BusinessOperatingMemory.empty(tenant_id=tenant_id, business_id=business_id)
         with FileBusinessMemoryLock(target_path=target, timeout_seconds=float(self.policy.save_lock_timeout_seconds), retry_delay_seconds=float(self.policy.save_lock_retry_delay_seconds)):
-            memory = self._load_unlocked(tenant_id=tenant_id, business_id=business_id)
-            try:
-                persisted = json.loads(target.read_text(encoding="utf-8"))
-            except json.JSONDecodeError as exc:
-                raise ValueError("corrupt business memory persistence") from exc
-            latest_schema = persisted.get("schema_version") if isinstance(persisted, dict) and "schema_version" in persisted else BUSINESS_MEMORY_SCHEMA_VERSION
-            if not isinstance(persisted, dict) or ("schema_version" in persisted and (isinstance(latest_schema, bool) or not isinstance(latest_schema, int) or latest_schema < 1 or latest_schema > BUSINESS_MEMORY_SCHEMA_VERSION)):
-                raise ValueError("unsupported future business memory schema or malformed schema version")
-            if (_text(persisted.get("tenant_id")), _text(persisted.get("business_id"))) != (_text(tenant_id), _text(business_id)):
-                raise ValueError("persisted scope mismatch")
-            if persisted != memory.to_dict():
-                if latest_schema == BUSINESS_MEMORY_SCHEMA_VERSION:
-                    latest = BusinessOperatingMemory.from_dict(persisted, policy=self.policy)
-                    return self.compactor.compact(latest) if self.compactor is not None else latest
+            first = self._read_payload_unlocked(tenant_id=tenant_id, business_id=business_id)
+            if first is None:
+                return BusinessOperatingMemory.empty(tenant_id=tenant_id, business_id=business_id)
+            memory = BusinessOperatingMemory.from_dict(first, policy=self.policy)
+            memory = self.compactor.compact(memory) if self.compactor is not None else memory
+            second = self._read_payload_unlocked(tenant_id=tenant_id, business_id=business_id)
+            if second is None:
+                return memory
+            if second != first:
+                latest = BusinessOperatingMemory.from_dict(second, policy=self.policy)
+                return self.compactor.compact(latest) if self.compactor is not None else latest
+            if first != memory.to_dict():
                 self._write_unlocked(memory)
             return memory
 
@@ -1246,11 +1250,7 @@ __all__ = [
     "BUSINESS_MEMORY_SCHEMA_VERSION", "BusinessMemoryCompactionReport", "BusinessMemoryCompactor", "BusinessMemoryPolicy",
     "BusinessOperatingMemory", "CANON_PERSISTENT_BUSINESS_OPERATING_MEMORY", "FileBusinessOperatingMemoryStore", "canonicalize_business_memory_payload",
     "project_business_memory_evidence", "project_business_memory_patterns", "project_business_memory_profile", "project_business_memory_recent_runs", "project_business_memory_state_context",
-    "project_business_memory_contract_bundle", "project_business_memory_meta_payloads",
-    "project_business_memory_feedback_snapshot", "project_business_memory_summary",
-    "project_business_memory_governance_summary", "CANON_BUSINESS_MEMORY_V2",
-    "MEMORY_LIFECYCLE", "add_memory_candidate",
-    "transition_memory", "persist_memory_candidate",
-    "persist_memory_transition", "project_business_memory_v2",
-    "project_memory_knowledge_graph", "project_portable_memory",
+    "project_business_memory_contract_bundle", "project_business_memory_meta_payloads", "project_business_memory_feedback_snapshot", "project_business_memory_summary",
+    "project_business_memory_governance_summary", "CANON_BUSINESS_MEMORY_V2", "MEMORY_LIFECYCLE", "add_memory_candidate",
+    "transition_memory", "persist_memory_candidate", "persist_memory_transition", "project_business_memory_v2", "project_memory_knowledge_graph", "project_portable_memory",
 ]
