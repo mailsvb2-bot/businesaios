@@ -1,11 +1,13 @@
 from __future__ import annotations
 
 import os
+from contextlib import contextmanager
 from dataclasses import dataclass, field, replace
 from datetime import datetime
 from enum import StrEnum
 from pathlib import Path
-from typing import Mapping
+from threading import RLock
+from typing import Iterator, Mapping
 from urllib.parse import urlsplit, urlunsplit
 
 from config.config_versioning import ConfigVersion, utc_now
@@ -27,6 +29,52 @@ class LLMProviderPolicy:
 
 
 DEFAULT_LLM_PROVIDER_POLICY = LLMProviderPolicy()
+
+
+_SALES_AI_PROCESS_BARRIERS: dict[str, RLock] = {}
+_SALES_AI_PROCESS_BARRIERS_GUARD = RLock()
+
+
+def _process_barrier(path: Path) -> RLock:
+    key = str(path.resolve())
+    with _SALES_AI_PROCESS_BARRIERS_GUARD:
+        return _SALES_AI_PROCESS_BARRIERS.setdefault(key, RLock())
+
+
+@contextmanager
+def _sales_ai_file_barrier(path: Path) -> Iterator[None]:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    process_lock = _process_barrier(path)
+    with process_lock:
+        handle = path.open("a+b")
+        try:
+            if os.name == "nt":
+                import msvcrt
+
+                handle.seek(0, os.SEEK_END)
+                if handle.tell() == 0:
+                    handle.write(b"\0")
+                    handle.flush()
+                handle.seek(0)
+                msvcrt.locking(handle.fileno(), msvcrt.LK_LOCK, 1)
+            else:
+                import fcntl
+
+                fcntl.flock(handle.fileno(), fcntl.LOCK_EX)
+            yield
+        finally:
+            try:
+                handle.seek(0)
+                if os.name == "nt":
+                    import msvcrt
+
+                    msvcrt.locking(handle.fileno(), msvcrt.LK_UNLCK, 1)
+                else:
+                    import fcntl
+
+                    fcntl.flock(handle.fileno(), fcntl.LOCK_UN)
+            finally:
+                handle.close()
 
 
 class SalesAIDataMode(StrEnum):
@@ -218,12 +266,18 @@ class InMemorySalesAIConsentStore(
     InMemoryVersionedConfigStore[SalesAIConsentSnapshot],
 ):
     def __init__(self) -> None:
+        self._sales_ai_barrier = RLock()
         InMemoryVersionedConfigStore.__init__(
             self,
             namespace="sales_ai_consent",
             snapshot_type=SalesAIConsentSnapshot,
             key_for_snapshot=self._snapshot_key,
         )
+
+    @contextmanager
+    def egress_barrier(self) -> Iterator[None]:
+        with self._sales_ai_barrier:
+            yield
 
     def configure(
         self,
@@ -240,21 +294,22 @@ class InMemorySalesAIConsentStore(
         expected_revision: int | None = None,
         labels: Mapping[str, str] | None = None,
     ) -> SalesAIConsentSnapshot:
-        return self._save_snapshot(
-            self._configured_snapshot(
-                tenant_id=tenant_id,
-                business_id=business_id,
-                enabled=enabled,
-                provider=provider,
-                base_url=base_url,
-                data_mode=data_mode,
-                customer_notice_confirmed=customer_notice_confirmed,
-                labels=labels,
-            ),
-            actor=actor,
-            reason=reason,
-            expected_revision=expected_revision,
-        )
+        with self.egress_barrier():
+            return self._save_snapshot(
+                self._configured_snapshot(
+                    tenant_id=tenant_id,
+                    business_id=business_id,
+                    enabled=enabled,
+                    provider=provider,
+                    base_url=base_url,
+                    data_mode=data_mode,
+                    customer_notice_confirmed=customer_notice_confirmed,
+                    labels=labels,
+                ),
+                actor=actor,
+                reason=reason,
+                expected_revision=expected_revision,
+            )
 
 
 class PersistentSalesAIConsentStore(
@@ -267,6 +322,8 @@ class PersistentSalesAIConsentStore(
         path: str | Path | None = None,
         audit_log_path: str | Path | None = None,
     ) -> None:
+        store_path = sales_ai_consent_store_path() if path is None else Path(path)
+        self._sales_ai_barrier_path = store_path.with_suffix(store_path.suffix + ".lock")
         PersistentVersionedConfigStore.__init__(
             self,
             namespace="sales_ai_consent",
@@ -282,9 +339,27 @@ class PersistentSalesAIConsentStore(
                 "customer_notice_confirmed": item.customer_notice_confirmed,
                 "consent_epoch": item.consent_epoch,
             },
-            path=sales_ai_consent_store_path() if path is None else path,
+            path=store_path,
             audit_log_path=sales_ai_consent_audit_log_path() if audit_log_path is None else audit_log_path,
         )
+
+    @contextmanager
+    def egress_barrier(self) -> Iterator[None]:
+        with _sales_ai_file_barrier(self._sales_ai_barrier_path):
+            yield
+
+    def refresh(self) -> None:
+        self._load()
+
+    def read_fresh(
+        self,
+        *,
+        tenant_id: str,
+        business_id: str,
+    ) -> SalesAIConsentSnapshot | None:
+        with self.egress_barrier():
+            self.refresh()
+            return self.get(tenant_id=tenant_id, business_id=business_id)
 
     def configure(
         self,
@@ -301,7 +376,9 @@ class PersistentSalesAIConsentStore(
         expected_revision: int | None = None,
         labels: Mapping[str, str] | None = None,
     ) -> SalesAIConsentSnapshot:
-        return self._save_persistent_snapshot(
+        with self.egress_barrier():
+            self.refresh()
+            return self._save_persistent_snapshot(
             self._configured_snapshot(
                 tenant_id=tenant_id,
                 business_id=business_id,
@@ -312,10 +389,10 @@ class PersistentSalesAIConsentStore(
                 customer_notice_confirmed=customer_notice_confirmed,
                 labels=labels,
             ),
-            actor=actor,
-            reason=reason,
-            expected_revision=expected_revision,
-        )
+                actor=actor,
+                reason=reason,
+                expected_revision=expected_revision,
+            )
 
 
 @dataclass(frozen=True)
