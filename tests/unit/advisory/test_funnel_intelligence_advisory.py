@@ -8,6 +8,7 @@ from advisory import (
     CommercialEvidence,
     DerivedConversationStage,
     FollowupConstraintContext,
+    SalesAIIntent,
     SalesAIObservation,
     SalesAIReplyGoal,
     ScopedInboundEvidence,
@@ -18,6 +19,7 @@ from advisory import (
     canonical_sales_ai_parameters,
     compare_source_order,
     derive_conversation_stage,
+    parse_sales_ai_observation,
 )
 
 
@@ -157,3 +159,93 @@ def test_sales_ai_response_goals_request_response_without_choosing_action() -> N
             "negative_sentiment",
             "evidence_score",
         }
+
+
+def test_sales_ai_structured_output_is_exact_and_strict() -> None:
+    observation = parse_sales_ai_observation(
+        """{
+          "intent": "service_interest",
+          "need_summary": "Клиент хочет понять следующий шаг",
+          "purchase_readiness": 0.8,
+          "confidence": 0.9,
+          "pricing_question": false,
+          "pricing_exception": false,
+          "need_is_specific": true,
+          "purchase_intent_explicit": true,
+          "explicit_human_request": false,
+          "sensitive_context": false,
+          "negative_sentiment": false,
+          "reply_goal": "ask_qualification",
+          "reason": "Нужно уточнить задачу"
+        }"""
+    )
+    assert observation.intent is SalesAIIntent.SERVICE_INTEREST
+    assert observation.purchase_readiness == 0.8
+    assert observation.to_mapping()["reply_goal"] == "ask_qualification"
+
+
+def test_sales_ai_structured_output_rejects_action_injection() -> None:
+    with pytest.raises(ValueError, match="extra=\\['action_kind'\\]"):
+        parse_sales_ai_observation(
+            """{
+              "intent": "service_interest",
+              "need_summary": "Интерес",
+              "purchase_readiness": 0.8,
+              "confidence": 0.9,
+              "pricing_question": false,
+              "pricing_exception": false,
+              "need_is_specific": true,
+              "purchase_intent_explicit": true,
+              "explicit_human_request": false,
+              "sensitive_context": false,
+              "negative_sentiment": false,
+              "reply_goal": "ask_qualification",
+              "reason": "Наблюдение",
+              "action_kind": "send_message"
+            }"""
+        )
+
+
+@pytest.mark.parametrize("bad", [True, "0.9", -0.1, 1.1, float("nan"), float("inf")])
+def test_sales_ai_strict_scores_reject_non_numeric_or_out_of_range(bad) -> None:
+    payload = {
+        "intent": "other",
+        "need_summary": "",
+        "purchase_readiness": bad,
+        "confidence": 0.5,
+        "pricing_question": False,
+        "pricing_exception": False,
+        "need_is_specific": False,
+        "purchase_intent_explicit": False,
+        "explicit_human_request": False,
+        "sensitive_context": False,
+        "negative_sentiment": False,
+        "reply_goal": "noop",
+        "reason": "",
+    }
+    if bad == "0.9":
+        observation = SalesAIObservation.from_mapping(payload)
+        assert observation.purchase_readiness == 0.9
+    else:
+        with pytest.raises(ValueError, match="finite number between 0 and 1"):
+            SalesAIObservation.from_mapping(payload)
+
+
+def test_sales_ai_strict_booleans_reject_truthy_strings() -> None:
+    payload = {
+        "intent": "other",
+        "need_summary": "",
+        "purchase_readiness": 0.1,
+        "confidence": 0.5,
+        "pricing_question": "false",
+        "pricing_exception": False,
+        "need_is_specific": False,
+        "purchase_intent_explicit": False,
+        "explicit_human_request": False,
+        "sensitive_context": False,
+        "negative_sentiment": False,
+        "reply_goal": "noop",
+        "reason": "",
+    }
+    with pytest.raises(ValueError, match="pricing_question must be a boolean"):
+        SalesAIObservation.from_mapping(payload)
