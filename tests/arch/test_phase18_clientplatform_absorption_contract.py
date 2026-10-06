@@ -34,8 +34,11 @@ def _validate(data: dict) -> list[str]:
         if status not in allowed:
             errors.append(f"{sid}: invalid status {status!r}")
         if status in {"mapped", "implemented", "parity_proven", "cutover", "decommissioned"}:
-            if not item.get("canonical_owner"):
+            owner = str(item.get("canonical_owner") or "")
+            if not owner:
                 errors.append(f"{sid}: canonical_owner required for {status}")
+            if "clientplatform" in owner.casefold():
+                errors.append(f"{sid}: donor-specific canonical_owner is forbidden")
             if not item.get("source_of_truth"):
                 errors.append(f"{sid}: source_of_truth required for {status}")
         if status in {"parity_proven", "cutover", "decommissioned"} and not item.get("evidence"):
@@ -80,3 +83,31 @@ def test_businessaios_runtime_has_no_clientplatform_import_dependency() -> None:
                         if alias.name.startswith("clientplatform")
                     )
     assert not violations, "\n".join(violations)
+
+
+def test_phase18_growth_policy_allows_useful_code_but_not_parallel_runtime() -> None:
+    ledger = json.loads((ROOT / "canon" / "metrics_debt_ledger.json").read_text(encoding="utf-8"))
+    policy = ledger["phase18_absorption_growth_policy"]
+    assert policy["active"] is True
+    assert policy["donor_repository"] == "mailsvb2-bot/clientplatform"
+    assert policy["target_product"] == "BusinessAIOS"
+    assert int(policy["python_line_budget"]) > 0
+    assert int(policy["python_file_budget"]) > 0
+    assert int(policy["transition_surface_budget"]) == 0
+    assert policy["donor_runtime_imports_allowed"] is False
+    assert policy["parallel_owners_allowed"] is False
+    assert policy["duplicate_runtimes_allowed"] is False
+
+
+def test_phase18_does_not_create_donor_named_python_runtime_surfaces() -> None:
+    offenders = []
+    for root_name in RUNTIME_ROOTS:
+        root = ROOT / root_name
+        if not root.exists():
+            continue
+        offenders.extend(
+            str(path.relative_to(ROOT))
+            for path in root.rglob("*.py")
+            if "clientplatform" in path.relative_to(ROOT).as_posix().casefold()
+        )
+    assert not offenders, "\n".join(offenders)
