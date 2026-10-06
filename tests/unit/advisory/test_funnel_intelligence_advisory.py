@@ -13,9 +13,9 @@ from advisory.funnel_intelligence import (
     assess_followup_constraints,
     assess_inbound_evidence,
     assess_offer_evidence,
+    compare_source_order,
     derive_conversation_stage,
 )
-from advisory.funnel_intelligence.source_order import compare_source_order
 
 
 def _inbound(**changes):
