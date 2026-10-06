@@ -134,14 +134,71 @@
       "runtime_dependency_removed": false
     },
     {
-      "id": "sales.ai_advisory_owner_review",
-      "status": "mapped",
-      "canonical_owner": "advisory + DecisionCore + entrypoints.api.owner_action_draft",
-      "source_of_truth": "AI observations -> canonical DecisionCore -> owner-review draft; no provider-side action authority",
+      "id": "sales.ai_observation_contract",
+      "status": "implemented",
+      "canonical_owner": "advisory",
+      "source_of_truth": "strict evidence-only SalesAIObservation; DecisionCore retains action authority",
       "evidence": [
         "advisory/__init__.py",
+        "tests/unit/advisory/test_funnel_intelligence_advisory.py"
+      ],
+      "runtime_dependency_removed": true
+    },
+    {
+      "id": "sales.ai_consent_egress",
+      "status": "implemented",
+      "canonical_owner": "config.llm_provider_policy + runtime.llm_completion_support",
+      "source_of_truth": "business-scoped versioned consent + canonical sealed LLM runtime",
+      "evidence": [
+        "config/llm_provider_policy.py",
+        "core/llm/redaction.py",
+        "runtime/_internal/effects_actions/llm_completion_support.py",
+        "tests/unit/config/test_versioned_config_persistence_wave25.py",
+        "tests/unit/runtime/test_sales_ai_llm_egress_phase18.py"
+      ],
+      "runtime_dependency_removed": true
+    },
+    {
+      "id": "sales.ai_owner_workspace_analysis",
+      "status": "implemented",
+      "canonical_owner": "adapters.api.fastapi.business_workspace_provider_routes",
+      "source_of_truth": "authenticated owner Business Workspace + consent-bound advisory analysis",
+      "evidence": [
+        "adapters/api/fastapi/business_workspace_provider_routes.py",
+        "tests/unit/adapters/api/fastapi/test_business_workspace_provider_routes.py"
+      ],
+      "runtime_dependency_removed": true
+    },
+    {
+      "id": "sales.ai_owner_review_draft",
+      "status": "mapped",
+      "canonical_owner": "DecisionCore + entrypoints.api.owner_action_draft",
+      "source_of_truth": "persisted canonical DecisionCore action projected to editable owner draft",
+      "evidence": [
         "entrypoints/api/owner_action_draft.py",
-        "tests/unit/advisory/test_funnel_intelligence_advisory.py",
+        "tests/unit/api/test_owner_action_draft_projector.py",
+        "docs/runbooks/CLIENTPLATFORM_SALES_AI.md"
+      ],
+      "runtime_dependency_removed": false
+    },
+    {
+      "id": "sales.ai_ingress_side_channel",
+      "status": "inventory",
+      "canonical_owner": null,
+      "source_of_truth": null,
+      "evidence": [
+        "runtime/business_autonomy/provider_inbound_webhook_service.py",
+        "clientplatform/application/sales_ai_orchestration.py"
+      ],
+      "runtime_dependency_removed": false
+    },
+    {
+      "id": "sales.ai_freshness_retention",
+      "status": "inventory",
+      "canonical_owner": null,
+      "source_of_truth": null,
+      "evidence": [
+        "clientplatform/application/sales_ai_orchestration.py",
         "docs/runbooks/CLIENTPLATFORM_SALES_AI.md"
       ],
       "runtime_dependency_removed": false
