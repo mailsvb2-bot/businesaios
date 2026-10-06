@@ -1,13 +1,13 @@
 from __future__ import annotations
 
 import os
+from collections.abc import Iterator, Mapping
 from contextlib import contextmanager
 from dataclasses import dataclass, field, replace
 from datetime import datetime
 from enum import StrEnum
 from pathlib import Path
 from threading import RLock
-from typing import Iterator, Mapping
 from urllib.parse import urlsplit, urlunsplit
 
 from config.config_versioning import ConfigVersion, utc_now
@@ -379,16 +379,16 @@ class PersistentSalesAIConsentStore(
         with self.egress_barrier():
             self.refresh()
             return self._save_persistent_snapshot(
-            self._configured_snapshot(
-                tenant_id=tenant_id,
-                business_id=business_id,
-                enabled=enabled,
-                provider=provider,
-                base_url=base_url,
-                data_mode=data_mode,
-                customer_notice_confirmed=customer_notice_confirmed,
-                labels=labels,
-            ),
+                self._configured_snapshot(
+                    tenant_id=tenant_id,
+                    business_id=business_id,
+                    enabled=enabled,
+                    provider=provider,
+                    base_url=base_url,
+                    data_mode=data_mode,
+                    customer_notice_confirmed=customer_notice_confirmed,
+                    labels=labels,
+                ),
                 actor=actor,
                 reason=reason,
                 expected_revision=expected_revision,
