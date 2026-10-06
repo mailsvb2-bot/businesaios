@@ -4,8 +4,8 @@ import time
 from typing import Any
 
 from application.ontology import EventFactLifecycleWriter
+from application.public_site.landing_content import EventLandingContent, EventLandingState
 from contracts.event_store import BUSINESS_FACT_EVENT_TYPE
-from application.public_site.landing_content import EventLandingContent, EventLandingPublicationStatus, EventLandingState
 
 _CREATED="event_landing.created"; _DRAFT="event_landing.draft_saved"; _PUBLISHED="event_landing.published"; _UNPUBLISHED="event_landing.unpublished"
 _FACTS=frozenset({_CREATED,_DRAFT,_PUBLISHED,_UNPUBLISHED})
@@ -47,7 +47,7 @@ class EventLandingRegistry:
             repaired=self._writer.repair_existing(tenant_id=tenant_id,business_id=business_id,entity_id=event_id,operation="create",idempotency_key=idempotency_key,fact_type=_CREATED,payload=payload,event_metadata={"actor_id":actor_id})
             if not repaired: raise RuntimeError("event_landing_already_exists")
             return current
-        self._writer.append_once(tenant_id=tenant_id,business_id=business_id,entity_id=event_id,operation="create",idempotency_key=idempotency_key,fact_type=_CREATED,payload=payload,occurred_at_ms=self._now(),event_metadata=metadata)
+        self._writer.append_once(tenant_id=tenant_id,business_id=business_id,entity_id=event_id,operation="create",idempotency_key=idempotency_key,fact_type=_CREATED,payload=payload,occurred_at_ms=self._now(),event_metadata={"actor_id":actor_id})
         return self.get(tenant_id=tenant_id,business_id=business_id,event_id=event_id)
 
     def transition(self, *, tenant_id: str, business_id: str, event_id: str, action: str, expected_revision: int, idempotency_key: str, actor_id: str, content: EventLandingContent|None=None, source: str="manual") -> EventLandingState:
