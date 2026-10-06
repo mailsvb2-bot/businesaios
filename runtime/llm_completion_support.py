@@ -8,6 +8,7 @@ __getattr__, __dir__, __all__ = build_owner_namespace(
     exports=(
         "read_provider_and_model",
         "call_marketing_llm",
+        "call_sales_ai_llm",
         "emit_marketing_llm_success",
         "emit_marketing_llm_error",
     ),
