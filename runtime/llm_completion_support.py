@@ -7,6 +7,7 @@ __getattr__, __dir__, __all__ = build_owner_namespace(
     "runtime._internal.effects_actions.llm_completion_support",
     exports=(
         "read_provider_and_model",
+        "analyze_sales_ai_message",
         "call_marketing_llm",
         "call_sales_ai_llm",
         "emit_marketing_llm_success",
