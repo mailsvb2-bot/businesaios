@@ -15,27 +15,51 @@ The machine-readable inventory is `config/phase18_clientplatform_absorption_mani
 - Email outbound → canonical messaging/provider runtime;
 - funnel intelligence patch v9 → pure logic folded into the existing `advisory` owner, with Decision/Memory/Attribution/Task owners unchanged.
 
-## First new Phase 18 slice: event landing
+## Event landing — granular status
 
-ClientPlatform's 2026-10-05 event landing release was reviewed as donor evidence. The transferable product semantics are:
+ClientPlatform's 2026-10-05 event landing release was reviewed as donor evidence. Only the presentation contract is currently implemented in BusinessAIOS:
 
-- deterministic safe landing draft from event/business facts;
+- deterministic safe landing content from event/business facts;
 - bounded hero/audience/outcomes/agenda/speaker/FAQ/CTA schema;
 - calm/bold/minimal presentation theme;
-- explicit data minimization for any later AI drafting;
-- registration/customer/provider secrets are not part of landing content.
+- explicit data minimization for later AI drafting;
+- registration/customer/provider secrets are excluded from landing content.
 
-These semantics are now represented by `contracts.landing_page.EventLandingContent` and `application.public_site.landing_content`.
+These semantics are represented by `contracts.landing_page.EventLandingContent` and `application.public_site.landing_content`.
 
-Not copied:
+The broader donor lifecycle is **not** marked implemented. Draft persistence, revision ordering, preview, publish/unpublish and owner-facing workflow remain inventory until they are wired through existing BusinessAIOS Event/Artifact/Task/Execution owners and proved end-to-end.
 
-- ClientPlatform repositories/tables;
+## Event promotion — granular status
+
+Only destination/identity semantics are currently implemented: campaign links retain canonical event identity and target the public event route through the existing Campaign owner.
+
+The donor owner workspace, promotion dashboard, ad-provider binding, registration attribution and omnichannel management flow are not yet parity-proven and remain inventory.
+
+## Current-main donor extensions
+
+The old 20-capability donor manifest is only a floor. Current ClientPlatform main also contains newer product surfaces that Phase 18 must account for, including:
+
+- owner Cockpit/business workspace;
+- Sales AI advisory + owner-reviewed draft flow;
+- sales workspace;
+- event landing full lifecycle;
+- event promotion owner flow;
+- program builder/delivery/media/progress;
+- Yandex Direct owner flow and growth analytics;
+- support cases and audited support access;
+- backup/DR and recovery evidence.
+
+These are inventoried independently so that a broad capability cannot be declared implemented merely because one sub-contract exists.
+
+## What is deliberately not copied
+
+- ClientPlatform repositories/tables as parallel persistence;
 - ClientPlatform tenancy owner;
-- ClientPlatform event runtime;
-- ClientPlatform AI provider client;
-- a second registration form, CRM, attribution engine or persistence layer.
+- ClientPlatform event/sales/support state machines where BusinessAIOS already has canonical owners;
+- ClientPlatform AI workers as a second decision/orchestration brain;
+- a second CRM, attribution engine, task engine, campaign engine or messaging runtime.
 
-The next step for this slice is wiring draft/publish/preview lifecycle to the existing canonical Event/Artifact/Task/Execution owners instead of transplanting ClientPlatform's repository state machine.
+Transfer means preserving missing product behavior on existing BusinessAIOS owners.
 
 ## Gate semantics
 
@@ -48,4 +72,4 @@ The next step for this slice is wiring draft/publish/preview lifecycle to the ex
 - parity/cutover claims without evidence;
 - cutover/decommission claims while runtime dependency remains.
 
-It intentionally reports Phase 18 incomplete today. Completion can only become true when every required donor capability is decommissioned/obsolete with evidence and no runtime dependency.
+It intentionally reports Phase 18 incomplete today. Completion can only become true when every required donor capability is decommissioned/obsolete with evidence and no runtime dependency. Current-main extension slices must also be resolved before any product-level claim that ClientPlatform can be shut down without capability loss.
