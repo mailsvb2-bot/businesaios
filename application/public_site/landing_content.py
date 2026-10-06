@@ -155,17 +155,12 @@ __all__ = [
 
 @dataclass(frozen=True, slots=True)
 class EventLandingFacts:
-    title: str
-    description: str = ""
-    timezone_name: str = "UTC"
-    starts_at: tuple[datetime, ...] = ()
+    title: str; description: str = ""; timezone_name: str = "UTC"; starts_at: tuple[datetime, ...] = ()
 
 
 @dataclass(frozen=True, slots=True)
 class BusinessLandingFacts:
-    business_name: str = ""
-    activity_description: str = ""
-    confirmed_audiences: tuple[str, ...] = ()
+    business_name: str = ""; activity_description: str = ""; confirmed_audiences: tuple[str, ...] = ()
 
 
 def _sentences(value: object, *, maximum: int = 4) -> tuple[str, ...]:
@@ -223,54 +218,39 @@ CANON_EVENT_LANDING_LIFECYCLE = True
 
 
 class EventLandingPublicationStatus(StrEnum):
-    DRAFT = "draft"
-    PUBLISHED = "published"
+    DRAFT, PUBLISHED = "draft", "published"
 
 
 @dataclass(frozen=True, slots=True)
 class EventLandingState:
-    event_id: str
-    draft: EventLandingContent
-    draft_source: str
-    revision: int = 1
-    status: EventLandingPublicationStatus = EventLandingPublicationStatus.DRAFT
-    published_revision: int | None = None
-    published: EventLandingContent | None = None
+    event_id: str; draft: EventLandingContent; draft_source: str
+    revision: int = 1; status: EventLandingPublicationStatus = EventLandingPublicationStatus.DRAFT
+    published_revision: int | None = None; published: EventLandingContent | None = None
 
     def __post_init__(self) -> None:
         event_id, source, revision = str(self.event_id or "").strip(), str(self.draft_source or "").strip(), int(self.revision)
-        if not event_id or len(event_id) > 200:
-            raise ValueError("event_id must be 1..200 characters")
-        if source not in {"template", "manual", "ai"}:
-            raise ValueError("draft_source must be template, manual or ai")
-        if revision < 1:
-            raise ValueError("revision must be >= 1")
+        if not event_id or len(event_id) > 200: raise ValueError("event_id must be 1..200 characters")
+        if source not in {"template", "manual", "ai"}: raise ValueError("draft_source must be template, manual or ai")
+        if revision < 1: raise ValueError("revision must be >= 1")
         object.__setattr__(self, "event_id", event_id); object.__setattr__(self, "draft_source", source); object.__setattr__(self, "revision", revision)
         status = EventLandingPublicationStatus(self.status); object.__setattr__(self, "status", status)
         if self.published_revision is not None:
             published_revision = int(self.published_revision)
-            if not 1 <= published_revision <= revision:
-                raise ValueError("published_revision must be within the revision history")
+            if not 1 <= published_revision <= revision: raise ValueError("published_revision must be within the revision history")
             object.__setattr__(self, "published_revision", published_revision)
-        if (self.published_revision is None) != (self.published is None):
-            raise ValueError("published content and published_revision must exist together")
-        if status is EventLandingPublicationStatus.PUBLISHED and self.published is None:
-            raise ValueError("published status requires a published snapshot")
+        if (self.published_revision is None) != (self.published is None): raise ValueError("published content and published_revision must exist together")
+        if status is EventLandingPublicationStatus.PUBLISHED and self.published is None: raise ValueError("published status requires a published snapshot")
 
     @property
-    def is_published(self) -> bool:
-        return self.status is EventLandingPublicationStatus.PUBLISHED
+    def is_published(self) -> bool: return self.status is EventLandingPublicationStatus.PUBLISHED
 
     @property
-    def has_unpublished_changes(self) -> bool:
-        return self.published_revision is not None and self.published_revision != self.revision
+    def has_unpublished_changes(self) -> bool: return self.published_revision is not None and self.published_revision != self.revision
 
-    def preview(self) -> EventLandingContent:
-        return self.draft
+    def preview(self) -> EventLandingContent: return self.draft
 
     def _checked(self, expected_revision: int) -> None:
-        if isinstance(expected_revision, bool) or int(expected_revision) != self.revision:
-            raise RuntimeError("event_landing_revision_conflict")
+        if isinstance(expected_revision, bool) or int(expected_revision) != self.revision: raise RuntimeError("event_landing_revision_conflict")
 
     def save_draft(self, *, content: EventLandingContent, source: str, expected_revision: int) -> "EventLandingState":
         self._checked(expected_revision)
@@ -285,8 +265,7 @@ class EventLandingState:
         self._checked(expected_revision)
         return replace(self, status=EventLandingPublicationStatus.DRAFT, published_revision=None, published=None)
 
-    def public_content(self) -> EventLandingContent | None:
-        return self.published if self.is_published else None
+    def public_content(self) -> EventLandingContent | None: return self.published if self.is_published else None
 
 
 def new_event_landing_state(*, event_id: str, content: EventLandingContent,
