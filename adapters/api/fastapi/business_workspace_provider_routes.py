@@ -98,7 +98,7 @@ def register_business_workspace_provider_routes(
         return _sales_ai_settings_payload(
             tenant_id=tenant_id,
             business_id=business_id,
-            snapshot=consent_store.get(tenant_id=tenant_id, business_id=business_id),
+            snapshot=consent_store.read_fresh(tenant_id=tenant_id, business_id=business_id),
         )
 
     @router.post('/business-workspace/sales-ai', tags=['business-workspace'])
