@@ -4,7 +4,7 @@ import ast
 from pathlib import Path
 
 
-ROOT = Path(__file__).resolve().parents[2] / "advisory" / "funnel_intelligence.py"
+ROOT = Path(__file__).resolve().parents[2] / "advisory" / "__init__.py"
 FORBIDDEN_IMPORT_PREFIXES = (
     "application.decision",
     "application.decisioning",
