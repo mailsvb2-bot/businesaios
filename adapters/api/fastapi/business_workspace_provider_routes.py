@@ -126,7 +126,7 @@ def register_business_workspace_provider_routes(
                 status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
                 detail='sales_ai_enabled_must_be_boolean',
             )
-        current = consent_store.get(tenant_id=tenant_id, business_id=business_id)
+        current = consent_store.read_fresh(tenant_id=tenant_id, business_id=business_id)
         if not enabled and current is None:
             return _sales_ai_settings_payload(
                 tenant_id=tenant_id,
