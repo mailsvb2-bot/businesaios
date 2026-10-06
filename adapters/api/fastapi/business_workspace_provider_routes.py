@@ -253,7 +253,7 @@ def register_business_workspace_provider_routes(
             'source': 'owner_supplied_customer_text',
             'advisory_only': True,
             'execution_allowed': False,
-            'next_boundary': '/business-workspace/decision-draft',
+            'decision_authority': 'DecisionCore',
         }
 
     @router.post('/business-workspace/providers', tags=['business-workspace'])
