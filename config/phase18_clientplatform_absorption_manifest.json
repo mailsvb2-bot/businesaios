@@ -135,11 +135,13 @@
     },
     {
       "id": "sales.ai_advisory_owner_review",
-      "status": "inventory",
-      "canonical_owner": null,
-      "source_of_truth": null,
+      "status": "mapped",
+      "canonical_owner": "advisory + DecisionCore + entrypoints.api.owner_action_draft",
+      "source_of_truth": "AI observations -> canonical DecisionCore -> owner-review draft; no provider-side action authority",
       "evidence": [
-        "clientplatform/application/sales_ai_orchestration.py",
+        "advisory/__init__.py",
+        "entrypoints/api/owner_action_draft.py",
+        "tests/unit/advisory/test_funnel_intelligence_advisory.py",
         "docs/runbooks/CLIENTPLATFORM_SALES_AI.md"
       ],
       "runtime_dependency_removed": false
