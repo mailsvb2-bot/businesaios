@@ -8,6 +8,12 @@ from fastapi import APIRouter, HTTPException, Request, status
 from adapters.api.fastapi.router_support import business_owner_scope, json_body
 from application.business_autonomy.integration_capability_catalog import CAPABILITY_SCHEMA_VERSION, list_integration_capability_payloads
 from application.business_autonomy.provider_truth_matrix import provider_truth_map
+from config.llm_provider_policy import (
+    PersistentSalesAIConsentStore,
+    SalesAIConsentSnapshot,
+    SalesAIConsentStore,
+    SalesAIDataMode,
+)
 from entrypoints.api.provider_admin_route_handlers import ProviderAdminRouteHandlers
 
 CANON_BUSINESS_WORKSPACE_PROVIDER_ROUTES = True
@@ -27,8 +33,49 @@ def _truth(provider_key: str, *, history: bool = False):
     return row
 
 
-def register_business_workspace_provider_routes(*, router: APIRouter, auth_bundle, provider_admin_handlers: ProviderAdminRouteHandlers | None = None) -> None:
+def _sales_ai_settings_payload(
+    *,
+    tenant_id: str,
+    business_id: str,
+    snapshot: SalesAIConsentSnapshot | None,
+) -> dict[str, Any]:
+    if snapshot is None:
+        return {
+            'tenant_id': tenant_id,
+            'business_id': business_id,
+            'configured': False,
+            'enabled': False,
+            'provider': '',
+            'base_url': '',
+            'data_mode': SalesAIDataMode.REDACTED.value,
+            'customer_notice_confirmed': False,
+            'consent_epoch': 0,
+            'revision': 0,
+        }
+    return {
+        'tenant_id': snapshot.tenant_id,
+        'business_id': snapshot.business_id,
+        'configured': True,
+        'enabled': snapshot.enabled,
+        'provider': snapshot.provider,
+        'base_url': snapshot.base_url,
+        'data_mode': snapshot.data_mode.value,
+        'customer_notice_confirmed': snapshot.customer_notice_confirmed,
+        'consent_epoch': snapshot.consent_epoch,
+        'revision': 0 if snapshot.version is None else snapshot.version.revision,
+        'updated_at': snapshot.updated_at.isoformat(),
+    }
+
+
+def register_business_workspace_provider_routes(
+    *,
+    router: APIRouter,
+    auth_bundle,
+    provider_admin_handlers: ProviderAdminRouteHandlers | None = None,
+    sales_ai_consent_store: SalesAIConsentStore | None = None,
+) -> None:
     handlers = provider_admin_handlers or ProviderAdminRouteHandlers()
+    consent_store = sales_ai_consent_store or PersistentSalesAIConsentStore()
     @router.get('/business-workspace/providers', tags=['business-workspace'])
     async def provider_workspace(request: Request, provider_key: str | None = None, limit: int = 50) -> dict[str, Any]:
         _, tenant_id, business_id = _workspace_scope(request=request, auth_bundle=auth_bundle)
@@ -45,6 +92,103 @@ def register_business_workspace_provider_routes(*, router: APIRouter, auth_bundl
             return handlers.get_business_customers(tenant_id=tenant_id, business_id=business_id, customer_id=str(customer_id or '').strip())
         except KeyError as exc:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail='customer_not_found') from exc
+    @router.get('/business-workspace/sales-ai', tags=['business-workspace'])
+    async def sales_ai_settings(request: Request) -> dict[str, Any]:
+        _, tenant_id, business_id = _workspace_scope(request=request, auth_bundle=auth_bundle)
+        return _sales_ai_settings_payload(
+            tenant_id=tenant_id,
+            business_id=business_id,
+            snapshot=consent_store.get(tenant_id=tenant_id, business_id=business_id),
+        )
+
+    @router.post('/business-workspace/sales-ai', tags=['business-workspace'])
+    async def update_sales_ai_settings(request: Request) -> dict[str, Any]:
+        principal, tenant_id, business_id = _workspace_scope(request=request, auth_bundle=auth_bundle)
+        body = await json_body(request)
+        allowed = {
+            'enabled',
+            'provider',
+            'base_url',
+            'data_mode',
+            'customer_notice_confirmed',
+            'expected_revision',
+        }
+        if set(body).difference(allowed):
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail='sales_ai_unknown_settings_fields',
+            )
+        enabled = body.get('enabled')
+        if not isinstance(enabled, bool):
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail='sales_ai_enabled_must_be_boolean',
+            )
+        current = consent_store.get(tenant_id=tenant_id, business_id=business_id)
+        if not enabled and current is None:
+            return _sales_ai_settings_payload(
+                tenant_id=tenant_id,
+                business_id=business_id,
+                snapshot=None,
+            )
+        provider = str(body.get('provider') or (current.provider if current else '')).strip()
+        base_url = str(body.get('base_url') or (current.base_url if current else '')).strip()
+        data_mode = str(
+            body.get('data_mode')
+            or (current.data_mode.value if current else SalesAIDataMode.REDACTED.value)
+        ).strip()
+        notice = body.get(
+            'customer_notice_confirmed',
+            current.customer_notice_confirmed if current else False,
+        )
+        if not isinstance(notice, bool):
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail='sales_ai_customer_notice_must_be_boolean',
+            )
+        expected_revision = body.get('expected_revision')
+        if expected_revision is not None and (
+            isinstance(expected_revision, bool) or not isinstance(expected_revision, int)
+        ):
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail='sales_ai_expected_revision_must_be_integer',
+            )
+        try:
+            stored = consent_store.configure(
+                tenant_id=tenant_id,
+                business_id=business_id,
+                enabled=enabled,
+                provider=provider,
+                base_url=base_url,
+                data_mode=data_mode,
+                customer_notice_confirmed=notice,
+                actor=str(
+                    getattr(principal, 'actor_id', None)
+                    or getattr(principal, 'subject', '')
+                    or 'owner'
+                ),
+                reason='owner_sales_ai_settings_update',
+                expected_revision=expected_revision,
+            )
+        except RuntimeError as exc:
+            if 'optimistic concurrency' in str(exc):
+                raise HTTPException(
+                    status_code=status.HTTP_409_CONFLICT,
+                    detail='sales_ai_settings_concurrent_update',
+                ) from exc
+            raise
+        except (TypeError, ValueError) as exc:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail=str(exc),
+            ) from exc
+        return _sales_ai_settings_payload(
+            tenant_id=tenant_id,
+            business_id=business_id,
+            snapshot=stored,
+        )
+
     @router.post('/business-workspace/providers', tags=['business-workspace'])
     async def provider_action(request: Request) -> dict[str, Any]:
         principal, tenant_id, business_id = _workspace_scope(request=request, auth_bundle=auth_bundle)
