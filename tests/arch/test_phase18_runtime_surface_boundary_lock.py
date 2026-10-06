@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import ast
 import re
 from pathlib import Path
 
@@ -28,7 +29,6 @@ def test_runtime_handlers_keep_boundary_public_surfaces() -> None:
         "runtime/handlers/learning_loop_run.py": ["from runtime.learning_loop import"],
         "runtime/handlers/ml_score.py": ["from runtime.ml import"],
         "runtime/handlers/reward_observe_candidates.py": ["from runtime.reward import"],
-        "runtime/_internal/effects_actions/llm_completion_support.py": ["from runtime.llm import LLMMessage, LLMRequest"],
         "runtime/audit/world_model_replay_audit.py": ["from runtime.world_model import", "replay_state_against_world_model"],
         "runtime/enforcement/rate_limit.py": ["from runtime.ratelimit import ("],
         "runtime/evolution/worker.py": ["from runtime.evolution import EvolutionOutbox, handle_evolution_job"],
@@ -65,6 +65,16 @@ def test_runtime_handlers_keep_boundary_public_surfaces() -> None:
             assert imp in text, rel
         for prefix in forbidden_prefixes:
             assert prefix not in text, f"{rel} still imports {prefix}"
+
+    llm_rel = "runtime/_internal/effects_actions/llm_completion_support.py"
+    llm_tree = ast.parse(_read(llm_rel), filename=llm_rel)
+    runtime_llm_names = {
+        alias.name
+        for node in ast.walk(llm_tree)
+        if isinstance(node, ast.ImportFrom) and node.module == "runtime.llm"
+        for alias in node.names
+    }
+    assert {"LLMMessage", "LLMRequest"}.issubset(runtime_llm_names), llm_rel
 
 def test_runtime_surface_compat_shims_and_core_boundary_rules_stay_explicit() -> None:
     runtime_root = _read("runtime/__init__.py")
