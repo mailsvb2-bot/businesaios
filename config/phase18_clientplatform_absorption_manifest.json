@@ -70,9 +70,10 @@
     {
       "id": "funnel.intelligence",
       "status": "implemented",
-      "canonical_owner": "advisory.funnel_intelligence",
-      "source_of_truth": "canonical Decision/Memory/Attribution owners remain unchanged",
+      "canonical_owner": "advisory",
+      "source_of_truth": "canonical advisory owner; Decision/Memory/Attribution owners remain unchanged",
       "evidence": [
+        "advisory/__init__.py",
         "docs/migrations/funnel_intelligence_patch_v9_absorption.md"
       ],
       "runtime_dependency_removed": true
