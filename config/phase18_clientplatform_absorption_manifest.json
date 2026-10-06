@@ -93,25 +93,28 @@
     {
       "id": "event.landing.lifecycle",
       "status": "implemented",
-      "canonical_owner": "application.public_site + application.artifact",
-      "source_of_truth": "canonical Event facts + immutable Artifact/Event lifecycle; public-site transition semantics",
+      "canonical_owner": "application.public_site.EventLandingRegistry",
+      "source_of_truth": "canonical Business Event Spine + EventFactLifecycleWriter + canonical idempotency owner",
       "evidence": [
+        "application/public_site/event_landing_registry.py",
         "application/public_site/landing_content.py",
-        "tests/unit/application/public_site/test_event_landing_lifecycle_phase18.py",
-        "application/artifact/registry.py"
+        "tests/unit/application/public_site/test_event_landing_registry_phase18.py"
       ],
-      "runtime_dependency_removed": false
+      "runtime_dependency_removed": true
     },
     {
       "id": "event.landing.owner_preview_publish",
-      "status": "mapped",
-      "canonical_owner": "application.public_site + owner Business Workspace",
-      "source_of_truth": "event landing lifecycle projected through authenticated owner workspace; execution remains canonical",
+      "status": "implemented",
+      "canonical_owner": "application.public_site + authenticated owner Business Workspace",
+      "source_of_truth": "one EventLandingRegistry projected to authenticated owner routes and read-only public published snapshot",
       "evidence": [
-        "application/public_site/landing_content.py",
-        "docs/releases/2026-10-05-ai-event-landing-builder.md"
+        "adapters/api/fastapi/business_workspace_event_landing_routes.py",
+        "adapters/api/fastapi/public_site_routes.py",
+        "adapters/api/fastapi/public_routes.py",
+        "entrypoints/api/public_surface_route_specs.py",
+        "tests/unit/adapters/api/fastapi/test_event_landing_routes_phase18.py"
       ],
-      "runtime_dependency_removed": false
+      "runtime_dependency_removed": true
     },
     {
       "id": "event.promotion.destination_identity",
