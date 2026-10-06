@@ -7,14 +7,13 @@ from datetime import datetime
 from typing import Any
 from zoneinfo import ZoneInfo
 
-from contracts.landing_page import EventLandingContent, EventLandingFaq, EventLandingTheme
-
 from application.business_autonomy.integration_capability_catalog import (
     CAPABILITY_SCHEMA_VERSION,
     CapabilitySurface,
     list_integration_capability_payloads,
     summarize_integration_capabilities,
 )
+from contracts.landing_page import EventLandingContent, EventLandingFaq, EventLandingTheme
 
 CANON_PUBLIC_SITE_CONTENT = True
 PUBLIC_SITE_SECTION_ORDER = (
