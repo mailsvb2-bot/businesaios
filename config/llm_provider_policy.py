@@ -164,17 +164,66 @@ class SalesAIConsentSnapshot:
 
 
 class SalesAIConsentStore:
-    """Business-scoped, versioned consent owner for external Sales AI egress."""
-
-    def __init__(self, backend: InMemoryVersionedConfigStore[SalesAIConsentSnapshot]) -> None:
-        self._backend = backend
+    """Public business-scoped API mixed into the canonical versioned config owner."""
 
     @staticmethod
-    def _key(tenant_id: str, business_id: str) -> str:
-        return f"{require_tenant_id(tenant_id)}:{_business_id(business_id)}"
+    def _key(*, tenant_id: str, business_id: str) -> str:
+        return f"{require_tenant_id(tenant_id)}::{_business_id(business_id)}"
+
+    @staticmethod
+    def _snapshot_key(snapshot: SalesAIConsentSnapshot) -> str:
+        return SalesAIConsentStore._key(
+            tenant_id=snapshot.tenant_id,
+            business_id=snapshot.business_id,
+        )
 
     def get(self, *, tenant_id: str, business_id: str) -> SalesAIConsentSnapshot | None:
-        return self._backend._get_by_key(self._key(tenant_id, business_id))
+        return self._get_by_key(self._key(tenant_id=tenant_id, business_id=business_id))
+
+    def history(self, *, tenant_id: str, business_id: str) -> tuple[SalesAIConsentSnapshot, ...]:
+        return self._history_by_key(self._key(tenant_id=tenant_id, business_id=business_id))
+
+    def list_all(self) -> tuple[SalesAIConsentSnapshot, ...]:
+        return self._list_all()
+
+    def _configured_snapshot(
+        self,
+        *,
+        tenant_id: str,
+        business_id: str,
+        enabled: bool,
+        provider: str,
+        base_url: str,
+        data_mode: SalesAIDataMode | str,
+        customer_notice_confirmed: bool,
+        labels: Mapping[str, str] | None,
+    ) -> SalesAIConsentSnapshot:
+        current = self.get(tenant_id=tenant_id, business_id=business_id)
+        epoch = 1 if current is None else current.consent_epoch + 1
+        return SalesAIConsentSnapshot(
+            tenant_id=tenant_id,
+            business_id=business_id,
+            enabled=bool(enabled),
+            provider=provider,
+            base_url=base_url,
+            data_mode=SalesAIDataMode(str(data_mode)),
+            customer_notice_confirmed=bool(customer_notice_confirmed),
+            consent_epoch=epoch,
+            labels=dict(labels or {}),
+        ).normalized()
+
+
+class InMemorySalesAIConsentStore(
+    SalesAIConsentStore,
+    InMemoryVersionedConfigStore[SalesAIConsentSnapshot],
+):
+    def __init__(self) -> None:
+        InMemoryVersionedConfigStore.__init__(
+            self,
+            namespace="sales_ai_consent",
+            snapshot_type=SalesAIConsentSnapshot,
+            key_for_snapshot=self._snapshot_key,
+        )
 
     def configure(
         self,
@@ -191,40 +240,38 @@ class SalesAIConsentStore:
         expected_revision: int | None = None,
         labels: Mapping[str, str] | None = None,
     ) -> SalesAIConsentSnapshot:
-        current = self.get(tenant_id=tenant_id, business_id=business_id)
-        epoch = 1 if current is None else current.consent_epoch + 1
-        snapshot = SalesAIConsentSnapshot(
-            tenant_id=tenant_id,
-            business_id=business_id,
-            enabled=bool(enabled),
-            provider=provider,
-            base_url=base_url,
-            data_mode=SalesAIDataMode(str(data_mode)),
-            customer_notice_confirmed=bool(customer_notice_confirmed),
-            consent_epoch=epoch,
-            labels=dict(labels or {}),
-        ).normalized()
-        return self._backend._save_snapshot(
-            snapshot,
+        return self._save_snapshot(
+            self._configured_snapshot(
+                tenant_id=tenant_id,
+                business_id=business_id,
+                enabled=enabled,
+                provider=provider,
+                base_url=base_url,
+                data_mode=data_mode,
+                customer_notice_confirmed=customer_notice_confirmed,
+                labels=labels,
+            ),
             actor=actor,
             reason=reason,
             expected_revision=expected_revision,
         )
 
 
-class PersistentSalesAIConsentStore(SalesAIConsentStore):
+class PersistentSalesAIConsentStore(
+    SalesAIConsentStore,
+    PersistentVersionedConfigStore[SalesAIConsentSnapshot],
+):
     def __init__(
         self,
         *,
         path: str | Path | None = None,
         audit_log_path: str | Path | None = None,
     ) -> None:
-        store_path = Path(path) if path is not None else sales_ai_consent_store_path()
-        audit_path = Path(audit_log_path) if audit_log_path is not None else sales_ai_consent_audit_log_path()
-        backend = PersistentVersionedConfigStore(
+        PersistentVersionedConfigStore.__init__(
+            self,
             namespace="sales_ai_consent",
             snapshot_type=SalesAIConsentSnapshot,
-            key_for_snapshot=lambda item: item.entity_id(),
+            key_for_snapshot=self._snapshot_key,
             snapshot_from_dict=SalesAIConsentSnapshot.from_dict,
             audit_payload=lambda item: {
                 "business_id": item.business_id,
@@ -235,30 +282,39 @@ class PersistentSalesAIConsentStore(SalesAIConsentStore):
                 "customer_notice_confirmed": item.customer_notice_confirmed,
                 "consent_epoch": item.consent_epoch,
             },
-            path=store_path,
-            audit_log_path=audit_path,
+            path=sales_ai_consent_store_path() if path is None else path,
+            audit_log_path=sales_ai_consent_audit_log_path() if audit_log_path is None else audit_log_path,
         )
-        super().__init__(backend)
 
-    def configure(self, **kwargs) -> SalesAIConsentSnapshot:
-        current = self.get(tenant_id=kwargs["tenant_id"], business_id=kwargs["business_id"])
-        epoch = 1 if current is None else current.consent_epoch + 1
-        snapshot = SalesAIConsentSnapshot(
-            tenant_id=kwargs["tenant_id"],
-            business_id=kwargs["business_id"],
-            enabled=bool(kwargs["enabled"]),
-            provider=kwargs["provider"],
-            base_url=kwargs["base_url"],
-            data_mode=SalesAIDataMode(str(kwargs["data_mode"])),
-            customer_notice_confirmed=bool(kwargs["customer_notice_confirmed"]),
-            consent_epoch=epoch,
-            labels=dict(kwargs.get("labels") or {}),
-        ).normalized()
-        return self._backend._save_persistent_snapshot(
-            snapshot,
-            actor=kwargs["actor"],
-            reason=kwargs["reason"],
-            expected_revision=kwargs.get("expected_revision"),
+    def configure(
+        self,
+        *,
+        tenant_id: str,
+        business_id: str,
+        enabled: bool,
+        provider: str,
+        base_url: str,
+        data_mode: SalesAIDataMode | str,
+        customer_notice_confirmed: bool,
+        actor: str,
+        reason: str,
+        expected_revision: int | None = None,
+        labels: Mapping[str, str] | None = None,
+    ) -> SalesAIConsentSnapshot:
+        return self._save_persistent_snapshot(
+            self._configured_snapshot(
+                tenant_id=tenant_id,
+                business_id=business_id,
+                enabled=enabled,
+                provider=provider,
+                base_url=base_url,
+                data_mode=data_mode,
+                customer_notice_confirmed=customer_notice_confirmed,
+                labels=labels,
+            ),
+            actor=actor,
+            reason=reason,
+            expected_revision=expected_revision,
         )
 
 
@@ -332,6 +388,7 @@ def sales_ai_consent_audit_log_path() -> Path:
 __all__ = [
     "DEFAULT_LLM_PROVIDER_POLICY",
     "LLMProviderPolicy",
+    "InMemorySalesAIConsentStore",
     "PersistentSalesAIConsentStore",
     "SalesAIConsentSnapshot",
     "SalesAIConsentStore",
