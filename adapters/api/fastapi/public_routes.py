@@ -176,12 +176,15 @@ def register_public_api_routes(
             if challenge is None:
                 raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail='provider_webhook_challenge_denied')
             return Response(content=challenge, media_type='text/plain')
-    register_public_site_routes(router=router, enforce_public_security=enforce_public_security, auth_bundle=auth_bundle, tenant_registry=tenant_registry)
     event_landing_registry = None
     if dependency_container is not None and getattr(dependency_container, 'api_idempotency_store', None) is not None:
         event_store = dependency_container.canonical_business_event_store()
         if event_store is not None:
             event_landing_registry = EventLandingRegistry(event_store=event_store, idempotency_store=dependency_container.api_idempotency_store)
+    register_public_site_routes(
+        router=router, enforce_public_security=enforce_public_security, auth_bundle=auth_bundle,
+        tenant_registry=tenant_registry, event_landing_registry=event_landing_registry,
+    )
     if auth_bundle is not None:
         if business_discovery_workspace is not None:
             register_business_workspace_discovery_routes(
