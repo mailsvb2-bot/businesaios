@@ -19,7 +19,7 @@ Only deterministic, side-effect-free evidence/constraint logic is absorbed:
 - follow-up suppressors, daily/weekly/sequence caps, minimum gaps and quiet-hours constraints;
 - conversation signal, fatigue and pressure calculations.
 
-The new package is under `advisory/funnel_intelligence`. It returns evidence and constraints only. It cannot send, enqueue, schedule, persist, authorize an ActionIntent, issue a decision, own memory, own attribution, or create a durable task.
+The absorbed logic now lives inside the existing canonical `advisory` owner surface; no new production module is introduced. It returns evidence and constraints only. It cannot send, enqueue, schedule, persist, authorize an ActionIntent, issue a decision, own memory, own attribution, or create a durable task.
 
 ## Intentionally not absorbed as owners
 
@@ -40,4 +40,4 @@ Future Phase 18 work may reuse their **behavioral rules** only by mapping them i
 
 ## No-second-brain gate
 
-`tests/arch/test_funnel_intelligence_no_second_brain.py` prevents the advisory package from importing canonical runtime owners or growing repository/router/scheduler/outbox/memory/engine classes and blocks obvious storage/network/process side effects.
+`tests/arch/test_funnel_intelligence_no_second_brain.py` prevents the canonical advisory surface from importing canonical runtime owners or growing repository/router/scheduler/outbox/memory/engine classes and blocks obvious storage/network/process side effects.
