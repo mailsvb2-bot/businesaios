@@ -9,13 +9,14 @@ from runtime._internal.effects_actions import llm_completion_support as support
 
 
 class _Client:
-    def __init__(self) -> None:
+    def __init__(self, content: str = "advisory evidence") -> None:
         self.requests = []
+        self.content = content
 
     def generate_sync(self, request):
         self.requests.append(request)
         return SimpleNamespace(
-            content="advisory evidence",
+            content=self.content,
             finish_reason="stop",
             usage={"input_tokens": 10, "output_tokens": 5},
         )
@@ -215,3 +216,114 @@ def test_sales_ai_provider_unavailable_is_explicit_not_fake_success(monkeypatch)
     assert result["ok"] is False
     assert result["error"] == "missing_api_key"
     assert result["consent_epoch"] == epoch
+
+
+_VALID_ANALYSIS = """{
+  "intent": "service_interest",
+  "need_summary": "Клиент интересуется услугой",
+  "purchase_readiness": 0.8,
+  "confidence": 0.9,
+  "pricing_question": false,
+  "pricing_exception": false,
+  "need_is_specific": true,
+  "purchase_intent_explicit": true,
+  "explicit_human_request": false,
+  "sensitive_context": false,
+  "negative_sentiment": false,
+  "reply_goal": "ask_qualification",
+  "reason": "Нужно уточнить задачу"
+}"""
+
+
+def test_sales_ai_analysis_returns_only_validated_evidence_and_decision_inputs(monkeypatch) -> None:
+    store, epoch = _enabled_store()
+    client = _Client(_VALID_ANALYSIS)
+    monkeypatch.setattr(
+        support,
+        "_configured_client",
+        lambda **_: (
+            "openai_compat",
+            "https://api.openai.com/v1",
+            "gpt-test",
+            client,
+            None,
+        ),
+    )
+
+    result = support.analyze_sales_ai_message(
+        tenant_id="tenant-a",
+        business_id="business-a",
+        provider="openai_compat",
+        customer_text="Хочу узнать подробнее",
+        current_stage="engaged",
+        source_kind="telegram",
+        model="gpt-test",
+        expected_epoch=epoch,
+        consent_store=store,
+    )
+
+    assert result["ok"] is True
+    assert result["observation"]["intent"] == "service_interest"
+    assert result["decision_inputs"]["evidence_score"] == 0.8
+    assert "action_kind" not in result["decision_inputs"]
+    assert "event" not in result["decision_inputs"]
+    assert "status" not in result["decision_inputs"]
+    assert "text" not in result
+
+
+@pytest.mark.parametrize(
+    "content",
+    (
+        "not-json",
+        """{
+          "intent": "service_interest",
+          "need_summary": "Интерес",
+          "purchase_readiness": 0.8,
+          "confidence": 0.9,
+          "pricing_question": false,
+          "pricing_exception": false,
+          "need_is_specific": true,
+          "purchase_intent_explicit": true,
+          "explicit_human_request": false,
+          "sensitive_context": false,
+          "negative_sentiment": false,
+          "reply_goal": "ask_qualification",
+          "reason": "Наблюдение",
+          "action_kind": "send_message"
+        }""",
+    ),
+)
+def test_sales_ai_analysis_rejects_malformed_or_action_bearing_model_output(
+    monkeypatch,
+    content: str,
+) -> None:
+    store, epoch = _enabled_store()
+    client = _Client(content)
+    monkeypatch.setattr(
+        support,
+        "_configured_client",
+        lambda **_: (
+            "openai_compat",
+            "https://api.openai.com/v1",
+            "gpt-test",
+            client,
+            None,
+        ),
+    )
+
+    result = support.analyze_sales_ai_message(
+        tenant_id="tenant-a",
+        business_id="business-a",
+        provider="openai_compat",
+        customer_text="hello",
+        current_stage="new",
+        source_kind="telegram",
+        model=None,
+        expected_epoch=epoch,
+        consent_store=store,
+    )
+
+    assert result["ok"] is False
+    assert result["error"] == "sales_ai_invalid_structured_output"
+    assert "text" not in result
+    assert len(client.requests) == 1
