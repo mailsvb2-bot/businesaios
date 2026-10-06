@@ -4,7 +4,7 @@ from datetime import datetime, timezone
 
 import pytest
 
-from application.public_site.event_landing import (
+from application.public_site.landing_content import (
     BusinessLandingFacts,
     EventLandingFacts,
     build_event_landing_template,
