@@ -9,6 +9,11 @@ import pytest
 
 import config.versioned_config_store as generic
 from config.config_audit import PersistentConfigAuditLog
+from config.llm_provider_policy import (
+    PersistentSalesAIConsentStore,
+    SalesAIDataMode,
+    require_sales_ai_egress,
+)
 from config.policy_config_store import (
     PersistentPolicyConfigStore,
     PolicyConfigSnapshot,
@@ -147,3 +152,170 @@ def test_default_paths_and_explicit_environment_overrides(tmp_path: Path, monkey
                 path=bad,
                 audit_log_path=tmp_path / "audit",
             )
+
+
+def test_sales_ai_consent_is_business_scoped_versioned_and_persistent(tmp_path: Path) -> None:
+    path = tmp_path / "sales-ai-consent.json"
+    audit = tmp_path / "sales-ai-consent.audit.jsonl"
+    store = PersistentSalesAIConsentStore(path=path, audit_log_path=audit)
+
+    first = store.configure(
+        tenant_id="tenant-a",
+        business_id="business-a",
+        enabled=True,
+        provider="YandexGPT",
+        base_url="https://LLM.API.CLOUD.YANDEX.NET/foundationModels/v1/",
+        data_mode=SalesAIDataMode.REDACTED,
+        customer_notice_confirmed=True,
+        actor="owner-1",
+        reason="enable sales AI",
+    )
+    assert first.consent_epoch == 1
+    assert first.provider == "yandexgpt"
+    assert first.base_url == "https://llm.api.cloud.yandex.net/foundationModels/v1"
+    assert first.version is not None and first.version.revision == 1
+
+    permit = require_sales_ai_egress(
+        first,
+        tenant_id="tenant-a",
+        business_id="business-a",
+        provider="yandexgpt",
+        base_url="https://llm.api.cloud.yandex.net/foundationModels/v1",
+        expected_epoch=1,
+    )
+    assert permit.consent_epoch == 1
+    assert permit.data_mode is SalesAIDataMode.REDACTED
+
+    reloaded = PersistentSalesAIConsentStore(path=path, audit_log_path=audit)
+    assert reloaded.get(tenant_id="tenant-a", business_id="business-a") == first
+    PersistentConfigAuditLog(audit).validate_chain()
+
+
+def test_sales_ai_consent_changes_invalidate_old_epoch_and_provider_target(tmp_path: Path) -> None:
+    store = PersistentSalesAIConsentStore(
+        path=tmp_path / "sales-ai.json",
+        audit_log_path=tmp_path / "sales-ai.audit.jsonl",
+    )
+    first = store.configure(
+        tenant_id="tenant-a",
+        business_id="business-a",
+        enabled=True,
+        provider="yandexgpt",
+        base_url="https://llm.api.cloud.yandex.net/foundationModels/v1",
+        data_mode="redacted",
+        customer_notice_confirmed=True,
+        actor="owner",
+        reason="initial consent",
+    )
+    second = store.configure(
+        tenant_id="tenant-a",
+        business_id="business-a",
+        enabled=True,
+        provider="openai_compat",
+        base_url="https://api.openai.com/v1",
+        data_mode="redacted",
+        customer_notice_confirmed=True,
+        actor="owner",
+        reason="change provider",
+        expected_revision=1,
+    )
+    assert second.consent_epoch == first.consent_epoch + 1
+
+    with pytest.raises(PermissionError, match="provider_target_changed"):
+        require_sales_ai_egress(
+            second,
+            tenant_id="tenant-a",
+            business_id="business-a",
+            provider="yandexgpt",
+            base_url="https://llm.api.cloud.yandex.net/foundationModels/v1",
+            expected_epoch=first.consent_epoch,
+        )
+    with pytest.raises(PermissionError, match="consent_epoch_changed"):
+        require_sales_ai_egress(
+            second,
+            tenant_id="tenant-a",
+            business_id="business-a",
+            provider="openai_compat",
+            base_url="https://api.openai.com/v1",
+            expected_epoch=first.consent_epoch,
+        )
+    with pytest.raises(PermissionError, match="scope_mismatch"):
+        require_sales_ai_egress(
+            second,
+            tenant_id="tenant-a",
+            business_id="business-b",
+            provider="openai_compat",
+            base_url="https://api.openai.com/v1",
+            expected_epoch=second.consent_epoch,
+        )
+
+
+def test_sales_ai_no_cloud_and_revoked_consent_fail_closed(tmp_path: Path) -> None:
+    store = PersistentSalesAIConsentStore(
+        path=tmp_path / "sales-ai.json",
+        audit_log_path=tmp_path / "sales-ai.audit.jsonl",
+    )
+    enabled = store.configure(
+        tenant_id="tenant-a",
+        business_id="business-a",
+        enabled=True,
+        provider="openai_compat",
+        base_url="https://api.openai.com/v1",
+        data_mode="redacted",
+        customer_notice_confirmed=True,
+        actor="owner",
+        reason="enable",
+    )
+    revoked = store.configure(
+        tenant_id="tenant-a",
+        business_id="business-a",
+        enabled=False,
+        provider="openai_compat",
+        base_url="https://api.openai.com/v1",
+        data_mode="no_cloud",
+        customer_notice_confirmed=False,
+        actor="owner",
+        reason="revoke",
+        expected_revision=enabled.version.revision if enabled.version else None,
+    )
+    with pytest.raises(PermissionError, match="consent_disabled"):
+        require_sales_ai_egress(
+            revoked,
+            tenant_id="tenant-a",
+            business_id="business-a",
+            provider="openai_compat",
+            base_url="https://api.openai.com/v1",
+            expected_epoch=revoked.consent_epoch,
+        )
+
+    with pytest.raises(ValueError, match="no_cloud mode cannot enable"):
+        store.configure(
+            tenant_id="tenant-a",
+            business_id="business-b",
+            enabled=True,
+            provider="openai_compat",
+            base_url="https://api.openai.com/v1",
+            data_mode="no_cloud",
+            customer_notice_confirmed=True,
+            actor="owner",
+            reason="invalid",
+        )
+
+
+def test_sales_ai_consent_requires_https_endpoint(tmp_path: Path) -> None:
+    store = PersistentSalesAIConsentStore(
+        path=tmp_path / "sales-ai.json",
+        audit_log_path=tmp_path / "sales-ai.audit.jsonl",
+    )
+    with pytest.raises(ValueError, match="must use https"):
+        store.configure(
+            tenant_id="tenant-a",
+            business_id="business-a",
+            enabled=True,
+            provider="openai_compat",
+            base_url="http://127.0.0.1:8080/v1",
+            data_mode="redacted",
+            customer_notice_confirmed=True,
+            actor="owner",
+            reason="invalid endpoint",
+        )
