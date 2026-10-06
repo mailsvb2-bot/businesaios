@@ -8,6 +8,7 @@ from fastapi import APIRouter, HTTPException
 
 from adapters.api.fastapi import business_workspace_provider_routes as workspace
 from adapters.api.fastapi import router_support
+from config.llm_provider_policy import InMemorySalesAIConsentStore
 from governance.rbac_contract import RoleId
 
 
@@ -39,11 +40,15 @@ def _principal(*, roles=(RoleId.OWNER,), scopes=('provider_control_plane',)):
     return SimpleNamespace(tenant_id='tenant-session', subject='owner-user', actor_id='owner-user', roles=roles, scopes=scopes, metadata={'business_id': 'business-session', 'principal_kind': 'user'})
 
 
-def _route(router: APIRouter, method: str):
+def _path_route(router: APIRouter, path: str, method: str):
     for route in router.routes:
-        if getattr(route, 'path', None) == '/business-workspace/providers' and method in getattr(route, 'methods', set()):
+        if getattr(route, 'path', None) == path and method in getattr(route, 'methods', set()):
             return route.endpoint
-    raise AssertionError(f'route not found: {method}')
+    raise AssertionError(f'route not found: {method} {path}')
+
+
+def _route(router: APIRouter, method: str):
+    return _path_route(router, '/business-workspace/providers', method)
 
 
 def _truth_rows():
@@ -200,3 +205,132 @@ def test_write_only_provider_history_is_owner_readable_without_enabling_provider
         asyncio.run(_route(router, 'POST')(object()))
     assert exc.value.status_code == 409
     assert handlers.sync_called is False
+
+
+def test_sales_ai_settings_are_scoped_to_authenticated_owner(monkeypatch) -> None:
+    store = InMemorySalesAIConsentStore()
+    router = APIRouter()
+    workspace.register_business_workspace_provider_routes(
+        router=router,
+        auth_bundle=object(),
+        provider_admin_handlers=_Handlers(),
+        sales_ai_consent_store=store,
+    )
+    _authenticate_as(monkeypatch, _principal())
+
+    async def fake_json_body(_request):
+        return {
+            'enabled': True,
+            'provider': 'yandexgpt',
+            'base_url': 'https://llm.api.cloud.yandex.net/foundationModels/v1',
+            'data_mode': 'redacted',
+            'customer_notice_confirmed': True,
+            'tenant_id': 'tenant-victim',
+            'business_id': 'business-victim',
+        }
+
+    monkeypatch.setattr(workspace, 'json_body', fake_json_body)
+    endpoint = _path_route(router, '/business-workspace/sales-ai', 'POST')
+    with pytest.raises(HTTPException) as exc:
+        asyncio.run(endpoint(object()))
+    assert (exc.value.status_code, exc.value.detail) == (422, 'sales_ai_unknown_settings_fields')
+    assert store.get(tenant_id='tenant-session', business_id='business-session') is None
+
+
+def test_sales_ai_owner_can_enable_read_and_revoke_with_revision(monkeypatch) -> None:
+    store = InMemorySalesAIConsentStore()
+    router = APIRouter()
+    workspace.register_business_workspace_provider_routes(
+        router=router,
+        auth_bundle=object(),
+        provider_admin_handlers=_Handlers(),
+        sales_ai_consent_store=store,
+    )
+    _authenticate_as(monkeypatch, _principal())
+    post = _path_route(router, '/business-workspace/sales-ai', 'POST')
+    get = _path_route(router, '/business-workspace/sales-ai', 'GET')
+
+    async def enable_body(_request):
+        return {
+            'enabled': True,
+            'provider': 'YandexGPT',
+            'base_url': 'https://LLM.API.CLOUD.YANDEX.NET/foundationModels/v1/',
+            'data_mode': 'redacted',
+            'customer_notice_confirmed': True,
+        }
+
+    monkeypatch.setattr(workspace, 'json_body', enable_body)
+    enabled = asyncio.run(post(object()))
+    assert enabled['enabled'] is True
+    assert enabled['provider'] == 'yandexgpt'
+    assert enabled['consent_epoch'] == 1
+    assert enabled['revision'] == 1
+    assert asyncio.run(get(object())) == enabled
+
+    async def revoke_body(_request):
+        return {
+            'enabled': False,
+            'data_mode': 'no_cloud',
+            'customer_notice_confirmed': False,
+            'expected_revision': 1,
+        }
+
+    monkeypatch.setattr(workspace, 'json_body', revoke_body)
+    revoked = asyncio.run(post(object()))
+    assert revoked['enabled'] is False
+    assert revoked['data_mode'] == 'no_cloud'
+    assert revoked['consent_epoch'] == 2
+    assert revoked['revision'] == 2
+
+
+def test_sales_ai_enable_requires_notice_and_rejects_stale_revision(monkeypatch) -> None:
+    store = InMemorySalesAIConsentStore()
+    router = APIRouter()
+    workspace.register_business_workspace_provider_routes(
+        router=router,
+        auth_bundle=object(),
+        provider_admin_handlers=_Handlers(),
+        sales_ai_consent_store=store,
+    )
+    _authenticate_as(monkeypatch, _principal())
+    post = _path_route(router, '/business-workspace/sales-ai', 'POST')
+
+    async def missing_notice(_request):
+        return {
+            'enabled': True,
+            'provider': 'openai_compat',
+            'base_url': 'https://api.openai.com/v1',
+            'data_mode': 'redacted',
+            'customer_notice_confirmed': False,
+        }
+
+    monkeypatch.setattr(workspace, 'json_body', missing_notice)
+    with pytest.raises(HTTPException) as exc:
+        asyncio.run(post(object()))
+    assert exc.value.status_code == 422
+    assert 'confirmed customer notice' in str(exc.value.detail)
+
+    async def valid(_request):
+        return {
+            'enabled': True,
+            'provider': 'openai_compat',
+            'base_url': 'https://api.openai.com/v1',
+            'data_mode': 'redacted',
+            'customer_notice_confirmed': True,
+        }
+
+    monkeypatch.setattr(workspace, 'json_body', valid)
+    assert asyncio.run(post(object()))['revision'] == 1
+
+    async def stale(_request):
+        return {
+            'enabled': False,
+            'data_mode': 'no_cloud',
+            'customer_notice_confirmed': False,
+            'expected_revision': 99,
+        }
+
+    monkeypatch.setattr(workspace, 'json_body', stale)
+    with pytest.raises(HTTPException) as exc:
+        asyncio.run(post(object()))
+    assert (exc.value.status_code, exc.value.detail) == (409, 'sales_ai_settings_concurrent_update')
