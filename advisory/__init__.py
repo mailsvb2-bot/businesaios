@@ -2,6 +2,8 @@ from __future__ import annotations
 
 """Canonical advisory owner surface for acquisition, revenue and funnel evidence."""
 
+import json
+import math
 import re
 from collections.abc import Mapping
 from dataclasses import dataclass
@@ -234,6 +236,16 @@ class ConversationSignals:
         return cls(**{key: value for key, value in values.items() if key in allowed})
 
 
+class SalesAIIntent(StrEnum):
+    SERVICE_INTEREST = "service_interest"
+    PRICING = "pricing"
+    BOOKING = "booking"
+    SUPPORT = "support"
+    COMPLAINT = "complaint"
+    FOLLOW_UP = "follow_up"
+    OTHER = "other"
+
+
 class SalesAIReplyGoal(StrEnum):
     ASK_QUALIFICATION = "ask_qualification"
     ANSWER_QUESTION = "answer_question"
@@ -244,32 +256,105 @@ class SalesAIReplyGoal(StrEnum):
     NOOP = "noop"
 
 
+_SALES_AI_OBSERVATION_KEYS = frozenset(
+    {
+        "intent",
+        "need_summary",
+        "purchase_readiness",
+        "confidence",
+        "pricing_question",
+        "pricing_exception",
+        "need_is_specific",
+        "purchase_intent_explicit",
+        "explicit_human_request",
+        "sensitive_context",
+        "negative_sentiment",
+        "reply_goal",
+        "reason",
+    }
+)
+
+
+def _strict_probability(value: object, *, field: str) -> float:
+    if isinstance(value, bool):
+        raise ValueError(f"{field} must be a finite number between 0 and 1")
+    try:
+        number = float(value)
+    except (TypeError, ValueError) as exc:
+        raise ValueError(f"{field} must be a finite number between 0 and 1") from exc
+    if not math.isfinite(number) or not 0.0 <= number <= 1.0:
+        raise ValueError(f"{field} must be a finite number between 0 and 1")
+    return number
+
+
+def _strict_bool(value: object, *, field: str) -> bool:
+    if not isinstance(value, bool):
+        raise ValueError(f"{field} must be a boolean")
+    return value
+
+
 @dataclass(frozen=True, slots=True)
 class SalesAIObservation:
-    """Provider-derived sales evidence only; DecisionCore still owns the action."""
+    """Strict provider-derived evidence; DecisionCore still owns every action."""
 
-    intent: str = "other"
+    intent: SalesAIIntent = SalesAIIntent.OTHER
     need_summary: str = ""
     purchase_readiness: float = 0.0
     confidence: float = 0.0
     pricing_question: bool = False
     pricing_exception: bool = False
+    need_is_specific: bool = False
+    purchase_intent_explicit: bool = False
     explicit_human_request: bool = False
     sensitive_context: bool = False
     negative_sentiment: bool = False
     reply_goal: SalesAIReplyGoal = SalesAIReplyGoal.ASK_QUALIFICATION
+    reason: str = ""
 
     def __post_init__(self) -> None:
-        object.__setattr__(self, "intent", _required(self.intent, "intent", 80))
-        summary = " ".join(str(self.need_summary or "").split())
-        object.__setattr__(self, "need_summary", summary[:1000])
-        object.__setattr__(self, "purchase_readiness", _probability(self.purchase_readiness))
-        object.__setattr__(self, "confidence", _probability(self.confidence))
-        if not isinstance(self.reply_goal, SalesAIReplyGoal):
-            object.__setattr__(self, "reply_goal", SalesAIReplyGoal(str(self.reply_goal)))
+        intent = self.intent if isinstance(self.intent, SalesAIIntent) else SalesAIIntent(str(self.intent))
+        reply_goal = (
+            self.reply_goal
+            if isinstance(self.reply_goal, SalesAIReplyGoal)
+            else SalesAIReplyGoal(str(self.reply_goal))
+        )
+        summary = " ".join(str(self.need_summary or "").replace("\x00", " ").split())
+        reason = " ".join(str(self.reason or "").replace("\x00", " ").split())
+        if len(summary) > 600:
+            raise ValueError("need_summary must be at most 600 characters")
+        if len(reason) > 600:
+            raise ValueError("reason must be at most 600 characters")
+        object.__setattr__(self, "intent", intent)
+        object.__setattr__(self, "reply_goal", reply_goal)
+        object.__setattr__(self, "need_summary", summary)
+        object.__setattr__(self, "reason", reason)
+        object.__setattr__(
+            self,
+            "purchase_readiness",
+            _strict_probability(self.purchase_readiness, field="purchase_readiness"),
+        )
+        object.__setattr__(
+            self,
+            "confidence",
+            _strict_probability(self.confidence, field="confidence"),
+        )
+        for field_name in (
+            "pricing_question",
+            "pricing_exception",
+            "need_is_specific",
+            "purchase_intent_explicit",
+            "explicit_human_request",
+            "sensitive_context",
+            "negative_sentiment",
+        ):
+            object.__setattr__(
+                self,
+                field_name,
+                _strict_bool(getattr(self, field_name), field=field_name),
+            )
         if (
-            self.reply_goal is SalesAIReplyGoal.HANDOFF
-            and self.confidence >= 0.8
+            reply_goal is SalesAIReplyGoal.HANDOFF
+            and self.confidence >= 0.72
             and not (
                 self.explicit_human_request
                 or self.sensitive_context
@@ -278,6 +363,44 @@ class SalesAIObservation:
             )
         ):
             raise ValueError("high-confidence handoff requires a concrete handoff signal")
+
+    @classmethod
+    def from_mapping(cls, payload: Mapping[str, object]) -> "SalesAIObservation":
+        actual = set(payload)
+        if actual != _SALES_AI_OBSERVATION_KEYS:
+            missing = sorted(_SALES_AI_OBSERVATION_KEYS - actual)
+            extra = sorted(actual - _SALES_AI_OBSERVATION_KEYS)
+            raise ValueError(
+                f"sales AI observation keys mismatch: missing={missing}; extra={extra}"
+            )
+        return cls(**{key: payload[key] for key in _SALES_AI_OBSERVATION_KEYS})
+
+    def to_mapping(self) -> dict[str, object]:
+        return {
+            "intent": self.intent.value,
+            "need_summary": self.need_summary,
+            "purchase_readiness": self.purchase_readiness,
+            "confidence": self.confidence,
+            "pricing_question": self.pricing_question,
+            "pricing_exception": self.pricing_exception,
+            "need_is_specific": self.need_is_specific,
+            "purchase_intent_explicit": self.purchase_intent_explicit,
+            "explicit_human_request": self.explicit_human_request,
+            "sensitive_context": self.sensitive_context,
+            "negative_sentiment": self.negative_sentiment,
+            "reply_goal": self.reply_goal.value,
+            "reason": self.reason,
+        }
+
+
+def parse_sales_ai_observation(raw: object) -> SalesAIObservation:
+    try:
+        payload = json.loads(str(raw or "").strip())
+    except json.JSONDecodeError as exc:
+        raise ValueError("sales AI structured output must be valid JSON") from exc
+    if not isinstance(payload, Mapping):
+        raise ValueError("sales AI structured output must be an object")
+    return SalesAIObservation.from_mapping(payload)
 
 
 def canonical_sales_ai_parameters(observation: SalesAIObservation) -> dict[str, object]:
@@ -532,6 +655,7 @@ __all__ = [
     "IngressClassification",
     "OfferEvidenceAssessment",
     "PressureInputs",
+    "SalesAIIntent",
     "SalesAIObservation",
     "SalesAIReplyGoal",
     "ScopedInboundEvidence",
@@ -543,6 +667,7 @@ __all__ = [
     "compare_source_order",
     "derive_conversation_stage",
     "fatigue_score",
+    "parse_sales_ai_observation",
     "pressure_budget",
     "source_order_is_newer",
 ]
