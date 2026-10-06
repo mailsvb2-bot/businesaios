@@ -5,7 +5,6 @@ from enum import StrEnum
 
 from contracts.landing_page import EventLandingContent
 
-
 CANON_EVENT_LANDING_LIFECYCLE = True
 
 
