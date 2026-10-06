@@ -334,3 +334,189 @@ def test_sales_ai_enable_requires_notice_and_rejects_stale_revision(monkeypatch)
     with pytest.raises(HTTPException) as exc:
         asyncio.run(post(object()))
     assert (exc.value.status_code, exc.value.detail) == (409, 'sales_ai_settings_concurrent_update')
+
+
+def test_sales_ai_owner_analysis_is_advisory_only_and_session_scoped(monkeypatch) -> None:
+    store = InMemorySalesAIConsentStore()
+    store.configure(
+        tenant_id='tenant-session',
+        business_id='business-session',
+        enabled=True,
+        provider='openai_compat',
+        base_url='https://api.openai.com/v1',
+        data_mode='redacted',
+        customer_notice_confirmed=True,
+        actor='owner-user',
+        reason='enable',
+    )
+    router = APIRouter()
+    workspace.register_business_workspace_provider_routes(
+        router=router,
+        auth_bundle=object(),
+        provider_admin_handlers=_Handlers(),
+        sales_ai_consent_store=store,
+    )
+    _authenticate_as(monkeypatch, _principal())
+    captured = {}
+
+    def analyze(**kwargs):
+        captured.update(kwargs)
+        return {
+            'ok': True,
+            'provider': 'openai_compat',
+            'model': 'gpt-test',
+            'consent_epoch': 1,
+            'data_mode': 'redacted',
+            'text_was_redacted': True,
+            'observation': {'intent': 'service_interest'},
+            'decision_inputs': {'evidence_score': 0.8},
+        }
+
+    monkeypatch.setattr(workspace, 'analyze_sales_ai_message', analyze)
+
+    async def analysis_body(_request):
+        return {
+            'customer_text': 'Хочу узнать подробнее',
+            'current_stage': 'engaged',
+            'source_kind': 'telegram',
+        }
+
+    monkeypatch.setattr(workspace, 'json_body', analysis_body)
+    endpoint = _path_route(router, '/business-workspace/sales-ai/analyze', 'POST')
+    result = asyncio.run(endpoint(object()))
+
+    assert captured['tenant_id'] == 'tenant-session'
+    assert captured['business_id'] == 'business-session'
+    assert captured['provider'] == 'openai_compat'
+    assert captured['expected_epoch'] == 1
+    assert captured['consent_store'] is store
+    assert result['tenant_id'] == 'tenant-session'
+    assert result['business_id'] == 'business-session'
+    assert result['source'] == 'owner_supplied_customer_text'
+    assert result['advisory_only'] is True
+    assert result['execution_allowed'] is False
+    assert result['decision_authority'] == 'DecisionCore'
+    assert 'action_kind' not in result.get('decision_inputs', {})
+
+
+def test_sales_ai_owner_analysis_rejects_scope_spoof_before_model(monkeypatch) -> None:
+    store = InMemorySalesAIConsentStore()
+    store.configure(
+        tenant_id='tenant-session',
+        business_id='business-session',
+        enabled=True,
+        provider='openai_compat',
+        base_url='https://api.openai.com/v1',
+        data_mode='redacted',
+        customer_notice_confirmed=True,
+        actor='owner-user',
+        reason='enable',
+    )
+    router = APIRouter()
+    workspace.register_business_workspace_provider_routes(
+        router=router,
+        auth_bundle=object(),
+        provider_admin_handlers=_Handlers(),
+        sales_ai_consent_store=store,
+    )
+    _authenticate_as(monkeypatch, _principal())
+    called = False
+
+    def analyze(**_kwargs):
+        nonlocal called
+        called = True
+        return {'ok': True}
+
+    monkeypatch.setattr(workspace, 'analyze_sales_ai_message', analyze)
+
+    async def spoofed_body(_request):
+        return {
+            'customer_text': 'hello',
+            'tenant_id': 'tenant-victim',
+            'business_id': 'business-victim',
+        }
+
+    monkeypatch.setattr(workspace, 'json_body', spoofed_body)
+    endpoint = _path_route(router, '/business-workspace/sales-ai/analyze', 'POST')
+    with pytest.raises(HTTPException) as exc:
+        asyncio.run(endpoint(object()))
+    assert (exc.value.status_code, exc.value.detail) == (
+        422,
+        'sales_ai_unknown_analysis_fields',
+    )
+    assert called is False
+
+
+def test_sales_ai_owner_analysis_requires_consent(monkeypatch) -> None:
+    store = InMemorySalesAIConsentStore()
+    router = APIRouter()
+    workspace.register_business_workspace_provider_routes(
+        router=router,
+        auth_bundle=object(),
+        provider_admin_handlers=_Handlers(),
+        sales_ai_consent_store=store,
+    )
+    _authenticate_as(monkeypatch, _principal())
+
+    async def analysis_body(_request):
+        return {'customer_text': 'hello'}
+
+    monkeypatch.setattr(workspace, 'json_body', analysis_body)
+    endpoint = _path_route(router, '/business-workspace/sales-ai/analyze', 'POST')
+    with pytest.raises(HTTPException) as exc:
+        asyncio.run(endpoint(object()))
+    assert (exc.value.status_code, exc.value.detail) == (409, 'sales_ai_consent_missing')
+
+
+def test_sales_ai_owner_analysis_surfaces_revoked_consent_and_provider_failure(monkeypatch) -> None:
+    store = InMemorySalesAIConsentStore()
+    store.configure(
+        tenant_id='tenant-session',
+        business_id='business-session',
+        enabled=True,
+        provider='openai_compat',
+        base_url='https://api.openai.com/v1',
+        data_mode='redacted',
+        customer_notice_confirmed=True,
+        actor='owner-user',
+        reason='enable',
+    )
+    router = APIRouter()
+    workspace.register_business_workspace_provider_routes(
+        router=router,
+        auth_bundle=object(),
+        provider_admin_handlers=_Handlers(),
+        sales_ai_consent_store=store,
+    )
+    _authenticate_as(monkeypatch, _principal())
+
+    async def analysis_body(_request):
+        return {'customer_text': 'hello'}
+
+    monkeypatch.setattr(workspace, 'json_body', analysis_body)
+    endpoint = _path_route(router, '/business-workspace/sales-ai/analyze', 'POST')
+
+    monkeypatch.setattr(
+        workspace,
+        'analyze_sales_ai_message',
+        lambda **_: (_ for _ in ()).throw(PermissionError('sales_ai_consent_disabled')),
+    )
+    with pytest.raises(HTTPException) as exc:
+        asyncio.run(endpoint(object()))
+    assert (exc.value.status_code, exc.value.detail) == (409, 'sales_ai_consent_disabled')
+
+    monkeypatch.setattr(
+        workspace,
+        'analyze_sales_ai_message',
+        lambda **_: {
+            'ok': False,
+            'error': 'missing_api_key',
+            'provider': 'openai_compat',
+            'model': 'gpt-test',
+        },
+    )
+    result = asyncio.run(endpoint(object()))
+    assert result['ok'] is False
+    assert result['error'] == 'missing_api_key'
+    assert result['advisory_only'] is True
+    assert result['execution_allowed'] is False
