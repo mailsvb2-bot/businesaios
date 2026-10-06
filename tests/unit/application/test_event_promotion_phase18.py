@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import pytest
 
-from application.campaign.event_promotion import EventPromotionTarget, event_advertising_url
+from application.campaign.registry import EventPromotionTarget, event_advertising_url
 
 
 def test_event_advertising_url_keeps_event_identity_and_attribution() -> None:
