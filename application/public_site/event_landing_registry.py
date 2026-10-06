@@ -4,6 +4,7 @@ import time
 from typing import Any
 
 from application.ontology import EventFactLifecycleWriter
+from contracts.event_store import BUSINESS_FACT_EVENT_TYPE
 from application.public_site.landing_content import EventLandingContent, EventLandingPublicationStatus, EventLandingState
 
 _CREATED="event_landing.created"; _DRAFT="event_landing.draft_saved"; _PUBLISHED="event_landing.published"; _UNPUBLISHED="event_landing.unpublished"
@@ -17,7 +18,7 @@ class EventLandingRegistry:
 
     def _history(self, *, tenant_id: str, business_id: str, event_id: str) -> list[dict[str,object]]:
         rows=[]
-        for order,event in enumerate(self._events.iter_events(tenant_id=tenant_id,start_ms=0,event_type="business.fact.v1")):
+        for order,event in enumerate(self._events.iter_events(tenant_id=tenant_id,start_ms=0,event_type=BUSINESS_FACT_EVENT_TYPE)):
             envelope=dict(event.get("payload") or {})
             if envelope.get("business_id")!=business_id or envelope.get("entity_id")!=event_id or envelope.get("fact_type") not in _FACTS: continue
             rows.append({"type":envelope["fact_type"],"payload":dict(envelope.get("payload") or {}),"time":int(envelope.get("event_time_ms") or event.get("timestamp_ms") or 0),"order":order})
