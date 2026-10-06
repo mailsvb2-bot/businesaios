@@ -92,21 +92,23 @@
     },
     {
       "id": "event.landing.lifecycle",
-      "status": "inventory",
-      "canonical_owner": null,
-      "source_of_truth": null,
+      "status": "implemented",
+      "canonical_owner": "application.public_site + application.artifact",
+      "source_of_truth": "canonical Event facts + immutable Artifact/Event lifecycle; public-site transition semantics",
       "evidence": [
-        "clientplatform/application/event_landing_builder.py",
-        "clientplatform/infrastructure/event_landing_repository.py"
+        "application/public_site/event_landing_lifecycle.py",
+        "tests/unit/application/public_site/test_event_landing_lifecycle_phase18.py",
+        "application/artifact/registry.py"
       ],
       "runtime_dependency_removed": false
     },
     {
       "id": "event.landing.owner_preview_publish",
-      "status": "inventory",
-      "canonical_owner": null,
-      "source_of_truth": null,
+      "status": "mapped",
+      "canonical_owner": "application.public_site + owner Business Workspace",
+      "source_of_truth": "event landing lifecycle projected through authenticated owner workspace; execution remains canonical",
       "evidence": [
+        "application/public_site/event_landing_lifecycle.py",
         "docs/releases/2026-10-05-ai-event-landing-builder.md"
       ],
       "runtime_dependency_removed": false
