@@ -4,7 +4,7 @@ from datetime import datetime, timedelta, timezone
 
 import pytest
 
-from advisory.funnel_intelligence import (
+from advisory import (
     CommercialEvidence,
     DerivedConversationStage,
     FollowupConstraintContext,
