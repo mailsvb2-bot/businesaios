@@ -79,7 +79,7 @@
       "runtime_dependency_removed": true
     },
     {
-      "id": "event.landing",
+      "id": "event.landing.presentation_contract",
       "status": "implemented",
       "canonical_owner": "application.public_site",
       "source_of_truth": "canonical event facts + public-site presentation contract",
@@ -91,15 +91,102 @@
       "runtime_dependency_removed": true
     },
     {
-      "id": "event.promotion",
+      "id": "event.landing.lifecycle",
+      "status": "inventory",
+      "canonical_owner": null,
+      "source_of_truth": null,
+      "evidence": [
+        "clientplatform/application/event_landing_builder.py",
+        "clientplatform/infrastructure/event_landing_repository.py"
+      ],
+      "runtime_dependency_removed": false
+    },
+    {
+      "id": "event.landing.owner_preview_publish",
+      "status": "inventory",
+      "canonical_owner": null,
+      "source_of_truth": null,
+      "evidence": [
+        "docs/releases/2026-10-05-ai-event-landing-builder.md"
+      ],
+      "runtime_dependency_removed": false
+    },
+    {
+      "id": "event.promotion.destination_identity",
       "status": "implemented",
       "canonical_owner": "application.campaign",
-      "source_of_truth": "canonical event identity + public event route; Campaign owner remains canonical for paid campaign lifecycle",
+      "source_of_truth": "canonical event identity + public event route",
       "evidence": [
         "application/campaign/registry.py",
         "tests/unit/application/test_event_promotion_phase18.py"
       ],
       "runtime_dependency_removed": true
+    },
+    {
+      "id": "event.promotion.owner_workspace",
+      "status": "inventory",
+      "canonical_owner": null,
+      "source_of_truth": null,
+      "evidence": [
+        "clientplatform/application/event_promotion.py",
+        "docs/releases/2026-10-05-event-promotion-flow.md"
+      ],
+      "runtime_dependency_removed": false
+    },
+    {
+      "id": "sales.ai_advisory_owner_review",
+      "status": "inventory",
+      "canonical_owner": null,
+      "source_of_truth": null,
+      "evidence": [
+        "clientplatform/application/sales_ai_orchestration.py",
+        "docs/runbooks/CLIENTPLATFORM_SALES_AI.md"
+      ],
+      "runtime_dependency_removed": false
+    },
+    {
+      "id": "sales.owner_workspace",
+      "status": "inventory",
+      "canonical_owner": null,
+      "source_of_truth": null,
+      "evidence": [
+        "clientplatform/application/sales_workspace.py",
+        "clientplatform/application/cockpit_sales.py"
+      ],
+      "runtime_dependency_removed": false
+    },
+    {
+      "id": "platform.owner_cockpit_workspace",
+      "status": "inventory",
+      "canonical_owner": null,
+      "source_of_truth": null,
+      "evidence": [
+        "clientplatform/application/cockpit.py",
+        "clientplatform/runtime/cockpit_business_workspace.js"
+      ],
+      "runtime_dependency_removed": false
+    },
+    {
+      "id": "commerce.program_builder_delivery",
+      "status": "inventory",
+      "canonical_owner": null,
+      "source_of_truth": null,
+      "evidence": [
+        "clientplatform/application/program_builder.py",
+        "clientplatform/application/programs.py"
+      ],
+      "runtime_dependency_removed": false
+    },
+    {
+      "id": "ads.yandex_direct_owner_flow",
+      "status": "inventory",
+      "canonical_owner": null,
+      "source_of_truth": null,
+      "evidence": [
+        "clientplatform/integrations/yandex_direct.py",
+        "clientplatform/application/yandex_growth_analytics.py"
+      ],
+      "runtime_dependency_removed": false
     },
     {
       "id": "platform.directory_access_review",
