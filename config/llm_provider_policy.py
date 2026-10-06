@@ -242,6 +242,16 @@ class SalesAIConsentStore:
     def refresh(self) -> None:
         return None
 
+    def read_fresh(
+        self,
+        *,
+        tenant_id: str,
+        business_id: str,
+    ) -> SalesAIConsentSnapshot | None:
+        with self.egress_barrier():
+            self.refresh()
+            return self.get(tenant_id=tenant_id, business_id=business_id)
+
     def _configured_snapshot(
         self,
         *,
