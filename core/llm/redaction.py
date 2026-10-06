@@ -44,9 +44,9 @@ def redact_text(text: str) -> RedactionResult:
     out = _sub(_RE_EMAIL, "EMAIL", out)
     out = _sub(_RE_URL, "URL", out)
     out = _sub(_RE_HANDLE, "HANDLE", out)
+    out = _sub(_RE_LONG_ID, "ID", out)
     out = _sub(_RE_PHONE, "PHONE", out)
     out = _sub(_RE_CARD, "CARD", out)
-    out = _sub(_RE_LONG_ID, "ID", out)
     return RedactionResult(text=out, mapping=mapping)
 
 
