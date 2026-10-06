@@ -4,7 +4,7 @@ import ast
 from pathlib import Path
 
 
-ROOT = Path(__file__).resolve().parents[2] / "advisory" / "funnel_intelligence"
+ROOT = Path(__file__).resolve().parents[2] / "advisory" / "funnel_intelligence.py"
 FORBIDDEN_IMPORT_PREFIXES = (
     "application.decision",
     "application.decisioning",
@@ -31,7 +31,7 @@ FORBIDDEN_FUNCTION_PREFIXES = ("dispatch", "enqueue", "persist", "save", "schedu
 
 
 def _modules():
-    return tuple(path for path in ROOT.glob("*.py") if path.name != "__init__.py")
+    return (ROOT,)
 
 
 def test_funnel_intelligence_is_pure_advisory_not_a_second_brain() -> None:
