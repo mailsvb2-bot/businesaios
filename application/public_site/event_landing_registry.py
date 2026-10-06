@@ -44,20 +44,24 @@ class EventLandingRegistry:
         except KeyError: current=None
         payload={"content":content.to_payload(),"source":source}
         if current is not None:
-            self._writer.repair_existing(tenant_id=tenant_id,business_id=business_id,entity_id=event_id,operation="create",idempotency_key=idempotency_key,fact_type=_CREATED,payload=payload,event_metadata={"actor_id":actor_id})
+            repaired=self._writer.repair_existing(tenant_id=tenant_id,business_id=business_id,entity_id=event_id,operation="create",idempotency_key=idempotency_key,fact_type=_CREATED,payload=payload,event_metadata={"actor_id":actor_id})
+            if not repaired: raise RuntimeError("event_landing_already_exists")
             return current
-        self._writer.append_once(tenant_id=tenant_id,business_id=business_id,entity_id=event_id,operation="create",idempotency_key=idempotency_key,fact_type=_CREATED,payload=payload,occurred_at_ms=self._now(),event_metadata={"actor_id":actor_id})
+        self._writer.append_once(tenant_id=tenant_id,business_id=business_id,entity_id=event_id,operation="create",idempotency_key=idempotency_key,fact_type=_CREATED,payload=payload,occurred_at_ms=self._now(),event_metadata=metadata)
         return self.get(tenant_id=tenant_id,business_id=business_id,event_id=event_id)
 
     def transition(self, *, tenant_id: str, business_id: str, event_id: str, action: str, expected_revision: int, idempotency_key: str, actor_id: str, content: EventLandingContent|None=None, source: str="manual") -> EventLandingState:
-        state=self.get(tenant_id=tenant_id,business_id=business_id,event_id=event_id)
-        if expected_revision!=state.revision: raise RuntimeError("event_landing_revision_conflict")
         if action=="save":
             if content is None: raise ValueError("content_required")
             fact_type,payload=_DRAFT,{"expected_revision":expected_revision,"content":content.to_payload(),"source":source}
         elif action=="publish": fact_type,payload=_PUBLISHED,{"expected_revision":expected_revision}
         elif action=="unpublish": fact_type,payload=_UNPUBLISHED,{"expected_revision":expected_revision}
         else: raise ValueError("unsupported_event_landing_action")
+        metadata={"actor_id":actor_id}
+        if self._writer.find_existing_for_key(tenant_id=tenant_id,business_id=business_id,entity_id=event_id,operation=action,idempotency_key=idempotency_key,fact_type=fact_type,event_metadata=metadata) is not None:
+            return self.get(tenant_id=tenant_id,business_id=business_id,event_id=event_id)
+        state=self.get(tenant_id=tenant_id,business_id=business_id,event_id=event_id)
+        if expected_revision!=state.revision: raise RuntimeError("event_landing_revision_conflict")
         token=f"{state.revision}:{state.status.value}:{state.published_revision or 0}"
         self._writer.append_transition_once(tenant_id=tenant_id,business_id=business_id,entity_id=event_id,expected_state_token=token,operation=action,idempotency_key=idempotency_key,fact_type=fact_type,payload=payload,occurred_at_ms=self._now(),event_metadata={"actor_id":actor_id})
         return self.get(tenant_id=tenant_id,business_id=business_id,event_id=event_id)
