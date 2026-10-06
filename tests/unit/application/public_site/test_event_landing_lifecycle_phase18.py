@@ -5,18 +5,12 @@ import pytest
 from application.public_site.landing_content import EventLandingPublicationStatus, new_event_landing_state
 from contracts.landing_page import EventLandingContent, EventLandingFaq
 
-
 def _content(title: str) -> EventLandingContent:
-    return EventLandingContent(
-        eyebrow="Онлайн", hero_title=title, hero_subtitle="Подзаголовок",
-        audience_title="Для кого", audience_points=("Для владельцев бизнеса",),
-        outcomes_title="Что получите", outcome_points=("Понимание следующего шага",),
-        agenda_title="Программа", agenda_points=("Вводная часть",),
+    return EventLandingContent(eyebrow="Онлайн", hero_title=title, hero_subtitle="Подзаголовок",
+        audience_title="Для кого", audience_points=("Для владельцев бизнеса",), outcomes_title="Что получите",
+        outcome_points=("Понимание следующего шага",), agenda_title="Программа", agenda_points=("Вводная часть",),
         speaker_title="Организатор", speaker_text="Команда", faq_title="FAQ",
-        faq=(EventLandingFaq(question="Когда?", answer="Сегодня."),),
-        cta_title="Регистрация", cta_text="Оставьте данные.",
-    )
-
+        faq=(EventLandingFaq(question="Когда?", answer="Сегодня."),), cta_title="Регистрация", cta_text="Оставьте данные.")
 
 def test_event_landing_draft_preview_publish_edit_and_unpublish() -> None:
     initial = _content("Первая версия")
@@ -32,14 +26,12 @@ def test_event_landing_draft_preview_publish_edit_and_unpublish() -> None:
     unpublished = republished.unpublish(expected_revision=2)
     assert (unpublished.public_content(), unpublished.is_published, unpublished.preview().hero_title) == (None, False, "Вторая версия")
 
-
 def test_event_landing_rejects_stale_editor_revision() -> None:
     edited = new_event_landing_state(event_id="event-1", content=_content("A")).save_draft(content=_content("B"), source="manual", expected_revision=1)
     with pytest.raises(RuntimeError, match="event_landing_revision_conflict"):
         edited.save_draft(content=_content("lost update"), source="manual", expected_revision=1)
     with pytest.raises(RuntimeError, match="event_landing_revision_conflict"):
         edited.publish(expected_revision=1)
-
 
 def test_preview_never_leaks_unpublished_changes_to_public_snapshot() -> None:
     published = new_event_landing_state(event_id="event-1", content=_content("Public")).publish(expected_revision=1)
