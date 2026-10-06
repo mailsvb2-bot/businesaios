@@ -27,7 +27,6 @@ PUBLIC_SITE_SECTION_ORDER = (
     'cta',
 )
 
-
 def _status_label(status: str) -> str:
     labels = {
         'production_ready': 'Готово',
@@ -38,7 +37,6 @@ def _status_label(status: str) -> str:
         'not_found': 'Не найдено',
     }
     return labels.get(status, status)
-
 
 def build_public_capabilities_payload(*, include_roadmap: bool = True) -> dict[str, Any]:
     capabilities = list_integration_capability_payloads(include_roadmap=include_roadmap)
@@ -60,7 +58,6 @@ def build_public_capabilities_payload(*, include_roadmap: bool = True) -> dict[s
             'write_actions_require_guarded_execution': True,
         },
     }
-
 
 def _capability_cards(capabilities: Iterable[dict[str, Any]]) -> list[dict[str, Any]]:
     cards: list[dict[str, Any]] = []
@@ -86,7 +83,6 @@ def _capability_cards(capabilities: Iterable[dict[str, Any]]) -> list[dict[str, 
             }
         )
     return cards
-
 
 def build_landing_payload(*, include_roadmap: bool = True) -> dict[str, Any]:
     capability_payload = build_public_capabilities_payload(include_roadmap=include_roadmap)
@@ -142,26 +138,19 @@ def build_landing_payload(*, include_roadmap: bool = True) -> dict[str, Any]:
         'capabilities': capability_payload,
     }
 
-
 __all__ = [
-    'CANON_PUBLIC_SITE_CONTENT',
-    'PUBLIC_SITE_SECTION_ORDER',
-    'build_landing_payload',
-    'build_public_capabilities_payload',
-    'BusinessLandingFacts', 'EventLandingFacts', 'build_event_landing_template',
-    'minimize_event_landing_ai_context', 'CANON_EVENT_LANDING_LIFECYCLE',
-    'EventLandingPublicationStatus', 'EventLandingState', 'new_event_landing_state',
+    'CANON_PUBLIC_SITE_CONTENT', 'PUBLIC_SITE_SECTION_ORDER', 'build_landing_payload', 'build_public_capabilities_payload',
+    'BusinessLandingFacts', 'EventLandingFacts', 'build_event_landing_template', 'minimize_event_landing_ai_context',
+    'CANON_EVENT_LANDING_LIFECYCLE', 'EventLandingPublicationStatus', 'EventLandingState', 'new_event_landing_state',
 ]
 
 @dataclass(frozen=True, slots=True)
 class EventLandingFacts:
     title: str; description: str = ""; timezone_name: str = "UTC"; starts_at: tuple[datetime, ...] = ()
 
-
 @dataclass(frozen=True, slots=True)
 class BusinessLandingFacts:
     business_name: str = ""; activity_description: str = ""; confirmed_audiences: tuple[str, ...] = ()
-
 
 def _sentences(value: object, *, maximum: int = 4) -> tuple[str, ...]:
     text = " ".join(str(value or "").split()).strip()
@@ -170,7 +159,6 @@ def _sentences(value: object, *, maximum: int = 4) -> tuple[str, ...]:
     parts = [p.strip(" •-—") for p in re.split(r"(?<=[.!?])\\s+|\\n+", text) if p.strip(" •-—")]
     return tuple((parts or [text])[:maximum])
 
-
 def _schedule(facts: EventLandingFacts) -> tuple[str, ...]:
     if not facts.starts_at:
         return ()
@@ -178,9 +166,7 @@ def _schedule(facts: EventLandingFacts) -> tuple[str, ...]:
     return tuple((f"День {i}: " if total > 1 else "") + dt.astimezone(zone).strftime("%d.%m.%Y · %H:%M")
                  for i, dt in enumerate(facts.starts_at, 1))
 
-
-def build_event_landing_template(*, event: EventLandingFacts,
-                                 business: BusinessLandingFacts = BusinessLandingFacts()) -> EventLandingContent:
+def build_event_landing_template(*, event: EventLandingFacts, business: BusinessLandingFacts = BusinessLandingFacts()) -> EventLandingContent:
     title = " ".join(event.title.split()).strip()
     if not title:
         raise ValueError("event title must not be empty")
@@ -202,9 +188,7 @@ def build_event_landing_template(*, event: EventLandingFacts,
         theme=EventLandingTheme.CALM,
     )
 
-
-def minimize_event_landing_ai_context(*, event: EventLandingFacts, business: BusinessLandingFacts,
-                                      safe_template: EventLandingContent) -> dict[str, object]:
+def minimize_event_landing_ai_context(*, event: EventLandingFacts, business: BusinessLandingFacts, safe_template: EventLandingContent) -> dict[str, object]:
     return {
         "event": {"title": event.title, "description": event.description, "timezone_name": event.timezone_name,
                   "schedule": list(_schedule(event))},
@@ -213,13 +197,10 @@ def minimize_event_landing_ai_context(*, event: EventLandingFacts, business: Bus
         "current_safe_template": safe_template.to_payload(),
     }
 
-
 CANON_EVENT_LANDING_LIFECYCLE = True
-
 
 class EventLandingPublicationStatus(StrEnum):
     DRAFT, PUBLISHED = "draft", "published"
-
 
 @dataclass(frozen=True, slots=True)
 class EventLandingState:
@@ -267,7 +248,5 @@ class EventLandingState:
 
     def public_content(self) -> EventLandingContent | None: return self.published if self.is_published else None
 
-
-def new_event_landing_state(*, event_id: str, content: EventLandingContent,
-                            source: str = "template") -> EventLandingState:
+def new_event_landing_state(*, event_id: str, content: EventLandingContent, source: str = "template") -> EventLandingState:
     return EventLandingState(event_id=event_id, draft=content, draft_source=source)
