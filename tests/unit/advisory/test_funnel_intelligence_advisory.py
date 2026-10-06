@@ -8,11 +8,14 @@ from advisory import (
     CommercialEvidence,
     DerivedConversationStage,
     FollowupConstraintContext,
+    SalesAIObservation,
+    SalesAIReplyGoal,
     ScopedInboundEvidence,
     VerifiedOfferEvidence,
     assess_followup_constraints,
     assess_inbound_evidence,
     assess_offer_evidence,
+    canonical_sales_ai_parameters,
     compare_source_order,
     derive_conversation_stage,
 )
@@ -104,3 +107,53 @@ def test_followup_constraints_compute_latest_defer_and_quiet_hours() -> None:
 def test_invalid_partial_price_is_rejected() -> None:
     with pytest.raises(ValueError, match="price requires amount and currency together"):
         VerifiedOfferEvidence("o-1", "Plan", True, amount_minor=100)
+
+
+def test_sales_ai_maps_only_observations_into_decision_inputs() -> None:
+    params = canonical_sales_ai_parameters(
+        SalesAIObservation(
+            intent="service_interest",
+            purchase_readiness=0.8,
+            confidence=0.95,
+            explicit_human_request=True,
+            reply_goal=SalesAIReplyGoal.ANSWER_QUESTION,
+        )
+    )
+    assert params["model_confidence"] == 0.95
+    assert params["evidence_score"] == 0.8
+    assert params["unanswered_inbound"] is True
+    assert params["explicit_human_request"] is True
+    assert "action_kind" not in params
+    assert "event" not in params
+    assert "status" not in params
+
+
+def test_sales_ai_high_confidence_handoff_requires_concrete_signal() -> None:
+    with pytest.raises(ValueError, match="concrete handoff signal"):
+        SalesAIObservation(
+            intent="service_interest",
+            confidence=0.95,
+            reply_goal=SalesAIReplyGoal.HANDOFF,
+        )
+
+
+def test_sales_ai_response_goals_request_response_without_choosing_action() -> None:
+    for goal in (
+        SalesAIReplyGoal.ANSWER_QUESTION,
+        SalesAIReplyGoal.RESOLVE_ISSUE,
+        SalesAIReplyGoal.PRESENT_OPTION,
+        SalesAIReplyGoal.HELP_CHECKOUT,
+    ):
+        params = canonical_sales_ai_parameters(
+            SalesAIObservation(intent="other", reply_goal=goal)
+        )
+        assert params["unanswered_inbound"] is True
+        assert set(params) == {
+            "model_confidence",
+            "unanswered_inbound",
+            "explicit_human_request",
+            "sensitive_context",
+            "pricing_exception",
+            "negative_sentiment",
+            "evidence_score",
+        }
