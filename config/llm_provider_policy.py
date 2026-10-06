@@ -234,6 +234,14 @@ class SalesAIConsentStore:
     def list_all(self) -> tuple[SalesAIConsentSnapshot, ...]:
         return self._list_all()
 
+    @contextmanager
+    def egress_barrier(self) -> Iterator[None]:
+        raise RuntimeError("sales_ai_egress_barrier_unconfigured")
+        yield
+
+    def refresh(self) -> None:
+        return None
+
     def _configured_snapshot(
         self,
         *,
