@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import json
+import threading
+import time
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import cast
@@ -319,3 +321,54 @@ def test_sales_ai_consent_requires_https_endpoint(tmp_path: Path) -> None:
             actor="owner",
             reason="invalid endpoint",
         )
+
+
+def test_sales_ai_persistent_barrier_serializes_concurrent_consent_change(tmp_path: Path) -> None:
+    path = tmp_path / "sales-ai.json"
+    audit = tmp_path / "sales-ai.audit.jsonl"
+    first_store = PersistentSalesAIConsentStore(path=path, audit_log_path=audit)
+    second_store = PersistentSalesAIConsentStore(path=path, audit_log_path=audit)
+    first = first_store.configure(
+        tenant_id="tenant-a",
+        business_id="business-a",
+        enabled=True,
+        provider="openai_compat",
+        base_url="https://api.openai.com/v1",
+        data_mode="redacted",
+        customer_notice_confirmed=True,
+        actor="owner",
+        reason="enable",
+    )
+
+    started = threading.Event()
+    finished = threading.Event()
+
+    def revoke() -> None:
+        started.set()
+        second_store.configure(
+            tenant_id="tenant-a",
+            business_id="business-a",
+            enabled=False,
+            provider="openai_compat",
+            base_url="https://api.openai.com/v1",
+            data_mode="no_cloud",
+            customer_notice_confirmed=False,
+            actor="owner",
+            reason="revoke",
+            expected_revision=first.version.revision if first.version else None,
+        )
+        finished.set()
+
+    with first_store.egress_barrier():
+        thread = threading.Thread(target=revoke, daemon=True)
+        thread.start()
+        assert started.wait(timeout=1.0)
+        time.sleep(0.05)
+        assert finished.is_set() is False
+
+    thread.join(timeout=2.0)
+    assert finished.is_set() is True
+    latest = first_store.read_fresh(tenant_id="tenant-a", business_id="business-a")
+    assert latest is not None
+    assert latest.enabled is False
+    assert latest.consent_epoch == 2
