@@ -2,7 +2,7 @@
   "schema_version": 1,
   "phase": "18",
   "donor_repository": "mailsvb2-bot/clientplatform",
-  "donor_baseline_sha": "a4c9402c77bd284c32c47f8e7f8176e927c798bf",
+  "donor_baseline_sha": "10ce06fa9f4266896bd03149c3051364fbcb139b",
   "target_product": "BusinessAIOS",
   "acceptance_test": "ClientPlatform may be shut down without loss of user-visible capability, UX flow, channel integration, business behavior, stored state, configuration, automation, production workflow or supported customer journey.",
   "allowed_statuses": [
@@ -395,6 +395,18 @@
       "evidence": [
         "runtime/_internal/effects_domains/visual_creative_gateway.py",
         "application/artifact/registry.py"
+      ],
+      "runtime_dependency_removed": false
+    },
+    {
+      "id": "visual.creative_director_scene_semantics",
+      "status": "inventory",
+      "canonical_owner": null,
+      "source_of_truth": null,
+      "evidence": [
+        "clientplatform/application/visual_scene_variants.py",
+        "clientplatform commit b5dbac5cfe65a2a2e39d4f6318ba221bab391615",
+        "clientplatform commit 9e3fd7cdd36a74e0010d7da9d2a77229090d6ac3"
       ],
       "runtime_dependency_removed": false
     },
