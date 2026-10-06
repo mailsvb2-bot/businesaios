@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 from collections.abc import Mapping
 from typing import Any
 
@@ -15,6 +16,7 @@ from config.llm_provider_policy import (
     SalesAIDataMode,
 )
 from entrypoints.api.provider_admin_route_handlers import ProviderAdminRouteHandlers
+from runtime.llm_completion_support import analyze_sales_ai_message
 
 CANON_BUSINESS_WORKSPACE_PROVIDER_ROUTES = True
 _READY = frozenset({'live_ready', 'read_only_ready', 'implemented', 'partial'})
@@ -188,6 +190,71 @@ def register_business_workspace_provider_routes(
             business_id=business_id,
             snapshot=stored,
         )
+
+    @router.post('/business-workspace/sales-ai/analyze', tags=['business-workspace'])
+    async def analyze_sales_ai(request: Request) -> dict[str, Any]:
+        _, tenant_id, business_id = _workspace_scope(request=request, auth_bundle=auth_bundle)
+        body = await json_body(request)
+        allowed = {'customer_text', 'current_stage', 'source_kind'}
+        if set(body).difference(allowed):
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail='sales_ai_unknown_analysis_fields',
+            )
+        customer_text = str(body.get('customer_text') or '').strip()
+        if not customer_text or len(customer_text) > 12000:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail='sales_ai_customer_text_must_be_1_to_12000_chars',
+            )
+        current_stage = str(body.get('current_stage') or 'new').strip()
+        source_kind = str(body.get('source_kind') or 'owner_workspace').strip()
+        if not current_stage or len(current_stage) > 120 or not source_kind or len(source_kind) > 120:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail='sales_ai_analysis_context_invalid',
+            )
+        snapshot = consent_store.read_fresh(tenant_id=tenant_id, business_id=business_id)
+        if snapshot is None:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail='sales_ai_consent_missing',
+            )
+        try:
+            result = await asyncio.to_thread(
+                analyze_sales_ai_message,
+                tenant_id=tenant_id,
+                business_id=business_id,
+                provider=snapshot.provider,
+                customer_text=customer_text,
+                current_stage=current_stage,
+                source_kind=source_kind,
+                model=None,
+                expected_epoch=snapshot.consent_epoch,
+                consent_store=consent_store,
+            )
+        except PermissionError as exc:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail=str(exc),
+            ) from exc
+        if not result.get('ok'):
+            return {
+                **result,
+                'tenant_id': tenant_id,
+                'business_id': business_id,
+                'advisory_only': True,
+                'execution_allowed': False,
+            }
+        return {
+            **result,
+            'tenant_id': tenant_id,
+            'business_id': business_id,
+            'source': 'owner_supplied_customer_text',
+            'advisory_only': True,
+            'execution_allowed': False,
+            'next_boundary': '/business-workspace/decision-draft',
+        }
 
     @router.post('/business-workspace/providers', tags=['business-workspace'])
     async def provider_action(request: Request) -> dict[str, Any]:
