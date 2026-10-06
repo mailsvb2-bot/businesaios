@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import pytest
 
-from application.public_site.event_landing_lifecycle import (
+from application.public_site.landing_content import (
     EventLandingPublicationStatus,
     new_event_landing_state,
 )
