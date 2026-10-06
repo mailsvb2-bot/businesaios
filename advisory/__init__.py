@@ -234,6 +234,72 @@ class ConversationSignals:
         return cls(**{key: value for key, value in values.items() if key in allowed})
 
 
+class SalesAIReplyGoal(StrEnum):
+    ASK_QUALIFICATION = "ask_qualification"
+    ANSWER_QUESTION = "answer_question"
+    RESOLVE_ISSUE = "resolve_issue"
+    PRESENT_OPTION = "present_option"
+    HELP_CHECKOUT = "help_checkout"
+    HANDOFF = "handoff"
+    NOOP = "noop"
+
+
+@dataclass(frozen=True, slots=True)
+class SalesAIObservation:
+    """Provider-derived sales evidence only; DecisionCore still owns the action."""
+
+    intent: str = "other"
+    need_summary: str = ""
+    purchase_readiness: float = 0.0
+    confidence: float = 0.0
+    pricing_question: bool = False
+    pricing_exception: bool = False
+    explicit_human_request: bool = False
+    sensitive_context: bool = False
+    negative_sentiment: bool = False
+    reply_goal: SalesAIReplyGoal = SalesAIReplyGoal.ASK_QUALIFICATION
+
+    def __post_init__(self) -> None:
+        object.__setattr__(self, "intent", _required(self.intent, "intent", 80))
+        summary = " ".join(str(self.need_summary or "").split())
+        object.__setattr__(self, "need_summary", summary[:1000])
+        object.__setattr__(self, "purchase_readiness", _probability(self.purchase_readiness))
+        object.__setattr__(self, "confidence", _probability(self.confidence))
+        if not isinstance(self.reply_goal, SalesAIReplyGoal):
+            object.__setattr__(self, "reply_goal", SalesAIReplyGoal(str(self.reply_goal)))
+        if (
+            self.reply_goal is SalesAIReplyGoal.HANDOFF
+            and self.confidence >= 0.8
+            and not (
+                self.explicit_human_request
+                or self.sensitive_context
+                or self.pricing_exception
+                or self.negative_sentiment
+            )
+        ):
+            raise ValueError("high-confidence handoff requires a concrete handoff signal")
+
+
+def canonical_sales_ai_parameters(observation: SalesAIObservation) -> dict[str, object]:
+    """Map model observations to canonical decision inputs, never to actions."""
+
+    return {
+        "model_confidence": observation.confidence,
+        "unanswered_inbound": observation.reply_goal
+        in {
+            SalesAIReplyGoal.ANSWER_QUESTION,
+            SalesAIReplyGoal.RESOLVE_ISSUE,
+            SalesAIReplyGoal.PRESENT_OPTION,
+            SalesAIReplyGoal.HELP_CHECKOUT,
+        },
+        "explicit_human_request": observation.explicit_human_request,
+        "sensitive_context": observation.sensitive_context,
+        "pricing_exception": observation.pricing_exception,
+        "negative_sentiment": observation.negative_sentiment,
+        "evidence_score": observation.purchase_readiness,
+    }
+
+
 @dataclass(frozen=True, slots=True)
 class FatigueInputs:
     same_argument_count: int = 0
@@ -466,11 +532,14 @@ __all__ = [
     "IngressClassification",
     "OfferEvidenceAssessment",
     "PressureInputs",
+    "SalesAIObservation",
+    "SalesAIReplyGoal",
     "ScopedInboundEvidence",
     "VerifiedOfferEvidence",
     "assess_followup_constraints",
     "assess_inbound_evidence",
     "assess_offer_evidence",
+    "canonical_sales_ai_parameters",
     "compare_source_order",
     "derive_conversation_stage",
     "fatigue_score",
