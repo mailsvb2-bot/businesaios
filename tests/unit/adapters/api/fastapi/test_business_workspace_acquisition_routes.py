@@ -165,3 +165,21 @@ def test_event_promotion_target_rejects_unpublished_event(monkeypatch) -> None:
     with pytest.raises(HTTPException) as exc:
         asyncio.run(_route(router, '/business-workspace/event-promotion-target')(object()))
     assert (exc.value.status_code, exc.value.detail) == (409, 'event_landing_not_published')
+
+
+def test_event_promotion_target_fails_closed_when_landing_registry_unavailable(monkeypatch) -> None:
+    router = APIRouter()
+    acquisition_routes.register_business_workspace_acquisition_routes(
+        router=router,
+        auth_bundle=object(),
+        event_landing_registry=None,
+    )
+    monkeypatch.setattr(acquisition_routes, 'business_owner_scope', lambda **_: (_principal(), 'tenant-session', 'business-session'))
+
+    async def body(_request):
+        return {'event_id': 'event-123', 'public_base_url': 'https://business.example.test'}
+
+    monkeypatch.setattr(acquisition_routes, 'json_body', body)
+    with pytest.raises(HTTPException) as exc:
+        asyncio.run(_route(router, '/business-workspace/event-promotion-target')(object()))
+    assert (exc.value.status_code, exc.value.detail) == (503, 'event_landing_registry_unavailable')
