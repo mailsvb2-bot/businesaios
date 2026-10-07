@@ -30,6 +30,7 @@ from runtime.ads import (
     EventStoreSpendLedger,
 )
 from bootstrap.ads_write_gateway import AdsWriteGateway
+from runtime.ads.metrics_ingress import AdsMetricsIngress
 from runtime.events import EventLog
 from runtime.platform.config.env_flags import env_bool, env_csv, env_float
 from runtime.platform.outbox.ads_token_store_sqlite import SqliteAdsTokenStore
@@ -40,6 +41,7 @@ from runtime.tenancy.paths import TenantPaths
 class AdsRuntime:
     read: AdsReadService
     write_gateway: AdsWriteGateway
+    metrics_ingress: AdsMetricsIngress | None = None
 
 
 def build_ads_runtime(*, tenant_paths: TenantPaths, event_store: Any, event_log: EventLog) -> AdsRuntime:
@@ -98,7 +100,12 @@ def build_ads_runtime(*, tenant_paths: TenantPaths, event_store: Any, event_log:
         circuit_breaker=breaker,
     )
 
-    return AdsRuntime(read=AdsReadService(registry=read_registry), write_gateway=write_gateway)
+    read_service = AdsReadService(registry=read_registry)
+    return AdsRuntime(
+        read=read_service,
+        write_gateway=write_gateway,
+        metrics_ingress=AdsMetricsIngress(read_service=read_service, event_store=event_store),
+    )
 
 
 class _AdsRuntimePort(AdsPort):
