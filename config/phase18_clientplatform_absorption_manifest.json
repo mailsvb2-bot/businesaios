@@ -280,14 +280,20 @@
     },
     {
       "id": "platform.roles_permissions",
-      "status": "mapped",
-      "canonical_owner": "governance.permission_matrix + core.users.roles",
-      "source_of_truth": "governance/permission_matrix.py",
+      "status": "implemented",
+      "canonical_owner": "governance.role_catalog + governance.permission_matrix + governance.rbac_policy",
+      "source_of_truth": "canonical governance RBAC; core.users.roles remains presentation-only UX segmentation",
       "evidence": [
+        "governance/role_catalog.py",
         "governance/permission_matrix.py",
-        "core/users/roles.py"
+        "governance/rbac_contract.py",
+        "governance/rbac_policy.py",
+        "entrypoints/api/rbac_route_guards.py",
+        "tests/api/test_rbac_route_guards.py",
+        "tests/governance/test_rbac_policy.py",
+        "tests/arch/test_phase18_roles_permissions_single_owner.py"
       ],
-      "runtime_dependency_removed": false
+      "runtime_dependency_removed": true
     },
     {
       "id": "platform.account_consolidation",
