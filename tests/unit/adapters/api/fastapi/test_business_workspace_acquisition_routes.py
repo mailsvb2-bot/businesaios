@@ -88,7 +88,6 @@ def test_acquisition_plan_uses_session_scope_and_canonical_solver(monkeypatch) -
     assert result['assumption_source'] == 'owner_input'
     assert result['calculation_only'] is True
     assert result['write_actions_enabled'] is False
-    assert landing_registry.calls == [{'tenant_id': 'tenant-session', 'business_id': 'business-session', 'event_id': 'event-123'}]
     assert result['plan']['feasible'] is True
     assert result['plan']['achievable_customers'] >= 10
     assert result['economics']['overall_conversion_rate'] == 0.5
@@ -147,6 +146,7 @@ def test_event_promotion_target_uses_authenticated_scope_and_live_public_route(m
     )
     assert result['calculation_only'] is True
     assert result['write_actions_enabled'] is False
+    assert landing_registry.calls == [{'tenant_id': 'tenant-session', 'business_id': 'business-session', 'event_id': 'event-123'}]
 
 
 def test_event_promotion_target_rejects_unpublished_event(monkeypatch) -> None:
