@@ -216,6 +216,11 @@ def transition_terminal(
     fencing_token: int | None,
     now,
 ) -> JobRecord:
+    current = fetch_job(db, tenant_id=tenant_id, job_id=job_id)
+    if current is None:
+        raise KeyError(f"job not found: tenant_id={tenant_id} job_id={job_id}")
+    if current.state is next_state:
+        return current
     current = require_transitionable(
         db,
         tenant_id=tenant_id,
