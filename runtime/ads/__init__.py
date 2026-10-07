@@ -33,6 +33,7 @@ from core.growth.campaign_builder.service import AutopilotCampaignBuilder
 from core.growth.circuit_breaker import BreakerConfig, CircuitBreaker
 from core.growth.event_sink import EventLogSink
 from core.growth.spend_ledger_event_store import EventStoreSpendLedger
+from runtime.ads.metrics_ingress import AdsMetricsImportResult, AdsMetricsIngress
 
 __all__ = [
     'CANON_RUNTIME_ADS_NAMESPACE',
@@ -47,6 +48,8 @@ __all__ = [
     "AdsAutopilotRequest",
     "AdsCommand",
     "AdsGuardrails",
+    "AdsMetricsImportResult",
+    "AdsMetricsIngress",
     "AdsKillSwitch",
     "AdsPlan",
     "AdsPort",
