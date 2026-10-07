@@ -7,6 +7,7 @@ from typing import Any
 from fastapi import APIRouter, HTTPException, Request, status
 
 from acquisition import evaluate_acquisition_payload
+from application.campaign.registry import EventPromotionTarget, event_advertising_url
 from adapters.api.fastapi.router_support import business_owner_scope, json_body
 from presentation import build_acquisition_view_model
 
@@ -24,6 +25,33 @@ def _json_safe(value: Any) -> Any:
 
 
 def register_business_workspace_acquisition_routes(*, router: APIRouter, auth_bundle) -> None:
+    @router.post('/business-workspace/event-promotion-target', tags=['business-workspace'])
+    async def event_promotion_target(request: Request) -> dict[str, Any]:
+        _, tenant_id, business_id = business_owner_scope(request=request, auth_bundle=auth_bundle)
+        body = await json_body(request)
+        allowed = {'event_id', 'public_base_url'}
+        if set(body).difference(allowed):
+            raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail='event_promotion_unknown_fields')
+        try:
+            target = EventPromotionTarget(
+                event_id=str(body.get('event_id') or '').strip(),
+                tenant_id=tenant_id,
+                business_id=business_id,
+                public_base_url=str(body.get('public_base_url') or '').strip(),
+            )
+            url = event_advertising_url(target)
+        except ValueError as exc:
+            raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)) from exc
+        return {
+            'ok': True,
+            'tenant_id': tenant_id,
+            'business_id': business_id,
+            'event_id': target.event_id,
+            'destination_url': url,
+            'source': 'canonical_public_event_route',
+            'calculation_only': True,
+            'write_actions_enabled': False,
+        }
     @router.post('/business-workspace/acquisition-plan', tags=['business-workspace'])
     async def acquisition_plan(request: Request) -> dict[str, Any]:
         _, tenant_id, business_id = business_owner_scope(request=request, auth_bundle=auth_bundle)
