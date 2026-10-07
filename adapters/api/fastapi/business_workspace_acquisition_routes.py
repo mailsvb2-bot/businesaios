@@ -35,7 +35,7 @@ def register_business_workspace_acquisition_routes(*, router: APIRouter, auth_bu
         try:
             event_id = str(body.get('event_id') or '').strip()
             if event_landing_registry is None:
-                raise ValueError('event_landing_registry_unavailable')
+                raise RuntimeError('event_landing_registry_unavailable')
             state = event_landing_registry.get(tenant_id=tenant_id, business_id=business_id, event_id=event_id)
             if state.public_content() is None:
                 raise ValueError('event_landing_not_published')
@@ -48,6 +48,10 @@ def register_business_workspace_acquisition_routes(*, router: APIRouter, auth_bu
             url = event_advertising_url(target)
         except KeyError as exc:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc.args[0] if exc.args else 'event_landing_not_found')) from exc
+        except RuntimeError as exc:
+            if str(exc) == 'event_landing_registry_unavailable':
+                raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=str(exc)) from exc
+            raise
         except ValueError as exc:
             code = str(exc)
             http_status = status.HTTP_409_CONFLICT if code == 'event_landing_not_published' else status.HTTP_422_UNPROCESSABLE_ENTITY
@@ -62,6 +66,7 @@ def register_business_workspace_acquisition_routes(*, router: APIRouter, auth_bu
             'calculation_only': True,
             'write_actions_enabled': False,
         }
+
     @router.post('/business-workspace/acquisition-plan', tags=['business-workspace'])
     async def acquisition_plan(request: Request) -> dict[str, Any]:
         _, tenant_id, business_id = business_owner_scope(request=request, auth_bundle=auth_bundle)
