@@ -467,10 +467,17 @@
     },
     {
       "id": "recovery.encrypted_backup_dr_evidence",
-      "status": "inventory",
-      "canonical_owner": null,
-      "source_of_truth": null,
-      "evidence": [],
+      "status": "mapped",
+      "canonical_owner": "Deep Release Validation + canonical PostgreSQL live proof",
+      "source_of_truth": "AES-256-GCM encrypted PostgreSQL backup artifact bound to exact commit SHA and verified restore sentinel",
+      "evidence": [
+        "scripts/ci/encrypted_backup.py",
+        ".github/workflows/deep-release-validation.yml",
+        "scripts/ci/step_postgres_live.py",
+        "tests/unit/scripts/ci/test_encrypted_backup_phase18.py",
+        "tests/ci/test_postgres_live_release_proof.py",
+        "tests/lock/test_deep_release_workflow_contract.py"
+      ],
       "runtime_dependency_removed": false
     },
     {
