@@ -89,26 +89,6 @@ class HttpTransport:
     ) -> HTTPBytesResponse:
         raise NotImplementedError
 
-    async def get_bytes(
-        self,
-        *,
-        url: str,
-        headers: dict[str, str] | None = None,
-        params: dict[str, Any] | None = None,
-        timeout_s: int = 30,
-        max_bytes: int = 256 * 1024 * 1024,
-    ) -> HTTPBytesResponse:
-        import asyncio
-
-        return await asyncio.to_thread(
-            sync_get_bytes,
-            url=str(url),
-            headers=dict(headers or {}),
-            params=dict(params or {}),
-            timeout_s=int(timeout_s or 30),
-            max_bytes=int(max_bytes),
-        )
-
     async def post_multipart_file(
         self,
         *,
@@ -286,6 +266,26 @@ class UrllibHttpTransport(HttpTransport):
             headers=dict(headers or {}),
             params=dict(params or {}),
             timeout_s=int(timeout_s or 30),
+        )
+
+    async def get_bytes(
+        self,
+        *,
+        url: str,
+        headers: dict[str, str] | None = None,
+        params: dict[str, Any] | None = None,
+        timeout_s: int = 30,
+        max_bytes: int = 256 * 1024 * 1024,
+    ) -> HTTPBytesResponse:
+        import asyncio
+
+        return await asyncio.to_thread(
+            sync_get_bytes,
+            url=str(url),
+            headers=dict(headers or {}),
+            params=dict(params or {}),
+            timeout_s=int(timeout_s or 30),
+            max_bytes=int(max_bytes),
         )
 
     async def post_multipart_file(
