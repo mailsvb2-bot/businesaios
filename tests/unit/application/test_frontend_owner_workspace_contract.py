@@ -37,3 +37,23 @@ def test_sales_center_stays_read_only_until_decisioncore_and_approval_boundary()
     assert 'Подтвердить и выполнить' in source
     assert 'provider-history' in source
     assert 'live_executed' in source
+
+
+def test_owner_cockpit_uses_single_business_workspace_surface() -> None:
+    source = Path('frontend/src/App.jsx').read_text(encoding='utf-8')
+    assert 'function Workspace(' in source
+    for route in (
+        '/business-workspace/providers',
+        '/business-workspace/customers',
+        '/business-workspace/acquisition-plan',
+        '/business-workspace/decision-draft',
+        '/business-workspace/process-observations',
+        '/business-workspace/process-opportunities',
+        '/business-workspace/discovery',
+    ):
+        assert route in source
+    assert '/web/provider-tokens' not in source
+    assert 'localStorage' not in source
+    assert 'sessionStorage' not in source
+    assert 'Центр продаж' in source
+    assert 'Центр действий' in source
