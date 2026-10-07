@@ -142,17 +142,42 @@ jobs:
           SQL
 
           BACKUP_DUMP_PATH="$PWD/artifacts/ci/postgres_backup.dump"
+          ENCRYPTED_BACKUP_PATH="$PWD/artifacts/ci/postgres_backup.dump.enc"
+          RESTORE_DUMP_PATH="$PWD/artifacts/ci/postgres_backup.restore.dump"
           pg_dump "$DATABASE_URL" --format=custom --no-owner --no-privileges --file="$BACKUP_DUMP_PATH"
           test -s "$BACKUP_DUMP_PATH"
 
+          BACKUP_KEY_HEX="$(.venv/bin/python -c 'import secrets; print(secrets.token_hex(32))')"
+          test "${#BACKUP_KEY_HEX}" -eq 64
+          ENCRYPTED_DUMP_SHA256="$(
+            .venv/bin/python -m scripts.ci.encrypted_backup seal \
+              --source "$BACKUP_DUMP_PATH" \
+              --output "$ENCRYPTED_BACKUP_PATH" \
+              --key-hex "$BACKUP_KEY_HEX" \
+              --exact-sha "$BAIOS_CI_TARGET_SHA"
+          )"
+          test -s "$ENCRYPTED_BACKUP_PATH"
+          rm -f "$BACKUP_DUMP_PATH"
+          test ! -e "$BACKUP_DUMP_PATH"
+
           cleanup_source_probe
           trap - EXIT
+
+          .venv/bin/python -m scripts.ci.encrypted_backup open \
+            --source "$ENCRYPTED_BACKUP_PATH" \
+            --output "$RESTORE_DUMP_PATH" \
+            --key-hex "$BACKUP_KEY_HEX" \
+            --exact-sha "$BAIOS_CI_TARGET_SHA" >/dev/null
+          test -s "$RESTORE_DUMP_PATH"
 
           RESTORE_DB="businesaios_restore_${GITHUB_RUN_ID}_${GITHUB_RUN_ATTEMPT}"
           ADMIN_DSN="${DATABASE_URL%/*}/postgres"
           psql "$ADMIN_DSN" --set=ON_ERROR_STOP=1 --command="CREATE DATABASE ${RESTORE_DB};"
           RESTORE_DSN="${DATABASE_URL%/*}/${RESTORE_DB}"
-          pg_restore --exit-on-error --no-owner --no-privileges --dbname="$RESTORE_DSN" "$BACKUP_DUMP_PATH"
+          pg_restore --exit-on-error --no-owner --no-privileges --dbname="$RESTORE_DSN" "$RESTORE_DUMP_PATH"
+          rm -f "$RESTORE_DUMP_PATH"
+          test ! -e "$RESTORE_DUMP_PATH"
+          unset BACKUP_KEY_HEX
 
           RESTORED_SHA="$(
             psql "$RESTORE_DSN" --no-align --tuples-only --set=ON_ERROR_STOP=1 \
@@ -161,19 +186,25 @@ jobs:
           RESTORED_SHA="$(printf '%s' "$RESTORED_SHA" | tr -d '[:space:]')"
           test "$RESTORED_SHA" = "$BAIOS_CI_TARGET_SHA"
 
-          DUMP_SHA256="$(sha256sum "$BACKUP_DUMP_PATH" | awk '{print $1}')"
-          export DUMP_SHA256 RESTORE_DB
+          export ENCRYPTED_DUMP_SHA256 RESTORE_DB
           .venv/bin/python - <<'PY'
           import json
           import os
           from pathlib import Path
 
           payload = {
-              "contract": "businesaios.postgres_backup_restore_evidence.v1",
+              "contract": "businesaios.postgres_encrypted_backup_restore_evidence.v1",
               "commit_sha": os.environ["BAIOS_CI_TARGET_SHA"],
-              "dump_path": "artifacts/ci/postgres_backup.dump",
-              "dump_sha256": os.environ["DUMP_SHA256"],
+              "encrypted_dump_path": "artifacts/ci/postgres_backup.dump.enc",
+              "encrypted_dump_sha256": os.environ["ENCRYPTED_DUMP_SHA256"],
+              "encryption": {
+                  "algorithm": "AES-256-GCM",
+                  "aad": "exact_commit_sha",
+                  "key_persisted": False,
+              },
+              "plaintext_dump_persisted": False,
               "restore_database": os.environ["RESTORE_DB"],
+              "restore_verified": True,
           }
           Path("artifacts/ci/postgres_backup_restore_evidence.json").write_text(
               json.dumps(payload, sort_keys=True, indent=2) + "\n",
