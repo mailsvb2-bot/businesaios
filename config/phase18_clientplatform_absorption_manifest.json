@@ -176,15 +176,16 @@
     },
     {
       "id": "sales.ai_owner_review_draft",
-      "status": "mapped",
-      "canonical_owner": "DecisionCore + entrypoints.api.owner_action_draft",
-      "source_of_truth": "persisted canonical DecisionCore action projected to editable owner draft",
+      "status": "implemented",
+      "canonical_owner": "DecisionCore + entrypoints.api.owner_action_draft + authenticated Business Workspace",
+      "source_of_truth": "persisted canonical DecisionCore send_message step projected to editable owner draft; execution remains /actions/execute",
       "evidence": [
         "entrypoints/api/owner_action_draft.py",
+        "adapters/api/fastapi/business_workspace_decision_routes.py",
         "tests/unit/api/test_owner_action_draft_projector.py",
-        "docs/runbooks/CLIENTPLATFORM_SALES_AI.md"
+        "tests/unit/adapters/api/fastapi/test_business_workspace_decision_routes.py"
       ],
-      "runtime_dependency_removed": false
+      "runtime_dependency_removed": true
     },
     {
       "id": "sales.ai_ingress_side_channel",
