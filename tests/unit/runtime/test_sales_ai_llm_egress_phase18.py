@@ -327,3 +327,39 @@ def test_sales_ai_analysis_rejects_malformed_or_action_bearing_model_output(
     assert result["error"] == "sales_ai_invalid_structured_output"
     assert "text" not in result
     assert len(client.requests) == 1
+
+
+def test_sales_ai_analysis_is_zero_retention_for_raw_customer_text(monkeypatch) -> None:
+    store, epoch = _enabled_store()
+    client = _Client(_VALID_ANALYSIS)
+    monkeypatch.setattr(
+        support,
+        "_configured_client",
+        lambda **_: (
+            "openai_compat",
+            "https://api.openai.com/v1",
+            "gpt-test",
+            client,
+            None,
+        ),
+    )
+    raw = "Свяжитесь со мной: customer@example.com"
+
+    result = support.analyze_sales_ai_message(
+        tenant_id="tenant-a",
+        business_id="business-a",
+        provider="openai_compat",
+        customer_text=raw,
+        current_stage="new",
+        source_kind="owner_workspace",
+        model="gpt-test",
+        expected_epoch=epoch,
+        consent_store=store,
+    )
+
+    assert result["ok"] is True
+    assert "customer_text" not in result
+    assert "text" not in result
+    assert raw not in repr(result)
+    assert "customer@example.com" not in client.requests[0].messages[1].content
+    assert store.history(tenant_id="tenant-a", business_id="business-a")[-1].consent_epoch == epoch
