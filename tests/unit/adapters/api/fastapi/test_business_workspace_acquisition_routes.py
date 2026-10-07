@@ -22,11 +22,11 @@ def _principal(*, roles=(RoleId.OWNER,), scopes=()):
     )
 
 
-def _route(router: APIRouter):
+def _route(router: APIRouter, path: str = '/business-workspace/acquisition-plan'):
     for route in router.routes:
-        if getattr(route, 'path', None) == '/business-workspace/acquisition-plan' and 'POST' in getattr(route, 'methods', set()):
+        if getattr(route, 'path', None) == path and 'POST' in getattr(route, 'methods', set()):
             return route.endpoint
-    raise AssertionError('acquisition route not found')
+    raise AssertionError(f'route not found: {path}')
 
 
 def _payload() -> dict:
@@ -93,3 +93,36 @@ def test_acquisition_plan_rejects_invalid_or_overflowing_payload(monkeypatch) ->
 def test_acquisition_plan_json_projection_is_safe_for_unbounded_timeline() -> None:
     assert acquisition_routes._json_safe(float('inf')) is None
     assert acquisition_routes._json_safe({'days': float('-inf'), 'rows': (1, 2)}) == {'days': None, 'rows': [1, 2]}
+
+
+def test_event_promotion_target_uses_authenticated_scope_and_live_public_route(monkeypatch) -> None:
+    router = APIRouter()
+    acquisition_routes.register_business_workspace_acquisition_routes(router=router, auth_bundle=object())
+    monkeypatch.setattr(acquisition_routes, 'business_owner_scope', lambda **_: (_principal(), 'tenant-session', 'business-session'))
+
+    async def fake_json_body(_request):
+        return {
+            'tenant_id': 'tenant-attacker',
+            'business_id': 'business-attacker',
+            'event_id': 'event-123',
+            'public_base_url': 'https://business.example.test',
+        }
+
+    monkeypatch.setattr(acquisition_routes, 'json_body', fake_json_body)
+    with pytest.raises(HTTPException) as exc:
+        asyncio.run(_route(router, '/business-workspace/event-promotion-target')(object()))
+    assert (exc.value.status_code, exc.value.detail) == (422, 'event_promotion_unknown_fields')
+
+    async def clean_body(_request):
+        return {'event_id': 'event-123', 'public_base_url': 'https://business.example.test'}
+
+    monkeypatch.setattr(acquisition_routes, 'json_body', clean_body)
+    result = asyncio.run(_route(router, '/business-workspace/event-promotion-target')(object()))
+    assert result['tenant_id'] == 'tenant-session'
+    assert result['business_id'] == 'business-session'
+    assert result['destination_url'] == (
+        'https://business.example.test/public-site/events/tenant-session/business-session/event-123'
+        '?source=ads&campaign_ref=event%3Aevent-123'
+    )
+    assert result['calculation_only'] is True
+    assert result['write_actions_enabled'] is False
