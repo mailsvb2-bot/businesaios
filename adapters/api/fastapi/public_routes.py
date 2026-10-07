@@ -194,7 +194,7 @@ def register_public_api_routes(
             )
         register_business_workspace_provider_routes(router=router, auth_bundle=auth_bundle)
         if event_landing_registry is not None:
-            register_business_workspace_event_landing_routes(router=router, auth_bundle=auth_bundle, registry=event_landing_registry)
+            register_business_workspace_event_landing_routes(router=router, auth_bundle=auth_bundle, event_landing_registry=event_landing_registry)
         register_business_workspace_acquisition_routes(router=router, auth_bundle=auth_bundle)
         if owner_action_draft_projector is not None:
             register_business_workspace_decision_routes(
