@@ -403,15 +403,18 @@
     },
     {
       "id": "visual.creative_director_scene_semantics",
-      "status": "inventory",
-      "canonical_owner": null,
-      "source_of_truth": null,
+      "status": "implemented",
+      "canonical_owner": "application.visual_creative_semantics + existing canonical visual execution path",
+      "source_of_truth": "DecisionCore-authorized visual brief grounded before runtime visual gateway execution",
       "evidence": [
-        "clientplatform/application/visual_scene_variants.py",
-        "clientplatform commit b5dbac5cfe65a2a2e39d4f6318ba221bab391615",
-        "clientplatform commit 9e3fd7cdd36a74e0010d7da9d2a77229090d6ac3"
+        "application/visual_creative_semantics.py",
+        "core/actions/catalog_groups.py",
+        "runtime/handlers/visual_creative_gateway.py",
+        "runtime/_internal/effects_domains/marketing.py",
+        "tests/unit/application/test_visual_creative_semantics_phase18.py",
+        "tests/unit/runtime/test_visual_creative_gateway.py"
       ],
-      "runtime_dependency_removed": false
+      "runtime_dependency_removed": true
     },
     {
       "id": "voice.media_delivery_metrics",
