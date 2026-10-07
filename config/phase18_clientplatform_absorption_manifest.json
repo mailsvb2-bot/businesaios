@@ -214,14 +214,19 @@
     },
     {
       "id": "sales.owner_workspace",
-      "status": "inventory",
-      "canonical_owner": null,
-      "source_of_truth": null,
+      "status": "implemented",
+      "canonical_owner": "frontend owner workspace + authenticated Business Workspace provider/customer/decision routes",
+      "source_of_truth": "owner-scoped CRM read evidence and DecisionCore-origin action drafts; external writes remain behind approval and /actions/execute",
       "evidence": [
-        "clientplatform/application/sales_workspace.py",
-        "clientplatform/application/cockpit_sales.py"
+        "frontend/src/App.jsx",
+        "adapters/api/fastapi/business_workspace_provider_routes.py",
+        "adapters/api/fastapi/business_workspace_decision_routes.py",
+        "entrypoints/api/owner_action_draft.py",
+        "tests/unit/application/test_frontend_owner_workspace_contract.py",
+        "tests/unit/adapters/api/fastapi/test_business_workspace_provider_routes.py",
+        "tests/unit/adapters/api/fastapi/test_business_workspace_decision_routes.py"
       ],
-      "runtime_dependency_removed": false
+      "runtime_dependency_removed": true
     },
     {
       "id": "platform.owner_cockpit_workspace",
@@ -403,11 +408,14 @@
     {
       "id": "visual.gateway_assets_review_jobs",
       "status": "mapped",
-      "canonical_owner": "runtime visual gateway + artifact/task owners",
-      "source_of_truth": "canonical visual execution boundary",
+      "canonical_owner": "existing visual gateway execution path + sealed HTTP transport + Human Governance review boundary",
+      "source_of_truth": "gateway job/evidence with authenticated scope-bound asset retrieval; durable visual review projection remains pending",
       "evidence": [
         "runtime/_internal/effects_domains/visual_creative_gateway.py",
-        "application/artifact/registry.py"
+        "runtime/_internal/effects_clients/visual_gateway_client.py",
+        "runtime/_internal/http_transport.py",
+        "tests/unit/runtime/test_visual_creative_gateway.py",
+        "tests/unit/runtime/test_visual_gateway_client.py"
       ],
       "runtime_dependency_removed": false
     },
