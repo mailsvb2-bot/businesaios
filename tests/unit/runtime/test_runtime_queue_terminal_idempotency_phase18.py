@@ -69,7 +69,7 @@ def test_sqlite_stale_fencing_after_reclaim_still_fails(tmp_path) -> None:
     first = store.claim(tenant_id="tenant-a", job_id="job-1", owner_id="worker-a", lease_seconds=1, now=now)
     assert first is not None and first.lease is not None
     store.reap_expired_claims(tenant_id="tenant-a", queue_name="ops", now=now + timedelta(seconds=2))
-    second = store.claim(tenant_id="tenant-a", job_id="job-1", owner_id="worker-b", lease_seconds=30, now=now + timedelta(seconds=2))
+    second = store.claim(tenant_id="tenant-a", job_id="job-1", owner_id="worker-a", lease_seconds=30, now=now + timedelta(seconds=2))
     assert second is not None and second.lease is not None
 
     with pytest.raises(ValueError, match="fencing token mismatch"):
