@@ -230,14 +230,20 @@
     },
     {
       "id": "platform.owner_cockpit_workspace",
-      "status": "inventory",
-      "canonical_owner": null,
-      "source_of_truth": null,
+      "status": "implemented",
+      "canonical_owner": "frontend Workspace + canonical Business Workspace FastAPI route set",
+      "source_of_truth": "single authenticated owner workspace projecting provider, customer, acquisition, process, decision and approval state",
       "evidence": [
-        "clientplatform/application/cockpit.py",
-        "clientplatform/runtime/cockpit_business_workspace.js"
+        "frontend/src/App.jsx",
+        "adapters/api/fastapi/public_routes.py",
+        "adapters/api/fastapi/router_support.py",
+        "adapters/api/fastapi/business_workspace_provider_routes.py",
+        "adapters/api/fastapi/business_workspace_acquisition_routes.py",
+        "adapters/api/fastapi/business_workspace_process_routes.py",
+        "adapters/api/fastapi/business_workspace_decision_routes.py",
+        "tests/unit/application/test_frontend_owner_workspace_contract.py"
       ],
-      "runtime_dependency_removed": false
+      "runtime_dependency_removed": true
     },
     {
       "id": "commerce.program_builder_delivery",
