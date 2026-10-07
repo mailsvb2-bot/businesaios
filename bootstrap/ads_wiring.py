@@ -41,7 +41,6 @@ from runtime.tenancy.paths import TenantPaths
 class AdsRuntime:
     read: AdsReadService
     write_gateway: AdsWriteGateway
-    metrics_ingress: AdsMetricsIngress | None = None
 
 
 def build_ads_runtime(*, tenant_paths: TenantPaths, event_store: Any, event_log: EventLog) -> AdsRuntime:
@@ -104,8 +103,18 @@ def build_ads_runtime(*, tenant_paths: TenantPaths, event_store: Any, event_log:
     return AdsRuntime(
         read=read_service,
         write_gateway=write_gateway,
-        metrics_ingress=AdsMetricsIngress(read_service=read_service, event_store=event_store),
     )
+
+
+def build_ads_metrics_ingress(*, ads_runtime: AdsRuntime, event_store: Any) -> AdsMetricsIngress:
+    """Build the canonical metrics-ingress service without widening AdsRuntime.
+
+    AdsRuntime intentionally exposes only the read facade and guarded write gateway.
+    Metrics ingestion remains a separate runtime service that consumes the read facade
+    and persists canonical ads_metrics_imported events.
+    """
+
+    return AdsMetricsIngress(read_service=ads_runtime.read, event_store=event_store)
 
 
 class _AdsRuntimePort(AdsPort):
