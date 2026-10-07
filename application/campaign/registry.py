@@ -216,29 +216,39 @@ class CampaignRegistry:
 @dataclass(frozen=True, slots=True)
 class EventPromotionTarget:
     event_id: str
-    public_slug: str
+    tenant_id: str
+    business_id: str
     public_base_url: str
 
     def __post_init__(self) -> None:
         event_id = str(self.event_id or "").strip()
-        slug = str(self.public_slug or "").strip()
+        tenant_id = str(self.tenant_id or "").strip()
+        business_id = str(self.business_id or "").strip()
         base = str(self.public_base_url or "").strip().rstrip("/")
         parsed = urlsplit(base)
         if not event_id or len(event_id) > 200:
             raise ValueError("event_id is required")
-        if not slug or len(slug) > 240:
-            raise ValueError("public event slug is required")
+        if not tenant_id or len(tenant_id) > 200:
+            raise ValueError("tenant_id is required")
+        if not business_id or len(business_id) > 200:
+            raise ValueError("business_id is required")
         if parsed.scheme != "https" or not parsed.hostname or parsed.query or parsed.fragment:
             raise ValueError("public event base URL must be a clean HTTPS origin/path")
         object.__setattr__(self, "event_id", event_id)
-        object.__setattr__(self, "public_slug", slug)
+        object.__setattr__(self, "tenant_id", tenant_id)
+        object.__setattr__(self, "business_id", business_id)
         object.__setattr__(self, "public_base_url", base)
 
 
 def event_advertising_url(target: EventPromotionTarget) -> str:
     campaign_ref = quote(f"event:{target.event_id}", safe="")
-    slug = quote(target.public_slug, safe="")
-    return f"{target.public_base_url}/e/{slug}?source=ads&campaign_ref={campaign_ref}"
+    tenant = quote(target.tenant_id, safe="")
+    business = quote(target.business_id, safe="")
+    event = quote(target.event_id, safe="")
+    return (
+        f"{target.public_base_url}/public-site/events/{tenant}/{business}/{event}"
+        f"?source=ads&campaign_ref={campaign_ref}"
+    )
 
 
 __all__ = ["CANON_CAMPAIGN_LIFECYCLE_OWNER", "CampaignRegistry", "EventPromotionTarget", "event_advertising_url"]
