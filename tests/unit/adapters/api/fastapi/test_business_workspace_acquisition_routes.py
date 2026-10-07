@@ -11,6 +11,25 @@ from adapters.api.fastapi import router_support
 from governance.rbac_contract import RoleId
 
 
+
+class _LandingState:
+    def __init__(self, *, published: bool) -> None:
+        self._published = published
+
+    def public_content(self):
+        return {"ok": True} if self._published else None
+
+
+class _LandingRegistry:
+    def __init__(self, *, published: bool = True) -> None:
+        self.published = published
+        self.calls = []
+
+    def get(self, **kwargs):
+        self.calls.append(dict(kwargs))
+        return _LandingState(published=self.published)
+
+
 def _principal(*, roles=(RoleId.OWNER,), scopes=()):
     return SimpleNamespace(
         tenant_id='tenant-session',
@@ -69,6 +88,7 @@ def test_acquisition_plan_uses_session_scope_and_canonical_solver(monkeypatch) -
     assert result['assumption_source'] == 'owner_input'
     assert result['calculation_only'] is True
     assert result['write_actions_enabled'] is False
+    assert landing_registry.calls == [{'tenant_id': 'tenant-session', 'business_id': 'business-session', 'event_id': 'event-123'}]
     assert result['plan']['feasible'] is True
     assert result['plan']['achievable_customers'] >= 10
     assert result['economics']['overall_conversion_rate'] == 0.5
@@ -97,7 +117,8 @@ def test_acquisition_plan_json_projection_is_safe_for_unbounded_timeline() -> No
 
 def test_event_promotion_target_uses_authenticated_scope_and_live_public_route(monkeypatch) -> None:
     router = APIRouter()
-    acquisition_routes.register_business_workspace_acquisition_routes(router=router, auth_bundle=object())
+    landing_registry = _LandingRegistry()
+    acquisition_routes.register_business_workspace_acquisition_routes(router=router, auth_bundle=object(), event_landing_registry=landing_registry)
     monkeypatch.setattr(acquisition_routes, 'business_owner_scope', lambda **_: (_principal(), 'tenant-session', 'business-session'))
 
     async def fake_json_body(_request):
@@ -126,3 +147,21 @@ def test_event_promotion_target_uses_authenticated_scope_and_live_public_route(m
     )
     assert result['calculation_only'] is True
     assert result['write_actions_enabled'] is False
+
+
+def test_event_promotion_target_rejects_unpublished_event(monkeypatch) -> None:
+    router = APIRouter()
+    acquisition_routes.register_business_workspace_acquisition_routes(
+        router=router,
+        auth_bundle=object(),
+        event_landing_registry=_LandingRegistry(published=False),
+    )
+    monkeypatch.setattr(acquisition_routes, 'business_owner_scope', lambda **_: (_principal(), 'tenant-session', 'business-session'))
+
+    async def body(_request):
+        return {'event_id': 'event-draft', 'public_base_url': 'https://business.example.test'}
+
+    monkeypatch.setattr(acquisition_routes, 'json_body', body)
+    with pytest.raises(HTTPException) as exc:
+        asyncio.run(_route(router, '/business-workspace/event-promotion-target')(object()))
+    assert (exc.value.status_code, exc.value.detail) == (409, 'event_landing_not_published')
