@@ -76,9 +76,9 @@ def test_every_declared_action_schema_accepts_only_its_contract() -> None:
             with pytest.raises(ValueError):
                 schema.validate(payload)  # type: ignore[arg-type]
             cases += 1
-    # The Phase 16 create_experiment action adds one fully typed runtime schema.
-    # Its required/optional/type/additional/payload checks add 24 matrix cases.
-    assert cases == 927
+    # Phase 18 adds one fully typed visual art_direction field to the canonical action schema.
+    # The exhaustive contract matrix therefore gains exactly one type-validation case.
+    assert cases == 928
 
 
 def test_every_runtime_handler_and_compatibility_import_door_resolves() -> None:
