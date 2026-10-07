@@ -46,6 +46,10 @@ def test_succeeded_job_requires_ready_asset() -> None:
     evidence = visual_creative_evidence(tenant_id="tenant-1", job=_job(status="succeeded", asset_ready=True))
     assert evidence["code"] == "visual_creative_completed"
     assert evidence["payload"]["asset_ready"] is True
+    assert evidence["external_refs"] == [
+        "visual-gateway:j1",
+        "visual-gateway-content:j1",
+    ]
 
 
 def test_job_acceptance_evidence_is_trusted_but_does_not_claim_completion() -> None:
