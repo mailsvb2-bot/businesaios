@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from typing import Any
 
+from application.visual_creative_semantics import grounded_visual_prompt
 from runtime._internal.effects_clients.visual_gateway_client import visual_gateway_json
 from runtime._internal.effects_domains.visual_creative_gateway import (
     assert_visual_creative_binding,
@@ -58,13 +59,14 @@ class MarketingEffectsMixin:
                 notification = {"ok": False, "error": exc.__class__.__name__}
         return {"ok": True, "status": "verified", "copy": payload, "notification": notification, "router_evidence": evidence}
 
-    def generate_visual_creative(self, *, decision_id: str, correlation_id: str, tenant_id: str, user_id: str, kind: str, prompt: str, country_code: str = "", preferred_provider: str = "", aspect_ratio: str = "1:1", duration_seconds: int = 5, negative_prompt: str = "", reference_url: str = "", brand_context: str = "", wait_seconds: int = 0) -> dict[str, Any]:
+    def generate_visual_creative(self, *, decision_id: str, correlation_id: str, tenant_id: str, user_id: str, kind: str, prompt: str, country_code: str = "", preferred_provider: str = "", aspect_ratio: str = "1:1", duration_seconds: int = 5, negative_prompt: str = "", reference_url: str = "", brand_context: str = "", art_direction: str = "", wait_seconds: int = 0) -> dict[str, Any]:
         assert_called_from_executor()
         tenant = self._visual_tenant(tenant_id, "generate_visual_creative")
         decision, correlation, user = _visual_identity(decision_id=decision_id, correlation_id=correlation_id, user_id=user_id)
-        visual_kind, visual_prompt = str(kind or "").strip().lower(), str(prompt or "").strip()
-        if visual_kind not in {"image", "video"} or not visual_prompt:
+        visual_kind, owner_request = str(kind or "").strip().lower(), str(prompt or "").strip()
+        if visual_kind not in {"image", "video"} or not owner_request:
             raise ValueError("valid visual kind and prompt are required")
+        visual_prompt = grounded_visual_prompt(owner_request=owner_request, art_direction=art_direction)
         bounded_wait = max(0, min(int(wait_seconds or 0), 60))
         request = {"kind": visual_kind, "prompt": visual_prompt, "country_code": str(country_code or ""), "preferred_provider": str(preferred_provider or ""), "aspect_ratio": str(aspect_ratio or "1:1"), "duration_seconds": max(2, min(int(duration_seconds or 5), 15)), "negative_prompt": str(negative_prompt or ""), "reference_url": str(reference_url or ""), "brand_context": str(brand_context or ""), "wait_seconds": bounded_wait, "scope_id": tenant, "idempotency_key": visual_creative_idempotency_key(tenant_id=tenant, decision_id=decision, kind=visual_kind)}
         job = visual_creative_job_payload(visual_gateway_json("POST", "/v1/creative/generations", request, timeout_s=max(30, bounded_wait + 15), transport=self.http_transport))
