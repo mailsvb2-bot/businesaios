@@ -57,7 +57,7 @@ def test_owner_event_route_uses_authenticated_scope_not_body(monkeypatch) -> Non
     state=EventLandingState(event_id="event-1",draft=_content("Draft"),draft_source="manual")
     registry=_Registry(state); router=APIRouter()
     monkeypatch.setattr(owner_routes,"business_owner_scope",lambda **_: (SimpleNamespace(actor_id="owner",subject="owner"),"tenant-session","business-session"))
-    owner_routes.register_business_workspace_event_landing_routes(router=router,auth_bundle=object(),registry=registry)
+    owner_routes.register_business_workspace_event_landing_routes(router=router,auth_bundle=object(),event_landing_registry=registry)
     async def body(_):
         return {"action":"create","content":_content("Draft").to_payload(),"idempotency_key":"create-1"}
     monkeypatch.setattr(owner_routes,"json_body",body)
