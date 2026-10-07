@@ -23,3 +23,17 @@ def test_frontend_requires_persisted_successful_live_sync_evidence_before_verifi
     assert '=== "live_executed"' in source
     assert 'Данные получены' in source
     assert 'Результат подтверждён реальным чтением данных из подключённого источника.' in source
+
+
+def test_sales_center_stays_read_only_until_decisioncore_and_approval_boundary() -> None:
+    source = Path('frontend/src/App.jsx').read_text(encoding='utf-8')
+    assert 'className="panel sales-panel"' in source
+    assert 'hubspotCanRefreshSales' in source
+    assert 'contact_sync' in source and 'deal_sync' in source
+    assert 'Кнопка выполняет только чтение HubSpot' in source
+    assert '/business-workspace/decision-draft' in source
+    assert '/actions/execute' in source
+    assert 'Черновик из DecisionCore' in source
+    assert 'Подтвердить и выполнить' in source
+    assert 'provider-history' in source
+    assert 'live_executed' in source
