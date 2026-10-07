@@ -309,14 +309,18 @@
     },
     {
       "id": "analytics.business_platform_observability",
-      "status": "mapped",
-      "canonical_owner": "application.analytics + observability",
-      "source_of_truth": "application/analytics",
+      "status": "implemented",
+      "canonical_owner": "application.analytics + authenticated analytics API projection",
+      "source_of_truth": "Event Store-backed business analytics projected through secured tenant-scoped API handlers",
       "evidence": [
         "application/analytics/business_analytics_service.py",
-        "observability/events.py"
+        "entrypoints/api/analytics_route_handlers.py",
+        "adapters/api/fastapi/analytics_routes.py",
+        "tests/unit/api/test_analytics_route_security_specs.py",
+        "tests/arch/test_analytics_api_and_runtime_wiring_no_second_brain.py",
+        "tests/unit/adapters/api/fastapi/test_analytics_routes_phase18.py"
       ],
-      "runtime_dependency_removed": false
+      "runtime_dependency_removed": true
     },
     {
       "id": "runtime.settings_diagnostics",
@@ -354,12 +358,14 @@
     {
       "id": "billing.subscription_payment_outcomes",
       "status": "mapped",
-      "canonical_owner": "billing",
-      "source_of_truth": "billing ledger/payment owners",
+      "canonical_owner": "billing.payment_collection + billing invoice/refund/ledger owners",
+      "source_of_truth": "canonical billing collection/refund outcomes with optional Event Spine payment projection; production collection Event Store assembly still pending",
       "evidence": [
         "billing/payment_collection.py",
         "billing/ledger_store.py",
-        "billing/refund_orchestrator.py"
+        "billing/refund_orchestrator.py",
+        "tests/unit/billing/test_payment_collection_phase18.py",
+        "tests/unit/billing/test_payment_collection_event_spine_phase18.py"
       ],
       "runtime_dependency_removed": false
     },
