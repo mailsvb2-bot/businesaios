@@ -51,7 +51,10 @@ def visual_creative_evidence(*, tenant_id: str, job: Mapping[str, Any]) -> dict[
     code = "visual_creative_completed" if completed else ("visual_creative_job_accepted" if accepted else "visual_creative_failed")
     payload = {"connector": "visual_creative_gateway", "tenant_id": str(tenant_id)}
     payload.update({key: job.get(key) for key in ("scope_id", "provider", "kind", "model", "status", "asset_ready")})
-    return {"source": "connector", "verified": accepted, "status": "verified" if accepted else "failed", "code": code, "external_refs": [f"visual-gateway:{job.get('id')}"] if accepted else [], "confidence": 1.0 if accepted else 0.0, "payload": payload}
+    external_refs = [f"visual-gateway:{job.get('id')}"] if accepted else []
+    if completed:
+        external_refs.append(f"visual-gateway-content:{job.get('id')}")
+    return {"source": "connector", "verified": accepted, "status": "verified" if accepted else "failed", "code": code, "external_refs": external_refs, "confidence": 1.0 if accepted else 0.0, "payload": payload}
 
 
 __all__ = ["assert_visual_creative_binding", "visual_creative_evidence", "visual_creative_idempotency_key", "visual_creative_job_payload"]
