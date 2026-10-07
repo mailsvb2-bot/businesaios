@@ -119,24 +119,27 @@
     {
       "id": "event.promotion.destination_identity",
       "status": "implemented",
-      "canonical_owner": "application.campaign",
-      "source_of_truth": "canonical event identity + public event route",
+      "canonical_owner": "application.campaign + canonical public event route",
+      "source_of_truth": "authenticated tenant/business/event identity projected to /public-site/events/{tenant_id}/{business_id}/{event_id}",
       "evidence": [
         "application/campaign/registry.py",
+        "adapters/api/fastapi/public_site_routes.py",
         "tests/unit/application/test_event_promotion_phase18.py"
       ],
       "runtime_dependency_removed": true
     },
     {
       "id": "event.promotion.owner_workspace",
-      "status": "inventory",
-      "canonical_owner": null,
-      "source_of_truth": null,
+      "status": "implemented",
+      "canonical_owner": "authenticated Business Workspace acquisition surface + application.campaign",
+      "source_of_truth": "owner-scoped read-only destination projection to canonical public event route",
       "evidence": [
-        "clientplatform/application/event_promotion.py",
-        "docs/releases/2026-10-05-event-promotion-flow.md"
+        "adapters/api/fastapi/business_workspace_acquisition_routes.py",
+        "application/campaign/registry.py",
+        "tests/unit/adapters/api/fastapi/test_business_workspace_acquisition_routes.py",
+        "tests/unit/application/test_event_promotion_phase18.py"
       ],
-      "runtime_dependency_removed": false
+      "runtime_dependency_removed": true
     },
     {
       "id": "sales.ai_observation_contract",
