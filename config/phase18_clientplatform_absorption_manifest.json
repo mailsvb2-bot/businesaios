@@ -499,10 +499,15 @@
     },
     {
       "id": "messenger.canonical_navigation_parity",
-      "status": "inventory",
-      "canonical_owner": null,
-      "source_of_truth": null,
-      "evidence": [],
+      "status": "mapped",
+      "canonical_owner": "core.ux.callbacks + canonical messaging inbound/provider bridge",
+      "source_of_truth": "stable canonical callback tokens and one inbound decision path; MAX button navigation remains unproven",
+      "evidence": [
+        "core/ux/callbacks.py",
+        "interfaces/telegram/routing/callback_router.py",
+        "docs/migrations/unified_multimessenger_telegram_vk_max_matrix.md",
+        "tests/unit/application/test_multichannel_provider_parity_contract.py"
+      ],
       "runtime_dependency_removed": false
     }
   ]
