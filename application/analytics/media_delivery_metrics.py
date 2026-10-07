@@ -54,6 +54,9 @@ class MediaDeliveryMetricsProjection:
         ):
             if str(event.get("event_type") or "") != "audio_sent":
                 continue
+            timestamp_ms = int(event.get("timestamp_ms") or 0)
+            if timestamp_ms < start_ms or timestamp_ms > end_ms:
+                continue
             payload = event.get("payload")
             if not isinstance(payload, dict):
                 continue
