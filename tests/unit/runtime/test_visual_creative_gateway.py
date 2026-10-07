@@ -94,9 +94,10 @@ def test_visual_gateway_auth_fails_closed_by_default(monkeypatch: pytest.MonkeyP
 def test_generate_and_poll_handlers_are_thin() -> None:
     effects = Mock()
     env = SimpleNamespace(decision=SimpleNamespace(decision_id="d1", correlation_id="c1"))
-    handle_generate_visual_creative({"tenant_id": "tenant-1", "user_id": "u1", "kind": "image", "prompt": "city", "duration_seconds": 7}, effects, env)
+    handle_generate_visual_creative({"tenant_id": "tenant-1", "user_id": "u1", "kind": "image", "prompt": "city", "art_direction": "cinematic staging", "duration_seconds": 7}, effects, env)
     assert effects.generate_visual_creative.call_args.kwargs["decision_id"] == "d1"
     assert effects.generate_visual_creative.call_args.kwargs["prompt"] == "city"
+    assert effects.generate_visual_creative.call_args.kwargs["art_direction"] == "cinematic staging"
     handle_poll_visual_creative({"tenant_id": "tenant-1", "user_id": "u1", "job_id": "j1"}, effects, env)
     assert effects.poll_visual_creative.call_args.kwargs["job_id"] == "j1"
 
