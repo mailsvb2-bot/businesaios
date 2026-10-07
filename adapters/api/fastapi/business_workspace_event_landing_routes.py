@@ -7,7 +7,7 @@ from application.public_site.event_landing_registry import EventLandingRegistry,
 from contracts.landing_page import EventLandingContent
 
 
-def register_business_workspace_event_landing_routes(*, router: APIRouter, auth_bundle, registry: EventLandingRegistry) -> None:
+def register_business_workspace_event_landing_routes(*, router: APIRouter, auth_bundle, event_landing_registry: EventLandingRegistry) -> None:
     def scope(request: Request):
         principal,tenant_id,business_id=business_owner_scope(request=request,auth_bundle=auth_bundle)
         return principal,tenant_id,business_id
@@ -16,7 +16,7 @@ def register_business_workspace_event_landing_routes(*, router: APIRouter, auth_
     async def get_event_landing(event_id: str, request: Request):
         _,tenant_id,business_id=scope(request)
         try:
-            return event_landing_payload(registry.get(tenant_id=tenant_id,business_id=business_id,event_id=event_id))
+            return event_landing_payload(event_landing_registry.get(tenant_id=tenant_id,business_id=business_id,event_id=event_id))
         except KeyError as exc:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND,detail='event_landing_not_found') from exc
 
@@ -34,12 +34,12 @@ def register_business_workspace_event_landing_routes(*, router: APIRouter, auth_
         try:
             if action=='create':
                 content=EventLandingContent.from_payload(body.get('content'))
-                state=registry.create(tenant_id=tenant_id,business_id=business_id,event_id=event_id,content=content,source=str(body.get('source') or 'manual'),idempotency_key=idem,actor_id=actor)
+                state=event_landing_registry.create(tenant_id=tenant_id,business_id=business_id,event_id=event_id,content=content,source=str(body.get('source') or 'manual'),idempotency_key=idem,actor_id=actor)
             else:
                 rev=body.get('expected_revision')
                 if isinstance(rev,bool) or not isinstance(rev,int): raise ValueError('expected_revision_required')
                 content=EventLandingContent.from_payload(body.get('content')) if action=='save' else None
-                state=registry.transition(tenant_id=tenant_id,business_id=business_id,event_id=event_id,action=action,expected_revision=rev,idempotency_key=idem,actor_id=actor,content=content,source=str(body.get('source') or 'manual'))
+                state=event_landing_registry.transition(tenant_id=tenant_id,business_id=business_id,event_id=event_id,action=action,expected_revision=rev,idempotency_key=idem,actor_id=actor,content=content,source=str(body.get('source') or 'manual'))
             return event_landing_payload(state)
         except RuntimeError as exc:
             if 'revision_conflict' in str(exc): raise HTTPException(status_code=409,detail='event_landing_revision_conflict') from exc
