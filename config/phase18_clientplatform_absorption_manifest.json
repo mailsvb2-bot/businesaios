@@ -203,14 +203,17 @@
     },
     {
       "id": "sales.ai_freshness_retention",
-      "status": "inventory",
-      "canonical_owner": null,
-      "source_of_truth": null,
+      "status": "implemented",
+      "canonical_owner": "SalesAIConsentStore + bounded Sales AI analysis runtime",
+      "source_of_truth": "versioned business-scoped consent epoch/target rechecked before and after provider egress; owner-workspace analysis retains no raw customer text or AI projection",
       "evidence": [
-        "clientplatform/application/sales_ai_orchestration.py",
-        "docs/runbooks/CLIENTPLATFORM_SALES_AI.md"
+        "config/llm_provider_policy.py",
+        "runtime/_internal/effects_actions/llm_completion_support.py",
+        "adapters/api/fastapi/business_workspace_provider_routes.py",
+        "tests/unit/runtime/test_sales_ai_llm_egress_phase18.py",
+        "tests/unit/adapters/api/fastapi/test_business_workspace_provider_routes.py"
       ],
-      "runtime_dependency_removed": false
+      "runtime_dependency_removed": true
     },
     {
       "id": "sales.owner_workspace",
