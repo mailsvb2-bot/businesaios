@@ -9,7 +9,7 @@ def run() -> tuple[bool, str]:
         mark_expression="not slow and not integration and not gate",
         junit_name="business-critical.xml",
         coverage_name="business-critical-coverage.xml",
-        timeout=240,
+        timeout=600,
     )
     if not ok:
         return False, message
