@@ -194,6 +194,7 @@ jobs:
           if-no-files-found: error
 
   complete-tree:
+    timeout-minutes: 90
     if: >-
       (github.event_name != 'pull_request_target' || github.event.pull_request.merged == true) &&
       (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)
@@ -233,7 +234,7 @@ jobs:
         run: |
           mkdir -p artifacts/ci/complete-tree
           set +e
-          pytest -q tests --junitxml=artifacts/ci/complete-tree/junit.xml 2>&1 | tee artifacts/ci/complete-tree/pytest.log
+          timeout --signal=TERM --kill-after=60s 80m pytest -q tests --junitxml=artifacts/ci/complete-tree/junit.xml 2>&1 | tee artifacts/ci/complete-tree/pytest.log
           status=${PIPESTATUS[0]}
           printf '%s\n' "$status" > artifacts/ci/complete-tree/exit-code.txt
           exit "$status"
