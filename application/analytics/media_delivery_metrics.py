@@ -52,6 +52,8 @@ class MediaDeliveryMetricsProjection:
             end_ms=end_ms,
             event_type="audio_sent",
         ):
+            if str(event.get("event_type") or "") != "audio_sent":
+                continue
             payload = event.get("payload")
             if not isinstance(payload, dict):
                 continue
