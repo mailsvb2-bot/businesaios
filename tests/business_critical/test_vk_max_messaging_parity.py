@@ -225,6 +225,31 @@ def test_max_canonical_inline_keyboard_round_trips_callback_token() -> None:
     assert decoded["message_id"] == "max-callback-roundtrip"
 
 
+
+def test_max_callback_identity_precedes_original_message_identity() -> None:
+    callback_payload = {
+        "update_type": "message_callback",
+        "timestamp": 1787259600000,
+        "user": {"user_id": 778899},
+        "message": {
+            "body": {"mid": "original-message-123", "text": "Choose"},
+            "sender": {"user_id": 778899},
+        },
+        "callback": {"callback_id": "callback-event-456", "payload": "menu:open"},
+    }
+    decoded = decode_provider_inbound(channel="max", payload=callback_payload)
+    assert decoded["message_id"] == "callback-event-456"
+    assert decoded["user_id"] == "778899"
+    assert decoded["text"] == "menu:open"
+
+    route = ProviderWebhookRouteRegistry().extract(
+        provider_map()["max_messaging"], {}, json.dumps(callback_payload).encode()
+    )
+    assert route["event_key"] == decoded["message_id"]
+    assert route["resource_id"] == decoded["message_id"]
+
+
+
 def test_max_keyboard_fails_closed_when_provider_row_capacity_is_exceeded() -> None:
     provider = provider_map()["max_messaging"]
     too_many = [
