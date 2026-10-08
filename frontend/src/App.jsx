@@ -341,6 +341,7 @@ function Workspace({ data, apiBase, businesses, onRestart, onRetryAccess, onSwit
   const selectedKeys = useMemo(() => new Set(integrations.map((item) => item.provider_key)), [integrations]);
   const [catalog, setCatalog] = useState([]);
   const [capabilities, setCapabilities] = useState([]);
+  const [messagingChannels, setMessagingChannels] = useState([]);
   const [activeKey, setActiveKey] = useState("");
   const [externalRef, setExternalRef] = useState("");
   const [secrets, setSecrets] = useState({});
@@ -382,6 +383,7 @@ function Workspace({ data, apiBase, businesses, onRestart, onRetryAccess, onSwit
     const rows = Array.isArray(payload.providers) ? payload.providers : [];
     setCatalog(rows);
     setCapabilities(Array.isArray(payload.capabilities) ? payload.capabilities : []);
+    setMessagingChannels(Array.isArray(payload.channels) ? payload.channels : []);
     setActiveKey((current) => {
       if (current && rows.some((row) => row.provider_key === current)) return current;
       return rows.find((row) => selectedKeys.has(row.provider_key) && row.customer_selectable)?.provider_key
@@ -1136,6 +1138,17 @@ function Workspace({ data, apiBase, businesses, onRestart, onRetryAccess, onSwit
           <p>{capabilityPlainCopy(item, item.userState)}</p>
           {item.userState.provider?.customer_selectable ? <button type="button" className="ghost small" onClick={() => openCapabilityProvider(item.userState.provider.provider_key)}>Открыть настройку</button> : <small className="helper-text">BusinessAIOS не показывает кнопку действия, пока для неё нет честного пользовательского пути.</small>}
         </article>)}</div></details> : null}
+      </section>
+
+      <section className="panel" aria-label="Единый блок каналов связи">
+        <div className="panel-title-row"><div><p className="eyebrow">Все каналы в одной системе</p><h2>Каналы общения</h2></div><span className="privacy-badge">Единый каталог</span></div>
+        <p className="muted-text">Здесь показаны каналы, известные BusinessAIOS. Наличие в каталоге не означает, что подключение или отправка сообщений уже доступны.</p>
+        <div className="capability-grid">
+          {messagingChannels.map((item) => <article className="capability-card" key={item.channel}>
+            <div className="capability-card-head"><strong>{item.channel}</strong><span className={`status-pill ${item.connected ? "ready" : "roadmap"}`}>{item.connected ? "Подключено" : "Не подключено"}</span></div>
+            <small>{[item.capabilities?.buttons && "Кнопки", item.capabilities?.attachments && "Вложения", item.capabilities?.html && "HTML"].filter(Boolean).join(" · ") || "Текстовые сообщения"}</small>
+          </article>)}
+        </div>
       </section>
 
       <section className="workspace-grid">
