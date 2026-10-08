@@ -592,3 +592,26 @@ def test_sales_ai_analysis_rejects_nonstring_fields_before_provider_call(
     with pytest.raises(HTTPException) as error:
         asyncio.run(endpoint(object()))
     assert (error.value.status_code, error.value.detail) == (422, expected_detail)
+
+
+def test_owner_workspace_uses_canonical_channel_catalog_not_a_three_channel_fork(monkeypatch) -> None:
+    from contracts.messaging_channels import ALL_CHANNELS
+
+    handlers = _Handlers((
+        {'provider_key': 'telegram_bot', 'connected': True},
+        {'provider_key': 'vk_messaging', 'connected': False},
+    ))
+    router = APIRouter()
+    workspace.register_business_workspace_provider_routes(
+        router=router, auth_bundle=object(), provider_admin_handlers=handlers,
+    )
+    _authenticate_as(monkeypatch, _principal())
+    result = asyncio.run(_route(router, 'GET')(object()))
+    channels = {row['channel']: row for row in result['channels']}
+    assert tuple(channels) == ALL_CHANNELS
+    assert channels['telegram']['connected'] is True
+    assert channels['vk']['connected'] is False
+    assert channels['max']['connected'] is False
+    assert channels['telegram']['capabilities']['buttons'] is True
+    assert channels['sms']['capabilities']['attachments'] is False
+    assert result['channel_catalog_source'] == 'contracts.messaging_channels.ALL_CHANNELS'
