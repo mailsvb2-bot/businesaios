@@ -548,3 +548,47 @@ def test_sales_ai_unconfigured_disable_enforces_optimistic_revision(monkeypatch)
     assert result['configured'] is False
     assert result['enabled'] is False
     assert result['revision'] == 0
+
+
+@pytest.mark.parametrize(
+    ("field", "bad_value", "expected_detail"),
+    [
+        ("customer_text", ["private", "message"], "sales_ai_customer_text_must_be_1_to_12000_chars"),
+        ("customer_text", {"text": "private"}, "sales_ai_customer_text_must_be_1_to_12000_chars"),
+        ("customer_text", 123, "sales_ai_customer_text_must_be_1_to_12000_chars"),
+        ("current_stage", {"stage": "new"}, "sales_ai_analysis_context_invalid"),
+        ("source_kind", ["telegram"], "sales_ai_analysis_context_invalid"),
+        ("source_kind", 0, "sales_ai_analysis_context_invalid"),
+    ],
+)
+def test_sales_ai_analysis_rejects_nonstring_fields_before_provider_call(
+    monkeypatch, field, bad_value, expected_detail
+) -> None:
+    store = InMemorySalesAIConsentStore()
+    store.configure(
+        tenant_id='tenant-session', business_id='business-session',
+        enabled=True, provider='openai_compat', base_url='https://api.openai.com/v1',
+        data_mode='redacted', customer_notice_confirmed=True,
+        actor='owner-user', reason='enable',
+    )
+    router = APIRouter()
+    workspace.register_business_workspace_provider_routes(
+        router=router, auth_bundle=object(), provider_admin_handlers=_Handlers(),
+        sales_ai_consent_store=store,
+    )
+    _authenticate_as(monkeypatch, _principal())
+    payload = {'customer_text': 'hello', 'current_stage': 'new', 'source_kind': 'telegram'}
+    payload[field] = bad_value
+
+    async def invalid_body(_request):
+        return payload
+
+    def must_not_call_provider(**kwargs):
+        pytest.fail('invalid analysis input must not reach Sales AI provider')
+
+    monkeypatch.setattr(workspace, 'json_body', invalid_body)
+    monkeypatch.setattr(workspace, 'analyze_sales_ai_message', must_not_call_provider)
+    endpoint = _path_route(router, '/business-workspace/sales-ai/analyze', 'POST')
+    with pytest.raises(HTTPException) as error:
+        asyncio.run(endpoint(object()))
+    assert (error.value.status_code, error.value.detail) == (422, expected_detail)
