@@ -64,3 +64,55 @@ def test_provider_webhook_inbound_processor_rejects_missing_and_failed_gateway_d
         )
         assert result['accepted'] is False
         assert result['decision_envelope'] == envelope
+
+
+def test_inbound_processor_rejects_invalid_identity_before_decision_core(monkeypatch):
+    calls = []
+
+    class _Gateway:
+        def __init__(self, **kwargs):
+            calls.append('constructed')
+
+    monkeypatch.setattr(
+        'runtime.business_autonomy.provider_webhook_inbound_processor.MessagingInboundDecisionGateway',
+        _Gateway,
+    )
+    valid = {'tenant_id': 't1', 'channel': 'telegram', 'user_id': 'u1', 'text': 'hello'}
+    for key, value in (
+        ('tenant_id', ' '), ('channel', ''), ('user_id', None),
+        ('text', []), ('text', '   '),
+    ):
+        malformed = {**valid, key: value}
+        out = ProviderWebhookInboundProcessor(decision_core=_Core()).process(
+            handoff={'inbound_message': malformed},
+        )
+        assert out == {'accepted': False, 'reason': 'invalid_inbound_identity_or_text'}
+    assert calls == []
+
+
+def test_inbound_processor_retains_trusted_source_and_chat_metadata(monkeypatch):
+    captured = {}
+
+    class _Gateway:
+        def __init__(self, **kwargs):
+            pass
+
+        def process(self, *, message):
+            captured['metadata'] = message.metadata
+            return {'decision_id': 'd1'}
+
+    monkeypatch.setattr(
+        'runtime.business_autonomy.provider_webhook_inbound_processor.MessagingInboundDecisionGateway',
+        _Gateway,
+    )
+    out = ProviderWebhookInboundProcessor(decision_core=_Core()).process(
+        handoff={'inbound_message': {
+            'tenant_id': 't1', 'channel': 'telegram', 'user_id': 'u1',
+            'text': 'hello', 'chat_id': 'real-chat',
+            'metadata': {'source': 'spoofed', 'chat_id': 'spoofed-chat', 'customer_id': 'c1'},
+        }},
+    )
+    assert out['accepted'] is True
+    assert captured['metadata']['source'] == 'provider_webhook_handoff'
+    assert captured['metadata']['chat_id'] == 'real-chat'
+    assert captured['metadata']['customer_id'] == 'c1'
