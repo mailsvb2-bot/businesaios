@@ -212,14 +212,27 @@ def register_business_workspace_provider_routes(
                 status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
                 detail='sales_ai_unknown_analysis_fields',
             )
-        customer_text = str(body.get('customer_text') or '').strip()
+        raw_customer_text = body.get('customer_text')
+        if not isinstance(raw_customer_text, str):
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail='sales_ai_customer_text_must_be_1_to_12000_chars',
+            )
+        customer_text = raw_customer_text.strip()
         if not customer_text or len(customer_text) > 12000:
             raise HTTPException(
                 status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
                 detail='sales_ai_customer_text_must_be_1_to_12000_chars',
             )
-        current_stage = str(body.get('current_stage') or 'new').strip()
-        source_kind = str(body.get('source_kind') or 'owner_workspace').strip()
+        raw_stage = body.get('current_stage', 'new')
+        raw_source = body.get('source_kind', 'owner_workspace')
+        if not isinstance(raw_stage, str) or not isinstance(raw_source, str):
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail='sales_ai_analysis_context_invalid',
+            )
+        current_stage = raw_stage.strip()
+        source_kind = raw_source.strip()
         if not current_stage or len(current_stage) > 120 or not source_kind or len(source_kind) > 120:
             raise HTTPException(
                 status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
