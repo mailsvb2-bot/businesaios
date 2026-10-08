@@ -47,6 +47,23 @@ def test_encrypted_backup_rejects_tamper(tmp_path: Path) -> None:
     assert not restored.exists()
 
 
+def test_encrypted_backup_rejects_wrong_valid_key(tmp_path: Path) -> None:
+    source = tmp_path / "backup.dump"
+    sealed = tmp_path / "backup.dump.enc"
+    restored = tmp_path / "restored.dump"
+    source.write_bytes(b"postgres-custom-backup")
+    seal_backup(source=source, output=sealed, key_hex=KEY_HEX, exact_sha=SHA)
+
+    with pytest.raises(EncryptedBackupError, match="authentication failed"):
+        open_backup(
+            source=sealed,
+            output=restored,
+            key_hex="22" * 32,
+            exact_sha=SHA,
+        )
+    assert not restored.exists()
+
+
 def test_encrypted_backup_rejects_wrong_sha_binding(tmp_path: Path) -> None:
     source = tmp_path / "backup.dump"
     sealed = tmp_path / "backup.dump.enc"
