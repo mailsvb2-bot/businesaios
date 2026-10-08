@@ -451,17 +451,20 @@
     },
     {
       "id": "voice.media_delivery_metrics",
-      "status": "mapped",
-      "canonical_owner": "runtime media delivery effects + application analytics media-delivery projection",
-      "source_of_truth": "tenant-bound durable audio_sent delivery outcomes projected through the canonical analytics dashboard",
+      "status": "implemented",
+      "canonical_owner": "runtime media delivery effects + canonical Event Log + analytics dashboard projection",
+      "source_of_truth": "tenant-scoped audio_sent outcomes persisted through the canonical EventLog/Event Store and projected into owner analytics",
       "evidence": [
         "runtime/_internal/effects_actions/telegram/media.py",
+        "core/events/log.py",
         "application/analytics/media_delivery_metrics.py",
         "application/analytics/dashboard_service.py",
+        "entrypoints/api/analytics_route_handlers.py",
         "tests/unit/application/analytics/test_media_delivery_metrics_phase18.py",
+        "tests/unit/application/analytics/test_media_delivery_end_to_end_phase18.py",
         "tests/unit/application/analytics/test_dashboard_service.py"
       ],
-      "runtime_dependency_removed": false
+      "runtime_dependency_removed": true
     },
     {
       "id": "content.production_workspace",
