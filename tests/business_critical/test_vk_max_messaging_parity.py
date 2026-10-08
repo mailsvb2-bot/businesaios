@@ -335,3 +335,27 @@ def test_max_callback_clicking_user_not_original_message_sender(actor_location: 
     assert route["event_key"] == "click-123"
     assert route["messaging_ingress"]["user_id"] == "778899"
     assert route["messaging_ingress"]["text"] == "menu:open"
+
+
+def test_vk_callback_uses_clicking_actor_not_embedded_message_sender() -> None:
+    payload = {
+        "type": "message_event",
+        "event_id": "click-vk-42",
+        "object": {
+            "user_id": 770001,
+            "peer_id": 200000001,
+            "message": {"from_id": 990002, "id": 500, "text": "Old menu"},
+            "payload": {"callback_data": "menu:open"},
+        },
+    }
+    decoded = decode_provider_inbound(channel="vk", payload=payload)
+    assert decoded["user_id"] == "770001"
+    assert decoded["text"] == "menu:open"
+    assert decoded["message_id"] == "click-vk-42"
+
+    route = ProviderWebhookRouteRegistry().extract(
+        provider_map()["vk_messaging"], {}, json.dumps(payload).encode()
+    )
+    assert route["event_key"] == "click-vk-42"
+    assert route["messaging_ingress"]["user_id"] == "770001"
+    assert route["messaging_ingress"]["text"] == "menu:open"
