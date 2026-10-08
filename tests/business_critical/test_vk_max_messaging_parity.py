@@ -266,3 +266,44 @@ def test_max_keyboard_fails_closed_when_provider_row_capacity_is_exceeded() -> N
                 "reply_markup": {"inline_keyboard": [too_many]},
             },
         )
+
+
+
+@pytest.mark.parametrize("unsafe_time", ["NaN", "Infinity", "-Infinity", "1e309"])
+def test_provider_ingress_rejects_non_finite_timestamps_without_losing_event(unsafe_time: str) -> None:
+    samples = (
+        ("telegram", {
+            "message": {
+                "message_id": 101,
+                "from": {"id": 7},
+                "chat": {"id": 7},
+                "text": "hello",
+                "date": unsafe_time,
+            }
+        }, "101"),
+        ("vk", {
+            "type": "message_new",
+            "object": {
+                "message": {
+                    "id": "vk-message-101",
+                    "from_id": 7,
+                    "peer_id": 7,
+                    "text": "hello",
+                    "date": unsafe_time,
+                }
+            },
+        }, "vk-message-101"),
+        ("max", {
+            "update_type": "message_created",
+            "timestamp": unsafe_time,
+            "message": {
+                "body": {"mid": "max-message-101", "text": "hello"},
+                "sender": {"user_id": 7},
+            },
+        }, "max-message-101"),
+    )
+    for channel, payload, expected_id in samples:
+        decoded = decode_provider_inbound(channel=channel, payload=payload)
+        assert str(decoded["message_id"]) == expected_id
+        assert decoded["text"] == "hello"
+        assert decoded["timestamp_ms"] == 0
