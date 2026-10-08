@@ -41,7 +41,7 @@ def test_runtime_audio_outcome_reaches_tenant_scoped_analytics_dashboard() -> No
         user_id="user-a",
         decision_id="decision-a",
         correlation_id="correlation-a",
-        timestamp_ms=1_800_000_000_000,
+        timestamp_ms=1_760_000_000_000,
         payload={
             "tenant_id": "tenant-a",
             "ok": True,
@@ -60,7 +60,7 @@ def test_runtime_audio_outcome_reaches_tenant_scoped_analytics_dashboard() -> No
         user_id="user-b",
         decision_id="decision-b",
         correlation_id="correlation-b",
-        timestamp_ms=1_800_000_000_000,
+        timestamp_ms=1_760_000_000_000,
         payload={
             "tenant_id": "tenant-b",
             "ok": False,
