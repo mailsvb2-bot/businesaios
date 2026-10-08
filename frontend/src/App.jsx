@@ -342,6 +342,12 @@ function Workspace({ data, apiBase, businesses, onRestart, onRetryAccess, onSwit
   const [catalog, setCatalog] = useState([]);
   const [capabilities, setCapabilities] = useState([]);
   const [messagingChannels, setMessagingChannels] = useState([]);
+  const [organizations, setOrganizations] = useState([]);
+  const [organizationName, setOrganizationName] = useState("");
+  const [organizationError, setOrganizationError] = useState("");
+  const [organizationBusy, setOrganizationBusy] = useState(false);
+  const [organizationPendingKey, setOrganizationPendingKey] = useState("");
+
   const [activeKey, setActiveKey] = useState("");
   const [externalRef, setExternalRef] = useState("");
   const [secrets, setSecrets] = useState({});
@@ -376,6 +382,38 @@ function Workspace({ data, apiBase, businesses, onRestart, onRetryAccess, onSwit
 
   const markOperationStale = (recovery) => { setOperationRecovery(recovery); setOperationQueueStale(true); };
   const clearOperationStale = () => { setOperationRecovery(null); setOperationQueueStale(false); };
+
+  const refreshOrganizations = async () => {
+    if (!apiKey) return;
+    try {
+      const response = await getJson(`${baseApi}/business-workspace/organizations`, authHeaders);
+      setOrganizations(Array.isArray(response.organizations) ? response.organizations : []);
+      setOrganizationError("");
+    } catch {
+      setOrganizationError("Не удалось загрузить организации. Повторите попытку.");
+    }
+  };
+
+  const createOrganization = async () => {
+    const name = organizationName.trim();
+    if (!apiKey || !name || organizationBusy) return;
+    const requestKey = organizationPendingKey || `organization-${crypto.randomUUID()}`;
+    setOrganizationPendingKey(requestKey);
+    setOrganizationBusy(true);
+    setOrganizationError("");
+    try {
+      await postJson(`${baseApi}/business-workspace/organizations`, { name }, {
+        ...authHeaders, "X-Idempotency-Key": requestKey,
+      });
+      setOrganizationName("");
+      setOrganizationPendingKey("");
+      await refreshOrganizations();
+    } catch {
+      setOrganizationError("Не удалось сохранить организацию. Проверьте соединение и повторите попытку — повтор не создаст дубликат.");
+    } finally {
+      setOrganizationBusy(false);
+    }
+  };
 
   const refreshCatalog = async () => {
     if (!apiKey) return [];
@@ -484,6 +522,8 @@ function Workspace({ data, apiBase, businesses, onRestart, onRetryAccess, onSwit
       });
     return () => { cancelled = true; };
   }, [apiKey]);
+
+  useEffect(() => { refreshOrganizations(); }, [apiKey]);
 
   const providers = catalog
     .filter((row) => row.connected || row.customer_selectable || selectedKeys.has(row.provider_key))
@@ -1138,6 +1178,19 @@ function Workspace({ data, apiBase, businesses, onRestart, onRetryAccess, onSwit
           <p>{capabilityPlainCopy(item, item.userState)}</p>
           {item.userState.provider?.customer_selectable ? <button type="button" className="ghost small" onClick={() => openCapabilityProvider(item.userState.provider.provider_key)}>Открыть настройку</button> : <small className="helper-text">BusinessAIOS не показывает кнопку действия, пока для неё нет честного пользовательского пути.</small>}
         </article>)}</div></details> : null}
+      </section>
+
+      <section className="panel" aria-label="Организации бизнеса">
+        <div className="panel-title-row"><div><p className="eyebrow">Структура бизнеса</p><h2>Организации</h2></div></div>
+        <p className="muted-text">Организации текущего бизнеса. Доступ к ним ограничен учётной записью владельца.</p>
+        {organizationError ? <p role="alert">{organizationError}</p> : null}
+        <ul>{organizations.map((organization) => <li key={organization.organization_id}>{organization.name || organization.organization_id}</li>)}</ul>
+        <label htmlFor="new-organization-name">Новая организация</label>
+        <input id="new-organization-name" value={organizationName} maxLength={300}
+          onChange={(event) => { setOrganizationName(event.target.value); setOrganizationPendingKey(""); }}
+          placeholder="Название организации" />
+        <button type="button" disabled={!apiKey || !organizationName.trim() || organizationBusy}
+          onClick={createOrganization}>{organizationBusy ? "Сохраняем…" : "Добавить организацию"}</button>
       </section>
 
       <section className="panel" aria-label="Единый блок каналов связи">
