@@ -1,6 +1,6 @@
-from __future__ import annotations
-
 """Canonical support-case input contract; persistence is owned by the future support-case store."""
+
+from __future__ import annotations
 
 import re
 from dataclasses import dataclass
