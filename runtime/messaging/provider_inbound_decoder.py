@@ -146,6 +146,7 @@ _PROVIDER_PATHS: dict[str, dict[str, tuple[FieldPath, ...]]] = {
             ("message", "body", "command"),
         ),
         "message_id": (
+            ("callback", "callback_id"),
             ("message", "body", "mid"),
             ("message", "body", "message_id"),
             ("update_id",),
