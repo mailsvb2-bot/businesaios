@@ -155,10 +155,11 @@ class ProviderInboundWebhookService:
             )
             message_result = {'message_id': recorded.message_id}
         inbound_result = self.inbound_processor.process(handoff=handoff) if decision.accepted and self.inbound_processor is not None and handoff else {}
-        if decision.accepted and (not handoff or inbound_result):
+        inbound_processed = inbound_result.get('accepted') is True
+        if decision.accepted and (not handoff or inbound_processed):
             self.complete(provider=provider, tenant_id=tenant_id, business_id=business_id, event_key=event_key, payload_digest=payload_digest, owner_id=decision.owner_id, topic=topic)
         ack_required = provider.provider_key == 'vk_messaging' and str(topic or '') == 'message_event'
-        ack_eligible = bool(handoff) and (bool(inbound_result) or decision.resolution == 'replay_completed')
+        ack_eligible = bool(handoff) and (inbound_processed or decision.resolution == 'replay_completed')
         if ack_required and not ack_eligible:
             provider_ack = {'required': True, 'ok': False, 'reason': 'inbound_processing_incomplete'}
         elif ack_required and self.operational_responder is None:
@@ -186,7 +187,7 @@ class ProviderInboundWebhookService:
         provider_ack = dict(metadata.get('provider_ack') or {})
         if provider_ack.get('required') and not provider_ack.get('ok'):
             return False
-        return not metadata.get('messaging_handoff') or bool(metadata.get('messaging_inbound_result')) or dict(metadata.get('decision') or {}).get('resolution') == 'replay_completed'
+        return not metadata.get('messaging_handoff') or dict(metadata.get('messaging_inbound_result') or {}).get('accepted') is True or dict(metadata.get('decision') or {}).get('resolution') == 'replay_completed'
 
     def complete(
         self,
