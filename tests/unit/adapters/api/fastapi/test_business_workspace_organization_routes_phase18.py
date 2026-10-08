@@ -1,12 +1,20 @@
 from __future__ import annotations
 
 import asyncio
-from types import SimpleNamespace
+from dataclasses import dataclass
 
 import pytest
 from fastapi import APIRouter, HTTPException
 
 from adapters.api.fastapi import business_workspace_organization_routes as routes
+
+
+@dataclass
+class _Organization:
+    organization_id: str
+    tenant_id: str
+    business_id: str
+    name: str
 
 
 class _Request:
@@ -30,7 +38,7 @@ def test_organization_create_list_retry_and_business_isolation(monkeypatch) -> N
             current = created.get(scope)
             if current is not None and current.name != kwargs["name"]:
                 raise ValueError("organization already exists with different identity metadata")
-            item = current or SimpleNamespace(
+            item = current or _Organization(
                 organization_id=kwargs["organization_id"], tenant_id=kwargs["tenant_id"],
                 business_id=kwargs["business_id"], name=kwargs["name"],
             )
