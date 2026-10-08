@@ -496,16 +496,19 @@
     },
     {
       "id": "messenger.canonical_navigation_parity",
-      "status": "mapped",
-      "canonical_owner": "core.ux.callbacks + canonical messaging inbound/provider bridge",
-      "source_of_truth": "stable canonical callback tokens and one inbound decision path; MAX button navigation remains unproven",
+      "status": "implemented",
+      "canonical_owner": "core.ux.callbacks + canonical multichannel native provider bridge",
+      "source_of_truth": "stable canonical callback tokens translated to provider-native buttons and decoded back through the single inbound decision path",
       "evidence": [
         "core/ux/callbacks.py",
-        "interfaces/telegram/routing/callback_router.py",
-        "docs/migrations/unified_multimessenger_telegram_vk_max_matrix.md",
-        "tests/unit/application/test_multichannel_provider_parity_contract.py"
+        "runtime/messaging/bootstrap.py",
+        "runtime/business_autonomy/provider_payload_normalizers.py",
+        "runtime/business_autonomy/provider_vendor_transports.py",
+        "runtime/messaging/provider_inbound_decoder.py",
+        "tests/business_critical/test_vk_max_messaging_parity.py",
+        "tests/lock/test_multimessenger_runtime_contract.py"
       ],
-      "runtime_dependency_removed": false
+      "runtime_dependency_removed": true
     }
   ]
 }
