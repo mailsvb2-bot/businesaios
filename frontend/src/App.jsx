@@ -1147,6 +1147,7 @@ function Workspace({ data, apiBase, businesses, onRestart, onRetryAccess, onSwit
           {messagingChannels.map((item) => <article className="capability-card" key={item.channel}>
             <div className="capability-card-head"><strong>{item.channel}</strong><span className={`status-pill ${item.connected ? "ready" : "roadmap"}`}>{item.connected ? "Подключено" : "Не подключено"}</span></div>
             <small>{[item.capabilities?.buttons && "Кнопки", item.capabilities?.attachments && "Вложения", item.capabilities?.html && "HTML"].filter(Boolean).join(" · ") || "Текстовые сообщения"}</small>
+            {item.provider_key && (item.connectable || item.connected) ? <button type="button" className="ghost small" onClick={() => openCapabilityProvider(item.provider_key)}>{item.connected ? "Настроить канал" : "Подключить канал"}</button> : <small className="helper-text">Настройка через кабинет пока недоступна</small>}
           </article>)}
         </div>
       </section>
