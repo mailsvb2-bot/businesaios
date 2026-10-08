@@ -18,6 +18,8 @@ class ProviderWebhookInboundProcessor:
         payload = dict(handoff or {}).get("inbound_message") or {}
         if not isinstance(payload, Mapping) or not payload:
             return {}
+        if any(not isinstance(payload.get(key), str) or not payload[key].strip() for key in ('tenant_id', 'channel', 'user_id', 'text')):
+            return {'accepted': False, 'reason': 'invalid_inbound_identity_or_text'}
         gateway = MessagingInboundDecisionGateway(
             decision_core=self.decision_core,
             caller='runtime.business_autonomy.provider_webhook_inbound_processor',
@@ -30,7 +32,7 @@ class ProviderWebhookInboundProcessor:
             correlation_id=str(payload.get('correlation_id') or ''),
             transport_message_id=str(payload.get('transport_message_id') or ''),
             external_user_ref=str(payload.get('external_user_ref') or payload.get('user_id') or ''),
-            metadata={'source': 'provider_webhook_handoff', 'chat_id': str(payload.get('chat_id') or ''), **dict(payload.get('metadata') or {})},
+            metadata={**dict(payload.get('metadata') or {}), 'source': 'provider_webhook_handoff', 'chat_id': str(payload.get('chat_id') or '')},
         )
         # Provider webhook handoff must not issue decisions directly. The
         # inbound gateway owns the canonical bridge to DecisionCore.
