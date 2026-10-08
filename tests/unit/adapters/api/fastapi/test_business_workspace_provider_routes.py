@@ -520,3 +520,31 @@ def test_sales_ai_owner_analysis_surfaces_revoked_consent_and_provider_failure(m
     assert result['error'] == 'missing_api_key'
     assert result['advisory_only'] is True
     assert result['execution_allowed'] is False
+
+
+def test_sales_ai_unconfigured_disable_enforces_optimistic_revision(monkeypatch) -> None:
+    store = InMemorySalesAIConsentStore()
+    router = APIRouter()
+    workspace.register_business_workspace_provider_routes(
+        router=router, auth_bundle=object(), provider_admin_handlers=_Handlers(),
+        sales_ai_consent_store=store,
+    )
+    _authenticate_as(monkeypatch, _principal())
+    post = _path_route(router, '/business-workspace/sales-ai', 'POST')
+
+    for expected, expected_status in ((True, 422), ("1", 422), (1, 409)):
+        async def invalid(_request, revision=expected):
+            return {'enabled': False, 'expected_revision': revision}
+        monkeypatch.setattr(workspace, 'json_body', invalid)
+        with pytest.raises(HTTPException) as error:
+            asyncio.run(post(object()))
+        assert error.value.status_code == expected_status
+        assert store.get(tenant_id='tenant-session', business_id='business-session') is None
+
+    async def valid(_request):
+        return {'enabled': False, 'expected_revision': 0}
+    monkeypatch.setattr(workspace, 'json_body', valid)
+    result = asyncio.run(post(object()))
+    assert result['configured'] is False
+    assert result['enabled'] is False
+    assert result['revision'] == 0
