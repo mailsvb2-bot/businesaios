@@ -11,6 +11,7 @@ from adapters.api.fastapi.business_workspace_decision_routes import register_bus
 from adapters.api.fastapi.business_workspace_discovery_routes import register_business_workspace_discovery_routes
 from adapters.api.fastapi.business_workspace_event_landing_routes import register_business_workspace_event_landing_routes
 from adapters.api.fastapi.business_workspace_process_routes import register_business_workspace_process_routes
+from adapters.api.fastapi.business_workspace_organization_routes import register_business_workspace_organization_routes
 from adapters.api.fastapi.business_workspace_provider_routes import register_business_workspace_provider_routes
 from adapters.api.fastapi.public_client_outcome_routes import register_public_client_outcome_routes
 from adapters.api.fastapi.public_core_routes import register_public_core_routes
@@ -191,6 +192,12 @@ def register_public_api_routes(
                 router=router,
                 auth_bundle=auth_bundle,
                 workspace=business_discovery_workspace,
+            )
+        if event_landing_registry is not None:
+            register_business_workspace_organization_routes(
+                router=router, auth_bundle=auth_bundle,
+                event_store=event_store,
+                idempotency_store=dependency_container.api_idempotency_store,
             )
         register_business_workspace_provider_routes(router=router, auth_bundle=auth_bundle)
         if event_landing_registry is not None:
