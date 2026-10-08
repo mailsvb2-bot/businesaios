@@ -35,6 +35,12 @@ class ProviderWebhookInboundProcessor:
         # Provider webhook handoff must not issue decisions directly. The
         # inbound gateway owns the canonical bridge to DecisionCore.
         envelope = process_inbound_gateway_message(gateway=gateway, message=message)
+        if envelope is None or envelope is False or (
+            isinstance(envelope, Mapping) and (
+                not envelope or envelope.get('accepted') is False or envelope.get('ok') is False
+            )
+        ):
+            return {'accepted': False, 'decision_envelope': envelope}
         return {
             'accepted': True,
             'decision_envelope': envelope,
