@@ -4,7 +4,8 @@ from __future__ import annotations
 
 from dataclasses import asdict
 from uuid import NAMESPACE_URL, uuid5
-from fastapi import APIRouter, HTTPException, Request, status
+
+from fastapi import APIRouter, HTTPException, Request
 
 from adapters.api.fastapi.router_support import business_owner_scope, json_body
 from application.organization.projector import OrganizationProjector
