@@ -102,6 +102,123 @@ test(canonicalScenario.title, async ({ page }, testInfo) => {
   const workspace = await workspaceResponse.json();
   expect(workspace.scope_source).toBe("authenticated_owner_session");
   expect(workspace.write_actions_enabled).toBe(false);
+  expect(workspace.channel_catalog_source).toBe("contracts.messaging_channels.ALL_CHANNELS");
+  expect(Array.isArray(workspace.channels)).toBe(true);
+  expect(workspace.channels).toHaveLength(16);
+  const communicationPanel = page.getByRole("region", { name: "Единый блок каналов связи" });
+  await expect(communicationPanel.getByRole("heading", { name: "Каналы общения" })).toBeVisible();
+  const channelCards = communicationPanel.locator("article.capability-card");
+  await expect(channelCards).toHaveCount(workspace.channels.length);
+  for (const channel of workspace.channels) {
+    const card = channelCards.filter({ has: page.locator("strong", { hasText: new RegExp(`^${channel.channel}import { expect, test } from "@playwright/test";
+import fs from "node:fs";
+
+const proofContract = JSON.parse(fs.readFileSync(new URL("./project-matrix.json", import.meta.url), "utf8"));
+const canonicalScenario = proofContract.scenarios?.find((item) => item?.id === "onboarding_owner_workspace");
+if (!canonicalScenario?.title || canonicalScenario.file !== "onboarding-workspace.spec.js") {
+  throw new Error("invalid canonical onboarding browser scenario contract");
+}
+
+function projectIdentity(projectName) {
+  const slug = String(projectName || "browser").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
+  return {
+    businessName: `Canonical Browser E2E ${projectName}`,
+    email: `browser-e2e+${slug}@example.test`
+  };
+}
+
+async function persistentBrowserStateContains(page, secret) {
+  const webStorageContains = await page.evaluate((needle) => {
+    const values = [];
+    for (const storage of [localStorage, sessionStorage]) {
+      for (let index = 0; index < storage.length; index += 1) {
+        const key = storage.key(index);
+        values.push(key, storage.getItem(key));
+      }
+    }
+    return values.some((value) => String(value || "").includes(needle));
+  }, secret);
+  const cookieContains = (await page.context().cookies()).some((cookie) => String(cookie.value || "").includes(secret));
+  const indexedDbCreated = await page.evaluate(async () => (await indexedDB.databases()).length > 0);
+  return webStorageContains || cookieContains || indexedDbCreated;
+}
+
+async function hasNoHorizontalOverflow(page) {
+  return page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth + 1);
+}
+
+async function answerNextDiscoveryQuestion(page, discovery) {
+  const next = (Array.isArray(discovery?.fields) ? discovery.fields : []).find((field) => !field?.covered);
+  if (!next) return null;
+  const panel = page.locator(`[data-discovery-field-key="${next.key}"]`);
+  await expect(panel).toBeVisible();
+
+  if (next.value_kind === "money_minor") {
+    await panel.getByLabel("Сумма в минимальных единицах").fill("125000");
+    await panel.getByLabel("Валюта").fill("RUB");
+  } else if (next.value_kind === "percentage") {
+    await panel.locator('input[inputmode="decimal"]').fill("32.5");
+  } else if (next.value_kind === "client_presence") {
+    await panel.locator("select").selectOption("yes");
+  } else {
+    await panel.locator("input").first().fill(`Browser discovery ${next.key}`);
+  }
+
+  const assertionPromise = page.waitForResponse((response) =>
+    response.url().includes("/api/business-workspace/discovery/assertions")
+      && response.request().method() === "POST");
+  await panel.getByRole("button", { name: "Сохранить ответ" }).click();
+  const assertionResponse = await assertionPromise;
+  expect(assertionResponse.status()).toBe(200);
+  return { fieldKey: next.key, payload: await assertionResponse.json() };
+}
+
+test(canonicalScenario.title, async ({ page }, testInfo) => {
+  const { businessName, email } = projectIdentity(testInfo.project.name);
+  await page.goto("/");
+  await expect(page.getByRole("heading", { name: /Подключите бизнес/ })).toBeVisible();
+  expect(await hasNoHorizontalOverflow(page)).toBe(true);
+
+  await page.getByLabel("Название бизнеса").fill(businessName);
+  await page.getByLabel("Email владельца").fill(email);
+  await page.getByLabel("Сфера").fill("services");
+  await page.getByLabel("Город").fill("Amsterdam");
+  await page.getByRole("button", { name: /Продолжить/ }).click();
+
+  await page.getByRole("button", { name: /Больше клиентов/ }).click();
+  await page.getByRole("button", { name: /Продолжить/ }).click();
+
+  const integration = page.locator("button.integration-card:not([disabled])").first();
+  await expect(integration).toBeVisible();
+  const providerTitle = (await integration.locator("strong").innerText()).trim();
+  await integration.click();
+  await expect(page.getByText("Выбрано ✓").first()).toBeVisible();
+  await page.getByRole("button", { name: /Продолжить/ }).click();
+
+  await page.getByRole("button", { name: /Советник/ }).click();
+  const ctaResponsePromise = page.waitForResponse((response) => response.url().includes("/api/public-site/cta/start") && response.request().method() === "POST");
+  const workspaceResponsePromise = page.waitForResponse((response) => response.url().includes("/api/business-workspace/providers") && response.request().method() === "GET");
+  const discoveryResponsePromise = page.waitForResponse((response) => response.url().includes("/api/business-workspace/discovery") && response.request().method() === "GET");
+  await page.getByRole("button", { name: /Создать мой BusinessAIOS/ }).click();
+
+  const ctaResponse = await ctaResponsePromise;
+  expect(ctaResponse.status()).toBe(200);
+  const cta = await ctaResponse.json();
+  const ownerKey = cta?.owner_session?.api_key;
+  expect(Boolean(typeof ownerKey === "string" && ownerKey.includes("."))).toBe(true);
+  expect(cta.write_actions_enabled).toBe(false);
+  expect(cta.approval_required_before_execution).toBe(true);
+
+  const workspaceResponse = await workspaceResponsePromise;
+  expect(workspaceResponse.status()).toBe(200);
+  const workspace = await workspaceResponse.json();
+  expect(workspace.scope_source).toBe("authenticated_owner_session");
+) }) });
+    await expect(card).toHaveCount(1);
+    await expect(card.getByText(channel.connected ? "Подключено" : "Не подключено", { exact: true })).toBeVisible();
+    const canOpen = Boolean(channel.provider_key && (channel.connectable || channel.connected));
+    await expect(card.getByRole("button")).toHaveCount(canOpen ? 1 : 0);
+  }
 
   const discoveryResponse = await discoveryResponsePromise;
   expect(discoveryResponse.status()).toBe(200);
