@@ -175,3 +175,69 @@ def test_native_vk_adapter_carries_canonical_markup_into_approved_provider_subje
         "decision_id": "dec-1",
         "execution_id": "dec-1",
     }
+
+
+def test_max_canonical_inline_keyboard_round_trips_callback_token() -> None:
+    provider = provider_map()["max_messaging"]
+    canonical = {
+        "inline_keyboard": [
+            [{"text": "Open", "callback_data": "menu:open"}],
+            [{"text": "Site", "url": "https://example.com"}],
+        ]
+    }
+    normalized = ProviderPayloadNormalizers().normalize_outbound(
+        provider=provider,
+        operation="message_send",
+        payload={"user_id": "778899", "text": "choose", "reply_markup": canonical},
+    )
+    assert normalized["attachments"] == [
+        {
+            "type": "inline_keyboard",
+            "payload": {
+                "buttons": [
+                    [{"type": "callback", "text": "Open", "payload": "menu:open"}],
+                    [{"type": "link", "text": "Site", "url": "https://example.com"}],
+                ]
+            },
+        }
+    ]
+
+    from runtime.business_autonomy.provider_vendor_transports import build_provider_vendor_transports
+
+    request = build_provider_vendor_transports()["max_messaging"].execute(
+        provider=provider,
+        tenant_id="tenant-a",
+        business_id="business-a",
+        operation="message_send",
+        payload=normalized,
+    )["request"]
+    assert request["url_template"] == "https://platform-api2.max.ru/messages?user_id=778899"
+    assert request["json_body"]["attachments"] == normalized["attachments"]
+
+    callback_payload = {
+        "update_type": "message_callback",
+        "timestamp": 1787259600000,
+        "user": {"user_id": 778899},
+        "callback": {"callback_id": "max-callback-roundtrip", "payload": "menu:open"},
+    }
+    decoded = decode_provider_inbound(channel="max", payload=callback_payload)
+    assert decoded["text"] == "menu:open"
+    assert decoded["message_id"] == "max-callback-roundtrip"
+
+
+def test_max_keyboard_fails_closed_when_provider_row_capacity_is_exceeded() -> None:
+    provider = provider_map()["max_messaging"]
+    too_many = [
+        {"text": f"B{index}", "callback_data": f"cmd:{index}"}
+        for index in range(8)
+    ]
+    with pytest.raises(ValueError, match="button capacity"):
+        ProviderPayloadNormalizers().normalize_outbound(
+            provider=provider,
+            operation="message_send",
+            payload={
+                "user_id": "778899",
+                "text": "choose",
+                "reply_markup": {"inline_keyboard": [too_many]},
+            },
+        )
