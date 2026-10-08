@@ -38,3 +38,29 @@ def test_provider_webhook_inbound_processor_issues_canonical_message_decision(mo
     assert out['decision_envelope']['decision_id'] == 'd1'
     assert calls['caller'] == 'runtime.business_autonomy.provider_webhook_inbound_processor'
     assert calls['message'].channel == 'telegram'
+
+
+def test_provider_webhook_inbound_processor_rejects_missing_and_failed_gateway_decisions(monkeypatch):
+    for envelope in (None, False, {}, {'accepted': False}, {'ok': False}):
+        class _Gateway:
+            def __init__(self, *, decision_core, caller):
+                pass
+
+            def process(self, *, message):
+                return envelope
+
+        monkeypatch.setattr(
+            'runtime.business_autonomy.provider_webhook_inbound_processor.MessagingInboundDecisionGateway',
+            _Gateway,
+        )
+        result = ProviderWebhookInboundProcessor(decision_core=_Core()).process(
+            handoff={
+                'inbound_message': {
+                    'tenant_id': 't1', 'channel': 'telegram',
+                    'user_id': 'u1', 'text': 'hello',
+                    'correlation_id': 'c1', 'transport_message_id': 'm1',
+                },
+            },
+        )
+        assert result['accepted'] is False
+        assert result['decision_envelope'] == envelope
