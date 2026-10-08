@@ -128,6 +128,17 @@ def register_business_workspace_provider_routes(
             )
         current = consent_store.read_fresh(tenant_id=tenant_id, business_id=business_id)
         if not enabled and current is None:
+            expected = body.get('expected_revision')
+            if expected is not None and (isinstance(expected, bool) or not isinstance(expected, int)):
+                raise HTTPException(
+                    status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                    detail='sales_ai_expected_revision_must_be_integer',
+                )
+            if expected not in (None, 0):
+                raise HTTPException(
+                    status_code=status.HTTP_409_CONFLICT,
+                    detail='sales_ai_settings_concurrent_update',
+                )
             return _sales_ai_settings_payload(
                 tenant_id=tenant_id,
                 business_id=business_id,
