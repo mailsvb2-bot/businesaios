@@ -610,8 +610,14 @@ def test_owner_workspace_uses_canonical_channel_catalog_not_a_three_channel_fork
     channels = {row['channel']: row for row in result['channels']}
     assert tuple(channels) == ALL_CHANNELS
     assert channels['telegram']['connected'] is True
+    assert channels['telegram']['provider_key'] == 'telegram_bot'
     assert channels['vk']['connected'] is False
+    assert channels['vk']['provider_key'] == 'vk_messaging'
     assert channels['max']['connected'] is False
+    assert channels['max']['provider_key'] is None
+    assert channels['max']['connectable'] is False
+    assert channels['wechat']['provider_key'] is None
+    assert channels['wechat']['connectable'] is False
     assert channels['telegram']['capabilities']['buttons'] is True
     assert channels['sms']['capabilities']['attachments'] is False
     assert result['channel_catalog_source'] == 'contracts.messaging_channels.ALL_CHANNELS'
