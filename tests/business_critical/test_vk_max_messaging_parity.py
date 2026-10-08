@@ -307,3 +307,31 @@ def test_provider_ingress_rejects_non_finite_timestamps_without_losing_event(uns
         assert str(decoded["message_id"]) == expected_id
         assert decoded["text"] == "hello"
         assert decoded["timestamp_ms"] == 0
+
+
+@pytest.mark.parametrize("actor_location", ["top_level", "callback"])
+def test_max_callback_clicking_user_not_original_message_sender(actor_location: str) -> None:
+    payload = {
+        "update_type": "message_callback",
+        "timestamp": 1787259600000,
+        "message": {
+            "body": {"mid": "original-bot-message", "text": "Menu"},
+            "sender": {"user_id": 999999},
+        },
+        "callback": {"callback_id": "click-123", "payload": "menu:open"},
+    }
+    if actor_location == "top_level":
+        payload["user"] = {"user_id": 778899}
+    else:
+        payload["callback"]["user"] = {"user_id": 778899}
+    decoded = decode_provider_inbound(channel="max", payload=payload)
+    assert decoded["user_id"] == "778899"
+    assert decoded["message_id"] == "click-123"
+    assert decoded["text"] == "menu:open"
+
+    route = ProviderWebhookRouteRegistry().extract(
+        provider_map()["max_messaging"], {}, json.dumps(payload).encode()
+    )
+    assert route["event_key"] == "click-123"
+    assert route["messaging_ingress"]["user_id"] == "778899"
+    assert route["messaging_ingress"]["text"] == "menu:open"
