@@ -366,6 +366,8 @@ def decode_provider_inbound(
         return _scalar_text(field_value(name))
 
     user_id = field_text("user_id")
+    if canonical == "vk" and raw.get("type") == "message_event":
+        user_id = _scalar_text(_path_value(raw, ("object", "user_id"))) or user_id
     if canonical == "max" and raw.get("update_type") == "message_callback":
         user_id = (
             _scalar_text(_path_value(raw, ("user", "user_id")))
