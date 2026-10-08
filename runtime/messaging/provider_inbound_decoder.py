@@ -387,7 +387,9 @@ def decode_provider_inbound(
         "channel": canonical,
         "user_id": user_id,
         "chat_id": chat_id,
-        "text": field_text("text"),
+        "text": (_scalar_text(_path_value(raw, ("callback", "payload"))) or field_text("text"))
+        if canonical == "max" and raw.get("update_type") == "message_callback"
+        else field_text("text"),
         "message_id": message_id,
         "external_user_ref": user_id or chat_id,
         "timestamp_ms": _timestamp_from_payload(raw, paths.get("timestamp", ())),
