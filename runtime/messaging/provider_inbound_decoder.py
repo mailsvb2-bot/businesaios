@@ -11,6 +11,7 @@ from __future__ import annotations
 from collections import deque
 from collections.abc import Mapping, Sequence
 from datetime import UTC, datetime
+from math import isfinite
 from typing import Any
 
 from contracts.messaging_event_identity import stable_transport_message_id
@@ -310,7 +311,7 @@ def _timestamp_ms(value: Any, *, already_ms: bool = False) -> int:
         if parsed.tzinfo is None:
             parsed = parsed.replace(tzinfo=UTC)
         return int(parsed.timestamp() * 1000)
-    if numeric < 0:
+    if not isfinite(numeric) or numeric < 0:
         return 0
     if already_ms:
         return int(numeric)
