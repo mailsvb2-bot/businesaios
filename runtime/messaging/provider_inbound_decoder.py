@@ -366,6 +366,12 @@ def decode_provider_inbound(
         return _scalar_text(field_value(name))
 
     user_id = field_text("user_id")
+    if canonical == "max" and raw.get("update_type") == "message_callback":
+        user_id = (
+            _scalar_text(_path_value(raw, ("user", "user_id")))
+            or _scalar_text(_path_value(raw, ("callback", "user", "user_id")))
+            or user_id
+        )
     chat_id = field_text("chat_id")
     if not user_id:
         user_id = chat_id
