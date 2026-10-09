@@ -46,6 +46,13 @@
       "file": "event-landing-journey.spec.js",
       "proof_mode": "source_locked_execution",
       "source_sha256": "2fb2c300a87b538e3f6bf646fe51d76850c0f82949b8777eddfc9c0f839f61f4"
+    },
+    {
+      "id": "support_operator_claim_resolve",
+      "title": "support console rejects owner credentials and processes bounded cases without key persistence",
+      "file": "support-operator-journey.spec.js",
+      "proof_mode": "source_locked_execution",
+      "source_sha256": "a5a3d5383f817e64de3a0ba20006306f6baba55518a0e76791b97ab93994493b"
     }
   ]
 }
