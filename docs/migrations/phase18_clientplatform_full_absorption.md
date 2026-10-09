@@ -6,7 +6,7 @@ Phase 18 is a product/runtime migration, not a namespace copy.
 
 BusinessAIOS is the only target product. ClientPlatform is donor evidence only. A slice is not complete until its user-visible behavior is reproduced through an existing BusinessAIOS canonical owner, migration/recovery is proven where state exists, production cutover is complete, duplicate donor runtime is frozen/removed, and the BusinessAIOS path no longer depends on ClientPlatform at runtime.
 
-The machine-readable inventory is `config/phase18_clientplatform_absorption_manifest.json`. It pins the inspected donor baseline and carries the donor capability floor into BusinessAIOS without making that donor manifest a source of truth.
+The completion gate evaluates **all** inventoried slices, including extensions beyond the initial 20-item donor floor. The machine-readable inventory is `config/phase18_clientplatform_absorption_manifest.json`. It pins the inspected donor baseline and carries the donor capability floor into BusinessAIOS without making that donor manifest a source of truth.
 
 ## Already mapped before this change
 
@@ -17,17 +17,17 @@ The machine-readable inventory is `config/phase18_clientplatform_absorption_mani
 
 ## Event landing — granular status
 
-ClientPlatform's 2026-10-05 event landing release was reviewed as donor evidence. Only the presentation contract is currently implemented in BusinessAIOS:
+ClientPlatform's 2026-10-05 event landing release was reviewed as donor evidence. The following code paths are now implemented in BusinessAIOS (without claiming production parity):
 
-- deterministic safe landing content from event/business facts;
-- bounded hero/audience/outcomes/agenda/speaker/FAQ/CTA schema;
-- calm/bold/minimal presentation theme;
-- explicit data minimization for later AI drafting;
-- registration/customer/provider secrets are excluded from landing content.
+- deterministic bounded landing content from event/business facts (hero/audience/outcomes/agenda/speaker/FAQ/CTA, calm/bold/minimal themes);
+- canonical Event Store-backed draft create/save and revision-checked publish/unpublish via the existing EventFactLifecycleWriter and idempotency owner;
+- authenticated owner UI in `frontend/src/EventLandingWorkspace.jsx`, with editing, server-confirmed operations, revision conflicts and draft preview;
+- independent public participant rendering in `frontend/src/PublicEventLanding.jsx`, requesting **published content only** without owner credentials or browser-persisted session;
+- explicit data minimization for later AI drafting; registration, customer and provider secrets are excluded from landing content.
 
-These semantics are represented by `contracts.landing_page.EventLandingContent` and `application.public_site.landing_content`.
+Code contracts: `contracts.landing_page.EventLandingContent`, `application.public_site.landing_content`, `application.public_site.event_landing_registry.EventLandingRegistry`.
 
-The broader donor lifecycle is **not** marked implemented. Draft persistence, revision ordering, preview, publish/unpublish and owner-facing workflow remain inventory until they are wired through existing BusinessAIOS Event/Artifact/Task/Execution owners and proved end-to-end.
+**Still not production-parity proven:** real browser journey against an actually deployed environment, registration/payment activation, donor data migration and shutdown/rollback evidence. The manifest therefore retains `implemented`, not `parity_proven` or `decommissioned`.
 
 ## Event promotion — granular status
 
