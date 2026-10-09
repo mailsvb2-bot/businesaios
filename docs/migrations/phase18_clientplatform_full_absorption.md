@@ -78,6 +78,51 @@ Code: `application.business_autonomy.support_case_registry`,
 `tests/unit/application/test_phase18_support_case_registry.py` and
 `tests/unit/adapters/api/fastapi/test_support_case_routes_phase18.py`.
 
+### Support operator browser journey and access issuance
+
+The original Phase-18 support API had no operator browser UI, so a
+real operator could not claim/resolve a case by clicking through the product.
+The bounded operator console now lives in the same BusinessAIOS frontend at
+`?support_console=1` (not in owner onboarding). It authenticates against
+`GET /platform-support/session`, which returns only the authenticated tenant,
+business and operator identity after checking `SUPPORT` and explicit
+`support_case_manage` scope. It never accepts a caller-supplied tenant or
+business selector. Operators can list that business's cases and claim,
+release or resolve using revision-checked, idempotent HTTP operations.
+Confirmed mutation receipts remain visible if a later queue refresh fails.
+The operator credential is held in React memory only: no browser storage,
+query-string credentials, owner-session reuse, or support impersonation.
+
+A local administrator, **not** any public endpoint, can provision the
+existing canonical persistent API key owner with a short-lived business-bound
+SUPPORT key. After setting the same
+`BUSINESAIOS_API_KEY_STORE_PATH` and
+`API_CONTROL_PLANE_API_KEY_PEPPER` used by the API process, run from a
+trusted interactive terminal:
+
+```bash
+python -m scripts.support.issue_case_operator_access issue --tenant TENANT_ID --business BUSINESS_ID --operator OPERATOR_ID --ttl-seconds 3600
+```
+
+For immediate revocation, run the same module with
+`revoke --key-id KEY_ID`. Both commands require an interactive confirmation
+and the canonical persistent key store; keys must never be committed,
+emailed or printed into CI logs. A browser logout drops its in-memory copy,
+but server-side access is revoked only by expiry or key revocation.
+
+**Validation levels must not be conflated:**
+- `tests/integration/api/test_phase18_support_full_http_journey.py`
+  exercises real FastAPI HTTP, real persistent API-key authentication,
+  distinct OWNER/SUPPORT roles, scoped queue isolation, claim/resolve,
+  owner visibility and revocation against the canonical memory Event Store.
+  Only the outer security transport adapter is stubbed.
+- `frontend/e2e/support-operator-journey.spec.js` exercises the operator
+  browser UI on the five-browser canonical matrix using explicit network
+  response fixtures. These fixtures are **not** a live deployed provider or
+  persisted PostgreSQL test.
+- Real deployed production and historical donor migration remain separate
+  acceptance gates. This slice remains `mapped` until those pass.
+
 **Not yet complete donor parity:** ClientPlatform's platform-wide case
 directory/queue, audited time-boxed support access sessions, operator console,
 historical state import/migration and live production journey validation.
