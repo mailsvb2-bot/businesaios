@@ -33,11 +33,25 @@ test("event landing owner journey: draft stays private, publish becomes public, 
 
   const panel = page.locator(".event-landing-editor");
   await expect(panel.getByRole("heading", { name: "Страница мероприятия" })).toBeVisible();
+  // The editor must not create document-wide horizontal scrolling on
+  // Mobile Chrome / Mobile Safari (same contract as owner onboarding).
+  const measureHorizontalOverflow = async () => page.evaluate(() => ({
+    viewport: document.documentElement.clientWidth,
+    document: document.documentElement.scrollWidth,
+    offenders: Array.from(document.querySelectorAll("body *")).filter((node) => {
+      const box = node.getBoundingClientRect();
+      return box.width > 0 && box.right > document.documentElement.clientWidth + 1;
+    }).slice(0, 8).map((node) => ({ element: node.tagName, className: typeof node.className === "string" ? node.className : "" }))
+  }));
+  const layoutBefore = await measureHorizontalOverflow();
+  expect(layoutBefore.document, JSON.stringify(layoutBefore)).toBeLessThanOrEqual(layoutBefore.viewport + 1);
   await panel.getByLabel("ID мероприятия").fill(eventId);
   await panel.getByLabel("Название мероприятия *").fill(title);
   await panel.getByLabel("Описание").fill("Описание создаётся в черновике владельца.");
   await panel.getByRole("button", { name: "Создать черновик" }).click();
   await expect(panel.getByText(/Черновик создан/)).toBeVisible();
+  const layoutAfter = await measureHorizontalOverflow();
+  expect(layoutAfter.document, JSON.stringify(layoutAfter)).toBeLessThanOrEqual(layoutAfter.viewport + 1);
   await expect(panel.getByText(/Статус: черновик/)).toBeVisible();
 
   const apiPublicUrl = "/api/public-site/events/" +
