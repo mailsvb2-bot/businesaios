@@ -8,6 +8,10 @@ export function SupportCasesWorkspace({ apiBase, apiKey, getJson, postJson }) {
   const [busy, setBusy] = useState("");
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
+  const [caseHistory, setCaseHistory] = useState(null);
+  const [historyBusy, setHistoryBusy] = useState("");
+  const [historyError, setHistoryError] = useState("");
+  const historyEpoch = useRef(0);
   const pending = useRef(null);
   const url = apiBase.replace(/\/$/, "") + "/business-workspace/support-cases";
   const headers = apiKey ? { "X-API-Key": apiKey } : {};
@@ -21,6 +25,34 @@ export function SupportCasesWorkspace({ apiBase, apiKey, getJson, postJson }) {
     return () => { active = false; };
   }, [url, apiKey, getJson]);
 
+  const toggleHistory = async (item) => {
+    if (!apiKey || busy || historyBusy) return;
+    if (caseHistory?.case_id === item.id) {
+      historyEpoch.current += 1;
+      setCaseHistory(null);
+      setHistoryError("");
+      return;
+    }
+    const epoch = ++historyEpoch.current;
+    setCaseHistory(null);
+    setHistoryBusy(item.id);
+    setHistoryError("");
+    try {
+      const data = await getJson(url + "/" + encodeURIComponent(item.id) + "/history", headers);
+      if (epoch !== historyEpoch.current) return;
+      if (data?.case_id !== item.id || !Array.isArray(data.entries) ||
+          !Number.isInteger(data.revision) || !Number.isInteger(data.total) ||
+          data.total < data.entries.length) {
+        throw new Error("Сервер вернул некорректную историю.");
+      }
+      setCaseHistory(data);
+    } catch (reason) {
+      if (epoch === historyEpoch.current) setHistoryError("Не удалось получить историю: " + (reason.message || "ошибка сети"));
+    } finally {
+      if (epoch === historyEpoch.current) setHistoryBusy("");
+    }
+  };
+
   const refresh = async () => {
     if (busy || !apiKey) return;
     setBusy("refresh");
@@ -28,6 +60,10 @@ export function SupportCasesWorkspace({ apiBase, apiKey, getJson, postJson }) {
     try {
       const payload = await getJson(url, headers);
       setCases(Array.isArray(payload?.cases) ? payload.cases : []);
+      historyEpoch.current += 1;
+      setCaseHistory(null);
+      setHistoryBusy("");
+      setHistoryError("");
       setNotice("Статусы получены из защищённого журнала BusinessAIOS.");
     } catch (reason) {
       setError("Не удалось обновить обращения: " + (reason.message || "ошибка сети"));
@@ -110,6 +146,33 @@ export function SupportCasesWorkspace({ apiBase, apiKey, getJson, postJson }) {
               <strong>{item.category} · {item.status === "open" ? "Открыто" : item.status === "claimed" ? "В работе" : item.status === "resolved" ? "Решено" : "Статус неизвестен"}</strong>
               <p>{item.summary}</p>
               <small>{item.id} · Изменено: {item.updated_at}</small>
+              <div>
+                <button type="button" className="ghost"
+                  disabled={Boolean(busy) || Boolean(historyBusy)}
+                  onClick={() => toggleHistory(item)}>
+                  {historyBusy === item.id ? "Загружаем историю…" :
+                    caseHistory?.case_id === item.id ? "Скрыть историю" : "Показать историю"}
+                </button>
+                {historyError && !historyBusy ? <p role="alert">{historyError}</p> : null}
+                {caseHistory?.case_id === item.id ? (
+                  <div aria-label={"История обращения " + item.id}>
+                    <p className="muted-text">Подтверждено событий: {caseHistory.total}
+                      {caseHistory.truncated ? " · Показаны последние " + caseHistory.entries.length : ""}
+                    </p>
+                    <ol>
+                      {caseHistory.entries.map((event) => (
+                        <li key={event.revision}>
+                          {event.action === "created" ? "Создано" :
+                            event.action === "claimed" ? "Взято в работу" :
+                            event.action === "released" ? "Возвращено в очередь" :
+                            event.action === "resolved" ? "Решено" : "Действие неизвестно"}
+                          {" · "}{event.occurred_at}
+                        </li>
+                      ))}
+                    </ol>
+                  </div>
+                ) : null}
+              </div>
             </li>
           ))}
         </ul>
