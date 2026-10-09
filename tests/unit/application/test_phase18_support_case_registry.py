@@ -89,3 +89,44 @@ def test_support_different_tenants_reusing_client_operation_keys_are_isolated():
     assert len({first["id"], second["id"], third["id"]}) == 3
     assert len(events) == 3
     assert len(registry.list(tenant_id="tenant-a", business_id="business-a")) == 1
+    # Both businesses can independently claim their cases with exactly the
+    # same client-generated key, using the same tenant-wide canonical store.
+    first_claimed = registry.transition(
+        tenant_id="tenant-a", business_id="business-a", case_id=first["id"],
+        operator_id="shared-support-agent", action="claim",
+        expected_revision=first["revision"], idempotency_key="claim-1",
+    )
+    third_claimed = registry.transition(
+        tenant_id="tenant-a", business_id="business-b", case_id=third["id"],
+        operator_id="shared-support-agent", action="claim",
+        expected_revision=third["revision"], idempotency_key="claim-1",
+    )
+    assert first_claimed["status"] == third_claimed["status"] == "claimed"
+    assert first_claimed["id"] != third_claimed["id"]
+    assert len(events) == 5
+    # Replay is scoped to the individual case and remains exactly-once.
+    assert registry.transition(
+        tenant_id="tenant-a", business_id="business-b", case_id=third["id"],
+        operator_id="shared-support-agent", action="claim",
+        expected_revision=third["revision"], idempotency_key="claim-1",
+    ) == third_claimed
+    assert len(events) == 5
+    with pytest.raises(RuntimeError, match="idempotency_conflict"):
+        registry.transition(
+            tenant_id="tenant-a", business_id="business-b", case_id=third["id"],
+            operator_id="shared-support-agent", action="claim",
+            expected_revision=third["revision"] + 1, idempotency_key="claim-1",
+        )
+    assert len(events) == 5
+
+
+
+def test_support_owner_reusing_request_key_is_scoped_to_actor_within_business():
+    events, claims, registry = _store()
+    first = _create(registry, actor_id="owner-one")
+    second = _create(registry, actor_id="owner-two")
+    assert first["id"] != second["id"]
+    assert first["created_by_member_id"] == "owner-one"
+    assert second["created_by_member_id"] == "owner-two"
+    assert len(events) == 2
+    assert len(registry.list(tenant_id="tenant-a", business_id="business-a")) == 2
