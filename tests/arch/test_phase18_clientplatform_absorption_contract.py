@@ -49,20 +49,28 @@ def _validate(data: dict) -> list[str]:
 
 
 def _complete(data: dict) -> bool:
-    required = set(data.get("required_donor_capabilities", ()))
-    by_id = {item["id"]: item for item in data.get("slices", ())}
-    return bool(required) and all(
-        by_id.get(capability, {}).get("status") in TERMINAL
-        and by_id.get(capability, {}).get("runtime_dependency_removed") is True
-        and bool(by_id.get(capability, {}).get("evidence"))
-        for capability in required
+    # The original 20 donor capabilities are a FLOOR, not the full product.
+    # Every newly inventoried user-visible extension must also be resolved
+    # before ClientPlatform can be shut down without capability loss.
+    slices = tuple(data.get("slices", ()))
+    return bool(data.get("required_donor_capabilities")) and bool(slices) and not _validate(data) and all(
+        item.get("status") in TERMINAL
+        and item.get("runtime_dependency_removed") is True
+        and bool(item.get("evidence"))
+        for item in slices
     )
 
 
 def test_phase18_absorption_manifest_is_valid_but_not_falsely_complete() -> None:
     data = _manifest()
     assert not _validate(data)
-    assert _complete(data) is False
+    unresolved = any(
+        item.get("status") not in TERMINAL
+        or item.get("runtime_dependency_removed") is not True
+        or not item.get("evidence")
+        for item in data["slices"]
+    )
+    assert _complete(data) is (not unresolved)
 
 
 def test_businessaios_runtime_has_no_clientplatform_import_dependency() -> None:
@@ -111,3 +119,37 @@ def test_phase18_does_not_create_donor_named_python_runtime_surfaces() -> None:
             if "clientplatform" in path.relative_to(ROOT).as_posix().casefold()
         )
     assert not offenders, "\n".join(offenders)
+
+
+
+def test_phase18_completion_includes_new_user_visible_extension_slices() -> None:
+    original = _manifest()
+    donor_floor = set(original["required_donor_capabilities"])
+    extensions = [item["id"] for item in original["slices"] if item["id"] not in donor_floor]
+    assert extensions, "phase18 needs to account for donor features discovered after the baseline"
+    # Construct an otherwise valid, fully migrated manifest; do not confuse
+    # synthetic contract validation with real production-cutover evidence.
+    ready = {
+        **original,
+        "slices": [
+            {
+                **item,
+                "status": "decommissioned",
+                "canonical_owner": item.get("canonical_owner") or "canonical.owner",
+                "source_of_truth": item.get("source_of_truth") or "canonical Event Store",
+                "evidence": ["synthetic-test-evidence"],
+                "runtime_dependency_removed": True,
+            }
+            for item in original["slices"]
+        ],
+    }
+    assert not _validate(ready)
+    assert _complete(ready) is True
+
+    extension = next(item for item in ready["slices"] if item["id"] == extensions[0])
+    extension["status"] = "implemented"
+    assert _complete(ready) is False, "a non-baseline UI/UX journey blocks donor shutdown"
+    extension["status"] = "decommissioned"
+
+    ready["slices"].append({**extension})
+    assert _complete(ready) is False, "duplicate slice IDs must never count as done"
