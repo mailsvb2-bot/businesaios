@@ -164,6 +164,15 @@ export function EventLandingWorkspace({ apiBase, tenantId, businessId, apiKey, g
     setNotice("");
     try {
       const result = await postJson(endpoint, { ...payload, idempotency_key: pending.current.key }, headers);
+      // An idempotent replay can return the current event after another
+      // operator changed its status. Never tell the owner "published" when
+      // the canonical publication receipt is no longer the requested one.
+      if (result.event_id !== currentId ||
+          (action === "publish" && (result.status !== "published" || result.published_revision !== payload.expected_revision)) ||
+          (action === "unpublish" && result.status !== "draft")) {
+        setSnapshot(null);
+        throw new Error("Статус изменился после запроса. Загрузите актуальную версию.");
+      }
       setSnapshot(result);
       setEditor(asEditor(result.draft));
       setDirty(false);
