@@ -92,6 +92,8 @@ export function EventLandingWorkspace({ apiBase, tenantId, businessId, apiKey, g
   const canPublish = loaded && !dirty && (!published || snapshot.has_unpublished_changes);
   const endpoint = apiBase.replace(/\/$/, "") + "/business-workspace/event-landings/" + encodeURIComponent(currentId);
   const headers = apiKey ? { "X-API-Key": apiKey } : {};
+  let previewContent = null;
+  try { previewContent = toPayload(editor); } catch { /* Form errors are shown on save, never crash the owner UI. */ }
 
   const changeEventId = (value) => {
     setEventId(value);
@@ -238,7 +240,7 @@ export function EventLandingWorkspace({ apiBase, tenantId, businessId, apiKey, g
       {loaded && published ? <p className="event-landing-notice">Публичная ссылка: <a href={publicLink(tenantId, businessId, currentId)} target="_blank" rel="noopener noreferrer">{publicLink(tenantId, businessId, currentId)}</a></p> : null}
       <details className="event-landing-preview" open={false}>
         <summary>Предпросмотр текущих полей (не публичная публикация)</summary>
-        <EventLandingPreview content={toPayload(editor)} />
+        {previewContent ? <EventLandingPreview content={previewContent} /> : <p role="status">Заполните все пары FAQ и сократите списки до шести пунктов для предпросмотра.</p>}
       </details>
       <small className="muted-text">Эта страница информирует о мероприятии. Приём регистраций и проведение платежей не включаются автоматически.</small>
     </section>
