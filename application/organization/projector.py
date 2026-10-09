@@ -6,8 +6,8 @@ from typing import Any
 from application.organization.facts import (
     ORGANIZATION_ARCHIVED,
     ORGANIZATION_CREATED,
-    ORGANIZATION_FACT_TYPES,
     ORGANIZATION_FACT_SOURCE,
+    ORGANIZATION_FACT_TYPES,
     ORGANIZATION_UPDATED,
 )
 from contracts.event_store import BUSINESS_FACT_EVENT_TYPE
