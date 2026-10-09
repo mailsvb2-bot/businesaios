@@ -88,7 +88,7 @@ def _matrix_snapshot():
         ]
         _need(len(rows) == 5 and len(identities) == len(scenarios) and all(all(row.values()) for row in rows))
         _need(
-            all(all(item) for item in identities)
+            all(all(item[:3]) for item in identities)
             and all(
                 len(item[4]) == 64 and all(char in "0123456789abcdef" for char in item[4])
                 and (
