@@ -326,11 +326,18 @@
     },
     {
       "id": "support.case_queue",
-      "status": "inventory",
-      "canonical_owner": null,
-      "source_of_truth": null,
-      "evidence": [],
-      "runtime_dependency_removed": false
+      "status": "mapped",
+      "canonical_owner": "application.business_autonomy.SupportCaseRegistry + existing Business Event Spine",
+      "source_of_truth": "BusinessFactV1 support_case.* through EventFactLifecycleWriter; tenant/business-scoped authenticated owner and support operator routes",
+      "evidence": [
+        "application/business_autonomy/support_case_registry.py",
+        "adapters/api/fastapi/business_workspace_support_case_routes.py",
+        "adapters/api/fastapi/public_routes.py",
+        "frontend/src/SupportCasesWorkspace.jsx",
+        "tests/unit/application/test_phase18_support_case_registry.py",
+        "tests/unit/adapters/api/fastapi/test_support_case_routes_phase18.py"
+      ],
+      "runtime_dependency_removed": true
     },
     {
       "id": "analytics.business_platform_observability",
