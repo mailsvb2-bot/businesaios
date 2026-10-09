@@ -57,3 +57,27 @@ def test_owner_cockpit_uses_single_business_workspace_surface() -> None:
     assert 'sessionStorage' not in source
     assert 'Центр продаж' in source
     assert 'Центр действий' in source
+
+
+
+def test_phase18_event_landing_has_owner_editor_and_anonymous_published_view() -> None:
+    workspace = Path('frontend/src/App.jsx').read_text(encoding='utf-8')
+    editor = Path('frontend/src/EventLandingWorkspace.jsx').read_text(encoding='utf-8')
+    public = Path('frontend/src/PublicEventLanding.jsx').read_text(encoding='utf-8')
+    bootstrap = Path('frontend/src/main.jsx').read_text(encoding='utf-8')
+
+    assert '<EventLandingWorkspace' in workspace
+    assert 'apiKey={apiKey}' in workspace
+    assert '/business-workspace/event-landings/' in editor
+    assert 'expected_revision: snapshot.revision' in editor
+    assert 'idempotency_key: pending.current.key' in editor
+    for action in ('create', 'save', 'publish', 'unpublish'):
+        assert 'commit("' + action + '")' in editor
+    assert 'Сначала сохраните изменения черновика' in editor
+    assert 'parsePublicEventQuery(window.location.search)' in bootstrap
+    assert '<PublicEventLanding' in bootstrap
+    assert '/public-site/events/' in public
+    assert 'credentials: "omit"' in public
+    assert 'payload.content' in public
+    assert 'localStorage' not in editor + public
+    assert 'sessionStorage' not in editor + public
