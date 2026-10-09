@@ -61,7 +61,20 @@ def _step_shape(step: object, file: str, project: str) -> dict:
             pass
         else:
             title = 'Fill "{observation_datetime}' + observation_suffix
-    return {"title": title, "location": [_text(location.get("file")), _integer(location.get("line")), _integer(location.get("column"))] if isinstance(location, dict) else None, "children": [_step_shape(child, file, project) for child in step["steps"]]}
+    children = [_step_shape(child, file, project) for child in step["steps"]]
+    if title == "Before Hooks":
+        # Playwright launches the shared browser in whichever spec runs first.
+        # The second spec reuses the browser, so its "Launch browser" fixture
+        # vanishes from the report even though all owner actions are identical.
+        # Normalize ONLY the exact framework-owned launch subtree. Other hook
+        # steps remain fingerprinted and any modified launch subtree still fails.
+        browser_launch = {
+            "title": 'Fixture "browser"',
+            "location": None,
+            "children": [{"title": "Launch browser", "location": None, "children": []}],
+        }
+        children = [child for child in children if child != browser_launch]
+    return {"title": title, "location": [_text(location.get("file")), _integer(location.get("line")), _integer(location.get("column"))] if isinstance(location, dict) else None, "children": children}
 
 
 def _step_fingerprint(steps: object, file: str, project: str) -> str:
