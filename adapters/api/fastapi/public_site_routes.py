@@ -157,6 +157,8 @@ def register_public_site_routes(*, router, enforce_public_security, auth_bundle=
         except KeyError as exc:
             raise HTTPException(status_code=404, detail='business_settings_not_found') from exc
         except ValueError as exc:
+            if str(exc) == 'business_settings_idempotency_conflict':
+                raise HTTPException(status_code=409, detail=str(exc)) from exc
             raise HTTPException(status_code=422, detail=str(exc)) from exc
         except RuntimeError as exc:
             if str(exc) == 'business_settings_stale_revision':
