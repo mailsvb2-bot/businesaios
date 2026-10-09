@@ -287,7 +287,7 @@ class CTALandingIntakeService:
     def update_business_settings(
         self, *, tenant_id: str, business_id: str,
         business_name: str, activity_description: str, timezone_name: str,
-        expected_revision: int, idempotency_key: str,
+        expected_revision: int, idempotency_key: str, actor_id: str = "",
     ) -> dict[str, object]:
         tenant, business = str(tenant_id or "").strip(), str(business_id or "").strip()
         name, activity, timezone = _validate_business_settings(
@@ -331,6 +331,7 @@ class CTALandingIntakeService:
                 "settings_revision": old_revision + 1,
                 "settings_last_key": key,
                 "settings_last_fingerprint": fingerprint,
+                "settings_actor_id": str(actor_id or "").strip(),
                 "settings_updated_at": datetime.now(UTC).isoformat(),
             }
             _append_intake_row(self._storage_path, next_row)

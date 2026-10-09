@@ -134,7 +134,7 @@ def register_public_site_routes(*, router, enforce_public_security, auth_bundle=
 
     @router.post('/business-workspace/settings', tags=['business-workspace'])
     async def save_owner_business_settings(http_request: Request) -> dict:
-        _, tenant_id, business_id = business_owner_scope(
+        principal, tenant_id, business_id = business_owner_scope(
             request=http_request, auth_bundle=auth_bundle, required_scope='provider_control_plane',
         )
         body = await json_body(http_request)
@@ -152,6 +152,7 @@ def register_public_site_routes(*, router, enforce_public_security, auth_bundle=
                 timezone_name=body['timezone_name'],
                 expected_revision=body['expected_revision'],
                 idempotency_key=key,
+                actor_id=str(getattr(principal, 'actor_id', None) or getattr(principal, 'subject', '') or ''),
             )
         except KeyError as exc:
             raise HTTPException(status_code=404, detail='business_settings_not_found') from exc

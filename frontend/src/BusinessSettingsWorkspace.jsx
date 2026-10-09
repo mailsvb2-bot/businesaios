@@ -105,7 +105,17 @@ export function BusinessSettingsWorkspace({ apiBase, apiKey, getJson, postJson, 
   };
 
   const zoneOptions = [...TIMEZONES];
-  if (timezone && !zoneOptions.some(([id]) => id === timezone)) zoneOptions.push([timezone, timezone]);
+  const knownZones = new Set(zoneOptions.map(([id]) => id));
+  // The donor cockpit allowed every IANA zone, not only the short Russian list.
+  const allZones = typeof Intl.supportedValuesOf === "function"
+    ? Intl.supportedValuesOf("timeZone") : [];
+  for (const zone of allZones) {
+    if (!knownZones.has(zone)) {
+      zoneOptions.push([zone, zone.replaceAll("_", " ")]);
+      knownZones.add(zone);
+    }
+  }
+  if (timezone && !knownZones.has(timezone)) zoneOptions.push([timezone, timezone]);
 
   return (
     <section className="panel" aria-labelledby="business-settings-title">
