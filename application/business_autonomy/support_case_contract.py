@@ -1,4 +1,4 @@
-"""Canonical support-case input contract; persistence is owned by the future support-case store."""
+"""Canonical support-case input contract; durable events belong to SupportCaseRegistry on the Business Event Spine."""
 
 from __future__ import annotations
 
