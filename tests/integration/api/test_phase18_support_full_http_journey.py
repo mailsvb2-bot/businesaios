@@ -15,18 +15,11 @@ from adapters.api.fastapi.business_workspace_support_case_routes import (
 )
 from application.business_autonomy.support_case_registry import SupportCaseRegistry
 from entrypoints.api.api_key_policy import ApiKeyPolicy, PersistentApiKeyStore
+from entrypoints.api.security_owner_bundle import ApiSecurityOwnerBundle
 from reliability.idempotency_store import InMemoryIdempotencyStore
 from runtime.platform.event_store.memory_event_store import MemoryEventStore
 from scripts.support.issue_case_operator_access import issue_operator_access
 
-
-class _AllowAuthenticationPerimeter:
-    """Only the external transport/perimeter guard is substituted in this
-    in-process HTTP test; API-key validity/roles/scope are completely real.
-    """
-
-    def enforce(self, **kwargs):
-        return None
 
 
 def test_owner_to_scoped_operator_to_owner_with_revocation_and_denial(tmp_path):
@@ -46,7 +39,9 @@ def test_owner_to_scoped_operator_to_owner_with_revocation_and_denial(tmp_path):
     router = APIRouter()
     auth = AuthDependencyBundle(
         auth_policy=CompositeAuthPolicy(api_key_policy=auth_policy),
-        security_guard=_AllowAuthenticationPerimeter(),
+        security_guard=ApiSecurityOwnerBundle.default(
+            audit_path=tmp_path / "canonical_security_audit.jsonl"
+        ).api_surface_guard,
     )
     register_business_workspace_support_case_routes(
         router=router, auth_bundle=auth, support_cases=cases
@@ -56,7 +51,7 @@ def test_owner_to_scoped_operator_to_owner_with_revocation_and_denial(tmp_path):
     owner_headers = {"X-API-Key": owner_key}
     support_headers = {"X-API-Key": support_key}
     wrong_headers = {"X-API-Key": wrong_business_key}
-    with TestClient(app) as client:
+    with TestClient(app, base_url="https://testserver") as client:
         owner_denied = client.get("/platform-support/session", headers=owner_headers)
         assert owner_denied.status_code == 403
         assert client.get("/platform-support/session").status_code == 401
