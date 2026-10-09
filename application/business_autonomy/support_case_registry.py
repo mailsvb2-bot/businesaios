@@ -157,6 +157,47 @@ class SupportCaseRegistry:
         cases.sort(key=lambda case: (str(case["created_at"]), str(case["id"])), reverse=True)
         return cases[:limit]
 
+    def history(self, *, tenant_id: str, business_id: str, case_id: str,
+                limit: int = 50) -> dict[str, object]:
+        """Owner-visible, immutable case journey from the canonical Event Spine.
+
+        Do not project idempotency keys, raw event envelopes, operator identity,
+        or future privileged support-access evidence into the owner interface.
+        Read the case first to fail closed if scope or replay is invalid.
+        """
+        if type(limit) is not int or not 1 <= limit <= 100:
+            raise ValueError("support_case_limit_invalid")
+        case_id = normalize_support_case_id(case_id)
+        current = self.get(tenant_id=tenant_id, business_id=business_id, case_id=case_id)
+        rows = self._history(tenant_id=tenant_id, business_id=business_id, case_id=case_id)
+        actions = {
+            _CREATED: ("created", "open"),
+            _CLAIMED: ("claimed", "claimed"),
+            _RELEASED: ("released", "open"),
+            _RESOLVED: ("resolved", "resolved"),
+        }
+        entries = []
+        for revision, (_, kind, data, _, _) in enumerate(rows, start=1):
+            action, status = actions[kind]
+            when = data.get("created_at") if kind == _CREATED else data.get("occurred_at")
+            if not isinstance(when, str) or not when:
+                raise RuntimeError("support_case_durable_timestamp_invalid")
+            entries.append({
+                "revision": revision,
+                "action": action,
+                "status": status,
+                "occurred_at": when,
+            })
+        if len(entries) != current["revision"]:
+            raise RuntimeError("support_case_durable_revision_invalid")
+        return {
+            "case_id": case_id,
+            "revision": current["revision"],
+            "total": len(entries),
+            "truncated": len(entries) > limit,
+            "entries": entries[-limit:],
+        }
+
     def create(self, *, tenant_id: str, business_id: str, actor_id: str,
                category: SupportCaseCategory | str, summary: str, idempotency_key: str):
         tenant_id, business_id, actor_id = (
