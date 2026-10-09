@@ -10,7 +10,7 @@ export function SupportCasesWorkspace({ apiBase, apiKey, getJson, postJson }) {
   const [notice, setNotice] = useState("");
   const [caseHistory, setCaseHistory] = useState(null);
   const [historyBusy, setHistoryBusy] = useState("");
-  const [historyError, setHistoryError] = useState("");
+  const [historyError, setHistoryError] = useState(null);
   const historyEpoch = useRef(0);
   const pending = useRef(null);
   const url = apiBase.replace(/\/$/, "") + "/business-workspace/support-cases";
@@ -30,13 +30,13 @@ export function SupportCasesWorkspace({ apiBase, apiKey, getJson, postJson }) {
     if (caseHistory?.case_id === item.id) {
       historyEpoch.current += 1;
       setCaseHistory(null);
-      setHistoryError("");
+      setHistoryError(null);
       return;
     }
     const epoch = ++historyEpoch.current;
     setCaseHistory(null);
     setHistoryBusy(item.id);
-    setHistoryError("");
+    setHistoryError(null);
     try {
       const data = await getJson(url + "/" + encodeURIComponent(item.id) + "/history", headers);
       if (epoch !== historyEpoch.current) return;
@@ -47,7 +47,7 @@ export function SupportCasesWorkspace({ apiBase, apiKey, getJson, postJson }) {
       }
       setCaseHistory(data);
     } catch (reason) {
-      if (epoch === historyEpoch.current) setHistoryError("Не удалось получить историю: " + (reason.message || "ошибка сети"));
+      if (epoch === historyEpoch.current) setHistoryError({ caseId: item.id, message: "Не удалось получить историю: " + (reason.message || "ошибка сети") });
     } finally {
       if (epoch === historyEpoch.current) setHistoryBusy("");
     }
@@ -63,7 +63,7 @@ export function SupportCasesWorkspace({ apiBase, apiKey, getJson, postJson }) {
       historyEpoch.current += 1;
       setCaseHistory(null);
       setHistoryBusy("");
-      setHistoryError("");
+      setHistoryError(null);
       setNotice("Статусы получены из защищённого журнала BusinessAIOS.");
     } catch (reason) {
       setError("Не удалось обновить обращения: " + (reason.message || "ошибка сети"));
@@ -153,7 +153,7 @@ export function SupportCasesWorkspace({ apiBase, apiKey, getJson, postJson }) {
                   {historyBusy === item.id ? "Загружаем историю…" :
                     caseHistory?.case_id === item.id ? "Скрыть историю" : "Показать историю"}
                 </button>
-                {historyError && !historyBusy ? <p role="alert">{historyError}</p> : null}
+                {historyError?.caseId === item.id && !historyBusy ? <p role="alert">{historyError.message}</p> : null}
                 {caseHistory?.case_id === item.id ? (
                   <div aria-label={"История обращения " + item.id}>
                     <p className="muted-text">Подтверждено событий: {caseHistory.total}
