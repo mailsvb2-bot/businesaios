@@ -23,6 +23,7 @@ from application.business_autonomy.support_case_contract import (
 )
 from application.ontology import EventFactLifecycleWriter
 from contracts.event_store import BUSINESS_FACT_EVENT_TYPE
+from reliability.idempotency_scope import hash_scope_seed
 
 _CREATED = "support_case.created"
 _CLAIMED = "support_case.claimed"
@@ -42,6 +43,21 @@ def _key(value: object) -> str:
     if not isinstance(value, str) or not _KEY.fullmatch(value):
         raise ValueError("support_case_idempotency_key_invalid")
     return value
+
+
+def _scoped_key(*, tenant_id: str, business_id: str, case_id: str,
+                actor_id: str, raw_key: str) -> str:
+    """Bind the client operation key to its own case/actor/business.
+
+    The canonical idempotency store indexes a tenant + namespace + operation +
+    *key* independently of semantic scope, rejecting accidental key reuse.
+    Two distinct businesses must therefore have distinct effective keys even
+    when clients both submit "new-case" or "claim-1". The shared canonical
+    idempotency owner still performs the actual reservation and validation.
+    """
+    return hash_scope_seed(
+        "support_case", tenant_id, business_id, case_id, actor_id, raw_key,
+    )
 
 
 def _now() -> str:
@@ -152,6 +168,10 @@ class SupportCaseRegistry:
         category = normalize_support_category(category)
         summary = normalize_support_summary(summary)
         case_id = str(uuid5(NAMESPACE_URL, f"businessaios:support-case:{tenant_id}:{business_id}:{actor_id}:{key}"))
+        scoped_key = _scoped_key(
+            tenant_id=tenant_id, business_id=business_id, case_id=case_id,
+            actor_id=actor_id, raw_key=key,
+        )
         try:
             existing = self.get(tenant_id=tenant_id, business_id=business_id, case_id=case_id)
         except KeyError:
@@ -163,7 +183,7 @@ class SupportCaseRegistry:
                 raise RuntimeError("support_case_idempotency_conflict")
             durable = self._writer.find_existing_for_key(
                 tenant_id=tenant_id, business_id=business_id, entity_id=case_id,
-                operation="create", idempotency_key=key, fact_type=_CREATED,
+                operation="create", idempotency_key=scoped_key, fact_type=_CREATED,
                 event_metadata={"actor_id": actor_id},
             )
             if durable is None:
@@ -177,7 +197,7 @@ class SupportCaseRegistry:
         }
         self._writer.append_once(
             tenant_id=tenant_id, business_id=business_id, entity_id=case_id,
-            operation="create", idempotency_key=key,
+            operation="create", idempotency_key=scoped_key,
             fact_type=_CREATED, payload=payload,
             occurred_at_ms=int(datetime.fromisoformat(timestamp).timestamp() * 1000),
             event_metadata={"actor_id": actor_id},
@@ -195,9 +215,13 @@ class SupportCaseRegistry:
         if type(expected_revision) is not int or expected_revision < 1:
             raise ValueError("support_case_revision_invalid")
         fact_type = {"claim": _CLAIMED, "release": _RELEASED, "resolve": _RESOLVED}[action]
+        scoped_key = _scoped_key(
+            tenant_id=tenant_id, business_id=business_id, case_id=case_id,
+            actor_id=operator_id, raw_key=key,
+        )
         replay = self._writer.find_existing_for_key(
             tenant_id=tenant_id, business_id=business_id, entity_id=case_id,
-            operation=action, idempotency_key=key, fact_type=fact_type,
+            operation=action, idempotency_key=scoped_key, fact_type=fact_type,
             event_metadata={"actor_id": operator_id},
         )
         if replay is not None:
@@ -218,7 +242,7 @@ class SupportCaseRegistry:
         self._writer.append_transition_once(
             tenant_id=tenant_id, business_id=business_id, entity_id=case_id,
             expected_state_token=f"{current['revision']}:{current['status']}:{current['claimed_by_operator_user_id'] or '-'}",
-            operation=action, idempotency_key=key, fact_type=fact_type,
+            operation=action, idempotency_key=scoped_key, fact_type=fact_type,
             payload={"operator_id": operator_id, "expected_revision": expected_revision, "occurred_at": stamp},
             occurred_at_ms=int(datetime.fromisoformat(stamp).timestamp() * 1000),
             event_metadata={"actor_id": operator_id},
