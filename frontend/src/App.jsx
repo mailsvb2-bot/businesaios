@@ -1271,7 +1271,7 @@ function Workspace({ data, apiBase, businesses, onRestart, onRetryAccess, onSwit
         </article>
       </section>
 
-      <EventLandingWorkspace apiBase={baseApi} tenantId={data.tenant_id} businessId={data.business_id} apiKey={apiKey} getJson={getJson} postJson={postJson} />
+      <EventLandingWorkspace key={`${data.tenant_id}:${data.business_id}`} apiBase={baseApi} tenantId={data.tenant_id} businessId={data.business_id} apiKey={apiKey} getJson={getJson} postJson={postJson} />
 
       <section className="panel sales-panel" aria-labelledby="business-sales-title">
         <div className="panel-title-row">
