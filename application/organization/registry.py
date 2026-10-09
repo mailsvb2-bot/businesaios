@@ -4,7 +4,7 @@ import time
 from typing import Any
 
 from application.ontology import EventFactLifecycleWriter
-from application.organization.facts import ORGANIZATION_ARCHIVED, ORGANIZATION_CREATED, ORGANIZATION_UPDATED
+from application.organization.facts import ORGANIZATION_ARCHIVED, ORGANIZATION_CREATED, ORGANIZATION_UPDATED, ORGANIZATION_FACT_SOURCE
 from application.organization.projector import OrganizationProjector
 from contracts.organization import Organization, OrganizationStatus
 from reliability.idempotency_contract import IdempotencyStore
@@ -21,7 +21,7 @@ class OrganizationRegistry:
             event_store=event_store,
             idempotency_store=idempotency_store,
             namespace="organization_fact",
-            source="organization_registry",
+            source=ORGANIZATION_FACT_SOURCE,
             id_prefix="organization",
         )
 

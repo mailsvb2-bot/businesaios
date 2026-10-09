@@ -7,6 +7,7 @@ from application.organization.facts import (
     ORGANIZATION_ARCHIVED,
     ORGANIZATION_CREATED,
     ORGANIZATION_FACT_TYPES,
+    ORGANIZATION_FACT_SOURCE,
     ORGANIZATION_UPDATED,
 )
 from contracts.event_store import BUSINESS_FACT_EVENT_TYPE
@@ -26,6 +27,10 @@ class OrganizationProjector:
         for append_order, event in enumerate(
             self._events.iter_events(tenant_id=str(tenant_id), start_ms=0, event_type=BUSINESS_FACT_EVENT_TYPE)
         ):
+            # This Event Spine is shared; fact-type matching does not grant
+            # another domain authority over canonical Organization state.
+            if event.get("source") != ORGANIZATION_FACT_SOURCE:
+                continue
             envelope = dict(event.get("payload") or {})
             if str(envelope.get("business_id") or "") != str(business_id):
                 continue
