@@ -115,7 +115,8 @@ but server-side access is revoked only by expiry or key revocation.
   exercises real FastAPI HTTP, real persistent API-key authentication,
   distinct OWNER/SUPPORT roles, scoped queue isolation, claim/resolve,
   owner visibility and revocation against the canonical memory Event Store.
-  Only the outer security transport adapter is stubbed.
+  It uses the real canonical API security surface and HTTPS test transport;
+  the isolated in-memory Event Store is not proof of production PostgreSQL.
 - `frontend/e2e/support-operator-journey.spec.js` exercises the operator
   browser UI on the five-browser canonical matrix using explicit network
   response fixtures. These fixtures are **not** a live deployed provider or
