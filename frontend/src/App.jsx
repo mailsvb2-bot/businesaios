@@ -3,6 +3,7 @@ import { AcquisitionPlanner } from "./AcquisitionPlanner.jsx";
 import { BusinessIntelligencePanel } from "./BusinessIntelligencePanel.jsx";
 import { BusinessDiscoveryPanel } from "./BusinessDiscoveryPanel.jsx";
 import { DiscoverBuildMeasurePanel } from "./DiscoverBuildMeasurePanel.jsx";
+import { EventLandingWorkspace } from "./EventLandingWorkspace.jsx";
 
 const DEFAULT_API = import.meta.env.VITE_API_BASE || "https://api.businessaios.ru";
 
@@ -1269,6 +1270,8 @@ function Workspace({ data, apiBase, businesses, onRestart, onRetryAccess, onSwit
           </div>
         </article>
       </section>
+
+      <EventLandingWorkspace apiBase={baseApi} tenantId={data.tenant_id} businessId={data.business_id} apiKey={apiKey} getJson={getJson} postJson={postJson} />
 
       <section className="panel sales-panel" aria-labelledby="business-sales-title">
         <div className="panel-title-row">
