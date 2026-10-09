@@ -23,6 +23,7 @@ STEP_SHAPE = json.loads(Path("tests/fixtures/playwright/onboarding-step-shape.js
 BROWSER_SCENARIOS = (
     ("onboarding creates a read-only OWNER workspace without persisting the API key", "onboarding-workspace.spec.js"),
     ("event landing owner journey: draft stays private, publish becomes public, unpublish revokes access", "event-landing-journey.spec.js"),
+    ("support console rejects owner credentials and processes bounded cases without key persistence", "support-operator-journey.spec.js"),
 )
 
 
@@ -74,7 +75,7 @@ def _browser_detail_test(test: dict) -> dict:
             [_fixture_step(node, project) for node in STEP_SHAPE]
             if test["location"]["file"] == "onboarding-workspace.spec.js"
             else [{
-                "title": "Verify event landing public lifecycle",
+                "title": "Verify source-locked browser user journey",
                 "startTime": "2026-08-11T00:00:00.000Z", "duration": 1,
                 "steps": [], "attachments": [], "count": 1, "skipped": False,
             }]
