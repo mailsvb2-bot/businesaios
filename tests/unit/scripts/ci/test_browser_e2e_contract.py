@@ -23,6 +23,10 @@ SOURCE_SHA = "c7a488a2af6a044a5a301ee8177052837cc6d182ccf3eb24e3fe46c9d00e7c79"
 EVENT_TITLE = "event landing owner journey: draft stays private, publish becomes public, unpublish revokes access"
 EVENT_SPEC = "event-landing-journey.spec.js"
 EVENT_SOURCE_SHA = "2fb2c300a87b538e3f6bf646fe51d76850c0f82949b8777eddfc9c0f839f61f4"
+SUPPORT_TITLE = "support console rejects owner credentials and processes bounded cases without key persistence"
+SUPPORT_SPEC = "support-operator-journey.spec.js"
+SUPPORT_SOURCE_SHA = "a5a3d5383f817e64de3a0ba20006306f6baba55518a0e76791b97ab93994493b"
+BROWSER_SCENARIOS = ((TITLE, SPEC), (EVENT_TITLE, EVENT_SPEC), (SUPPORT_TITLE, SUPPORT_SPEC))
 STEP_SHAPE = json.loads(Path("tests/fixtures/playwright/onboarding-step-shape.json").read_text(encoding="utf-8"))
 MATRIX = [
     {"name": "chromium", "device": "Desktop Chrome", "engine": "chromium", "surface": "desktop"},
@@ -44,6 +48,9 @@ def test_browser_contract_plans_provisioning_and_security_are_locked() -> None:
         }, {
             "id": "event_landing_owner_publication", "title": EVENT_TITLE, "file": EVENT_SPEC,
             "proof_mode": "source_locked_execution", "source_sha256": EVENT_SOURCE_SHA,
+        }, {
+            "id": "support_operator_claim_resolve", "title": SUPPORT_TITLE, "file": SUPPORT_SPEC,
+            "proof_mode": "source_locked_execution", "source_sha256": SUPPORT_SOURCE_SHA,
         }],
     }
     assert browser_evidence.browser_project_names() == tuple(item["name"] for item in MATRIX)
@@ -52,6 +59,12 @@ def test_browser_contract_plans_provisioning_and_security_are_locked() -> None:
     scenario = scenario_path.read_text(encoding="utf-8")
     assert hashlib.sha256(scenario_path.read_bytes()).hexdigest() == SOURCE_SHA
     assert hashlib.sha256(Path("frontend/e2e/event-landing-journey.spec.js").read_bytes()).hexdigest() == EVENT_SOURCE_SHA
+    assert hashlib.sha256(Path("frontend/e2e/support-operator-journey.spec.js").read_bytes()).hexdigest() == SUPPORT_SOURCE_SHA
+    operator_panel = Path("frontend/e2e/support-operator-journey.spec.js").read_text(encoding="utf-8")
+    assert 'test("support console rejects owner credentials' in operator_panel
+    assert 'await page.getByRole("button", { name: "Взять в работу" }).click()' in operator_panel
+    assert 'await page.getByRole("button", { name: "Закрыть обращение" }).click()' in operator_panel
+
     assert 'test("event landing owner journey: draft stays private' in Path("frontend/e2e/event-landing-journey.spec.js").read_text(encoding="utf-8")
     assert 'readFileSync(new URL("./e2e/project-matrix.json", import.meta.url)' in config
     assert f'projectMatrix.schema !== "{browser_evidence.BROWSER_PROJECT_MATRIX_SCHEMA}"' in config
@@ -244,10 +257,10 @@ def _outputs(
     html_errors: bool = False,
 ) -> None:
     names = projects or browser_evidence.browser_project_names()
-    # Both registered scenarios must appear in every browser and in every
+    # Every reviewed scenario must appear in every browser and in every
     # independent reporter. An extra, missing, retried or failed test must not
     # accidentally turn into a passing release proof.
-    scenarios = [(title, file), (EVENT_TITLE, EVENT_SPEC)]
+    scenarios = [(title, file), *BROWSER_SCENARIOS[1:]]
     specs = [
         {"title": scenario_title, "file": scenario_file, "line": 21, "column": 1, "ok": True, "tests": [{
             "expectedStatus": "passed", "projectName": project, "status": "expected",
@@ -305,9 +318,9 @@ def test_evidence_requires_exact_projects_canonical_identity_and_three_real_arti
     _outputs(browser)
     snapshot = browser_evidence.browser_artifact_snapshot(browser)
     assert snapshot and [item["name"] for item in snapshot["projects"]] == list(names)
-    assert all(item["tests"] == 2 for item in snapshot["projects"]) and snapshot["artifacts"]["junit"]["tests"] == 10
+    assert all(item["tests"] == len(BROWSER_SCENARIOS) for item in snapshot["projects"]) and snapshot["artifacts"]["junit"]["tests"] == len(names) * len(BROWSER_SCENARIOS)
     canonical = browser_evidence._matrix_snapshot()
-    assert canonical and browser_evidence._scenario_matrix([(p, title, file) for p in names for title, file in ((TITLE, SPEC), (EVENT_TITLE, EVENT_SPEC))], names, canonical[1])
+    assert canonical and browser_evidence._scenario_matrix([(p, title, file) for p in names for title, file in BROWSER_SCENARIOS], names, canonical[1])
     # Fingerprints are pinned to the complete 128-step onboarding journey.
     # Dynamic browser identity and observation timestamp alone must not
     # invalidate an otherwise identical real user journey.
@@ -379,7 +392,7 @@ def test_browser_step_requires_complete_matrix_and_fails_closed(monkeypatch, tmp
     assert [item["name"] for item in evidence["projects"]] == list(browser_evidence.browser_project_names())
     assert captured["env"]["BAIOS_E2E_PYTHON"] == sys.executable
     assert evidence["exact_sha"] == "a" * 40 and evidence["runtime_mode"] == "development"
-    assert evidence["storage_backend"] == "isolated-local" and all(item["tests"] == 2 for item in evidence["projects"])
+    assert evidence["storage_backend"] == "isolated-local" and all(item["tests"] == len(BROWSER_SCENARIOS) for item in evidence["projects"])
     assert evidence["project_matrix"]["sha256"] == browser_evidence._matrix_snapshot()[2]
     for skipped, diagnostics in ((1, True), (0, False)):
         child = tmp_path / f"case-{skipped}-{diagnostics}"
