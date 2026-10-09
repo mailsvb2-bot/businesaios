@@ -130,3 +130,43 @@ def test_support_owner_reusing_request_key_is_scoped_to_actor_within_business():
     assert second["created_by_member_id"] == "owner-two"
     assert len(events) == 2
     assert len(registry.list(tenant_id="tenant-a", business_id="business-a")) == 2
+
+
+def test_owner_history_is_derived_from_canonical_events_and_scrubs_privileged_metadata():
+    events, claims, registry = _store()
+    created = _create(registry)
+    claimed = _transition(registry, created, "claim")
+    released = _transition(registry, claimed, "release")
+    claimed_again = _transition(registry, released, "claim", key="claim-again")
+    resolved = _transition(registry, claimed_again, "resolve")
+    observed = registry.history(
+        tenant_id="tenant-a", business_id="business-a", case_id=created["id"],
+    )
+    assert observed["case_id"] == created["id"]
+    assert observed["revision"] == 5 and observed["total"] == 5
+    assert observed["truncated"] is False
+    assert [entry["action"] for entry in observed["entries"]] == [
+        "created", "claimed", "released", "claimed", "resolved",
+    ]
+    assert [entry["revision"] for entry in observed["entries"]] == [1, 2, 3, 4, 5]
+    assert all(entry["occurred_at"] for entry in observed["entries"])
+    assert all(set(entry) == {"revision", "action", "status", "occurred_at"} for entry in observed["entries"])
+    assert "support-1" not in str(observed)
+    assert "claim-again" not in str(observed)
+    page = registry.history(
+        tenant_id="tenant-a", business_id="business-a", case_id=created["id"], limit=2,
+    )
+    assert page["total"] == 5 and page["truncated"] is True
+    assert [entry["revision"] for entry in page["entries"]] == [4, 5]
+    assert registry.get(tenant_id="tenant-a", business_id="business-a", case_id=created["id"]) == resolved
+    for tenant, business in [("tenant-b", "business-a"), ("tenant-a", "business-b")]:
+        with pytest.raises(KeyError):
+            registry.history(tenant_id=tenant, business_id=business, case_id=created["id"])
+    for invalid_limit in (0, 101, True, "5"):
+        with pytest.raises(ValueError, match="limit"):
+            registry.history(
+                tenant_id="tenant-a", business_id="business-a",
+                case_id=created["id"], limit=invalid_limit,
+            )
+    restarted = SupportCaseRegistry(event_store=events, idempotency_store=claims)
+    assert restarted.history(tenant_id="tenant-a", business_id="business-a", case_id=created["id"]) == observed
