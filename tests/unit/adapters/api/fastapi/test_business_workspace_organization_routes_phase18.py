@@ -121,7 +121,22 @@ async def _body():
 
 def test_organization_http_boundary_uses_real_event_writer_and_survives_reopen(monkeypatch) -> None:
     from reliability.idempotency_store import InMemoryIdempotencyStore
-    from tests.unit.application.test_organization_registry import MemoryEventStore
+    class MemoryEventStore:
+        def __init__(self):
+            self.events = []
+
+        def append_event(self, event):
+            self.events.append(dict(event))
+
+        def iter_events(self, *, tenant_id, start_ms, end_ms=None, user_id=None, event_type=None):
+            for event in self.events:
+                if event.get("tenant_id") != tenant_id:
+                    continue
+                if int(event.get("timestamp_ms") or 0) < start_ms:
+                    continue
+                if event_type is not None and event.get("event_type") != event_type:
+                    continue
+                yield dict(event)
 
     events = MemoryEventStore()
     claims = InMemoryIdempotencyStore()
