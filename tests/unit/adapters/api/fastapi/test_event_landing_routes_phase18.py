@@ -65,3 +65,33 @@ def test_owner_event_route_uses_authenticated_scope_not_body(monkeypatch) -> Non
     asyncio.run(endpoint("event-1",object()))
     call=registry.calls[-1][1]
     assert (call["tenant_id"],call["business_id"])==("tenant-session","business-session")
+
+
+
+def test_owner_event_duplicate_create_returns_conflict_not_server_error(monkeypatch) -> None:
+    class _ExistingRegistry(_Registry):
+        def create(self, **kwargs):
+            raise RuntimeError("event_landing_already_exists")
+
+    state = EventLandingState(event_id="event-1", draft=_content("Draft"), draft_source="manual")
+    router = APIRouter()
+    monkeypatch.setattr(
+        owner_routes, "business_owner_scope",
+        lambda **_: (SimpleNamespace(actor_id="owner", subject="owner"), "tenant-a", "business-a"),
+    )
+    owner_routes.register_business_workspace_event_landing_routes(
+        router=router, auth_bundle=object(), event_landing_registry=_ExistingRegistry(state),
+    )
+
+    async def body(_):
+        return {
+            "action": "create",
+            "content": _content("Conflicting landing").to_payload(),
+            "idempotency_key": "new-owner-request",
+        }
+
+    monkeypatch.setattr(owner_routes, "json_body", body)
+    endpoint = _endpoint(router, "/business-workspace/event-landings/{event_id}", "POST")
+    with pytest.raises(HTTPException) as exc:
+        asyncio.run(endpoint("event-1", object()))
+    assert (exc.value.status_code, exc.value.detail) == (409, "event_landing_already_exists")
