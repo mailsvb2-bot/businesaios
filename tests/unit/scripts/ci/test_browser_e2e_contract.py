@@ -18,7 +18,7 @@ from scripts.ci.subprocess_io import CommandOutcome
 
 TITLE = "onboarding creates a read-only OWNER workspace without persisting the API key"
 SPEC = "onboarding-workspace.spec.js"
-STEP_SHA = "912c61fbb5f236a13b0f07036f8074812ef2ed1c06038e95e1d588f6be582bfc"
+STEP_SHA = "7b10447e40fc8228a8fcbc772a3eab9a8bf606adad7cd201c68ec84de449822d"
 SOURCE_SHA = "ddff20b818c9df7ff0ee6cc5d2797885e403233a26923e3aeee49441a8486b41"
 EVENT_TITLE = "event landing owner journey: draft stays private, publish becomes public, unpublish revokes access"
 EVENT_SPEC = "event-landing-journey.spec.js"
