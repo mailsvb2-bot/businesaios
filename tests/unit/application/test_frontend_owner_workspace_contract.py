@@ -67,7 +67,12 @@ def test_phase18_event_landing_has_owner_editor_and_anonymous_published_view() -
     bootstrap = Path('frontend/src/main.jsx').read_text(encoding='utf-8')
 
     assert '<EventLandingWorkspace' in workspace
+    # React remounts the editor when the owner switches businesses, preventing
+    # a private draft from the previous tenant/business remaining on screen.
+    assert 'key={`${data.tenant_id}:${data.business_id}`}' in workspace
     assert 'apiKey={apiKey}' in workspace
+    # A pending mutation cannot be redirected to a different event ID.
+    assert 'disabled={Boolean(busy)} value={eventId}' in editor
     assert '/business-workspace/event-landings/' in editor
     assert 'expected_revision: snapshot.revision' in editor
     assert 'idempotency_key: pending.current.key' in editor
