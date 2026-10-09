@@ -154,6 +154,27 @@ def test_volatile_observation_datetime_does_not_change_canonical_step_fingerprin
     assert browser_evidence._step_fingerprint([step("not-a-datetime")], SPEC, "chromium") != first
 
 
+
+def test_shared_playwright_browser_launch_hook_is_order_independent_but_tamper_safe() -> None:
+    # With two specs in one Playwright worker, only the first one launches a
+    # browser. The locked owner journey must not depend on spec execution order.
+    chromium = [_fixture_step(node, "chromium") for node in STEP_SHAPE]
+    assert browser_evidence._step_fingerprint(chromium, SPEC, "chromium") == STEP_SHA
+
+    reused_browser = json.loads(json.dumps(chromium))
+    before = reused_browser[0]
+    before["steps"] = [child for child in before["steps"] if child["title"] != 'Fixture "browser"']
+    assert browser_evidence._step_fingerprint(reused_browser, SPEC, "chromium") == STEP_SHA
+
+    changed_browser_launch = json.loads(json.dumps(chromium))
+    changed_browser_launch[0]["steps"][0]["steps"][0]["title"] = "Unexpected launch operation"
+    assert browser_evidence._step_fingerprint(changed_browser_launch, SPEC, "chromium") != STEP_SHA
+
+    changed_user_action = json.loads(json.dumps(reused_browser))
+    changed_user_action[9]["title"] = "Wrong action"
+    assert browser_evidence._step_fingerprint(changed_user_action, SPEC, "chromium") != STEP_SHA
+
+
 def _json_result() -> dict:
     return {
         "workerIndex": 0, "parallelIndex": 0, "status": "passed", "duration": 1, "errors": [],
