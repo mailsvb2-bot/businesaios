@@ -32,7 +32,13 @@ for (const scenario of projectMatrix.scenarios) {
   const file = String(scenario?.file || "").trim();
   const sourceSha256 = String(scenario?.source_sha256 || "").trim();
   const stepSha256 = String(scenario?.detail_step_sha256 || "").trim();
-  if (!file || path.basename(file) !== file || !canonicalHash.test(sourceSha256) || !canonicalHash.test(stepSha256)) {
+  const proofMode = String(scenario?.proof_mode || "step_fingerprint").trim();
+  // Every scenario is pinned to its exact source. Preserve the legacy
+  // onboarding step fingerprint; for newer multi-action journeys the three
+  // Playwright reporters provide exact five-browser pass/no-retry proof.
+  const validProof = (proofMode === "step_fingerprint" && canonicalHash.test(stepSha256))
+    || (proofMode === "source_locked_execution" && stepSha256 === "");
+  if (!file || path.basename(file) !== file || !canonicalHash.test(sourceSha256) || !validProof) {
     throw new Error("invalid canonical browser scenario proof contract");
   }
   const sourceUrl = new URL(`./e2e/${file}`, import.meta.url);
