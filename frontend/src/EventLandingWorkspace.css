@@ -1,3 +1,9 @@
+/* Keep the owner editor inside the same centered responsive workspace
+   bounds as Sales / Customers. A full-width panel with a nowrap badge
+   otherwise widens the document on narrow mobile viewports. */
+.event-landing-editor { width: min(1180px, calc(100% - 48px)); margin: 17px auto 0; min-width: 0; }
+.event-landing-editor .panel-title-row > div { min-width: 0; }
+.event-landing-editor .privacy-badge { flex: 0 1 auto; max-width: 100%; white-space: normal; overflow-wrap: anywhere; }
 .event-landing-id { display: flex; align-items: end; gap: 12px; flex-wrap: wrap; margin: 18px 0; }
 .event-landing-id label { flex: 1; min-width: 230px; }
 .event-landing-editor label, .event-landing-id label { display: grid; gap: 7px; font-weight: 650; font-size: .92rem; }
@@ -28,4 +34,11 @@
 .theme-bold .event-public-hero .eyebrow { color: #bad1ff; }
 .theme-minimal .event-public-hero, .theme-minimal .event-public-cta { background: #fff; }
 .event-public-footer { color: #6b788b; font-size: .82rem; text-align: center; margin-top: 24px; }
-@media (max-width: 700px) { .event-landing-fields, .event-public-grid, .event-faq-editor { grid-template-columns: 1fr; } .event-landing-fields label { grid-column: 1 / -1; } }
+@media (max-width: 700px) {
+  .event-landing-editor { width: min(100% - 24px, 1180px); }
+  .event-landing-editor .panel-title-row { flex-direction: column; align-items: flex-start; gap: 8px; }
+  .event-landing-fields, .event-public-grid, .event-faq-editor { grid-template-columns: minmax(0, 1fr); }
+  .event-landing-fields label { grid-column: 1 / -1; min-width: 0; }
+  .event-landing-id label { flex-basis: 100%; min-width: 0; }
+  .event-landing-preview, .event-landing-notice { min-width: 0; }
+}
