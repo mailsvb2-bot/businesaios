@@ -1,6 +1,10 @@
 from __future__ import annotations
 
 import json
+import os
+from contextlib import contextmanager
+from hashlib import sha256
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 from dataclasses import asdict, dataclass
 from datetime import UTC, datetime
 from pathlib import Path
@@ -96,6 +100,85 @@ def public_integration_marketplace() -> tuple[dict[str, object], ...]:
     return tuple(rows)
 
 
+
+@contextmanager
+def _intake_lock(path: Path):
+    """Serialize CTA and settings appends across API workers on the same ledger."""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    guard_path = path.with_name(path.name + ".lock")
+    with guard_path.open("a+b") as guard:
+        if os.name == "nt":
+            import msvcrt
+            guard.seek(0, os.SEEK_END)
+            if guard.tell() == 0:
+                guard.write(b"\x00")
+                guard.flush()
+            guard.seek(0)
+            msvcrt.locking(guard.fileno(), msvcrt.LK_LOCK, 1)
+        else:
+            import fcntl
+            fcntl.flock(guard.fileno(), fcntl.LOCK_EX)
+        try:
+            yield
+        finally:
+            if os.name == "nt":
+                guard.seek(0)
+                msvcrt.locking(guard.fileno(), msvcrt.LK_UNLCK, 1)
+            else:
+                fcntl.flock(guard.fileno(), fcntl.LOCK_UN)
+
+
+def _append_intake_row(path: Path, row: dict[str, object]) -> None:
+    """Caller holds _intake_lock; never create a parallel settings store."""
+    with path.open("a", encoding="utf-8") as fh:
+        fh.write(json.dumps(row, ensure_ascii=False, sort_keys=True) + "\n")
+        fh.flush()
+        os.fsync(fh.fileno())
+
+
+def _latest_business_row(lines, *, tenant_id: str, business_id: str) -> dict[str, object]:
+    for line in reversed(lines):
+        try:
+            row = json.loads(line) if line.strip() else None
+        except (json.JSONDecodeError, TypeError):
+            continue
+        if (
+            isinstance(row, dict)
+            and str(row.get("tenant_id") or "") == tenant_id
+            and str(row.get("business_id") or "") == business_id
+            and str(row.get("intake_id") or "").strip()
+        ):
+            return row
+    raise KeyError("business_settings_not_found")
+
+
+def _settings_payload(row: dict[str, object]) -> dict[str, object]:
+    profile = dict(row.get("business_profile") or {})
+    settings = dict(row.get("business_settings") or {})
+    return {
+        "tenant_id": str(row.get("tenant_id") or ""),
+        "business_id": str(row.get("business_id") or ""),
+        "business_name": str(profile.get("name") or ""),
+        "activity_description": str(settings.get("activity_description") or ""),
+        "timezone_name": str(settings.get("timezone_name") or "Europe/Moscow"),
+        "revision": int(row.get("settings_revision") or 0),
+        "updated_at": str(row.get("settings_updated_at") or row.get("created_at") or ""),
+    }
+
+
+def _validate_business_settings(*, business_name: str, activity_description: str, timezone_name: str) -> tuple[str, str, str]:
+    if not all(isinstance(value, str) for value in (business_name, activity_description, timezone_name)):
+        raise ValueError("business_settings_fields_must_be_strings")
+    name, activity, tz = business_name.strip(), activity_description.strip(), timezone_name.strip()
+    if not 1 <= len(name) <= 200 or len(activity) > 2000 or not 1 <= len(tz) <= 120:
+        raise ValueError("business_settings_fields_invalid")
+    try:
+        ZoneInfo(tz)
+    except (ZoneInfoNotFoundError, ValueError) as exc:
+        raise ValueError("business_settings_timezone_invalid") from exc
+    return name, activity, tz
+
+
 class CTALandingIntakeService:
     def __init__(self, *, storage_path: str = "runtime_state/pilot_applications.jsonl", app_base_url: str = "https://app.businessaios.ru") -> None:
         self._storage_path, self._app_base_url = Path(storage_path), app_base_url.rstrip("/")
@@ -124,9 +207,8 @@ class CTALandingIntakeService:
                                "requires_approval_before_execution": True, "decision_core_required_for_irreversible_actions": True,
                                "credential_activation_requires_authenticated_control_plane": True},
         })
-        self._storage_path.parent.mkdir(parents=True, exist_ok=True)
-        with self._storage_path.open("a", encoding="utf-8") as fh:
-            fh.write(json.dumps(row, ensure_ascii=False, sort_keys=True) + "\n")
+        with _intake_lock(self._storage_path):
+            _append_intake_row(self._storage_path, row)
         return result
 
     def get_status(self, *, intake_id: str) -> CTAIntakeStatus:
@@ -145,7 +227,7 @@ class CTALandingIntakeService:
     def list_recent(self, *, limit: int = 50) -> tuple[dict[str, object], ...]:
         if not self._storage_path.exists():
             return ()
-        rows = []
+        rows, seen = [], set()
         for line in reversed(self._storage_path.read_text(encoding="utf-8").splitlines()):
             if len(rows) >= max(1, min(int(limit or 50), 200)):
                 break
@@ -154,6 +236,10 @@ class CTALandingIntakeService:
             except Exception:
                 continue
             if isinstance(row, dict):
+                intake_id = str(row.get("intake_id") or "").strip()
+                if not intake_id or intake_id in seen:
+                    continue
+                seen.add(intake_id)
                 rows.append(_admin_row(row))
         return tuple(rows)
 
@@ -186,6 +272,69 @@ class CTALandingIntakeService:
                 "onboarding_status": str(row.get("onboarding_status") or "advisory_intake_created"),
             })
         return tuple(rows)
+
+
+    def read_business_settings(self, *, tenant_id: str, business_id: str) -> dict[str, object]:
+        tenant, business = str(tenant_id or "").strip(), str(business_id or "").strip()
+        if not tenant or not business or not self._storage_path.exists():
+            raise KeyError("business_settings_not_found")
+        row = _latest_business_row(
+            self._storage_path.read_text(encoding="utf-8").splitlines(),
+            tenant_id=tenant, business_id=business,
+        )
+        return _settings_payload(row)
+
+    def update_business_settings(
+        self, *, tenant_id: str, business_id: str,
+        business_name: str, activity_description: str, timezone_name: str,
+        expected_revision: int, idempotency_key: str,
+    ) -> dict[str, object]:
+        tenant, business = str(tenant_id or "").strip(), str(business_id or "").strip()
+        name, activity, timezone = _validate_business_settings(
+            business_name=business_name, activity_description=activity_description,
+            timezone_name=timezone_name,
+        )
+        if isinstance(expected_revision, bool) or not isinstance(expected_revision, int) or expected_revision < 0:
+            raise ValueError("business_settings_expected_revision_invalid")
+        if not isinstance(idempotency_key, str) or not 1 <= len(idempotency_key.strip()) <= 200:
+            raise ValueError("business_settings_idempotency_key_required")
+        key = idempotency_key.strip()
+        fingerprint = sha256(
+            json.dumps([name, activity, timezone], separators=(",", ":"), ensure_ascii=True).encode("utf-8")
+        ).hexdigest()
+        with _intake_lock(self._storage_path):
+            if not self._storage_path.exists():
+                raise KeyError("business_settings_not_found")
+            row = _latest_business_row(
+                self._storage_path.read_text(encoding="utf-8").splitlines(),
+                tenant_id=tenant, business_id=business,
+            )
+            old_revision = int(row.get("settings_revision") or 0)
+            if row.get("settings_last_key") == key:
+                if row.get("settings_last_fingerprint") != fingerprint:
+                    raise ValueError("business_settings_idempotency_conflict")
+                return _settings_payload(row)
+            if old_revision != expected_revision:
+                raise RuntimeError("business_settings_stale_revision")
+            profile = dict(row.get("business_profile") or {})
+            profile["name"] = name
+            first_value = dict(row.get("first_value_preview") or {})
+            first_value["business_name"] = name
+            original_payload = dict(row.get("payload") or {})
+            original_payload["business_name"] = name
+            next_row = {
+                **row,
+                "business_profile": profile,
+                "payload": original_payload,
+                "first_value_preview": first_value,
+                "business_settings": {"activity_description": activity, "timezone_name": timezone},
+                "settings_revision": old_revision + 1,
+                "settings_last_key": key,
+                "settings_last_fingerprint": fingerprint,
+                "settings_updated_at": datetime.now(UTC).isoformat(),
+            }
+            _append_intake_row(self._storage_path, next_row)
+            return _settings_payload(next_row)
 
 
 def _row_owner_account_id(row: dict[str, object]) -> str:

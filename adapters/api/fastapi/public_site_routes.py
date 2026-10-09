@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from fastapi import HTTPException, Request, Response, status
 
+from adapters.api.fastapi.router_support import business_owner_scope, json_body
 from application.public_site.cta_intake import CTALandingIntakeService, public_integration_marketplace
 from entrypoints.api.request_context import RequestContext
 from tenancy.tenant_registry import ensure_tenant_record
@@ -119,6 +120,47 @@ def register_public_site_routes(*, router, enforce_public_security, auth_bundle=
 
     def api_key_policy():
         return getattr(getattr(auth_bundle, 'auth_policy', None), 'api_key_policy', None)
+
+
+    @router.get('/business-workspace/settings', tags=['business-workspace'])
+    async def owner_business_settings(http_request: Request) -> dict:
+        _, tenant_id, business_id = business_owner_scope(
+            request=http_request, auth_bundle=auth_bundle, required_scope='provider_control_plane',
+        )
+        try:
+            return service.read_business_settings(tenant_id=tenant_id, business_id=business_id)
+        except KeyError as exc:
+            raise HTTPException(status_code=404, detail='business_settings_not_found') from exc
+
+    @router.post('/business-workspace/settings', tags=['business-workspace'])
+    async def save_owner_business_settings(http_request: Request) -> dict:
+        _, tenant_id, business_id = business_owner_scope(
+            request=http_request, auth_bundle=auth_bundle, required_scope='provider_control_plane',
+        )
+        body = await json_body(http_request)
+        required = {'business_name', 'activity_description', 'timezone_name', 'expected_revision'}
+        if set(body) != required:
+            raise HTTPException(status_code=422, detail='business_settings_fields_invalid')
+        key = str(http_request.headers.get('x-idempotency-key') or '').strip()
+        if not key or len(key) > 200:
+            raise HTTPException(status_code=422, detail='business_settings_idempotency_key_required')
+        try:
+            return service.update_business_settings(
+                tenant_id=tenant_id, business_id=business_id,
+                business_name=body['business_name'],
+                activity_description=body['activity_description'],
+                timezone_name=body['timezone_name'],
+                expected_revision=body['expected_revision'],
+                idempotency_key=key,
+            )
+        except KeyError as exc:
+            raise HTTPException(status_code=404, detail='business_settings_not_found') from exc
+        except ValueError as exc:
+            raise HTTPException(status_code=422, detail=str(exc)) from exc
+        except RuntimeError as exc:
+            if str(exc) == 'business_settings_stale_revision':
+                raise HTTPException(status_code=409, detail=str(exc)) from exc
+            raise
 
     @router.get('/public-site/events/{tenant_id}/{business_id}/{event_id}', tags=['public-site'])
     async def public_event_landing(tenant_id: str, business_id: str, event_id: str, http_request: Request) -> dict:
