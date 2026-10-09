@@ -20,6 +20,10 @@ from scripts.ci.reports import release_verdict
 from scripts.ci.user_scenario_targets import USER_SCENARIO_EVIDENCE_NAME, USER_SCENARIO_RUST_FIXTURE, USER_SCENARIOS
 
 STEP_SHAPE = json.loads(Path("tests/fixtures/playwright/onboarding-step-shape.json").read_text(encoding="utf-8"))
+BROWSER_SCENARIOS = (
+    ("onboarding creates a read-only OWNER workspace without persisting the API key", "onboarding-workspace.spec.js"),
+    ("event landing owner journey: draft stays private, publish becomes public, unpublish revokes access", "event-landing-journey.spec.js"),
+)
 
 
 def _step(name: str, status: str = "passed") -> StepResult:
@@ -34,12 +38,12 @@ def _write_payload(tmp_path, payload: dict) -> None:
     (tmp_path / USER_SCENARIO_EVIDENCE_NAME).write_text(json.dumps(payload), encoding="utf-8")
 
 
-def _browser_test(project: str) -> dict:
+def _browser_test(project: str, *, title: str, file: str) -> dict:
     return {
-        "testId": f"browser-test-{project}",
-        "title": "onboarding creates a read-only OWNER workspace without persisting the API key",
+        "testId": f"browser-test-{project}-{file}",
+        "title": title,
         "projectName": project,
-        "location": {"file": "onboarding-workspace.spec.js", "line": 21, "column": 1},
+        "location": {"file": file, "line": 21, "column": 1},
         "duration": 1, "annotations": [], "tags": [], "outcome": "expected", "path": [], "ok": True,
         "results": [{"attachments": [], "workerIndex": 0, "startTime": "2026-08-11T00:00:00.000Z"}],
     }
@@ -66,58 +70,76 @@ def _browser_detail_test(test: dict) -> dict:
     project = str(test["projectName"])
     detail["results"] = [{
         "duration": 1, "startTime": "2026-08-11T00:00:00.000Z", "retry": 0,
-        "steps": [_fixture_step(node, project) for node in STEP_SHAPE],
+        "steps": (
+            [_fixture_step(node, project) for node in STEP_SHAPE]
+            if test["location"]["file"] == "onboarding-workspace.spec.js"
+            else [{
+                "title": "Verify event landing public lifecycle",
+                "startTime": "2026-08-11T00:00:00.000Z", "duration": 1,
+                "steps": [], "attachments": [], "count": 1, "skipped": False,
+            }]
+        ),
         "errors": [], "status": "passed", "attachments": [], "annotations": [], "workerIndex": 0,
     }]
     return detail
 
 
 def _html_report(projects: tuple[str, ...]) -> str:
-    tests = [_browser_test(project) for project in projects]
-    file_id, file_name = "canonical-browser-spec", "onboarding-workspace.spec.js"
-    stats = {"total": len(tests), "expected": len(tests), "unexpected": 0, "flaky": 0, "skipped": 0, "ok": True}
-    report = {"projectNames": list(projects), "errors": [], "files": [{"fileId": file_id, "fileName": file_name, "tests": tests, "stats": stats}], "stats": stats}
+    report_files = []
     output = io.BytesIO()
     with zipfile.ZipFile(output, "w", zipfile.ZIP_DEFLATED) as archive:
-        archive.writestr("report.json", json.dumps(report))
-        archive.writestr(f"{file_id}.json", json.dumps({"fileId": file_id, "fileName": file_name, "tests": [_browser_detail_test(test) for test in tests]}))
+        for index, (title, file) in enumerate(BROWSER_SCENARIOS):
+            tests = [_browser_test(project, title=title, file=file) for project in projects]
+            file_id = f"canonical-browser-spec-{index}"
+            stats = {"total": len(tests), "expected": len(tests), "unexpected": 0, "flaky": 0, "skipped": 0, "ok": True}
+            report_files.append({"fileId": file_id, "fileName": file, "tests": tests, "stats": stats})
+            archive.writestr(f"{file_id}.json", json.dumps({
+                "fileId": file_id, "fileName": file,
+                "tests": [_browser_detail_test(test) for test in tests],
+            }))
+        total = sum(len(item["tests"]) for item in report_files)
+        stats = {"total": total, "expected": total, "unexpected": 0, "flaky": 0, "skipped": 0, "ok": True}
+        archive.writestr("report.json", json.dumps({
+            "projectNames": list(projects), "errors": [],
+            "files": report_files, "stats": stats,
+        }))
     encoded = base64.b64encode(output.getvalue()).decode("ascii")
     return f'<!DOCTYPE html><html><head><title>Playwright Test Report</title></head><body><template id="playwrightReportBase64">data:application/zip;base64,{encoded}</template></body></html>'
 
 
 def _json_report(projects: tuple[str, ...]) -> dict:
-    tests = [
-        {
-            "expectedStatus": "passed", "projectName": project, "status": "expected",
-            "results": [{
-                "workerIndex": 0, "parallelIndex": 0, "status": "passed", "duration": 1,
-                "errors": [], "stdout": [], "stderr": [], "retry": 0,
-                "startTime": "2026-08-11T10:48:09.726Z", "annotations": [], "attachments": [],
-            }],
-        }
-        for project in projects
-    ]
+    specs = []
+    for title, file in BROWSER_SCENARIOS:
+        tests = [
+            {
+                "expectedStatus": "passed", "projectName": project, "status": "expected",
+                "results": [{
+                    "workerIndex": 0, "parallelIndex": 0, "status": "passed", "duration": 1,
+                    "errors": [], "stdout": [], "stderr": [], "retry": 0,
+                    "startTime": "2026-08-11T10:48:09.726Z", "annotations": [], "attachments": [],
+                }],
+            }
+            for project in projects
+        ]
+        specs.append({
+            "title": title, "file": file, "line": 21, "column": 1,
+            "ok": True, "tests": tests,
+        })
     return {
         "config": {"projects": [{"name": name} for name in projects]}, "errors": [],
-        "suites": [{
-            "specs": [{
-                "title": "onboarding creates a read-only OWNER workspace without persisting the API key",
-                "file": "onboarding-workspace.spec.js", "line": 21, "column": 1, "ok": True, "tests": tests,
-            }],
-            "suites": [],
-        }],
-        "stats": {"expected": len(projects), "unexpected": 0, "skipped": 0, "flaky": 0},
+        "suites": [{"specs": specs, "suites": []}],
+        "stats": {"expected": len(projects) * len(BROWSER_SCENARIOS), "unexpected": 0, "skipped": 0, "flaky": 0},
     }
 
 
 def _junit_report(projects: tuple[str, ...]) -> str:
-    title, file = "onboarding creates a read-only OWNER workspace without persisting the API key", "onboarding-workspace.spec.js"
     suites = "".join(
-        f'<testsuite name="{file}" hostname="{project}" tests="1" failures="0" skipped="0" errors="0">'
-        f'<testcase name="{title}" classname="{file}"/></testsuite>'
+        f'<testsuite name="canonical" hostname="{project}" tests="{len(BROWSER_SCENARIOS)}" failures="0" skipped="0" errors="0">'
+        + "".join(f'<testcase name="{title}" classname="{file}"/>' for title, file in BROWSER_SCENARIOS)
+        + '</testsuite>'
         for project in projects
     )
-    return f'<testsuites tests="{len(projects)}" failures="0" skipped="0" errors="0">{suites}</testsuites>'
+    return f'<testsuites tests="{len(projects) * len(BROWSER_SCENARIOS)}" failures="0" skipped="0" errors="0">{suites}</testsuites>'
 
 
 def _write_browser_evidence(
