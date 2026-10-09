@@ -112,7 +112,12 @@
         "adapters/api/fastapi/public_site_routes.py",
         "adapters/api/fastapi/public_routes.py",
         "entrypoints/api/public_surface_route_specs.py",
-        "tests/unit/adapters/api/fastapi/test_event_landing_routes_phase18.py"
+        "tests/unit/adapters/api/fastapi/test_event_landing_routes_phase18.py",
+        "frontend/src/EventLandingWorkspace.jsx",
+        "frontend/src/PublicEventLanding.jsx",
+        "frontend/src/EventLandingWorkspace.css",
+        "frontend/src/main.jsx",
+        "tests/unit/application/test_frontend_owner_workspace_contract.py"
       ],
       "runtime_dependency_removed": true
     },
