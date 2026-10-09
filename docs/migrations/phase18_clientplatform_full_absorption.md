@@ -124,6 +124,29 @@ but server-side access is revoked only by expiry or key revocation.
 - Real deployed production and historical donor migration remain separate
   acceptance gates. This slice remains `mapped` until those pass.
 
+### Owner-visible lifecycle proof
+
+The owner support workspace now has a **Показать историю** action on each
+case. `GET /business-workspace/support-cases/{case_id}/history` binds the
+authenticated owner tenant and business (not a client-provided selector),
+replays the same canonical support events that determine the current case
+status, and returns revision-ordered timestamps and lifecycle actions
+(created → claimed → released → resolved). Its response is capped to the last
+50 events by default with a truthful total and truncation flag. It never
+publishes operator identifiers, owner tokens, raw event payloads or idempotency
+keys. A case from a different business yields 404.
+
+Contract tests exercise the full lifecycle, same-store process restart,
+cross-tenant and cross-business denial, limit validation, an unprivileged
+support principal denied the owner-only history route, and an HTTPS
+OWNER → SUPPORT → OWNER status/history proof through canonical security.
+The UI shows loading/failed history on the relevant case only and never
+persists the API key.
+
+This is a real new owner-visible *read-only outcome*; it is not audited
+platform-wide temporary support access, donor import or production
+PostgreSQL parity. Accordingly `support.case_queue` remains `mapped`.
+
 **Not yet complete donor parity:** ClientPlatform's platform-wide case
 directory/queue, audited time-boxed support access sessions, operator console,
 historical state import/migration and live production journey validation.
