@@ -16,6 +16,7 @@ from adapters.api.fastapi.business_workspace_support_case_routes import (
 from application.business_autonomy.support_case_registry import SupportCaseRegistry
 from entrypoints.api.api_key_policy import ApiKeyPolicy, PersistentApiKeyStore
 from entrypoints.api.security_owner_bundle import ApiSecurityOwnerBundle
+from governance.rbac_contract import RoleId
 from reliability.idempotency_store import InMemoryIdempotencyStore
 from runtime.platform.event_store.memory_event_store import MemoryEventStore
 from scripts.support.issue_case_operator_access import issue_operator_access
@@ -30,6 +31,12 @@ def test_owner_to_scoped_operator_to_owner_with_revocation_and_denial(tmp_path):
     )
     support_id, support_key = issue_operator_access(
         store=keys, tenant_id="tenant-a", business_id="business-a", operator_id="operator-one"
+    )
+    _, unscoped_support_key = keys.issue(
+        tenant_id="tenant-a", subject="unscoped-support",
+        roles=(RoleId.SUPPORT,), scopes=(),
+        metadata={"principal_kind": "user", "business_id": "business-a"},
+        ttl_seconds=3600,
     )
     _, wrong_business_key = issue_operator_access(
         store=keys, tenant_id="tenant-a", business_id="business-b", operator_id="operator-two"
@@ -55,8 +62,9 @@ def test_owner_to_scoped_operator_to_owner_with_revocation_and_denial(tmp_path):
         owner_denied = client.get("/platform-support/session", headers=owner_headers)
         assert owner_denied.status_code == 403
         assert client.get("/platform-support/session").status_code == 401
+        assert client.get("/platform-support/session", headers={"X-API-Key": unscoped_support_key}).status_code == 403
         bound = client.get("/platform-support/session", headers=support_headers)
-        assert bound.status_code == 200
+        assert bound.status_code == 200, bound.text
         assert bound.json() == {
             "tenant_id": "tenant-a", "business_id": "business-a",
             "operator_id": "operator-one", "can_manage_cases": True,
