@@ -100,7 +100,7 @@ def _matrix_snapshot():
             and len({item[0] for item in identities}) == len(identities)
         )
         e2e_root = repo_root() / "frontend" / "e2e"
-        for _, _, file, _, source_sha in identities:
+        for _, _, file, _, source_sha, _ in identities:
             _need(Path(file).name == file)
             _need(hashlib.sha256((e2e_root / file).read_bytes()).hexdigest() == source_sha)
         _need(len({row["name"] for row in rows}) == len({row["device"] for row in rows}) == 5)
