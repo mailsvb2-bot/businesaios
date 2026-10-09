@@ -61,6 +61,18 @@ def register_business_workspace_support_case_routes(
         except (ValueError, TypeError, RuntimeError, KeyError) as exc:
             fail(exc)
 
+    @router.get("/platform-support/session", tags=["platform-support"])
+    async def operator_session(request: Request):
+        tenant_id, business_id, actor_id = operator(request)
+        # The server, never a caller-supplied query/body, binds the console to
+        # exactly one business. Return public identity metadata only.
+        return {
+            "tenant_id": tenant_id,
+            "business_id": business_id,
+            "operator_id": actor_id,
+            "can_manage_cases": True,
+        }
+
     @router.get("/platform-support/cases", tags=["platform-support"])
     async def operator_queue(request: Request, limit: int = 50):
         tenant_id, business_id, _ = operator(request)
