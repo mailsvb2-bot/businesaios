@@ -56,6 +56,9 @@ def test_browser_contract_plans_provisioning_and_security_are_locked() -> None:
     assert 'readFileSync(new URL("./e2e/project-matrix.json", import.meta.url)' in config
     assert f'projectMatrix.schema !== "{browser_evidence.BROWSER_PROJECT_MATRIX_SCHEMA}"' in config
     assert 'actualSourceSha256 !== sourceSha256' in config
+    assert 'proofMode === "step_fingerprint"' in config
+    assert 'proofMode === "source_locked_execution"' in config
+    assert 'canonicalHash.test(sourceSha256)' in config
     assert "browserName: entry.engine" in config and 'trace: "off"' in config
     assert 'const runtimeMode = process.env.BAIOS_E2E_RUNTIME_MODE || "development"' in config
     assert 'const production = runtimeMode === "production"' in config
