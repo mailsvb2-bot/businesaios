@@ -116,6 +116,23 @@ def test_owner_to_scoped_operator_to_owner_with_revocation_and_denial(tmp_path):
         assert client.get("/business-workspace/support-cases", headers=owner_headers).json()["cases"] == [resolved]
         assert len(event_store) == 3
 
+        history_url = "/business-workspace/support-cases/" + created["id"] + "/history"
+        history_response = client.get(history_url, headers=owner_headers)
+        assert history_response.status_code == 200, history_response.text
+        trail = history_response.json()
+        assert trail["case_id"] == created["id"] and trail["revision"] == 3
+        assert trail["total"] == 3 and not trail["truncated"]
+        assert [entry["action"] for entry in trail["entries"]] == ["created", "claimed", "resolved"]
+        assert all(entry["occurred_at"] for entry in trail["entries"])
+        assert "operator-one" not in history_response.text
+        assert "operator-resolve" not in history_response.text
+        assert client.get(history_url, headers=support_headers).status_code == 403
+        _, other_owner_key = auth_policy.issue_owner_session(
+            tenant_id="tenant-a", business_id="business-b", subject="other-owner"
+        )
+        assert client.get(history_url, headers={"X-API-Key": other_owner_key}).status_code == 404
+        assert client.get(history_url + "?limit=0", headers=owner_headers).status_code == 422
+
         keys.revoke(support_id)
         assert client.get("/platform-support/cases", headers=support_headers).status_code == 401
         assert client.get("/business-workspace/support-cases", headers=owner_headers).status_code == 200
