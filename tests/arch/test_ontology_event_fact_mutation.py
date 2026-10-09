@@ -38,6 +38,7 @@ EXTERNAL_FACT_INGRESS = Path("application/business_autonomy/evidence_projection.
 BUSINESS_DISCOVERY_FACT_INGRESS = Path("application/business_discovery/ingress.py")
 AGENT_IDENTITY_EVENT_FACT_OWNER = Path("application/business_autonomy/registry.py")
 EVENT_LANDING_EVENT_FACT_OWNER = Path("application/public_site/event_landing_registry.py")
+SUPPORT_CASE_EVENT_FACT_OWNER = Path("application/business_autonomy/support_case_registry.py")
 DIRECT_BUSINESS_FACT_MUTATION_OWNERS = (OWNER, CUSTOMER_DIRECT_OWNER)
 SPECIAL_EVENT_STORE_WRITER_MODULES = (
     "crm.customer_registry",
@@ -103,6 +104,7 @@ def test_shared_event_fact_writer_consumers_are_review_locked() -> None:
             BUSINESS_DISCOVERY_FACT_INGRESS,
             AGENT_IDENTITY_EVENT_FACT_OWNER,
             EVENT_LANDING_EVENT_FACT_OWNER,
+            SUPPORT_CASE_EVENT_FACT_OWNER,
         )
     )
 
@@ -119,6 +121,17 @@ def test_event_landing_event_fact_owner_is_review_locked() -> None:
     assert "EventFactLifecycleWriter" in source
     assert "BusinessFactV1(" not in source
     assert "build_idempotency_key(" not in source
+
+
+def test_support_case_event_fact_owner_is_review_locked() -> None:
+    source = (ROOT / SUPPORT_CASE_EVENT_FACT_OWNER).read_text(encoding="utf-8")
+    assert "EventFactLifecycleWriter" in source
+    assert "BusinessFactV1(" not in source
+    assert "build_idempotency_key(" not in source
+    assert "append_event(" not in source
+    assert "IdempotencyState" not in source
+    assert "tenant_id=tenant_id" in source
+    assert "business_id=business_id" in source
 
 
 def test_agent_identity_event_fact_owner_is_review_locked() -> None:
