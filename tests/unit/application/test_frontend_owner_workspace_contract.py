@@ -86,3 +86,17 @@ def test_phase18_event_landing_has_owner_editor_and_anonymous_published_view() -
     assert 'payload.content' in public
     assert 'localStorage' not in editor + public
     assert 'sessionStorage' not in editor + public
+
+
+def test_owner_support_case_journey_uses_authenticated_canonical_workspace_only() -> None:
+    app = Path('frontend/src/App.jsx').read_text(encoding='utf-8')
+    panel = Path('frontend/src/SupportCasesWorkspace.jsx').read_text(encoding='utf-8')
+    routes = Path('adapters/api/fastapi/public_routes.py').read_text(encoding='utf-8')
+    assert '<SupportCasesWorkspace' in app
+    assert 'support:${data.tenant_id}:${data.business_id}' in app
+    assert '/business-workspace/support-cases' in panel
+    assert 'X-API-Key' in panel and 'credentials: "include"' not in panel
+    assert 'localStorage' not in panel and 'sessionStorage' not in panel
+    assert 'crypto.randomUUID()' in panel and 'pending.current.key' in panel
+    assert 'register_business_workspace_support_case_routes(' in routes
+    assert 'SupportCaseRegistry(' in routes
