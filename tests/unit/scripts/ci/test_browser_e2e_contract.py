@@ -283,7 +283,7 @@ def test_evidence_requires_exact_projects_canonical_identity_and_three_real_arti
     assert snapshot and [item["name"] for item in snapshot["projects"]] == list(names)
     assert all(item["tests"] == 2 for item in snapshot["projects"]) and snapshot["artifacts"]["junit"]["tests"] == 10
     canonical = browser_evidence._matrix_snapshot()
-    assert canonical and browser_evidence._scenario_matrix([(p, TITLE, SPEC) for p in names], names, canonical[1])
+    assert canonical and browser_evidence._scenario_matrix([(p, title, file) for p in names for title, file in ((TITLE, SPEC), (EVENT_TITLE, EVENT_SPEC))], names, canonical[1])
     assert browser_evidence._scenario_matrix([(p, "forged scenario", "forged.spec.js") for p in names], names, canonical[1]) is None
     for mutate in (
         lambda: _outputs(browser, projects=names[:-1]),
