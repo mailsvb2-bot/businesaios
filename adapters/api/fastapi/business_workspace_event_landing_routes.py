@@ -42,6 +42,8 @@ def register_business_workspace_event_landing_routes(*, router: APIRouter, auth_
                 state=event_landing_registry.transition(tenant_id=tenant_id,business_id=business_id,event_id=event_id,action=action,expected_revision=rev,idempotency_key=idem,actor_id=actor,content=content,source=str(body.get('source') or 'manual'))
             return event_landing_payload(state)
         except RuntimeError as exc:
+            if str(exc) == 'event_landing_already_exists':
+                raise HTTPException(status_code=409, detail='event_landing_already_exists') from exc
             if 'revision_conflict' in str(exc): raise HTTPException(status_code=409,detail='event_landing_revision_conflict') from exc
             raise
         except (TypeError,ValueError) as exc:
