@@ -117,3 +117,46 @@ def test_organization_create_requires_idempotency_and_rejects_replay_changes(mon
 
 async def _body():
     return {"name": "Clinic"}
+
+
+def test_organization_http_boundary_uses_real_event_writer_and_survives_reopen(monkeypatch) -> None:
+    from reliability.idempotency_store import InMemoryIdempotencyStore
+    from tests.unit.application.test_organization_registry import MemoryEventStore
+
+    events = MemoryEventStore()
+    claims = InMemoryIdempotencyStore()
+    actor = {"tenant": "tenant-real", "business": "business-real"}
+
+    def scope(**kwargs):
+        assert kwargs["required_scope"] == "provider_control_plane"
+        return object(), actor["tenant"], actor["business"]
+
+    async def body(_request):
+        return {"name": "Real Clinic", "organization_type": "clinic"}
+
+    monkeypatch.setattr(routes, "business_owner_scope", scope)
+    monkeypatch.setattr(routes, "json_body", body)
+    first_router = APIRouter()
+    routes.register_business_workspace_organization_routes(
+        router=first_router, auth_bundle=object(), event_store=events, idempotency_store=claims,
+    )
+    create = _endpoint(first_router, "/business-workspace/organizations", "POST")
+    created = asyncio.run(create(_Request(key="durable-create")))
+    assert created["organization"]["name"] == "Real Clinic"
+    assert len(events.events) == 1
+    assert asyncio.run(create(_Request(key="durable-create"))) == created
+    assert len(events.events) == 1
+
+    reopened_router = APIRouter()
+    routes.register_business_workspace_organization_routes(
+        router=reopened_router, auth_bundle=object(), event_store=events, idempotency_store=claims,
+    )
+    listing = _endpoint(reopened_router, "/business-workspace/organizations", "GET")
+    items = asyncio.run(listing(_Request()))["organizations"]
+    assert len(items) == 1
+    assert items[0]["organization_id"] == created["organization"]["organization_id"]
+    actor["business"] = "another-business"
+    assert asyncio.run(listing(_Request()))["organizations"] == []
+    actor["tenant"] = "another-tenant"
+    actor["business"] = "business-real"
+    assert asyncio.run(listing(_Request()))["organizations"] == []
