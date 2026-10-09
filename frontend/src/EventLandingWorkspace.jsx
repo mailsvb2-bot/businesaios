@@ -207,7 +207,7 @@ export function EventLandingWorkspace({ apiBase, tenantId, businessId, apiKey, g
       <p className="muted-text">Откройте мероприятие по его ID или создайте черновик. После сохранения можно опубликовать страницу, а затем снять её с публикации. Пока вы не нажали «Опубликовать», посетители не увидят черновик.</p>
       <div className="event-landing-id">
         <label>Идентификатор мероприятия
-          <input aria-label="ID мероприятия" maxLength={200} value={eventId} onChange={(e) => changeEventId(e.target.value)} placeholder="Например, webinar-2026-10" />
+          <input aria-label="ID мероприятия" maxLength={200} disabled={Boolean(busy)} value={eventId} onChange={(e) => changeEventId(e.target.value)} placeholder="Например, webinar-2026-10" />
         </label>
         <button type="button" className="ghost" disabled={!apiKey || !currentId || Boolean(busy)} onClick={refresh}>{busy === "load" ? "Загружаем…" : "Загрузить"}</button>
       </div>
