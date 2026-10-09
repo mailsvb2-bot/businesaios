@@ -100,3 +100,24 @@ def test_owner_support_case_journey_uses_authenticated_canonical_workspace_only(
     assert 'crypto.randomUUID()' in panel and 'pending.current.key' in panel
     assert 'register_business_workspace_support_case_routes(' in routes
     assert 'SupportCaseRegistry(' in routes
+
+
+def test_phase18_operator_console_isolated_from_owner_and_uses_real_auth_boundary() -> None:
+    root = Path("frontend/src/main.jsx").read_text(encoding="utf-8")
+    panel = Path("frontend/src/SupportOperatorConsole.jsx").read_text(encoding="utf-8")
+    routes = Path("adapters/api/fastapi/business_workspace_support_case_routes.py").read_text(encoding="utf-8")
+    assert 'get("support_console") === "1"' in root
+    assert "<SupportOperatorConsole apiBase={apiBase} />" in root
+    assert "publicEvent ? <PublicEventLanding" in root
+    assert "/platform-support" in panel
+    assert '"/session"' in panel and '"/cases"' in panel
+    assert '"X-API-Key": key' in panel
+    assert 'credentials: "omit"' in panel
+    assert 'cache: "no-store"' in panel
+    assert "sessionStorage" not in panel and "localStorage" not in panel
+    assert "crypto.randomUUID()" in panel and "pending.current.key" in panel
+    assert '"support_case_manage"' in routes
+    assert "RoleId.SUPPORT" in routes
+    assert "@router.get(\"/platform-support/session\"" in routes
+    assert 'dict(principal.metadata or {}).get("business_id")' in routes
+    assert "request.query_params" not in routes
