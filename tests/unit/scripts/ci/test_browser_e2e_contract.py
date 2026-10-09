@@ -18,7 +18,7 @@ from scripts.ci.subprocess_io import CommandOutcome
 
 TITLE = "onboarding creates a read-only OWNER workspace without persisting the API key"
 SPEC = "onboarding-workspace.spec.js"
-STEP_SHA = "f1cae0b84700dc5079bda912e24f1cb9ce75ac8a11455ca5ba4e8abc709a4068"
+STEP_SHA = "912c61fbb5f236a13b0f07036f8074812ef2ed1c06038e95e1d588f6be582bfc"
 SOURCE_SHA = "c7a488a2af6a044a5a301ee8177052837cc6d182ccf3eb24e3fe46c9d00e7c79"
 EVENT_TITLE = "event landing owner journey: draft stays private, publish becomes public, unpublish revokes access"
 EVENT_SPEC = "event-landing-journey.spec.js"
@@ -287,6 +287,13 @@ def test_evidence_requires_exact_projects_canonical_identity_and_three_real_arti
     assert all(item["tests"] == 2 for item in snapshot["projects"]) and snapshot["artifacts"]["junit"]["tests"] == 10
     canonical = browser_evidence._matrix_snapshot()
     assert canonical and browser_evidence._scenario_matrix([(p, title, file) for p in names for title, file in ((TITLE, SPEC), (EVENT_TITLE, EVENT_SPEC))], names, canonical[1])
+    # Fingerprints are pinned to the complete 128-step onboarding journey.
+    # Dynamic browser identity and observation timestamp alone must not
+    # invalidate an otherwise identical real user journey.
+    for project in names:
+        normalized = [_fixture_step(node, project) for node in STEP_SHAPE]
+        assert browser_evidence._step_fingerprint(normalized, SPEC, project) == STEP_SHA
+
     assert browser_evidence._scenario_matrix([(p, "forged scenario", "forged.spec.js") for p in names], names, canonical[1]) is None
     for mutate in (
         lambda: _outputs(browser, projects=names[:-1]),
