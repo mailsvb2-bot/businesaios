@@ -121,3 +121,17 @@ def test_phase18_operator_console_isolated_from_owner_and_uses_real_auth_boundar
     assert "@router.get(\"/platform-support/session\"" in routes
     assert 'dict(principal.metadata or {}).get("business_id")' in routes
     assert "request.query_params" not in routes
+
+
+def test_support_history_is_bound_to_authenticated_owner_and_durable_event_spine() -> None:
+    backend = Path("application/business_autonomy/support_case_registry.py").read_text(encoding="utf-8")
+    routes = Path("adapters/api/fastapi/business_workspace_support_case_routes.py").read_text(encoding="utf-8")
+    owner = Path("frontend/src/SupportCasesWorkspace.jsx").read_text(encoding="utf-8")
+    assert 'def history(self, *, tenant_id: str, business_id: str, case_id: str,' in backend
+    assert 'rows = self._history(tenant_id=tenant_id, business_id=business_id, case_id=case_id)' in backend
+    assert '@router.get("/business-workspace/support-cases/{case_id}/history"' in routes
+    assert 'tenant_id, business_id, _ = owner(request)' in routes
+    assert '"/history"' in owner and "encodeURIComponent(item.id)" in owner
+    assert 'getJson(url + "/" + encodeURIComponent(item.id) + "/history", headers)' in owner
+    assert 'Показать историю' in owner and 'Подтверждено событий:' in owner
+    assert "sessionStorage" not in owner and "localStorage" not in owner
