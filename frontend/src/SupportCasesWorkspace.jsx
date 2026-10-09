@@ -54,11 +54,19 @@ export function SupportCasesWorkspace({ apiBase, apiKey, getJson, postJson }) {
       if (!created?.id || created?.status !== "open") {
         throw new Error("Создание не подтверждено сервером. Проверьте историю обращений.");
       }
+      // The POST response is already a durable server receipt. A later list
+      // refresh must never retroactively turn a successful create into "failed".
       pending.current = null;
       setSummary("");
-      const payload = await getJson(url, headers);
-      setCases(Array.isArray(payload?.cases) ? payload.cases : [created]);
+      setCases((previous) => [created, ...previous.filter((item) => item.id !== created.id)]);
       setNotice("Обращение зарегистрировано. Номер: " + created.id);
+      try {
+        const payload = await getJson(url, headers);
+        if (Array.isArray(payload?.cases)) setCases(payload.cases);
+      } catch {
+        // Keep the confirmed case visible. The owner can refresh status later.
+        setNotice("Обращение зарегистрировано. Номер: " + created.id + ". Список можно обновить позже.");
+      }
     } catch (reason) {
       setError("Не удалось подтвердить создание: " + (reason.message || "ошибка сети") + ". Повторная отправка использует тот же идентификатор операции.");
     } finally {
