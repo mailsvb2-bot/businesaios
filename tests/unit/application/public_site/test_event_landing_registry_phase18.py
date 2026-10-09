@@ -91,3 +91,29 @@ def test_invalid_event_landing_source_and_identity_never_poison_canonical_histor
         actor_id="owner", content=_content("Updated"), source="manual",
     )
     assert updated.revision == 2
+
+
+
+def test_reused_landing_idempotency_key_may_not_mutate_authorized_payload() -> None:
+    events, claims = _EventStore(), InMemoryIdempotencyStore()
+    registry = EventLandingRegistry(event_store=events, idempotency_store=claims)
+    registry.create(
+        tenant_id="t", business_id="b", event_id="e", content=_content("A"),
+        source="manual", idempotency_key="create", actor_id="owner",
+    )
+    published = registry.transition(
+        tenant_id="t", business_id="b", event_id="e", action="publish",
+        expected_revision=1, idempotency_key="publish", actor_id="owner",
+    )
+    assert published.is_published
+    rows = list(events.events)
+    assert registry.transition(
+        tenant_id="t", business_id="b", event_id="e", action="publish",
+        expected_revision=1, idempotency_key="publish", actor_id="owner",
+    ) == published
+    with pytest.raises(ValueError, match="idempotency_payload_conflict"):
+        registry.transition(
+            tenant_id="t", business_id="b", event_id="e", action="publish",
+            expected_revision=2, idempotency_key="publish", actor_id="owner",
+        )
+    assert events.events == rows
