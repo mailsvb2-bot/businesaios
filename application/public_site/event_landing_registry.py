@@ -61,7 +61,11 @@ class EventLandingRegistry:
         elif action=="unpublish": fact_type,payload=_UNPUBLISHED,{"expected_revision":expected_revision}
         else: raise ValueError("unsupported_event_landing_action")
         metadata={"actor_id":actor_id}
-        if self._writer.find_existing_for_key(tenant_id=tenant_id,business_id=business_id,entity_id=event_id,operation=action,idempotency_key=idempotency_key,fact_type=fact_type,event_metadata=metadata) is not None:
+        existing=self._writer.find_existing_for_key(tenant_id=tenant_id,business_id=business_id,entity_id=event_id,operation=action,idempotency_key=idempotency_key,fact_type=fact_type,event_metadata=metadata)
+        if existing is not None:
+            durable_payload=dict((existing.get("payload") or {}).get("payload") or {})
+            if durable_payload!=payload:
+                raise ValueError("event_landing_idempotency_payload_conflict")
             return self.get(tenant_id=tenant_id,business_id=business_id,event_id=event_id)
         state=self.get(tenant_id=tenant_id,business_id=business_id,event_id=event_id)
         if expected_revision!=state.revision: raise RuntimeError("event_landing_revision_conflict")
