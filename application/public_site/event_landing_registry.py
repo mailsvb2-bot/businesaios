@@ -42,6 +42,9 @@ class EventLandingRegistry:
     def create(self, *, tenant_id: str, business_id: str, event_id: str, content: EventLandingContent, source: str, idempotency_key: str, actor_id: str) -> EventLandingState:
         try: current=self.get(tenant_id=tenant_id,business_id=business_id,event_id=event_id)
         except KeyError: current=None
+        # Validate before appending immutable canonical events: otherwise a
+        # malformed event_id or source can permanently poison event replay.
+        EventLandingState(event_id=event_id, draft=content, draft_source=source)
         payload={"content":content.to_payload(),"source":source}
         if current is not None:
             repaired=self._writer.repair_existing(tenant_id=tenant_id,business_id=business_id,entity_id=event_id,operation="create",idempotency_key=idempotency_key,fact_type=_CREATED,payload=payload,event_metadata={"actor_id":actor_id})
@@ -62,6 +65,14 @@ class EventLandingRegistry:
             return self.get(tenant_id=tenant_id,business_id=business_id,event_id=event_id)
         state=self.get(tenant_id=tenant_id,business_id=business_id,event_id=event_id)
         if expected_revision!=state.revision: raise RuntimeError("event_landing_revision_conflict")
+        # Exercise the exact domain transition before persisting its event.
+        # Invalid draft provenance must never be written into durable history.
+        if action=="save":
+            state.save_draft(content=content, source=source, expected_revision=expected_revision)
+        elif action=="publish":
+            state.publish(expected_revision=expected_revision)
+        else:
+            state.unpublish(expected_revision=expected_revision)
         token=f"{state.revision}:{state.status.value}:{state.published_revision or 0}"
         self._writer.append_transition_once(tenant_id=tenant_id,business_id=business_id,entity_id=event_id,expected_state_token=token,operation=action,idempotency_key=idempotency_key,fact_type=fact_type,payload=payload,occurred_at_ms=self._now(),event_metadata={"actor_id":actor_id})
         return self.get(tenant_id=tenant_id,business_id=business_id,event_id=event_id)
