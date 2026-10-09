@@ -51,6 +51,40 @@ The old 20-capability donor manifest is only a floor. Current ClientPlatform mai
 
 These are inventoried independently so that a broad capability cannot be declared implemented merely because one sub-contract exists.
 
+## Support cases — first authenticated end-to-end slice
+
+A tenant-scoped support case user journey is now wired to the **existing
+Business Event Spine**, not to donor support tables:
+
+1. An authenticated business owner opens **Поддержка** in the canonical owner
+   workspace, creates a category/summary case with an idempotency key and
+   receives a durable case UUID.
+2. The same owner reloads their inbox and sees server-backed status updates.
+3. An authenticated tenant/business-bound **SUPPORT** principal with explicit
+   `support_case_manage` scope can list that business's queue, claim an open
+   case, release their claim, or resolve it. Ownership of a claimed case
+   is enforced, and a terminal resolved case cannot be reopened.
+4. Repeated commands are handled by the shared ontology fact writer and
+   idempotency store; concurrent operations require the same canonical
+   state transition token. All events and lookups include authenticated
+   tenant **and** business identity.
+5. Invalid summaries (including detected credentials), body-injected tenant
+   identifiers, stale revisions, duplicate operation payloads and unauthorized
+   operator attempts fail closed.
+
+Code: `application.business_autonomy.support_case_registry`,
+`adapters.api.fastapi.business_workspace_support_case_routes`,
+`frontend/src/SupportCasesWorkspace.jsx`; tests under
+`tests/unit/application/test_phase18_support_case_registry.py` and
+`tests/unit/adapters/api/fastapi/test_support_case_routes_phase18.py`.
+
+**Not yet complete donor parity:** ClientPlatform's platform-wide case
+directory/queue, audited time-boxed support access sessions, operator console,
+historical state import/migration and live production journey validation.
+For safety, there is **no global case enumeration fallback** and no operator
+impersonation of an owner. `support.case_queue` remains **mapped**, not
+`implemented` or `parity_proven` until these gaps are closed.
+
 ## What is deliberately not copied
 
 - ClientPlatform repositories/tables as parallel persistence;
