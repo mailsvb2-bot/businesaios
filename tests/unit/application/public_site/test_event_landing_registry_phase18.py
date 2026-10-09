@@ -117,3 +117,60 @@ def test_reused_landing_idempotency_key_may_not_mutate_authorized_payload() -> N
             expected_revision=2, idempotency_key="publish", actor_id="owner",
         )
     assert events.events == rows
+
+
+def test_foreign_fact_source_cannot_create_or_mutate_public_event_landing() -> None:
+    """The shared Event Spine is not a shared write authority for landing state."""
+    from contracts.event_store import BusinessFactV1
+
+    events, idempotency = _EventStore(), InMemoryIdempotencyStore()
+    registry = EventLandingRegistry(event_store=events, idempotency_store=idempotency)
+
+    def foreign_fact(kind: str, payload: dict, *, timestamp: int, fact_id: str) -> None:
+        events.append_event(BusinessFactV1(
+            fact_id=fact_id,
+            tenant_id="tenant-a",
+            business_id="business-a",
+            fact_type=kind,
+            entity_id="event-1",
+            event_time_ms=timestamp,
+            observed_at_ms=timestamp,
+            source="other_domain",
+            payload=payload,
+        ).as_event())
+
+    # Even an otherwise well-formed foreign CREATE is not owned by the
+    # event-landing registry. It must not make an unpublished page appear.
+    foreign_fact(
+        "event_landing.created",
+        {"content": _content("Foreign").to_payload(), "source": "manual"},
+        timestamp=1, fact_id="foreign-create",
+    )
+    with pytest.raises(KeyError, match="event_landing_not_found"):
+        registry.get(tenant_id="tenant-a", business_id="business-a", event_id="event-1")
+
+    created = registry.create(
+        tenant_id="tenant-a", business_id="business-a", event_id="event-1",
+        content=_content("Canonical"), source="manual",
+        idempotency_key="canonical-create", actor_id="owner",
+    )
+    assert created.revision == 1 and created.draft.hero_title == "Canonical"
+    published = registry.transition(
+        tenant_id="tenant-a", business_id="business-a", event_id="event-1",
+        action="publish", expected_revision=1,
+        idempotency_key="canonical-publish", actor_id="owner",
+    )
+    assert published.public_content().hero_title == "Canonical"
+
+    # A later, matching foreign UNPUBLISH must not revoke the real public page.
+    foreign_fact(
+        "event_landing.unpublished", {"expected_revision": 1},
+        timestamp=10**15, fact_id="foreign-unpublish",
+    )
+    recovered = EventLandingRegistry(
+        event_store=events, idempotency_store=idempotency,
+    ).get(tenant_id="tenant-a", business_id="business-a", event_id="event-1")
+    assert recovered == published
+    assert recovered.is_published
+    assert recovered.public_content().hero_title == "Canonical"
+    assert len(events.events) == 4
