@@ -1,7 +1,7 @@
 """Prove support-case access is narrow and cannot grant general audit rights."""
 from __future__ import annotations
 
-from compliance.data_classification import DataCategory, DataSensitivity, KeywordDataClassifier
+from compliance.data_classification import DataCategory, DataSensitivity
 from governance.permission_matrix import permissions_for_roles
 from governance.rbac_contract import ActorContext, Permission, RoleId
 from security.access_policy import DataAccessPolicy, SecurityAction, SecurityResource
