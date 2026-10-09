@@ -46,6 +46,19 @@ def register_business_workspace_support_case_routes(
         except (ValueError, RuntimeError) as exc:
             fail(exc)
 
+    @router.get("/business-workspace/support-cases/{case_id}/history", tags=["business-workspace"])
+    async def owner_support_case_history(case_id: str, request: Request, limit: int = 50):
+        # No caller-supplied tenant/business/actor binding; the existing owner
+        # authentication perimeter determines which event stream is readable.
+        tenant_id, business_id, _ = owner(request)
+        try:
+            return support_cases.history(
+                tenant_id=tenant_id, business_id=business_id,
+                case_id=case_id, limit=limit,
+            )
+        except (ValueError, TypeError, RuntimeError, KeyError) as exc:
+            fail(exc)
+
     @router.post("/business-workspace/support-cases", tags=["business-workspace"])
     async def owner_create_support_case(request: Request):
         tenant_id, business_id, actor_id = owner(request)
