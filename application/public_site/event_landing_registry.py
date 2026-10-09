@@ -9,16 +9,22 @@ from contracts.event_store import BUSINESS_FACT_EVENT_TYPE
 
 _CREATED="event_landing.created"; _DRAFT="event_landing.draft_saved"; _PUBLISHED="event_landing.published"; _UNPUBLISHED="event_landing.unpublished"
 _FACTS=frozenset({_CREATED,_DRAFT,_PUBLISHED,_UNPUBLISHED})
+_SOURCE="event_landing_registry"
 
 
 class EventLandingRegistry:
     def __init__(self, *, event_store: Any, idempotency_store) -> None:
         self._events=event_store
-        self._writer=EventFactLifecycleWriter(event_store=event_store,idempotency_store=idempotency_store,namespace="event_landing",source="event_landing_registry",id_prefix="event-landing")
+        self._writer=EventFactLifecycleWriter(event_store=event_store,idempotency_store=idempotency_store,namespace="event_landing",source=_SOURCE,id_prefix="event-landing")
 
     def _history(self, *, tenant_id: str, business_id: str, event_id: str) -> list[dict[str,object]]:
         rows=[]
         for order,event in enumerate(self._events.iter_events(tenant_id=tenant_id,start_ms=0,event_type=BUSINESS_FACT_EVENT_TYPE)):
+            # BusinessFactV1 types share one Event Spine across canonical owners.
+            # A matching type/entity from another domain must never alter public
+            # publication state or block the real owner from creating it.
+            if event.get("source") != _SOURCE:
+                continue
             envelope=dict(event.get("payload") or {})
             if envelope.get("business_id")!=business_id or envelope.get("entity_id")!=event_id or envelope.get("fact_type") not in _FACTS: continue
             rows.append({"type":envelope["fact_type"],"payload":dict(envelope.get("payload") or {}),"time":int(envelope.get("event_time_ms") or event.get("timestamp_ms") or 0),"order":order})
