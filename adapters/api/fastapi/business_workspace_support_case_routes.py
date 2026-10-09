@@ -1,7 +1,7 @@
 """Authenticated Phase-18 support journey; no cross-tenant operator bypass."""
 from __future__ import annotations
 
-from fastapi import APIRouter, HTTPException, Request, status
+from fastapi import APIRouter, HTTPException, Request
 
 from adapters.api.fastapi.router_support import authorize_request, business_owner_scope, json_body
 from application.business_autonomy.support_case_registry import SupportCaseRegistry
