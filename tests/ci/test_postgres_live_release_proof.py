@@ -22,8 +22,8 @@ def _configure_backup_evidence(
 ) -> Path:
     artifact_root = tmp_path / "artifacts" / "ci"
     artifact_root.mkdir(parents=True, exist_ok=True)
-    dump_path = artifact_root / "postgres-backup.dump"
-    dump_path.write_bytes(b"canonical-postgres-backup")
+    dump_path = artifact_root / "postgres-backup.dump.enc"
+    dump_path.write_bytes(b"encrypted-canonical-postgres-backup")
     digest = dump_sha256 or hashlib.sha256(dump_path.read_bytes()).hexdigest()
     evidence_path = artifact_root / "postgres-backup-restore-evidence.json"
     evidence_path.write_text(
@@ -31,8 +31,15 @@ def _configure_backup_evidence(
             {
                 "contract": step_postgres_live._BACKUP_EVIDENCE_CONTRACT,
                 "commit_sha": evidence_commit_sha,
-                "dump_path": "artifacts/ci/postgres-backup.dump",
-                "dump_sha256": digest,
+                "encrypted_dump_path": "artifacts/ci/postgres-backup.dump.enc",
+                "encrypted_dump_sha256": digest,
+                "encryption": {
+                    "algorithm": "AES-256-GCM",
+                    "aad": "exact_commit_sha",
+                    "key_persisted": False,
+                },
+                "plaintext_dump_persisted": False,
+                "restore_verified": True,
             },
             sort_keys=True,
         ),
@@ -138,7 +145,53 @@ def test_backup_evidence_rejects_dump_digest_mismatch(
 
     assert step_postgres_live._backup_evidence_status() == (
         False,
-        "postgres_backup_dump_sha256_mismatch",
+        "postgres_backup_encrypted_dump_sha256_mismatch",
+    )
+
+
+
+
+def test_backup_evidence_rejects_wrong_encryption_algorithm(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    evidence_path = _configure_backup_evidence(tmp_path, monkeypatch)
+    payload = json.loads(evidence_path.read_text(encoding="utf-8"))
+    payload["encryption"]["algorithm"] = "AES-128-CBC"
+    evidence_path.write_text(json.dumps(payload), encoding="utf-8")
+
+    assert step_postgres_live._backup_evidence_status() == (
+        False,
+        "postgres_backup_encryption_algorithm_invalid",
+    )
+
+
+def test_backup_evidence_rejects_persisted_key_claim(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    evidence_path = _configure_backup_evidence(tmp_path, monkeypatch)
+    payload = json.loads(evidence_path.read_text(encoding="utf-8"))
+    payload["encryption"]["key_persisted"] = True
+    evidence_path.write_text(json.dumps(payload), encoding="utf-8")
+
+    assert step_postgres_live._backup_evidence_status() == (
+        False,
+        "postgres_backup_encryption_key_persistence_forbidden",
+    )
+
+
+def test_backup_evidence_rejects_plaintext_backup_artifact(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _configure_backup_evidence(tmp_path, monkeypatch)
+    plaintext = tmp_path / "artifacts" / "ci" / "postgres-backup.dump"
+    plaintext.write_bytes(b"plaintext-must-not-persist")
+
+    assert step_postgres_live._backup_evidence_status() == (
+        False,
+        "postgres_backup_plaintext_artifact_present",
     )
 
 

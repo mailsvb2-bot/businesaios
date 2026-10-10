@@ -175,3 +175,187 @@ def test_native_vk_adapter_carries_canonical_markup_into_approved_provider_subje
         "decision_id": "dec-1",
         "execution_id": "dec-1",
     }
+
+
+def test_max_canonical_inline_keyboard_round_trips_callback_token() -> None:
+    provider = provider_map()["max_messaging"]
+    canonical = {
+        "inline_keyboard": [
+            [{"text": "Open", "callback_data": "menu:open"}],
+            [{"text": "Site", "url": "https://example.com"}],
+        ]
+    }
+    normalized = ProviderPayloadNormalizers().normalize_outbound(
+        provider=provider,
+        operation="message_send",
+        payload={"user_id": "778899", "text": "choose", "reply_markup": canonical},
+    )
+    assert normalized["attachments"] == [
+        {
+            "type": "inline_keyboard",
+            "payload": {
+                "buttons": [
+                    [{"type": "callback", "text": "Open", "payload": "menu:open"}],
+                    [{"type": "link", "text": "Site", "url": "https://example.com"}],
+                ]
+            },
+        }
+    ]
+
+    from runtime.business_autonomy.provider_vendor_transports import build_provider_vendor_transports
+
+    request = build_provider_vendor_transports()["max_messaging"].execute(
+        provider=provider,
+        tenant_id="tenant-a",
+        business_id="business-a",
+        operation="message_send",
+        payload=normalized,
+    )["request"]
+    assert request["url_template"] == "https://platform-api2.max.ru/messages?user_id=778899"
+    assert request["json_body"]["attachments"] == normalized["attachments"]
+
+    callback_payload = {
+        "update_type": "message_callback",
+        "timestamp": 1787259600000,
+        "user": {"user_id": 778899},
+        "callback": {"callback_id": "max-callback-roundtrip", "payload": "menu:open"},
+    }
+    decoded = decode_provider_inbound(channel="max", payload=callback_payload)
+    assert decoded["text"] == "menu:open"
+    assert decoded["message_id"] == "max-callback-roundtrip"
+
+
+
+def test_max_callback_identity_precedes_original_message_identity() -> None:
+    callback_payload = {
+        "update_type": "message_callback",
+        "timestamp": 1787259600000,
+        "user": {"user_id": 778899},
+        "message": {
+            "body": {"mid": "original-message-123", "text": "Choose"},
+            "sender": {"user_id": 778899},
+        },
+        "callback": {"callback_id": "callback-event-456", "payload": "menu:open"},
+    }
+    decoded = decode_provider_inbound(channel="max", payload=callback_payload)
+    assert decoded["message_id"] == "callback-event-456"
+    assert decoded["user_id"] == "778899"
+    assert decoded["text"] == "menu:open"
+
+    route = ProviderWebhookRouteRegistry().extract(
+        provider_map()["max_messaging"], {}, json.dumps(callback_payload).encode()
+    )
+    assert route["event_key"] == decoded["message_id"]
+    assert route["resource_id"] == decoded["message_id"]
+
+
+
+def test_max_keyboard_fails_closed_when_provider_row_capacity_is_exceeded() -> None:
+    provider = provider_map()["max_messaging"]
+    too_many = [
+        {"text": f"B{index}", "callback_data": f"cmd:{index}"}
+        for index in range(8)
+    ]
+    with pytest.raises(ValueError, match="button capacity"):
+        ProviderPayloadNormalizers().normalize_outbound(
+            provider=provider,
+            operation="message_send",
+            payload={
+                "user_id": "778899",
+                "text": "choose",
+                "reply_markup": {"inline_keyboard": [too_many]},
+            },
+        )
+
+
+
+@pytest.mark.parametrize("unsafe_time", ["NaN", "Infinity", "-Infinity", "1e309"])
+def test_provider_ingress_rejects_non_finite_timestamps_without_losing_event(unsafe_time: str) -> None:
+    samples = (
+        ("telegram", {
+            "message": {
+                "message_id": 101,
+                "from": {"id": 7},
+                "chat": {"id": 7},
+                "text": "hello",
+                "date": unsafe_time,
+            }
+        }, "101"),
+        ("vk", {
+            "type": "message_new",
+            "object": {
+                "message": {
+                    "id": "vk-message-101",
+                    "from_id": 7,
+                    "peer_id": 7,
+                    "text": "hello",
+                    "date": unsafe_time,
+                }
+            },
+        }, "vk-message-101"),
+        ("max", {
+            "update_type": "message_created",
+            "timestamp": unsafe_time,
+            "message": {
+                "body": {"mid": "max-message-101", "text": "hello"},
+                "sender": {"user_id": 7},
+            },
+        }, "max-message-101"),
+    )
+    for channel, payload, expected_id in samples:
+        decoded = decode_provider_inbound(channel=channel, payload=payload)
+        assert str(decoded["message_id"]) == expected_id
+        assert decoded["text"] == "hello"
+        assert decoded["timestamp_ms"] == 0
+
+
+@pytest.mark.parametrize("actor_location", ["top_level", "callback"])
+def test_max_callback_clicking_user_not_original_message_sender(actor_location: str) -> None:
+    payload = {
+        "update_type": "message_callback",
+        "timestamp": 1787259600000,
+        "message": {
+            "body": {"mid": "original-bot-message", "text": "Menu"},
+            "sender": {"user_id": 999999},
+        },
+        "callback": {"callback_id": "click-123", "payload": "menu:open"},
+    }
+    if actor_location == "top_level":
+        payload["user"] = {"user_id": 778899}
+    else:
+        payload["callback"]["user"] = {"user_id": 778899}
+    decoded = decode_provider_inbound(channel="max", payload=payload)
+    assert decoded["user_id"] == "778899"
+    assert decoded["message_id"] == "click-123"
+    assert decoded["text"] == "menu:open"
+
+    route = ProviderWebhookRouteRegistry().extract(
+        provider_map()["max_messaging"], {}, json.dumps(payload).encode()
+    )
+    assert route["event_key"] == "click-123"
+    assert route["messaging_ingress"]["user_id"] == "778899"
+    assert route["messaging_ingress"]["text"] == "menu:open"
+
+
+def test_vk_callback_uses_clicking_actor_not_embedded_message_sender() -> None:
+    payload = {
+        "type": "message_event",
+        "event_id": "click-vk-42",
+        "object": {
+            "user_id": 770001,
+            "peer_id": 200000001,
+            "message": {"from_id": 990002, "id": 500, "text": "Old menu"},
+            "payload": {"callback_data": "menu:open"},
+        },
+    }
+    decoded = decode_provider_inbound(channel="vk", payload=payload)
+    assert decoded["user_id"] == "770001"
+    assert decoded["text"] == "menu:open"
+    assert decoded["message_id"] == "click-vk-42"
+
+    route = ProviderWebhookRouteRegistry().extract(
+        provider_map()["vk_messaging"], {}, json.dumps(payload).encode()
+    )
+    assert route["event_key"] == "click-vk-42"
+    assert route["messaging_ingress"]["user_id"] == "770001"
+    assert route["messaging_ingress"]["text"] == "menu:open"

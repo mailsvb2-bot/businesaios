@@ -90,8 +90,8 @@ def ads_catalog() -> dict[str, CatalogEntry]:
             "visual_creative_generate@v1",
             1,
             required={"tenant_id", "user_id", "kind", "prompt"},
-            optional={"country_code", "preferred_provider", "aspect_ratio", "duration_seconds", "negative_prompt", "reference_url", "brand_context", "wait_seconds"},
-            field_types={"tenant_id": str, "user_id": str, "kind": str, "prompt": str, "country_code": str, "preferred_provider": str, "aspect_ratio": str, "duration_seconds": int, "negative_prompt": str, "reference_url": str, "brand_context": str, "wait_seconds": int},
+            optional={"country_code", "preferred_provider", "aspect_ratio", "duration_seconds", "negative_prompt", "reference_url", "brand_context", "art_direction", "wait_seconds"},
+            field_types={"tenant_id": str, "user_id": str, "kind": str, "prompt": str, "country_code": str, "preferred_provider": str, "aspect_ratio": str, "duration_seconds": int, "negative_prompt": str, "reference_url": str, "brand_context": str, "art_direction": str, "wait_seconds": int},
         ),
         "visual_creative_poll@v1": _entry(
             "visual_creative_poll@v1",

@@ -79,7 +79,12 @@ class NativeMessagingVendorTransport(_PreparedOnlyTransport):
             return {'method': 'POST', 'url_template': str(binding['base_url']) + ('/get_account_info' if operation == 'health_probe' else '/send_message'), 'headers': {'X-Viber-Auth-Token': '{auth_token}'}, 'json_body': {} if operation == 'health_probe' else dict(payload or {})}
         if provider.provider_key == 'max_messaging':
             recipient = (('chat_id', payload.get('chat_id')) if payload.get('chat_id') else ('message_ids', payload.get('message_ids') or '{message_ids}')) if operation == 'message_read' else (('chat_id', payload.get('chat_id')) if payload.get('chat_id') else ('user_id', payload.get('user_id') or '{user_id}'))
-            return {'method': 'GET' if operation in {'health_probe', 'message_read'} else 'POST', 'url_template': str(binding['base_url']) + ({'health_probe': '/me', 'message_read': '/messages'}.get(operation, '/messages')) + ('' if operation == 'health_probe' else f'?{recipient[0]}={recipient[1]}'), 'headers': {'Authorization': '{access_token}'}, 'json_body': None if operation in {'health_probe', 'message_read'} else {'text': payload.get('text', '')}}
+            body = None
+            if operation not in {'health_probe', 'message_read'}:
+                body = {'text': payload.get('text', '')}
+                if isinstance(payload.get('attachments'), list):
+                    body['attachments'] = [dict(item) for item in payload['attachments'] if isinstance(item, Mapping)]
+            return {'method': 'GET' if operation in {'health_probe', 'message_read'} else 'POST', 'url_template': str(binding['base_url']) + ({'health_probe': '/me', 'message_read': '/messages'}.get(operation, '/messages')) + ('' if operation == 'health_probe' else f'?{recipient[0]}={recipient[1]}'), 'headers': {'Authorization': '{access_token}'}, 'json_body': body}
         if provider.provider_key == 'slack_messaging':
             channel = str(payload.get('channel') or payload.get('channel_id') or '{channel_id}')
             return {'method': 'POST' if operation != 'message_read' else 'GET', 'url_template': str(binding['base_url']) + ({'health_probe': '/auth.test', 'message_read': '/conversations.history'}.get(operation, '/chat.postMessage')) + (('?' + _query_string({'channel': channel})) if operation == 'message_read' else ''), 'headers': {'Authorization': 'Bearer {bot_token}'}, 'json_body': {'channel': channel, 'text': str(payload.get('text') or '')} if operation not in {'health_probe', 'message_read'} else None}

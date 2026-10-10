@@ -59,9 +59,28 @@ def test_runtime_queue_multiprocess_soak_finishes_all_jobs(tmp_path):
         if store.count(tenant_id='tenant-a', queue_name='ops', state=JobState.SUCCEEDED) == total_jobs:
             break
         time.sleep(0.01)
-    for proc in procs:
-        proc.join(timeout=10)
-        assert proc.exitcode == 0
+    # A shared deadline accommodates slow process spawn on loaded CI runners
+    # while retaining an explicit failure when a worker actually hangs.
+    deadline = time.monotonic() + 45
+    try:
+        for proc in procs:
+            proc.join(timeout=max(0, deadline - time.monotonic()))
+        unfinished = [proc for proc in procs if proc.is_alive()]
+        assert not unfinished, (
+            f"queue workers did not exit within 45s: "
+            f"{[(proc.pid, proc.exitcode) for proc in unfinished]}"
+        )
+        assert all(proc.exitcode == 0 for proc in procs), (
+            f"queue worker failures: {[(proc.pid, proc.exitcode) for proc in procs]}"
+        )
+    finally:
+        for proc in procs:
+            if proc.is_alive():
+                proc.terminate()
+                proc.join(timeout=5)
+                if proc.is_alive():
+                    proc.kill()
+                    proc.join(timeout=5)
 
     assert store.count(tenant_id='tenant-a', queue_name='ops', state=JobState.SUCCEEDED) == total_jobs
     assert store.count(tenant_id='tenant-a', queue_name='ops', state=JobState.PENDING) == 0

@@ -11,7 +11,7 @@ from runtime.platform.postgres_live_probe import PostgresLiveProbeConfig, run_po
 from runtime.platform.postgres_port import PostgresPort
 from scripts.ci.paths import repo_root
 
-_BACKUP_EVIDENCE_CONTRACT = "businesaios.postgres_backup_restore_evidence.v1"
+_BACKUP_EVIDENCE_CONTRACT = "businesaios.postgres_encrypted_backup_restore_evidence.v1"
 _BACKUP_SENTINEL_QUERY = (
     "SELECT commit_sha FROM deep_release_backup_probe.restore_sentinel WHERE id = %s;"
 )
@@ -107,14 +107,31 @@ def _backup_evidence_status() -> tuple[bool, str]:
     if evidence_sha != expected_sha:
         return False, "postgres_backup_evidence_commit_sha_mismatch"
 
-    dump_path = _ci_artifact_file(payload.get("dump_path"))
-    if dump_path is None:
-        return False, "postgres_backup_dump_path_invalid"
-    expected_dump_sha256 = str(payload.get("dump_sha256") or "").strip()
+    encrypted_path = _ci_artifact_file(payload.get("encrypted_dump_path"))
+    if encrypted_path is None:
+        return False, "postgres_backup_encrypted_dump_path_invalid"
+    expected_dump_sha256 = str(payload.get("encrypted_dump_sha256") or "").strip()
     if len(expected_dump_sha256) != 64 or any(char not in "0123456789abcdef" for char in expected_dump_sha256):
-        return False, "postgres_backup_dump_sha256_invalid"
-    if _sha256(dump_path) != expected_dump_sha256:
-        return False, "postgres_backup_dump_sha256_mismatch"
+        return False, "postgres_backup_encrypted_dump_sha256_invalid"
+    if _sha256(encrypted_path) != expected_dump_sha256:
+        return False, "postgres_backup_encrypted_dump_sha256_mismatch"
+
+    encryption = payload.get("encryption")
+    if not isinstance(encryption, dict):
+        return False, "postgres_backup_encryption_metadata_required"
+    if encryption.get("algorithm") != "AES-256-GCM":
+        return False, "postgres_backup_encryption_algorithm_invalid"
+    if encryption.get("aad") != "exact_commit_sha":
+        return False, "postgres_backup_encryption_aad_invalid"
+    if encryption.get("key_persisted") is not False:
+        return False, "postgres_backup_encryption_key_persistence_forbidden"
+    if payload.get("plaintext_dump_persisted") is not False:
+        return False, "postgres_backup_plaintext_persistence_forbidden"
+    if payload.get("restore_verified") is not True:
+        return False, "postgres_backup_restore_evidence_unverified"
+    plaintext_candidate = encrypted_path.with_suffix("")
+    if plaintext_candidate.exists():
+        return False, "postgres_backup_plaintext_artifact_present"
 
     try:
         with PostgresPort(restore_dsn, application_name="businesaios-postgres-backup-restore-proof") as port:

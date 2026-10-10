@@ -49,6 +49,14 @@ class HTTPResponse:
     json: Any | None
     text: str
 
+
+@dataclass(frozen=True)
+class HTTPBytesResponse:
+    status: int
+    headers: dict[str, str]
+    body: bytes
+
+
 class HttpTransport:
     async def post_json(
         self,
@@ -68,6 +76,17 @@ class HttpTransport:
         params: dict[str, Any] | None = None,
         timeout_s: int = 30,
     ) -> HTTPResponse:
+        raise NotImplementedError
+
+    async def get_bytes(
+        self,
+        *,
+        url: str,
+        headers: dict[str, str] | None = None,
+        params: dict[str, Any] | None = None,
+        timeout_s: int = 30,
+        max_bytes: int = 256 * 1024 * 1024,
+    ) -> HTTPBytesResponse:
         raise NotImplementedError
 
     async def post_multipart_file(
@@ -206,6 +225,9 @@ class DisabledNetworkTransport(HttpTransport):
     async def get_json(self, **_: Any) -> HTTPResponse:
         raise RuntimeError("network_disabled_in_this_runtime")
 
+    async def get_bytes(self, **_: Any) -> HTTPBytesResponse:
+        raise RuntimeError("network_disabled_in_this_runtime")
+
     async def post_multipart_file(self, **_: Any) -> HTTPResponse:
         raise RuntimeError("network_disabled_in_this_runtime")
 
@@ -244,6 +266,26 @@ class UrllibHttpTransport(HttpTransport):
             headers=dict(headers or {}),
             params=dict(params or {}),
             timeout_s=int(timeout_s or 30),
+        )
+
+    async def get_bytes(
+        self,
+        *,
+        url: str,
+        headers: dict[str, str] | None = None,
+        params: dict[str, Any] | None = None,
+        timeout_s: int = 30,
+        max_bytes: int = 256 * 1024 * 1024,
+    ) -> HTTPBytesResponse:
+        import asyncio
+
+        return await asyncio.to_thread(
+            sync_get_bytes,
+            url=str(url),
+            headers=dict(headers or {}),
+            params=dict(params or {}),
+            timeout_s=int(timeout_s or 30),
+            max_bytes=int(max_bytes),
         )
 
     async def post_multipart_file(
@@ -423,6 +465,62 @@ def sync_multipart_file(
     finally:
         connection.close()
 
+def sync_get_bytes(
+    *,
+    url: str,
+    headers: dict[str, str] | None = None,
+    params: dict[str, Any] | None = None,
+    timeout_s: int = 30,
+    max_bytes: int = 256 * 1024 * 1024,
+) -> HTTPBytesResponse:
+    limit = max(1, min(int(max_bytes), 512 * 1024 * 1024))
+    final_url = url_with_params(url=url, params=params)
+    hdrs = dict(headers or {})
+    req = _urllib_request().Request(
+        url=final_url,
+        headers=hdrs,
+        method="GET",
+    )
+    has_authorization = any(str(key).lower() == "authorization" for key in hdrs)
+    open_call = _authenticated_urlopen(final_url) if has_authorization else _urllib_request().urlopen
+    try:
+        with open_call(req, timeout=float(timeout_s or 30)) as resp:
+            response_headers = {str(k): str(v) for k, v in resp.headers.items()}
+            content_length = str(
+                response_headers.get("Content-Length")
+                or response_headers.get("content-length")
+                or ""
+            ).strip()
+            if content_length:
+                try:
+                    parsed_length = int(content_length)
+                except ValueError:
+                    parsed_length = -1
+                if parsed_length > limit:
+                    raise ValueError("http_response_too_large")
+            body = resp.read(limit + 1)
+            if len(body) > limit:
+                raise ValueError("http_response_too_large")
+            return HTTPBytesResponse(
+                status=int(getattr(resp, "status", 200) or 200),
+                headers=response_headers,
+                body=bytes(body),
+            )
+    except _urllib_error().HTTPError as exc:
+        try:
+            exc.read(min(limit, 65536))
+        except OSError:
+            pass
+        return HTTPBytesResponse(
+            status=int(getattr(exc, "code", 0) or 0),
+            headers={
+                str(k): str(v)
+                for k, v in (exc.headers.items() if exc.headers is not None else ())
+            },
+            body=b"",
+        )
+
+
 def sync_post_json(*, url: str, headers: dict[str, str] | None = None, data: dict[str, Any] | None = None, timeout_s: int = 30) -> HTTPResponse:
     body = _json.dumps(dict(data or {}), ensure_ascii=False).encode("utf-8")
     result = sync_request(method="POST", url=url, headers={**dict(headers or {}), "Content-Type": "application/json"}, body=body, timeout_s=float(timeout_s or 30))
@@ -442,6 +540,7 @@ def build_http_transport(*, allow_network: bool | None = None) -> HttpTransport:
     return UrllibHttpTransport() if allow_network else DisabledNetworkTransport()
 
 __all__ = [
+    "HTTPBytesResponse",
     "HTTPResponse",
     "HttpTransport",
     "SyncHTTPResult",
@@ -453,6 +552,7 @@ __all__ = [
     "runtime_network_mode",
     "same_origin_url",
     "sync_get",
+    "sync_get_bytes",
     "sync_multipart_file",
     "sync_post_json",
     "sync_request",

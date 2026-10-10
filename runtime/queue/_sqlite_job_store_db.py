@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import importlib
+import time
 from contextlib import contextmanager
 from dataclasses import replace
 from pathlib import Path
@@ -39,11 +40,22 @@ def connect_sqlite_job_store(
     return db
 
 
+def _begin_immediate_with_retry(db: sqlite3.Connection, *, attempts: int = 4) -> None:
+    for attempt in range(max(1, int(attempts))):
+        try:
+            db.execute("BEGIN IMMEDIATE;")
+            return
+        except sqlite3.OperationalError as exc:
+            if "database is locked" not in str(exc).lower() or attempt + 1 >= attempts:
+                raise
+            time.sleep(0.01 * (2 ** attempt))
+
+
 @contextmanager
 def sqlite_job_store_tx(*, path: Path, busy_timeout_ms: int):
     db = connect_sqlite_job_store(path=path, busy_timeout_ms=busy_timeout_ms)
     try:
-        db.execute("BEGIN IMMEDIATE;")
+        _begin_immediate_with_retry(db)
         yield db
         db.commit()
     except Exception:
@@ -204,6 +216,11 @@ def transition_terminal(
     fencing_token: int | None,
     now,
 ) -> JobRecord:
+    current = fetch_job(db, tenant_id=tenant_id, job_id=job_id)
+    if current is None:
+        raise KeyError(f"job not found: tenant_id={tenant_id} job_id={job_id}")
+    if current.state is next_state:
+        return current
     current = require_transitionable(
         db,
         tenant_id=tenant_id,
@@ -223,6 +240,7 @@ __all__ = [
     "CANON_RUNTIME_QUEUE_SQLITE_JOB_STORE_DB",
     "SCHEMA_VERSION",
     "TERMINAL_REPLACEABLE_DEDUPE_STATES",
+    "_begin_immediate_with_retry",
     "connect_sqlite_job_store",
     "fetch_job",
     "fetch_latest_by_dedupe_key",

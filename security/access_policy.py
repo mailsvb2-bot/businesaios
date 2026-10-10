@@ -7,6 +7,7 @@ strategy and must never become a second decision path.
 """
 
 from dataclasses import dataclass, field
+import re
 from enum import Enum
 from typing import Any, Mapping
 
@@ -17,12 +18,35 @@ from compliance.data_classification import (
     KeywordDataClassifier,
 )
 from governance.permission_matrix import PermissionMatrix
-from governance.rbac_contract import AccessRequest, ActorContext, Permission, ResourceRef
+from governance.rbac_contract import AccessRequest, ActorContext, Permission, ResourceRef, RoleId
 from governance.rbac_policy import RbacPolicy
 from governance.role_catalog import RoleCatalog
 
 
 CANON_SECURITY_ACCESS_POLICY = True
+
+# Explicit server-controlled path allowlist; no generic audit-read escalation.
+# Authentication is only the first boundary: the support route separately
+# verifies the exact role, scope, tenant and business before reading the case.
+_SUPPORT_CASE_ID_PATTERN = r"[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}"
+_SUPPORT_CASE_API_ROUTE = re.compile(
+    r"^(?:GET:/platform-support/(?:session|cases)"
+    r"|GET:/platform-support/cases/" + _SUPPORT_CASE_ID_PATTERN + r"(?:/history)?"
+    r"|POST:/platform-support/cases/" + _SUPPORT_CASE_ID_PATTERN
+    + r"/(?:claim|release|resolve))$"
+)
+
+
+def _is_scoped_support_case_read(*, actor: ActorContext, resource: SecurityResource) -> bool:
+    scopes = actor.attributes.get("scopes", ())
+    return (
+        resource.resource_type == "api_authentication"
+        and RoleId.SUPPORT in actor.role_ids
+        and isinstance(scopes, (tuple, list, frozenset))
+        and "support_case_manage" in scopes
+        and _SUPPORT_CASE_API_ROUTE.fullmatch(resource.resource_id) is not None
+    )
+
 
 
 class SecurityAction(str, Enum):
@@ -112,7 +136,7 @@ class DataAccessPolicy:
         actor.validate()
         request = AccessRequest(
             actor=actor,
-            permission=self._required_permission(action=action, classification=resource.classification),
+            permission=self._required_permission(action=action, classification=resource.classification, actor=actor, resource=resource),
             resource=resource.to_resource_ref(),
             action_name=f'{resource.resource_type}:{action.value}',
             metadata={
@@ -167,8 +191,16 @@ class DataAccessPolicy:
         )
 
     @staticmethod
-    def _required_permission(*, action: SecurityAction, classification: DataClassificationResult) -> Permission:
+    def _required_permission(
+        *, action: SecurityAction, classification: DataClassificationResult,
+        actor: ActorContext | None = None, resource: SecurityResource | None = None,
+    ) -> Permission:
         if action is SecurityAction.READ:
+            if actor is not None and resource is not None and _is_scoped_support_case_read(actor=actor, resource=resource):
+                # A SUPPORT operator should not receive VIEW_AUDIT merely to
+                # authenticate to an explicitly support-scoped endpoint.
+                # The actual route still checks role, scope and business.
+                return Permission.VIEW_SUPPORT_CASE
             return Permission.VIEW_AUDIT if classification.category in {DataCategory.RESTRICTED, DataCategory.REGULATED} else Permission.VIEW_POLICY
         if action is SecurityAction.WRITE:
             return Permission.EXECUTE_INTERNAL_WRITE

@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import time
+
 from application.analytics.dashboard_service import ApplicationAnalyticsDashboardService
 
 
@@ -15,6 +17,7 @@ class _EventStore:
 
 
 def test_dashboard_service_builds_bundle():
+    now_ms = int(time.time() * 1000)
     service = ApplicationAnalyticsDashboardService(
         event_store=_EventStore([
             {'tenant_id': 'tenant-1', 'event_type': 'offer_shown', 'user_id': 'u1', 'timestamp_ms': 1, 'payload': {}},
@@ -23,9 +26,13 @@ def test_dashboard_service_builds_bundle():
             {'tenant_id': 'tenant-1', 'event_type': 'decision_issued', 'user_id': 'u1', 'timestamp_ms': 4, 'payload': {}},
             {'tenant_id': 'tenant-1', 'event_type': 'decision_executed', 'user_id': 'u1', 'timestamp_ms': 5, 'payload': {}},
             {'tenant_id': 'tenant-1', 'event_type': 'latency_span', 'user_id': 'u1', 'timestamp_ms': 6, 'payload': {'duration_ms': 500}},
+            {'tenant_id': 'tenant-1', 'event_type': 'audio_sent', 'user_id': 'u1', 'timestamp_ms': now_ms, 'payload': {'ok': True, 'channel': 'telegram', 'kind': 'voice', 'meta': {'delivery_finalized': True, 'delivery_phase': 'finalized'}}},
         ])
     )
     bundle = service.build_dashboard_bundle(tenant_id='tenant-1', window_days=30)
     assert 'dashboard' in bundle
     assert 'explainability' in bundle
     assert 'tenant_rollup' in bundle
+    assert 'media_delivery' in bundle
+    assert bundle['media_delivery']['delivered'] == 1
+    assert bundle['media_delivery']['by_channel'] == {'telegram': 1}

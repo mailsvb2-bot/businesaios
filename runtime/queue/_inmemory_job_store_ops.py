@@ -231,6 +231,9 @@ def set_claim_expiry_policy(*, jobs: JobMap, tenant_id: str, job_id: str, policy
     return updated
 
 def mark_succeeded(*, jobs: JobMap, tenant_id: str, job_id: str, owner_id: str | None = None, fencing_token: int | None = None, now: datetime | None = None) -> JobRecord:
+    current = require_job(jobs=jobs, tenant_id=tenant_id, job_id=job_id)
+    if current.state is JobState.SUCCEEDED:
+        return current
     current = require_transitionable(jobs=jobs, tenant_id=tenant_id, job_id=job_id, allowed_from=(JobState.CLAIMED,))
     validate_claim_guard(current, owner_id, fencing_token)
     moment = normalize_now(now)
@@ -254,6 +257,9 @@ def reschedule_job(*, jobs: JobMap, tenant_id: str, job_id: str, delay_seconds: 
     return updated
 
 def mark_failed(*, jobs: JobMap, tenant_id: str, job_id: str, error: str, owner_id: str | None = None, fencing_token: int | None = None, now: datetime | None = None) -> JobRecord:
+    current = require_job(jobs=jobs, tenant_id=tenant_id, job_id=job_id)
+    if current.state is JobState.FAILED:
+        return current
     current = require_transitionable(jobs=jobs, tenant_id=tenant_id, job_id=job_id, allowed_from=(JobState.CLAIMED,))
     validate_claim_guard(current, owner_id, fencing_token)
     moment = normalize_now(now)
@@ -262,6 +268,9 @@ def mark_failed(*, jobs: JobMap, tenant_id: str, job_id: str, error: str, owner_
     return updated
 
 def mark_dead_letter(*, jobs: JobMap, tenant_id: str, job_id: str, error: str, owner_id: str | None = None, fencing_token: int | None = None, now: datetime | None = None) -> JobRecord:
+    current = require_job(jobs=jobs, tenant_id=tenant_id, job_id=job_id)
+    if current.state is JobState.DEAD_LETTER:
+        return current
     current = require_transitionable(
         jobs=jobs,
         tenant_id=tenant_id,

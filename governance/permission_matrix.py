@@ -77,6 +77,7 @@ _ROLE_PERMISSIONS: dict[RoleId, frozenset[Permission]] = {
     }),
     RoleId.SUPPORT: frozenset({
         Permission.VIEW_POLICY,
+        Permission.VIEW_SUPPORT_CASE,
         Permission.EXECUTE_SAFE_READ,
         Permission.EXECUTE_OUTBOUND,
     }),

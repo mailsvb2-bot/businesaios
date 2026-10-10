@@ -287,6 +287,7 @@ def send_audio_effect(
         payload={
             "tenant_id": tenant,
             "ok": bool(ok),
+            "channel": selected_channel,
             "path": str(path),
             "kind": str(kind or "voice"),
             "meta": dict(meta or {}),

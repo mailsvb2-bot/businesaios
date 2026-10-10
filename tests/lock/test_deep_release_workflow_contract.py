@@ -29,6 +29,12 @@ def test_deep_release_workflow_uses_canonical_gates_and_real_probes() -> None:
 
     assert "--gate postgres-migrations" in text
     assert "pg_dump" in text
+    assert "scripts.ci.encrypted_backup seal" in text
+    assert "scripts.ci.encrypted_backup open" in text
+    assert "postgres_backup.dump.enc" in text
+    assert "plaintext_dump_persisted" in text
+    assert '"algorithm": "AES-256-GCM"' in text
+    assert "rm -f \"$BACKUP_DUMP_PATH\"" in text
     assert "run_staging_runtime_proof.sh" in text
     assert "timeout --signal=TERM --kill-after=30s 12m" in text
     assert "--gate staging-runtime" in text

@@ -232,8 +232,33 @@ def run() -> tuple[bool, str]:
     html_outcome = run_command(_python_command("-m", "coverage", "html", "-d", str(paths["html"])), timeout=120)
     report_outcome = run_command(_python_command("-m", "coverage", "report", "--fail-under", str(MIN_TOTAL_COVERAGE)), timeout=60)
 
-    coverage_payload = json.loads(paths["json"].read_text(encoding="utf-8")) if paths["json"].exists() else {}
-    total = dict(coverage_payload.get("totals") or {})
+    coverage_payload = {}
+    coverage_json_error = ""
+    try:
+        coverage_payload = json.loads(paths["json"].read_text(encoding="utf-8"))
+        if not isinstance(coverage_payload, dict) or not isinstance(coverage_payload.get("totals"), dict):
+            coverage_json_error = "coverage_json_invalid_structure"
+    except FileNotFoundError:
+        coverage_json_error = "coverage_json_missing"
+    except (UnicodeError, json.JSONDecodeError):
+        coverage_json_error = "coverage_json_invalid"
+    if coverage_json_error:
+        _write_summary({
+            "artifact": "code_coverage",
+            "status": "blocked",
+            "coverage_kind": "coverage.py",
+            "violations": [coverage_json_error],
+            "warnings": [],
+            "json_command_returncode": json_outcome.returncode,
+            "xml_command_returncode": xml_outcome.returncode,
+            "html_command_returncode": html_outcome.returncode,
+            "report_command_returncode": report_outcome.returncode,
+            "completed_shards": completed_shards,
+            "claims_code_coverage": False,
+            "claims_production_ready": False,
+        })
+        return False, f"coverage.py gate failed: {coverage_json_error} json_command_returncode={json_outcome.returncode}"
+    total = coverage_payload["totals"]
     percent = float(total.get("percent_covered", 0.0))
     status = "ready" if report_outcome.returncode == 0 else "blocked"
     violations = [] if status == "ready" else ["coverage_below_minimum"]

@@ -11,6 +11,7 @@ from __future__ import annotations
 from collections import deque
 from collections.abc import Mapping, Sequence
 from datetime import UTC, datetime
+from math import isfinite
 from typing import Any
 
 from contracts.messaging_event_identity import stable_transport_message_id
@@ -146,6 +147,7 @@ _PROVIDER_PATHS: dict[str, dict[str, tuple[FieldPath, ...]]] = {
             ("message", "body", "command"),
         ),
         "message_id": (
+            ("callback", "callback_id"),
             ("message", "body", "mid"),
             ("message", "body", "message_id"),
             ("update_id",),
@@ -309,7 +311,7 @@ def _timestamp_ms(value: Any, *, already_ms: bool = False) -> int:
         if parsed.tzinfo is None:
             parsed = parsed.replace(tzinfo=UTC)
         return int(parsed.timestamp() * 1000)
-    if numeric < 0:
+    if not isfinite(numeric) or numeric < 0:
         return 0
     if already_ms:
         return int(numeric)
@@ -364,6 +366,14 @@ def decode_provider_inbound(
         return _scalar_text(field_value(name))
 
     user_id = field_text("user_id")
+    if canonical == "vk" and raw.get("type") == "message_event":
+        user_id = _scalar_text(_path_value(raw, ("object", "user_id"))) or user_id
+    if canonical == "max" and raw.get("update_type") == "message_callback":
+        user_id = (
+            _scalar_text(_path_value(raw, ("user", "user_id")))
+            or _scalar_text(_path_value(raw, ("callback", "user", "user_id")))
+            or user_id
+        )
     chat_id = field_text("chat_id")
     if not user_id:
         user_id = chat_id
@@ -386,7 +396,9 @@ def decode_provider_inbound(
         "channel": canonical,
         "user_id": user_id,
         "chat_id": chat_id,
-        "text": field_text("text"),
+        "text": (_scalar_text(_path_value(raw, ("callback", "payload"))) or field_text("text"))
+        if canonical == "max" and raw.get("update_type") == "message_callback"
+        else field_text("text"),
         "message_id": message_id,
         "external_user_ref": user_id or chat_id,
         "timestamp_ms": _timestamp_from_payload(raw, paths.get("timestamp", ())),

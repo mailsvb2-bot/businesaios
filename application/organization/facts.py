@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 CANON_ORGANIZATION_FACT_VOCABULARY = True
+ORGANIZATION_FACT_SOURCE = "organization_registry"
 ORGANIZATION_CREATED = "organization.created"
 ORGANIZATION_UPDATED = "organization.updated"
 ORGANIZATION_ARCHIVED = "organization.archived"
@@ -10,6 +11,7 @@ __all__ = [
     "CANON_ORGANIZATION_FACT_VOCABULARY",
     "ORGANIZATION_ARCHIVED",
     "ORGANIZATION_CREATED",
+    "ORGANIZATION_FACT_SOURCE",
     "ORGANIZATION_FACT_TYPES",
     "ORGANIZATION_UPDATED",
 ]

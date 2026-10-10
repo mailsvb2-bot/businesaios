@@ -1,0 +1,543 @@
+{
+  "schema_version": 1,
+  "phase": "18",
+  "donor_repository": "mailsvb2-bot/clientplatform",
+  "donor_baseline_sha": "10ce06fa9f4266896bd03149c3051364fbcb139b",
+  "target_product": "BusinessAIOS",
+  "acceptance_test": "ClientPlatform may be shut down without loss of user-visible capability, UX flow, channel integration, business behavior, stored state, configuration, automation, production workflow or supported customer journey.",
+  "allowed_statuses": [
+    "inventory",
+    "mapped",
+    "implemented",
+    "parity_proven",
+    "cutover",
+    "decommissioned",
+    "obsolete"
+  ],
+  "required_donor_capabilities": [
+    "platform.directory_access_review",
+    "platform.roles_permissions",
+    "platform.account_consolidation",
+    "messaging.broadcast_publication_cohorts",
+    "support.audited_access_session",
+    "support.case_queue",
+    "analytics.business_platform_observability",
+    "runtime.settings_diagnostics",
+    "security.audit_access_review",
+    "release.deploy_rollback_forensics",
+    "billing.subscription_payment_outcomes",
+    "commerce.offerings_program_delivery",
+    "growth.goal_first_autopilot_nba",
+    "ads.connection_spend_attribution",
+    "visual.gateway_assets_review_jobs",
+    "voice.media_delivery_metrics",
+    "content.production_workspace",
+    "recovery.encrypted_backup_dr_evidence",
+    "lifecycle.referral_retention_cohorts",
+    "messenger.canonical_navigation_parity"
+  ],
+  "slices": [
+    {
+      "id": "customer.timeline",
+      "status": "implemented",
+      "canonical_owner": "crm",
+      "source_of_truth": "Business Event Spine + crm.CustomerRegistry",
+      "evidence": [
+        "docs/migrations/unified_customer_timeline_matrix.md"
+      ],
+      "runtime_dependency_removed": true
+    },
+    {
+      "id": "messaging.telegram_vk_max",
+      "status": "implemented",
+      "canonical_owner": "interfaces.messaging_runtime",
+      "source_of_truth": "canonical provider queue/runtime",
+      "evidence": [
+        "docs/migrations/unified_multimessenger_telegram_vk_max_matrix.md"
+      ],
+      "runtime_dependency_removed": true
+    },
+    {
+      "id": "email.outbound",
+      "status": "implemented",
+      "canonical_owner": "interfaces.messaging + provider runtime",
+      "source_of_truth": "provider queue + SecretVault",
+      "evidence": [
+        "docs/migrations/canonical_email_outbound_matrix.md"
+      ],
+      "runtime_dependency_removed": true
+    },
+    {
+      "id": "funnel.intelligence",
+      "status": "implemented",
+      "canonical_owner": "advisory",
+      "source_of_truth": "canonical advisory owner; Decision/Memory/Attribution owners remain unchanged",
+      "evidence": [
+        "advisory/__init__.py",
+        "docs/migrations/funnel_intelligence_patch_v9_absorption.md"
+      ],
+      "runtime_dependency_removed": true
+    },
+    {
+      "id": "event.landing.presentation_contract",
+      "status": "implemented",
+      "canonical_owner": "application.public_site",
+      "source_of_truth": "canonical event facts + public-site presentation contract",
+      "evidence": [
+        "application/public_site/landing_content.py",
+        "contracts/landing_page.py",
+        "tests/unit/application/public_site/test_event_landing_phase18.py"
+      ],
+      "runtime_dependency_removed": true
+    },
+    {
+      "id": "event.landing.lifecycle",
+      "status": "implemented",
+      "canonical_owner": "application.public_site.EventLandingRegistry",
+      "source_of_truth": "canonical Business Event Spine + EventFactLifecycleWriter + canonical idempotency owner",
+      "evidence": [
+        "application/public_site/event_landing_registry.py",
+        "application/public_site/landing_content.py",
+        "tests/unit/application/public_site/test_event_landing_registry_phase18.py"
+      ],
+      "runtime_dependency_removed": true
+    },
+    {
+      "id": "event.landing.owner_preview_publish",
+      "status": "implemented",
+      "canonical_owner": "application.public_site + authenticated owner Business Workspace",
+      "source_of_truth": "one EventLandingRegistry projected to authenticated owner routes and read-only public published snapshot",
+      "evidence": [
+        "adapters/api/fastapi/business_workspace_event_landing_routes.py",
+        "adapters/api/fastapi/public_site_routes.py",
+        "adapters/api/fastapi/public_routes.py",
+        "entrypoints/api/public_surface_route_specs.py",
+        "tests/unit/adapters/api/fastapi/test_event_landing_routes_phase18.py",
+        "frontend/src/EventLandingWorkspace.jsx",
+        "frontend/src/PublicEventLanding.jsx",
+        "frontend/src/EventLandingWorkspace.css",
+        "frontend/src/main.jsx",
+        "tests/unit/application/test_frontend_owner_workspace_contract.py"
+      ],
+      "runtime_dependency_removed": true
+    },
+    {
+      "id": "event.promotion.destination_identity",
+      "status": "implemented",
+      "canonical_owner": "application.campaign + canonical public event route",
+      "source_of_truth": "authenticated tenant/business/event identity projected to /public-site/events/{tenant_id}/{business_id}/{event_id}",
+      "evidence": [
+        "application/campaign/registry.py",
+        "adapters/api/fastapi/public_site_routes.py",
+        "tests/unit/application/test_event_promotion_phase18.py"
+      ],
+      "runtime_dependency_removed": true
+    },
+    {
+      "id": "event.promotion.owner_workspace",
+      "status": "implemented",
+      "canonical_owner": "authenticated Business Workspace acquisition surface + application.campaign",
+      "source_of_truth": "owner-scoped read-only destination projection to canonical public event route",
+      "evidence": [
+        "adapters/api/fastapi/business_workspace_acquisition_routes.py",
+        "application/campaign/registry.py",
+        "tests/unit/adapters/api/fastapi/test_business_workspace_acquisition_routes.py",
+        "tests/unit/application/test_event_promotion_phase18.py"
+      ],
+      "runtime_dependency_removed": true
+    },
+    {
+      "id": "sales.ai_observation_contract",
+      "status": "implemented",
+      "canonical_owner": "advisory",
+      "source_of_truth": "strict evidence-only SalesAIObservation; DecisionCore retains action authority",
+      "evidence": [
+        "advisory/__init__.py",
+        "tests/unit/advisory/test_funnel_intelligence_advisory.py"
+      ],
+      "runtime_dependency_removed": true
+    },
+    {
+      "id": "sales.ai_consent_egress",
+      "status": "implemented",
+      "canonical_owner": "config.llm_provider_policy + runtime.llm_completion_support",
+      "source_of_truth": "business-scoped versioned consent + canonical sealed LLM runtime",
+      "evidence": [
+        "config/llm_provider_policy.py",
+        "core/llm/redaction.py",
+        "runtime/_internal/effects_actions/llm_completion_support.py",
+        "tests/unit/config/test_versioned_config_persistence_wave25.py",
+        "tests/unit/runtime/test_sales_ai_llm_egress_phase18.py"
+      ],
+      "runtime_dependency_removed": true
+    },
+    {
+      "id": "sales.ai_owner_workspace_analysis",
+      "status": "implemented",
+      "canonical_owner": "adapters.api.fastapi.business_workspace_provider_routes",
+      "source_of_truth": "authenticated owner Business Workspace + consent-bound advisory analysis",
+      "evidence": [
+        "adapters/api/fastapi/business_workspace_provider_routes.py",
+        "tests/unit/adapters/api/fastapi/test_business_workspace_provider_routes.py"
+      ],
+      "runtime_dependency_removed": true
+    },
+    {
+      "id": "sales.ai_owner_review_draft",
+      "status": "implemented",
+      "canonical_owner": "DecisionCore + entrypoints.api.owner_action_draft + authenticated Business Workspace",
+      "source_of_truth": "persisted canonical DecisionCore send_message step projected to editable owner draft; execution remains /actions/execute",
+      "evidence": [
+        "entrypoints/api/owner_action_draft.py",
+        "adapters/api/fastapi/business_workspace_decision_routes.py",
+        "tests/unit/api/test_owner_action_draft_projector.py",
+        "tests/unit/adapters/api/fastapi/test_business_workspace_decision_routes.py"
+      ],
+      "runtime_dependency_removed": true
+    },
+    {
+      "id": "sales.ai_ingress_side_channel",
+      "status": "inventory",
+      "canonical_owner": null,
+      "source_of_truth": null,
+      "evidence": [
+        "runtime/business_autonomy/provider_inbound_webhook_service.py",
+        "clientplatform/application/sales_ai_orchestration.py"
+      ],
+      "runtime_dependency_removed": false
+    },
+    {
+      "id": "sales.ai_freshness_retention",
+      "status": "implemented",
+      "canonical_owner": "SalesAIConsentStore + bounded Sales AI analysis runtime",
+      "source_of_truth": "versioned business-scoped consent epoch/target rechecked before and after provider egress; owner-workspace analysis retains no raw customer text or AI projection",
+      "evidence": [
+        "config/llm_provider_policy.py",
+        "runtime/_internal/effects_actions/llm_completion_support.py",
+        "adapters/api/fastapi/business_workspace_provider_routes.py",
+        "tests/unit/runtime/test_sales_ai_llm_egress_phase18.py",
+        "tests/unit/adapters/api/fastapi/test_business_workspace_provider_routes.py"
+      ],
+      "runtime_dependency_removed": true
+    },
+    {
+      "id": "sales.owner_workspace",
+      "status": "implemented",
+      "canonical_owner": "frontend owner workspace + authenticated Business Workspace provider/customer/decision routes",
+      "source_of_truth": "owner-scoped CRM read evidence and DecisionCore-origin action drafts; external writes remain behind approval and /actions/execute",
+      "evidence": [
+        "frontend/src/App.jsx",
+        "adapters/api/fastapi/business_workspace_provider_routes.py",
+        "adapters/api/fastapi/business_workspace_decision_routes.py",
+        "entrypoints/api/owner_action_draft.py",
+        "tests/unit/application/test_frontend_owner_workspace_contract.py",
+        "tests/unit/adapters/api/fastapi/test_business_workspace_provider_routes.py",
+        "tests/unit/adapters/api/fastapi/test_business_workspace_decision_routes.py"
+      ],
+      "runtime_dependency_removed": true
+    },
+    {
+      "id": "platform.owner_cockpit_workspace",
+      "status": "implemented",
+      "canonical_owner": "frontend Workspace + canonical Business Workspace FastAPI route set",
+      "source_of_truth": "single authenticated owner workspace projecting provider, customer, acquisition, process, decision and approval state",
+      "evidence": [
+        "frontend/src/App.jsx",
+        "adapters/api/fastapi/public_routes.py",
+        "adapters/api/fastapi/router_support.py",
+        "adapters/api/fastapi/business_workspace_provider_routes.py",
+        "adapters/api/fastapi/business_workspace_acquisition_routes.py",
+        "adapters/api/fastapi/business_workspace_process_routes.py",
+        "adapters/api/fastapi/business_workspace_decision_routes.py",
+        "tests/unit/application/test_frontend_owner_workspace_contract.py"
+      ],
+      "runtime_dependency_removed": true
+    },
+    {
+      "id": "commerce.program_builder_delivery",
+      "status": "mapped",
+      "canonical_owner": "application.commerce.phase18_program_publication_registry.ProgramPublicationRegistry + EventFactLifecycleWriter",
+      "source_of_truth": "BusinessFactV1 program.published/draft.* and program.enrollment_created in canonical EventStore; resumable owner drafts, atomic publication and idempotent customer-bound enrollment pending verified delivery. Provider delivery/progress completion remain unported",
+      "evidence": [
+        "clientplatform/application/program_builder.py",
+        "clientplatform/application/programs.py",
+        "application/commerce/phase18_program_publication_registry.py",
+        "application/commerce/phase18_program_lesson_delivery.py",
+        "tests/integration/api/test_phase18_program_lesson_delivery_http.py",
+        "adapters/api/fastapi/business_workspace_program_routes.py",
+        "tests/integration/api/test_phase18_program_publication_journey.py",
+        "tests/integration/api/test_phase18_program_draft_journey.py",
+        "tests/integration/api/test_phase18_program_enrollment_journey.py",
+        "frontend/src/ProgramPublicationWorkspace.jsx",
+        "frontend/e2e/program-publication-journey.spec.js",
+        "frontend/src/App.jsx"
+      ],
+      "runtime_dependency_removed": false
+    },
+    {
+      "id": "ads.yandex_direct_owner_flow",
+      "status": "inventory",
+      "canonical_owner": null,
+      "source_of_truth": null,
+      "evidence": [
+        "clientplatform/integrations/yandex_direct.py",
+        "clientplatform/application/yandex_growth_analytics.py"
+      ],
+      "runtime_dependency_removed": false
+    },
+    {
+      "id": "platform.directory_access_review",
+      "status": "inventory",
+      "canonical_owner": null,
+      "source_of_truth": null,
+      "evidence": [],
+      "runtime_dependency_removed": false
+    },
+    {
+      "id": "platform.roles_permissions",
+      "status": "implemented",
+      "canonical_owner": "governance.role_catalog + governance.permission_matrix + governance.rbac_policy",
+      "source_of_truth": "canonical governance RBAC; core.users.roles remains presentation-only UX segmentation",
+      "evidence": [
+        "governance/role_catalog.py",
+        "governance/permission_matrix.py",
+        "governance/rbac_contract.py",
+        "governance/rbac_policy.py",
+        "entrypoints/api/rbac_route_guards.py",
+        "tests/api/test_rbac_route_guards.py",
+        "tests/governance/test_rbac_policy.py",
+        "tests/arch/test_phase18_roles_permissions_single_owner.py"
+      ],
+      "runtime_dependency_removed": true
+    },
+    {
+      "id": "platform.account_consolidation",
+      "status": "inventory",
+      "canonical_owner": null,
+      "source_of_truth": null,
+      "evidence": [],
+      "runtime_dependency_removed": false
+    },
+    {
+      "id": "messaging.broadcast_publication_cohorts",
+      "status": "inventory",
+      "canonical_owner": null,
+      "source_of_truth": null,
+      "evidence": [],
+      "runtime_dependency_removed": false
+    },
+    {
+      "id": "support.audited_access_session",
+      "status": "inventory",
+      "canonical_owner": null,
+      "source_of_truth": null,
+      "evidence": [],
+      "runtime_dependency_removed": false
+    },
+    {
+      "id": "support.case_queue",
+      "status": "mapped",
+      "canonical_owner": "application.business_autonomy.SupportCaseRegistry + existing Business Event Spine",
+      "source_of_truth": "BusinessFactV1 support_case.* through EventFactLifecycleWriter; tenant/business-scoped authenticated owner and support operator routes",
+      "evidence": [
+        "application/business_autonomy/support_case_registry.py",
+        "adapters/api/fastapi/business_workspace_support_case_routes.py",
+        "adapters/api/fastapi/public_routes.py",
+        "frontend/src/SupportCasesWorkspace.jsx",
+        "tests/unit/application/test_phase18_support_case_registry.py",
+        "tests/unit/adapters/api/fastapi/test_support_case_routes_phase18.py",
+        "frontend/src/SupportOperatorConsole.jsx",
+        "scripts/support/issue_case_operator_access.py",
+        "tests/integration/api/test_phase18_support_full_http_journey.py",
+        "tests/unit/security/test_support_case_route_access_policy_phase18.py"
+      ],
+      "runtime_dependency_removed": true
+    },
+    {
+      "id": "analytics.business_platform_observability",
+      "status": "implemented",
+      "canonical_owner": "application.analytics + authenticated analytics API projection",
+      "source_of_truth": "Event Store-backed business analytics projected through secured tenant-scoped API handlers",
+      "evidence": [
+        "application/analytics/business_analytics_service.py",
+        "entrypoints/api/analytics_route_handlers.py",
+        "adapters/api/fastapi/analytics_routes.py",
+        "tests/unit/api/test_analytics_route_security_specs.py",
+        "tests/arch/test_analytics_api_and_runtime_wiring_no_second_brain.py",
+        "tests/unit/adapters/api/fastapi/test_analytics_routes_phase18.py"
+      ],
+      "runtime_dependency_removed": true
+    },
+    {
+      "id": "runtime.settings_diagnostics",
+      "status": "mapped",
+      "canonical_owner": "runtime.config + runtime observability",
+      "source_of_truth": "runtime/config",
+      "evidence": [
+        "runtime/config",
+        "runtime/observability"
+      ],
+      "runtime_dependency_removed": false
+    },
+    {
+      "id": "security.audit_access_review",
+      "status": "mapped",
+      "canonical_owner": "governance + security",
+      "source_of_truth": "governance audit/security policy",
+      "evidence": [
+        "governance/control_plane_audit_support.py",
+        "security"
+      ],
+      "runtime_dependency_removed": false
+    },
+    {
+      "id": "release.deploy_rollback_forensics",
+      "status": "mapped",
+      "canonical_owner": "release/CI operational tooling",
+      "source_of_truth": "canonical release validation",
+      "evidence": [
+        "scripts/verify_release.sh",
+        ".github/workflows/deep-release-validation.yml"
+      ],
+      "runtime_dependency_removed": false
+    },
+    {
+      "id": "billing.subscription_payment_outcomes",
+      "status": "mapped",
+      "canonical_owner": "billing.payment_collection + billing invoice/refund/ledger owners",
+      "source_of_truth": "canonical billing collection/refund outcomes with optional Event Spine payment projection; production collection Event Store assembly still pending",
+      "evidence": [
+        "billing/payment_collection.py",
+        "billing/ledger_store.py",
+        "billing/refund_orchestrator.py",
+        "tests/unit/billing/test_payment_collection_phase18.py",
+        "tests/unit/billing/test_payment_collection_event_spine_phase18.py"
+      ],
+      "runtime_dependency_removed": false
+    },
+    {
+      "id": "commerce.offerings_program_delivery",
+      "status": "inventory",
+      "canonical_owner": null,
+      "source_of_truth": null,
+      "evidence": [],
+      "runtime_dependency_removed": false
+    },
+    {
+      "id": "growth.goal_first_autopilot_nba",
+      "status": "mapped",
+      "canonical_owner": "core.growth",
+      "source_of_truth": "canonical growth/autopilot owner",
+      "evidence": [
+        "core/growth/autopilot_engine.py",
+        "core/growth/autopilot_flow.py"
+      ],
+      "runtime_dependency_removed": false
+    },
+    {
+      "id": "ads.connection_spend_attribution",
+      "status": "mapped",
+      "canonical_owner": "core.ads + connectors.platform.ads + attribution",
+      "source_of_truth": "canonical ads/provider/attribution owners",
+      "evidence": [
+        "core/ads",
+        "connectors/platform/ads",
+        "attribution"
+      ],
+      "runtime_dependency_removed": false
+    },
+    {
+      "id": "visual.gateway_assets_review_jobs",
+      "status": "mapped",
+      "canonical_owner": "existing visual gateway execution path + sealed HTTP transport + Human Governance review boundary",
+      "source_of_truth": "gateway job/evidence with authenticated scope-bound asset retrieval; durable visual review projection remains pending",
+      "evidence": [
+        "runtime/_internal/effects_domains/visual_creative_gateway.py",
+        "runtime/_internal/effects_clients/visual_gateway_client.py",
+        "runtime/_internal/http_transport.py",
+        "tests/unit/runtime/test_visual_creative_gateway.py",
+        "tests/unit/runtime/test_visual_gateway_client.py"
+      ],
+      "runtime_dependency_removed": false
+    },
+    {
+      "id": "visual.creative_director_scene_semantics",
+      "status": "implemented",
+      "canonical_owner": "application.visual_creative_semantics + existing canonical visual execution path",
+      "source_of_truth": "DecisionCore-authorized visual brief grounded before runtime visual gateway execution",
+      "evidence": [
+        "application/visual_creative_semantics.py",
+        "core/actions/catalog_groups.py",
+        "runtime/handlers/visual_creative_gateway.py",
+        "runtime/_internal/effects_domains/marketing.py",
+        "tests/unit/application/test_visual_creative_semantics_phase18.py",
+        "tests/unit/runtime/test_visual_creative_gateway.py"
+      ],
+      "runtime_dependency_removed": true
+    },
+    {
+      "id": "voice.media_delivery_metrics",
+      "status": "implemented",
+      "canonical_owner": "runtime media delivery effects + canonical Event Log + analytics dashboard projection",
+      "source_of_truth": "tenant-scoped audio_sent outcomes persisted through the canonical EventLog/Event Store and projected into owner analytics",
+      "evidence": [
+        "runtime/_internal/effects_actions/telegram/media.py",
+        "core/events/log.py",
+        "application/analytics/media_delivery_metrics.py",
+        "application/analytics/dashboard_service.py",
+        "entrypoints/api/analytics_route_handlers.py",
+        "tests/unit/application/analytics/test_media_delivery_metrics_phase18.py",
+        "tests/unit/application/analytics/test_media_delivery_end_to_end_phase18.py",
+        "tests/unit/application/analytics/test_dashboard_service.py"
+      ],
+      "runtime_dependency_removed": true
+    },
+    {
+      "id": "content.production_workspace",
+      "status": "inventory",
+      "canonical_owner": null,
+      "source_of_truth": null,
+      "evidence": [],
+      "runtime_dependency_removed": false
+    },
+    {
+      "id": "recovery.encrypted_backup_dr_evidence",
+      "status": "implemented",
+      "canonical_owner": "Deep Release Validation + canonical PostgreSQL backup/restore evidence",
+      "source_of_truth": "AES-256-GCM encrypted PostgreSQL backup bound to exact commit SHA, plaintext removed, restored into isolated database, and restore sentinel verified",
+      "evidence": [
+        ".github/workflows/deep-release-validation.yml",
+        "scripts/ci/encrypted_backup.py",
+        "tests/unit/scripts/ci/test_encrypted_backup_phase18.py"
+      ],
+      "runtime_dependency_removed": true
+    },
+    {
+      "id": "lifecycle.referral_retention_cohorts",
+      "status": "mapped",
+      "canonical_owner": "core.retention + attribution/partner",
+      "source_of_truth": "canonical retention owner",
+      "evidence": [
+        "core/retention",
+        "application/partner/registry.py"
+      ],
+      "runtime_dependency_removed": false
+    },
+    {
+      "id": "messenger.canonical_navigation_parity",
+      "status": "implemented",
+      "canonical_owner": "core.ux.callbacks + canonical multichannel native provider bridge",
+      "source_of_truth": "stable canonical callback tokens translated to provider-native buttons and decoded back through the single inbound decision path",
+      "evidence": [
+        "core/ux/callbacks.py",
+        "runtime/messaging/bootstrap.py",
+        "runtime/business_autonomy/provider_payload_normalizers.py",
+        "runtime/business_autonomy/provider_vendor_transports.py",
+        "runtime/messaging/provider_inbound_decoder.py",
+        "tests/business_critical/test_vk_max_messaging_parity.py",
+        "tests/lock/test_multimessenger_runtime_contract.py"
+      ],
+      "runtime_dependency_removed": true
+    }
+  ]
+}

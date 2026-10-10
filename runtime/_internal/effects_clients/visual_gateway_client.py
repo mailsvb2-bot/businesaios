@@ -3,7 +3,7 @@ from __future__ import annotations
 from typing import Any
 
 from runtime._internal.effects_clients.http_client import _run_coroutine_sync
-from runtime._internal.http_transport import HttpTransport, build_http_transport
+from runtime._internal.http_transport import HTTPBytesResponse, HttpTransport, build_http_transport
 from runtime.platform.config.env_flags import env_bool, env_str
 
 
@@ -41,4 +41,40 @@ def visual_gateway_json(method: str, path: str, payload: dict[str, Any] | None, 
     return dict(body)
 
 
-__all__ = ["visual_gateway_json"]
+def visual_gateway_bytes(
+    path: str,
+    params: dict[str, Any] | None,
+    *,
+    timeout_s: int = 60,
+    max_bytes: int = 256 * 1024 * 1024,
+    transport: HttpTransport | None = None,
+) -> tuple[bytes, str]:
+    base_url, headers = _gateway_config()
+    target = base_url + "/" + str(path or "").lstrip("/")
+    active = transport or build_http_transport()
+    timeout = max(3, min(int(timeout_s or 60), 300))
+    limit = max(1, min(int(max_bytes), 512 * 1024 * 1024))
+
+    async def _call() -> HTTPBytesResponse:
+        return await active.get_bytes(
+            url=target,
+            headers=headers,
+            params=dict(params or {}),
+            timeout_s=timeout,
+            max_bytes=limit,
+        )
+
+    response = _run_coroutine_sync(_call())
+    if not 200 <= int(response.status or 0) < 300 or not response.body:
+        raise RuntimeError(f"visual_gateway_http_{int(response.status or 0)}")
+    mime = str(
+        response.headers.get("Content-Type")
+        or response.headers.get("content-type")
+        or "application/octet-stream"
+    ).split(";", 1)[0].strip().lower()
+    if not mime or len(mime) > 120 or any(ord(ch) < 32 for ch in mime):
+        raise RuntimeError("visual_gateway_invalid_content_type")
+    return bytes(response.body), mime
+
+
+__all__ = ["visual_gateway_bytes", "visual_gateway_json"]

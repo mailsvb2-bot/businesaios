@@ -3,6 +3,10 @@ import { AcquisitionPlanner } from "./AcquisitionPlanner.jsx";
 import { BusinessIntelligencePanel } from "./BusinessIntelligencePanel.jsx";
 import { BusinessDiscoveryPanel } from "./BusinessDiscoveryPanel.jsx";
 import { DiscoverBuildMeasurePanel } from "./DiscoverBuildMeasurePanel.jsx";
+import { EventLandingWorkspace } from "./EventLandingWorkspace.jsx";
+import { SupportCasesWorkspace } from "./SupportCasesWorkspace.jsx";
+import { ProgramPublicationWorkspace } from "./ProgramPublicationWorkspace.jsx";
+import { BusinessSettingsWorkspace } from "./BusinessSettingsWorkspace.jsx";
 
 const DEFAULT_API = import.meta.env.VITE_API_BASE || "https://api.businessaios.ru";
 
@@ -316,6 +320,7 @@ function evidenceTimeLabel(row) {
 
 function Workspace({ data, apiBase, businesses, onRestart, onRetryAccess, onSwitchBusiness }) {
   const profile = data.business_profile || {};
+  const [businessName, setBusinessName] = useState(profile.name || "");
   const progress = data.onboarding_progress || {};
   const preview = data.first_value_preview || {};
   const integrations = data.integration_plan || [];
@@ -341,6 +346,13 @@ function Workspace({ data, apiBase, businesses, onRestart, onRetryAccess, onSwit
   const selectedKeys = useMemo(() => new Set(integrations.map((item) => item.provider_key)), [integrations]);
   const [catalog, setCatalog] = useState([]);
   const [capabilities, setCapabilities] = useState([]);
+  const [messagingChannels, setMessagingChannels] = useState([]);
+  const [organizations, setOrganizations] = useState([]);
+  const [organizationName, setOrganizationName] = useState("");
+  const [organizationError, setOrganizationError] = useState("");
+  const [organizationBusy, setOrganizationBusy] = useState(false);
+  const [organizationPendingKey, setOrganizationPendingKey] = useState("");
+
   const [activeKey, setActiveKey] = useState("");
   const [externalRef, setExternalRef] = useState("");
   const [secrets, setSecrets] = useState({});
@@ -365,6 +377,8 @@ function Workspace({ data, apiBase, businesses, onRestart, onRetryAccess, onSwit
   const [operationRecovery, setOperationRecovery] = useState(null);
   const [operationDraftKey, setOperationDraftKey] = useState(() => crypto.randomUUID());
   const [operationOrigin, setOperationOrigin] = useState(null);
+  const [pendingProgramLesson, setPendingProgramLesson] = useState(null);
+  const [programApprovalIds, setProgramApprovalIds] = useState({});
   const [customers, setCustomers] = useState([]);
   const [selectedCustomerId, setSelectedCustomerId] = useState("");
   const [customerTimeline, setCustomerTimeline] = useState([]);
@@ -376,12 +390,45 @@ function Workspace({ data, apiBase, businesses, onRestart, onRetryAccess, onSwit
   const markOperationStale = (recovery) => { setOperationRecovery(recovery); setOperationQueueStale(true); };
   const clearOperationStale = () => { setOperationRecovery(null); setOperationQueueStale(false); };
 
+  const refreshOrganizations = async () => {
+    if (!apiKey) return;
+    try {
+      const response = await getJson(`${baseApi}/business-workspace/organizations`, authHeaders);
+      setOrganizations(Array.isArray(response.organizations) ? response.organizations : []);
+      setOrganizationError("");
+    } catch {
+      setOrganizationError("Не удалось загрузить организации. Повторите попытку.");
+    }
+  };
+
+  const createOrganization = async () => {
+    const name = organizationName.trim();
+    if (!apiKey || !name || organizationBusy) return;
+    const requestKey = organizationPendingKey || `organization-${crypto.randomUUID()}`;
+    setOrganizationPendingKey(requestKey);
+    setOrganizationBusy(true);
+    setOrganizationError("");
+    try {
+      await postJson(`${baseApi}/business-workspace/organizations`, { name }, {
+        ...authHeaders, "X-Idempotency-Key": requestKey,
+      });
+      setOrganizationName("");
+      setOrganizationPendingKey("");
+      await refreshOrganizations();
+    } catch {
+      setOrganizationError("Не удалось сохранить организацию. Проверьте соединение и повторите попытку — повтор не создаст дубликат.");
+    } finally {
+      setOrganizationBusy(false);
+    }
+  };
+
   const refreshCatalog = async () => {
     if (!apiKey) return [];
     const payload = await getJson(workspaceUrl, authHeaders);
     const rows = Array.isArray(payload.providers) ? payload.providers : [];
     setCatalog(rows);
     setCapabilities(Array.isArray(payload.capabilities) ? payload.capabilities : []);
+    setMessagingChannels(Array.isArray(payload.channels) ? payload.channels : []);
     setActiveKey((current) => {
       if (current && rows.some((row) => row.provider_key === current)) return current;
       return rows.find((row) => selectedKeys.has(row.provider_key) && row.customer_selectable)?.provider_key
@@ -482,6 +529,8 @@ function Workspace({ data, apiBase, businesses, onRestart, onRetryAccess, onSwit
       });
     return () => { cancelled = true; };
   }, [apiKey]);
+
+  useEffect(() => { refreshOrganizations(); }, [apiKey]);
 
   const providers = catalog
     .filter((row) => row.connected || row.customer_selectable || selectedKeys.has(row.provider_key))
@@ -692,8 +741,20 @@ function Workspace({ data, apiBase, businesses, onRestart, onRetryAccess, onSwit
       payload: { business_id: data.business_id, provider_key: providerKey, user_id: recipient, text: messageText, channel: messagingChannelForProvider(providerKey), kind: operationOrigin ? "owner_decision_draft" : "owner_manual", ...providerRecipientContext(providerKey, recipient), ...(providerKey === "whatsapp_cloud" ? { whatsapp_policy_attestation: { recipient_opted_in: operationWhatsappOptIn, customer_service_window: operationWhatsappWindow } } : {}), ...(subjectText ? { subject: subjectText } : {}), ...(draftOrigin ? { track_payload: draftOrigin } : {}) }
     }, { ...authHeaders, "X-Idempotency-Key": operationDraftKey, "X-Action-ID": operationDraftKey });
     if (!outcome || !outcome.nextOperations) return;
-    const preparedApproval = (outcome.nextOperations.approvals || []).some((row) => approvalMatchesDraftIdentity(row, data.tenant_id, operationDraftKey)
-      && approvalMatchesPreparedMessage(row, { providerKey, recipient, text: messageText, subject: subjectText }));
+    const matchedApprovals = (outcome.nextOperations.approvals || []).filter((row) =>
+      approvalMatchesDraftIdentity(row, data.tenant_id, operationDraftKey) &&
+      approvalMatchesPreparedMessage(row, { providerKey, recipient, text: messageText, subject: subjectText }));
+    const preparedApproval = matchedApprovals.length > 0;
+    if (preparedApproval && matchedApprovals.length === 1 &&
+        pendingProgramLesson?.actionId === operationDraftKey &&
+        pendingProgramLesson?.providerKey === providerKey &&
+        pendingProgramLesson?.recipient === recipient &&
+        pendingProgramLesson?.text === messageText) {
+      // Reuse a real, server-issued approval ID; never invent a receipt.
+      setProgramApprovalIds((current) => ({
+        ...current, [pendingProgramLesson.key]: matchedApprovals[0].approval_id,
+      }));
+    }
     const resultStatus = String(outcome.result?.status || "").toLowerCase();
     const resultReason = String(outcome.result?.reason || outcome.result?.details?.guard_stage || "").toLowerCase();
     const idempotencyInProgress = resultStatus === "blocked" && resultReason === "idempotency_in_progress";
@@ -1020,6 +1081,47 @@ function Workspace({ data, apiBase, businesses, onRestart, onRetryAccess, onSwit
     return draft;
   }, [apiKey, authHeaders, decisionDraftUrl, operationQueueStale, readyOperationProviders, selectedCustomer]);
 
+  const prepareProgramLesson = async ({ programId, enrollmentId, lessonPosition, channel }) => {
+    if (!apiKey) throw new Error("owner_session_required");
+    if (operationQueueStale || Boolean(operationBusy)) {
+      throw new Error("Очередь внешних действий требует восстановления. Обновите её перед новой отправкой.");
+    }
+    const providerKeys = {
+      telegram: "telegram_bot", vk: "vk_messaging", max: "max_messaging",
+      email: "email_connector", whatsapp: "whatsapp_cloud",
+    };
+    const provider = readyOperationProviders.find((row) =>
+      row.provider_key === providerKeys[channel]);
+    if (!provider) throw new Error("Канал не готов к подтверждаемой отправке.");
+    const plan = await getJson(
+      `${baseApi}/business-workspace/programs/${encodeURIComponent(programId)}/enrollments/${encodeURIComponent(enrollmentId)}/lessons/${encodeURIComponent(lessonPosition)}/send-plan?channel=${encodeURIComponent(channel)}`,
+      authHeaders,
+    );
+    if (plan.program_id !== programId || plan.enrollment_id !== enrollmentId ||
+        plan.lesson_position !== lessonPosition || plan.provider_key !== provider.provider_key ||
+        plan.status !== "requires_owner_review_and_approval" ||
+        plan.action_type !== "send_message@v1" ||
+        !plan.recipient || !plan.text || plan.execution_allowed !== false) {
+      throw new Error("Сервер не подтвердил безопасный план отправки урока.");
+    }
+    setOperationProviderKey(provider.provider_key);
+    setOperationRecipient(plan.recipient);
+    setOperationSubject(provider.provider_key === "email_connector" ? "Материал программы" : "");
+    setOperationText(plan.text);
+    setOperationOrigin(null);
+    // Stable action identity keeps retries of the same lesson from silently
+    // becoming new outbound sends when the owner revisits the program.
+    const actionId = `program-${enrollmentId}-${lessonPosition}`;
+    setOperationDraftKey(actionId);
+    setPendingProgramLesson({
+      key: enrollmentId + ":" + lessonPosition, providerKey: provider.provider_key,
+      recipient: plan.recipient, text: plan.text, actionId,
+    });
+    setOperationError("Это только проверяемый черновик урока. Проверьте получателя, текст и одобрите действие отдельно. Доставка ещё не подтверждена.");
+    document.getElementById("business-operations-title")?.scrollIntoView({ behavior: "smooth", block: "start" });
+    return plan;
+  };
+
   const retryProtectedAccess = async () => {
     if (!data.intake_id || !onRetryAccess) return;
     setAccessRecoveryBusy(true);
@@ -1048,7 +1150,7 @@ function Workspace({ data, apiBase, businesses, onRestart, onRetryAccess, onSwit
       <section className="workspace-hero">
         <div>
           <p className="eyebrow">Кабинет бизнеса</p>
-          <h1>{profile.name || "Ваш бизнес"}</h1>
+          <h1>{businessName || "Ваш бизнес"}</h1>
           <p className="lead">{liveEvidence ? "Первые реальные данные уже подтверждены. Ниже — результат и следующие безопасные действия." : "Сейчас задача одна: получить первый подтверждённый результат на ваших данных. Никаких отправок, изменений или расходов."}</p>
         </div>
         <div className="progress-card">
@@ -1138,6 +1240,31 @@ function Workspace({ data, apiBase, businesses, onRestart, onRetryAccess, onSwit
         </article>)}</div></details> : null}
       </section>
 
+      <section className="panel" aria-label="Организации бизнеса">
+        <div className="panel-title-row"><div><p className="eyebrow">Структура бизнеса</p><h2>Организации</h2></div></div>
+        <p className="muted-text">Организации текущего бизнеса. Доступ к ним ограничен учётной записью владельца.</p>
+        {organizationError ? <p role="alert">{organizationError}</p> : null}
+        <ul>{organizations.map((organization) => <li key={organization.organization_id}>{organization.name || organization.organization_id}</li>)}</ul>
+        <label htmlFor="new-organization-name">Новая организация</label>
+        <input id="new-organization-name" value={organizationName} maxLength={300}
+          onChange={(event) => { setOrganizationName(event.target.value); setOrganizationPendingKey(""); }}
+          placeholder="Название организации" />
+        <button type="button" disabled={!apiKey || !organizationName.trim() || organizationBusy}
+          onClick={createOrganization}>{organizationBusy ? "Сохраняем…" : "Добавить организацию"}</button>
+      </section>
+
+      <section className="panel" aria-label="Единый блок каналов связи">
+        <div className="panel-title-row"><div><p className="eyebrow">Все каналы в одной системе</p><h2>Каналы общения</h2></div><span className="privacy-badge">Единый каталог</span></div>
+        <p className="muted-text">Здесь показаны каналы, известные BusinessAIOS. Наличие в каталоге не означает, что подключение или отправка сообщений уже доступны.</p>
+        <div className="capability-grid">
+          {messagingChannels.map((item) => <article className="capability-card" key={item.channel}>
+            <div className="capability-card-head"><strong>{item.channel}</strong><span className={`status-pill ${item.connected ? "ready" : "roadmap"}`}>{item.connected ? "Подключено" : "Не подключено"}</span></div>
+            <small>{[item.capabilities?.buttons && "Кнопки", item.capabilities?.attachments && "Вложения", item.capabilities?.html && "HTML"].filter(Boolean).join(" · ") || "Текстовые сообщения"}</small>
+            {item.provider_key && (item.connectable || item.connected) ? <button type="button" className="ghost small" onClick={() => openCapabilityProvider(item.provider_key)}>{item.connected ? "Настроить канал" : "Подключить канал"}</button> : <small className="helper-text">Настройка через кабинет пока недоступна</small>}
+          </article>)}
+        </div>
+      </section>
+
       <section className="workspace-grid">
         <article className="panel primary-panel" id="connections-panel">
           <div className="panel-title-row"><div><p className="eyebrow">Шаг к результату</p><h2>Подключите источник данных</h2></div><span className="privacy-badge">Только чтение</span></div>
@@ -1202,6 +1329,17 @@ function Workspace({ data, apiBase, businesses, onRestart, onRetryAccess, onSwit
           </div>
         </article>
       </section>
+
+      <EventLandingWorkspace key={`${data.tenant_id}:${data.business_id}`} apiBase={baseApi} tenantId={data.tenant_id} businessId={data.business_id} apiKey={apiKey} getJson={getJson} postJson={postJson} />
+      <BusinessSettingsWorkspace key={`settings:${data.tenant_id}:${data.business_id}`} apiBase={baseApi} apiKey={apiKey} getJson={getJson} postJson={postJson} onSaved={(settings) => setBusinessName(settings.business_name)} />
+      <SupportCasesWorkspace key={`support:${data.tenant_id}:${data.business_id}`} apiBase={baseApi} apiKey={apiKey} getJson={getJson} postJson={postJson} />
+      <ProgramPublicationWorkspace key={`programs:${data.tenant_id}:${data.business_id}`}
+        apiBase={baseApi} apiKey={apiKey} tenantId={data.tenant_id}
+        businessId={data.business_id} getJson={getJson} postJson={postJson}
+        customers={customers} onRefreshCustomers={refreshCustomers}
+        sendableProviders={readyOperationProviders.map((provider) => provider.provider_key)}
+        onPrepareLessonSend={prepareProgramLesson}
+        suggestedApprovalIds={programApprovalIds} />
 
       <section className="panel sales-panel" aria-labelledby="business-sales-title">
         <div className="panel-title-row">
@@ -1328,6 +1466,7 @@ function Workspace({ data, apiBase, businesses, onRestart, onRetryAccess, onSwit
                 <div className="approval-card-head"><div><strong>{provider?.title || previewRow.providerKey || "Сообщение"}</strong><small>Получатель: {previewRow.recipient || "—"}</small></div><span>Ждёт решения</span></div>
                 {previewRow.subject ? <p><strong>{previewRow.subject}</strong></p> : null}
                 <p>{previewRow.text || "Текст действия сохранён и ждёт вашего решения."}</p>
+                <small className="helper-text">ID подтверждения: {approval.approval_id}</small>
                 <small className="helper-text">После подтверждения получатель и содержание берутся из этого сохранённого действия.</small>
                 <div className="navigation-row"><button type="button" className="ghost" disabled={Boolean(operationBusy) || operationQueueStale} onClick={() => decideApproval(approval.approval_id, false)}>Отклонить</button><button type="button" className="primary" disabled={Boolean(operationBusy) || operationQueueStale} onClick={() => decideApproval(approval.approval_id, true)}>{operationBusy === `approval:${approval.approval_id}` ? "Выполняем…" : "Подтвердить и выполнить"}</button></div>
               </article>;
@@ -1356,7 +1495,7 @@ function Workspace({ data, apiBase, businesses, onRestart, onRetryAccess, onSwit
       <AcquisitionPlanner enabled={Boolean(apiKey)} onEvaluate={(payload) => postJson(acquisitionUrl, payload, authHeaders)} />
 
       <section className="panel business-card">
-        <div><p className="eyebrow">Профиль</p><h2>{profile.name || "Бизнес"}</h2></div>
+        <div><p className="eyebrow">Профиль</p><h2>{businessName || "Бизнес"}</h2></div>
         <div className="business-meta">{profile.industry ? <span>{profile.industry}</span> : null}{profile.city ? <span>{profile.city}</span> : null}{profile.website ? <a href={profile.website} target="_blank" rel="noreferrer">{profile.website}</a> : null}</div>
       </section>
 

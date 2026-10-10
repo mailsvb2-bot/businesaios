@@ -7,8 +7,8 @@ from typing import Any
 import pytest
 
 from runtime._internal import http_transport
-from runtime._internal.effects_clients.visual_gateway_client import visual_gateway_json
-from runtime._internal.http_transport import HTTPResponse, HttpTransport, same_origin_url
+from runtime._internal.effects_clients.visual_gateway_client import visual_gateway_bytes, visual_gateway_json
+from runtime._internal.http_transport import HTTPBytesResponse, HTTPResponse, HttpTransport, same_origin_url
 
 
 @dataclass
@@ -18,6 +18,7 @@ class _RecordingTransport(HttpTransport):
     url: str = ""
     headers: dict[str, str] | None = None
     payload: dict[str, Any] | None = None
+    bytes_response: HTTPBytesResponse | None = None
 
     async def post_json(self, *, url: str, headers=None, data=None, timeout_s: int = 30) -> HTTPResponse:
         self.method = "POST"
@@ -32,6 +33,13 @@ class _RecordingTransport(HttpTransport):
         self.headers = dict(headers or {})
         self.payload = dict(params or {})
         return self.response
+
+    async def get_bytes(self, *, url: str, headers=None, params=None, timeout_s: int = 30, max_bytes: int = 256 * 1024 * 1024) -> HTTPBytesResponse:
+        self.method = "GET_BYTES"
+        self.url = url
+        self.headers = dict(headers or {})
+        self.payload = dict(params or {})
+        return self.bytes_response or HTTPBytesResponse(status=500, headers={}, body=b"")
 
 
 def test_visual_gateway_client_uses_bearer_auth_and_sealed_transport(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -84,3 +92,45 @@ def test_authenticated_redirect_policy_is_same_origin_only(monkeypatch: pytest.M
     assert handler.redirect_request(None, None, 302, "redirect", {}, "https://visual.example/next") == "followed"
     with pytest.raises(Exception, match="cross_origin_redirect_blocked"):
         handler.redirect_request(None, None, 302, "redirect", {}, "https://other.example/next")
+
+
+def test_visual_gateway_binary_download_is_authenticated_and_scope_bound(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("VISUAL_GATEWAY_URL", "https://visual-gateway.example/")
+    monkeypatch.setenv("VISUAL_GATEWAY_TOKEN", "secret-token")
+    transport = _RecordingTransport(
+        HTTPResponse(status=200, json={}, text=""),
+        bytes_response=HTTPBytesResponse(
+            status=200,
+            headers={"Content-Type": "image/png; charset=binary"},
+            body=b"png-bytes",
+        ),
+    )
+
+    body, mime = visual_gateway_bytes(
+        "/v1/creative/generations/j1/content",
+        {"scope_id": "tenant-1"},
+        transport=transport,
+        max_bytes=1024,
+    )
+
+    assert body == b"png-bytes"
+    assert mime == "image/png"
+    assert transport.method == "GET_BYTES"
+    assert transport.url == "https://visual-gateway.example/v1/creative/generations/j1/content"
+    assert transport.headers == {"Accept": "application/json", "Authorization": "Bearer secret-token"}
+    assert transport.payload == {"scope_id": "tenant-1"}
+
+
+def test_visual_gateway_binary_download_fails_closed_when_content_not_ready(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("VISUAL_GATEWAY_URL", "https://visual-gateway.example")
+    monkeypatch.setenv("VISUAL_GATEWAY_TOKEN", "secret-token")
+    transport = _RecordingTransport(
+        HTTPResponse(status=200, json={}, text=""),
+        bytes_response=HTTPBytesResponse(status=404, headers={}, body=b""),
+    )
+    with pytest.raises(RuntimeError, match="visual_gateway_http_404"):
+        visual_gateway_bytes(
+            "/v1/creative/generations/j1/content",
+            {"scope_id": "tenant-1"},
+            transport=transport,
+        )

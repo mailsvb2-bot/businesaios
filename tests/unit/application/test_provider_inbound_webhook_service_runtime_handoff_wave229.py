@@ -183,3 +183,57 @@ def test_vk_message_event_ack_failure_keeps_http_transport_fail_closed(monkeypat
     assert out.metadata['provider_ack']['required'] is True
     assert out.metadata['provider_ack']['ok'] is False
     assert service.transport_ack_safe(out) is False
+
+
+def test_rejected_inbound_decision_is_not_marked_complete_or_transport_acknowledged(monkeypatch):
+    provider = provider_map()['telegram_bot']
+    monkeypatch.setattr(ProviderWebhookRuntime, 'verify', lambda self, **kwargs: True)
+
+    class _RejectingProcessor:
+        def process(self, *, handoff):
+            assert handoff['inbound_message']['text'] == 'hello'
+            return {'accepted': False, 'reason': 'decision_rejected'}
+
+    service = ProviderInboundWebhookService(
+        webhook_runtime=ProviderWebhookRuntime(None),
+        replay_guard=ProviderWebhookReplayGuard(InMemoryIdempotencyStore()),
+        inbound_processor=_RejectingProcessor(),
+    )
+    body = b'{"message":{"from":{"id":42},"text":"hello","message_id":9},"update_id":123}'
+    first = service.ingest(
+        provider=provider, tenant_id='t1', business_id='b1', headers={}, body=body,
+        event_key='evt-rejected-decision', topic='telegram_update', owner_id='provider_admin',
+    )
+    assert first.metadata['messaging_inbound_result']['accepted'] is False
+    assert service.transport_ack_safe(first) is False
+    retry = service.ingest(
+        provider=provider, tenant_id='t1', business_id='b1', headers={}, body=body,
+        event_key='evt-rejected-decision', topic='telegram_update', owner_id='provider_admin',
+    )
+    assert retry.metadata['decision']['resolution'] == 'rejected_in_progress'
+    assert service.transport_ack_safe(retry) is False
+
+
+def test_vk_rejected_callback_does_not_send_success_ack(monkeypatch):
+    provider = provider_map()['vk_messaging']
+    monkeypatch.setattr(ProviderWebhookRuntime, 'verify', lambda self, **kwargs: True)
+
+    class _RejectingProcessor:
+        def process(self, *, handoff):
+            return {'accepted': False, 'reason': 'decision_rejected'}
+
+    responder = _VkAckResponder()
+    service = ProviderInboundWebhookService(
+        webhook_runtime=ProviderWebhookRuntime(None),
+        replay_guard=ProviderWebhookReplayGuard(InMemoryIdempotencyStore()),
+        inbound_processor=_RejectingProcessor(),
+        operational_responder=responder,
+    )
+    body = b'{"type":"message_event","object":{"event_id":"evt-vk-reject","user_id":42,"peer_id":42,"payload":{"callback_data":"menu:open"}}}'
+    result = service.ingest(
+        provider=provider, tenant_id='t1', business_id='b1', headers={}, body=body,
+        event_key='evt-vk-reject', topic='message_event', owner_id='provider_admin',
+    )
+    assert result.metadata['provider_ack']['reason'] == 'inbound_processing_incomplete'
+    assert responder.calls == []
+    assert service.transport_ack_safe(result) is False

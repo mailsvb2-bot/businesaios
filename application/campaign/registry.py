@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 import time
+from dataclasses import dataclass
 from typing import Any
+from urllib.parse import quote, urlsplit
 
 from application.campaign.projector import CAMPAIGN_ARCHIVED, CAMPAIGN_CREATED, CAMPAIGN_UPDATED, CampaignProjector
 from application.ontology import EventFactLifecycleWriter
@@ -211,4 +213,42 @@ class CampaignRegistry:
         return self._projector.list_for_business(tenant_id=tenant_id, business_id=business_id)
 
 
-__all__ = ["CANON_CAMPAIGN_LIFECYCLE_OWNER", "CampaignRegistry"]
+@dataclass(frozen=True, slots=True)
+class EventPromotionTarget:
+    event_id: str
+    tenant_id: str
+    business_id: str
+    public_base_url: str
+
+    def __post_init__(self) -> None:
+        event_id = str(self.event_id or "").strip()
+        tenant_id = str(self.tenant_id or "").strip()
+        business_id = str(self.business_id or "").strip()
+        base = str(self.public_base_url or "").strip().rstrip("/")
+        parsed = urlsplit(base)
+        if not event_id or len(event_id) > 200:
+            raise ValueError("event_id is required")
+        if not tenant_id or len(tenant_id) > 200:
+            raise ValueError("tenant_id is required")
+        if not business_id or len(business_id) > 200:
+            raise ValueError("business_id is required")
+        if parsed.scheme != "https" or not parsed.hostname or parsed.query or parsed.fragment:
+            raise ValueError("public event base URL must be a clean HTTPS origin/path")
+        object.__setattr__(self, "event_id", event_id)
+        object.__setattr__(self, "tenant_id", tenant_id)
+        object.__setattr__(self, "business_id", business_id)
+        object.__setattr__(self, "public_base_url", base)
+
+
+def event_advertising_url(target: EventPromotionTarget) -> str:
+    campaign_ref = quote(f"event:{target.event_id}", safe="")
+    tenant = quote(target.tenant_id, safe="")
+    business = quote(target.business_id, safe="")
+    event = quote(target.event_id, safe="")
+    return (
+        f"{target.public_base_url}/public-site/events/{tenant}/{business}/{event}"
+        f"?source=ads&campaign_ref={campaign_ref}"
+    )
+
+
+__all__ = ["CANON_CAMPAIGN_LIFECYCLE_OWNER", "CampaignRegistry", "EventPromotionTarget", "event_advertising_url"]

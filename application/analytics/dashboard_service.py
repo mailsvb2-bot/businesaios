@@ -4,6 +4,7 @@ from dataclasses import asdict, dataclass, field
 from typing import Any
 
 from application.analytics.business_analytics_service import ApplicationBusinessAnalyticsService
+from application.analytics.media_delivery_metrics import MediaDeliveryMetricsProjection
 from core.analytics.analytics_dashboard import AnalyticsDashboardService
 from core.analytics.analytics_explainability_trace import AnalyticsExplainabilityService
 from core.analytics.analytics_rollup import AnalyticsRollupService
@@ -25,9 +26,14 @@ class ApplicationAnalyticsDashboardService:
         dashboard = self._dashboard.build_dashboard(tenant_id=str(tenant_id), window_days=int(window_days), business_scorecard=business)
         explainability = self._explain.build_from_business_scorecard(scorecard=business)
         tenant_rollup = self._rollup.build_tenant_rollup(dashboard=dashboard, business_scorecard=business)
+        media_delivery = MediaDeliveryMetricsProjection(self.event_store).build(
+            tenant_id=str(tenant_id),
+            window_days=int(window_days),
+        )
         return {
             'dashboard': asdict(dashboard),
             'explainability': asdict(explainability),
             'tenant_rollup': asdict(tenant_rollup),
             'business': asdict(business),
+            'media_delivery': asdict(media_delivery),
         }

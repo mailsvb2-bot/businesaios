@@ -13,6 +13,57 @@ VK_MAX_BUTTONS_PER_ROW = 5
 VK_MAX_BUTTON_ROWS = 6
 VK_MAX_INLINE_CALLBACK_BUTTONS = 10
 
+MAX_MAX_BUTTON_ROWS = 30
+MAX_MAX_BUTTONS_PER_ROW = 7
+MAX_MAX_LINK_BUTTONS_PER_ROW = 3
+
+
+def _max_keyboard_attachment(reply_markup: object) -> dict[str, Any] | None:
+    if not isinstance(reply_markup, Mapping):
+        return None
+    raw_rows = reply_markup.get("inline_keyboard")
+    if not isinstance(raw_rows, list):
+        return None
+    if len(raw_rows) > MAX_MAX_BUTTON_ROWS:
+        raise ValueError("MAX keyboard exceeds provider row capacity")
+
+    rows: list[list[dict[str, Any]]] = []
+    for raw_row in raw_rows:
+        if not isinstance(raw_row, list):
+            continue
+        if len(raw_row) > MAX_MAX_BUTTONS_PER_ROW:
+            raise ValueError("MAX keyboard exceeds provider button capacity")
+        row: list[dict[str, Any]] = []
+        link_count = 0
+        for raw_button in raw_row:
+            if not isinstance(raw_button, Mapping):
+                continue
+            label = str(raw_button.get("text") or "").strip()
+            if not label:
+                raise ValueError("MAX button label is required")
+            callback_data = raw_button.get("callback_data")
+            url = raw_button.get("url")
+            if not url and isinstance(raw_button.get("web_app"), Mapping):
+                url = raw_button["web_app"].get("url")
+            if callback_data is not None:
+                payload = str(callback_data).strip()
+                if not payload:
+                    raise ValueError("MAX callback button requires callback_data")
+                row.append({"type": "callback", "text": label, "payload": payload})
+            elif url:
+                link_count += 1
+                row.append({"type": "link", "text": label, "url": str(url).strip()})
+            else:
+                raise ValueError("MAX button requires callback_data or url")
+        if link_count and len(row) > MAX_MAX_LINK_BUTTONS_PER_ROW:
+            raise ValueError("MAX link keyboard exceeds provider row capacity")
+        if row:
+            rows.append(row)
+    if not rows:
+        return None
+    return {"type": "inline_keyboard", "payload": {"buttons": rows}}
+
+
 
 def _vk_button_payload(callback_data: object) -> str:
     value = str(callback_data or '').strip()
@@ -133,8 +184,13 @@ class ProviderPayloadNormalizers:
                     normalized['attachments'] = [dict(item) for item in raw['attachments'] if isinstance(item, Mapping)]
                 return normalized
             normalized = {'chat_id': str(raw.get('chat_id') or ''), 'user_id': str(raw.get('user_id') or ''), 'text': str(raw.get('text') or raw.get('message') or '')}
-            if isinstance(raw.get('attachments'), list):
-                normalized['attachments'] = [dict(item) for item in raw['attachments'] if isinstance(item, Mapping)]
+            attachments = [dict(item) for item in raw.get('attachments', []) if isinstance(item, Mapping)] if isinstance(raw.get('attachments'), list) else []
+            if key == 'max_messaging':
+                keyboard = _max_keyboard_attachment(raw.get('reply_markup'))
+                if keyboard is not None:
+                    attachments.append(keyboard)
+            if attachments:
+                normalized['attachments'] = attachments
             return normalized
         if key in {'shopify', 'woocommerce'}:
             if operation.endswith('catalog_sync'):
