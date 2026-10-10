@@ -32,6 +32,7 @@ def _route_verdict(resource_id: str, *, role: RoleId = RoleId.SUPPORT, scopes=("
 def test_support_key_can_authenticate_only_bounded_support_routes():
     routes = (
         "GET:/platform-support/session", "GET:/platform-support/cases",
+        "GET:/platform-support/cases/0c2d6f9e-558a-42ba-aa3e-99135c3be0aa/history",
         "POST:/platform-support/cases/0c2d6f9e-558a-42ba-aa3e-99135c3be0aa/claim",
         "POST:/platform-support/cases/0c2d6f9e-558a-42ba-aa3e-99135c3be0aa/release",
         "POST:/platform-support/cases/0c2d6f9e-558a-42ba-aa3e-99135c3be0aa/resolve",
@@ -51,6 +52,10 @@ def test_support_key_cannot_read_audit_other_business_or_unregistered_endpoint()
         "GET:/control-plane/audit",
         "GET:/business-workspace/support-cases",
         "GET:/platform-support/cases/stolen",
+        "GET:/platform-support/cases/not-a-uuid/history",
+        "GET:/platform-support/cases/0c2d6f9e-558a-42ba-aa3e-99135c3be0aa/raw-audit",
+        "GET:/platform-support/cases/0c2d6f9e-558a-42ba-aa3e-99135c3be0aa/history/../../audit",
+        "POST:/platform-support/cases/0c2d6f9e-558a-42ba-aa3e-99135c3be0aa/history",
         "DELETE:/platform-support/cases",
         "POST:/platform-support/cases",
         "POST:/platform-support/cases/0c2d6f9e-558a-42ba-aa3e-99135c3be0aa/reopen",
@@ -68,3 +73,7 @@ def test_support_special_permission_cannot_be_triggered_by_missing_scope_or_wron
     assert not _route_verdict(good_route, scopes=()).allowed
     assert not _route_verdict(good_route, role=RoleId.VIEWER).allowed
     assert not _route_verdict(good_route, kind="business_fact").allowed
+    history_route = "GET:/platform-support/cases/0c2d6f9e-558a-42ba-aa3e-99135c3be0aa/history"
+    assert not _route_verdict(history_route, scopes=()).allowed
+    assert not _route_verdict(history_route, role=RoleId.VIEWER).allowed
+    assert not _route_verdict(history_route, kind="business_fact").allowed

@@ -26,11 +26,14 @@ from governance.role_catalog import RoleCatalog
 CANON_SECURITY_ACCESS_POLICY = True
 
 # Explicit server-controlled path allowlist; no generic audit-read escalation.
+# Authentication is only the first boundary: the support route separately
+# verifies the exact role, scope, tenant and business before reading the case.
+_SUPPORT_CASE_ID_PATTERN = r"[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}"
 _SUPPORT_CASE_API_ROUTE = re.compile(
     r"^(?:GET:/platform-support/(?:session|cases)"
-    r"|POST:/platform-support/cases/"
-    r"[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}"
-    r"/(?:claim|release|resolve))$"
+    r"|GET:/platform-support/cases/" + _SUPPORT_CASE_ID_PATTERN + r"/history"
+    r"|POST:/platform-support/cases/" + _SUPPORT_CASE_ID_PATTERN
+    + r"/(?:claim|release|resolve))$"
 )
 
 

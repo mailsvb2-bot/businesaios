@@ -163,4 +163,5 @@ def test_owner_to_scoped_operator_to_owner_with_revocation_and_denial(tmp_path):
 
         keys.revoke(support_id)
         assert client.get("/platform-support/cases", headers=support_headers).status_code == 401
+        assert client.get(operator_history_url, headers=support_headers).status_code == 401
         assert client.get("/business-workspace/support-cases", headers=owner_headers).status_code == 200
