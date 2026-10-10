@@ -7,6 +7,7 @@ as the canonical outbound runtime. Provider acceptance != recipient delivery.
 from __future__ import annotations
 
 from collections.abc import Mapping
+from datetime import datetime
 from typing import Any
 
 CANON_PHASE18_LESSON_DELIVERY_VERIFIER = True
@@ -115,13 +116,24 @@ def reconcile_program_lesson_provider_acceptance(
     if not accepted or not resource_id:
         return {"status": "provider_not_confirmed", "provider_accepted": False,
                 "recipient_delivery_confirmed": False}
-    history_id = str(row.get("history_id") or "").strip() or queue_job_id
+    history_id = str(row.get("history_id") or "").strip()
+    raw_time = str(row.get("recorded_at_utc") or "").strip()
+    try:
+        recorded_at = datetime.fromisoformat(raw_time.replace("Z", "+00:00"))
+        if recorded_at.tzinfo is None:
+            raise ValueError("timezone required")
+        recorded_at_ms = int(recorded_at.timestamp() * 1000)
+    except (ValueError, OverflowError) as exc:
+        raise RuntimeError("program_delivery_provider_timestamp_missing") from exc
+    if not history_id or recorded_at_ms < 1:
+        raise RuntimeError("program_delivery_provider_evidence_incomplete")
     observed = programs.record_provider_acceptance(
         tenant_id=tenant_id, business_id=business_id,
         program_id=program_id, enrollment_id=enrollment_id,
         lesson_position=lesson_position, provider_key=plan["provider_key"],
         approval_id=approval_id, decision_id=decision_id,
         provider_message_id=resource_id, history_id=history_id,
+        recorded_at_ms=recorded_at_ms,
     )
     return {
         "status": "provider_accepted", "provider_accepted": True,

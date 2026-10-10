@@ -160,6 +160,8 @@ def register_business_workspace_program_routes(
                 "program_lesson_already_provider_accepted", "enrollment_customer_not_active",
                 "program_delivery_identity_missing", "program_delivery_identity_ambiguous",
                 "program_lesson_media_delivery_not_connected",
+                "program_delivery_provider_timestamp_missing",
+                "program_delivery_provider_evidence_incomplete",
             }:
                 raise HTTPException(status_code=409, detail=str(exc)) from exc
             raise

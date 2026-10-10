@@ -185,6 +185,7 @@ def test_provider_acceptance_is_durable_but_never_claims_recipient_delivery():
         "status": "live_executed", "accepted": True,
         "parsed_response": {"resource_id": "msg-real-1"},
         "history_id": "history-real-1",
+        "recorded_at_utc": "2026-10-10T17:00:00+00:00",
     }
     accepted = reconcile()
     assert accepted["status"] == "provider_accepted"

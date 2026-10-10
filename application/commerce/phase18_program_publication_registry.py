@@ -474,7 +474,7 @@ class ProgramPublicationRegistry:
         self, *, tenant_id: str, business_id: str, program_id: str,
         enrollment_id: str, lesson_position: int, provider_key: str,
         approval_id: str, decision_id: str, provider_message_id: str,
-        history_id: str,
+        history_id: str, recorded_at_ms: int,
     ) -> dict[str, object]:
         """Only a verifier supplied with server-held provider proof calls this."""
         enrollment = self.get_enrollment(
@@ -488,6 +488,8 @@ class ProgramPublicationRegistry:
         decision_id = _required(decision_id, "decision_id")
         provider_message_id = _required(provider_message_id, "provider_message_id", maximum=512)
         history_id = _required(history_id, "history_id", maximum=512)
+        if type(recorded_at_ms) is not int or recorded_at_ms < 1:
+            raise ValueError("program_delivery_provider_timestamp_invalid")
         prior = self.list_lesson_provider_outcomes(
             tenant_id=tenant_id, business_id=business_id,
             program_id=program_id, enrollment_id=enrollment_id,
@@ -498,7 +500,7 @@ class ProgramPublicationRegistry:
             if row["approval_id"] == approval_id and row["provider_message_id"] == provider_message_id:
                 return row
             raise RuntimeError("program_lesson_already_provider_accepted")
-        when = int(time.time() * 1000)
+        when = recorded_at_ms
         row = {
             "tenant_id": tenant_id, "business_id": business_id,
             "program_id": program_id, "enrollment_id": enrollment_id,

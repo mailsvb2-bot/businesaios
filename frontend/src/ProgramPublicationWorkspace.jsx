@@ -17,6 +17,9 @@ function ProgramEnrollmentForm({ program, url, apiKey, customers, sendableProvid
   const [enrollments, setEnrollments] = useState([]);
   const [busy, setBusy] = useState(false);
   const [deliveryChoice, setDeliveryChoice] = useState({});
+  const [approvalIds, setApprovalIds] = useState({});
+  const [providerOutcomes, setProviderOutcomes] = useState({});
+  const [reconcileStatus, setReconcileStatus] = useState({});
   const [preparedNotice, setPreparedNotice] = useState("");
   const [error, setError] = useState("");
   const endpoint = url + "/" + encodeURIComponent(program.id) + "/enrollments";
@@ -28,6 +31,17 @@ function ProgramEnrollmentForm({ program, url, apiKey, customers, sendableProvid
       if (!active) return;
       if (!Array.isArray(result?.enrollments)) throw new Error("Некорректный список зачислений.");
       setEnrollments(result.enrollments);
+      Promise.all(result.enrollments.map(async (enrollment) => {
+        const response = await getJson(endpoint + "/" + encodeURIComponent(enrollment.id) +
+          "/provider-outcomes", headers);
+        if (!Array.isArray(response?.outcomes)) throw new Error("Некорректные подтверждения провайдера.");
+        return [enrollment.id, response.outcomes];
+      })).then((rows) => {
+        if (active) setProviderOutcomes(Object.fromEntries(rows));
+      }).catch((reason) => {
+        if (active) setError("Не удалось прочитать подтверждённые результаты отправки: " +
+          (reason.message || "ошибка сети"));
+      });
     }).catch((reason) => {
       if (active) setError("Не удалось прочитать зачисления: " + (reason.message || "ошибка сети"));
     });
@@ -86,6 +100,35 @@ function ProgramEnrollmentForm({ program, url, apiKey, customers, sendableProvid
     }
   };
 
+  const reconcileLesson = async (enrollment, lesson, channel, approvalId) => {
+    if (!approvalId || busy) return;
+    setBusy(true);
+    setError("");
+    const key = enrollment.id + ":" + lesson.position;
+    try {
+      const result = await postJson(
+        endpoint + "/" + encodeURIComponent(enrollment.id) +
+        "/lessons/" + encodeURIComponent(lesson.position) + "/reconcile",
+        { channel, approval_id: approvalId.trim() }, headers,
+      );
+      if (!["provider_accepted", "awaiting_owner_approval", "awaiting_provider_evidence",
+            "provider_not_confirmed"].includes(result?.status)) {
+        throw new Error("Неизвестный ответ сверки с провайдером.");
+      }
+      setReconcileStatus((current) => ({ ...current, [key]: result.status }));
+      if (result.status === "provider_accepted") {
+        const verified = await getJson(endpoint + "/" + encodeURIComponent(enrollment.id) +
+          "/provider-outcomes", headers);
+        if (!Array.isArray(verified?.outcomes)) throw new Error("Не удалось перечитать запись результата.");
+        setProviderOutcomes((current) => ({ ...current, [enrollment.id]: verified.outcomes }));
+      }
+    } catch (reason) {
+      setError("Не удалось подтвердить отправку: " + (reason.message || "ошибка сети"));
+    } finally {
+      setBusy(false);
+    }
+  };
+
   return (
     <div>
       <form onSubmit={enroll}>
@@ -128,10 +171,15 @@ function ProgramEnrollmentForm({ program, url, apiKey, customers, sendableProvid
               const key = enrollment.id + ":" + lesson.position;
               const channel = channels.includes(deliveryChoice[key]) ? deliveryChoice[key] : (channels[0] || "");
               const supported = ["text", "link"].includes(lesson.content_kind);
+              const proven = (providerOutcomes[enrollment.id] || []).find((item) =>
+                item.lesson_position === lesson.position && item.status === "provider_accepted"
+              );
               return (
                 <div key={key}>
-                  <p>Урок {lesson.position}: {lesson.title} · Ожидает отправки</p>
-                  {supported && channels.length ? (
+                  <p>Урок {lesson.position}: {lesson.title} · {proven
+                    ? "Провайдер принял сообщение; доставка адресату не доказана"
+                    : "Подтверждённой отправки ещё нет"}</p>
+                  {supported && channels.length && !proven ? (
                     <>
                       <label>Канал урока {lesson.position}
                         <select value={channel} disabled={busy}
@@ -143,6 +191,20 @@ function ProgramEnrollmentForm({ program, url, apiKey, customers, sendableProvid
                         onClick={() => prepareLesson(enrollment, lesson, channel)}>
                         Подготовить урок {lesson.position} к отправке
                       </button>
+                      <label>ID подтверждённого действия для урока {lesson.position}
+                        <input type="text" autoComplete="off" value={approvalIds[key] || ""}
+                          disabled={busy}
+                          onChange={(event) => setApprovalIds((current) => ({
+                            ...current, [key]: event.target.value,
+                          }))} />
+                      </label>
+                      <button className="ghost" type="button" disabled={busy || !apiKey || !(approvalIds[key] || "").trim()}
+                        onClick={() => reconcileLesson(enrollment, lesson, channel, approvalIds[key])}>
+                        Проверить подтверждение у провайдера
+                      </button>
+                      {reconcileStatus[key] === "awaiting_owner_approval" ? <p>Ожидается подтверждение владельца.</p> : null}
+                      {reconcileStatus[key] === "awaiting_provider_evidence" ? <p>Выполнение ожидается; повторять отправку нельзя.</p> : null}
+                      {reconcileStatus[key] === "provider_not_confirmed" ? <p>Отправка не подтверждена провайдером; результата доставки нет.</p> : null}
                     </>
                   ) : !supported ? <p>Для этого типа материала требуется канонический медиамаршрут. Отправка заблокирована.</p> : null}
                 </div>
