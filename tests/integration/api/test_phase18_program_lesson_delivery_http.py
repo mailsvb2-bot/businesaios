@@ -187,6 +187,7 @@ def test_real_owner_http_program_to_provider_acceptance_is_durable_and_isolated(
         assert first.status_code == 200, first.text
         assert first.json()["status"] == "provider_accepted"
         assert first.json()["recipient_delivery_confirmed"] is False
+        assert first.json()["outcome"]["customer_id"] == identity.customer.customer_id
         assert len(event_store) == before + 1
         timeline_after = client.get(
             "/business-workspace/customers?customer_id=" + identity.customer.customer_id,

@@ -463,6 +463,10 @@ class ProgramPublicationRegistry:
                 or payload.get("business_id") != business_id
                 or payload.get("program_id") != program_id
                 or payload.get("enrollment_id") != enrollment_id
+                or payload.get("customer_id") != self.get_enrollment(
+                    tenant_id=tenant_id, business_id=business_id,
+                    program_id=program_id, enrollment_id=enrollment_id,
+                )["customer_id"]
                 or payload.get("status") != "provider_accepted"
             ):
                 raise RuntimeError("program_delivery_durable_payload_invalid")
@@ -504,6 +508,7 @@ class ProgramPublicationRegistry:
         row = {
             "tenant_id": tenant_id, "business_id": business_id,
             "program_id": program_id, "enrollment_id": enrollment_id,
+            "customer_id": enrollment["customer_id"],
             "lesson_position": lesson_position,
             "provider_key": provider_key, "approval_id": approval_id,
             "decision_id": decision_id, "provider_message_id": provider_message_id,
@@ -597,6 +602,9 @@ class ProgramPublicationRegistry:
         self, *, tenant_id: str, business_id: str, program_id: str,
         enrollment_id: str,
     ) -> dict[str, object]:
+        # Authorize the parent first, including on the read-only lesson and
+        # outcome routes; an enrollment ID must never bypass program scope.
+        self.get(tenant_id=tenant_id, business_id=business_id, program_id=program_id)
         rows = [row for row in self._enrollments(
             tenant_id=tenant_id, business_id=business_id, program_id=program_id,
         ) if row["id"] == enrollment_id]

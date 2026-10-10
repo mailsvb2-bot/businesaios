@@ -199,6 +199,7 @@ def test_provider_acceptance_is_durable_but_never_claims_recipient_delivery():
         enrollment_id=enrolled["id"],
     )
     assert len(outcomes) == 1 and outcomes[0]["history_id"] == "history-real-1"
+    assert outcomes[0]["customer_id"] == identity.customer.customer_id
     with pytest.raises(KeyError):
         programs.list_lesson_provider_outcomes(
             tenant_id="t", business_id="other", program_id=program["id"],
