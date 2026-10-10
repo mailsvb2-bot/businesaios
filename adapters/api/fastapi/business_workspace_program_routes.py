@@ -61,4 +61,57 @@ def register_business_workspace_program_routes(
             raise HTTPException(status_code=422, detail=str(exc)) from exc
 
 
+    @router.get("/business-workspace/program-drafts", tags=["business-workspace"])
+    async def list_program_drafts(request: Request):
+        tenant_id, business_id, _ = scope(request)
+        return {"drafts": programs.list_drafts(tenant_id=tenant_id, business_id=business_id)}
+
+    @router.post("/business-workspace/program-drafts", tags=["business-workspace"])
+    async def create_program_draft(request: Request):
+        tenant_id, business_id, actor_id = scope(request)
+        body = await json_body(request)
+        if set(body) != {"title", "lessons", "idempotency_key"}:
+            raise HTTPException(status_code=422, detail="program_draft_fields_invalid")
+        try:
+            return programs.create_draft(
+                tenant_id=tenant_id, business_id=business_id, actor_id=actor_id,
+                title=body["title"], lessons=body["lessons"],
+                idempotency_key=body["idempotency_key"],
+            )
+        except (TypeError, ValueError) as exc:
+            raise HTTPException(status_code=422, detail=str(exc)) from exc
+        except RuntimeError as exc:
+            if str(exc) == "program_idempotency_conflict":
+                raise HTTPException(status_code=409, detail=str(exc)) from exc
+            raise
+
+    @router.post("/business-workspace/program-drafts/{program_id}", tags=["business-workspace"])
+    async def change_program_draft(program_id: str, request: Request):
+        tenant_id, business_id, actor_id = scope(request)
+        body = await json_body(request)
+        action = body.get("action")
+        expected = {"action", "expected_revision", "idempotency_key"}
+        if action == "save":
+            expected |= {"title", "lessons"}
+        if set(body) != expected:
+            raise HTTPException(status_code=422, detail="program_draft_transition_fields_invalid")
+        try:
+            return programs.change_draft(
+                tenant_id=tenant_id, business_id=business_id, actor_id=actor_id,
+                program_id=program_id, action=action,
+                expected_revision=body["expected_revision"],
+                idempotency_key=body["idempotency_key"],
+                title=body.get("title"), lessons=body.get("lessons"),
+            )
+        except KeyError as exc:
+            raise HTTPException(status_code=404, detail="program_not_found") from exc
+        except (TypeError, ValueError) as exc:
+            raise HTTPException(status_code=422, detail=str(exc)) from exc
+        except RuntimeError as exc:
+            if str(exc) in {"program_revision_conflict", "program_idempotency_conflict",
+                            "program_draft_not_editable"} or str(exc).startswith("ontology transition rejected:"):
+                raise HTTPException(status_code=409, detail=str(exc)) from exc
+            raise
+
+
 __all__ = ["register_business_workspace_program_routes"]
