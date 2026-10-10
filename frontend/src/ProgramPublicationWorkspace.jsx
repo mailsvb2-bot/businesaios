@@ -7,6 +7,68 @@ const KINDS = [
   ["task", "Задание"], ["mixed", "Смешанный материал"]
 ];
 
+function ProgramEnrollmentForm({ program, url, apiKey, getJson, postJson }) {
+  const [customerId, setCustomerId] = useState("");
+  const [enrollments, setEnrollments] = useState([]);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+  const endpoint = url + "/" + encodeURIComponent(program.id) + "/enrollments";
+  const headers = { "X-API-Key": apiKey };
+
+  useEffect(() => {
+    let active = true;
+    if (apiKey) getJson(endpoint, headers).then((result) => {
+      if (!active) return;
+      if (!Array.isArray(result?.enrollments)) throw new Error("Некорректный список зачислений.");
+      setEnrollments(result.enrollments);
+    }).catch((reason) => {
+      if (active) setError("Не удалось прочитать зачисления: " + (reason.message || "ошибка сети"));
+    });
+    return () => { active = false; };
+  }, [apiKey, endpoint, getJson]);
+
+  const enroll = async (event) => {
+    event.preventDefault();
+    if (busy || !apiKey || !customerId.trim()) return;
+    setBusy(true);
+    setError("");
+    try {
+      const receipt = await postJson(endpoint, { customer_id: customerId.trim() }, headers);
+      if (receipt?.program_id !== program.id ||
+          receipt?.customer_id !== customerId.trim() ||
+          receipt?.status !== "awaiting_delivery" || !Array.isArray(receipt?.progress) ||
+          receipt.progress.length !== program.lessons.length ||
+          receipt.progress.some((item) => item.status !== "pending")) {
+        throw new Error("Сервер не подтвердил зачисление в рамках программы.");
+      }
+      setEnrollments((existing) => [receipt, ...existing.filter((item) => item.id !== receipt.id)]);
+      setCustomerId("");
+    } catch (reason) {
+      setError("Зачисление не подтверждено: " + (reason.message || "ошибка сети"));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <div>
+      <form onSubmit={enroll}>
+        <label>ID существующего клиента
+          <input type="text" maxLength={64} autoComplete="off" value={customerId}
+            onChange={(event) => setCustomerId(event.target.value)}
+            placeholder="UUID клиента из вашего бизнеса" />
+        </label>
+        <button type="submit" className="ghost" disabled={busy || !customerId.trim() || !apiKey}>
+          {busy ? "Зачисляем…" : "Зачислить без отправки материалов"}
+        </button>
+      </form>
+      {error ? <p role="alert">{error}</p> : null}
+      <p className="muted-text">Зачислено: {enrollments.length}. Все уроки ожидают реальной доставки,
+        отправка и отметки о прохождении здесь не выполняются.</p>
+    </div>
+  );
+}
+
 /** Phase 18: atomic course publication; actual lesson delivery is not enabled. */
 export function ProgramPublicationWorkspace({ apiBase, apiKey, tenantId, businessId, getJson, postJson }) {
   const [programs, setPrograms] = useState([]);
@@ -327,6 +389,8 @@ export function ProgramPublicationWorkspace({ apiBase, apiKey, tenantId, busines
             <ol>{item.lessons.map((lesson) => (
               <li key={lesson.position}>{lesson.title} · {lesson.content_kind}</li>
             ))}</ol>
+            <ProgramEnrollmentForm key={item.id} program={item} url={url}
+              apiKey={apiKey} getJson={getJson} postJson={postJson} />
           </li>
         ))}</ul>
       ) : <p className="muted-text">Программ пока нет.</p>}

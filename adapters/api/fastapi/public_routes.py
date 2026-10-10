@@ -26,6 +26,7 @@ from adapters.api.fastapi.router_support import authorize_request
 from application.business_autonomy.provider_catalog import provider_map
 from application.business_autonomy.support_case_registry import SupportCaseRegistry
 from application.commerce.phase18_program_publication_registry import ProgramPublicationRegistry
+from crm.customer_registry import CustomerRegistry
 from application.public_site.event_landing_registry import EventLandingRegistry
 from entrypoints.api.owner_action_draft import OwnerActionDraftProjector
 from entrypoints.api.public_surface_security_guard import PublicSurfaceSecurityGuard
@@ -220,6 +221,11 @@ def register_public_api_routes(
                 programs=ProgramPublicationRegistry(
                     event_store=event_store,
                     idempotency_store=dependency_container.api_idempotency_store,
+                    customer_registry=CustomerRegistry(
+                        event_store=event_store,
+                        idempotency_store=dependency_container.api_idempotency_store,
+                        pii_vault=dependency_container.secret_vault,
+                    ),
                 ),
             )
         if event_landing_registry is not None:

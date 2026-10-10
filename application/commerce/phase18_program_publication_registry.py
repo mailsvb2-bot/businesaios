@@ -11,7 +11,9 @@ import re
 import time
 from typing import Any
 from urllib.parse import urlsplit
-from uuid import NAMESPACE_URL, uuid5
+from uuid import NAMESPACE_URL, UUID, uuid5
+
+from contracts.customer import CustomerStatus, CustomerNotFound
 
 from application.ontology import EventFactLifecycleWriter
 from contracts.event_store import BUSINESS_FACT_EVENT_TYPE
@@ -25,6 +27,8 @@ _DRAFT_SAVED = "program.draft_saved"
 _DRAFT_PUBLISHED = "program.draft_published"
 _DRAFT_ARCHIVED = "program.draft_archived"
 _PROGRAM_FACTS = frozenset({_PUBLISHED, _DRAFT_CREATED, _DRAFT_SAVED, _DRAFT_PUBLISHED, _DRAFT_ARCHIVED})
+_ENROLL_SOURCE = "phase18_program_enrollment_registry"
+_ENROLLED = "program.enrollment_created"
 _KEY = re.compile(r"^[A-Za-z0-9:_-]{1,128}$")
 _CONTENT_KINDS = frozenset({
     "audio", "video", "text", "document", "image", "link", "task", "mixed",
@@ -68,12 +72,18 @@ def _lessons(value: object, *, allow_empty: bool = False) -> list[dict[str, obje
 class ProgramPublicationRegistry:
     """Business-scoped immutable publication using the shared ontology writer."""
 
-    def __init__(self, *, event_store: Any, idempotency_store: Any) -> None:
+    def __init__(self, *, event_store: Any, idempotency_store: Any, customer_registry: Any = None) -> None:
         self._events = event_store
+        self._customers = customer_registry
         self._writer = EventFactLifecycleWriter(
             event_store=event_store, idempotency_store=idempotency_store,
             namespace="phase18_program_publication", source=_SOURCE,
             id_prefix="program-publication",
+        )
+        self._enrollment_writer = EventFactLifecycleWriter(
+            event_store=event_store, idempotency_store=idempotency_store,
+            namespace="phase18_program_enrollment", source=_ENROLL_SOURCE,
+            id_prefix="program-enrollment",
         )
 
     def _records(self, *, tenant_id: str, business_id: str, program_id: str | None = None) -> list[dict[str, object]]:
@@ -320,6 +330,128 @@ class ProgramPublicationRegistry:
             payload=row, occurred_at_ms=when, event_metadata={"actor_id": actor_id},
         )
         return self.get(tenant_id=tenant_id, business_id=business_id, program_id=program_id)
+
+
+    def _enrollments(self, *, tenant_id: str, business_id: str,
+                     program_id: str | None = None) -> list[dict[str, object]]:
+        tenant_id = _required(tenant_id, "tenant_id")
+        business_id = _required(business_id, "business_id")
+        rows = []
+        ids = set()
+        for event in self._events.iter_events(
+            tenant_id=tenant_id, start_ms=0, event_type=BUSINESS_FACT_EVENT_TYPE,
+        ):
+            if event.get("source") != _ENROLL_SOURCE:
+                continue
+            fact = event.get("payload") or {}
+            if not isinstance(fact, dict) or fact.get("business_id") != business_id:
+                continue
+            if fact.get("fact_type") != _ENROLLED:
+                raise RuntimeError("enrollment_unknown_durable_fact")
+            data = fact.get("payload")
+            if not isinstance(data, dict):
+                raise RuntimeError("enrollment_durable_payload_invalid")
+            if data.get("tenant_id") != tenant_id or data.get("business_id") != business_id or (
+                data.get("id") != fact.get("entity_id")
+            ):
+                raise RuntimeError("enrollment_durable_scope_invalid")
+            if program_id is not None and data.get("program_id") != program_id:
+                continue
+            if data["id"] in ids:
+                raise RuntimeError("enrollment_duplicate_durable_fact")
+            ids.add(data["id"])
+            if data.get("status") != "awaiting_delivery" or not isinstance(data.get("progress"), list):
+                raise RuntimeError("enrollment_durable_status_invalid")
+            program = self.get(
+                tenant_id=tenant_id, business_id=business_id,
+                program_id=_required(data.get("program_id"), "program_id"),
+            )
+            expected = [{"position": lesson["position"], "status": "pending"}
+                        for lesson in program["lessons"]]
+            if data["progress"] != expected or program["status"] != "active":
+                raise RuntimeError("enrollment_durable_progress_invalid")
+            rows.append(dict(data))
+        rows.sort(key=lambda item: (int(item["enrolled_at_ms"]), str(item["id"])), reverse=True)
+        return rows
+
+    def enroll_customer(
+        self, *, tenant_id: str, business_id: str, actor_id: str,
+        program_id: str, customer_id: str,
+    ) -> dict[str, object]:
+        # No phantom customers or fabricated message delivery. Resolve the
+        # customer through the existing canonical customer lifecycle owner.
+        tenant_id = _required(tenant_id, "tenant_id")
+        business_id = _required(business_id, "business_id")
+        actor_id = _required(actor_id, "actor_id")
+        try:
+            program_id = str(UUID(_required(program_id, "program_id")))
+            customer_id = str(UUID(_required(customer_id, "customer_id")))
+        except ValueError as exc:
+            raise ValueError("enrollment_identifier_invalid") from exc
+        program = self.get(tenant_id=tenant_id, business_id=business_id, program_id=program_id)
+        if program["status"] != "active":
+            raise RuntimeError("enrollment_program_not_active")
+        if self._customers is None:
+            raise RuntimeError("enrollment_canonical_customer_owner_unavailable")
+        try:
+            customer = self._customers.get_customer(
+                tenant_id=tenant_id, business_id=business_id, customer_id=customer_id,
+            )
+        except CustomerNotFound as exc:
+            raise KeyError("enrollment_customer_not_found") from exc
+        if customer.customer.status is not CustomerStatus.ACTIVE:
+            raise RuntimeError("enrollment_customer_not_active")
+        identity = str(uuid5(NAMESPACE_URL,
+            f"businessaios:phase18:enrollment:{tenant_id}:{business_id}:{program_id}:{customer_id}",
+        ))
+        for row in self._enrollments(
+            tenant_id=tenant_id, business_id=business_id, program_id=program_id,
+        ):
+            if row["id"] == identity:
+                return row
+        now = int(time.time() * 1000)
+        row = {
+            "id": identity, "tenant_id": tenant_id, "business_id": business_id,
+            "program_id": program_id, "customer_id": customer_id,
+            "status": "awaiting_delivery",
+            "progress": [{"position": lesson["position"], "status": "pending"}
+                         for lesson in program["lessons"]],
+            "enrolled_at_ms": now,
+        }
+        key = hash_scope_seed(
+            "phase18_program_enrollment", tenant_id, business_id, program_id, customer_id,
+        )
+        self._enrollment_writer.append_once(
+            tenant_id=tenant_id, business_id=business_id, entity_id=identity,
+            operation="enroll", idempotency_key=key, fact_type=_ENROLLED,
+            payload=row, occurred_at_ms=now, event_metadata={"actor_id": actor_id},
+        )
+        return self.get_enrollment(
+            tenant_id=tenant_id, business_id=business_id,
+            program_id=program_id, enrollment_id=identity,
+        )
+
+    def get_enrollment(
+        self, *, tenant_id: str, business_id: str, program_id: str,
+        enrollment_id: str,
+    ) -> dict[str, object]:
+        rows = [row for row in self._enrollments(
+            tenant_id=tenant_id, business_id=business_id, program_id=program_id,
+        ) if row["id"] == enrollment_id]
+        if not rows:
+            raise KeyError("program_enrollment_not_found")
+        if len(rows) != 1:
+            raise RuntimeError("enrollment_duplicate_durable_fact")
+        return rows[0]
+
+    def list_enrollments(
+        self, *, tenant_id: str, business_id: str, program_id: str,
+    ) -> list[dict[str, object]]:
+        # Check the parent first, so no other-business program can be probed.
+        self.get(tenant_id=tenant_id, business_id=business_id, program_id=program_id)
+        return self._enrollments(
+            tenant_id=tenant_id, business_id=business_id, program_id=program_id,
+        )
 
 
 __all__ = ["CANON_PHASE18_PROGRAM_PUBLICATION_OWNER", "ProgramPublicationRegistry"]

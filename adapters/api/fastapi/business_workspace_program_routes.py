@@ -61,6 +61,38 @@ def register_business_workspace_program_routes(
             raise HTTPException(status_code=422, detail=str(exc)) from exc
 
 
+    @router.get("/business-workspace/programs/{program_id}/enrollments", tags=["business-workspace"])
+    async def list_program_enrollments(program_id: str, request: Request):
+        tenant_id, business_id, _ = scope(request)
+        try:
+            return {"enrollments": programs.list_enrollments(
+                tenant_id=tenant_id, business_id=business_id, program_id=program_id,
+            )}
+        except KeyError as exc:
+            raise HTTPException(status_code=404, detail="program_not_found") from exc
+
+    @router.post("/business-workspace/programs/{program_id}/enrollments", tags=["business-workspace"])
+    async def enroll_program_customer(program_id: str, request: Request):
+        tenant_id, business_id, actor_id = scope(request)
+        body = await json_body(request)
+        if set(body) != {"customer_id"} or not isinstance(body.get("customer_id"), str):
+            raise HTTPException(status_code=422, detail="enrollment_fields_invalid")
+        try:
+            return programs.enroll_customer(
+                tenant_id=tenant_id, business_id=business_id, actor_id=actor_id,
+                program_id=program_id, customer_id=body["customer_id"],
+            )
+        except KeyError as exc:
+            raise HTTPException(status_code=404, detail=str(exc.args[0])) from exc
+        except ValueError as exc:
+            raise HTTPException(status_code=422, detail=str(exc)) from exc
+        except RuntimeError as exc:
+            if str(exc) in {"enrollment_program_not_active", "enrollment_customer_not_active"}:
+                raise HTTPException(status_code=409, detail=str(exc)) from exc
+            if str(exc) == "enrollment_canonical_customer_owner_unavailable":
+                raise HTTPException(status_code=503, detail=str(exc)) from exc
+            raise
+
     @router.get("/business-workspace/program-drafts", tags=["business-workspace"])
     async def list_program_drafts(request: Request):
         tenant_id, business_id, _ = scope(request)

@@ -257,7 +257,7 @@
       "id": "commerce.program_builder_delivery",
       "status": "mapped",
       "canonical_owner": "application.commerce.phase18_program_publication_registry.ProgramPublicationRegistry + EventFactLifecycleWriter",
-      "source_of_truth": "BusinessFactV1 program.published in canonical EventStore; atomic immutable owner publication only; drafts/enrollments/provider delivery still unported",
+      "source_of_truth": "BusinessFactV1 program.published/draft.* and program.enrollment_created in canonical EventStore; resumable owner drafts, atomic publication and idempotent customer-bound enrollment pending verified delivery. Provider delivery/progress completion remain unported",
       "evidence": [
         "clientplatform/application/program_builder.py",
         "clientplatform/application/programs.py",
@@ -265,6 +265,7 @@
         "adapters/api/fastapi/business_workspace_program_routes.py",
         "tests/integration/api/test_phase18_program_publication_journey.py",
         "tests/integration/api/test_phase18_program_draft_journey.py",
+        "tests/integration/api/test_phase18_program_enrollment_journey.py",
         "frontend/src/ProgramPublicationWorkspace.jsx",
         "frontend/e2e/program-publication-journey.spec.js",
         "frontend/src/App.jsx"
