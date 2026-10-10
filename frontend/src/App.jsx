@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { AcquisitionPlanner } from "./AcquisitionPlanner.jsx";
 import { BusinessIntelligencePanel } from "./BusinessIntelligencePanel.jsx";
 import { BusinessDiscoveryPanel } from "./BusinessDiscoveryPanel.jsx";
+import { EventLandingWorkspace } from "./EventLandingWorkspace.jsx";
 import { DiscoverBuildMeasurePanel } from "./DiscoverBuildMeasurePanel.jsx";
 
 const DEFAULT_API = import.meta.env.VITE_API_BASE || "https://api.businessaios.ru";
@@ -1352,6 +1353,8 @@ function Workspace({ data, apiBase, businesses, onRestart, onRetryAccess, onSwit
         {operationDecisionProvenance ? <div className="decision-result-evidence" role="status"><strong>Результат связан с решением DecisionCore</strong><span>Сервер подтвердил происхождение: run {operationDecisionProvenance.run_id}, decision {operationDecisionProvenance.decision_id}, action {operationDecisionProvenance.action_id}.</span><span>{operationProviderAccepted && operationProviderResourceId ? `Провайдер принял действие и вернул receipt ${operationProviderResourceId}. Это подтверждает приём провайдером, но не объявляется доказанной доставкой получателю.` : "Внешний результат пока не имеет подтверждённого provider receipt; используйте recovery и историю выполнения."}</span></div> : null}
         {operationResult ? <details className="technical-inline"><summary>Технические детали последнего действия</summary><pre>{JSON.stringify(operationResult, null, 2)}</pre></details> : null}
       </section>
+
+      <EventLandingWorkspace key={`${data.tenant_id}:${data.business_id}`} apiBase={baseApi} tenantId={data.tenant_id} businessId={data.business_id} apiKey={apiKey} getJson={getJson} postJson={postJson} />
 
       <AcquisitionPlanner enabled={Boolean(apiKey)} onEvaluate={(payload) => postJson(acquisitionUrl, payload, authHeaders)} />
 

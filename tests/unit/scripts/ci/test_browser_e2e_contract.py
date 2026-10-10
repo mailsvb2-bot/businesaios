@@ -20,6 +20,10 @@ TITLE = "onboarding creates a read-only OWNER workspace without persisting the A
 SPEC = "onboarding-workspace.spec.js"
 STEP_SHA = "f1cae0b84700dc5079bda912e24f1cb9ce75ac8a11455ca5ba4e8abc709a4068"
 SOURCE_SHA = "c7a488a2af6a044a5a301ee8177052837cc6d182ccf3eb24e3fe46c9d00e7c79"
+EVENT_TITLE = "event landing owner journey: draft stays private, publish becomes public, unpublish revokes access"
+EVENT_SPEC = "event-landing-journey.spec.js"
+EVENT_SOURCE_SHA = "2fb2c300a87b538e3f6bf646fe51d76850c0f82949b8777eddfc9c0f839f61f4"
+BROWSER_SCENARIOS = ((TITLE, SPEC), (EVENT_TITLE, EVENT_SPEC))
 STEP_SHAPE = json.loads(Path("tests/fixtures/playwright/onboarding-step-shape.json").read_text(encoding="utf-8"))
 MATRIX = [
     {"name": "chromium", "device": "Desktop Chrome", "engine": "chromium", "surface": "desktop"},
@@ -38,6 +42,9 @@ def test_browser_contract_plans_provisioning_and_security_are_locked() -> None:
         "scenarios": [{
             "id": "onboarding_owner_workspace", "title": TITLE, "file": SPEC,
             "detail_step_sha256": STEP_SHA, "source_sha256": SOURCE_SHA,
+        }, {
+            "id": "event_landing_owner_publication", "title": EVENT_TITLE, "file": EVENT_SPEC,
+            "proof_mode": "source_locked_execution", "source_sha256": EVENT_SOURCE_SHA,
         }],
     }
     assert browser_evidence.browser_project_names() == tuple(item["name"] for item in MATRIX)
@@ -45,9 +52,14 @@ def test_browser_contract_plans_provisioning_and_security_are_locked() -> None:
     scenario_path = Path("frontend/e2e/onboarding-workspace.spec.js")
     scenario = scenario_path.read_text(encoding="utf-8")
     assert hashlib.sha256(scenario_path.read_bytes()).hexdigest() == SOURCE_SHA
+    assert hashlib.sha256(Path("frontend/e2e/event-landing-journey.spec.js").read_bytes()).hexdigest() == EVENT_SOURCE_SHA
+    assert 'test("event landing owner journey: draft stays private' in Path("frontend/e2e/event-landing-journey.spec.js").read_text(encoding="utf-8")
     assert 'readFileSync(new URL("./e2e/project-matrix.json", import.meta.url)' in config
     assert f'projectMatrix.schema !== "{browser_evidence.BROWSER_PROJECT_MATRIX_SCHEMA}"' in config
     assert 'actualSourceSha256 !== sourceSha256' in config
+    assert 'proofMode === "step_fingerprint"' in config
+    assert 'proofMode === "source_locked_execution"' in config
+    assert 'canonicalHash.test(sourceSha256)' in config
     assert "browserName: entry.engine" in config and 'trace: "off"' in config
     assert 'const runtimeMode = process.env.BAIOS_E2E_RUNTIME_MODE || "development"' in config
     assert 'const production = runtimeMode === "production"' in config
@@ -143,6 +155,27 @@ def test_volatile_observation_datetime_does_not_change_canonical_step_fingerprin
     assert browser_evidence._step_fingerprint([step("not-a-datetime")], SPEC, "chromium") != first
 
 
+
+def test_shared_playwright_browser_launch_hook_is_order_independent_but_tamper_safe() -> None:
+    # With two specs in one Playwright worker, only the first one launches a
+    # browser. The locked owner journey must not depend on spec execution order.
+    chromium = [_fixture_step(node, "chromium") for node in STEP_SHAPE]
+    assert browser_evidence._step_fingerprint(chromium, SPEC, "chromium") == STEP_SHA
+
+    reused_browser = json.loads(json.dumps(chromium))
+    before = reused_browser[0]
+    before["steps"] = [child for child in before["steps"] if child["title"] != 'Fixture "browser"']
+    assert browser_evidence._step_fingerprint(reused_browser, SPEC, "chromium") == STEP_SHA
+
+    changed_browser_launch = json.loads(json.dumps(chromium))
+    changed_browser_launch[0]["steps"][0]["steps"][0]["title"] = "Unexpected launch operation"
+    assert browser_evidence._step_fingerprint(changed_browser_launch, SPEC, "chromium") != STEP_SHA
+
+    changed_user_action = json.loads(json.dumps(reused_browser))
+    changed_user_action[9]["title"] = "Wrong action"
+    assert browser_evidence._step_fingerprint(changed_user_action, SPEC, "chromium") != STEP_SHA
+
+
 def _json_result() -> dict:
     return {
         "workerIndex": 0, "parallelIndex": 0, "status": "passed", "duration": 1, "errors": [],
@@ -212,35 +245,55 @@ def _outputs(
     html_errors: bool = False,
 ) -> None:
     names = projects or browser_evidence.browser_project_names()
+    # Every reviewed scenario must appear in every browser and in every
+    # independent reporter. An extra, missing, retried or failed test must not
+    # accidentally turn into a passing release proof.
+    scenarios = [(title, file), *BROWSER_SCENARIOS[1:]]
     specs = [
-        {"title": title, "file": file, "line": 21, "column": 1, "ok": True, "tests": [{
+        {"title": scenario_title, "file": scenario_file, "line": 21, "column": 1, "ok": True, "tests": [{
             "expectedStatus": "passed", "projectName": project, "status": "expected",
             "results": [dict(_json_result()) for _ in range(attempts)],
         }]}
-        for project in names
+        for scenario_title, scenario_file in scenarios for project in names
     ]
     browser.mkdir(parents=True, exist_ok=True)
     (browser / "playwright.json").write_text(json.dumps({
         "config": {"projects": [{"name": name} for name in names]}, "errors": [{"message": "reporter failure"}] if json_errors else [],
         "suites": [{"specs": specs, "suites": []}],
-        "stats": {"expected": len(names), "unexpected": 0, "skipped": skipped, "flaky": 0},
+        "stats": {"expected": len(names) * len(scenarios), "unexpected": 0, "skipped": skipped, "flaky": 0},
     }), encoding="utf-8")
     suites = "".join(
-        f'<testsuite hostname="{project}" tests="1" failures="0" skipped="0" errors="0"><testcase name="{title}" classname="{file}"/></testsuite>'
+        '<testsuite hostname="' + project + '" tests="' + str(len(scenarios)) + '" failures="0" skipped="0" errors="0">'
+        + "".join(f'<testcase name="{scenario_title}" classname="{scenario_file}"/>' for scenario_title, scenario_file in scenarios)
+        + '</testsuite>'
         for project in names
     )
-    (browser / "junit.xml").write_text(f'<testsuites tests="{len(names)}" failures="0" skipped="0" errors="0">{suites}</testsuites>', encoding="utf-8")
-    tests = [_embedded(project, title, file, attempts, html_extra) for project in names]
-    if duplicate:
-        tests *= 2
-    file_id = "canonical-browser-spec"
-    stats = {"total": len(tests), "expected": len(tests), "unexpected": 0, "flaky": 0, "skipped": 0, "ok": True}
-    report = {"projectNames": list(names), "errors": [{"message": "reporter failure"}] if html_errors else [], "files": [{"fileId": file_id, "fileName": file, "tests": tests, "stats": stats}], "stats": stats}
+    total = len(names) * len(scenarios)
+    (browser / "junit.xml").write_text(f'<testsuites tests="{total}" failures="0" skipped="0" errors="0">{suites}</testsuites>', encoding="utf-8")
+    report_files = []
     archive = io.BytesIO()
     with zipfile.ZipFile(archive, "w", zipfile.ZIP_DEFLATED) as handle:
-        handle.writestr("report.json", json.dumps(report))
-        if html_data:
-            handle.writestr(f"{file_id}.json", json.dumps({"fileId": file_id, "fileName": file, "tests": [_detail_test(test, truncated_steps=truncated_steps) for test in tests]}))
+        for index, (scenario_title, scenario_file) in enumerate(scenarios):
+            tests = [_embedded(project, scenario_title, scenario_file, attempts, html_extra) for project in names]
+            if duplicate:
+                tests *= 2
+            file_id = f"canonical-browser-spec-{index}"
+            stats = {"total": len(tests), "expected": len(tests), "unexpected": 0, "flaky": 0, "skipped": 0, "ok": True}
+            report_files.append({"fileId": file_id, "fileName": scenario_file, "tests": tests, "stats": stats})
+            if html_data:
+                handle.writestr(f"{file_id}.json", json.dumps({
+                    "fileId": file_id, "fileName": scenario_file,
+                    "tests": [_detail_test(test, truncated_steps=truncated_steps) for test in tests],
+                }))
+        aggregate = {
+            "total": sum(len(item["tests"]) for item in report_files),
+            "expected": sum(len(item["tests"]) for item in report_files),
+            "unexpected": 0, "flaky": 0, "skipped": 0, "ok": True,
+        }
+        handle.writestr("report.json", json.dumps({
+            "projectNames": list(names), "errors": [{"message": "reporter failure"}] if html_errors else [],
+            "files": report_files, "stats": aggregate,
+        }))
     html = base64.b64encode(archive.getvalue()).decode("ascii")
     (browser / "html").mkdir(exist_ok=True)
     (browser / "html" / "index.html").write_text(
@@ -253,9 +306,16 @@ def test_evidence_requires_exact_projects_canonical_identity_and_three_real_arti
     _outputs(browser)
     snapshot = browser_evidence.browser_artifact_snapshot(browser)
     assert snapshot and [item["name"] for item in snapshot["projects"]] == list(names)
-    assert all(item["tests"] == 1 for item in snapshot["projects"]) and snapshot["artifacts"]["junit"]["tests"] == 5
+    assert all(item["tests"] == len(BROWSER_SCENARIOS) for item in snapshot["projects"]) and snapshot["artifacts"]["junit"]["tests"] == len(names) * len(BROWSER_SCENARIOS)
     canonical = browser_evidence._matrix_snapshot()
-    assert canonical and browser_evidence._scenario_matrix([(p, TITLE, SPEC) for p in names], names, canonical[1])
+    assert canonical and browser_evidence._scenario_matrix([(p, title, file) for p in names for title, file in BROWSER_SCENARIOS], names, canonical[1])
+    # Fingerprints are pinned to the complete 128-step onboarding journey.
+    # Dynamic browser identity and observation timestamp alone must not
+    # invalidate an otherwise identical real user journey.
+    for project in names:
+        normalized = [_fixture_step(node, project) for node in STEP_SHAPE]
+        assert browser_evidence._step_fingerprint(normalized, SPEC, project) == STEP_SHA
+
     assert browser_evidence._scenario_matrix([(p, "forged scenario", "forged.spec.js") for p in names], names, canonical[1]) is None
     for mutate in (
         lambda: _outputs(browser, projects=names[:-1]),
@@ -320,7 +380,7 @@ def test_browser_step_requires_complete_matrix_and_fails_closed(monkeypatch, tmp
     assert [item["name"] for item in evidence["projects"]] == list(browser_evidence.browser_project_names())
     assert captured["env"]["BAIOS_E2E_PYTHON"] == sys.executable
     assert evidence["exact_sha"] == "a" * 40 and evidence["runtime_mode"] == "development"
-    assert evidence["storage_backend"] == "isolated-local" and all(item["tests"] == 1 for item in evidence["projects"])
+    assert evidence["storage_backend"] == "isolated-local" and all(item["tests"] == len(BROWSER_SCENARIOS) for item in evidence["projects"])
     assert evidence["project_matrix"]["sha256"] == browser_evidence._matrix_snapshot()[2]
     for skipped, diagnostics in ((1, True), (0, False)):
         child = tmp_path / f"case-{skipped}-{diagnostics}"
