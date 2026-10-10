@@ -8,5 +8,17 @@
   "kind": "canon_metrics_debt_ledger",
   "policy": "Do not raise canon/metrics_baseline.json. Test-only paths are excluded from both this production-source budget and the current total.",
   "pre_existing_head_total_python_lines_debt": 37615,
-  "reconciled_clean_head_total_python_lines": 361624
+  "reconciled_clean_head_total_python_lines": 361624,
+  "phase18_absorption_growth_policy": {
+    "active": true,
+    "donor_repository": "mailsvb2-bot/clientplatform",
+    "target_product": "BusinessAIOS",
+    "principle": "Bounded first vertical slice only: event landing owner draft/publish -> anonymous public read -> unpublish. No donor runtime, parallel owner, or second persistence.",
+    "python_line_budget": 500,
+    "python_file_budget": 2,
+    "transition_surface_budget": 0,
+    "donor_runtime_imports_allowed": false,
+    "parallel_owners_allowed": false,
+    "duplicate_runtimes_allowed": false
+  }
 }

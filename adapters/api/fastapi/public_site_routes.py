@@ -106,7 +106,7 @@ def _refresh_owner_account_cookie_if_needed(*, response: Response, request: Requ
     _set_owner_account_cookie(response=response, request=request, raw_key=refreshed)
 
 
-def register_public_site_routes(*, router, enforce_public_security, auth_bundle=None, tenant_registry=None) -> None:
+def register_public_site_routes(*, router, enforce_public_security, auth_bundle=None, tenant_registry=None, event_landing_registry=None) -> None:
     service = CTALandingIntakeService()
 
     def secure(request: Request, route: str, body: dict) -> None:
@@ -119,6 +119,20 @@ def register_public_site_routes(*, router, enforce_public_security, auth_bundle=
 
     def api_key_policy():
         return getattr(getattr(auth_bundle, 'auth_policy', None), 'api_key_policy', None)
+
+    @router.get('/public-site/events/{tenant_id}/{business_id}/{event_id}', tags=['public-site'])
+    async def public_event_landing(tenant_id: str, business_id: str, event_id: str, http_request: Request) -> dict:
+        secure(http_request, '/public-site/events/{tenant_id}/{business_id}/{event_id}', {'tenant_id': tenant_id, 'business_id': business_id, 'event_id': event_id})
+        if event_landing_registry is None:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail='event_landing_not_found')
+        try:
+            state = event_landing_registry.get(tenant_id=tenant_id, business_id=business_id, event_id=event_id)
+        except KeyError as exc:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail='event_landing_not_found') from exc
+        published = state.public_content()
+        if published is None:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail='event_landing_not_published')
+        return {'ok': True, 'event_id': event_id, 'revision': state.published_revision, 'content': published.to_payload()}
 
     @router.get('/public-site/integrations', tags=['public-site'])
     async def public_site_integrations(http_request: Request) -> dict:
