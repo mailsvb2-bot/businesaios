@@ -94,6 +94,19 @@ def register_business_workspace_support_case_routes(
         except (ValueError, RuntimeError) as exc:
             fail(exc)
 
+    @router.get("/platform-support/cases/{case_id}/history", tags=["platform-support"])
+    async def operator_support_case_history(case_id: str, request: Request, limit: int = 50):
+        # Operator credentials are bound to one tenant and business by the
+        # existing authentication boundary, never by caller-supplied query data.
+        tenant_id, business_id, _ = operator(request)
+        try:
+            return support_cases.history(
+                tenant_id=tenant_id, business_id=business_id,
+                case_id=case_id, limit=limit,
+            )
+        except (ValueError, TypeError, RuntimeError, KeyError) as exc:
+            fail(exc)
+
     @router.post("/platform-support/cases/{case_id}/{action}", tags=["platform-support"])
     async def operator_transition(case_id: str, action: str, request: Request):
         tenant_id, business_id, actor_id = operator(request)

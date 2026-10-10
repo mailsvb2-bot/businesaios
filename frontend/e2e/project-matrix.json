@@ -52,7 +52,7 @@
       "title": "support console rejects owner credentials and processes bounded cases without key persistence",
       "file": "support-operator-journey.spec.js",
       "proof_mode": "source_locked_execution",
-      "source_sha256": "a5a3d5383f817e64de3a0ba20006306f6baba55518a0e76791b97ab93994493b"
+      "source_sha256": "460a0ede16da08bfcf03745185743f742f80efa18547c7f81281106d4fd8d4f8"
     }
   ]
 }

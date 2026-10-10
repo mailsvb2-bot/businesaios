@@ -26,6 +26,19 @@ test("support console rejects owner credentials and processes bounded cases with
       });
     }
     if (path.endsWith("/cases")) return respond(200, { cases: [item] });
+    if (req.method() === "GET" && path.endsWith("/cases/" + item.id + "/history")) {
+      const entries = [{ revision: 1, action: "created", status: "open", occurred_at: item.created_at }];
+      if (item.revision >= 2) {
+        entries.push({ revision: 2, action: "claimed", status: "claimed", occurred_at: item.updated_at });
+      }
+      if (item.revision >= 3) {
+        entries.push({ revision: 3, action: "resolved", status: "resolved", occurred_at: item.updated_at });
+      }
+      return respond(200, {
+        case_id: item.id, revision: item.revision, total: entries.length,
+        truncated: false, entries
+      });
+    }
     if (req.method() === "POST" && path.includes("/cases/")) {
       const action = path.split("/").pop();
       const body = req.postDataJSON();
@@ -60,10 +73,18 @@ test("support console rejects owner credentials and processes bounded cases with
   await page.getByRole("button", { name: "Войти в поддержку" }).click();
   await expect(page.getByText("Messages are not delivered")).toBeVisible();
   await expect(page.getByText("Бизнес: business-a")).toBeVisible();
+  await page.getByRole("button", { name: "Показать историю" }).click();
+  await expect(page.getByText("Подтверждено событий: 1")).toBeVisible();
+  await expect(page.getByText(/Создано ·/)).toBeVisible();
+  await page.getByRole("button", { name: "Скрыть историю" }).click();
   await page.getByRole("button", { name: "Взять в работу" }).click();
   await expect(page.getByRole("button", { name: "Закрыть обращение" })).toBeVisible();
   await page.getByRole("button", { name: "Закрыть обращение" }).click();
   await expect(page.getByText("Решено")).toBeVisible();
+  await page.getByRole("button", { name: "Показать историю" }).click();
+  await expect(page.getByText("Подтверждено событий: 3")).toBeVisible();
+  await expect(page.getByText(/Взято в работу ·/)).toBeVisible();
+  await expect(page.getByText(/Решено ·/)).toBeVisible();
   expect(observed.map((row) => row.action)).toEqual(["claim", "resolve"]);
   expect(observed.map((row) => row.expected_revision)).toEqual([1, 2]);
   expect(observed.every((row) => String(row.idempotency_key).startsWith("support-op-"))).toBe(true);

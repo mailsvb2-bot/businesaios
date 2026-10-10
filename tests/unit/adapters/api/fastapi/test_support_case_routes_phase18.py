@@ -103,3 +103,42 @@ def test_support_route_rejects_conflicts_and_unexpected_fields(monkeypatch):
     with pytest.raises(HTTPException) as exc:
         asyncio.run(transition(first["id"], "resolve", object()))
     assert (exc.value.status_code, exc.value.detail) == (409, "support_case_not_claimed_by_operator")
+
+
+def test_operator_can_review_only_bound_business_history_without_privileged_event_fields(monkeypatch):
+    registry, router, current, body = _fixture(monkeypatch)
+    create = _endpoint(router, "/business-workspace/support-cases", "POST")
+    history = _endpoint(router, "/platform-support/cases/{case_id}/history", "GET")
+    case = asyncio.run(create(object()))
+    first = asyncio.run(history(case["id"], object()))
+    assert (first["case_id"], first["revision"], first["total"]) == (case["id"], 1, 1)
+    assert [entry["action"] for entry in first["entries"]] == ["created"]
+    assert set(first) == {"case_id", "revision", "total", "truncated", "entries"}
+    assert set(first["entries"][0]) == {"revision", "action", "status", "occurred_at"}
+    assert "idempotency_key" not in str(first) and "operator_id" not in str(first)
+
+    body.clear()
+    body.update({"expected_revision": 1, "idempotency_key": "claim-operator-history"})
+    transition = _endpoint(router, "/platform-support/cases/{case_id}/{action}", "POST")
+    claimed = asyncio.run(transition(case["id"], "claim", object()))
+    assert claimed["revision"] == 2
+    after = asyncio.run(history(case["id"], object()))
+    assert [entry["action"] for entry in after["entries"]] == ["created", "claimed"]
+    assert after["revision"] == 2
+
+    current["principal"].metadata = {"business_id": "another-business"}
+    with pytest.raises(HTTPException) as exc:
+        asyncio.run(history(case["id"], object()))
+    assert exc.value.status_code == 404
+    current["principal"].metadata = {"business_id": "business-a"}
+    current["principal"].roles = (RoleId.OWNER,)
+    with pytest.raises(HTTPException) as exc:
+        asyncio.run(history(case["id"], object()))
+    assert exc.value.status_code == 403
+    current["principal"].roles = (RoleId.SUPPORT,)
+    with pytest.raises(HTTPException) as exc:
+        asyncio.run(history("not-a-uuid", object()))
+    assert exc.value.status_code == 422
+    with pytest.raises(HTTPException) as exc:
+        asyncio.run(history(case["id"], object(), limit=0))
+    assert exc.value.status_code == 422

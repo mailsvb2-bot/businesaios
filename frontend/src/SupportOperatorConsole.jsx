@@ -12,6 +12,10 @@ export function SupportOperatorConsole({ apiBase }) {
   const [busy, setBusy] = useState("");
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
+  const [history, setHistory] = useState(null);
+  const [historyBusy, setHistoryBusy] = useState("");
+  const [historyError, setHistoryError] = useState(null);
+  const historyEpoch = useRef(0);
   const pending = useRef(null);
   const epoch = useRef(0);
   const base = apiBase.replace(/\/$/, "") + "/platform-support";
@@ -37,6 +41,10 @@ export function SupportOperatorConsole({ apiBase }) {
 
   const logout = () => {
     epoch.current += 1;
+    historyEpoch.current += 1;
+    setHistory(null);
+    setHistoryBusy("");
+    setHistoryError(null);
     pending.current = null;
     setCredential("");
     setSession(null);
@@ -76,6 +84,10 @@ export function SupportOperatorConsole({ apiBase }) {
   const refresh = async () => {
     if (!session || busy) return;
     const generation = epoch.current;
+    historyEpoch.current += 1;
+    setHistory(null);
+    setHistoryBusy("");
+    setHistoryError(null);
     setBusy("refresh");
     setError("");
     try {
@@ -94,6 +106,44 @@ export function SupportOperatorConsole({ apiBase }) {
       }
     } finally {
       if (generation === epoch.current) setBusy("");
+    }
+  };
+
+  const toggleHistory = async (item) => {
+    if (!session || busy || historyBusy) return;
+    if (history?.case_id === item.id) {
+      historyEpoch.current += 1;
+      setHistory(null);
+      setHistoryError(null);
+      return;
+    }
+    const generation = epoch.current;
+    const requestEpoch = ++historyEpoch.current;
+    setHistory(null);
+    setHistoryBusy(item.id);
+    setHistoryError(null);
+    try {
+      const result = await request(session.key, "/cases/" + encodeURIComponent(item.id) + "/history");
+      if (generation !== epoch.current || requestEpoch !== historyEpoch.current) return;
+      if (result?.case_id !== item.id || !Array.isArray(result.entries) ||
+          !Number.isInteger(result.revision) || result.revision < item.revision ||
+          !Number.isInteger(result.total) || result.total < result.entries.length ||
+          result.entries.some((entry) => !Number.isInteger(entry.revision) ||
+            !["created", "claimed", "released", "resolved"].includes(entry.action) ||
+            typeof entry.occurred_at !== "string")) {
+        throw new Error("Сервер вернул некорректную историю обращения.");
+      }
+      setHistory(result);
+    } catch (reason) {
+      if (generation !== epoch.current || requestEpoch !== historyEpoch.current) return;
+      if (reason.httpStatus === 401 || reason.httpStatus === 403) {
+        logout();
+        setError("Доступ оператора отозван. Повторите вход.");
+      } else {
+        setHistoryError({ caseId: item.id, message: "Не удалось получить историю: " + reason.message });
+      }
+    } finally {
+      if (generation === epoch.current && requestEpoch === historyEpoch.current) setHistoryBusy("");
     }
   };
 
@@ -117,6 +167,10 @@ export function SupportOperatorConsole({ apiBase }) {
         throw new Error("Сервер не подтвердил изменение. Повтор использует прежний ключ.");
       }
       pending.current = null;
+      historyEpoch.current += 1;
+      setHistory(null);
+      setHistoryBusy("");
+      setHistoryError(null);
       setCases((existing) => existing.map((row) => row.id === result.id ? result : row));
       setNotice("Изменение подтверждено сервером. Обращение " + result.id + ".");
       try {
@@ -204,6 +258,30 @@ export function SupportOperatorConsole({ apiBase }) {
                       </>
                     ) : null}
                   </div>
+                  <button type="button" className="ghost"
+                    disabled={Boolean(busy) || Boolean(historyBusy)}
+                    onClick={() => toggleHistory(item)}>
+                    {historyBusy === item.id ? "Загружаем историю…" :
+                      history?.case_id === item.id ? "Скрыть историю" : "Показать историю"}
+                  </button>
+                  {historyError?.caseId === item.id ? <p role="alert">{historyError.message}</p> : null}
+                  {history?.case_id === item.id ? (
+                    <div aria-label={"История обращения " + item.id}>
+                      <p className="muted-text">Подтверждено событий: {history.total}
+                        {history.truncated ? " · Показаны последние " + history.entries.length : ""}
+                      </p>
+                      <ol>
+                        {history.entries.map((entry) => (
+                          <li key={entry.revision}>
+                            {entry.action === "created" ? "Создано" :
+                              entry.action === "claimed" ? "Взято в работу" :
+                              entry.action === "released" ? "Возвращено в очередь" : "Решено"}
+                            {" · "}{entry.occurred_at}
+                          </li>
+                        ))}
+                      </ol>
+                    </div>
+                  ) : null}
                 </li>
               );
             })}
