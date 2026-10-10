@@ -6,7 +6,6 @@ owner, not a stub. No provider delivery is claimed before proof exists.
 from __future__ import annotations
 
 from application.commerce.phase18_program_publication_registry import ProgramPublicationRegistry
-from contracts.customer import CustomerNotFound
 from crm.customer_registry import CustomerRegistry
 from reliability.idempotency_store import InMemoryIdempotencyStore
 from runtime.platform.event_store.memory_event_store import MemoryEventStore
