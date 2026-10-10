@@ -53,6 +53,13 @@
       "file": "support-operator-journey.spec.js",
       "proof_mode": "source_locked_execution",
       "source_sha256": "3e45ac353a16135274bc509e9f9cd7f08d650f57f54c2f858472500a11a3a699"
+    },
+    {
+      "id": "program_publication_owner_journey",
+      "title": "owner creates and publishes a multi-lesson program through the canonical catalog",
+      "file": "program-publication-journey.spec.js",
+      "proof_mode": "source_locked_execution",
+      "source_sha256": "8e177a4d72895c8d5a0ee779c8865510fb04679076b1535f184cdea26a7fb28f"
     }
   ]
 }

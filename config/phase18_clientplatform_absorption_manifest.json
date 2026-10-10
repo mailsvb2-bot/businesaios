@@ -263,7 +263,10 @@
         "clientplatform/application/programs.py",
         "application/commerce/phase18_program_publication_registry.py",
         "adapters/api/fastapi/business_workspace_program_routes.py",
-        "tests/integration/api/test_phase18_program_publication_journey.py"
+        "tests/integration/api/test_phase18_program_publication_journey.py",
+        "frontend/src/ProgramPublicationWorkspace.jsx",
+        "frontend/e2e/program-publication-journey.spec.js",
+        "frontend/src/App.jsx"
       ],
       "runtime_dependency_removed": false
     },

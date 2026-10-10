@@ -26,7 +26,10 @@ EVENT_SOURCE_SHA = "2fb2c300a87b538e3f6bf646fe51d76850c0f82949b8777eddfc9c0f839f
 SUPPORT_TITLE = "support console rejects owner credentials and processes bounded cases without key persistence"
 SUPPORT_SPEC = "support-operator-journey.spec.js"
 SUPPORT_SOURCE_SHA = "3e45ac353a16135274bc509e9f9cd7f08d650f57f54c2f858472500a11a3a699"
-BROWSER_SCENARIOS = ((TITLE, SPEC), (EVENT_TITLE, EVENT_SPEC), (SUPPORT_TITLE, SUPPORT_SPEC))
+PROGRAM_TITLE = "owner creates and publishes a multi-lesson program through the canonical catalog"
+PROGRAM_SPEC = "program-publication-journey.spec.js"
+PROGRAM_SOURCE_SHA = "8e177a4d72895c8d5a0ee779c8865510fb04679076b1535f184cdea26a7fb28f"
+BROWSER_SCENARIOS = ((TITLE, SPEC), (EVENT_TITLE, EVENT_SPEC), (SUPPORT_TITLE, SUPPORT_SPEC), (PROGRAM_TITLE, PROGRAM_SPEC))
 STEP_SHAPE = json.loads(Path("tests/fixtures/playwright/onboarding-step-shape.json").read_text(encoding="utf-8"))
 MATRIX = [
     {"name": "chromium", "device": "Desktop Chrome", "engine": "chromium", "surface": "desktop"},
@@ -51,6 +54,9 @@ def test_browser_contract_plans_provisioning_and_security_are_locked() -> None:
         }, {
             "id": "support_operator_claim_resolve", "title": SUPPORT_TITLE, "file": SUPPORT_SPEC,
             "proof_mode": "source_locked_execution", "source_sha256": SUPPORT_SOURCE_SHA,
+        }, {
+            "id": "program_publication_owner_journey", "title": PROGRAM_TITLE, "file": PROGRAM_SPEC,
+            "proof_mode": "source_locked_execution", "source_sha256": PROGRAM_SOURCE_SHA,
         }],
     }
     assert browser_evidence.browser_project_names() == tuple(item["name"] for item in MATRIX)
@@ -60,6 +66,7 @@ def test_browser_contract_plans_provisioning_and_security_are_locked() -> None:
     assert hashlib.sha256(scenario_path.read_bytes()).hexdigest() == SOURCE_SHA
     assert hashlib.sha256(Path("frontend/e2e/event-landing-journey.spec.js").read_bytes()).hexdigest() == EVENT_SOURCE_SHA
     assert hashlib.sha256(Path("frontend/e2e/support-operator-journey.spec.js").read_bytes()).hexdigest() == SUPPORT_SOURCE_SHA
+    assert hashlib.sha256(Path("frontend/e2e/program-publication-journey.spec.js").read_bytes()).hexdigest() == PROGRAM_SOURCE_SHA
     operator_panel = Path("frontend/e2e/support-operator-journey.spec.js").read_text(encoding="utf-8")
     assert 'test("support console rejects owner credentials' in operator_panel
     assert 'await page.getByRole("button", { name: "Взять в работу" }).click()' in operator_panel

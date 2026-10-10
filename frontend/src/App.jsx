@@ -5,6 +5,7 @@ import { BusinessDiscoveryPanel } from "./BusinessDiscoveryPanel.jsx";
 import { DiscoverBuildMeasurePanel } from "./DiscoverBuildMeasurePanel.jsx";
 import { EventLandingWorkspace } from "./EventLandingWorkspace.jsx";
 import { SupportCasesWorkspace } from "./SupportCasesWorkspace.jsx";
+import { ProgramPublicationWorkspace } from "./ProgramPublicationWorkspace.jsx";
 import { BusinessSettingsWorkspace } from "./BusinessSettingsWorkspace.jsx";
 
 const DEFAULT_API = import.meta.env.VITE_API_BASE || "https://api.businessaios.ru";
@@ -1277,6 +1278,9 @@ function Workspace({ data, apiBase, businesses, onRestart, onRetryAccess, onSwit
       <EventLandingWorkspace key={`${data.tenant_id}:${data.business_id}`} apiBase={baseApi} tenantId={data.tenant_id} businessId={data.business_id} apiKey={apiKey} getJson={getJson} postJson={postJson} />
       <BusinessSettingsWorkspace key={`settings:${data.tenant_id}:${data.business_id}`} apiBase={baseApi} apiKey={apiKey} getJson={getJson} postJson={postJson} onSaved={(settings) => setBusinessName(settings.business_name)} />
       <SupportCasesWorkspace key={`support:${data.tenant_id}:${data.business_id}`} apiBase={baseApi} apiKey={apiKey} getJson={getJson} postJson={postJson} />
+      <ProgramPublicationWorkspace key={`programs:${data.tenant_id}:${data.business_id}`}
+        apiBase={baseApi} apiKey={apiKey} tenantId={data.tenant_id}
+        businessId={data.business_id} getJson={getJson} postJson={postJson} />
 
       <section className="panel sales-panel" aria-labelledby="business-sales-title">
         <div className="panel-title-row">
