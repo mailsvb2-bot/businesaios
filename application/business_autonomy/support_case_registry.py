@@ -142,7 +142,15 @@ class SupportCaseRegistry:
             raise KeyError("support_case_not_found")
         return support_case_payload(case, revision=revision)
 
-    def list(self, *, tenant_id: str, business_id: str, limit: int = 50) -> list[dict[str, object]]:
+    def list(self, *, tenant_id: str, business_id: str, limit: int = 50,
+             active_only: bool = False) -> list[dict[str, object]]:
+        """Owner history is newest-first; operator work queue is oldest-first.
+
+        Filter closed cases before applying limit so resolved history cannot
+        exhaust the operator's page of pending work.
+        """
+        if type(active_only) is not bool:
+            raise ValueError("support_case_active_only_invalid")
         if type(limit) is not int or not 1 <= limit <= 100:
             raise ValueError("support_case_limit_invalid")
         grouped: dict[str, list] = {}
@@ -154,7 +162,14 @@ class SupportCaseRegistry:
             if case.tenant_id != tenant_id or case.business_id != business_id:
                 raise RuntimeError("support_case_durable_scope_invalid")
             cases.append(support_case_payload(case, revision=revision))
-        cases.sort(key=lambda case: (str(case["created_at"]), str(case["id"])), reverse=True)
+        if active_only:
+            cases = [case for case in cases if case["status"] in {
+                SupportCaseStatus.OPEN.value, SupportCaseStatus.CLAIMED.value,
+            }]
+        cases.sort(
+            key=lambda case: (str(case["created_at"]), str(case["id"])),
+            reverse=not active_only,
+        )
         return cases[:limit]
 
     def history(self, *, tenant_id: str, business_id: str, case_id: str,

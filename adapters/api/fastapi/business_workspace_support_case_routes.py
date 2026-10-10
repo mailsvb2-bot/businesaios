@@ -90,7 +90,10 @@ def register_business_workspace_support_case_routes(
     async def operator_queue(request: Request, limit: int = 50):
         tenant_id, business_id, _ = operator(request)
         try:
-            return {"cases": support_cases.list(tenant_id=tenant_id, business_id=business_id, limit=limit)}
+            return {"cases": support_cases.list(
+                tenant_id=tenant_id, business_id=business_id,
+                limit=limit, active_only=True,
+            )}
         except (ValueError, RuntimeError) as exc:
             fail(exc)
 

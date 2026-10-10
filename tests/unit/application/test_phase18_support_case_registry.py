@@ -144,6 +144,22 @@ def test_support_action_replay_cannot_acknowledge_later_case_state():
     assert len(events) == 5
 
 
+def test_operator_queue_only_open_and_claimed_oldest_first_before_limit():
+    events, claims, registry = _store()
+    first = _create(registry, key="first", summary="First pending request")
+    second = _create(registry, key="second", summary="Second pending request")
+    third = _create(registry, key="third", summary="Third request to resolve")
+    claimed = _transition(registry, second, "claim")
+    third_claimed = _transition(registry, third, "claim", key="third-claim")
+    _transition(registry, third_claimed, "resolve", key="third-resolve")
+    expected = sorted([first, claimed], key=lambda c: (c["created_at"], c["id"]))
+    assert registry.list(tenant_id="tenant-a", business_id="business-a", limit=2, active_only=True) == expected
+    assert len(registry.list(tenant_id="tenant-a", business_id="business-a")) == 3
+    assert len(events) == 6
+    with pytest.raises(ValueError, match="active_only"):
+        registry.list(tenant_id="tenant-a", business_id="business-a", active_only=1)
+
+
 def test_support_owner_reusing_request_key_is_scoped_to_actor_within_business():
     events, claims, registry = _store()
     first = _create(registry, actor_id="owner-one")

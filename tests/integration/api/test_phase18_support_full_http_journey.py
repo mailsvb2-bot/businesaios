@@ -124,6 +124,11 @@ def test_owner_to_scoped_operator_to_owner_with_revocation_and_denial(tmp_path):
         assert stale_claim.status_code == 409
         assert stale_claim.json()["detail"] == "support_case_replay_stale"
         assert client.get("/business-workspace/support-cases", headers=owner_headers).json()["cases"] == [resolved]
+        # Operator queue is actionable work only; resolved cases remain in
+        # durable owner history, not the pending-work queue.
+        after_resolve_queue = client.get("/platform-support/cases", headers=support_headers)
+        assert after_resolve_queue.status_code == 200
+        assert after_resolve_queue.json()["cases"] == []
         assert len(event_store) == 3
 
         history_url = "/business-workspace/support-cases/" + created["id"] + "/history"
