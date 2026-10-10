@@ -151,7 +151,10 @@ def test_phase18_program_send_plan_hands_off_to_existing_owner_action_and_never_
     assert "const prepareProgramLesson = async" in owner
     assert "send-plan?channel=" in owner
     assert 'setOperationOrigin(null)' in owner
-    assert "setOperationDraftKey(`program-" in owner
+    assert "const actionId = `program-${enrollmentId}-${lessonPosition}`;" in owner
+    assert "setOperationDraftKey(actionId);" in owner
+    assert "setPendingProgramLesson({" in owner
+    assert "recipient: plan.recipient, text: plan.text, actionId," in owner
     assert "onPrepareLessonSend={prepareProgramLesson}" in owner
     assert "Подготовить урок" in program
     assert "onPrepareLessonSend({" in program
