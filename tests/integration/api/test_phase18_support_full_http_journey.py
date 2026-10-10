@@ -142,9 +142,13 @@ def test_owner_to_scoped_operator_to_owner_with_revocation_and_denial(tmp_path):
         assert detail.json()["summary"] == created["summary"]
         assert client.get(operator_detail_url, headers=wrong_headers).status_code == 404
         assert client.get(operator_detail_url, headers=owner_headers).status_code == 403
-        # An unregistered audit path has no handler; it must return 404,
-        # while the security policy independently denies its permission.
-        assert client.get(operator_detail_url + "/raw-audit", headers=support_headers).status_code == 404
+        # GET /{case_id}/raw-audit matches the registered POST action
+        # pattern, so FastAPI returns 405 without dispatching the request.
+        # The canonical security policy independently denies that path.
+        denied_audit = client.get(operator_detail_url + "/raw-audit", headers=support_headers)
+        assert denied_audit.status_code == 405
+        assert denied_audit.json()["detail"] == "Method Not Allowed"
+        assert created["summary"] not in denied_audit.text
 
         operator_history_url = "/platform-support/cases/" + created["id"] + "/history"
         operator_history = client.get(operator_history_url, headers=support_headers)

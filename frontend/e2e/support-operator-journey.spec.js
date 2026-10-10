@@ -91,7 +91,7 @@ test("support console rejects owner credentials and processes bounded cases with
   await expect(page.getByRole("alert")).toContainText("Введите корректный номер");
   await lookup.fill("00000000-0000-0000-0000-000000000099");
   await page.getByRole("button", { name: "Найти историю" }).click();
-  await expect(page.getByRole("alert")).toContainText("Не удалось получить историю");
+  await expect(page.getByRole("alert")).toContainText("Не удалось получить обращение");
   await lookup.fill(item.id);
   await page.getByRole("button", { name: "Найти историю" }).click();
   await expect(page.getByRole("region", { name: "Результат поиска истории" })).toBeVisible();

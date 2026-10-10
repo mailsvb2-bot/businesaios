@@ -25,7 +25,7 @@ EVENT_SPEC = "event-landing-journey.spec.js"
 EVENT_SOURCE_SHA = "2fb2c300a87b538e3f6bf646fe51d76850c0f82949b8777eddfc9c0f839f61f4"
 SUPPORT_TITLE = "support console rejects owner credentials and processes bounded cases without key persistence"
 SUPPORT_SPEC = "support-operator-journey.spec.js"
-SUPPORT_SOURCE_SHA = "b63150939411f73bea6c83f94615af7895858e010676203779bbd0a994dd074b"
+SUPPORT_SOURCE_SHA = "3e45ac353a16135274bc509e9f9cd7f08d650f57f54c2f858472500a11a3a699"
 BROWSER_SCENARIOS = ((TITLE, SPEC), (EVENT_TITLE, EVENT_SPEC), (SUPPORT_TITLE, SUPPORT_SPEC))
 STEP_SHAPE = json.loads(Path("tests/fixtures/playwright/onboarding-step-shape.json").read_text(encoding="utf-8"))
 MATRIX = [
