@@ -29,6 +29,7 @@ from application.commerce.phase18_program_publication_registry import ProgramPub
 from crm.customer_registry import CustomerRegistry
 from application.public_site.event_landing_registry import EventLandingRegistry
 from entrypoints.api.owner_action_draft import OwnerActionDraftProjector
+from entrypoints.api.provider_admin_route_handlers import ProviderAdminRouteHandlers
 from entrypoints.api.public_surface_security_guard import PublicSurfaceSecurityGuard
 from entrypoints.api.request_context import RequestContext
 from runtime.business_autonomy.provider_webhook_runtime import ProviderWebhookRuntime
@@ -204,7 +205,11 @@ def register_public_api_routes(
                 event_store=event_store,
                 idempotency_store=dependency_container.api_idempotency_store,
             )
-        register_business_workspace_provider_routes(router=router, auth_bundle=auth_bundle)
+        phase18_provider_admin = ProviderAdminRouteHandlers()
+        register_business_workspace_provider_routes(
+            router=router, auth_bundle=auth_bundle,
+            provider_admin_handlers=phase18_provider_admin,
+        )
         # Support has one canonical Event Store owner. Never register an
         # ephemeral support queue if persistent idempotency is unavailable.
         if event_landing_registry is not None:
@@ -218,6 +223,7 @@ def register_public_api_routes(
         if event_landing_registry is not None:
             register_business_workspace_program_routes(
                 router=router, auth_bundle=auth_bundle,
+                provider_admin_handlers=phase18_provider_admin,
                 programs=ProgramPublicationRegistry(
                     event_store=event_store,
                     idempotency_store=dependency_container.api_idempotency_store,

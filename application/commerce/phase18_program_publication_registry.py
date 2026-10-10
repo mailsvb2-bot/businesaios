@@ -27,6 +27,8 @@ _DRAFT_PUBLISHED = "program.draft_published"
 _DRAFT_ARCHIVED = "program.draft_archived"
 _PROGRAM_FACTS = frozenset({_PUBLISHED, _DRAFT_CREATED, _DRAFT_SAVED, _DRAFT_PUBLISHED, _DRAFT_ARCHIVED})
 _ENROLL_SOURCE = "phase18_program_enrollment_registry"
+_DELIVERY_SOURCE = "phase18_program_lesson_provider_observation"
+_PROVIDER_ACCEPTED = "program.lesson_provider_accepted"
 _ENROLLED = "program.enrollment_created"
 _LESSON_MESSAGE_CHANNELS = {"telegram": "telegram_bot", "vk": "vk_messaging", "max": "max_messaging", "email": "email_connector", "whatsapp": "whatsapp_cloud"}
 _KEY = re.compile(r"^[A-Za-z0-9:_-]{1,128}$")
@@ -84,6 +86,11 @@ class ProgramPublicationRegistry:
             event_store=event_store, idempotency_store=idempotency_store,
             namespace="phase18_program_enrollment", source=_ENROLL_SOURCE,
             id_prefix="program-enrollment",
+        )
+        self._delivery_writer = EventFactLifecycleWriter(
+            event_store=event_store, idempotency_store=idempotency_store,
+            namespace="phase18_program_lesson_provider_observation", source=_DELIVERY_SOURCE,
+            id_prefix="program-lesson-provider-outcome",
         )
 
     def _records(self, *, tenant_id: str, business_id: str, program_id: str | None = None) -> list[dict[str, object]]:
@@ -430,6 +437,92 @@ class ProgramPublicationRegistry:
             tenant_id=tenant_id, business_id=business_id,
             program_id=program_id, enrollment_id=identity,
         )
+
+    def list_lesson_provider_outcomes(
+        self, *, tenant_id: str, business_id: str, program_id: str,
+        enrollment_id: str,
+    ) -> list[dict[str, object]]:
+        self.get_enrollment(
+            tenant_id=tenant_id, business_id=business_id,
+            program_id=program_id, enrollment_id=enrollment_id,
+        )
+        outcomes = []
+        for event in self._events.iter_events(
+            tenant_id=tenant_id, start_ms=0, event_type=BUSINESS_FACT_EVENT_TYPE,
+        ):
+            if event.get("source") != _DELIVERY_SOURCE:
+                continue
+            fact = event.get("payload") or {}
+            if fact.get("business_id") != business_id or fact.get("entity_id") != enrollment_id:
+                continue
+            if fact.get("fact_type") != _PROVIDER_ACCEPTED:
+                raise RuntimeError("program_delivery_durable_fact_invalid")
+            payload = fact.get("payload")
+            if not isinstance(payload, dict) or (
+                payload.get("tenant_id") != tenant_id
+                or payload.get("business_id") != business_id
+                or payload.get("program_id") != program_id
+                or payload.get("enrollment_id") != enrollment_id
+                or payload.get("status") != "provider_accepted"
+            ):
+                raise RuntimeError("program_delivery_durable_payload_invalid")
+            outcomes.append(dict(payload))
+        outcomes.sort(key=lambda item: (int(item["recorded_at_ms"]), str(item["approval_id"])))
+        return outcomes
+
+    def record_provider_acceptance(
+        self, *, tenant_id: str, business_id: str, program_id: str,
+        enrollment_id: str, lesson_position: int, provider_key: str,
+        approval_id: str, decision_id: str, provider_message_id: str,
+        history_id: str,
+    ) -> dict[str, object]:
+        """Only a verifier supplied with server-held provider proof calls this."""
+        enrollment = self.get_enrollment(
+            tenant_id=tenant_id, business_id=business_id,
+            program_id=program_id, enrollment_id=enrollment_id,
+        )
+        if type(lesson_position) is not int or not 1 <= lesson_position <= len(enrollment["progress"]):
+            raise ValueError("program_lesson_position_invalid")
+        provider_key = _required(provider_key, "provider_key")
+        approval_id = _required(approval_id, "approval_id")
+        decision_id = _required(decision_id, "decision_id")
+        provider_message_id = _required(provider_message_id, "provider_message_id", maximum=512)
+        history_id = _required(history_id, "history_id", maximum=512)
+        prior = self.list_lesson_provider_outcomes(
+            tenant_id=tenant_id, business_id=business_id,
+            program_id=program_id, enrollment_id=enrollment_id,
+        )
+        for row in prior:
+            if row["lesson_position"] != lesson_position:
+                continue
+            if row["approval_id"] == approval_id and row["provider_message_id"] == provider_message_id:
+                return row
+            raise RuntimeError("program_lesson_already_provider_accepted")
+        when = int(time.time() * 1000)
+        row = {
+            "tenant_id": tenant_id, "business_id": business_id,
+            "program_id": program_id, "enrollment_id": enrollment_id,
+            "lesson_position": lesson_position,
+            "provider_key": provider_key, "approval_id": approval_id,
+            "decision_id": decision_id, "provider_message_id": provider_message_id,
+            "history_id": history_id,
+            "status": "provider_accepted",
+            "recipient_delivery_confirmed": False,
+            "lesson_completion_confirmed": False,
+            "recorded_at_ms": when,
+        }
+        key = hash_scope_seed(
+            "phase18_program_lesson_provider_acceptance", tenant_id,
+            business_id, enrollment_id, str(lesson_position), approval_id,
+        )
+        self._delivery_writer.append_once(
+            tenant_id=tenant_id, business_id=business_id,
+            entity_id=enrollment_id, operation="provider_accepted",
+            idempotency_key=key, fact_type=_PROVIDER_ACCEPTED,
+            payload=row, occurred_at_ms=when,
+            event_metadata={"decision_id": decision_id, "evidence_ids": [history_id]},
+        )
+        return row
 
     def lesson_send_plan(
         self, *, tenant_id: str, business_id: str, program_id: str,

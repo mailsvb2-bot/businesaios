@@ -5,10 +5,12 @@ from fastapi import APIRouter, HTTPException, Request
 
 from adapters.api.fastapi.router_support import business_owner_scope, json_body
 from application.commerce.phase18_program_publication_registry import ProgramPublicationRegistry
+from application.commerce.phase18_program_lesson_delivery import reconcile_program_lesson_provider_acceptance
 
 
 def register_business_workspace_program_routes(
     *, router: APIRouter, auth_bundle, programs: ProgramPublicationRegistry,
+    provider_admin_handlers=None,
 ) -> None:
     def scope(request: Request) -> tuple[str, str, str]:
         principal, tenant_id, business_id = business_owner_scope(
@@ -112,6 +114,52 @@ def register_business_workspace_program_routes(
             if str(exc) in {
                 "enrollment_customer_not_active", "program_delivery_identity_missing",
                 "program_delivery_identity_ambiguous", "program_lesson_media_delivery_not_connected",
+            }:
+                raise HTTPException(status_code=409, detail=str(exc)) from exc
+            raise
+
+    @router.get("/business-workspace/programs/{program_id}/enrollments/{enrollment_id}/provider-outcomes", tags=["business-workspace"])
+    async def lesson_provider_outcomes(program_id: str, enrollment_id: str, request: Request):
+        tenant_id, business_id, _ = scope(request)
+        try:
+            return {"outcomes": programs.list_lesson_provider_outcomes(
+                tenant_id=tenant_id, business_id=business_id,
+                program_id=program_id, enrollment_id=enrollment_id,
+            )}
+        except KeyError as exc:
+            raise HTTPException(status_code=404, detail=str(exc.args[0])) from exc
+
+    @router.post("/business-workspace/programs/{program_id}/enrollments/{enrollment_id}/lessons/{lesson_position}/reconcile", tags=["business-workspace"])
+    async def reconcile_lesson_provider_outcome(program_id: str, enrollment_id: str, lesson_position: int, request: Request):
+        tenant_id, business_id, _ = scope(request)
+        body = await json_body(request)
+        if set(body) != {"channel", "approval_id"} or (
+            not isinstance(body.get("channel"), str)
+            or not isinstance(body.get("approval_id"), str)
+        ):
+            raise HTTPException(status_code=422, detail="program_reconcile_fields_invalid")
+        try:
+            return reconcile_program_lesson_provider_acceptance(
+                programs=programs, provider_admin_handlers=provider_admin_handlers,
+                tenant_id=tenant_id, business_id=business_id,
+                program_id=program_id, enrollment_id=enrollment_id,
+                lesson_position=lesson_position,
+                channel=body["channel"], approval_id=body["approval_id"],
+            )
+        except KeyError as exc:
+            raise HTTPException(status_code=404, detail=str(exc.args[0])) from exc
+        except (ValueError, TypeError) as exc:
+            raise HTTPException(status_code=422, detail=str(exc)) from exc
+        except RuntimeError as exc:
+            if str(exc) in {
+                "program_delivery_verifier_unavailable",
+                "enrollment_canonical_customer_owner_unavailable",
+            }:
+                raise HTTPException(status_code=503, detail=str(exc)) from exc
+            if str(exc) in {
+                "program_lesson_already_provider_accepted", "enrollment_customer_not_active",
+                "program_delivery_identity_missing", "program_delivery_identity_ambiguous",
+                "program_lesson_media_delivery_not_connected",
             }:
                 raise HTTPException(status_code=409, detail=str(exc)) from exc
             raise
