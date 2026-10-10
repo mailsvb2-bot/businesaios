@@ -135,6 +135,15 @@ def test_owner_to_scoped_operator_to_owner_with_revocation_and_denial(tmp_path):
         # its audit history remains available by exact ID to the same
         # scoped support operator, never to another business.
         assert client.get("/platform-support/cases", headers=support_headers).json()["cases"] == []
+        operator_detail_url = "/platform-support/cases/" + created["id"]
+        detail = client.get(operator_detail_url, headers=support_headers)
+        assert detail.status_code == 200, detail.text
+        assert detail.json() == resolved
+        assert detail.json()["summary"] == created["summary"]
+        assert client.get(operator_detail_url, headers=wrong_headers).status_code == 404
+        assert client.get(operator_detail_url, headers=owner_headers).status_code == 403
+        assert client.get(operator_detail_url + "/raw-audit", headers=support_headers).status_code == 403
+
         operator_history_url = "/platform-support/cases/" + created["id"] + "/history"
         operator_history = client.get(operator_history_url, headers=support_headers)
         assert operator_history.status_code == 200, operator_history.text
@@ -164,4 +173,5 @@ def test_owner_to_scoped_operator_to_owner_with_revocation_and_denial(tmp_path):
         keys.revoke(support_id)
         assert client.get("/platform-support/cases", headers=support_headers).status_code == 401
         assert client.get(operator_history_url, headers=support_headers).status_code == 401
+        assert client.get(operator_detail_url, headers=support_headers).status_code == 401
         assert client.get("/business-workspace/support-cases", headers=owner_headers).status_code == 200

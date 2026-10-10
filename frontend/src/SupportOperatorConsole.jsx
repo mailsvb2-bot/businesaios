@@ -34,6 +34,7 @@ export function SupportOperatorConsole({ apiBase }) {
   const [notice, setNotice] = useState("");
   const [history, setHistory] = useState(null);
   const [lookupId, setLookupId] = useState("");
+  const [lookupCase, setLookupCase] = useState(null);
   const [historyBusy, setHistoryBusy] = useState("");
   const [historyError, setHistoryError] = useState(null);
   const historyEpoch = useRef(0);
@@ -65,6 +66,7 @@ export function SupportOperatorConsole({ apiBase }) {
     historyEpoch.current += 1;
     setHistory(null);
     setLookupId("");
+    setLookupCase(null);
     setHistoryBusy("");
     setHistoryError(null);
     pending.current = null;
@@ -108,6 +110,7 @@ export function SupportOperatorConsole({ apiBase }) {
     const generation = epoch.current;
     historyEpoch.current += 1;
     setHistory(null);
+    setLookupCase(null);
     setHistoryBusy("");
     setHistoryError(null);
     setBusy("refresh");
@@ -136,6 +139,7 @@ export function SupportOperatorConsole({ apiBase }) {
     if (history?.case_id === item.id) {
       historyEpoch.current += 1;
       setHistory(null);
+      setLookupCase(null);
       setHistoryError(null);
       return;
     }
@@ -179,8 +183,46 @@ export function SupportOperatorConsole({ apiBase }) {
       setHistoryError({ caseId: id, message: "Введите корректный номер обращения (UUID)." });
       return;
     }
-    if (history?.case_id === id) return;
-    await toggleHistory({ id, revision: 0 });
+    if (history?.case_id === id && lookupCase?.id === id) return;
+    const generation = epoch.current;
+    const requestEpoch = ++historyEpoch.current;
+    setHistory(null);
+    setLookupCase(null);
+    setHistoryBusy(id);
+    setHistoryError(null);
+    try {
+      const detail = await request(session.key, "/cases/" + encodeURIComponent(id));
+      if (generation !== epoch.current || requestEpoch !== historyEpoch.current) return;
+      if (detail?.id !== id || detail.tenant_id !== session.identity.tenant_id ||
+          detail.business_id !== session.identity.business_id ||
+          typeof detail.summary !== "string" ||
+          !["open", "claimed", "resolved"].includes(detail.status) ||
+          !Number.isInteger(detail.revision) || detail.revision < 1) {
+        throw new Error("Сервер вернул некорректные сведения об обращении.");
+      }
+      const trail = await request(session.key, "/cases/" + encodeURIComponent(id) + "/history");
+      if (generation !== epoch.current || requestEpoch !== historyEpoch.current) return;
+      if (trail?.case_id !== id || !Array.isArray(trail.entries) ||
+          !Number.isInteger(trail.revision) || trail.revision !== detail.revision ||
+          !Number.isInteger(trail.total) || trail.total < trail.entries.length ||
+          trail.entries.some((entry) => !Number.isInteger(entry.revision) ||
+            !["created", "claimed", "released", "resolved"].includes(entry.action) ||
+            typeof entry.occurred_at !== "string")) {
+        throw new Error("Состояние обращения изменилось или история некорректна. Повторите поиск.");
+      }
+      setLookupCase(detail);
+      setHistory(trail);
+    } catch (reason) {
+      if (generation !== epoch.current || requestEpoch !== historyEpoch.current) return;
+      if (reason.httpStatus === 401 || reason.httpStatus === 403) {
+        logout();
+        setError("Доступ оператора отозван. Повторите вход.");
+      } else {
+        setHistoryError({ caseId: id, message: "Не удалось получить обращение: " + reason.message });
+      }
+    } finally {
+      if (generation === epoch.current && requestEpoch === historyEpoch.current) setHistoryBusy("");
+    }
   };
 
   const transition = async (item, action) => {
@@ -205,6 +247,7 @@ export function SupportOperatorConsole({ apiBase }) {
       pending.current = null;
       historyEpoch.current += 1;
       setHistory(null);
+      setLookupCase(null);
       setHistoryBusy("");
       setHistoryError(null);
       setCases((existing) => existing.map((row) => row.id === result.id ? result : row));
@@ -286,6 +329,12 @@ export function SupportOperatorConsole({ apiBase }) {
         {history && !cases.some((item) => item.id === history.case_id) ? (
           <section aria-label="Результат поиска истории">
             <p>Обращение {history.case_id} · Версия: {history.revision}</p>
+            {lookupCase?.id === history.case_id ? (
+              <>
+                <strong>{lookupCase.category} · {lookupCase.status}</strong>
+                <p>{lookupCase.summary}</p>
+              </>
+            ) : null}
             <SupportCaseHistory history={history} />
           </section>
         ) : null}

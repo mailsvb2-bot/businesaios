@@ -39,6 +39,9 @@ test("support console rejects owner credentials and processes bounded cases with
         truncated: false, entries
       });
     }
+    if (req.method() === "GET" && path.endsWith("/cases/" + item.id)) {
+      return respond(200, item);
+    }
     if (req.method() === "POST" && path.includes("/cases/")) {
       const action = path.split("/").pop();
       const body = req.postDataJSON();
@@ -92,6 +95,8 @@ test("support console rejects owner credentials and processes bounded cases with
   await lookup.fill(item.id);
   await page.getByRole("button", { name: "Найти историю" }).click();
   await expect(page.getByRole("region", { name: "Результат поиска истории" })).toBeVisible();
+  await expect(page.getByRole("region", { name: "Результат поиска истории" })).toContainText(item.summary);
+  await expect(page.getByRole("region", { name: "Результат поиска истории" })).toContainText("resolved");
   await expect(page.getByText("Подтверждено событий: 3")).toBeVisible();
   await expect(page.getByText(/Взято в работу ·/)).toBeVisible();
   await expect(page.getByText(/Решено ·/)).toBeVisible();
