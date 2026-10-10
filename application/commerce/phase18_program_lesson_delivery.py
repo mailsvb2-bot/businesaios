@@ -60,8 +60,13 @@ def reconcile_program_lesson_provider_acceptance(
         return {"status": "awaiting_owner_approval", "provider_accepted": False,
                 "recipient_delivery_confirmed": False}
     decision_id = str(meta.get("decision_id") or "").strip()
-    fingerprint = str(meta.get("approval_request_fingerprint") or "").strip()
-    if not decision_id or not fingerprint:
+    request_fingerprint = str(meta.get("approval_request_fingerprint") or "").strip()
+    # Queue dispatch uses gate.evidence.subject_fingerprint, which is the
+    # approval request's canonical subject_fingerprint. The separate
+    # approval_request_fingerprint authenticates the approval but must NEVER
+    # be substituted for the queue/dedupe job identity.
+    subject_fingerprint = str(getattr(record.request, "subject_fingerprint", "") or "").strip()
+    if not decision_id or not request_fingerprint or not subject_fingerprint:
         raise RuntimeError("program_delivery_approval_provenance_missing")
     context = meta.get("approval_resume_context")
     if not isinstance(context, Mapping) or (
@@ -92,7 +97,7 @@ def reconcile_program_lesson_provider_acceptance(
         or str(archived.get("text") or "") != plan["text"]
     ):
         raise ValueError("program_delivery_decision_content_mismatch")
-    queue_job_id = f'provider-sync-{plan["provider_key"]}-{fingerprint[:32]}'
+    queue_job_id = f'provider-sync-{plan["provider_key"]}-{subject_fingerprint[:32]}'
     history = provider_admin_handlers._service(business_id).find_provider_sync_history_jobs(
         tenant_id=tenant_id, business_id=business_id,
         provider_key=plan["provider_key"], queue_job_ids=(queue_job_id,),

@@ -139,7 +139,7 @@ def test_provider_acceptance_is_durable_but_never_claims_recipient_delivery():
     fingerprint = "a" * 64
     approval = SimpleNamespace(
         status="approved",
-        request=SimpleNamespace(tenant_id="t", metadata={
+        request=SimpleNamespace(tenant_id="t", subject_fingerprint="s" * 64, metadata={
             "action_name": "provider.telegram_bot.message_send",
             "decision_id": "decision1",
             "approval_request_fingerprint": fingerprint,
@@ -155,7 +155,7 @@ def test_provider_acceptance_is_durable_but_never_claims_recipient_delivery():
         payload={"business_id": "b", "provider_key": "telegram_bot",
                  "user_id": plan["recipient"], "text": plan["text"]},
     )
-    job_id = "provider-sync-telegram_bot-" + fingerprint[:32]
+    job_id = "provider-sync-telegram_bot-" + ("s" * 32)
     rows = {}
     class FakeService:
         def find_provider_sync_history_jobs(self, *, tenant_id, business_id, provider_key, queue_job_ids):

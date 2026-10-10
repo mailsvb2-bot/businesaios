@@ -170,8 +170,10 @@ explicit owner approval, provider queue, and existing provider transport.
 
 After approval and execution, the owner may reconcile a lesson by approval ID.
 The server re-derives the *current canonical* customer/lesson and matches
-approved provider payload, canonical Decision Archive, approval fingerprint,
-queue job identity, and provider execution-history record (same tenant/business).
+approved provider payload, canonical Decision Archive, the distinct
+`approval_request_fingerprint` and `request.subject_fingerprint` identities,
+the latter's canonical provider queue job identity, and provider
+execution-history record (same tenant/business).
 Only actual accepted `live_executed` provider results with a resource ID
 produce an idempotent `program.lesson_provider_accepted` fact via the **same
 canonical Event Store / EventFactLifecycleWriter**. The existing read-only CRM

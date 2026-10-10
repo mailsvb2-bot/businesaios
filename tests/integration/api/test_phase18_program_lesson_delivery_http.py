@@ -53,6 +53,7 @@ def test_real_owner_http_program_to_provider_acceptance_is_durable_and_isolated(
     )
     approval_id, decision_id = "approval-phase18-one", "decision-phase18-one"
     fingerprint = "d" * 64
+    subject_fingerprint = "e" * 64
     approval = None
     decision = None
     history = {}
@@ -139,7 +140,7 @@ def test_real_owner_http_program_to_provider_acceptance_is_durable_and_isolated(
 
         approval = SimpleNamespace(
             status="approved",
-            request=SimpleNamespace(tenant_id="tenant", metadata={
+            request=SimpleNamespace(tenant_id="tenant", subject_fingerprint=subject_fingerprint, metadata={
                 "action_name": "provider.telegram_bot.message_send",
                 "decision_id": decision_id,
                 "approval_request_fingerprint": fingerprint,
@@ -172,7 +173,7 @@ def test_real_owner_http_program_to_provider_acceptance_is_durable_and_isolated(
         assert pending.status_code == 200 and pending.json()["status"] == "awaiting_provider_evidence"
         assert len(event_store) == before
 
-        job_id = "provider-sync-telegram_bot-" + fingerprint[:32]
+        job_id = "provider-sync-telegram_bot-" + subject_fingerprint[:32]
         history[job_id] = {
             "tenant_id": "tenant", "business_id": "business",
             "provider_key": "telegram_bot", "queue_job_id": job_id,
