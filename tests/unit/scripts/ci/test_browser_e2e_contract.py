@@ -28,7 +28,7 @@ SUPPORT_SPEC = "support-operator-journey.spec.js"
 SUPPORT_SOURCE_SHA = "3e45ac353a16135274bc509e9f9cd7f08d650f57f54c2f858472500a11a3a699"
 PROGRAM_TITLE = "owner creates and publishes a multi-lesson program through the canonical catalog"
 PROGRAM_SPEC = "program-publication-journey.spec.js"
-PROGRAM_SOURCE_SHA = "8e177a4d72895c8d5a0ee779c8865510fb04679076b1535f184cdea26a7fb28f"
+PROGRAM_SOURCE_SHA = "83fb1f2aff96782bbe7d0c4d40bd82ebea4a942949f1ff9dfddf840aebd21022"
 BROWSER_SCENARIOS = ((TITLE, SPEC), (EVENT_TITLE, EVENT_SPEC), (SUPPORT_TITLE, SUPPORT_SPEC), (PROGRAM_TITLE, PROGRAM_SPEC))
 STEP_SHAPE = json.loads(Path("tests/fixtures/playwright/onboarding-step-shape.json").read_text(encoding="utf-8"))
 MATRIX = [

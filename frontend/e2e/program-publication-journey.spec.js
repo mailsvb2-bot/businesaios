@@ -65,6 +65,38 @@ test("owner creates and publishes a multi-lesson program through the canonical c
   expect(programs[0].lessons.map((item) => item.content_kind)).toEqual(["link", "task"]);
   expect(programs[0].tenant_id).toBe(account.tenant_id);
   expect(programs[0].business_id).toBe(account.business_id);
+  // The owner can safely leave a draft and resume it without retyping lessons.
+  const draftTitle = "Черновик программы " + suffix;
+  await panel.getByLabel("Название программы").fill(draftTitle);
+  await panel.getByRole("button", { name: "Сохранить черновик" }).click();
+  await expect(panel.getByText(/Черновик сохранён в BusinessAIOS/)).toBeVisible();
+  await panel.getByRole("button", { name: "Новая программа" }).click();
+  await expect(panel.getByText(draftTitle)).toBeVisible();
+  await panel.getByRole("button", { name: "Обновить каталог" }).click();
+  await panel.getByRole("button", { name: "Продолжить черновик" }).click();
+  await expect(panel.getByLabel("Название программы")).toHaveValue(draftTitle);
+  await panel.getByLabel("Название урока").fill("Первый сохранённый урок");
+  await panel.getByLabel("Ссылка HTTPS или идентификатор сохранённого материала")
+    .fill("https://example.org/saved-lesson");
+  await panel.getByRole("button", { name: "Сохранить черновик" }).click();
+  await expect(panel.getByText(/Черновик сохранён в BusinessAIOS/)).toBeVisible();
+  await panel.getByRole("button", { name: "Опубликовать черновик" }).click();
+  await expect(panel.getByText(/Программа сохранена и опубликована/)).toBeVisible();
+  const finalReceipt = await page.request.get(apiPath, {
+    headers: { "X-API-Key": account.owner_session.api_key },
+  });
+  expect(finalReceipt.status()).toBe(200);
+  const finalPrograms = (await finalReceipt.json()).programs;
+  expect(finalPrograms).toHaveLength(2);
+  const newProgram = finalPrograms.find((item) => item.title === draftTitle);
+  expect(newProgram?.status).toBe("active");
+  expect(newProgram?.lessons.map((item) => item.title)).toEqual(["Первый сохранённый урок"]);
+  const draftReceipt = await page.request.get("/api/business-workspace/program-drafts", {
+    headers: { "X-API-Key": account.owner_session.api_key },
+  });
+  expect(draftReceipt.status()).toBe(200);
+  expect((await draftReceipt.json()).drafts).toEqual([]);
+
   const overflow = await page.evaluate(() =>
     document.documentElement.scrollWidth > document.documentElement.clientWidth + 1);
   expect(overflow).toBe(false);
