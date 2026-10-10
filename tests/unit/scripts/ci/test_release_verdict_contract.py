@@ -24,7 +24,17 @@ BROWSER_SCENARIOS = (
     ("onboarding creates a read-only OWNER workspace without persisting the API key", "onboarding-workspace.spec.js"),
     ("event landing owner journey: draft stays private, publish becomes public, unpublish revokes access", "event-landing-journey.spec.js"),
     ("support console rejects owner credentials and processes bounded cases without key persistence", "support-operator-journey.spec.js"),
+    ("owner creates and publishes a multi-lesson program through the canonical catalog", "program-publication-journey.spec.js"),
 )
+
+
+def test_release_fixture_tracks_every_canonical_browser_scenario() -> None:
+    # The mock release-report fixture must not silently omit a newly added
+    # real browser journey: that mismatch otherwise fails unrelated verdict
+    # tests and hides the missing scenario evidence.
+    matrix = json.loads(Path("frontend/e2e/project-matrix.json").read_text(encoding="utf-8"))
+    expected = tuple((item["title"], item["file"]) for item in matrix["scenarios"])
+    assert BROWSER_SCENARIOS == expected
 
 
 def _step(name: str, status: str = "passed") -> StepResult:
