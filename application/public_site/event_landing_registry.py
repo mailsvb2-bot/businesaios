@@ -17,30 +17,67 @@ class EventLandingRegistry:
         self._events=event_store
         self._writer=EventFactLifecycleWriter(event_store=event_store,idempotency_store=idempotency_store,namespace="event_landing",source=_SOURCE,id_prefix="event-landing")
 
-    def _history(self, *, tenant_id: str, business_id: str, event_id: str) -> list[dict[str,object]]:
-        rows=[]
-        for order,event in enumerate(self._events.iter_events(tenant_id=tenant_id,start_ms=0,event_type=BUSINESS_FACT_EVENT_TYPE)):
-            # BusinessFactV1 types share one Event Spine across canonical owners.
-            # A matching type/entity from another domain must never alter public
-            # publication state or block the real owner from creating it.
+    def _history(self, *, tenant_id: str, business_id: str, event_id: str) -> list[dict[str, object]]:
+        # The canonical stores expose durable append_seq when this cursor is
+        # requested. Ordinary iter_events reads may sort tied timestamps by
+        # event_id, which is NOT lifecycle chronology.
+        rows: list[dict[str, object]] = []
+        for event in self._events.iter_events(
+            tenant_id=tenant_id, start_ms=0,
+            event_type=BUSINESS_FACT_EVENT_TYPE, after_append_seq=0,
+        ):
             if event.get("source") != _SOURCE:
                 continue
-            envelope=dict(event.get("payload") or {})
-            if envelope.get("business_id")!=business_id or envelope.get("entity_id")!=event_id or envelope.get("fact_type") not in _FACTS: continue
-            rows.append({"type":envelope["fact_type"],"payload":dict(envelope.get("payload") or {}),"time":int(envelope.get("event_time_ms") or event.get("timestamp_ms") or 0),"order":order})
-        rows.sort(key=lambda x:(x["time"],x["order"]))
+            envelope = dict(event.get("payload") or {})
+            if (
+                envelope.get("business_id") != business_id
+                or envelope.get("entity_id") != event_id
+                or envelope.get("fact_type") not in _FACTS
+            ):
+                continue
+            append_seq = event.get("append_seq")
+            if type(append_seq) is not int or append_seq < 1:
+                raise RuntimeError("event_landing_durable_append_sequence_required")
+            rows.append({
+                "type": envelope["fact_type"],
+                "payload": dict(envelope.get("payload") or {}),
+                "sequence": append_seq,
+            })
+        rows.sort(key=lambda row: row["sequence"])
+        if len({row["sequence"] for row in rows}) != len(rows):
+            raise RuntimeError("event_landing_duplicate_append_sequence")
         return rows
 
-    def get(self, *, tenant_id: str, business_id: str, event_id: str) -> EventLandingState:
-        rows=self._history(tenant_id=tenant_id,business_id=business_id,event_id=event_id)
-        if not rows or rows[0]["type"]!=_CREATED: raise KeyError("event_landing_not_found")
-        p=dict(rows[0]["payload"]); state=EventLandingState(event_id=event_id,draft=EventLandingContent.from_payload(p["content"]),draft_source=str(p["source"]),revision=1)
+    def _snapshot(self, *, tenant_id: str, business_id: str, event_id: str) -> tuple[EventLandingState, int]:
+        rows = self._history(tenant_id=tenant_id, business_id=business_id, event_id=event_id)
+        if not rows or rows[0]["type"] != _CREATED:
+            raise KeyError("event_landing_not_found")
+        initial = dict(rows[0]["payload"])
+        state = EventLandingState(
+            event_id=event_id,
+            draft=EventLandingContent.from_payload(initial["content"]),
+            draft_source=str(initial["source"]),
+            revision=1,
+        )
         for row in rows[1:]:
-            p=dict(row["payload"]); expected=int(p["expected_revision"])
-            if row["type"]==_DRAFT: state=state.save_draft(content=EventLandingContent.from_payload(p["content"]),source=str(p["source"]),expected_revision=expected)
-            elif row["type"]==_PUBLISHED: state=state.publish(expected_revision=expected)
-            elif row["type"]==_UNPUBLISHED: state=state.unpublish(expected_revision=expected)
-        return state
+            if row["type"] == _CREATED:
+                raise RuntimeError("event_landing_duplicate_create_fact")
+            payload = dict(row["payload"])
+            expected = int(payload["expected_revision"])
+            if row["type"] == _DRAFT:
+                state = state.save_draft(
+                    content=EventLandingContent.from_payload(payload["content"]),
+                    source=str(payload["source"]),
+                    expected_revision=expected,
+                )
+            elif row["type"] == _PUBLISHED:
+                state = state.publish(expected_revision=expected)
+            elif row["type"] == _UNPUBLISHED:
+                state = state.unpublish(expected_revision=expected)
+        return state, len(rows)
+
+    def get(self, *, tenant_id: str, business_id: str, event_id: str) -> EventLandingState:
+        return self._snapshot(tenant_id=tenant_id, business_id=business_id, event_id=event_id)[0]
 
     @staticmethod
     def _now() -> int: return int(time.time()*1000)
@@ -56,7 +93,21 @@ class EventLandingRegistry:
             repaired=self._writer.repair_existing(tenant_id=tenant_id,business_id=business_id,entity_id=event_id,operation="create",idempotency_key=idempotency_key,fact_type=_CREATED,payload=payload,event_metadata={"actor_id":actor_id})
             if not repaired: raise RuntimeError("event_landing_already_exists")
             return current
-        self._writer.append_once(tenant_id=tenant_id,business_id=business_id,entity_id=event_id,operation="create",idempotency_key=idempotency_key,fact_type=_CREATED,payload=payload,occurred_at_ms=self._now(),event_metadata={"actor_id":actor_id})
+        # One absent-state transition guard, shared by all requests for this
+        # scoped entity, prevents two different create keys from each writing a
+        # legitimate but mutually incompatible immutable _CREATED fact.
+        try:
+            self._writer.append_transition_once(
+                tenant_id=tenant_id, business_id=business_id, entity_id=event_id,
+                expected_state_token="absent", operation="create",
+                idempotency_key=idempotency_key, fact_type=_CREATED,
+                payload=payload, occurred_at_ms=self._now(),
+                event_metadata={"actor_id": actor_id},
+            )
+        except RuntimeError as exc:
+            if str(exc).startswith("ontology transition rejected:"):
+                raise RuntimeError("event_landing_already_exists") from exc
+            raise
         return self.get(tenant_id=tenant_id,business_id=business_id,event_id=event_id)
 
     def transition(self, *, tenant_id: str, business_id: str, event_id: str, action: str, expected_revision: int, idempotency_key: str, actor_id: str, content: EventLandingContent|None=None, source: str="manual") -> EventLandingState:
@@ -73,7 +124,7 @@ class EventLandingRegistry:
             if durable_payload!=payload:
                 raise ValueError("event_landing_idempotency_payload_conflict")
             return self.get(tenant_id=tenant_id,business_id=business_id,event_id=event_id)
-        state=self.get(tenant_id=tenant_id,business_id=business_id,event_id=event_id)
+        state, lifecycle_version = self._snapshot(tenant_id=tenant_id,business_id=business_id,event_id=event_id)
         if expected_revision!=state.revision: raise RuntimeError("event_landing_revision_conflict")
         # Exercise the exact domain transition before persisting its event.
         # Invalid draft provenance must never be written into durable history.
@@ -83,7 +134,10 @@ class EventLandingRegistry:
             state.publish(expected_revision=expected_revision)
         else:
             state.unpublish(expected_revision=expected_revision)
-        token=f"{state.revision}:{state.status.value}:{state.published_revision or 0}"
+        # Draft revision does not advance on publish/unpublish. The append
+        # count advances after *every* canonical lifecycle fact, so a later
+        # publish cycle can never reuse a completed guard for an older cycle.
+        token=f"{lifecycle_version}:{state.revision}:{state.status.value}:{state.published_revision or 0}"
         self._writer.append_transition_once(tenant_id=tenant_id,business_id=business_id,entity_id=event_id,expected_state_token=token,operation=action,idempotency_key=idempotency_key,fact_type=fact_type,payload=payload,occurred_at_ms=self._now(),event_metadata={"actor_id":actor_id})
         return self.get(tenant_id=tenant_id,business_id=business_id,event_id=event_id)
 
