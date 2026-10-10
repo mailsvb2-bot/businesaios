@@ -255,12 +255,15 @@
     },
     {
       "id": "commerce.program_builder_delivery",
-      "status": "inventory",
-      "canonical_owner": null,
-      "source_of_truth": null,
+      "status": "mapped",
+      "canonical_owner": "application.commerce.phase18_program_publication_registry.ProgramPublicationRegistry + EventFactLifecycleWriter",
+      "source_of_truth": "BusinessFactV1 program.published in canonical EventStore; atomic immutable owner publication only; drafts/enrollments/provider delivery still unported",
       "evidence": [
         "clientplatform/application/program_builder.py",
-        "clientplatform/application/programs.py"
+        "clientplatform/application/programs.py",
+        "application/commerce/phase18_program_publication_registry.py",
+        "adapters/api/fastapi/business_workspace_program_routes.py",
+        "tests/integration/api/test_phase18_program_publication_journey.py"
       ],
       "runtime_dependency_removed": false
     },
