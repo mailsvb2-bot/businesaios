@@ -1280,7 +1280,8 @@ function Workspace({ data, apiBase, businesses, onRestart, onRetryAccess, onSwit
       <SupportCasesWorkspace key={`support:${data.tenant_id}:${data.business_id}`} apiBase={baseApi} apiKey={apiKey} getJson={getJson} postJson={postJson} />
       <ProgramPublicationWorkspace key={`programs:${data.tenant_id}:${data.business_id}`}
         apiBase={baseApi} apiKey={apiKey} tenantId={data.tenant_id}
-        businessId={data.business_id} getJson={getJson} postJson={postJson} />
+        businessId={data.business_id} getJson={getJson} postJson={postJson}
+        customers={customers} onRefreshCustomers={refreshCustomers} />
 
       <section className="panel sales-panel" aria-labelledby="business-sales-title">
         <div className="panel-title-row">

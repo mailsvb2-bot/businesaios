@@ -97,6 +97,21 @@ test("owner creates and publishes a multi-lesson program through the canonical c
   expect(draftReceipt.status()).toBe(200);
   expect((await draftReceipt.json()).drafts).toEqual([]);
 
+  // The enrollment UI must use the canonical customer list, never require a
+  // manually copied UUID or synthesize a customer when the business has none.
+  await expect(panel.getByLabel("Выберите существующего клиента")).toHaveCount(2);
+  await expect(panel.getByText("Активных клиентов пока нет", { exact: false })).toHaveCount(2);
+  await expect(panel.getByRole("button", { name: "Зачислить без отправки материалов" })).toHaveCount(2);
+  for (const enrollButton of await panel.getByRole("button", { name: "Зачислить без отправки материалов" }).all()) {
+    await expect(enrollButton).toBeDisabled();
+  }
+  const enrollmentMissingCustomer = await page.request.post(
+    apiPath + "/" + encodeURIComponent(newProgram.id) + "/enrollments",
+    { headers: { "X-API-Key": account.owner_session.api_key },
+      data: { customer_id: "00000000-0000-4000-8000-000000000001" } },
+  );
+  expect(enrollmentMissingCustomer.status()).toBe(404);
+
   const overflow = await page.evaluate(() =>
     document.documentElement.scrollWidth > document.documentElement.clientWidth + 1);
   expect(overflow).toBe(false);

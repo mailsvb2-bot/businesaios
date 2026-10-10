@@ -7,7 +7,10 @@ const KINDS = [
   ["task", "Задание"], ["mixed", "Смешанный материал"]
 ];
 
-function ProgramEnrollmentForm({ program, url, apiKey, getJson, postJson }) {
+function ProgramEnrollmentForm({ program, url, apiKey, customers, onRefreshCustomers, getJson, postJson }) {
+  const activeCustomers = (customers || []).filter((customer) =>
+    customer?.customer_id && customer?.status === "active"
+  );
   const [customerId, setCustomerId] = useState("");
   const [enrollments, setEnrollments] = useState([]);
   const [busy, setBusy] = useState(false);
@@ -29,7 +32,8 @@ function ProgramEnrollmentForm({ program, url, apiKey, getJson, postJson }) {
 
   const enroll = async (event) => {
     event.preventDefault();
-    if (busy || !apiKey || !customerId.trim()) return;
+    if (busy || !apiKey || !customerId.trim() ||
+        !activeCustomers.some((customer) => customer.customer_id === customerId)) return;
     setBusy(true);
     setError("");
     try {
@@ -53,12 +57,26 @@ function ProgramEnrollmentForm({ program, url, apiKey, getJson, postJson }) {
   return (
     <div>
       <form onSubmit={enroll}>
-        <label>ID существующего клиента
-          <input type="text" maxLength={64} autoComplete="off" value={customerId}
-            onChange={(event) => setCustomerId(event.target.value)}
-            placeholder="UUID клиента из вашего бизнеса" />
+        <label>Выберите существующего клиента
+          <select value={customerId}
+            onChange={(event) => setCustomerId(event.target.value)}>
+            <option value="">Выберите клиента из вашего бизнеса</option>
+            {activeCustomers.map((customer) => (
+              <option key={customer.customer_id} value={customer.customer_id}>
+                {customer.display_name || customer.identities?.[0]?.display_name ||
+                  customer.identities?.[0]?.username || customer.customer_id}
+              </option>
+            ))}
+          </select>
         </label>
-        <button type="submit" className="ghost" disabled={busy || !customerId.trim() || !apiKey}>
+        <button type="button" className="ghost" disabled={busy || !apiKey}
+          onClick={onRefreshCustomers}>Обновить список клиентов</button>
+        {!activeCustomers.length ? (
+          <p className="muted-text">Активных клиентов пока нет. Они появятся после входящих событий
+            из подключённых каналов; вымышленных клиентов не создаём.</p>
+        ) : null}
+        <button type="submit" className="ghost" disabled={busy || !apiKey ||
+          !activeCustomers.some((customer) => customer.customer_id === customerId)}>
           {busy ? "Зачисляем…" : "Зачислить без отправки материалов"}
         </button>
       </form>
@@ -70,7 +88,7 @@ function ProgramEnrollmentForm({ program, url, apiKey, getJson, postJson }) {
 }
 
 /** Phase 18: atomic course publication; actual lesson delivery is not enabled. */
-export function ProgramPublicationWorkspace({ apiBase, apiKey, tenantId, businessId, getJson, postJson }) {
+export function ProgramPublicationWorkspace({ apiBase, apiKey, tenantId, businessId, getJson, postJson, customers = [], onRefreshCustomers }) {
   const [programs, setPrograms] = useState([]);
   const [drafts, setDrafts] = useState([]);
   const [editingDraft, setEditingDraft] = useState(null);
@@ -390,7 +408,8 @@ export function ProgramPublicationWorkspace({ apiBase, apiKey, tenantId, busines
               <li key={lesson.position}>{lesson.title} · {lesson.content_kind}</li>
             ))}</ol>
             <ProgramEnrollmentForm key={item.id} program={item} url={url}
-              apiKey={apiKey} getJson={getJson} postJson={postJson} />
+              apiKey={apiKey} customers={customers} onRefreshCustomers={onRefreshCustomers}
+              getJson={getJson} postJson={postJson} />
           </li>
         ))}</ul>
       ) : <p className="muted-text">Программ пока нет.</p>}
