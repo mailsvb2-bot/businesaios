@@ -112,6 +112,24 @@ test("owner creates and publishes a multi-lesson program through the canonical c
   );
   expect(enrollmentMissingCustomer.status()).toBe(404);
 
+
+  // Archiving the currently opened draft must close its editor after the
+  // durable server receipt, rather than leave an archived draft editable.
+  const archivedTitle = "Архивируемый черновик " + suffix;
+  await panel.getByLabel("Название программы").fill(archivedTitle);
+  await panel.getByRole("button", { name: "Сохранить черновик" }).click();
+  await expect(panel.getByRole("button", { name: "Опубликовать черновик" })).toBeVisible();
+  await panel.getByRole("button", { name: "Архивировать черновик" }).click();
+  await expect(panel.getByText("Черновик архивирован. Опубликованные программы не затронуты.")).toBeVisible();
+  await expect(panel.getByLabel("Название программы")).toHaveValue("");
+  await expect(panel.getByRole("button", { name: "Опубликовать программу" })).toBeVisible();
+  await expect(panel.getByRole("button", { name: "Продолжить черновик" })).toHaveCount(0);
+  const archivedDrafts = await page.request.get("/api/business-workspace/program-drafts", {
+    headers: { "X-API-Key": account.owner_session.api_key },
+  });
+  expect(archivedDrafts.status()).toBe(200);
+  expect((await archivedDrafts.json()).drafts).toEqual([]);
+
   const overflow = await page.evaluate(() =>
     document.documentElement.scrollWidth > document.documentElement.clientWidth + 1);
   expect(overflow).toBe(false);

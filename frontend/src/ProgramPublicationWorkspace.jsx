@@ -192,8 +192,7 @@ export function ProgramPublicationWorkspace({ apiBase, apiKey, tenantId, busines
     }
   };
 
-  const resetEditor = () => {
-    if (busy) return;
+  const clearEditor = () => {
     setEditingDraft(null);
     setTitle("");
     setLessons([newLesson()]);
@@ -201,6 +200,11 @@ export function ProgramPublicationWorkspace({ apiBase, apiKey, tenantId, busines
     draftPending.current = null;
     setError("");
     setNotice("");
+  };
+
+  const resetEditor = () => {
+    if (busy) return;
+    clearEditor();
   };
 
   const continueDraft = (draft) => {
@@ -287,7 +291,9 @@ export function ProgramPublicationWorkspace({ apiBase, apiKey, tenantId, busines
       }
       draftPending.current = null;
       setDrafts((existing) => existing.filter((item) => item.id !== archived.id));
-      if (editingDraft?.id === archived.id) resetEditor();
+      // A server-acknowledged archive must close the editor even while this
+      // request owns the busy flag; a user-initiated reset stays blocked.
+      if (editingDraft?.id === archived.id) clearEditor();
       setNotice("Черновик архивирован. Опубликованные программы не затронуты.");
     } catch (reason) {
       setError("Не удалось архивировать черновик: " + (reason.message || "ошибка сети"));

@@ -135,3 +135,11 @@ def test_support_history_is_bound_to_authenticated_owner_and_durable_event_spine
     assert 'getJson(url + "/" + encodeURIComponent(item.id) + "/history", headers)' in owner
     assert 'Показать историю' in owner and 'Подтверждено событий:' in owner
     assert "sessionStorage" not in owner and "localStorage" not in owner
+
+def test_phase18_archived_program_draft_exits_editor_only_on_durable_receipt() -> None:
+    source = Path('frontend/src/ProgramPublicationWorkspace.jsx').read_text(encoding='utf-8')
+    assert 'const clearEditor = () => {' in source
+    assert 'const resetEditor = () => {\n    if (busy) return;\n    clearEditor();' in source
+    assert 'if (editingDraft?.id === archived.id) clearEditor();' in source
+    assert 'if (editingDraft?.id === archived.id) resetEditor();' not in source
+    assert 'archived?.id !== draft.id || archived?.status !== "archived"' in source
