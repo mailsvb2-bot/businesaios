@@ -29,7 +29,7 @@ class _EventStore:
             rows.sort(key=lambda e: e["append_seq"])
         return rows
     def count_events(self,*,tenant_id,start_ms,end_ms,user_id=None,event_type=None):
-        return len(tuple(self.iter_events(tenant_id=tenant_id,start_ms,end_ms=end_ms,user_id=user_id,event_type=event_type)))
+        return len(tuple(self.iter_events(tenant_id=tenant_id,start_ms=start_ms,end_ms=end_ms,user_id=user_id,event_type=event_type)))
 
 
 def _content(title: str) -> EventLandingContent:
