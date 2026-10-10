@@ -154,6 +154,45 @@ For safety, there is **no global case enumeration fallback** and no operator
 impersonation of an owner. `support.case_queue` remains **mapped**, not
 `implemented` or `parity_proven` until these gaps are closed.
 
+## Program builder: owner-approved lesson handoff and provider acceptance proof
+
+The authenticated owner can now publish a multi-lesson program, enroll a **real
+active canonical Customer**, and select an existing active customer identity in a
+configured provider. Text and HTTPS-link lessons have a server-generated,
+tenant/business-bound **read-only send plan**. No user-supplied recipient or
+lesson text is accepted in the plan endpoint; archival/revoked customer
+identities are rejected. Unsupported media types stay blocked.
+
+The owner workspace projects that plan into the **existing** Centre действий.
+External sending stays under `/actions/execute`, existing DecisionCore,
+explicit owner approval, provider queue, and existing provider transport.
+`ProgramPublicationRegistry` is not a scheduler, sender or decision engine.
+
+After approval and execution, the owner may reconcile a lesson by approval ID.
+The server re-derives the *current canonical* customer/lesson and matches
+approved provider payload, canonical Decision Archive, approval fingerprint,
+queue job identity, and provider execution-history record (same tenant/business).
+Only actual accepted `live_executed` provider results with a resource ID
+produce an idempotent `program.lesson_provider_accepted` fact via the **same
+canonical Event Store / EventFactLifecycleWriter**. Server-recorded provider
+evidence time is reused on retries; status is recovered on restart.
+
+**Important truth boundary:** a provider response acknowledging acceptance
+is not proof the recipient device received or displayed a message, and it
+does not mean the learner viewed/completed the lesson. The UI and event fact
+state `recipient_delivery_confirmed=false` and
+`lesson_completion_confirmed=false`. No fake delivery/completion is emitted.
+Provider delivery callbacks, canonical inbound acknowledgment/progress, retry
+reconciliation, production live-provider proof and legacy donor migration still
+must be completed before `commerce.program_builder_delivery` can advance
+beyond **mapped** or Phase 18 can be called complete.
+
+Proof: `tests/integration/api/test_phase18_program_lesson_delivery_http.py`
+(real authenticated FastAPI + canonical CRM/Event Store with fixture provider);
+`tests/integration/api/test_phase18_program_enrollment_canonical_customer.py`
+(actual customer and semantic evidence contracts). Fixture provider is *not*
+a live deployed Telegram/VK/MAX test.
+
 ## What is deliberately not copied
 
 - ClientPlatform repositories/tables as parallel persistence;

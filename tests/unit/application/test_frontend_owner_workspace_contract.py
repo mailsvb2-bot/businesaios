@@ -156,4 +156,7 @@ def test_phase18_program_send_plan_hands_off_to_existing_owner_action_and_never_
     assert "Подготовить урок" in program
     assert "onPrepareLessonSend({" in program
     assert '@router.get("/business-workspace/programs/{program_id}/enrollments/{enrollment_id}/lessons/{lesson_position}/send-plan"' in routes
-    assert "postJson(" not in program.split("const prepareLesson =")[1].split("  return (")[0]
+    assert "postJson(" not in program.split("const prepareLesson =")[1].split("  const reconcileLesson =")[0]
+    assert '"/provider-outcomes"' in program
+    assert '"/reconcile"' in program
+    assert "recipient_delivery_confirmed" not in program.split("const prepareLesson =")[1].split("  return (")[0]

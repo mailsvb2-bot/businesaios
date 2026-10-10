@@ -99,11 +99,12 @@ def register_business_workspace_program_routes(
     async def program_lesson_send_plan(program_id: str, enrollment_id: str, lesson_position: int, request: Request, channel: str = ""):
         tenant_id, business_id, _ = scope(request)
         try:
-            return programs.lesson_send_plan(
+            response = programs.lesson_send_plan(
                 tenant_id=tenant_id, business_id=business_id,
                 program_id=program_id, enrollment_id=enrollment_id,
                 lesson_position=lesson_position, channel=channel,
             )
+            return response
         except KeyError as exc:
             raise HTTPException(status_code=404, detail=str(exc.args[0])) from exc
         except (ValueError, TypeError) as exc:
