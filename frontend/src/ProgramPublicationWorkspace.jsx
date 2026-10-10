@@ -7,13 +7,17 @@ const KINDS = [
   ["task", "Задание"], ["mixed", "Смешанный материал"]
 ];
 
-function ProgramEnrollmentForm({ program, url, apiKey, customers, onRefreshCustomers, getJson, postJson }) {
+const PROVIDER_FOR_CHANNEL = { telegram: "telegram_bot", vk: "vk_messaging", max: "max_messaging", email: "email_connector", whatsapp: "whatsapp_cloud" };
+
+function ProgramEnrollmentForm({ program, url, apiKey, customers, sendableProviders, onPrepareLessonSend, onRefreshCustomers, getJson, postJson }) {
   const activeCustomers = (customers || []).filter((customer) =>
     customer?.customer_id && customer?.status === "active"
   );
   const [customerId, setCustomerId] = useState("");
   const [enrollments, setEnrollments] = useState([]);
   const [busy, setBusy] = useState(false);
+  const [deliveryChoice, setDeliveryChoice] = useState({});
+  const [preparedNotice, setPreparedNotice] = useState("");
   const [error, setError] = useState("");
   const endpoint = url + "/" + encodeURIComponent(program.id) + "/enrollments";
   const headers = { "X-API-Key": apiKey };
@@ -54,6 +58,34 @@ function ProgramEnrollmentForm({ program, url, apiKey, customers, onRefreshCusto
     }
   };
 
+  const routesFor = (customerId) => {
+    const customer = activeCustomers.find((item) => item.customer_id === customerId);
+    return (customer?.identities || [])
+      .filter((identity) => identity.status === "active" &&
+        Boolean(identity.external_subject) &&
+        sendableProviders.includes(PROVIDER_FOR_CHANNEL[identity.channel]))
+      .map((identity) => identity.channel)
+      .filter((channel, index, all) => all.indexOf(channel) === index);
+  };
+
+  const prepareLesson = async (enrollment, lesson, channel) => {
+    if (busy || !channel || !onPrepareLessonSend) return;
+    setBusy(true);
+    setError("");
+    setPreparedNotice("");
+    try {
+      await onPrepareLessonSend({
+        programId: program.id, enrollmentId: enrollment.id,
+        lessonPosition: lesson.position, channel,
+      });
+      setPreparedNotice("Урок подготовлен в Центре действий. Отправки и подтверждения доставки пока нет.");
+    } catch (reason) {
+      setError("Не удалось подготовить урок: " + (reason.message || "ошибка сети"));
+    } finally {
+      setBusy(false);
+    }
+  };
+
   return (
     <div>
       <form onSubmit={enroll}>
@@ -81,14 +113,50 @@ function ProgramEnrollmentForm({ program, url, apiKey, customers, onRefreshCusto
         </button>
       </form>
       {error ? <p role="alert">{error}</p> : null}
-      <p className="muted-text">Зачислено: {enrollments.length}. Все уроки ожидают реальной доставки,
-        отправка и отметки о прохождении здесь не выполняются.</p>
+      {preparedNotice ? <p role="status">{preparedNotice}</p> : null}
+      <p className="muted-text">Зачислено: {enrollments.length}. Для отправки урока используйте Центр действий:
+        подготовка не означает согласие владельца, принятие провайдером или доставку клиенту.</p>
+      {enrollments.map((enrollment) => {
+        const channels = routesFor(enrollment.customer_id);
+        const label = activeCustomers.find((customer) =>
+          customer.customer_id === enrollment.customer_id)?.display_name || enrollment.customer_id;
+        return (
+          <div key={enrollment.id} className="recovery-box">
+            <strong>Зачислен: {label}</strong>
+            {!channels.length ? <p>Нет активной идентичности в подключённом канале с подтверждением владельца.</p> : null}
+            {program.lessons.map((lesson) => {
+              const key = enrollment.id + ":" + lesson.position;
+              const channel = channels.includes(deliveryChoice[key]) ? deliveryChoice[key] : (channels[0] || "");
+              const supported = ["text", "link"].includes(lesson.content_kind);
+              return (
+                <div key={key}>
+                  <p>Урок {lesson.position}: {lesson.title} · Ожидает отправки</p>
+                  {supported && channels.length ? (
+                    <>
+                      <label>Канал урока {lesson.position}
+                        <select value={channel} disabled={busy}
+                          onChange={(event) => setDeliveryChoice((current) => ({ ...current, [key]: event.target.value }))}>
+                          {channels.map((item) => <option key={item} value={item}>{item}</option>)}
+                        </select>
+                      </label>
+                      <button className="ghost" type="button" disabled={busy || !apiKey}
+                        onClick={() => prepareLesson(enrollment, lesson, channel)}>
+                        Подготовить урок {lesson.position} к отправке
+                      </button>
+                    </>
+                  ) : !supported ? <p>Для этого типа материала требуется канонический медиамаршрут. Отправка заблокирована.</p> : null}
+                </div>
+              );
+            })}
+          </div>
+        );
+      })}
     </div>
   );
 }
 
 /** Phase 18: atomic course publication; actual lesson delivery is not enabled. */
-export function ProgramPublicationWorkspace({ apiBase, apiKey, tenantId, businessId, getJson, postJson, customers = [], onRefreshCustomers }) {
+export function ProgramPublicationWorkspace({ apiBase, apiKey, tenantId, businessId, getJson, postJson, customers = [], sendableProviders = [], onPrepareLessonSend, onRefreshCustomers }) {
   const [programs, setPrograms] = useState([]);
   const [drafts, setDrafts] = useState([]);
   const [editingDraft, setEditingDraft] = useState(null);
@@ -414,7 +482,8 @@ export function ProgramPublicationWorkspace({ apiBase, apiKey, tenantId, busines
               <li key={lesson.position}>{lesson.title} · {lesson.content_kind}</li>
             ))}</ol>
             <ProgramEnrollmentForm key={item.id} program={item} url={url}
-              apiKey={apiKey} customers={customers} onRefreshCustomers={onRefreshCustomers}
+              apiKey={apiKey} customers={customers} sendableProviders={sendableProviders}
+              onPrepareLessonSend={onPrepareLessonSend} onRefreshCustomers={onRefreshCustomers}
               getJson={getJson} postJson={postJson} />
           </li>
         ))}</ul>

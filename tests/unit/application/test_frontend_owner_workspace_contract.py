@@ -143,3 +143,17 @@ def test_phase18_archived_program_draft_exits_editor_only_on_durable_receipt() -
     assert 'if (editingDraft?.id === archived.id) clearEditor();' in source
     assert 'if (editingDraft?.id === archived.id) resetEditor();' not in source
     assert 'archived?.id !== draft.id || archived?.status !== "archived"' in source
+
+def test_phase18_program_send_plan_hands_off_to_existing_owner_action_and_never_sends_directly() -> None:
+    owner = Path("frontend/src/App.jsx").read_text(encoding="utf-8")
+    program = Path("frontend/src/ProgramPublicationWorkspace.jsx").read_text(encoding="utf-8")
+    routes = Path("adapters/api/fastapi/business_workspace_program_routes.py").read_text(encoding="utf-8")
+    assert "const prepareProgramLesson = async" in owner
+    assert "send-plan?channel=" in owner
+    assert 'setOperationOrigin(null)' in owner
+    assert "setOperationDraftKey(`program-" in owner
+    assert "onPrepareLessonSend={prepareProgramLesson}" in owner
+    assert "Подготовить урок" in program
+    assert "onPrepareLessonSend({" in program
+    assert '@router.get("/business-workspace/programs/{program_id}/enrollments/{enrollment_id}/lessons/{lesson_position}/send-plan"' in routes
+    assert "postJson(" not in program.split("const prepareLesson =")[1].split("  return (")[0]

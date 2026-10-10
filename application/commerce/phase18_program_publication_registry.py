@@ -14,7 +14,7 @@ from urllib.parse import urlsplit
 from uuid import NAMESPACE_URL, UUID, uuid5
 
 from application.ontology import EventFactLifecycleWriter
-from contracts.customer import CustomerNotFound, CustomerStatus
+from contracts.customer import CustomerIdentityStatus, CustomerNotFound, CustomerStatus
 from contracts.event_store import BUSINESS_FACT_EVENT_TYPE
 from reliability.idempotency_scope import hash_scope_seed
 
@@ -28,6 +28,7 @@ _DRAFT_ARCHIVED = "program.draft_archived"
 _PROGRAM_FACTS = frozenset({_PUBLISHED, _DRAFT_CREATED, _DRAFT_SAVED, _DRAFT_PUBLISHED, _DRAFT_ARCHIVED})
 _ENROLL_SOURCE = "phase18_program_enrollment_registry"
 _ENROLLED = "program.enrollment_created"
+_LESSON_MESSAGE_CHANNELS = {"telegram": "telegram_bot", "vk": "vk_messaging", "max": "max_messaging", "email": "email_connector", "whatsapp": "whatsapp_cloud"}
 _KEY = re.compile(r"^[A-Za-z0-9:_-]{1,128}$")
 _CONTENT_KINDS = frozenset({
     "audio", "video", "text", "document", "image", "link", "task", "mixed",
@@ -429,6 +430,73 @@ class ProgramPublicationRegistry:
             tenant_id=tenant_id, business_id=business_id,
             program_id=program_id, enrollment_id=identity,
         )
+
+    def lesson_send_plan(
+        self, *, tenant_id: str, business_id: str, program_id: str,
+        enrollment_id: str, lesson_position: int, channel: str,
+    ) -> dict[str, object]:
+        """Prepare an owner-reviewable draft; never execute or attest delivery.
+
+        The recipient is read from the existing customer identity owner, not
+        from a caller-controlled destination. The existing /actions/execute
+        and approval path remains the sole external-write authority.
+        """
+        if type(lesson_position) is not int or lesson_position < 1:
+            raise ValueError("program_lesson_position_invalid")
+        channel = _required(channel, "delivery_channel", maximum=40).lower()
+        provider_key = _LESSON_MESSAGE_CHANNELS.get(channel)
+        if provider_key is None:
+            raise ValueError("program_delivery_channel_unsupported")
+        enrollment = self.get_enrollment(
+            tenant_id=tenant_id, business_id=business_id,
+            program_id=program_id, enrollment_id=enrollment_id,
+        )
+        if self._customers is None:
+            raise RuntimeError("enrollment_canonical_customer_owner_unavailable")
+        try:
+            customer = self._customers.get_customer(
+                tenant_id=tenant_id, business_id=business_id,
+                customer_id=enrollment["customer_id"],
+            )
+        except CustomerNotFound as exc:
+            raise KeyError("enrollment_customer_not_found") from exc
+        if customer.customer.status is not CustomerStatus.ACTIVE:
+            raise RuntimeError("enrollment_customer_not_active")
+        identities = [
+            identity for identity in customer.identities
+            if identity.channel == channel
+            and identity.status is CustomerIdentityStatus.ACTIVE
+        ]
+        if len(identities) != 1:
+            raise RuntimeError(
+                "program_delivery_identity_missing" if not identities
+                else "program_delivery_identity_ambiguous"
+            )
+        program = self.get(
+            tenant_id=tenant_id, business_id=business_id, program_id=program_id,
+        )
+        matches = [item for item in program["lessons"] if item["position"] == lesson_position]
+        if len(matches) != 1:
+            raise KeyError("program_lesson_not_found")
+        lesson = matches[0]
+        if lesson["content_kind"] not in {"text", "link"}:
+            raise RuntimeError("program_lesson_media_delivery_not_connected")
+        message = (
+            f'Программа: {program["title"]}\n'
+            f'Урок {lesson_position}: {lesson["title"]}\n'
+            f'{lesson["content_ref"]}'
+        )
+        if len(message) > 3072:
+            raise ValueError("program_lesson_message_too_long")
+        return {
+            "program_id": program["id"], "enrollment_id": enrollment["id"],
+            "customer_id": enrollment["customer_id"], "lesson_position": lesson_position,
+            "channel": channel, "provider_key": provider_key,
+            "recipient": identities[0].external_subject, "text": message,
+            "action_type": "send_message@v1", "execution_allowed": False,
+            "status": "requires_owner_review_and_approval",
+            "next_boundary": "/actions/execute",
+        }
 
     def get_enrollment(
         self, *, tenant_id: str, business_id: str, program_id: str,

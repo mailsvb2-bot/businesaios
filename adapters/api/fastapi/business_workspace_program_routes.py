@@ -93,6 +93,29 @@ def register_business_workspace_program_routes(
                 raise HTTPException(status_code=503, detail=str(exc)) from exc
             raise
 
+    @router.get("/business-workspace/programs/{program_id}/enrollments/{enrollment_id}/lessons/{lesson_position}/send-plan", tags=["business-workspace"])
+    async def program_lesson_send_plan(program_id: str, enrollment_id: str, lesson_position: int, request: Request, channel: str = ""):
+        tenant_id, business_id, _ = scope(request)
+        try:
+            return programs.lesson_send_plan(
+                tenant_id=tenant_id, business_id=business_id,
+                program_id=program_id, enrollment_id=enrollment_id,
+                lesson_position=lesson_position, channel=channel,
+            )
+        except KeyError as exc:
+            raise HTTPException(status_code=404, detail=str(exc.args[0])) from exc
+        except (ValueError, TypeError) as exc:
+            raise HTTPException(status_code=422, detail=str(exc)) from exc
+        except RuntimeError as exc:
+            if str(exc) == "enrollment_canonical_customer_owner_unavailable":
+                raise HTTPException(status_code=503, detail=str(exc)) from exc
+            if str(exc) in {
+                "enrollment_customer_not_active", "program_delivery_identity_missing",
+                "program_delivery_identity_ambiguous", "program_lesson_media_delivery_not_connected",
+            }:
+                raise HTTPException(status_code=409, detail=str(exc)) from exc
+            raise
+
     @router.get("/business-workspace/program-drafts", tags=["business-workspace"])
     async def list_program_drafts(request: Request):
         tenant_id, business_id, _ = scope(request)

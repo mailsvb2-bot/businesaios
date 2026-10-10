@@ -70,3 +70,47 @@ def test_real_customer_registry_enrollment_persists_and_blocks_archived_or_cross
         assert str(exc) == "enrollment_customer_not_active"
     else:
         raise AssertionError("an archived customer was enrolled")
+
+def test_lesson_send_plan_resolves_only_active_canonical_identity_and_does_not_send():
+    events, claims, vault = MemoryEventStore(), InMemoryIdempotencyStore(), InMemorySecretVault()
+    customers = CustomerRegistry(event_store=events, idempotency_store=claims, pii_vault=vault)
+    identity = customers.ensure_customer_identity(
+        tenant_id="tenant", business_id="business",
+        channel="telegram", external_subject="12345678",
+    )
+    registry = ProgramPublicationRegistry(event_store=events, idempotency_store=claims, customer_registry=customers)
+    program = registry.publish(tenant_id="tenant", business_id="business", actor_id="owner",
+        title="Introduction", lessons=[{"title": "Part one", "content_kind": "link",
+            "content_ref": "https://example.org/one"}], idempotency_key="one")
+    enrolled = registry.enroll_customer(tenant_id="tenant", business_id="business", actor_id="owner",
+        program_id=program["id"], customer_id=identity.customer.customer_id)
+    size = len(events)
+    plan = registry.lesson_send_plan(tenant_id="tenant", business_id="business",
+        program_id=program["id"], enrollment_id=enrolled["id"], lesson_position=1,
+        channel="telegram")
+    assert plan["recipient"] == "12345678"
+    assert plan["provider_key"] == "telegram_bot"
+    assert plan["action_type"] == "send_message@v1"
+    assert plan["text"] == "Программа: Introduction\\nУрок 1: Part one\\nhttps://example.org/one"
+    assert plan["execution_allowed"] is False
+    assert plan["status"] == "requires_owner_review_and_approval"
+    assert len(events) == size  # no synthetic delivery event and no outbound write
+    import pytest
+    with pytest.raises(ValueError, match="program_delivery_channel_unsupported"):
+        registry.lesson_send_plan(tenant_id="tenant", business_id="business",
+            program_id=program["id"], enrollment_id=enrolled["id"], lesson_position=1,
+            channel="unknown")
+    with pytest.raises(KeyError, match="program_not_found"):
+        registry.lesson_send_plan(tenant_id="tenant", business_id="other",
+            program_id=program["id"], enrollment_id=enrolled["id"], lesson_position=1,
+            channel="telegram")
+    with pytest.raises(RuntimeError, match="program_delivery_identity_missing"):
+        registry.lesson_send_plan(tenant_id="tenant", business_id="business",
+            program_id=program["id"], enrollment_id=enrolled["id"], lesson_position=1,
+            channel="email")
+    customers.archive_customer(tenant_id="tenant", business_id="business",
+        customer_id=identity.customer.customer_id)
+    with pytest.raises(RuntimeError, match="enrollment_customer_not_active"):
+        registry.lesson_send_plan(tenant_id="tenant", business_id="business",
+            program_id=program["id"], enrollment_id=enrolled["id"], lesson_position=1,
+            channel="telegram")

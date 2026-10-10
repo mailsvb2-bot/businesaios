@@ -1067,6 +1067,42 @@ function Workspace({ data, apiBase, businesses, onRestart, onRetryAccess, onSwit
     return draft;
   }, [apiKey, authHeaders, decisionDraftUrl, operationQueueStale, readyOperationProviders, selectedCustomer]);
 
+  const prepareProgramLesson = async ({ programId, enrollmentId, lessonPosition, channel }) => {
+    if (!apiKey) throw new Error("owner_session_required");
+    if (operationQueueStale || Boolean(operationBusy)) {
+      throw new Error("Очередь внешних действий требует восстановления. Обновите её перед новой отправкой.");
+    }
+    const providerKeys = {
+      telegram: "telegram_bot", vk: "vk_messaging", max: "max_messaging",
+      email: "email_connector", whatsapp: "whatsapp_cloud",
+    };
+    const provider = readyOperationProviders.find((row) =>
+      row.provider_key === providerKeys[channel]);
+    if (!provider) throw new Error("Канал не готов к подтверждаемой отправке.");
+    const plan = await getJson(
+      `${baseApi}/business-workspace/programs/${encodeURIComponent(programId)}/enrollments/${encodeURIComponent(enrollmentId)}/lessons/${encodeURIComponent(lessonPosition)}/send-plan?channel=${encodeURIComponent(channel)}`,
+      authHeaders,
+    );
+    if (plan.program_id !== programId || plan.enrollment_id !== enrollmentId ||
+        plan.lesson_position !== lessonPosition || plan.provider_key !== provider.provider_key ||
+        plan.status !== "requires_owner_review_and_approval" ||
+        plan.action_type !== "send_message@v1" ||
+        !plan.recipient || !plan.text || plan.execution_allowed !== false) {
+      throw new Error("Сервер не подтвердил безопасный план отправки урока.");
+    }
+    setOperationProviderKey(provider.provider_key);
+    setOperationRecipient(plan.recipient);
+    setOperationSubject(provider.provider_key === "email_connector" ? "Материал программы" : "");
+    setOperationText(plan.text);
+    setOperationOrigin(null);
+    // Stable action identity keeps retries of the same lesson from silently
+    // becoming new outbound sends when the owner revisits the program.
+    setOperationDraftKey(`program-${enrollmentId}-${lessonPosition}`);
+    setOperationError("Это только проверяемый черновик урока. Проверьте получателя, текст и одобрите действие отдельно. Доставка ещё не подтверждена.");
+    document.getElementById("business-operations-title")?.scrollIntoView({ behavior: "smooth", block: "start" });
+    return plan;
+  };
+
   const retryProtectedAccess = async () => {
     if (!data.intake_id || !onRetryAccess) return;
     setAccessRecoveryBusy(true);
@@ -1281,7 +1317,9 @@ function Workspace({ data, apiBase, businesses, onRestart, onRetryAccess, onSwit
       <ProgramPublicationWorkspace key={`programs:${data.tenant_id}:${data.business_id}`}
         apiBase={baseApi} apiKey={apiKey} tenantId={data.tenant_id}
         businessId={data.business_id} getJson={getJson} postJson={postJson}
-        customers={customers} onRefreshCustomers={refreshCustomers} />
+        customers={customers} onRefreshCustomers={refreshCustomers}
+        sendableProviders={readyOperationProviders.map((provider) => provider.provider_key)}
+        onPrepareLessonSend={prepareProgramLesson} />
 
       <section className="panel sales-panel" aria-labelledby="business-sales-title">
         <div className="panel-title-row">
