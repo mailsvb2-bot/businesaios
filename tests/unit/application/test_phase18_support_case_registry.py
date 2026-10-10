@@ -121,6 +121,29 @@ def test_support_different_tenants_reusing_client_operation_keys_are_isolated():
 
 
 
+def test_support_action_replay_cannot_acknowledge_later_case_state():
+    events, claims, registry = _store()
+    created = _create(registry)
+    claimed = _transition(registry, created, "claim")
+    # A lost HTTP response can safely replay only the current transition.
+    assert _transition(registry, created, "claim") == claimed
+    released = _transition(registry, claimed, "release")
+    assert _transition(registry, claimed, "release") == released
+    with pytest.raises(RuntimeError, match="support_case_replay_stale"):
+        _transition(registry, created, "claim")
+    reclaimed = _transition(registry, released, "claim", key="claim-new")
+    with pytest.raises(RuntimeError, match="support_case_replay_stale"):
+        _transition(registry, claimed, "release")
+    resolved = _transition(registry, reclaimed, "resolve", key="resolve-new")
+    assert _transition(registry, reclaimed, "resolve", key="resolve-new") == resolved
+    with pytest.raises(RuntimeError, match="support_case_replay_stale"):
+        _transition(registry, released, "claim", key="claim-new")
+    with pytest.raises(RuntimeError, match="support_case_replay_stale"):
+        _transition(registry, created, "claim")
+    assert registry.get(tenant_id="tenant-a", business_id="business-a", case_id=created["id"]) == resolved
+    assert len(events) == 5
+
+
 def test_support_owner_reusing_request_key_is_scoped_to_actor_within_business():
     events, claims, registry = _store()
     first = _create(registry, actor_id="owner-one")

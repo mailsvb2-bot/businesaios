@@ -269,7 +269,21 @@ class SupportCaseRegistry:
             prior = dict((replay.get("payload") or {}).get("payload") or {})
             if prior.get("expected_revision") != expected_revision or prior.get("operator_id") != operator_id:
                 raise RuntimeError("support_case_idempotency_conflict")
-            return self.get(tenant_id=tenant_id, business_id=business_id, case_id=case_id)
+            # A replay acknowledges precisely the original transition, never
+            # a subsequent case state after release, reassignment, or resolution.
+            current = self.get(tenant_id=tenant_id, business_id=business_id, case_id=case_id)
+            expected_status = {
+                "claim": SupportCaseStatus.CLAIMED.value,
+                "release": SupportCaseStatus.OPEN.value,
+                "resolve": SupportCaseStatus.RESOLVED.value,
+            }[action]
+            if (
+                current["revision"] != expected_revision + 1
+                or current["status"] != expected_status
+                or (action == "claim" and current["claimed_by_operator_user_id"] != operator_id)
+            ):
+                raise RuntimeError("support_case_replay_stale")
+            return current
         current = self.get(tenant_id=tenant_id, business_id=business_id, case_id=case_id)
         if current["revision"] != expected_revision:
             raise RuntimeError("support_case_revision_conflict")
