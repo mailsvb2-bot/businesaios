@@ -112,6 +112,15 @@ def test_real_owner_http_program_to_provider_acceptance_is_durable_and_isolated(
         })
         assert enrolled.status_code == 200, enrolled.text
         enrollment = enrolled.json()
+        customer_history = client.get(
+            "/business-workspace/customers?customer_id=" + identity.customer.customer_id,
+            headers=owner,
+        )
+        assert customer_history.status_code == 200
+        assert any(
+            row["kind"] == "program.enrollment_created"
+            for row in customer_history.json()["timeline"]["entries"]
+        )
         lesson_path = (
             base_path + "/enrollments/" + enrollment["id"] + "/lessons/1"
         )
@@ -178,6 +187,15 @@ def test_real_owner_http_program_to_provider_acceptance_is_durable_and_isolated(
         assert first.json()["status"] == "provider_accepted"
         assert first.json()["recipient_delivery_confirmed"] is False
         assert len(event_store) == before + 1
+        timeline_after = client.get(
+            "/business-workspace/customers?customer_id=" + identity.customer.customer_id,
+            headers=owner,
+        )
+        assert timeline_after.status_code == 200
+        events = timeline_after.json()["timeline"]["entries"]
+        provider_entries = [row for row in events if row["kind"] == "program.lesson_provider_accepted"]
+        assert len(provider_entries) == 1
+        assert provider_entries[0]["title"] == "Урок принят провайдером; доставка клиенту не подтверждена"
         again = client.post(rec_path, headers=owner, json=body)
         assert again.status_code == 200 and again.json() == first.json()
         assert len(event_store) == before + 1

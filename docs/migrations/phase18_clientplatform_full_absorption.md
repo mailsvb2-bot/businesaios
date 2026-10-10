@@ -174,8 +174,11 @@ approved provider payload, canonical Decision Archive, approval fingerprint,
 queue job identity, and provider execution-history record (same tenant/business).
 Only actual accepted `live_executed` provider results with a resource ID
 produce an idempotent `program.lesson_provider_accepted` fact via the **same
-canonical Event Store / EventFactLifecycleWriter**. Server-recorded provider
-evidence time is reused on retries; status is recovered on restart.
+canonical Event Store / EventFactLifecycleWriter**. The existing read-only CRM
+CustomerTimelineProjector includes program enrollment and provider acceptance
+from these facts; it is a projection, not a second CustomerRegistry.
+Server-recorded provider evidence time is reused on retries; status is
+recovered on restart.
 
 **Important truth boundary:** a provider response acknowledging acceptance
 is not proof the recipient device received or displayed a message, and it
