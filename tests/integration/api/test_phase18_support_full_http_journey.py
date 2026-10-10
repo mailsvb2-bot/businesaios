@@ -131,6 +131,19 @@ def test_owner_to_scoped_operator_to_owner_with_revocation_and_denial(tmp_path):
         assert after_resolve_queue.json()["cases"] == []
         assert len(event_store) == 3
 
+        # A resolved case is absent from the actionable operator queue, but
+        # its audit history remains available by exact ID to the same
+        # scoped support operator, never to another business.
+        assert client.get("/platform-support/cases", headers=support_headers).json()["cases"] == []
+        operator_history_url = "/platform-support/cases/" + created["id"] + "/history"
+        operator_history = client.get(operator_history_url, headers=support_headers)
+        assert operator_history.status_code == 200, operator_history.text
+        assert [entry["action"] for entry in operator_history.json()["entries"]] == [
+            "created", "claimed", "resolved",
+        ]
+        assert client.get(operator_history_url, headers=wrong_headers).status_code == 404
+        assert client.get(operator_history_url, headers=owner_headers).status_code == 403
+
         history_url = "/business-workspace/support-cases/" + created["id"] + "/history"
         history_response = client.get(history_url, headers=owner_headers)
         assert history_response.status_code == 200, history_response.text

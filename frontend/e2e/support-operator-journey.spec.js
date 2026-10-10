@@ -25,7 +25,7 @@ test("support console rejects owner credentials and processes bounded cases with
         can_manage_cases: true
       });
     }
-    if (path.endsWith("/cases")) return respond(200, { cases: [item] });
+    if (path.endsWith("/cases")) return respond(200, { cases: item.status === "resolved" ? [] : [item] });
     if (req.method() === "GET" && path.endsWith("/cases/" + item.id + "/history")) {
       const entries = [{ revision: 1, action: "created", status: "open", occurred_at: item.created_at }];
       if (item.revision >= 2) {
@@ -80,8 +80,18 @@ test("support console rejects owner credentials and processes bounded cases with
   await page.getByRole("button", { name: "Взять в работу" }).click();
   await expect(page.getByRole("button", { name: "Закрыть обращение" })).toBeVisible();
   await page.getByRole("button", { name: "Закрыть обращение" }).click();
-  await expect(page.getByText("Решено")).toBeVisible();
-  await page.getByRole("button", { name: "Показать историю" }).click();
+  await expect(page.getByText("В очереди нет открытых обращений.")).toBeVisible();
+  await expect(page.getByText("Messages are not delivered")).toHaveCount(0);
+  const lookup = page.getByLabel("Номер обращения");
+  await lookup.fill("not-a-uuid");
+  await page.getByRole("button", { name: "Найти историю" }).click();
+  await expect(page.getByRole("alert")).toContainText("Введите корректный номер");
+  await lookup.fill("00000000-0000-0000-0000-000000000099");
+  await page.getByRole("button", { name: "Найти историю" }).click();
+  await expect(page.getByRole("alert")).toContainText("Не удалось получить историю");
+  await lookup.fill(item.id);
+  await page.getByRole("button", { name: "Найти историю" }).click();
+  await expect(page.getByRole("region", { name: "Результат поиска истории" })).toBeVisible();
   await expect(page.getByText("Подтверждено событий: 3")).toBeVisible();
   await expect(page.getByText(/Взято в работу ·/)).toBeVisible();
   await expect(page.getByText(/Решено ·/)).toBeVisible();

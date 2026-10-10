@@ -5,6 +5,26 @@ import { useRef, useState } from "react";
  * tenant, business and operator identity from a scoped SUPPORT credential.
  * No credential persistence, owner impersonation, or cross-business fallback.
  */
+function SupportCaseHistory({ history }) {
+  return (
+    <div aria-label={"История обращения " + history.case_id}>
+      <p className="muted-text">Подтверждено событий: {history.total}
+        {history.truncated ? " · Показаны последние " + history.entries.length : ""}
+      </p>
+      <ol>
+        {history.entries.map((entry) => (
+          <li key={entry.revision}>
+            {entry.action === "created" ? "Создано" :
+              entry.action === "claimed" ? "Взято в работу" :
+                entry.action === "released" ? "Возвращено в очередь" : "Решено"}
+            {" · "}{entry.occurred_at}
+          </li>
+        ))}
+      </ol>
+    </div>
+  );
+}
+
 export function SupportOperatorConsole({ apiBase }) {
   const [credential, setCredential] = useState("");
   const [session, setSession] = useState(null);
@@ -13,6 +33,7 @@ export function SupportOperatorConsole({ apiBase }) {
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
   const [history, setHistory] = useState(null);
+  const [lookupId, setLookupId] = useState("");
   const [historyBusy, setHistoryBusy] = useState("");
   const [historyError, setHistoryError] = useState(null);
   const historyEpoch = useRef(0);
@@ -43,6 +64,7 @@ export function SupportOperatorConsole({ apiBase }) {
     epoch.current += 1;
     historyEpoch.current += 1;
     setHistory(null);
+    setLookupId("");
     setHistoryBusy("");
     setHistoryError(null);
     pending.current = null;
@@ -147,6 +169,20 @@ export function SupportOperatorConsole({ apiBase }) {
     }
   };
 
+  const searchHistory = async (event) => {
+    event.preventDefault();
+    if (!session || busy || historyBusy) return;
+    const id = lookupId.trim().toLowerCase();
+    if (!/^[0-9a-f]{8}(-[0-9a-f]{4}){3}-[0-9a-f]{12}$/.test(id)) {
+      historyEpoch.current += 1;
+      setHistory(null);
+      setHistoryError({ caseId: id, message: "Введите корректный номер обращения (UUID)." });
+      return;
+    }
+    if (history?.case_id === id) return;
+    await toggleHistory({ id, revision: 0 });
+  };
+
   const transition = async (item, action) => {
     if (!session || busy) return;
     const generation = epoch.current;
@@ -232,9 +268,30 @@ export function SupportOperatorConsole({ apiBase }) {
           <button type="button" className="ghost" onClick={logout}>Выйти</button>
         </div>
         <button type="button" className="ghost" onClick={refresh} disabled={Boolean(busy)}>Обновить очередь</button>
+        <form onSubmit={searchHistory} aria-label="Поиск истории обращения">
+          <label>Номер обращения
+            <input type="text" autoComplete="off" spellCheck={false}
+              placeholder="UUID обращения" value={lookupId}
+              disabled={Boolean(busy) || Boolean(historyBusy)}
+              onChange={(event) => {
+                setLookupId(event.target.value);
+                setHistoryError(null);
+              }} />
+          </label>
+          <button type="submit" className="ghost" disabled={Boolean(busy) || Boolean(historyBusy) || !lookupId.trim()}>
+            {historyBusy && historyBusy === lookupId.trim().toLowerCase() ? "Ищем историю…" : "Найти историю"}
+          </button>
+        </form>
+        {historyError?.caseId === lookupId.trim().toLowerCase() ? <p role="alert">{historyError.message}</p> : null}
+        {history && !cases.some((item) => item.id === history.case_id) ? (
+          <section aria-label="Результат поиска истории">
+            <p>Обращение {history.case_id} · Версия: {history.revision}</p>
+            <SupportCaseHistory history={history} />
+          </section>
+        ) : null}
         {error ? <p className="error-box inline-error" role="alert">{error}</p> : null}
         {notice ? <p role="status">{notice}</p> : null}
-        {!cases.length ? <p className="muted-text">Для этого бизнеса обращений пока нет.</p> : (
+        {!cases.length ? <p className="muted-text">В очереди нет открытых обращений.</p> : (
           <ul>
             {cases.map((item) => {
               const mine = item.status === "claimed" && item.claimed_by_operator_user_id === operatorId;
@@ -265,23 +322,7 @@ export function SupportOperatorConsole({ apiBase }) {
                       history?.case_id === item.id ? "Скрыть историю" : "Показать историю"}
                   </button>
                   {historyError?.caseId === item.id ? <p role="alert">{historyError.message}</p> : null}
-                  {history?.case_id === item.id ? (
-                    <div aria-label={"История обращения " + item.id}>
-                      <p className="muted-text">Подтверждено событий: {history.total}
-                        {history.truncated ? " · Показаны последние " + history.entries.length : ""}
-                      </p>
-                      <ol>
-                        {history.entries.map((entry) => (
-                          <li key={entry.revision}>
-                            {entry.action === "created" ? "Создано" :
-                              entry.action === "claimed" ? "Взято в работу" :
-                              entry.action === "released" ? "Возвращено в очередь" : "Решено"}
-                            {" · "}{entry.occurred_at}
-                          </li>
-                        ))}
-                      </ol>
-                    </div>
-                  ) : null}
+                  {history?.case_id === item.id ? <SupportCaseHistory history={history} /> : null}
                 </li>
               );
             })}
