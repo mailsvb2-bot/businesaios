@@ -91,7 +91,7 @@ def test_lesson_send_plan_resolves_only_active_canonical_identity_and_does_not_s
     assert plan["recipient"] == "12345678"
     assert plan["provider_key"] == "telegram_bot"
     assert plan["action_type"] == "send_message@v1"
-    assert plan["text"] == "Программа: Introduction\\nУрок 1: Part one\\nhttps://example.org/one"
+    assert plan["text"] == "Программа: Introduction\nУрок 1: Part one\nhttps://example.org/one"
     assert plan["execution_allowed"] is False
     assert plan["status"] == "requires_owner_review_and_approval"
     assert len(events) == size  # no synthetic delivery event and no outbound write
