@@ -13,9 +13,8 @@ from typing import Any
 from urllib.parse import urlsplit
 from uuid import NAMESPACE_URL, UUID, uuid5
 
-from contracts.customer import CustomerStatus, CustomerNotFound
-
 from application.ontology import EventFactLifecycleWriter
+from contracts.customer import CustomerNotFound, CustomerStatus
 from contracts.event_store import BUSINESS_FACT_EVENT_TYPE
 from reliability.idempotency_scope import hash_scope_seed
 
