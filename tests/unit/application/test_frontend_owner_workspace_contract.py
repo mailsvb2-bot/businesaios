@@ -160,3 +160,14 @@ def test_phase18_program_send_plan_hands_off_to_existing_owner_action_and_never_
     assert '"/provider-outcomes"' in program
     assert '"/reconcile"' in program
     assert "recipient_delivery_confirmed" not in program.split("const prepareLesson =")[1].split("  return (")[0]
+
+def test_phase18_lesson_reconciliation_uses_server_issued_approval_id() -> None:
+    parent = Path("frontend/src/App.jsx").read_text(encoding="utf-8")
+    child = Path("frontend/src/ProgramPublicationWorkspace.jsx").read_text(encoding="utf-8")
+    assert "matchedApprovals[0].approval_id" in parent
+    assert "approvalMatchesDraftIdentity(row, data.tenant_id, operationDraftKey)" in parent
+    assert "approvalMatchesPreparedMessage(row, { providerKey, recipient, text: messageText, subject: subjectText })" in parent
+    assert "ID подтверждения: {approval.approval_id}" in parent
+    assert "suggestedApprovalIds={programApprovalIds}" in parent
+    assert "suggestedApprovalIds={suggestedApprovalIds}" in child
+    assert "Object.prototype.hasOwnProperty.call(approvalIds, key)" in child

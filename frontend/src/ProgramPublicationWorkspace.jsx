@@ -9,7 +9,7 @@ const KINDS = [
 
 const PROVIDER_FOR_CHANNEL = { telegram: "telegram_bot", vk: "vk_messaging", max: "max_messaging", email: "email_connector", whatsapp: "whatsapp_cloud" };
 
-function ProgramEnrollmentForm({ program, url, apiKey, customers, sendableProviders, onPrepareLessonSend, onRefreshCustomers, getJson, postJson }) {
+function ProgramEnrollmentForm({ program, url, apiKey, customers, sendableProviders, suggestedApprovalIds, onPrepareLessonSend, onRefreshCustomers, getJson, postJson }) {
   const activeCustomers = (customers || []).filter((customer) =>
     customer?.customer_id && customer?.status === "active"
   );
@@ -192,14 +192,18 @@ function ProgramEnrollmentForm({ program, url, apiKey, customers, sendableProvid
                         Подготовить урок {lesson.position} к отправке
                       </button>
                       <label>ID подтверждённого действия для урока {lesson.position}
-                        <input type="text" autoComplete="off" value={approvalIds[key] || ""}
+                        <input type="text" autoComplete="off" value={Object.prototype.hasOwnProperty.call(approvalIds, key)
+                          ? approvalIds[key] : (suggestedApprovalIds[key] || "")}
                           disabled={busy}
                           onChange={(event) => setApprovalIds((current) => ({
                             ...current, [key]: event.target.value,
                           }))} />
                       </label>
-                      <button className="ghost" type="button" disabled={busy || !apiKey || !(approvalIds[key] || "").trim()}
-                        onClick={() => reconcileLesson(enrollment, lesson, channel, approvalIds[key])}>
+                      <button className="ghost" type="button" disabled={busy || !apiKey || !(Object.prototype.hasOwnProperty.call(approvalIds, key)
+                          ? approvalIds[key] : (suggestedApprovalIds[key] || "")).trim()}
+                        onClick={() => reconcileLesson(enrollment, lesson, channel,
+                          Object.prototype.hasOwnProperty.call(approvalIds, key)
+                            ? approvalIds[key] : (suggestedApprovalIds[key] || ""))}>
                         Проверить подтверждение у провайдера
                       </button>
                       {reconcileStatus[key] === "awaiting_owner_approval" ? <p>Ожидается подтверждение владельца.</p> : null}
@@ -218,7 +222,7 @@ function ProgramEnrollmentForm({ program, url, apiKey, customers, sendableProvid
 }
 
 /** Phase 18: atomic course publication; actual lesson delivery is not enabled. */
-export function ProgramPublicationWorkspace({ apiBase, apiKey, tenantId, businessId, getJson, postJson, customers = [], sendableProviders = [], onPrepareLessonSend, onRefreshCustomers }) {
+export function ProgramPublicationWorkspace({ apiBase, apiKey, tenantId, businessId, getJson, postJson, customers = [], sendableProviders = [], suggestedApprovalIds = {}, onPrepareLessonSend, onRefreshCustomers }) {
   const [programs, setPrograms] = useState([]);
   const [drafts, setDrafts] = useState([]);
   const [editingDraft, setEditingDraft] = useState(null);
@@ -545,7 +549,7 @@ export function ProgramPublicationWorkspace({ apiBase, apiKey, tenantId, busines
             ))}</ol>
             <ProgramEnrollmentForm key={item.id} program={item} url={url}
               apiKey={apiKey} customers={customers} sendableProviders={sendableProviders}
-              onPrepareLessonSend={onPrepareLessonSend} onRefreshCustomers={onRefreshCustomers}
+              suggestedApprovalIds={suggestedApprovalIds} onPrepareLessonSend={onPrepareLessonSend} onRefreshCustomers={onRefreshCustomers}
               getJson={getJson} postJson={postJson} />
           </li>
         ))}</ul>

@@ -377,6 +377,8 @@ function Workspace({ data, apiBase, businesses, onRestart, onRetryAccess, onSwit
   const [operationRecovery, setOperationRecovery] = useState(null);
   const [operationDraftKey, setOperationDraftKey] = useState(() => crypto.randomUUID());
   const [operationOrigin, setOperationOrigin] = useState(null);
+  const [pendingProgramLesson, setPendingProgramLesson] = useState(null);
+  const [programApprovalIds, setProgramApprovalIds] = useState({});
   const [customers, setCustomers] = useState([]);
   const [selectedCustomerId, setSelectedCustomerId] = useState("");
   const [customerTimeline, setCustomerTimeline] = useState([]);
@@ -739,8 +741,20 @@ function Workspace({ data, apiBase, businesses, onRestart, onRetryAccess, onSwit
       payload: { business_id: data.business_id, provider_key: providerKey, user_id: recipient, text: messageText, channel: messagingChannelForProvider(providerKey), kind: operationOrigin ? "owner_decision_draft" : "owner_manual", ...providerRecipientContext(providerKey, recipient), ...(providerKey === "whatsapp_cloud" ? { whatsapp_policy_attestation: { recipient_opted_in: operationWhatsappOptIn, customer_service_window: operationWhatsappWindow } } : {}), ...(subjectText ? { subject: subjectText } : {}), ...(draftOrigin ? { track_payload: draftOrigin } : {}) }
     }, { ...authHeaders, "X-Idempotency-Key": operationDraftKey, "X-Action-ID": operationDraftKey });
     if (!outcome || !outcome.nextOperations) return;
-    const preparedApproval = (outcome.nextOperations.approvals || []).some((row) => approvalMatchesDraftIdentity(row, data.tenant_id, operationDraftKey)
-      && approvalMatchesPreparedMessage(row, { providerKey, recipient, text: messageText, subject: subjectText }));
+    const matchedApprovals = (outcome.nextOperations.approvals || []).filter((row) =>
+      approvalMatchesDraftIdentity(row, data.tenant_id, operationDraftKey) &&
+      approvalMatchesPreparedMessage(row, { providerKey, recipient, text: messageText, subject: subjectText }));
+    const preparedApproval = matchedApprovals.length > 0;
+    if (preparedApproval && matchedApprovals.length === 1 &&
+        pendingProgramLesson?.actionId === operationDraftKey &&
+        pendingProgramLesson?.providerKey === providerKey &&
+        pendingProgramLesson?.recipient === recipient &&
+        pendingProgramLesson?.text === messageText) {
+      // Reuse a real, server-issued approval ID; never invent a receipt.
+      setProgramApprovalIds((current) => ({
+        ...current, [pendingProgramLesson.key]: matchedApprovals[0].approval_id,
+      }));
+    }
     const resultStatus = String(outcome.result?.status || "").toLowerCase();
     const resultReason = String(outcome.result?.reason || outcome.result?.details?.guard_stage || "").toLowerCase();
     const idempotencyInProgress = resultStatus === "blocked" && resultReason === "idempotency_in_progress";
@@ -1097,7 +1111,12 @@ function Workspace({ data, apiBase, businesses, onRestart, onRetryAccess, onSwit
     setOperationOrigin(null);
     // Stable action identity keeps retries of the same lesson from silently
     // becoming new outbound sends when the owner revisits the program.
-    setOperationDraftKey(`program-${enrollmentId}-${lessonPosition}`);
+    const actionId = `program-${enrollmentId}-${lessonPosition}`;
+    setOperationDraftKey(actionId);
+    setPendingProgramLesson({
+      key: enrollmentId + ":" + lessonPosition, providerKey: provider.provider_key,
+      recipient: plan.recipient, text: plan.text, actionId,
+    });
     setOperationError("Это только проверяемый черновик урока. Проверьте получателя, текст и одобрите действие отдельно. Доставка ещё не подтверждена.");
     document.getElementById("business-operations-title")?.scrollIntoView({ behavior: "smooth", block: "start" });
     return plan;
@@ -1319,7 +1338,8 @@ function Workspace({ data, apiBase, businesses, onRestart, onRetryAccess, onSwit
         businessId={data.business_id} getJson={getJson} postJson={postJson}
         customers={customers} onRefreshCustomers={refreshCustomers}
         sendableProviders={readyOperationProviders.map((provider) => provider.provider_key)}
-        onPrepareLessonSend={prepareProgramLesson} />
+        onPrepareLessonSend={prepareProgramLesson}
+        suggestedApprovalIds={programApprovalIds} />
 
       <section className="panel sales-panel" aria-labelledby="business-sales-title">
         <div className="panel-title-row">
@@ -1446,6 +1466,7 @@ function Workspace({ data, apiBase, businesses, onRestart, onRetryAccess, onSwit
                 <div className="approval-card-head"><div><strong>{provider?.title || previewRow.providerKey || "Сообщение"}</strong><small>Получатель: {previewRow.recipient || "—"}</small></div><span>Ждёт решения</span></div>
                 {previewRow.subject ? <p><strong>{previewRow.subject}</strong></p> : null}
                 <p>{previewRow.text || "Текст действия сохранён и ждёт вашего решения."}</p>
+                <small className="helper-text">ID подтверждения: {approval.approval_id}</small>
                 <small className="helper-text">После подтверждения получатель и содержание берутся из этого сохранённого действия.</small>
                 <div className="navigation-row"><button type="button" className="ghost" disabled={Boolean(operationBusy) || operationQueueStale} onClick={() => decideApproval(approval.approval_id, false)}>Отклонить</button><button type="button" className="primary" disabled={Boolean(operationBusy) || operationQueueStale} onClick={() => decideApproval(approval.approval_id, true)}>{operationBusy === `approval:${approval.approval_id}` ? "Выполняем…" : "Подтвердить и выполнить"}</button></div>
               </article>;
