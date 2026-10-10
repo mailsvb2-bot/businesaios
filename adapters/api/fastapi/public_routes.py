@@ -205,7 +205,17 @@ def register_public_api_routes(
                 event_store=event_store,
                 idempotency_store=dependency_container.api_idempotency_store,
             )
-        phase18_provider_admin = ProviderAdminRouteHandlers()
+        canonical_customers = (
+            CustomerRegistry(
+                event_store=event_store,
+                idempotency_store=dependency_container.api_idempotency_store,
+                pii_vault=dependency_container.secret_vault,
+            ) if event_landing_registry is not None else None
+        )
+        phase18_provider_admin = ProviderAdminRouteHandlers(
+            customer_event_store=event_store if canonical_customers is not None else None,
+            customer_registry=canonical_customers,
+        )
         register_business_workspace_provider_routes(
             router=router, auth_bundle=auth_bundle,
             provider_admin_handlers=phase18_provider_admin,
@@ -227,11 +237,7 @@ def register_public_api_routes(
                 programs=ProgramPublicationRegistry(
                     event_store=event_store,
                     idempotency_store=dependency_container.api_idempotency_store,
-                    customer_registry=CustomerRegistry(
-                        event_store=event_store,
-                        idempotency_store=dependency_container.api_idempotency_store,
-                        pii_vault=dependency_container.secret_vault,
-                    ),
+                    customer_registry=canonical_customers,
                 ),
             )
         if event_landing_registry is not None:

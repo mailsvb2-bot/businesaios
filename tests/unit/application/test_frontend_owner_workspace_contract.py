@@ -171,3 +171,12 @@ def test_phase18_lesson_reconciliation_uses_server_issued_approval_id() -> None:
     assert "suggestedApprovalIds={programApprovalIds}" in parent
     assert "suggestedApprovalIds={suggestedApprovalIds}" in child
     assert "Object.prototype.hasOwnProperty.call(approvalIds, key)" in child
+
+def test_phase18_programs_and_owner_roster_share_the_only_customer_owner() -> None:
+    bootstrap = Path("adapters/api/fastapi/public_routes.py").read_text(encoding="utf-8")
+    handler = Path("entrypoints/api/provider_admin_route_handlers.py").read_text(encoding="utf-8")
+    assert "canonical_customers = (" in bootstrap
+    assert "customer_registry=canonical_customers" in bootstrap
+    assert "customer_event_store=event_store if canonical_customers is not None else None" in bootstrap
+    assert "customer_registry=canonical_customers," in bootstrap
+    assert "self.customer_registry if self.customer_registry is not None" in handler

@@ -30,6 +30,7 @@ class ProviderAdminRouteHandlers:
     decision_loader: Any = load_archived_decision
     approval_completion_handler: Any = None
     customer_event_store: Any = None
+    customer_registry: Any = None
     def _service(self, business_id: str):
         kwargs = {"business_id": business_id}
         if self.customer_event_store is not None:
@@ -70,7 +71,13 @@ class ProviderAdminRouteHandlers:
             ],
         }
     def get_business_customers(self, *, tenant_id: str, business_id: str, customer_id: str = '') -> dict[str, Any]:
-        registry = getattr(self._service(business_id), 'customer_registry', None)
+        # The owner UI and Phase-18 program enrollment must project the
+        # identical canonical CustomerRegistry, EventStore and encrypted vault.
+        # Never silently rebuild a second registry if one was injected.
+        registry = (
+            self.customer_registry if self.customer_registry is not None
+            else getattr(self._service(business_id), 'customer_registry', None)
+        )
         selected = str(customer_id or '').strip()
         rows = [] if registry is None else [
             {**asdict(customer), 'status': customer.status.value, 'identities': [

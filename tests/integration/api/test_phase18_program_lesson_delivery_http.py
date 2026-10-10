@@ -12,9 +12,11 @@ from fastapi.testclient import TestClient
 
 from adapters.api.fastapi.auth_dependencies import AuthDependencyBundle, CompositeAuthPolicy
 from adapters.api.fastapi.business_workspace_program_routes import register_business_workspace_program_routes
+from adapters.api.fastapi.business_workspace_provider_routes import register_business_workspace_provider_routes
 from application.commerce.phase18_program_publication_registry import ProgramPublicationRegistry
 from crm.customer_registry import CustomerRegistry
 from entrypoints.api.api_key_policy import ApiKeyPolicy, PersistentApiKeyStore
+from entrypoints.api.provider_admin_route_handlers import ProviderAdminRouteHandlers
 from entrypoints.api.security_owner_bundle import ApiSecurityOwnerBundle
 from governance.rbac_contract import RoleId
 from reliability.idempotency_store import InMemoryIdempotencyStore
@@ -77,12 +79,26 @@ def test_real_owner_http_program_to_provider_acceptance_is_durable_and_isolated(
         router=router, auth_bundle=auth, programs=programs,
         provider_admin_handlers=FakeProviderAdmin(),
     )
+    # The actual owner-facing customer endpoint must see the exact same
+    # registry and event chronology as program enrollment, not a shadow CRM.
+    register_business_workspace_provider_routes(
+        router=router, auth_bundle=auth,
+        provider_admin_handlers=ProviderAdminRouteHandlers(
+            customer_event_store=event_store, customer_registry=customers,
+        ),
+    )
     app = FastAPI()
     app.include_router(router)
     owner = {"X-API-Key": owner_key}
     stranger = {"X-API-Key": stranger_key}
     support = {"X-API-Key": support_key}
     with TestClient(app, base_url="https://testserver") as client:
+        roster = client.get("/business-workspace/customers", headers=owner)
+        assert roster.status_code == 200, roster.text
+        assert roster.json()["customers"][0]["customer_id"] == identity.customer.customer_id
+        assert roster.json()["customers"][0]["identities"][0]["external_subject"] == "123456789"
+        assert client.get("/business-workspace/customers", headers=stranger).json()["customers"] == []
+        assert client.get("/business-workspace/customers", headers=support).status_code == 403
         pub = client.post("/business-workspace/programs", headers=owner, json={
             "title": "Materials", "idempotency_key": "pub",
             "lessons": [{"title": "Intro", "content_kind": "link",
