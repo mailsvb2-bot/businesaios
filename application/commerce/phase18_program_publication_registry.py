@@ -97,9 +97,10 @@ class ProgramPublicationRegistry:
         tenant_id = _required(tenant_id, "tenant_id")
         business_id = _required(business_id, "business_id")
         grouped: dict[str, list[tuple[int, int, str, dict[str, object]]]] = {}
-        for order, event in enumerate(self._events.iter_events(
+        observed_sequences: set[int] = set()
+        for event in self._events.iter_events(
             tenant_id=tenant_id, start_ms=0, event_type=BUSINESS_FACT_EVENT_TYPE,
-        )):
+        ):
             if event.get("source") != _SOURCE:
                 continue
             fact = event.get("payload") or {}
@@ -113,12 +114,19 @@ class ProgramPublicationRegistry:
             payload = fact.get("payload")
             if not isinstance(payload, dict):
                 raise RuntimeError("program_durable_payload_invalid")
+            # event_time_ms is supplied by independent workers and may be
+            # identical or move backwards. Only the Event Spine durable append
+            # cursor proves mutation order across worker/restart boundaries.
+            sequence = int(event.get("append_seq") or 0)
+            if sequence <= 0 or sequence in observed_sequences:
+                raise RuntimeError("program_durable_append_sequence_invalid")
+            observed_sequences.add(sequence)
             grouped.setdefault(entity_id, []).append((
-                int(fact.get("event_time_ms") or 0), order, kind, dict(payload),
+                sequence, int(fact.get("event_time_ms") or 0), kind, dict(payload),
             ))
         result: list[dict[str, object]] = []
         for entity_id, facts in grouped.items():
-            facts.sort(key=lambda item: (item[0], item[1]))
+            facts.sort(key=lambda item: item[0])
             first_kind, first_payload = facts[0][2], facts[0][3]
             if first_kind not in {_PUBLISHED, _DRAFT_CREATED}:
                 raise RuntimeError("program_durable_creation_missing")
@@ -134,7 +142,7 @@ class ProgramPublicationRegistry:
             if first_kind == _PUBLISHED and len(facts) != 1:
                 raise RuntimeError("program_duplicate_publication")
             revision = 1
-            for when, _, kind, payload in facts[1:]:
+            for _, when, kind, payload in facts[1:]:
                 if row["status"] != "draft" or payload.get("expected_revision") != revision:
                     raise RuntimeError("program_durable_transition_invalid")
                 if kind == _DRAFT_SAVED:

@@ -198,3 +198,83 @@ def test_identical_lesson_text_cannot_share_approval_between_programs():
     assert "Код материала: " in plans[0]["text"]
     assert plans[0]["text"].split("Код материала: ")[0] == plans[1]["text"].split("Код материала: ")[0]
     assert plans[0]["execution_allowed"] is plans[1]["execution_allowed"] is False
+
+
+def test_program_replay_uses_durable_append_sequence_not_clock_or_iteration_order():
+    events, claims = MemoryEventStore(), InMemoryIdempotencyStore()
+    first = ProgramPublicationRegistry(event_store=events, idempotency_store=claims)
+    draft = first.create_draft(
+        tenant_id="tenant", business_id="business", actor_id="owner",
+        title="Initial", lessons=[], idempotency_key="create",
+    )
+    saved = first.change_draft(
+        tenant_id="tenant", business_id="business", actor_id="owner",
+        program_id=draft["id"], action="save", expected_revision=1,
+        idempotency_key="save",
+        title="Updated", lessons=[{"title": "Lesson", "content_kind": "text", "content_ref": "Body"}],
+    )
+    published = first.change_draft(
+        tenant_id="tenant", business_id="business", actor_id="owner",
+        program_id=draft["id"], action="publish", expected_revision=saved["revision"],
+        idempotency_key="publish",
+    )
+    assert published["revision"] == 3 and published["status"] == "active"
+
+    class ClockSkewReverseStore:
+        def __init__(self, backing):
+            self.backing = backing
+
+        def __getattr__(self, name):
+            return getattr(self.backing, name)
+
+        def iter_events(self, **kwargs):
+            # Deliberately invert provider-local timestamps and read order.
+            rows = []
+            for raw in self.backing.iter_events(**kwargs):
+                event = dict(raw)
+                payload = dict(event.get("payload") or {})
+                payload["event_time_ms"] = 1000000 - int(event["append_seq"])
+                event["payload"] = payload
+                rows.append(event)
+            return iter(reversed(rows))
+
+    restored = ProgramPublicationRegistry(
+        event_store=ClockSkewReverseStore(events), idempotency_store=claims,
+    )
+    observed = restored.get(
+        tenant_id="tenant", business_id="business", program_id=draft["id"],
+    )
+    assert observed["revision"] == 3
+    assert observed["status"] == "active"
+    assert observed["title"] == "Updated"
+    assert observed["lessons"][0]["content_ref"] == "Body"
+
+
+def test_program_replay_rejects_noncanonical_or_duplicate_append_sequences():
+    events, claims = MemoryEventStore(), InMemoryIdempotencyStore()
+    first = ProgramPublicationRegistry(event_store=events, idempotency_store=claims)
+    program = first.publish(
+        tenant_id="tenant", business_id="business", actor_id="owner",
+        title="Material", lessons=[{
+            "title": "Lesson", "content_kind": "text", "content_ref": "Body",
+        }], idempotency_key="publish",
+    )
+
+    class MissingSequenceStore:
+        def __init__(self, backing):
+            self.backing = backing
+
+        def __getattr__(self, name):
+            return getattr(self.backing, name)
+
+        def iter_events(self, **kwargs):
+            for raw in self.backing.iter_events(**kwargs):
+                event = dict(raw)
+                event.pop("append_seq", None)
+                yield event
+
+    restored = ProgramPublicationRegistry(
+        event_store=MissingSequenceStore(events), idempotency_store=claims,
+    )
+    with pytest.raises(RuntimeError, match="^program_durable_append_sequence_invalid$"):
+        restored.get(tenant_id="tenant", business_id="business", program_id=program["id"])
