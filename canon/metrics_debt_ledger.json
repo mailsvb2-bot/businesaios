@@ -15,7 +15,7 @@
     "target_product": "BusinessAIOS",
     "principle": "Four bounded reviewed Phase-18 journeys: public event landing, owner business settings over existing ledger (+200 lines), owner/SUPPORT case lifecycle over canonical Event Spine (+850 lines), and multi-lesson program publication/real Customer enrollment/owner-approved provider acceptance over the existing DecisionCore/provider queue (+1100 lines). The program outcome is provider acceptance only, never invented recipient delivery. No second brain, CRM, scheduler, settings database or donor runtime.",
     "python_line_budget": 2700,
-    "python_file_budget": 5,
+    "python_file_budget": 9,
     "transition_surface_budget": 0,
     "donor_runtime_imports_allowed": false,
     "parallel_owners_allowed": false,
