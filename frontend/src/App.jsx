@@ -3,6 +3,7 @@ import { AcquisitionPlanner } from "./AcquisitionPlanner.jsx";
 import { BusinessIntelligencePanel } from "./BusinessIntelligencePanel.jsx";
 import { BusinessDiscoveryPanel } from "./BusinessDiscoveryPanel.jsx";
 import { EventLandingWorkspace } from "./EventLandingWorkspace.jsx";
+import { BusinessSettingsWorkspace } from "./BusinessSettingsWorkspace.jsx";
 import { SupportCasesWorkspace } from "./SupportCasesWorkspace.jsx";
 import { DiscoverBuildMeasurePanel } from "./DiscoverBuildMeasurePanel.jsx";
 
@@ -316,8 +317,9 @@ function evidenceTimeLabel(row) {
   return Number.isNaN(timestamp.getTime()) ? "Время не указано" : timestamp.toLocaleString("ru-RU");
 }
 
-function Workspace({ data, apiBase, businesses, onRestart, onRetryAccess, onSwitchBusiness }) {
+function Workspace({ data, apiBase, businesses, onRestart, onRetryAccess, onSwitchBusiness, onBusinessRenamed }) {
   const profile = data.business_profile || {};
+  const [businessName, setBusinessName] = useState(profile.name || "");
   const progress = data.onboarding_progress || {};
   const preview = data.first_value_preview || {};
   const integrations = data.integration_plan || [];
@@ -1050,7 +1052,7 @@ function Workspace({ data, apiBase, businesses, onRestart, onRetryAccess, onSwit
       <section className="workspace-hero">
         <div>
           <p className="eyebrow">Кабинет бизнеса</p>
-          <h1>{profile.name || "Ваш бизнес"}</h1>
+          <h1>{businessName || "Ваш бизнес"}</h1>
           <p className="lead">{liveEvidence ? "Первые реальные данные уже подтверждены. Ниже — результат и следующие безопасные действия." : "Сейчас задача одна: получить первый подтверждённый результат на ваших данных. Никаких отправок, изменений или расходов."}</p>
         </div>
         <div className="progress-card">
@@ -1356,12 +1358,15 @@ function Workspace({ data, apiBase, businesses, onRestart, onRetryAccess, onSwit
       </section>
 
       <EventLandingWorkspace key={`${data.tenant_id}:${data.business_id}`} apiBase={baseApi} tenantId={data.tenant_id} businessId={data.business_id} apiKey={apiKey} getJson={getJson} postJson={postJson} />
-      <SupportCasesWorkspace key={`support:${data.tenant_id}:${data.business_id}`} apiBase={baseApi} apiKey={apiKey} getJson={getJson} postJson={postJson} />
+
+      <BusinessSettingsWorkspace key={`settings:${data.tenant_id}:${data.business_id}`} apiBase={baseApi} apiKey={apiKey} getJson={getJson} postJson={postJson} onSaved={(value) => { setBusinessName(value.business_name); onBusinessRenamed?.(data.business_id, value.business_name); }} />
+
+       <SupportCasesWorkspace key={`support:${data.tenant_id}:${data.business_id}`} apiBase={baseApi} apiKey={apiKey} getJson={getJson} postJson={postJson} />
 
       <AcquisitionPlanner enabled={Boolean(apiKey)} onEvaluate={(payload) => postJson(acquisitionUrl, payload, authHeaders)} />
 
       <section className="panel business-card">
-        <div><p className="eyebrow">Профиль</p><h2>{profile.name || "Бизнес"}</h2></div>
+        <div><p className="eyebrow">Профиль</p><h2>{businessName || "Бизнес"}</h2></div>
         <div className="business-meta">{profile.industry ? <span>{profile.industry}</span> : null}{profile.city ? <span>{profile.city}</span> : null}{profile.website ? <a href={profile.website} target="_blank" rel="noreferrer">{profile.website}</a> : null}</div>
       </section>
 
@@ -1536,7 +1541,7 @@ export function App() {
     setError("");
   };
 
-  if (result) return <Workspace key={`${result.business_id}:${result.owner_session?.expires_at || result.intake_id || ""}`} data={result} apiBase={apiBase} businesses={ownerBusinesses} onRestart={restart} onRetryAccess={restoreWorkspaceAccess} onSwitchBusiness={switchBusiness} />;
+  if (result) return <Workspace key={`${result.business_id}:${result.owner_session?.expires_at || result.intake_id || ""}`} data={result} apiBase={apiBase} businesses={ownerBusinesses} onRestart={restart} onRetryAccess={restoreWorkspaceAccess} onSwitchBusiness={switchBusiness} onBusinessRenamed={(id, name) => setOwnerBusinesses((rows) => rows.map((item) => item.business_id === id ? { ...item, name } : item))} />;
   if (!creatingNewBusiness && !initialIntakeId() && !ownerAccountChecked) return <main className="onboarding-shell"><div className="account-loading" role="status">Открываем ваши бизнесы…</div></main>;
   if (!creatingNewBusiness && ownerBusinesses.length) return <BusinessChooser businesses={ownerBusinesses} onOpen={switchBusiness} onAdd={restart} />;
 

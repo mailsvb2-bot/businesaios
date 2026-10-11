@@ -223,5 +223,30 @@ test(canonicalScenario.title, async ({ page }, testInfo) => {
   await expect(page.getByRole("heading", { name: "Мои бизнесы" })).toBeVisible();
   await expect(page.getByRole("button", { name: `Открыть бизнес ${businessName}`, exact: true })).toBeVisible();
   await expect(page.getByRole("button", { name: `Открыть бизнес ${secondBusinessName}`, exact: true })).toBeVisible();
+  // Phase 18: donor cockpit settings -> authenticated BusinessAIOS owner profile,
+  // stored in the same intake ledger and visible after session restoration.
+  await page.getByRole("button", { name: `Открыть бизнес ${businessName}`, exact: true }).click();
+  const settingsPanel = page.locator('section[aria-labelledby="business-settings-title"]');
+  await expect(settingsPanel.getByRole("heading", { name: "Настройки" })).toBeVisible();
+  await expect(settingsPanel.getByLabel("Название бизнеса")).toHaveValue(businessName);
+  const renamedBusiness = `${businessName} · Settings`;
+  await settingsPanel.getByLabel("Название бизнеса").fill(renamedBusiness);
+  await settingsPanel.getByLabel("Описание деятельности").fill("Owner settings browser journey");
+  await settingsPanel.getByLabel("Часовой пояс").selectOption("Europe/Moscow");
+  const settingWrite = page.waitForResponse((response) =>
+    response.url().includes("/api/business-workspace/settings") && response.request().method() === "POST");
+  await settingsPanel.getByRole("button", { name: "Сохранить настройки" }).click();
+  const settingReceipt = await settingWrite;
+  expect(settingReceipt.status()).toBe(200);
+  const saved = await settingReceipt.json();
+  expect(saved.business_name).toBe(renamedBusiness);
+  expect(saved.revision).toBe(1);
+  await expect(page.getByRole("heading", { name: renamedBusiness, level: 1 })).toBeVisible();
+  await page.reload();
+  await expect(page.getByRole("heading", { name: renamedBusiness, level: 1 })).toBeVisible();
+  await expect(settingsPanel.getByLabel("Описание деятельности")).toHaveValue("Owner settings browser journey");
+  await page.goto("/");
+  await expect(page.getByRole("button", { name: `Открыть бизнес ${renamedBusiness}`, exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: `Открыть бизнес ${secondBusinessName}`, exact: true })).toBeVisible();
   expect(await hasNoHorizontalOverflow(page)).toBe(true);
 });
