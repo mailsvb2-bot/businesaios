@@ -102,13 +102,16 @@ def test_connector_health_snapshot_is_thread_safe(tmp_path) -> None:
 
 
 def test_circuit_breaker_half_open_window_is_enforced(tmp_path) -> None:
+    # A real sleeping clock can cross the half-open window during loaded CI
+    # fsync calls; use the production clock-injection seam to prove precisely
+    # one probe per window, independent of runner scheduling and I/O pauses.
+    clock = [1000.0]
     breaker = ConnectorCircuitBreaker(
         default_rule=CircuitBreakerRule(connector_id='*', failure_threshold=1, recovery_timeout_seconds=0.01, half_open_max_calls=1, half_open_window_seconds=0.5),
-        state_path=tmp_path / 'breaker.json',
+        state_path=tmp_path / 'breaker.json', time_fn=lambda: clock[0],
     )
     breaker.record_failure(connector_id='crm', provider='hubspot', version='v1', operation='sync_customer', reason='timeout')
-    import time
-    time.sleep(0.02)
+    clock[0] += 0.02
     first = breaker.allow_call(connector_id='crm', provider='hubspot', version='v1', operation='sync_customer')
     second = breaker.allow_call(connector_id='crm', provider='hubspot', version='v1', operation='sync_customer')
     assert first.allowed is True
