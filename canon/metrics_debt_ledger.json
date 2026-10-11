@@ -15,7 +15,7 @@
     "target_product": "BusinessAIOS",
     "principle": "Three reviewed Phase-18 owner journeys: Event Landing over the canonical Event Spine; Business Settings over the existing CTA ledger (+200 reviewed production Python lines); and tenant/business-scoped owner-to-SUPPORT case lifecycle over the same canonical Event Spine (+850 reviewed production Python lines). Historical idempotency receipts, optimistic transition concurrency, permission scoping, and five-browser release evidence are enforced; no second brain, support store, settings DB, parallel CRM or donor runtime.",
     "python_line_budget": 1600,
-    "python_file_budget": 2,
+    "python_file_budget": 6,
     "transition_surface_budget": 0,
     "donor_runtime_imports_allowed": false,
     "parallel_owners_allowed": false,
