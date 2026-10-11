@@ -12,6 +12,7 @@ from adapters.api.fastapi.business_workspace_discovery_routes import register_bu
 from adapters.api.fastapi.business_workspace_event_landing_routes import register_business_workspace_event_landing_routes
 from adapters.api.fastapi.business_workspace_process_routes import register_business_workspace_process_routes
 from adapters.api.fastapi.business_workspace_provider_routes import register_business_workspace_provider_routes
+from adapters.api.fastapi.business_workspace_support_case_routes import register_business_workspace_support_case_routes
 from adapters.api.fastapi.public_client_outcome_routes import register_public_client_outcome_routes
 from adapters.api.fastapi.public_core_routes import register_public_core_routes
 from adapters.api.fastapi.public_site_routes import (
@@ -21,6 +22,7 @@ from adapters.api.fastapi.public_site_routes import (
 )
 from adapters.api.fastapi.router_support import authorize_request
 from application.business_autonomy.provider_catalog import provider_map
+from application.business_autonomy.support_case_registry import SupportCaseRegistry
 from application.public_site.event_landing_registry import EventLandingRegistry
 from entrypoints.api.owner_action_draft import OwnerActionDraftProjector
 from entrypoints.api.public_surface_security_guard import PublicSurfaceSecurityGuard
@@ -197,6 +199,18 @@ def register_public_api_routes(
                 workspace=business_discovery_workspace,
             )
         register_business_workspace_provider_routes(router=router, auth_bundle=auth_bundle)
+        if dependency_container is not None and getattr(dependency_container, "api_idempotency_store", None) is not None:
+            # Canonical event/idempotency owners only: never invent an isolated
+            # support ledger if the application has no durable Event Spine.
+            support_event_store = dependency_container.canonical_business_event_store()
+            if support_event_store is not None:
+                register_business_workspace_support_case_routes(
+                    router=router, auth_bundle=auth_bundle,
+                    support_cases=SupportCaseRegistry(
+                        event_store=support_event_store,
+                        idempotency_store=dependency_container.api_idempotency_store,
+                    ),
+                )
         if event_landing_registry is not None:
             register_business_workspace_event_landing_routes(
                 router=router, auth_bundle=auth_bundle,

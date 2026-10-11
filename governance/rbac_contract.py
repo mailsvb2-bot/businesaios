@@ -22,6 +22,7 @@ class Permission(str, Enum):
     VIEW_AUDIT = "view_audit"
     VIEW_APPROVALS = "view_approvals"
     VIEW_POLICY = "view_policy"
+    VIEW_SUPPORT_CASE = "view_support_case"
 
     EXECUTE_SAFE_READ = "execute_safe_read"
     EXECUTE_INTERNAL_WRITE = "execute_internal_write"
