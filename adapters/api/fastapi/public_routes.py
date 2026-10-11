@@ -10,6 +10,7 @@ from adapters.api.fastapi.business_workspace_acquisition_routes import register_
 from adapters.api.fastapi.business_workspace_decision_routes import register_business_workspace_decision_routes
 from adapters.api.fastapi.business_workspace_discovery_routes import register_business_workspace_discovery_routes
 from adapters.api.fastapi.business_workspace_event_landing_routes import register_business_workspace_event_landing_routes
+from adapters.api.fastapi.business_workspace_program_routes import register_business_workspace_program_routes
 from adapters.api.fastapi.business_workspace_process_routes import register_business_workspace_process_routes
 from adapters.api.fastapi.business_workspace_provider_routes import register_business_workspace_provider_routes
 from adapters.api.fastapi.business_workspace_support_case_routes import register_business_workspace_support_case_routes
@@ -24,6 +25,9 @@ from adapters.api.fastapi.router_support import authorize_request
 from application.business_autonomy.provider_catalog import provider_map
 from application.business_autonomy.support_case_registry import SupportCaseRegistry
 from application.public_site.event_landing_registry import EventLandingRegistry
+from application.commerce.phase18_program_publication_registry import ProgramPublicationRegistry
+from crm.customer_registry import CustomerRegistry
+from entrypoints.api.provider_admin_route_handlers import ProviderAdminRouteHandlers
 from entrypoints.api.owner_action_draft import OwnerActionDraftProjector
 from entrypoints.api.public_surface_security_guard import PublicSurfaceSecurityGuard
 from entrypoints.api.request_context import RequestContext
@@ -198,7 +202,32 @@ def register_public_api_routes(
                 auth_bundle=auth_bundle,
                 workspace=business_discovery_workspace,
             )
-        register_business_workspace_provider_routes(router=router, auth_bundle=auth_bundle)
+        # The owner CRM view and program enrollment share the exact Customer
+        # registry/event spine. No shadow customer, provider or decision owner.
+        canonical_customers = (
+            CustomerRegistry(
+                event_store=event_store,
+                idempotency_store=dependency_container.api_idempotency_store,
+                pii_vault=dependency_container.secret_vault,
+            ) if event_landing_registry is not None else None
+        )
+        provider_handlers = ProviderAdminRouteHandlers(
+            customer_event_store=event_store if canonical_customers is not None else None,
+            customer_registry=canonical_customers,
+        )
+        register_business_workspace_provider_routes(
+            router=router, auth_bundle=auth_bundle, provider_admin_handlers=provider_handlers,
+        )
+        if event_landing_registry is not None:
+            register_business_workspace_program_routes(
+                router=router, auth_bundle=auth_bundle,
+                provider_admin_handlers=provider_handlers,
+                programs=ProgramPublicationRegistry(
+                    event_store=event_store,
+                    idempotency_store=dependency_container.api_idempotency_store,
+                    customer_registry=canonical_customers,
+                ),
+            )
         if dependency_container is not None and getattr(dependency_container, "api_idempotency_store", None) is not None:
             # Canonical event/idempotency owners only: never invent an isolated
             # support ledger if the application has no durable Event Spine.

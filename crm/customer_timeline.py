@@ -50,16 +50,46 @@ class CustomerTimelineProjector:
             payload = dict(event.get("payload") or {})
             kind, title, detail, relevant = event_type, event_type.replace("_", " ").strip() or "Business event", None, False
             if event_type == BUSINESS_FACT_EVENT_TYPE:
-                if str(payload.get("business_id") or "") != business_id or str(payload.get("entity_id") or "") != customer_id:
+                if str(payload.get("business_id") or "") != business_id:
                     continue
                 fact_type = str(payload.get("fact_type") or "").strip()
-                if not fact_type.startswith("customer."):
-                    continue
                 fact_payload = dict(payload.get("payload") or {})
-                kind, title, relevant = fact_type, _CUSTOMER_TITLES.get(fact_type, fact_type), True
-                customer_seen = customer_seen or fact_type == "customer.created"
-                if fact_type in {"customer.identity.attached", "customer.contact.observed"}:
-                    detail = str(fact_payload.get("channel") or "").strip() or None
+                # Projection only: lesson outcomes are durable Business Facts
+                # owned by the program domain, not a new CRM writer.
+                program_enrollment = (
+                    fact_type == "program.enrollment_created"
+                    and str(event.get("source") or "") == "phase18_program_enrollment_registry"
+                    and str(fact_payload.get("status") or "") == "awaiting_delivery"
+                )
+                lesson_accepted = (
+                    fact_type == "program.lesson_provider_accepted"
+                    and str(event.get("source") or "") == "phase18_program_lesson_provider_observation"
+                    and str(fact_payload.get("status") or "") == "provider_accepted"
+                    and fact_payload.get("recipient_delivery_confirmed") is False
+                )
+                if program_enrollment or lesson_accepted:
+                    if str(fact_payload.get("customer_id") or "") != customer_id:
+                        continue
+                    kind = fact_type
+                    title = (
+                        "Зачислен в программу; материалы ожидают отправки"
+                        if program_enrollment
+                        else "Урок принят провайдером; доставка клиенту не подтверждена"
+                    )
+                    detail = (
+                        str(fact_payload.get("provider_key") or "").strip() or None
+                        if lesson_accepted else None
+                    )
+                    relevant = True
+                else:
+                    if str(payload.get("entity_id") or "") != customer_id:
+                        continue
+                    if not fact_type.startswith("customer."):
+                        continue
+                    kind, title, relevant = fact_type, _CUSTOMER_TITLES.get(fact_type, fact_type), True
+                    customer_seen = customer_seen or fact_type == "customer.created"
+                    if fact_type in {"customer.identity.attached", "customer.contact.observed"}:
+                        detail = str(fact_payload.get("channel") or "").strip() or None
                 timestamp = payload.get("event_time_ms", event.get("timestamp_ms"))
                 payload = fact_payload
             else:
