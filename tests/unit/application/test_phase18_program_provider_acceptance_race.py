@@ -65,3 +65,136 @@ def test_stale_competing_provider_acceptance_cannot_append_second_fact(monkeypat
         provider_message_id="provider-message-a", history_id="history-a",
         recorded_at_ms=1234567890000,
     ) == observed
+
+
+def _stale_program_registry(monkeypatch, fresh, original):
+    """Simulate an optimistic read completed before another writer committed."""
+    real_get = fresh.get
+    calls = 0
+
+    def read_once_stale(**kwargs):
+        nonlocal calls
+        calls += 1
+        if calls == 1:
+            raise KeyError("simulated_pre_commit_snapshot")
+        return real_get(**kwargs)
+
+    monkeypatch.setattr(fresh, "get", read_once_stale)
+
+
+def test_concurrent_same_key_publication_never_poisons_catalog(monkeypatch):
+    from application.commerce import phase18_program_publication_registry as program_module
+
+    events, claims = MemoryEventStore(), InMemoryIdempotencyStore()
+    first = ProgramPublicationRegistry(event_store=events, idempotency_store=claims)
+    payload = dict(
+        tenant_id="tenant", business_id="business", actor_id="owner",
+        title="Original", lessons=[{
+            "title": "Lesson", "content_kind": "text", "content_ref": "Hello",
+        }], idempotency_key="same-publish",
+    )
+    initial = first.publish(**payload)
+    second = ProgramPublicationRegistry(event_store=events, idempotency_store=claims)
+    _stale_program_registry(monkeypatch, second, initial)
+    before = len(events)
+    # Guarantee the losing writer builds a different timestamped payload.
+    with monkeypatch.context() as time_patch:
+        time_patch.setattr(program_module.time, "time", lambda: 2000000000.5)
+        with pytest.raises(RuntimeError, match="^program_creation_in_progress$"):
+            second.publish(**payload)
+    assert len(events) == before
+    assert first.get(tenant_id="tenant", business_id="business", program_id=initial["id"]) == initial
+    assert first.publish(**payload) == initial
+    assert len(first.list_for_business(tenant_id="tenant", business_id="business")) == 1
+
+
+def test_competing_same_key_draft_create_cannot_write_second_origin(monkeypatch):
+    from application.commerce import phase18_program_publication_registry as program_module
+
+    events, claims = MemoryEventStore(), InMemoryIdempotencyStore()
+    first = ProgramPublicationRegistry(event_store=events, idempotency_store=claims)
+    payload = dict(tenant_id="tenant", business_id="business", actor_id="owner",
+                   title="Draft", lessons=[], idempotency_key="same-draft")
+    initial = first.create_draft(**payload)
+    second = ProgramPublicationRegistry(event_store=events, idempotency_store=claims)
+    _stale_program_registry(monkeypatch, second, initial)
+    before = len(events)
+    with monkeypatch.context() as time_patch:
+        time_patch.setattr(program_module.time, "time", lambda: 2000000000.5)
+        with pytest.raises(RuntimeError, match="^program_creation_in_progress$"):
+            second.create_draft(**payload)
+    assert len(events) == before
+    assert first.get(tenant_id="tenant", business_id="business", program_id=initial["id"]) == initial
+    assert first.create_draft(**payload) == initial
+
+
+def test_stale_enrollment_cannot_duplicate_or_poison_customer_timeline(monkeypatch):
+    from application.commerce import phase18_program_publication_registry as program_module
+
+    events, claims = MemoryEventStore(), InMemoryIdempotencyStore()
+    customers = CustomerRegistry(
+        event_store=events, idempotency_store=claims, pii_vault=InMemorySecretVault(),
+    )
+    created = customers.ensure_customer_identity(
+        tenant_id="tenant", business_id="business",
+        channel="telegram", external_subject="123456789",
+    )
+    first = ProgramPublicationRegistry(event_store=events, idempotency_store=claims, customer_registry=customers)
+    program = first.publish(
+        tenant_id="tenant", business_id="business", actor_id="owner",
+        title="Lessons", lessons=[{
+            "title": "Introduction", "content_kind": "text", "content_ref": "Hello",
+        }], idempotency_key="p",
+    )
+    payload = dict(
+        tenant_id="tenant", business_id="business", actor_id="owner",
+        program_id=program["id"], customer_id=created.customer.customer_id,
+    )
+    initial = first.enroll_customer(**payload)
+    second = ProgramPublicationRegistry(event_store=events, idempotency_store=claims, customer_registry=customers)
+    monkeypatch.setattr(second, "_enrollments", lambda **_kwargs: [])
+    before = len(events)
+    with monkeypatch.context() as time_patch:
+        time_patch.setattr(program_module.time, "time", lambda: 2000000000.5)
+        with pytest.raises(RuntimeError, match="^enrollment_creation_in_progress$"):
+            second.enroll_customer(**payload)
+    assert len(events) == before
+    assert first.enroll_customer(**payload) == initial
+    assert len(first.list_enrollments(tenant_id="tenant", business_id="business",
+                                      program_id=program["id"])) == 1
+
+
+def test_identical_lesson_text_cannot_share_approval_between_programs():
+    events, claims = MemoryEventStore(), InMemoryIdempotencyStore()
+    customers = CustomerRegistry(
+        event_store=events, idempotency_store=claims, pii_vault=InMemorySecretVault(),
+    )
+    created = customers.ensure_customer_identity(
+        tenant_id="tenant", business_id="business",
+        channel="telegram", external_subject="123456789",
+    )
+    programs = ProgramPublicationRegistry(event_store=events, idempotency_store=claims, customer_registry=customers)
+    scope = dict(tenant_id="tenant", business_id="business", actor_id="owner",
+                 title="Identical title", lessons=[{
+                    "title": "Identical lesson", "content_kind": "link",
+                    "content_ref": "https://example.org/lesson",
+                 }])
+    published_a = programs.publish(**scope, idempotency_key="program-a")
+    published_b = programs.publish(**scope, idempotency_key="program-b")
+    plans = []
+    for program in (published_a, published_b):
+        enrolled = programs.enroll_customer(
+            tenant_id="tenant", business_id="business", actor_id="owner",
+            program_id=program["id"], customer_id=created.customer.customer_id,
+        )
+        plans.append(programs.lesson_send_plan(
+            tenant_id="tenant", business_id="business",
+            program_id=program["id"], enrollment_id=enrolled["id"],
+            lesson_position=1, channel="telegram",
+        ))
+    assert plans[0]["recipient"] == plans[1]["recipient"] == "123456789"
+    assert plans[0]["program_id"] != plans[1]["program_id"]
+    assert plans[0]["text"] != plans[1]["text"]
+    assert "Код материала: " in plans[0]["text"]
+    assert plans[0]["text"].split("Код материала: ")[0] == plans[1]["text"].split("Код материала: ")[0]
+    assert plans[0]["execution_allowed"] is plans[1]["execution_allowed"] is False

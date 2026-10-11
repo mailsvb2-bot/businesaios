@@ -183,6 +183,35 @@ def test_real_owner_http_program_to_provider_acceptance_is_durable_and_isolated(
             "history_id": "real-provider-evidence-1",
             "recorded_at_utc": "2026-10-10T16:10:00+00:00",
         }
+        # A second program may have identical title, recipient and lesson
+        # content. It must NOT reuse the first program's real approval/history.
+        twin_response = client.post("/business-workspace/programs", headers=owner, json={
+            "title": "Materials", "idempotency_key": "pub-identical-twin",
+            "lessons": [{"title": "Intro", "content_kind": "link",
+                         "content_ref": "https://example.org/material"}],
+        })
+        assert twin_response.status_code == 200, twin_response.text
+        twin = twin_response.json()
+        twin_enrolled = client.post(
+            f'/business-workspace/programs/{twin["id"]}/enrollments',
+            headers=owner, json={"customer_id": identity.customer.customer_id},
+        )
+        assert twin_enrolled.status_code == 200, twin_enrolled.text
+        twin_lesson = (
+            f'/business-workspace/programs/{twin["id"]}/enrollments/'
+            f'{twin_enrolled.json()["id"]}/lessons/1'
+        )
+        twin_plan = client.get(twin_lesson + "/send-plan?channel=telegram", headers=owner)
+        assert twin_plan.status_code == 200
+        assert twin_plan.json()["recipient"] == plan["recipient"]
+        assert twin_plan.json()["text"] != plan["text"]
+        forged_reconciliation = client.post(
+            twin_lesson + "/reconcile", headers=owner, json=body,
+        )
+        assert forged_reconciliation.status_code == 422, forged_reconciliation.text
+        assert forged_reconciliation.json()["detail"] == "program_delivery_approval_content_mismatch"
+        assert len(event_store) == before
+
         first = client.post(rec_path, headers=owner, json=body)
         assert first.status_code == 200, first.text
         assert first.json()["status"] == "provider_accepted"

@@ -232,12 +232,19 @@ class ProgramPublicationRegistry:
             "created_by_actor_id": actor_id, "created_at_ms": when,
             "updated_at_ms": when, "revision": 1, "published_at_ms": None,
         }
-        self._writer.append_once(
-            tenant_id=tenant_id, business_id=business_id, entity_id=draft_id,
-            operation="draft_create", idempotency_key=key,
-            fact_type=_DRAFT_CREATED, payload=row,
-            occurred_at_ms=when, event_metadata={"actor_id": actor_id},
-        )
+        try:
+            # Reserve absent -> created before emitting the timestamped fact.
+            # A stale parallel creator cannot mint a second immutable origin.
+            self._writer.append_transition_once(
+                tenant_id=tenant_id, business_id=business_id, entity_id=draft_id,
+                expected_state_token="absent", operation="draft_create",
+                idempotency_key=key, fact_type=_DRAFT_CREATED, payload=row,
+                occurred_at_ms=when, event_metadata={"actor_id": actor_id},
+            )
+        except RuntimeError as exc:
+            if str(exc).startswith("ontology transition rejected: "):
+                raise RuntimeError("program_creation_in_progress") from exc
+            raise
         return self.get(tenant_id=tenant_id, business_id=business_id, program_id=draft_id)
 
     def change_draft(self, *, tenant_id: str, business_id: str, actor_id: str,
@@ -331,11 +338,20 @@ class ProgramPublicationRegistry:
             "title": title, "status": "active", "lessons": items,
             "created_by_actor_id": actor_id, "published_at_ms": when,
         }
-        self._writer.append_once(
-            tenant_id=tenant_id, business_id=business_id, entity_id=program_id,
-            operation="publish", idempotency_key=key, fact_type=_PUBLISHED,
-            payload=row, occurred_at_ms=when, event_metadata={"actor_id": actor_id},
-        )
+        try:
+            # The shared, payload-independent absent-state guard owns creation.
+            # Two same-key requests may generate different timestamps, but
+            # only one program origin can reach the canonical Event Spine.
+            self._writer.append_transition_once(
+                tenant_id=tenant_id, business_id=business_id, entity_id=program_id,
+                expected_state_token="absent", operation="publish",
+                idempotency_key=key, fact_type=_PUBLISHED, payload=row,
+                occurred_at_ms=when, event_metadata={"actor_id": actor_id},
+            )
+        except RuntimeError as exc:
+            if str(exc).startswith("ontology transition rejected: "):
+                raise RuntimeError("program_creation_in_progress") from exc
+            raise
         return self.get(tenant_id=tenant_id, business_id=business_id, program_id=program_id)
 
 
@@ -428,11 +444,20 @@ class ProgramPublicationRegistry:
         key = hash_scope_seed(
             "phase18_program_enrollment", tenant_id, business_id, program_id, customer_id,
         )
-        self._enrollment_writer.append_once(
-            tenant_id=tenant_id, business_id=business_id, entity_id=identity,
-            operation="enroll", idempotency_key=key, fact_type=_ENROLLED,
-            payload=row, occurred_at_ms=now, event_metadata={"actor_id": actor_id},
-        )
+        try:
+            # Same customer/program may race across workers. The canonical
+            # absent-state guard excludes a second timestamped enrollment.
+            self._enrollment_writer.append_transition_once(
+                tenant_id=tenant_id, business_id=business_id, entity_id=identity,
+                expected_state_token="absent", operation="enroll",
+                idempotency_key=key, fact_type=_ENROLLED,
+                payload=row, occurred_at_ms=now,
+                event_metadata={"actor_id": actor_id},
+            )
+        except RuntimeError as exc:
+            if str(exc).startswith("ontology transition rejected: "):
+                raise RuntimeError("enrollment_creation_in_progress") from exc
+            raise
         return self.get_enrollment(
             tenant_id=tenant_id, business_id=business_id,
             program_id=program_id, enrollment_id=identity,
@@ -590,10 +615,19 @@ class ProgramPublicationRegistry:
         lesson = matches[0]
         if lesson["content_kind"] not in {"text", "link"}:
             raise RuntimeError("program_lesson_media_delivery_not_connected")
+        # The exact approved message is the immutable correlation carrier.
+        # Even two identical lessons for one recipient must never share an
+        # approval/provider receipt. This is source-owned, not user-supplied.
+        lesson_marker = uuid5(
+            NAMESPACE_URL,
+            f"businessaios:lesson-message:{tenant_id}:{business_id}:"
+            f"{program['id']}:{enrollment['id']}:{lesson_position}",
+        ).hex
         message = (
             f'Программа: {program["title"]}\n'
             f'Урок {lesson_position}: {lesson["title"]}\n'
-            f'{lesson["content_ref"]}'
+            f'{lesson["content_ref"]}\n'
+            f'Код материала: {lesson_marker}'
         )
         if len(message) > 3072:
             raise ValueError("program_lesson_message_too_long")

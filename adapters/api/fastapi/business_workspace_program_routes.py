@@ -46,7 +46,7 @@ def register_business_workspace_program_routes(
         except (ValueError, TypeError) as exc:
             raise HTTPException(status_code=422, detail=str(exc)) from exc
         except RuntimeError as exc:
-            if str(exc) == "program_idempotency_conflict":
+            if str(exc) in {"program_idempotency_conflict", "program_creation_in_progress"}:
                 raise HTTPException(status_code=409, detail=str(exc)) from exc
             raise
 
@@ -89,7 +89,7 @@ def register_business_workspace_program_routes(
         except ValueError as exc:
             raise HTTPException(status_code=422, detail=str(exc)) from exc
         except RuntimeError as exc:
-            if str(exc) in {"enrollment_program_not_active", "enrollment_customer_not_active"}:
+            if str(exc) in {"enrollment_program_not_active", "enrollment_customer_not_active", "enrollment_creation_in_progress"}:
                 raise HTTPException(status_code=409, detail=str(exc)) from exc
             if str(exc) == "enrollment_canonical_customer_owner_unavailable":
                 raise HTTPException(status_code=503, detail=str(exc)) from exc
@@ -187,7 +187,7 @@ def register_business_workspace_program_routes(
         except (TypeError, ValueError) as exc:
             raise HTTPException(status_code=422, detail=str(exc)) from exc
         except RuntimeError as exc:
-            if str(exc) == "program_idempotency_conflict":
+            if str(exc) in {"program_idempotency_conflict", "program_creation_in_progress"}:
                 raise HTTPException(status_code=409, detail=str(exc)) from exc
             raise
 
