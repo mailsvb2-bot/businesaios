@@ -98,8 +98,13 @@ class ProgramPublicationRegistry:
         business_id = _required(business_id, "business_id")
         grouped: dict[str, list[tuple[int, int, str, dict[str, object]]]] = {}
         observed_sequences: set[int] = set()
+        # Canonical Event Stores expose append_seq only when the cursor
+        # is requested. The default iterator contract intentionally returns
+        # timestamp-ordered events without that field (Memory and PostgreSQL).
+        # Request durable append order explicitly, as in EventLandingRegistry.
         for event in self._events.iter_events(
             tenant_id=tenant_id, start_ms=0, event_type=BUSINESS_FACT_EVENT_TYPE,
+            after_append_seq=0,
         ):
             if event.get("source") != _SOURCE:
                 continue
