@@ -66,3 +66,35 @@ def test_business_settings_owner_lifecycle_on_single_canonical_intake_ledger(tmp
     assert len(reopened.list_recent()) == 2
     with pytest.raises(KeyError, match="not_found"):
         reopened.read_business_settings(tenant_id=two.tenant_id, business_id=one.business_id)
+
+
+
+def test_old_successful_settings_receipt_survives_later_saves_and_restart(tmp_path):
+    path = tmp_path / "owner-ledger.jsonl"
+    service = CTALandingIntakeService(storage_path=str(path))
+    created = service.submit(payload={"business_name": "Original"}, owner_account_id="owner")
+    scope = {"tenant_id": created.tenant_id, "business_id": created.business_id}
+    first = dict(
+        **scope, business_name="One", activity_description="A",
+        timezone_name="Europe/Moscow", expected_revision=0,
+        idempotency_key="first",
+    )
+    second = dict(
+        **scope, business_name="Two", activity_description="B",
+        timezone_name="Europe/Moscow", expected_revision=1,
+        idempotency_key="second",
+    )
+    result_one = service.update_business_settings(**first)
+    result_two = service.update_business_settings(**second)
+    count = len(path.read_text(encoding="utf-8").splitlines())
+    reopened = CTALandingIntakeService(storage_path=str(path))
+    assert reopened.update_business_settings(**first) == result_one
+    assert reopened.update_business_settings(**second) == result_two
+    assert reopened.read_business_settings(**scope) == result_two
+    assert len(path.read_text(encoding="utf-8").splitlines()) == count
+    with pytest.raises(ValueError, match="idempotency_conflict"):
+        reopened.update_business_settings(**{**first, "expected_revision": 1})
+    with pytest.raises(ValueError, match="idempotency_conflict"):
+        reopened.update_business_settings(**{**first, "business_name": "Tampered"})
+    assert reopened.read_business_settings(**scope) == result_two
+    assert len(path.read_text(encoding="utf-8").splitlines()) == count
