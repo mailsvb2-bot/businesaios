@@ -246,3 +246,28 @@ def test_support_replay_uses_durable_append_sequence_not_tied_timestamp_or_store
     assert [entry["action"] for entry in restored.history(
         tenant_id="tenant-a", business_id="business-a", case_id=initial["id"]
     )["entries"]] == ["created", "claimed", "released", "claimed", "resolved"]
+
+
+def test_operator_transition_reservation_race_returns_revision_conflict(monkeypatch):
+    _, _, registry = _store()
+    created = _create(registry)
+
+    def competing_operator_reserved_first(**_kwargs):
+        raise RuntimeError("ontology transition rejected: already_reserved")
+
+    monkeypatch.setattr(registry._writer, "append_transition_once", competing_operator_reserved_first)
+    with pytest.raises(RuntimeError, match="^support_case_revision_conflict$"):
+        _transition(registry, created, "claim", key="racing-operator")
+    assert registry.get(tenant_id="tenant-a", business_id="business-a", case_id=created["id"]) == created
+
+
+def test_unrelated_ontology_failure_is_never_disguised_as_client_conflict(monkeypatch):
+    _, _, registry = _store()
+    created = _create(registry)
+
+    def failed_durable_write(**_kwargs):
+        raise RuntimeError("ontology EventStore append did not become durable")
+
+    monkeypatch.setattr(registry._writer, "append_transition_once", failed_durable_write)
+    with pytest.raises(RuntimeError, match="ontology EventStore append did not become durable"):
+        _transition(registry, created, "claim", key="failed-durability")
