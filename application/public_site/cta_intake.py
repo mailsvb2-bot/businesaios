@@ -300,20 +300,32 @@ class CTALandingIntakeService:
             raise ValueError("business_settings_idempotency_key_required")
         key = idempotency_key.strip()
         fingerprint = sha256(
-            json.dumps([name, activity, timezone], separators=(",", ":"), ensure_ascii=True).encode("utf-8")
+            json.dumps([expected_revision, name, activity, timezone], separators=(",", ":"), ensure_ascii=True).encode("utf-8")
         ).hexdigest()
         with _intake_lock(self._storage_path):
             if not self._storage_path.exists():
                 raise KeyError("business_settings_not_found")
-            row = _latest_business_row(
-                self._storage_path.read_text(encoding="utf-8").splitlines(),
-                tenant_id=tenant, business_id=business,
-            )
-            old_revision = int(row.get("settings_revision") or 0)
-            if row.get("settings_last_key") == key:
-                if row.get("settings_last_fingerprint") != fingerprint:
+            history = self._storage_path.read_text(encoding="utf-8").splitlines()
+            row = _latest_business_row(history, tenant_id=tenant, business_id=business)
+            # Preserve durable replay across later independent saves. A snapshot
+            # includes the receipt of its own write; the latest one alone does
+            # not contain the receipts of all earlier accepted idempotency keys.
+            for line in reversed(history):
+                try:
+                    previous = json.loads(line)
+                except (ValueError, TypeError):
+                    continue
+                if not isinstance(previous, dict) or (
+                    previous.get("tenant_id") != tenant
+                    or previous.get("business_id") != business
+                    or previous.get("intake_id") != row.get("intake_id")
+                    or previous.get("settings_last_key") != key
+                ):
+                    continue
+                if previous.get("settings_last_fingerprint") != fingerprint:
                     raise ValueError("business_settings_idempotency_conflict")
-                return _settings_payload(row)
+                return _settings_payload(previous)
+            old_revision = int(row.get("settings_revision") or 0)
             if old_revision != expected_revision:
                 raise RuntimeError("business_settings_stale_revision")
             profile = dict(row.get("business_profile") or {})
