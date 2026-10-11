@@ -209,3 +209,40 @@ def test_owner_history_is_derived_from_canonical_events_and_scrubs_privileged_me
             )
     restarted = SupportCaseRegistry(event_store=events, idempotency_store=claims)
     assert restarted.history(tenant_id="tenant-a", business_id="business-a", case_id=created["id"]) == observed
+
+
+
+def test_support_replay_uses_durable_append_sequence_not_tied_timestamp_or_store_order():
+    events, claims, registry = _store()
+    initial = _create(registry)
+    claimed = _transition(registry, initial, "claim")
+    released = _transition(registry, claimed, "release")
+    claimed_again = _transition(registry, released, "claim", key="claim-again")
+    resolved = _transition(registry, claimed_again, "resolve")
+
+    class TiedTimestampScrambledReads:
+        def __init__(self, backing):
+            self.backing = backing
+
+        def __getattr__(self, name):
+            return getattr(self.backing, name)
+
+        def iter_events(self, **kwargs):
+            # Production ordinary reads may be timestamp/ID ordered; deliberately
+            # scramble all five facts with identical timestamp to prove that the
+            # lifecycle replays the canonical durable append sequence.
+            rows = list(self.backing.iter_events(**kwargs))
+            for item in rows:
+                item["timestamp_ms"] = 42
+            return iter(reversed(rows))
+
+    restored = SupportCaseRegistry(
+        event_store=TiedTimestampScrambledReads(events),
+        idempotency_store=claims,
+    )
+    assert restored.get(
+        tenant_id="tenant-a", business_id="business-a", case_id=initial["id"]
+    ) == resolved
+    assert [entry["action"] for entry in restored.history(
+        tenant_id="tenant-a", business_id="business-a", case_id=initial["id"]
+    )["entries"]] == ["created", "claimed", "released", "claimed", "resolved"]
