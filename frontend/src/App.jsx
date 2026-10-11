@@ -316,7 +316,7 @@ function evidenceTimeLabel(row) {
   return Number.isNaN(timestamp.getTime()) ? "Время не указано" : timestamp.toLocaleString("ru-RU");
 }
 
-function Workspace({ data, apiBase, businesses, onRestart, onRetryAccess, onSwitchBusiness }) {
+function Workspace({ data, apiBase, businesses, onRestart, onRetryAccess, onSwitchBusiness, onBusinessRenamed }) {
   const profile = data.business_profile || {};
   const [businessName, setBusinessName] = useState(profile.name || "");
   const progress = data.onboarding_progress || {};
@@ -1358,7 +1358,7 @@ function Workspace({ data, apiBase, businesses, onRestart, onRetryAccess, onSwit
 
       <EventLandingWorkspace key={`${data.tenant_id}:${data.business_id}`} apiBase={baseApi} tenantId={data.tenant_id} businessId={data.business_id} apiKey={apiKey} getJson={getJson} postJson={postJson} />
 
-      <BusinessSettingsWorkspace key={`settings:${data.tenant_id}:${data.business_id}`} apiBase={baseApi} apiKey={apiKey} getJson={getJson} postJson={postJson} onSaved={(value) => setBusinessName(value.business_name)} />
+      <BusinessSettingsWorkspace key={`settings:${data.tenant_id}:${data.business_id}`} apiBase={baseApi} apiKey={apiKey} getJson={getJson} postJson={postJson} onSaved={(value) => { setBusinessName(value.business_name); onBusinessRenamed?.(data.business_id, value.business_name); }} />
 
       <AcquisitionPlanner enabled={Boolean(apiKey)} onEvaluate={(payload) => postJson(acquisitionUrl, payload, authHeaders)} />
 
@@ -1538,7 +1538,7 @@ export function App() {
     setError("");
   };
 
-  if (result) return <Workspace key={`${result.business_id}:${result.owner_session?.expires_at || result.intake_id || ""}`} data={result} apiBase={apiBase} businesses={ownerBusinesses} onRestart={restart} onRetryAccess={restoreWorkspaceAccess} onSwitchBusiness={switchBusiness} />;
+  if (result) return <Workspace key={`${result.business_id}:${result.owner_session?.expires_at || result.intake_id || ""}`} data={result} apiBase={apiBase} businesses={ownerBusinesses} onRestart={restart} onRetryAccess={restoreWorkspaceAccess} onSwitchBusiness={switchBusiness} onBusinessRenamed={(id, name) => setOwnerBusinesses((rows) => rows.map((item) => item.business_id === id ? { ...item, name } : item))} />;
   if (!creatingNewBusiness && !initialIntakeId() && !ownerAccountChecked) return <main className="onboarding-shell"><div className="account-loading" role="status">Открываем ваши бизнесы…</div></main>;
   if (!creatingNewBusiness && ownerBusinesses.length) return <BusinessChooser businesses={ownerBusinesses} onOpen={switchBusiness} onAdd={restart} />;
 
