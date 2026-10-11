@@ -23,7 +23,10 @@ SOURCE_SHA = "ddff20b818c9df7ff0ee6cc5d2797885e403233a26923e3aeee49441a8486b41"
 EVENT_TITLE = "event landing owner journey: draft stays private, publish becomes public, unpublish revokes access"
 EVENT_SPEC = "event-landing-journey.spec.js"
 EVENT_SOURCE_SHA = "2fb2c300a87b538e3f6bf646fe51d76850c0f82949b8777eddfc9c0f839f61f4"
-BROWSER_SCENARIOS = ((TITLE, SPEC), (EVENT_TITLE, EVENT_SPEC))
+SUPPORT_TITLE = "support console rejects owner credentials and processes bounded cases without key persistence"
+SUPPORT_SPEC = "support-operator-journey.spec.js"
+SUPPORT_SOURCE_SHA = "3e45ac353a16135274bc509e9f9cd7f08d650f57f54c2f858472500a11a3a699"
+BROWSER_SCENARIOS = ((TITLE, SPEC), (EVENT_TITLE, EVENT_SPEC), (SUPPORT_TITLE, SUPPORT_SPEC))
 STEP_SHAPE = json.loads(Path("tests/fixtures/playwright/onboarding-step-shape.json").read_text(encoding="utf-8"))
 MATRIX = [
     {"name": "chromium", "device": "Desktop Chrome", "engine": "chromium", "surface": "desktop"},
@@ -45,6 +48,9 @@ def test_browser_contract_plans_provisioning_and_security_are_locked() -> None:
         }, {
             "id": "event_landing_owner_publication", "title": EVENT_TITLE, "file": EVENT_SPEC,
             "proof_mode": "source_locked_execution", "source_sha256": EVENT_SOURCE_SHA,
+        }, {
+            "id": "support_operator_claim_resolve", "title": SUPPORT_TITLE, "file": SUPPORT_SPEC,
+            "proof_mode": "source_locked_execution", "source_sha256": SUPPORT_SOURCE_SHA,
         }],
     }
     assert browser_evidence.browser_project_names() == tuple(item["name"] for item in MATRIX)
@@ -53,6 +59,10 @@ def test_browser_contract_plans_provisioning_and_security_are_locked() -> None:
     scenario = scenario_path.read_text(encoding="utf-8")
     assert hashlib.sha256(scenario_path.read_bytes()).hexdigest() == SOURCE_SHA
     assert hashlib.sha256(Path("frontend/e2e/event-landing-journey.spec.js").read_bytes()).hexdigest() == EVENT_SOURCE_SHA
+    operator_spec = Path("frontend/e2e/support-operator-journey.spec.js")
+    assert hashlib.sha256(operator_spec.read_bytes()).hexdigest() == SUPPORT_SOURCE_SHA
+    assert 'test("support console rejects owner credentials' in operator_spec.read_text(encoding="utf-8")
+    assert 'await page.getByRole("button", { name: "Взять в работу" }).click()' in operator_spec.read_text(encoding="utf-8")
     assert 'test("event landing owner journey: draft stays private' in Path("frontend/e2e/event-landing-journey.spec.js").read_text(encoding="utf-8")
     assert 'readFileSync(new URL("./e2e/project-matrix.json", import.meta.url)' in config
     assert f'projectMatrix.schema !== "{browser_evidence.BROWSER_PROJECT_MATRIX_SCHEMA}"' in config

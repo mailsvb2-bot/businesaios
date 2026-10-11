@@ -4,6 +4,7 @@ import { BusinessIntelligencePanel } from "./BusinessIntelligencePanel.jsx";
 import { BusinessDiscoveryPanel } from "./BusinessDiscoveryPanel.jsx";
 import { EventLandingWorkspace } from "./EventLandingWorkspace.jsx";
 import { BusinessSettingsWorkspace } from "./BusinessSettingsWorkspace.jsx";
+import { SupportCasesWorkspace } from "./SupportCasesWorkspace.jsx";
 import { DiscoverBuildMeasurePanel } from "./DiscoverBuildMeasurePanel.jsx";
 
 const DEFAULT_API = import.meta.env.VITE_API_BASE || "https://api.businessaios.ru";
@@ -1359,6 +1360,8 @@ function Workspace({ data, apiBase, businesses, onRestart, onRetryAccess, onSwit
       <EventLandingWorkspace key={`${data.tenant_id}:${data.business_id}`} apiBase={baseApi} tenantId={data.tenant_id} businessId={data.business_id} apiKey={apiKey} getJson={getJson} postJson={postJson} />
 
       <BusinessSettingsWorkspace key={`settings:${data.tenant_id}:${data.business_id}`} apiBase={baseApi} apiKey={apiKey} getJson={getJson} postJson={postJson} onSaved={(value) => { setBusinessName(value.business_name); onBusinessRenamed?.(data.business_id, value.business_name); }} />
+
+       <SupportCasesWorkspace key={`support:${data.tenant_id}:${data.business_id}`} apiBase={baseApi} apiKey={apiKey} getJson={getJson} postJson={postJson} />
 
       <AcquisitionPlanner enabled={Boolean(apiKey)} onEvaluate={(payload) => postJson(acquisitionUrl, payload, authHeaders)} />
 
