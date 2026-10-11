@@ -207,6 +207,7 @@ function ProgramEnrollmentForm({ program, url, apiKey, customers, sendableProvid
                         Проверить подтверждение у провайдера
                       </button>
                       {reconcileStatus[key] === "awaiting_owner_approval" ? <p>Ожидается подтверждение владельца.</p> : null}
+                      {reconcileStatus[key] === "approval_not_granted" ? <p role="alert">Подтверждение не предоставлено или отозвано. Отправка запрещена; необходимо новое разрешённое действие.</p> : null}
                       {reconcileStatus[key] === "awaiting_provider_evidence" ? <p>Выполнение ожидается; повторять отправку нельзя.</p> : null}
                       {reconcileStatus[key] === "provider_not_confirmed" ? <p>Отправка не подтверждена провайдером; результата доставки нет.</p> : null}
                     </>
