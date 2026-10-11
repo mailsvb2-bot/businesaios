@@ -44,6 +44,17 @@ def test_support_key_can_authenticate_only_bounded_support_routes():
         assert result.required_permission is Permission.VIEW_SUPPORT_CASE
 
 
+def test_support_uuid_case_normalization_agrees_with_authentication_allowlist():
+    uppercase_id = "0C2D6F9E-558A-42BA-AA3E-99135C3BE0AA"
+    for suffix in ("", "/history"):
+        response = _route_verdict(f"GET:/platform-support/cases/{uppercase_id}{suffix}")
+        assert response.allowed and response.required_permission is Permission.VIEW_SUPPORT_CASE
+    for action in ("claim", "release", "resolve"):
+        response = _route_verdict(f"POST:/platform-support/cases/{uppercase_id}/{action}")
+        assert response.allowed and response.required_permission is Permission.VIEW_SUPPORT_CASE
+    assert not _route_verdict("GET:/platform-support/cases/not-uuid").allowed
+
+
 def test_support_key_cannot_read_audit_other_business_or_unregistered_endpoint():
     roles = permissions_for_roles(frozenset({RoleId.SUPPORT}))
     assert Permission.VIEW_SUPPORT_CASE in roles
