@@ -25,6 +25,7 @@ BROWSER_SCENARIOS = (
     ("onboarding creates a read-only OWNER workspace without persisting the API key", "onboarding-workspace.spec.js"),
     (EVENT_TITLE, EVENT_SPEC),
     ("support console rejects owner credentials and processes bounded cases without key persistence", "support-operator-journey.spec.js"),
+    ("owner creates and publishes a multi-lesson program through the canonical catalog", "program-publication-journey.spec.js"),
 )
 
 STEP_SHAPE = json.loads(Path("tests/fixtures/playwright/onboarding-step-shape.json").read_text(encoding="utf-8"))
