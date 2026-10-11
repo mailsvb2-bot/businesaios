@@ -312,12 +312,20 @@ class SupportCaseRegistry:
         ):
             raise RuntimeError("support_case_not_claimed_by_operator")
         stamp = _now()
-        self._writer.append_transition_once(
-            tenant_id=tenant_id, business_id=business_id, entity_id=case_id,
-            expected_state_token=f"{current['revision']}:{current['status']}:{current['claimed_by_operator_user_id'] or '-'}",
-            operation=action, idempotency_key=scoped_key, fact_type=fact_type,
-            payload={"operator_id": operator_id, "expected_revision": expected_revision, "occurred_at": stamp},
-            occurred_at_ms=int(datetime.fromisoformat(stamp).timestamp() * 1000),
-            event_metadata={"actor_id": operator_id},
-        )
+        try:
+            self._writer.append_transition_once(
+                tenant_id=tenant_id, business_id=business_id, entity_id=case_id,
+                expected_state_token=f"{current['revision']}:{current['status']}:{current['claimed_by_operator_user_id'] or '-'}",
+                operation=action, idempotency_key=scoped_key, fact_type=fact_type,
+                payload={"operator_id": operator_id, "expected_revision": expected_revision, "occurred_at": stamp},
+                occurred_at_ms=int(datetime.fromisoformat(stamp).timestamp() * 1000),
+                event_metadata={"actor_id": operator_id},
+            )
+        except RuntimeError as exc:
+            # A competing operator reserved the canonical transition after
+            # our read. This is optimistic-lock contention, not an API 500.
+            # Unrelated durability and ontology errors must still surface.
+            if str(exc).startswith("ontology transition rejected: "):
+                raise RuntimeError("support_case_revision_conflict") from exc
+            raise
         return self.get(tenant_id=tenant_id, business_id=business_id, case_id=case_id)
