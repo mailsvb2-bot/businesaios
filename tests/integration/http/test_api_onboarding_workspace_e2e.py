@@ -235,6 +235,45 @@ def test_real_api_onboarding_issues_owner_session_and_opens_workspace(tmp_path) 
             assert chosen["write_actions_enabled"] is False
 
             owner_headers = {**secure_headers, "X-API-Key": switched_owner["api_key"]}
+            status, initial_settings = _request(
+                port, "/business-workspace/settings", headers=owner_headers,
+            )
+            assert status == 200, initial_settings
+            assert initial_settings["business_name"] == "Canonical API E2E Business"
+            assert initial_settings["revision"] == 0
+            settings_body = {
+                "business_name": "Renamed canonical business",
+                "activity_description": "Customer services",
+                "timezone_name": "Europe/Moscow",
+                "expected_revision": 0,
+            }
+            save_headers = {**owner_headers, "X-Idempotency-Key": "owner-settings-one"}
+            status, saved_settings = _request(
+                port, "/business-workspace/settings", method="POST",
+                headers=save_headers, payload=settings_body,
+            )
+            assert status == 200, saved_settings
+            assert saved_settings["revision"] == 1
+            assert saved_settings["activity_description"] == "Customer services"
+            status, replay_settings = _request(
+                port, "/business-workspace/settings", method="POST",
+                headers=save_headers, payload=settings_body,
+            )
+            assert status == 200 and replay_settings == saved_settings
+            status, stale_settings = _request(
+                port, "/business-workspace/settings", method="POST",
+                headers={**owner_headers, "X-Idempotency-Key": "other-settings-write"},
+                payload=settings_body,
+            )
+            assert status == 409 and stale_settings["detail"] == "business_settings_stale_revision"
+            status, refreshed_settings = _request(port, "/business-workspace/settings", headers=owner_headers)
+            assert status == 200 and refreshed_settings["business_name"] == "Renamed canonical business"
+            status, owner_switch_visible = _request(
+                port, "/public-site/owner/businesses", headers=secure_headers, cookies=browser_cookies,
+            )
+            assert status == 200
+            assert next(x for x in owner_switch_visible["businesses"] if x["business_id"] == cta["business_id"])["name"] == "Renamed canonical business"
+
             status, discovery = _request(
                 port,
                 "/business-workspace/discovery",
