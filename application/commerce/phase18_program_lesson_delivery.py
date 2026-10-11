@@ -56,9 +56,13 @@ def reconcile_program_lesson_provider_acceptance(
     action = f'provider.{plan["provider_key"]}.message_send'
     if str(meta.get("action_name") or "") != action:
         raise ValueError("program_delivery_approval_action_mismatch")
-    if str(getattr(record.status, "value", record.status)) != "approved":
-        return {"status": "awaiting_owner_approval", "provider_accepted": False,
-                "recipient_delivery_confirmed": False}
+    approval_status = str(getattr(record.status, "value", record.status)).lower()
+    if approval_status != "approved":
+        # A rejected, revoked or expired approval is not waiting for the owner.
+        # Never turn a terminal denial into a plausible pending send.
+        pending = approval_status in {"pending", "requested", "awaiting_approval"}
+        return {"status": "awaiting_owner_approval" if pending else "approval_not_granted",
+                "provider_accepted": False, "recipient_delivery_confirmed": False}
     decision_id = str(meta.get("decision_id") or "").strip()
     request_fingerprint = str(meta.get("approval_request_fingerprint") or "").strip()
     # Queue dispatch uses gate.evidence.subject_fingerprint, which is the
