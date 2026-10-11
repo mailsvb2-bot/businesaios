@@ -37,6 +37,7 @@ SHARED_EVENT_FACT_OWNERS = (
 EXTERNAL_FACT_INGRESS = Path("application/business_autonomy/evidence_projection.py")
 BUSINESS_DISCOVERY_FACT_INGRESS = Path("application/business_discovery/ingress.py")
 AGENT_IDENTITY_EVENT_FACT_OWNER = Path("application/business_autonomy/registry.py")
+EVENT_LANDING_EVENT_FACT_OWNER = Path("application/public_site/event_landing_registry.py")
 DIRECT_BUSINESS_FACT_MUTATION_OWNERS = (OWNER, CUSTOMER_DIRECT_OWNER)
 SPECIAL_EVENT_STORE_WRITER_MODULES = (
     "crm.customer_registry",
@@ -101,6 +102,7 @@ def test_shared_event_fact_writer_consumers_are_review_locked() -> None:
             EXTERNAL_FACT_INGRESS,
             BUSINESS_DISCOVERY_FACT_INGRESS,
             AGENT_IDENTITY_EVENT_FACT_OWNER,
+            EVENT_LANDING_EVENT_FACT_OWNER,
         )
     )
 
@@ -181,3 +183,9 @@ def test_business_autonomy_bootstrap_delegates_ontology_composition() -> None:
     for name in registry_names:
         assert name not in bootstrap
         assert name in wiring
+
+def test_event_landing_only_uses_canonical_event_fact_writer() -> None:
+    source = (ROOT / EVENT_LANDING_EVENT_FACT_OWNER).read_text(encoding="utf-8")
+    assert "EventFactLifecycleWriter" in source
+    assert "BusinessFactV1(" not in source
+    assert "append_event(" not in source

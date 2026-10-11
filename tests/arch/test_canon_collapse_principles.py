@@ -84,10 +84,12 @@ def _load_effective_baseline(baseline: dict[str, int]) -> dict[str, int]:
 
     pre_existing_debt = int(ledger.get("pre_existing_head_total_python_lines_debt", 0))
     current_iteration_budget = int(ledger.get("current_iteration_total_python_lines_budget", 0))
+    phase18 = ledger.get("phase18_absorption_growth_policy") or {}
+    landing_budget = int(phase18.get("python_line_budget", 0)) if phase18.get("active") is True else 0
 
     effective = dict(baseline)
     effective["total_python_lines"] = (
-        baseline["total_python_lines"] + pre_existing_debt + current_iteration_budget
+        baseline["total_python_lines"] + pre_existing_debt + current_iteration_budget + landing_budget
     )
     return effective
 

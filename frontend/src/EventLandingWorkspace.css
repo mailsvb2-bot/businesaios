@@ -1,0 +1,44 @@
+/* Keep the owner editor inside the same centered responsive workspace
+   bounds as Sales / Customers. A full-width panel with a nowrap badge
+   otherwise widens the document on narrow mobile viewports. */
+.event-landing-editor { width: min(1180px, calc(100% - 48px)); margin: 17px auto 0; min-width: 0; }
+.event-landing-editor .panel-title-row > div { min-width: 0; }
+.event-landing-editor .privacy-badge { flex: 0 1 auto; max-width: 100%; white-space: normal; overflow-wrap: anywhere; }
+.event-landing-id { display: flex; align-items: end; gap: 12px; flex-wrap: wrap; margin: 18px 0; }
+.event-landing-id label { flex: 1; min-width: 230px; }
+.event-landing-editor label, .event-landing-id label { display: grid; gap: 7px; font-weight: 650; font-size: .92rem; }
+.event-landing-editor input, .event-landing-editor textarea, .event-landing-editor select { width: 100%; border: 1px solid #cbd5e1; border-radius: 10px; padding: 11px 12px; color: #17243b; background: white; }
+.event-landing-editor input:focus, .event-landing-editor textarea:focus { outline: 2px solid #547bff; outline-offset: 1px; }
+.event-landing-fields { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; margin: 16px 0 24px; }
+.event-landing-fields label:nth-child(2), .event-landing-fields label:nth-child(3), .event-landing-fields label:nth-child(5), .event-landing-fields label:nth-child(7), .event-landing-fields label:nth-child(9), .event-landing-fields label:nth-child(11), .event-landing-fields label:nth-child(14) { grid-column: 1 / -1; }
+.event-faq-editor { display: grid; grid-template-columns: 1fr 1fr auto; align-items: end; gap: 12px; margin: 12px 0; }
+.event-landing-actions { display: flex; flex-wrap: wrap; gap: 10px; margin: 24px 0; }
+.event-landing-notice { background: #edf6ff; border: 1px solid #bad5f6; padding: 12px 14px; border-radius: 12px; line-height: 1.5; overflow-wrap: anywhere; }
+.event-landing-notice a { color: #0c4cba; text-decoration: underline; }
+.event-landing-preview { border-top: 1px solid #e3e8f0; padding-top: 16px; }
+.event-landing-preview summary { cursor: pointer; font-weight: 700; margin-bottom: 16px; }
+.event-public-shell { min-height: 100vh; padding: 24px max(20px, calc((100% - 1040px)/2)); background: #f4f7fb; }
+.event-public-brand { font-size: .9rem; font-weight: 800; margin: 0 0 20px; }
+.event-public-card { background: #fff; border: 1px solid #e0e7f0; border-radius: 22px; overflow: hidden; line-height: 1.65; color: #1c2c45; }
+.event-public-hero { padding: clamp(24px, 5vw, 64px); background: #eff5ff; }
+.event-public-card h1 { margin: 8px 0 16px; font-size: clamp(1.8rem, 4vw, 3.2rem); line-height: 1.15; }
+.event-public-card h2 { font-size: 1.25rem; }
+.event-public-card ul { padding-left: 21px; }
+.event-public-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 24px; padding: 24px clamp(20px, 4vw, 48px); }
+.event-public-grid section { min-width: 0; }
+.event-public-faq, .event-public-cta { padding: 24px clamp(20px, 4vw, 48px); border-top: 1px solid #e0e7f0; }
+.event-public-faq details { border-bottom: 1px solid #ebeff4; padding: 12px 0; }
+.event-public-faq summary { font-weight: 700; cursor: pointer; }
+.event-public-cta { background: #f2f5ff; }
+.theme-bold .event-public-hero { background: #192f67; color: #fff; }
+.theme-bold .event-public-hero .eyebrow { color: #bad1ff; }
+.theme-minimal .event-public-hero, .theme-minimal .event-public-cta { background: #fff; }
+.event-public-footer { color: #6b788b; font-size: .82rem; text-align: center; margin-top: 24px; }
+@media (max-width: 700px) {
+  .event-landing-editor { width: min(100% - 24px, 1180px); }
+  .event-landing-editor .panel-title-row { flex-direction: column; align-items: flex-start; gap: 8px; }
+  .event-landing-fields, .event-public-grid, .event-faq-editor { grid-template-columns: minmax(0, 1fr); }
+  .event-landing-fields label { grid-column: 1 / -1; min-width: 0; }
+  .event-landing-id label { flex-basis: 100%; min-width: 0; }
+  .event-landing-preview, .event-landing-notice { min-width: 0; }
+}
