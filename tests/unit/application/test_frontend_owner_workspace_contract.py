@@ -23,3 +23,12 @@ def test_frontend_requires_persisted_successful_live_sync_evidence_before_verifi
     assert '=== "live_executed"' in source
     assert 'Данные получены' in source
     assert 'Результат подтверждён реальным чтением данных из подключённого источника.' in source
+
+
+
+def test_phase18_business_rename_refreshes_owner_account_switcher_without_reload() -> None:
+    source = Path("frontend/src/App.jsx").read_text(encoding="utf-8")
+    assert "onBusinessRenamed?.(data.business_id, value.business_name)" in source
+    assert "setBusinessName(value.business_name)" in source
+    assert "setOwnerBusinesses((rows) => rows.map((item) => item.business_id === id ? { ...item, name } : item))" in source
+    assert "businesses.map((item) => <option value={item.intake_id}" in source
