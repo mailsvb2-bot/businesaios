@@ -522,13 +522,22 @@ class ProgramPublicationRegistry:
             "phase18_program_lesson_provider_acceptance", tenant_id,
             business_id, enrollment_id, str(lesson_position), approval_id,
         )
-        self._delivery_writer.append_once(
-            tenant_id=tenant_id, business_id=business_id,
-            entity_id=enrollment_id, operation="provider_accepted",
-            idempotency_key=key, fact_type=_PROVIDER_ACCEPTED,
-            payload=row, occurred_at_ms=when,
-            event_metadata={"decision_id": decision_id, "evidence_ids": [history_id]},
-        )
+        try:
+            # Only one provider acceptance may win per enrollment and lesson,
+            # even if competing approvals both read an empty outcome projection.
+            # Reuse the canonical transition claim, not a second delivery store.
+            self._delivery_writer.append_transition_once(
+                tenant_id=tenant_id, business_id=business_id,
+                entity_id=enrollment_id,
+                expected_state_token=f"lesson:{lesson_position}:provider_unconfirmed",
+                operation="provider_accepted", idempotency_key=key,
+                fact_type=_PROVIDER_ACCEPTED, payload=row, occurred_at_ms=when,
+                event_metadata={"decision_id": decision_id, "evidence_ids": [history_id]},
+            )
+        except RuntimeError as exc:
+            if str(exc).startswith("ontology transition rejected: "):
+                raise RuntimeError("program_lesson_already_provider_accepted") from exc
+            raise
         return row
 
     def lesson_send_plan(
