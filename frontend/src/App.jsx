@@ -3,6 +3,7 @@ import { AcquisitionPlanner } from "./AcquisitionPlanner.jsx";
 import { BusinessIntelligencePanel } from "./BusinessIntelligencePanel.jsx";
 import { BusinessDiscoveryPanel } from "./BusinessDiscoveryPanel.jsx";
 import { EventLandingWorkspace } from "./EventLandingWorkspace.jsx";
+import { BusinessSettingsWorkspace } from "./BusinessSettingsWorkspace.jsx";
 import { DiscoverBuildMeasurePanel } from "./DiscoverBuildMeasurePanel.jsx";
 
 const DEFAULT_API = import.meta.env.VITE_API_BASE || "https://api.businessaios.ru";
@@ -317,6 +318,7 @@ function evidenceTimeLabel(row) {
 
 function Workspace({ data, apiBase, businesses, onRestart, onRetryAccess, onSwitchBusiness }) {
   const profile = data.business_profile || {};
+  const [businessName, setBusinessName] = useState(profile.name || "");
   const progress = data.onboarding_progress || {};
   const preview = data.first_value_preview || {};
   const integrations = data.integration_plan || [];
@@ -1049,7 +1051,7 @@ function Workspace({ data, apiBase, businesses, onRestart, onRetryAccess, onSwit
       <section className="workspace-hero">
         <div>
           <p className="eyebrow">Кабинет бизнеса</p>
-          <h1>{profile.name || "Ваш бизнес"}</h1>
+          <h1>{businessName || "Ваш бизнес"}</h1>
           <p className="lead">{liveEvidence ? "Первые реальные данные уже подтверждены. Ниже — результат и следующие безопасные действия." : "Сейчас задача одна: получить первый подтверждённый результат на ваших данных. Никаких отправок, изменений или расходов."}</p>
         </div>
         <div className="progress-card">
@@ -1356,10 +1358,12 @@ function Workspace({ data, apiBase, businesses, onRestart, onRetryAccess, onSwit
 
       <EventLandingWorkspace key={`${data.tenant_id}:${data.business_id}`} apiBase={baseApi} tenantId={data.tenant_id} businessId={data.business_id} apiKey={apiKey} getJson={getJson} postJson={postJson} />
 
+      <BusinessSettingsWorkspace key={`settings:${data.tenant_id}:${data.business_id}`} apiBase={baseApi} apiKey={apiKey} getJson={getJson} postJson={postJson} onSaved={(value) => setBusinessName(value.business_name)} />
+
       <AcquisitionPlanner enabled={Boolean(apiKey)} onEvaluate={(payload) => postJson(acquisitionUrl, payload, authHeaders)} />
 
       <section className="panel business-card">
-        <div><p className="eyebrow">Профиль</p><h2>{profile.name || "Бизнес"}</h2></div>
+        <div><p className="eyebrow">Профиль</p><h2>{businessName || "Бизнес"}</h2></div>
         <div className="business-meta">{profile.industry ? <span>{profile.industry}</span> : null}{profile.city ? <span>{profile.city}</span> : null}{profile.website ? <a href={profile.website} target="_blank" rel="noreferrer">{profile.website}</a> : null}</div>
       </section>
 
