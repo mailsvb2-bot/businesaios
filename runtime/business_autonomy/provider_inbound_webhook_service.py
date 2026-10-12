@@ -33,6 +33,7 @@ class ProviderInboundWebhookService:
     customer_registry: object | None = None
     conversation_registry: object | None = None
     message_registry: object | None = None
+    lead_registry: object | None = None
     operational_responder: object | None = None
 
     def ingest(
@@ -154,6 +155,36 @@ class ProviderInboundWebhookService:
                 conversation_id=str(metadata.get('conversation_id') or '').strip() or None,
             )
             message_result = {'message_id': recorded.message_id}
+        # The lead is created from *verified* canonical Customer, Conversation
+        # and Message records, before the only authorized inbound DecisionCore
+        # gateway runs. A partial failure cannot acknowledge the webhook.
+        commercial_receipt = {}
+        if (decision.accepted and self.lead_registry is not None
+                and self.customer_registry is not None
+                and self.conversation_registry is not None
+                and self.message_registry is not None
+                and customer_result and message_result):
+            from dataclasses import asdict
+            from application.commerce.phase18_commercial_ingress import CommercialIngressCoordinator
+
+            inbound = dict(handoff.get("inbound_message") or {})
+            commercial_receipt = asdict(CommercialIngressCoordinator(
+                customers=self.customer_registry,
+                conversations=self.conversation_registry,
+                messages=self.message_registry,
+                leads=self.lead_registry,
+            ).ensure_verified_ingress(
+                tenant_id=str(tenant_id), business_id=str(business_id),
+                customer_id=customer_result["customer_id"],
+                conversation_id=customer_result["conversation_id"],
+                message_id=message_result["message_id"],
+                channel=str(inbound.get("channel") or ""),
+            ))
+            inbound["metadata"] = {
+                **dict(inbound.get("metadata") or {}),
+                "lead_id": commercial_receipt["lead_id"],
+            }
+            handoff = {**handoff, "inbound_message": inbound}
         inbound_result = self.inbound_processor.process(handoff=handoff) if decision.accepted and self.inbound_processor is not None and handoff else {}
         if decision.accepted and (not handoff or inbound_result):
             self.complete(provider=provider, tenant_id=tenant_id, business_id=business_id, event_key=event_key, payload_digest=payload_digest, owner_id=decision.owner_id, topic=topic)
@@ -178,7 +209,7 @@ class ProviderInboundWebhookService:
             provider_ack = {'required': False, 'ok': True}
         inbound_summary = summarize_provider_webhook_inbound_result(handoff=handoff, inbound_result=inbound_result)
         self.observability.record_webhook_inbound_handoff(tenant_id=str(tenant_id), provider_key=provider.provider_key, status=status, inbound_summary=inbound_summary)
-        return ProviderWebhookIngressResult(provider_key=provider.provider_key, event_key=event_key, accepted=decision.accepted, status=status, metadata={'decision': {'resolution': decision.resolution, **dict(decision.metadata)}, 'owner_id': decision.owner_id, 'topic': topic, 'audit_refs': refs, 'export_refs': export_refs, 'route': dict(route), 'messaging_handoff': handoff, 'messaging_inbound_result': inbound_result, 'messaging_inbound_summary': inbound_summary, 'provider_ack': provider_ack, 'customer': customer_result, 'message': message_result, 'incident': incident})
+        return ProviderWebhookIngressResult(provider_key=provider.provider_key, event_key=event_key, accepted=decision.accepted, status=status, metadata={'decision': {'resolution': decision.resolution, **dict(decision.metadata)}, 'owner_id': decision.owner_id, 'topic': topic, 'audit_refs': refs, 'export_refs': export_refs, 'route': dict(route), 'messaging_handoff': handoff, 'messaging_inbound_result': inbound_result, 'messaging_inbound_summary': inbound_summary, 'provider_ack': provider_ack, 'customer': customer_result, 'message': message_result, 'commercial_lead': commercial_receipt, 'incident': incident})
 
     @staticmethod
     def transport_ack_safe(result: ProviderWebhookIngressResult) -> bool:

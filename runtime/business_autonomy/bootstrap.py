@@ -807,6 +807,7 @@ def build_business_autonomy_guarded_service(*, business_id: str = 'external_busi
         customer_registry=customer_registry,
         conversation_registry=getattr(service, '_conversation_registry', None),
         message_registry=getattr(service, '_message_registry', None),
+        lead_registry=getattr(service, '_lead_registry', None),
         provider_pacing=ProviderPacingCoordinator(distributed['provider_pacing']),
         provider_media=ProviderMediaPreparationCoordinator(distributed['provider_media']),
         audit_recorder=provider_runtime_audit,

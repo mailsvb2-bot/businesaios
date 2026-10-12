@@ -41,6 +41,9 @@ class Lead:
     business_id: str
     source: str | None = None
     status: str | None = None
+    customer_id: str | None = None
+    conversation_id: str | None = None
+    channel: str | None = None
     lifecycle_status: LeadLifecycleStatus = LeadLifecycleStatus.ACTIVE
     created_at_ms: int = 0
     updated_at_ms: int = 0
@@ -51,6 +54,12 @@ class Lead:
             object.__setattr__(self, field_name, _required(getattr(self, field_name), field_name))
         object.__setattr__(self, "source", _optional(self.source, "source", 120))
         object.__setattr__(self, "status", _optional(self.status, "status", 120))
+        for ref_name in ("customer_id", "conversation_id", "channel"):
+            object.__setattr__(self, ref_name, _optional(getattr(self, ref_name), ref_name, 200))
+        if any((self.customer_id, self.conversation_id, self.channel)) and not all(
+            (self.customer_id, self.conversation_id, self.channel)
+        ):
+            raise ValueError("commercial lead must bind customer, conversation and channel together")
         object.__setattr__(self, "lifecycle_status", LeadLifecycleStatus(self.lifecycle_status))
         created, updated = int(self.created_at_ms), int(self.updated_at_ms)
         if created < 0 or updated < created:
