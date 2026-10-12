@@ -13,7 +13,7 @@ from adapters.api.fastapi.business_workspace_program_routes import (
     register_business_workspace_program_routes,
 )
 from application.commerce.phase18_program_publication_registry import ProgramPublicationRegistry
-from application.commerce.phase18_sale_evidence import evaluate_sale_evidence
+from application.commerce.phase18_program_lesson_delivery import evaluate_sale_evidence
 from application.lead.registry import LeadRegistry
 from billing.commercial_cycle_contract import InvoiceLifecycleStatus
 from billing.invoice_lifecycle import CommercialInvoiceEnvelope, InvoiceLifecycleService
