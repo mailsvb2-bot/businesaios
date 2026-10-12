@@ -46,6 +46,7 @@ def make_service():
                  customer_id="customer-one", conversation_id="conversation-one", channel="telegram")
     programs = ProgramPublicationRegistry(event_store=events, idempotency_store=idem)
     program = programs.publish(
+        access_mode="paid",
         **scope, actor_id="owner", title="Existing paid program",
         lessons=[{"title": "Lesson", "content_kind": "text", "content_ref": "Material"}],
         idempotency_key="program-create",

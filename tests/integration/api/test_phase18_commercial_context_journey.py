@@ -58,6 +58,7 @@ def _build():
     programs = ProgramPublicationRegistry(event_store=events, idempotency_store=claims,
                                           customer_registry=customers)
     published = programs.publish(
+        access_mode="paid",
         **scope, actor_id="owner", title="Course", idempotency_key="create-program",
         lessons=[{"title": "Start", "content_kind": "text", "content_ref": "Material"}],
     )

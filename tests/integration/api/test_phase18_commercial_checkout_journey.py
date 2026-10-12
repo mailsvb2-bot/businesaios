@@ -60,6 +60,7 @@ def setup():
                  customer_id="customer-a", conversation_id="conversation-a", channel="telegram")
     programs = ProgramPublicationRegistry(event_store=events, idempotency_store=idem)
     program = programs.publish(
+        access_mode="paid",
         **scope, actor_id="owner", title="Real training", idempotency_key="publish",
         lessons=[{"title": "Lesson", "content_kind": "text", "content_ref": "Material"}],
     )

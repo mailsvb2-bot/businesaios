@@ -59,6 +59,7 @@ def test_owner_scoped_order_payment_visibility_and_psp_guard(tmp_path):
                  customer_id="customer-a", conversation_id="conversation-a", channel="telegram")
     programs = ProgramPublicationRegistry(event_store=events, idempotency_store=idem)
     published = programs.publish(
+        access_mode="paid",
         **scope, actor_id="owner-a", title="Existing course", idempotency_key="course",
         lessons=[{"title": "Lesson", "content_kind": "text", "content_ref": "Text"}],
     )

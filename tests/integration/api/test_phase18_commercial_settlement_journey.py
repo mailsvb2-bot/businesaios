@@ -70,6 +70,7 @@ def build():
                  idempotency_key="new-lead", status="new", source="telegram")
     programs = ProgramPublicationRegistry(event_store=events, idempotency_store=claims)
     program = programs.publish(
+        access_mode="paid",
         **scope, actor_id="owner-a", title="Published course",
         lessons=[{"title": "Lesson 1", "content_kind": "text", "content_ref": "First lesson"}],
         idempotency_key="program-a",
