@@ -56,7 +56,8 @@ def setup():
     events, idem = MemoryEventStore(), InMemoryIdempotencyStore()
     scope = {"tenant_id": "tenant-a", "business_id": "business-a"}
     leads = LeadRegistry(event_store=events, idempotency_store=idem)
-    leads.create(**scope, lead_id="lead-a", idempotency_key="create-lead")
+    leads.create(**scope, lead_id="lead-a", idempotency_key="create-lead",
+                 customer_id="customer-a", conversation_id="conversation-a", channel="telegram")
     programs = ProgramPublicationRegistry(event_store=events, idempotency_store=idem)
     program = programs.publish(
         **scope, actor_id="owner", title="Real training", idempotency_key="publish",

@@ -85,6 +85,12 @@ class CommercialProgramPurchaseService:
         if (lead.tenant_id != tenant_id or lead.business_id != business_id
                 or lead.lead_id != lead_id or lead.lifecycle_status is not LeadLifecycleStatus.ACTIVE):
             raise ValueError("commercial_lead_inactive_or_unowned")
+        # A paid product cannot be granted against an unrelated CRM Lead.
+        # Only the canonical provider ingress establishes customer/conversation
+        # identity; free-text lead/customer IDs are never sufficient evidence.
+        if (lead.customer_id != customer_id or not lead.conversation_id
+                or not lead.channel):
+            raise ValueError("commercial_lead_customer_conversation_binding_missing")
         record = self.customers.get_customer(
             tenant_id=tenant_id, business_id=business_id, customer_id=customer_id,
         )

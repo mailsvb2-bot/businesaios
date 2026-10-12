@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 export function CommercialSalesWorkspace({ apiBase, apiKey, getJson }) {
   const url = apiBase.replace(/\/$/, "") + "/business-workspace/commercial/orders";
   const [orders, setOrders] = useState([]);
+  const [leads, setLeads] = useState([]);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
   const [loaded, setLoaded] = useState(false);
@@ -14,8 +15,17 @@ export function CommercialSalesWorkspace({ apiBase, apiKey, getJson }) {
     setBusy(true);
     setError("");
     try {
-      const data = await getJson(url, { "X-API-Key": apiKey });
+      const [data, leadResponse] = await Promise.all([
+        getJson(url, { "X-API-Key": apiKey }),
+        getJson(apiBase.replace(/\/$/, "") + "/business-workspace/commercial/leads",
+          { "X-API-Key": apiKey }),
+      ]);
       if (signal?.aborted) return;
+      if (!Array.isArray(leadResponse?.leads) ||
+          leadResponse.leads.some((lead) => !lead.lead_id ||
+            !lead.customer_id || !lead.conversation_id || !lead.channel)) {
+        throw new Error("Некорректная история обращений");
+      }
       if (!Array.isArray(data?.orders) ||
           data.orders.some((o) => !o.order_id || !o.invoice_id ||
             !Number.isSafeInteger(o.amount_minor) || o.amount_minor <= 0 ||
@@ -24,6 +34,7 @@ export function CommercialSalesWorkspace({ apiBase, apiKey, getJson }) {
         throw new Error("Некорректное подтверждение счёта сервером");
       }
       setOrders(data.orders);
+      setLeads(leadResponse.leads);
       setLoaded(true);
     } catch (reason) {
       if (!signal?.aborted) setError("Невозможно получить канонические заказы: " +
@@ -31,11 +42,12 @@ export function CommercialSalesWorkspace({ apiBase, apiKey, getJson }) {
     } finally {
       if (!signal?.aborted) setBusy(false);
     }
-  }, [apiKey, getJson, url]);
+  }, [apiBase, apiKey, getJson, url]);
 
   useEffect(() => {
     const controller = new AbortController();
     setOrders([]);
+    setLeads([]);
     setSelectedId("");
     setLoaded(false);
     if (apiKey) void refresh(controller.signal);
@@ -77,6 +89,21 @@ export function CommercialSalesWorkspace({ apiBase, apiKey, getJson }) {
         автоматическое исполнение ещё не включены.</p>
       {error ? <div className="error-box inline-error" role="alert">{error}</div> : null}
       {!loaded && !error ? <p className="muted-text">Подтверждённые данные пока не загружены.</p> : null}
+      {loaded && !leads.length ? (
+        <p className="empty-state">Связанных с реальными диалогами лидов пока нет.</p>
+      ) : null}
+      {leads.length ? (
+        <>
+          <h3>Обращения и этапы продаж</h3>
+          <ul>{leads.map((lead) => (
+            <li key={lead.lead_id}>
+              <strong>{lead.channel}</strong> · {lead.sales_stage || "этап не определён"} ·
+              {" "}{lead.lifecycle_status === "archived" ? "закрыт" : "активен"}
+              <small> Клиент: {lead.customer_id} · Диалог: {lead.conversation_id}</small>
+            </li>
+          ))}</ul>
+        </>
+      ) : null}
       {loaded && !orders.length ? <p className="empty-state">Подтверждённых коммерческих заказов пока нет.</p> : null}
       {orders.length ? (
         <>

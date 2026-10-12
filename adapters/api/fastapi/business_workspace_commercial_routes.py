@@ -15,6 +15,25 @@ def register_business_workspace_commercial_routes(*, router: APIRouter, auth_bun
         _, tenant, business = business_owner_scope(request=request, auth_bundle=auth_bundle)
         return tenant, business
 
+    @router.get("/business-workspace/commercial/leads", tags=["business-workspace"])
+    async def list_commercial_leads(request: Request):
+        tenant, business = scope(request)
+        leads = purchases.leads.list_for_business(tenant_id=tenant, business_id=business)
+        return {"leads": [
+            {
+                "lead_id": lead.lead_id,
+                "customer_id": lead.customer_id,
+                "conversation_id": lead.conversation_id,
+                "channel": lead.channel,
+                "source": lead.source,
+                "sales_stage": lead.status,
+                "lifecycle_status": lead.lifecycle_status.value,
+                "updated_at_ms": lead.updated_at_ms,
+            }
+            for lead in leads
+            if lead.customer_id and lead.conversation_id and lead.channel
+        ]}
+
     @router.get("/business-workspace/commercial/offers/{program_id}", tags=["business-workspace"])
     async def offers(program_id: str, request: Request):
         tenant, business = scope(request)

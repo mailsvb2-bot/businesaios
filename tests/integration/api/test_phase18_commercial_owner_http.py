@@ -55,7 +55,8 @@ def test_owner_scoped_order_payment_visibility_and_psp_guard(tmp_path):
     events, idem = MemoryEventStore(), InMemoryIdempotencyStore()
     scope = {"tenant_id": "tenant-a", "business_id": "business-a"}
     leads = LeadRegistry(event_store=events, idempotency_store=idem)
-    leads.create(**scope, lead_id="lead-a", idempotency_key="lead-a")
+    leads.create(**scope, lead_id="lead-a", idempotency_key="lead-a",
+                 customer_id="customer-a", conversation_id="conversation-a", channel="telegram")
     programs = ProgramPublicationRegistry(event_store=events, idempotency_store=idem)
     published = programs.publish(
         **scope, actor_id="owner-a", title="Existing course", idempotency_key="course",
@@ -80,6 +81,10 @@ def test_owner_scoped_order_payment_visibility_and_psp_guard(tmp_path):
         assert client.post(base + "/orders", headers={"X-API-Key": alien},
                            json=body).status_code == 404
         owner_headers = {"X-API-Key": owner}
+        leads_response = client.get(base + "/leads", headers=owner_headers)
+        assert leads_response.status_code == 200
+        assert leads_response.json()["leads"][0]["customer_id"] == "customer-a"
+        assert client.get(base + "/leads", headers={"X-API-Key": alien}).json() == {"leads": []}
         quote = client.get(base + "/offers/" + published["id"], headers=owner_headers)
         assert quote.status_code == 200 and quote.json()["offers"][0]["amount_minor"] == 50000
         made = client.post(base + "/orders", headers=owner_headers, json=body)

@@ -42,7 +42,8 @@ def make_service():
     events, idem = MemoryEventStore(), InMemoryIdempotencyStore()
     scope = {"tenant_id": "tenant-a", "business_id": "business-a"}
     leads = LeadRegistry(event_store=events, idempotency_store=idem)
-    leads.create(**scope, lead_id="lead-one", idempotency_key="lead-create")
+    leads.create(**scope, lead_id="lead-one", idempotency_key="lead-create",
+                 customer_id="customer-one", conversation_id="conversation-one", channel="telegram")
     programs = ProgramPublicationRegistry(event_store=events, idempotency_store=idem)
     program = programs.publish(
         **scope, actor_id="owner", title="Existing paid program",
