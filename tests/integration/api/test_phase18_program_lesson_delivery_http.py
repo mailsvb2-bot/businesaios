@@ -169,6 +169,21 @@ def test_real_owner_http_program_to_provider_acceptance_is_durable_and_isolated(
         assert client.post(rec_path, headers=owner, json={
             "channel": "telegram", "approval_id": "not-owned",
         }).status_code == 404
+        # Terminal rejection must not masquerade as an approval still pending.
+        approval.status = "rejected"
+        denied = client.post(rec_path, headers=owner, json=body)
+        assert denied.status_code == 200, denied.text
+        assert denied.json() == {
+            "status": "approval_not_granted",
+            "provider_accepted": False, "recipient_delivery_confirmed": False,
+        }
+        assert len(event_store) == before
+        approval.status = "pending"
+        waiting = client.post(rec_path, headers=owner, json=body)
+        assert waiting.status_code == 200
+        assert waiting.json()["status"] == "awaiting_owner_approval"
+        assert len(event_store) == before
+        approval.status = "approved"
         pending = client.post(rec_path, headers=owner, json=body)
         assert pending.status_code == 200 and pending.json()["status"] == "awaiting_provider_evidence"
         assert len(event_store) == before
