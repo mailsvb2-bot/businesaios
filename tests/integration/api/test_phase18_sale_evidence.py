@@ -60,7 +60,12 @@ def test_sale_requires_owned_paid_invoice_published_program_and_live_lead():
         invoices["invoice-1"] = changed
         with pytest.raises(RuntimeError, match="sale_billing_scope_mismatch|sale_invoice_product_binding_missing"):
             evaluate_sale_evidence(**args)
-    assert evaluate_sale_evidence(**{**args, "reversal_reader": lambda **_: True}).reason == "payment_reversed"\n    with pytest.raises(RuntimeError, match="sale_reversal_authority_required"):\n        evaluate_sale_evidence(**{**args, "reversal_reader": None})\n    with pytest.raises(RuntimeError, match="sale_reversal_evidence_invalid"):\n        evaluate_sale_evidence(**{**args, "reversal_reader": lambda **_: None})\n    invoices["invoice-1"] = replace(original, status=InvoiceLifecycleStatus.CREDITED)
+    assert evaluate_sale_evidence(**{**args, "reversal_reader": lambda **_: True}).reason == "payment_reversed"
+    with pytest.raises(RuntimeError, match="sale_reversal_authority_required"):
+        evaluate_sale_evidence(**{**args, "reversal_reader": None})
+    with pytest.raises(RuntimeError, match="sale_reversal_evidence_invalid"):
+        evaluate_sale_evidence(**{**args, "reversal_reader": lambda **_: None})
+    invoices["invoice-1"] = replace(original, status=InvoiceLifecycleStatus.CREDITED)
     assert not evaluate_sale_evidence(**args).can_request_fulfilment
     invoices["invoice-1"] = original
     leads.archive(**scope, lead_id="lead-1", idempotency_key="archive")
