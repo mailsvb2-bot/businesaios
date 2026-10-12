@@ -120,6 +120,9 @@ def test_verified_psp_posts_once_into_canonical_invoice_and_survives_reread():
     assert reconciler.reconcile(**scope, order_id=order.order_id) == result
     restored = InvoiceRegistry(event_store=env["events"], idempotency_store=env["claims"])
     assert restored.get(**scope, invoice_id=order.invoice_id).paid_minor == 89000
+    assert restored.has_verified_psp_payment_evidence(
+        **scope, invoice_id=order.invoice_id, evidence_id="verified-psp-evidence-1",
+    ) is True
     events = [event for event in env["events"]
               if (event.get("payload") or {}).get("fact_type") == "invoice.payment_recorded"]
     assert len(events) == 1
@@ -163,3 +166,19 @@ def test_failed_authority_and_cross_business_read_fail_closed():
             tenant_id="tenant-a", business_id="business-b", order_id=env["order"].order_id,
         )
     assert env["invoices"].get(**env["scope"], invoice_id=env["order"].invoice_id).paid_minor == 0
+
+
+
+def test_already_paid_invoice_without_matching_psp_proof_cannot_be_laundered():
+    env = build()
+    scope = env["scope"]
+    order = env["order"]
+    env["invoices"].record_payment(
+        **scope, invoice_id=order.invoice_id,
+        idempotency_key="manually-paid-without-psp", amount_minor=order.amount_minor,
+    )
+    with pytest.raises(RuntimeError, match="commercial_settlement_paid_without_matching_proof"):
+        env["reconciler"].reconcile(**scope, order_id=order.order_id)
+    assert env["invoices"].has_verified_psp_payment_evidence(
+        **scope, invoice_id=order.invoice_id, evidence_id="verified-psp-evidence-1",
+    ) is False

@@ -113,6 +113,20 @@ class CommercialSettlementReconciler:
                 total_minor=invoice.total_minor,
                 provider_verified=False, evidence_id=proof.evidence_id,
             )
+        if invoice.status is InvoiceLifecycleStatus.PAID:
+            # A previously paid invoice cannot be re-labelled as verified
+            # by an unrelated PSP. Canonical evidence must already exist.
+            if not self._purchases.invoices.has_verified_psp_payment_evidence(
+                tenant_id=tenant_id, business_id=business_id,
+                invoice_id=invoice.invoice_id, evidence_id=proof.evidence_id,
+            ):
+                raise RuntimeError("commercial_settlement_paid_without_matching_proof")
+            return CommercialSettlementOutcome(
+                order_id=order_id, invoice_id=invoice.invoice_id,
+                billing_status=invoice.status.value, paid_minor=invoice.paid_minor,
+                total_minor=invoice.total_minor,
+                provider_verified=True, evidence_id=proof.evidence_id,
+            )
         if invoice.status not in (
             InvoiceLifecycleStatus.ISSUED,
             InvoiceLifecycleStatus.PARTIALLY_PAID,
