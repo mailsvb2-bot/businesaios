@@ -18,6 +18,13 @@ DOMAIN_KEYWORDS = {
     "product_quality_growth": ("product", "quality", "growth", "guardrail", "customer"),
     "ml_learning": ("ml", "learning", "model", "scoring", "inference"),
     "shared_registry": ("shared", "schema", "registry", "contract"),
+    # Commercial journeys share the canonical CRM, Billing, Program and
+    # provider-ingress owners. All nine acceptance suites are selected when
+    # any owner changes; there is deliberately no shadow GitHub workflow.
+    "commercial_journey": (
+        "phase18_commercial", "phase18_paid_program",
+        "phase18_program_enrollment", "phase18_program_publication",
+    ),
 }
 DOMAIN_ROOTS = {
     "billing": (
@@ -45,6 +52,21 @@ DOMAIN_ROOTS = {
     "product_quality_growth": ("product/", "quality/", "growth/", "guardrails/"),
     "ml_learning": ("ml/", "learning/"),
     "shared_registry": ("shared/", "schemas/", "registry/"),
+    "commercial_journey": (
+        "application/commerce/",
+        "application/lead/",
+        "billing/phase18_commercial",
+        "billing/invoice_registry.py",
+        "runtime/messaging/",
+        "runtime/business_autonomy/provider_inbound_webhook_service.py",
+        "adapters/api/fastapi/business_workspace_commercial_routes.py",
+        "adapters/api/fastapi/business_workspace_program_routes.py",
+        "frontend/src/CommercialSalesWorkspace.jsx",
+        "frontend/src/ProgramPublicationWorkspace.jsx",
+        "tests/integration/api/test_phase18_commercial",
+        "tests/integration/api/test_phase18_paid_program_access",
+        "tests/integration/api/test_phase18_program",
+    ),
 }
 
 
