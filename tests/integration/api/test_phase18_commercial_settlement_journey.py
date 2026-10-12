@@ -128,7 +128,7 @@ def test_verified_psp_posts_once_into_canonical_invoice_and_survives_reread():
               if (event.get("payload") or {}).get("fact_type") == "invoice.payment_recorded"]
     assert len(events) == 1
     fact = events[0]
-    assert fact["payload"]["evidence_ids"] == ("verified-psp-evidence-1",)
+    assert fact["payload"]["evidence_ids"] == ["verified-psp-evidence-1"]
     assert fact["payload"]["provenance"]["authority"] == "verified_psp"
 
 

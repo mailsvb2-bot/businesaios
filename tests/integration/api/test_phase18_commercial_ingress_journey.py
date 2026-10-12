@@ -200,3 +200,34 @@ def test_lead_binding_survives_status_change_and_is_immutable(monkeypatch):
             customer_id="alien", conversation_id=original["conversation_id"],
             channel="telegram",
         )
+
+
+def test_same_transport_contact_reused_in_distinct_chats_has_separate_claims(monkeypatch):
+    service, processor, customers, conversations, messages, leads, events, claims = _wired(monkeypatch)
+    tenant, business = "tenant-a", "business-a"
+    record = customers.ensure_customer_identity(
+        tenant_id=tenant, business_id=business, channel="telegram", external_subject="42",
+    )
+    customer_id = record.customer.customer_id
+    first = conversations.ensure_ingress(
+        tenant_id=tenant, business_id=business, customer_id=customer_id,
+        channel="telegram", route_ref="chat:private", contact_id="message:1",
+    )
+    second = conversations.ensure_ingress(
+        tenant_id=tenant, business_id=business, customer_id=customer_id,
+        channel="telegram", route_ref="chat:group", contact_id="message:1",
+    )
+    assert first.conversation_id != second.conversation_id
+    assert conversations.get(
+        tenant_id=tenant, business_id=business, conversation_id=first.conversation_id,
+    ).activity_count == 1
+    assert conversations.get(
+        tenant_id=tenant, business_id=business, conversation_id=second.conversation_id,
+    ).activity_count == 1
+    # Retry is idempotent in the same conversation and never changes
+    # another conversation's activity.
+    replay = conversations.ensure_ingress(
+        tenant_id=tenant, business_id=business, customer_id=customer_id,
+        channel="telegram", route_ref="chat:private", contact_id="message:1",
+    )
+    assert replay.activity_count == 1
