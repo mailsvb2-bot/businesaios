@@ -1,17 +1,10 @@
 """Phase-18 multi-lesson owner publication over real authentication + canonical EventStore."""
 from __future__ import annotations
 
-
 from dataclasses import replace
 from datetime import datetime, timezone
 
 import pytest
-
-from application.commerce.phase18_sale_evidence import evaluate_sale_evidence
-from application.lead.registry import LeadRegistry
-from billing.commercial_cycle_contract import InvoiceLifecycleStatus
-from billing.invoice_lifecycle import CommercialInvoiceEnvelope, InvoiceLifecycleService
-
 from fastapi import APIRouter, FastAPI
 from fastapi.testclient import TestClient
 
@@ -20,12 +13,15 @@ from adapters.api.fastapi.business_workspace_program_routes import (
     register_business_workspace_program_routes,
 )
 from application.commerce.phase18_program_publication_registry import ProgramPublicationRegistry
+from application.commerce.phase18_sale_evidence import evaluate_sale_evidence
+from application.lead.registry import LeadRegistry
+from billing.commercial_cycle_contract import InvoiceLifecycleStatus
+from billing.invoice_lifecycle import CommercialInvoiceEnvelope, InvoiceLifecycleService
 from entrypoints.api.api_key_policy import ApiKeyPolicy, PersistentApiKeyStore
 from entrypoints.api.security_owner_bundle import ApiSecurityOwnerBundle
 from governance.rbac_contract import RoleId
 from reliability.idempotency_store import InMemoryIdempotencyStore
 from runtime.platform.event_store.memory_event_store import MemoryEventStore
-
 
 def _body():
     return {
