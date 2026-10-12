@@ -8,11 +8,11 @@ from __future__ import annotations
 
 from collections.abc import Mapping
 from dataclasses import dataclass
+from datetime import datetime
+from typing import Any
 
 from billing.commercial_cycle_contract import InvoiceLifecycleStatus
 from billing.invoice_lifecycle import CommercialInvoiceEnvelope
-from datetime import datetime
-from typing import Any
 
 CANON_PHASE18_LESSON_DELIVERY_VERIFIER = True
 
