@@ -248,6 +248,9 @@ def register_public_api_routes(
             from core.offers.offer_catalog_resolver import OfferCatalogResolver
             from lead_outcomes.client_outcome_order_store import OrderStore
             from runtime.platform.client_outcome_persistence import ClientOutcomePersistenceOwner
+            from runtime.messaging.conversation_registry import ConversationRegistry
+            from runtime.messaging.message_registry import MessageRegistry
+            from application.commerce.phase18_commercial_context import CommercialJourneyContextReader
 
             commercial_purchases = CommercialProgramPurchaseService(
                 leads=LeadRegistry(event_store=event_store, idempotency_store=dependency_container.api_idempotency_store),
@@ -264,9 +267,24 @@ def register_public_api_routes(
                 invoices=InvoiceRegistry(event_store=event_store, idempotency_store=dependency_container.api_idempotency_store),
             )
             # Fail closed: no real PSP adapter is configured at this boundary yet.
+            commercial_context = CommercialJourneyContextReader(
+                leads=commercial_purchases.leads,
+                customers=canonical_customers,
+                conversations=ConversationRegistry(
+                    event_store=event_store, idempotency_store=dependency_container.api_idempotency_store,
+                    customer_registry=canonical_customers,
+                ),
+                messages=MessageRegistry(
+                    event_store=event_store, idempotency_store=dependency_container.api_idempotency_store,
+                ),
+                programs=commercial_purchases.programs,
+                orders=commercial_purchases.orders,
+                invoices=commercial_purchases.invoices,
+            )
             register_business_workspace_commercial_routes(
                 router=router, auth_bundle=auth_bundle,
                 purchases=commercial_purchases, checkout=None,
+                context_reader=commercial_context,
             )
         if event_landing_registry is not None:
             register_business_workspace_event_landing_routes(

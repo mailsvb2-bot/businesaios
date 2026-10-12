@@ -9,6 +9,9 @@ export function CommercialSalesWorkspace({ apiBase, apiKey, getJson }) {
   const [busy, setBusy] = useState(false);
   const [loaded, setLoaded] = useState(false);
   const [selectedId, setSelectedId] = useState("");
+  const [focusedLead, setFocusedLead] = useState("");
+  const [leadContext, setLeadContext] = useState(null);
+  const [leadContextError, setLeadContextError] = useState("");
 
   const refresh = useCallback(async (signal) => {
     if (!apiKey) return;
@@ -49,10 +52,38 @@ export function CommercialSalesWorkspace({ apiBase, apiKey, getJson }) {
     setOrders([]);
     setLeads([]);
     setSelectedId("");
+    setFocusedLead("");
+    setLeadContext(null);
+    setLeadContextError("");
     setLoaded(false);
     if (apiKey) void refresh(controller.signal);
     return () => controller.abort();
   }, [apiKey, refresh]);
+
+  const showLeadContext = async (leadId) => {
+    if (leadId === focusedLead) {
+      setFocusedLead("");
+      setLeadContext(null);
+      setLeadContextError("");
+      return;
+    }
+    setFocusedLead(leadId);
+    setLeadContext(null);
+    setLeadContextError("");
+    try {
+      const data = await getJson(
+        apiBase.replace(/\/$/, "") + "/business-workspace/commercial/leads/" +
+        encodeURIComponent(leadId) + "/context", { "X-API-Key": apiKey },
+      );
+      if (data?.lead_id !== leadId || !data?.context_fingerprint ||
+          !Array.isArray(data?.orders) || !Number.isSafeInteger(data?.inbound_message_count)) {
+        throw new Error("Сервер не подтвердил контекст обращения.");
+      }
+      setLeadContext(data);
+    } catch (reason) {
+      setLeadContextError("Контекст недоступен: " + (reason?.message || "ошибка сервера"));
+    }
+  };
 
   const selected = useMemo(
     () => orders.find((item) => item.order_id === selectedId) || null,
@@ -97,9 +128,26 @@ export function CommercialSalesWorkspace({ apiBase, apiKey, getJson }) {
           <h3>Обращения и этапы продаж</h3>
           <ul>{leads.map((lead) => (
             <li key={lead.lead_id}>
-              <strong>{lead.channel}</strong> · {lead.sales_stage || "этап не определён"} ·
-              {" "}{lead.lifecycle_status === "archived" ? "закрыт" : "активен"}
+              <button type="button" className="ghost" aria-expanded={focusedLead === lead.lead_id}
+                onClick={() => void showLeadContext(lead.lead_id)}>
+                {lead.channel} · {lead.sales_stage || "этап не определён"} ·
+                {" "}{lead.lifecycle_status === "archived" ? "закрыт" : "активен"}
+              </button>
               <small> Клиент: {lead.customer_id} · Диалог: {lead.conversation_id}</small>
+              {focusedLead === lead.lead_id && leadContextError ? (
+                <div className="error-box inline-error" role="alert">{leadContextError}</div>
+              ) : null}
+              {focusedLead === lead.lead_id && leadContext?.lead_id === lead.lead_id ? (
+                <div className="recovery-box">
+                  <p>Сообщений в канонической истории: {leadContext.inbound_message_count}</p>
+                  <p>Актуальный этап: {leadContext.sales_stage}</p>
+                  <p>Связанных заказов: {leadContext.orders.length}</p>
+                  <p>{leadContext.lead_active && leadContext.customer_active &&
+                      leadContext.conversation_open ?
+                    "История актуальна для подготовки предложения; внешнее действие всё равно требует Policy и Execution." :
+                    "Клиент, лид или диалог закрыт. Автоматическое предложение заблокировано."}</p>
+                </div>
+              ) : null}
             </li>
           ))}</ul>
         </>

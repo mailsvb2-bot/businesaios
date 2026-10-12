@@ -10,7 +10,7 @@ from adapters.api.fastapi.router_support import business_owner_scope, json_body
 CANON_PHASE18_COMMERCIAL_OWNER_API = True
 
 
-def register_business_workspace_commercial_routes(*, router: APIRouter, auth_bundle, purchases, checkout=None):
+def register_business_workspace_commercial_routes(*, router: APIRouter, auth_bundle, purchases, checkout=None, context_reader=None):
     def scope(request):
         _, tenant, business = business_owner_scope(request=request, auth_bundle=auth_bundle)
         return tenant, business
@@ -33,6 +33,18 @@ def register_business_workspace_commercial_routes(*, router: APIRouter, auth_bun
             for lead in leads
             if lead.customer_id and lead.conversation_id and lead.channel
         ]}
+
+    @router.get("/business-workspace/commercial/leads/{lead_id}/context", tags=["business-workspace"])
+    async def read_commercial_context(lead_id: str, request: Request):
+        tenant, business = scope(request)
+        if context_reader is None:
+            raise HTTPException(status_code=503, detail="commercial_context_owner_not_configured")
+        try:
+            return asdict(context_reader.read(
+                tenant_id=tenant, business_id=business, lead_id=lead_id,
+            ))
+        except LookupError as exc:
+            raise HTTPException(status_code=404, detail="commercial_lead_not_found") from exc
 
     @router.get("/business-workspace/commercial/offers/{program_id}", tags=["business-workspace"])
     async def offers(program_id: str, request: Request):
