@@ -112,7 +112,7 @@ function ProgramEnrollmentForm({ program, url, apiKey, customers, sendableProvid
         { channel, approval_id: approvalId.trim() }, headers,
       );
       if (!["provider_accepted", "awaiting_owner_approval", "awaiting_provider_evidence",
-            "provider_not_confirmed"].includes(result?.status)) {
+            "provider_not_confirmed", "approval_not_granted"].includes(result?.status)) {
         throw new Error("Неизвестный ответ сверки с провайдером.");
       }
       setReconcileStatus((current) => ({ ...current, [key]: result.status }));
