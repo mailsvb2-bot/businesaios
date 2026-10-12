@@ -11,6 +11,7 @@ from adapters.api.fastapi.business_workspace_decision_routes import register_bus
 from adapters.api.fastapi.business_workspace_discovery_routes import register_business_workspace_discovery_routes
 from adapters.api.fastapi.business_workspace_event_landing_routes import register_business_workspace_event_landing_routes
 from adapters.api.fastapi.business_workspace_program_routes import register_business_workspace_program_routes
+from adapters.api.fastapi.business_workspace_commercial_routes import register_business_workspace_commercial_routes
 from adapters.api.fastapi.business_workspace_process_routes import register_business_workspace_process_routes
 from adapters.api.fastapi.business_workspace_provider_routes import register_business_workspace_provider_routes
 from adapters.api.fastapi.business_workspace_support_case_routes import register_business_workspace_support_case_routes
@@ -240,6 +241,33 @@ def register_public_api_routes(
                         idempotency_store=dependency_container.api_idempotency_store,
                     ),
                 )
+        if event_landing_registry is not None:
+            from application.commerce.phase18_commercial_order import CommercialProgramPurchaseService
+            from application.lead.registry import LeadRegistry
+            from billing.invoice_registry import InvoiceRegistry
+            from core.offers.offer_catalog_resolver import OfferCatalogResolver
+            from lead_outcomes.client_outcome_order_store import OrderStore
+            from runtime.platform.client_outcome_persistence import ClientOutcomePersistenceOwner
+
+            commercial_purchases = CommercialProgramPurchaseService(
+                leads=LeadRegistry(event_store=event_store, idempotency_store=dependency_container.api_idempotency_store),
+                customers=canonical_customers,
+                programs=ProgramPublicationRegistry(
+                    event_store=event_store, idempotency_store=dependency_container.api_idempotency_store,
+                    customer_registry=canonical_customers,
+                ),
+                offers=OfferCatalogResolver(),
+                orders=OrderStore(
+                    backend=ClientOutcomePersistenceOwner.default().registry("order"),
+                    event_store=event_store, require_event_spine=True,
+                ),
+                invoices=InvoiceRegistry(event_store=event_store, idempotency_store=dependency_container.api_idempotency_store),
+            )
+            # Fail closed: no real PSP adapter is configured at this boundary yet.
+            register_business_workspace_commercial_routes(
+                router=router, auth_bundle=auth_bundle,
+                purchases=commercial_purchases, checkout=None,
+            )
         if event_landing_registry is not None:
             register_business_workspace_event_landing_routes(
                 router=router, auth_bundle=auth_bundle,
