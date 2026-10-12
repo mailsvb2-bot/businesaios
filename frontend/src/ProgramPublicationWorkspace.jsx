@@ -112,7 +112,7 @@ function ProgramEnrollmentForm({ program, url, apiKey, customers, sendableProvid
         { channel, approval_id: approvalId.trim() }, headers,
       );
       if (!["provider_accepted", "awaiting_owner_approval", "awaiting_provider_evidence",
-            "provider_not_confirmed"].includes(result?.status)) {
+            "provider_not_confirmed", "approval_not_granted"].includes(result?.status)) {
         throw new Error("Неизвестный ответ сверки с провайдером.");
       }
       setReconcileStatus((current) => ({ ...current, [key]: result.status }));
@@ -207,6 +207,7 @@ function ProgramEnrollmentForm({ program, url, apiKey, customers, sendableProvid
                         Проверить подтверждение у провайдера
                       </button>
                       {reconcileStatus[key] === "awaiting_owner_approval" ? <p>Ожидается подтверждение владельца.</p> : null}
+                      {reconcileStatus[key] === "approval_not_granted" ? <p role="alert">Подтверждение не предоставлено или отозвано. Отправка запрещена; необходимо новое разрешённое действие.</p> : null}
                       {reconcileStatus[key] === "awaiting_provider_evidence" ? <p>Выполнение ожидается; повторять отправку нельзя.</p> : null}
                       {reconcileStatus[key] === "provider_not_confirmed" ? <p>Отправка не подтверждена провайдером; результата доставки нет.</p> : null}
                     </>
