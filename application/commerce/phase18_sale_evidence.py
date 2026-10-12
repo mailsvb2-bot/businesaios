@@ -67,7 +67,13 @@ def evaluate_sale_evidence(
             and type(invoice.total_minor) is int and invoice.total_minor > 0
             and type(invoice.paid_minor) is int
             and invoice.paid_minor == invoice.total_minor)
-    # A PAID invoice projection alone is insufficient: refunds and chargebacks\n    # can be held by separate canonical finance owners. An absent authoritative\n    # reversal reader fails closed rather than silently granting fulfilment.\n    if not callable(reversal_reader):\n        raise RuntimeError("sale_reversal_authority_required")\n    reversal = reversal_reader(tenant_id=tenant_id, business_id=business_id, invoice_id=invoice_id)\n    if type(reversal) is not bool:\n        raise RuntimeError("sale_reversal_evidence_invalid")\n    allowed = lead_active and published and paid and not reversal
+    # A PAID invoice projection alone is insufficient: refunds and chargebacks
+    # can be held by separate canonical finance owners. An absent authoritative
+    # reversal reader fails closed rather than silently granting fulfilment.
+    if not callable(reversal_reader):\n        raise RuntimeError("sale_reversal_authority_required")
+    reversal = reversal_reader(tenant_id=tenant_id, business_id=business_id, invoice_id=invoice_id)
+    if type(reversal) is not bool:\n        raise RuntimeError("sale_reversal_evidence_invalid")
+    allowed = lead_active and published and paid and not reversal
     reason = ("ready_for_governed_fulfilment" if allowed else
               "lead_inactive" if not lead_active else
               "product_not_published" if not published else
