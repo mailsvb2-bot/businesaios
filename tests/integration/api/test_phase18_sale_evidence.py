@@ -67,3 +67,38 @@ def test_sale_requires_owned_paid_invoice_published_program_and_live_lead():
     assert evaluate_sale_evidence(**args).reason == "lead_inactive"
     with pytest.raises((LookupError, KeyError)):
         evaluate_sale_evidence(**{**args, "business_id": "different-business"})
+
+
+def test_sale_reads_durable_canonical_invoice_after_registry_restart():
+    from billing.invoice_registry import InvoiceRegistry
+
+    events, idem = MemoryEventStore(), InMemoryIdempotencyStore()
+    scope = {"tenant_id": "tenant-a", "business_id": "business-a"}
+    leads = LeadRegistry(event_store=events, idempotency_store=idem)
+    programs = ProgramPublicationRegistry(event_store=events, idempotency_store=idem)
+    first_billing = InvoiceRegistry(event_store=events, idempotency_store=idem)
+    leads.create(**scope, lead_id="lead-one", idempotency_key="lead-one")
+    program = programs.publish(
+        **scope, actor_id="owner", title="Paid lessons", idempotency_key="course",
+        lessons=[{"title": "Lesson", "content_kind": "text", "content_ref": "Text"}],
+    )
+    invoice = CommercialInvoiceEnvelope(
+        **scope, invoice_id="invoice-one", currency="RUB",
+        total_minor=15000, metadata={"lead_id": "lead-one", "program_id": program["id"]},
+    )
+    first_billing.create(business_id=scope["business_id"], invoice=invoice, idempotency_key="create")
+    first_billing.issue(**scope, invoice_id="invoice-one", idempotency_key="issue",
+                        issued_at=datetime(2026, 10, 12, tzinfo=timezone.utc))
+    first_billing.record_payment(**scope, invoice_id="invoice-one",
+                                 idempotency_key="payment", amount_minor=15000)
+    restarted = InvoiceRegistry(event_store=events, idempotency_store=idem)
+    args = dict(**scope, lead_id="lead-one", program_id=program["id"],
+                invoice_id="invoice-one", leads=leads, programs=programs,
+                invoice_reader=restarted.get, reversal_reader=lambda **_: False)
+    assert evaluate_sale_evidence(**args).can_request_fulfilment is True
+    # A reverse-payment observation from the canonical finance owner overrides
+    # the durable paid invoice projection until it has been reconciled.
+    assert evaluate_sale_evidence(**{**args, "reversal_reader": lambda **_: True}).can_request_fulfilment is False
+    restarted.credit(**scope, invoice_id="invoice-one", idempotency_key="credit")
+    assert evaluate_sale_evidence(**args).can_request_fulfilment is False
+    assert evaluate_sale_evidence(**args).reason == "payment_not_confirmed"
