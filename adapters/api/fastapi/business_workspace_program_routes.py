@@ -35,13 +35,17 @@ def register_business_workspace_program_routes(
     async def publish_program(request: Request):
         tenant_id, business_id, actor_id = scope(request)
         body = await json_body(request)
-        if set(body) != {"title", "lessons", "idempotency_key"}:
+        if set(body) not in (
+            {"title", "lessons", "idempotency_key"},
+            {"title", "lessons", "idempotency_key", "access_mode"},
+        ):
             raise HTTPException(status_code=422, detail="program_publication_fields_invalid")
         try:
             return programs.publish(
                 tenant_id=tenant_id, business_id=business_id, actor_id=actor_id,
                 title=body["title"], lessons=body["lessons"],
                 idempotency_key=body["idempotency_key"],
+                access_mode=body.get("access_mode", "free"),
             )
         except (ValueError, TypeError) as exc:
             raise HTTPException(status_code=422, detail=str(exc)) from exc
@@ -89,9 +93,15 @@ def register_business_workspace_program_routes(
         except ValueError as exc:
             raise HTTPException(status_code=422, detail=str(exc)) from exc
         except RuntimeError as exc:
-            if str(exc) in {"enrollment_program_not_active", "enrollment_customer_not_active", "enrollment_creation_in_progress"}:
+            if str(exc) in {
+                "enrollment_program_not_active", "enrollment_customer_not_active",
+                "enrollment_creation_in_progress", "program_paid_entitlement_not_verified",
+            }:
                 raise HTTPException(status_code=409, detail=str(exc)) from exc
-            if str(exc) == "enrollment_canonical_customer_owner_unavailable":
+            if str(exc) in {
+                "enrollment_canonical_customer_owner_unavailable",
+                "program_paid_access_authority_unavailable",
+            }:
                 raise HTTPException(status_code=503, detail=str(exc)) from exc
             raise
 
@@ -110,11 +120,15 @@ def register_business_workspace_program_routes(
         except (ValueError, TypeError) as exc:
             raise HTTPException(status_code=422, detail=str(exc)) from exc
         except RuntimeError as exc:
-            if str(exc) == "enrollment_canonical_customer_owner_unavailable":
+            if str(exc) in {
+                "enrollment_canonical_customer_owner_unavailable",
+                "program_paid_access_authority_unavailable",
+            }:
                 raise HTTPException(status_code=503, detail=str(exc)) from exc
             if str(exc) in {
                 "enrollment_customer_not_active", "program_delivery_identity_missing",
                 "program_delivery_identity_ambiguous", "program_lesson_media_delivery_not_connected",
+                "program_paid_entitlement_not_verified",
             }:
                 raise HTTPException(status_code=409, detail=str(exc)) from exc
             raise
@@ -155,12 +169,14 @@ def register_business_workspace_program_routes(
             if str(exc) in {
                 "program_delivery_verifier_unavailable",
                 "enrollment_canonical_customer_owner_unavailable",
+                "program_paid_access_authority_unavailable",
             }:
                 raise HTTPException(status_code=503, detail=str(exc)) from exc
             if str(exc) in {
                 "program_lesson_already_provider_accepted", "enrollment_customer_not_active",
                 "program_delivery_identity_missing", "program_delivery_identity_ambiguous",
                 "program_lesson_media_delivery_not_connected",
+                "program_paid_entitlement_not_verified",
                 "program_delivery_provider_timestamp_missing",
                 "program_delivery_provider_evidence_incomplete",
             }:

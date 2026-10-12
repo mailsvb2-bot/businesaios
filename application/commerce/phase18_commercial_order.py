@@ -104,6 +104,8 @@ class CommercialProgramPurchaseService:
         if (program.get("tenant_id") != tenant_id or program.get("business_id") != business_id
                 or program.get("id") != program_id or program.get("status") != "active"):
             raise ValueError("commercial_program_unpublished_or_unowned")
+        if program.get("access_mode", "free") != "paid":
+            raise ValueError("commercial_product_not_configured_for_paid_access")
 
     def priced_offer(self, *, tenant_id: str, business_id: str,
                      program_id: str, offer_id: str) -> PricedProgramOffer:

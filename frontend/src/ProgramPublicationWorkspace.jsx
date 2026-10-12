@@ -228,6 +228,7 @@ export function ProgramPublicationWorkspace({ apiBase, apiKey, tenantId, busines
   const [drafts, setDrafts] = useState([]);
   const [editingDraft, setEditingDraft] = useState(null);
   const [title, setTitle] = useState("");
+  const [accessMode, setAccessMode] = useState("free");
   const [lessons, setLessons] = useState([newLesson()]);
   const [busy, setBusy] = useState("");
   const [error, setError] = useState("");
@@ -275,6 +276,7 @@ export function ProgramPublicationWorkspace({ apiBase, apiKey, tenantId, busines
         title: item.title.trim(), content_kind: item.content_kind,
         content_ref: item.content_ref.trim(),
       })),
+      ...(!editingDraft ? { access_mode: accessMode } : {}),
     };
     const signature = JSON.stringify(payload);
     if (editingDraft && editingDraft.signature !== signature) {
@@ -308,6 +310,7 @@ export function ProgramPublicationWorkspace({ apiBase, apiKey, tenantId, busines
       setDrafts((existing) => existing.filter((item) => item.id !== published.id));
       setPrograms((existing) => [published, ...existing.filter((item) => item.id !== published.id)]);
       setTitle("");
+      setAccessMode("free");
       setLessons([newLesson()]);
       setNotice("Программа сохранена и опубликована в каталоге BusinessAIOS. Номер: " + published.id);
       try {
@@ -330,6 +333,7 @@ export function ProgramPublicationWorkspace({ apiBase, apiKey, tenantId, busines
   const clearEditor = () => {
     setEditingDraft(null);
     setTitle("");
+    setAccessMode("free");
     setLessons([newLesson()]);
     pending.current = null;
     draftPending.current = null;
@@ -479,6 +483,19 @@ export function ProgramPublicationWorkspace({ apiBase, apiKey, tenantId, busines
             onChange={(event) => { setTitle(event.target.value); pending.current = null; draftPending.current = null; }}
             placeholder="Например: Четыре шага к результату" />
         </label>
+        <label>Режим доступа
+          <select value={editingDraft ? "free" : accessMode}
+            disabled={Boolean(busy) || Boolean(editingDraft)}
+            onChange={(event) => { setAccessMode(event.target.value); pending.current = null; }}>
+            <option value="free">Бесплатная программа</option>
+            <option value="paid">Платная программа — только подтверждённое право доступа</option>
+          </select>
+        </label>
+        {accessMode === "paid" && !editingDraft ? (
+          <p className="muted-text">Публикация платной программы сама не назначает цену
+            и не подтверждает оплату. Пока PSP и право доступа не проверены,
+            зачисление и выдача закрыты.</p>
+        ) : null}
         <h3>Уроки ({lessons.length} из 100)</h3>
         {lessons.map((item, index) => (
           <fieldset key={index} disabled={Boolean(busy)}>
@@ -543,15 +560,21 @@ export function ProgramPublicationWorkspace({ apiBase, apiKey, tenantId, busines
         <ul>{programs.map((item) => (
           <li key={item.id}>
             <strong>{item.title}</strong>
-            <p>Уроков: {item.lessons.length} · Статус: {item.status}</p>
+            <p>Уроков: {item.lessons.length} · Статус: {item.status}
+              · Доступ: {item.access_mode === "paid" ? "платный" : "бесплатный"}</p>
             <small>{item.id}</small>
             <ol>{item.lessons.map((lesson) => (
               <li key={lesson.position}>{lesson.title} · {lesson.content_kind}</li>
             ))}</ol>
-            <ProgramEnrollmentForm key={item.id} program={item} url={url}
-              apiKey={apiKey} customers={customers} sendableProviders={sendableProviders}
-              suggestedApprovalIds={suggestedApprovalIds} onPrepareLessonSend={onPrepareLessonSend} onRefreshCustomers={onRefreshCustomers}
-              getJson={getJson} postJson={postJson} />
+            {item.access_mode === "paid" ? (
+              <p className="muted-text">Ручное зачисление и отправка платной программы
+                заблокированы до серверной проверки права доступа.</p>
+            ) : (
+              <ProgramEnrollmentForm key={item.id} program={item} url={url}
+                apiKey={apiKey} customers={customers} sendableProviders={sendableProviders}
+                suggestedApprovalIds={suggestedApprovalIds} onPrepareLessonSend={onPrepareLessonSend} onRefreshCustomers={onRefreshCustomers}
+                getJson={getJson} postJson={postJson} />
+            )}
           </li>
         ))}</ul>
       ) : <p className="muted-text">Программ пока нет.</p>}

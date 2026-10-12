@@ -561,6 +561,10 @@ class ProgramPublicationRegistry:
             tenant_id=tenant_id, business_id=business_id,
             program_id=program_id, enrollment_id=enrollment_id,
         )
+        self._require_program_access(
+            tenant_id=tenant_id, business_id=business_id,
+            program_id=program_id, customer_id=enrollment["customer_id"],
+        )
         if type(lesson_position) is not int or not 1 <= lesson_position <= len(enrollment["progress"]):
             raise ValueError("program_lesson_position_invalid")
         provider_key = _required(provider_key, "provider_key")
