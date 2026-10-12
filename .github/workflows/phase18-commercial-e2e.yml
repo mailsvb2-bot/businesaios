@@ -1,0 +1,71 @@
+name: Phase18 Commercial E2E
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+    paths:
+      - 'application/commerce/**'
+      - 'application/lead/**'
+      - 'adapters/api/fastapi/business_workspace_commercial_routes.py'
+      - 'adapters/api/fastapi/business_workspace_program_routes.py'
+      - 'billing/invoice_registry.py'
+      - 'billing/phase18_commercial_settlement.py'
+      - 'runtime/business_autonomy/provider_inbound_webhook_service.py'
+      - 'tests/integration/api/test_phase18_*.py'
+      - '.github/workflows/phase18-commercial-e2e.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: phase18-commercial-e2e-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verified-journey:
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
+    name: commercial-journey (${{ matrix.python-version }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ['3.11', '3.12']
+    steps:
+      - name: Checkout exact branch SHA
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+        with:
+          python-version: ${{ matrix.python-version }}
+      - name: Verify locked dependencies
+        run: python scripts/ci/check_requirements_lock.py
+      - name: Install locked runtime
+        run: python -m pip install -r requirements.lock.txt
+      - name: Run real owner and commercial safety journeys
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts/ci/commercial
+          python -m pytest -q \
+            tests/integration/api/test_phase18_commercial_ingress_journey.py \
+            tests/integration/api/test_phase18_commercial_context_journey.py \
+            tests/integration/api/test_phase18_commercial_order_journey.py \
+            tests/integration/api/test_phase18_commercial_checkout_journey.py \
+            tests/integration/api/test_phase18_commercial_owner_http.py \
+            tests/integration/api/test_phase18_commercial_settlement_journey.py \
+            tests/integration/api/test_phase18_paid_program_access_journey.py \
+            tests/integration/api/test_phase18_program_enrollment_canonical_customer.py \
+            tests/integration/api/test_phase18_program_publication_journey.py \
+            --junitxml=artifacts/ci/commercial/junit.xml
+      - name: Preserve actual regression evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: phase18-commercial-${{ matrix.python-version }}
+          retention-days: 3
+          path: artifacts/ci/commercial/
+          if-no-files-found: warn
