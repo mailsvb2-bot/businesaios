@@ -60,6 +60,7 @@ def test_sale_requires_owned_paid_invoice_published_program_and_live_lead():
         invoices["invoice-1"] = changed
         with pytest.raises(RuntimeError, match="sale_billing_scope_mismatch|sale_invoice_product_binding_missing"):
             evaluate_sale_evidence(**args)
+    invoices["invoice-1"] = original
     assert evaluate_sale_evidence(**{**args, "reversal_reader": lambda **_: True}).reason == "payment_reversed"
     with pytest.raises(RuntimeError, match="sale_reversal_authority_required"):
         evaluate_sale_evidence(**{**args, "reversal_reader": None})
