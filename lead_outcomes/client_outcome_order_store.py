@@ -362,6 +362,18 @@ class OrderStore(BaseRegistry):
             raise OrderNotFound(f"order not found: {order_id}")
         return order
 
+    def get_order_specialization(
+        self, *, order_id: str, tenant_id: str, business_id: str,
+    ) -> dict[str, Any]:
+        """Read links through the canonical owner under a strict tenant scope."""
+        payload = self.maybe_get(str(order_id))
+        if payload is None:
+            raise OrderNotFound(f"order not found: {order_id}")
+        order, specialization, _ = self._decode_envelope(payload)
+        if order.tenant_id != str(tenant_id).strip() or order.business_id != str(business_id).strip():
+            raise OrderNotFound(f"order not found: {order_id}")
+        return dict(specialization)
+
     def list_for_business(self, *, tenant_id: str, business_id: str) -> tuple[Order, ...]:
         tenant = str(tenant_id).strip()
         business = str(business_id).strip()
