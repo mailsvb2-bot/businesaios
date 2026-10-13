@@ -26,6 +26,7 @@ BROWSER_SCENARIOS = (
     (EVENT_TITLE, EVENT_SPEC),
     ("support console rejects owner credentials and processes bounded cases without key persistence", "support-operator-journey.spec.js"),
     ("owner creates and publishes a multi-lesson program through the canonical catalog", "program-publication-journey.spec.js"),
+    ("owner can quote, create and recover a canonical sale without inventing payment", "commercial-sale-journey.spec.js"),
 )
 
 STEP_SHAPE = json.loads(Path("tests/fixtures/playwright/onboarding-step-shape.json").read_text(encoding="utf-8"))
