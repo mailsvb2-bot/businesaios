@@ -164,3 +164,115 @@ def test_canonical_funnel_advisory_uses_live_customer_and_order_facts_not_fake_p
             tenant_id=scope["tenant_id"], business_id="foreign-business",
             lead_id=lead.lead_id,
         )
+
+
+
+@pytest.mark.parametrize(
+    ("signals", "reason", "priority"),
+    [
+        ({"sensitive_context": True, "human_requested": True}, "sensitive_context", "urgent"),
+        ({"human_requested": True}, "explicit_human_request", "high"),
+        ({"pricing_exception": True}, "pricing_exception", "high"),
+        ({"failed_attempts": 2}, "repeated_failure", "high"),
+        ({"negative_sentiment": True}, "negative_sentiment", "normal"),
+        ({"model_confidence": 0.5}, "low_confidence", "normal"),
+    ],
+)
+def test_clientplatform_sales_handoff_uses_canonical_operator_contract(signals, reason, priority):
+    ctx = _build()
+    scope = ctx["scope"]
+    reader = ctx["context"]
+    before = reader.read(**scope, lead_id=ctx["lead"].lead_id)
+    review = reader.evaluate_sales_engagement(
+        **scope, lead_id=ctx["lead"].lead_id,
+        expected_fingerprint=before.context_fingerprint,
+        model_confidence=signals.pop("model_confidence", 0.98), **signals,
+    )
+    assert review["handoff_reason"] == reason
+    assert review["handoff_priority"] == priority
+    assert review["handoff"]["operator_required"] is True
+    assert review["handoff"]["handoff_state"] == "awaiting_operator"
+    assert review["handoff"]["decision_id"] == before.context_fingerprint
+    assert review["outreach_suppressed"] is True
+    assert review["followup_queued"] is False
+    assert review["operator_handoff_persisted"] is False
+    assert review["message_sent"] is False
+
+
+def test_sales_followup_candidate_is_not_a_message_send_or_approval():
+    ctx = _build()
+    scope = ctx["scope"]
+    reader = ctx["context"]
+    before = reader.read(**scope, lead_id=ctx["lead"].lead_id)
+    decision = reader.evaluate_sales_engagement(
+        **scope, lead_id=ctx["lead"].lead_id,
+        expected_fingerprint=before.context_fingerprint,
+        model_confidence=0.99,
+    )
+    assert decision["followup_candidate"] is True
+    assert decision["message_sent"] is False
+    assert decision["followup_queued"] is False
+    assert decision["manual_approval_required"] is True
+    opted_out = reader.evaluate_sales_engagement(
+        **scope, lead_id=ctx["lead"].lead_id,
+        expected_fingerprint=before.context_fingerprint,
+        model_confidence=0.99, customer_opted_out=True,
+    )
+    assert opted_out["followup_candidate"] is False
+    assert opted_out["handoff"] is None
+    assert opted_out["suppression_reason"] == "customer_opt_out"
+    ctx["purchase"].prepare_purchase(
+        **scope, lead_id=ctx["lead"].lead_id,
+        customer_id=ctx["customer"].customer_id,
+        program_id=ctx["published"]["id"], offer_id="verified",
+        idempotency_key="followup-existing-order",
+    )
+    with pytest.raises(RuntimeError, match="commercial_context_stale_decision"):
+        reader.evaluate_sales_engagement(
+            **scope, lead_id=ctx["lead"].lead_id,
+            expected_fingerprint=before.context_fingerprint,
+            model_confidence=0.99,
+        )
+    after = reader.read(**scope, lead_id=ctx["lead"].lead_id)
+    new_review = reader.evaluate_sales_engagement(
+        **scope, lead_id=ctx["lead"].lead_id,
+        expected_fingerprint=after.context_fingerprint,
+        model_confidence=0.99,
+    )
+    assert new_review["suppression_reason"] == "existing_order_requires_billing_truth"
+
+
+@pytest.mark.parametrize("input_overrides", [
+    {"model_confidence": float("nan")},
+    {"model_confidence": float("inf")},
+    {"model_confidence": -0.1},
+    {"model_confidence": 1.1},
+    {"model_confidence": True},
+    {"failed_attempts": -1},
+    {"failed_attempts": True},
+    {"human_requested": 1},
+    {"customer_opted_out": "yes"},
+])
+def test_sales_engagement_rejects_invalid_model_and_flags(input_overrides):
+    ctx = _build()
+    scope = ctx["scope"]
+    reader = ctx["context"]
+    before = reader.read(**scope, lead_id=ctx["lead"].lead_id)
+    with pytest.raises(ValueError):
+        reader.evaluate_sales_engagement(
+            **scope, lead_id=ctx["lead"].lead_id,
+            expected_fingerprint=before.context_fingerprint,
+            **({"model_confidence": 0.99} | input_overrides),
+        )
+
+
+def test_sales_engagement_never_exposes_foreign_business_context():
+    ctx = _build()
+    before = ctx["context"].read(**ctx["scope"], lead_id=ctx["lead"].lead_id)
+    with pytest.raises(LookupError):
+        ctx["context"].evaluate_sales_engagement(
+            tenant_id="tenant-a", business_id="foreign-business",
+            lead_id=ctx["lead"].lead_id,
+            expected_fingerprint=before.context_fingerprint,
+            model_confidence=0.99,
+        )
