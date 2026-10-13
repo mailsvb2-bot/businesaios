@@ -409,3 +409,22 @@ def test_repository_scan_handles_os_errors_and_post_stat_growth(
         with pytest.raises(ValueError, match="source file exceeds"):
             repository_sources.read_python_source(path, max_bytes=4)
     assert Path.open is real_open
+
+
+def test_business_critical_step_uses_bounded_shards_and_reports_failure(monkeypatch) -> None:
+    from scripts.ci import step_business_critical_tests
+
+    captured = {}
+
+    def fake_runner(**kwargs):
+        captured.update(kwargs)
+        return False, "shard 2/5: failing business invariant"
+
+    monkeypatch.setattr(step_business_critical_tests, "run_pytest_sharded_with_report", fake_runner)
+    assert step_business_critical_tests.run() == (
+        False, "shard 2/5: failing business invariant"
+    )
+    assert captured["target_args"] == ["tests/business_critical"]
+    assert captured["timeout_per_shard"] == 240
+    assert 0 < captured["max_files_per_shard"] <= 12
+    assert captured["mark_expression"] == "not slow and not integration and not gate"
