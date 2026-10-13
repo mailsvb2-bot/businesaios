@@ -34,6 +34,38 @@ def register_business_workspace_commercial_routes(*, router: APIRouter, auth_bun
             if lead.customer_id and lead.conversation_id and lead.channel
         ]}
 
+    @router.get("/business-workspace/commercial/funnel-metrics", tags=["business-workspace"])
+    async def commercial_funnel_metrics(request: Request):
+        """Read-only donor sales metrics from canonical Lead/Order/Invoice truth."""
+        tenant, business = scope(request)
+        leads = purchases.leads.list_for_business(tenant_id=tenant, business_id=business)
+        statuses: dict[str, int] = {}
+        for lead in leads:
+            if lead.customer_id and lead.conversation_id and lead.channel:
+                stage = str(lead.status or "new")
+                statuses[stage] = statuses.get(stage, 0) + 1
+        orders = [
+            _order_status(purchases, tenant, business, order.order_id, checkout=checkout)
+            for order in purchases.orders.list_for_business(tenant_id=tenant, business_id=business)
+            if order.order_kind == "commercial_program"
+        ]
+        verified = [order for order in orders if order["provider_verified"]]
+        gross: dict[str, int] = {}
+        for order in verified:
+            currency = order["currency"]
+            gross[currency] = gross.get(currency, 0) + order["paid_minor"]
+        return {
+            "tenant_id": tenant,
+            "business_id": business,
+            "lead_count": sum(statuses.values()),
+            "stages": statuses,
+            "order_count": len(orders),
+            "externally_verified_order_count": len(verified),
+            "verified_gross_captured_minor_by_currency": gross,
+            "net_revenue_not_computed": True,
+            "external_payment_proof_required": True,
+        }
+
     @router.get("/business-workspace/commercial/leads/{lead_id}/context", tags=["business-workspace"])
     async def read_commercial_context(lead_id: str, request: Request):
         tenant, business = scope(request)
