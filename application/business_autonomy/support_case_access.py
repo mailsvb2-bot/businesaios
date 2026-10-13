@@ -226,12 +226,20 @@ class SupportCaseDiagnosticAccess:
             "grant_id": state["grant_id"], "operator_id": operator_id,
             "observed_at_ms": now, "window_hours": 24, "counts": counts,
         }
-        self._writer.append_once(
-            tenant_id=tenant_id, business_id=business_id, entity_id=case["id"],
-            operation="view_diagnostics", idempotency_key=effective,
-            fact_type=_VIEWED, payload=row, occurred_at_ms=now,
-            event_metadata={"actor_id": operator_id},
-        )
+        try:
+            self._writer.append_transition_once(
+                tenant_id=tenant_id, business_id=business_id, entity_id=case["id"],
+                expected_state_token="access:" + str(state["fact_revision"]),
+                operation="view_diagnostics", idempotency_key=effective,
+                fact_type=_VIEWED, payload=row, occurred_at_ms=now,
+                event_metadata={"actor_id": operator_id},
+            )
+        except RuntimeError as exc:
+            if str(exc).startswith("ontology transition rejected:"):
+                raise RuntimeError("support_access_revision_conflict") from exc
+            raise
+        if not self.state(tenant_id=tenant_id, business_id=business_id, case_id=case["id"])["active"]:
+            raise RuntimeError("support_access_no_live_consent")
         return self._diagnostic_receipt(case["id"], row)
 
     @staticmethod
