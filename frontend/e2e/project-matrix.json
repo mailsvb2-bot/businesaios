@@ -66,7 +66,7 @@
       "title": "owner can quote, create and recover a canonical sale without inventing payment",
       "file": "commercial-sale-journey.spec.js",
       "proof_mode": "source_locked_execution",
-      "source_sha256": "02a3a2117e3e99a8d64a3fc334f3a17994ef1ffe5450efdaac922e63afde3a27"
+      "source_sha256": "178e295519feed1c180fcd1705c375aad7a027211d7e5d71bf500b59b5b05923"
     }
   ]
 }
