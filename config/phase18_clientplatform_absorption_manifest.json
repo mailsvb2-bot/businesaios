@@ -405,14 +405,28 @@
     },
     {
       "id": "support.audited_access_session",
-      "status": "inventory",
-      "canonical_owner": null,
-      "source_of_truth": null,
-      "evidence": [],
+      "status": "mapped",
+      "canonical_owner": "application.business_autonomy.SupportCaseRegistry + SupportCaseDiagnosticAccess (one existing EventFactLifecycleWriter)",
+      "source_of_truth": "Canonical Business Event Spine support_case.access_granted/access_revoked/diagnostics_viewed; tenant/business-scoped case claim and existing API-key/RBAC owner",
+      "evidence": [
+        "application/business_autonomy/support_case_access.py",
+        "adapters/api/fastapi/business_workspace_support_case_routes.py",
+        "security/access_policy.py",
+        "frontend/src/SupportCasesWorkspace.jsx",
+        "frontend/src/SupportOperatorConsole.jsx",
+        "tests/unit/application/test_phase18_support_case_consent_access.py",
+        "tests/integration/api/test_phase18_support_consent_diagnostics_http.py",
+        "tests/unit/security/test_support_case_route_access_policy_phase18.py",
+        "frontend/e2e/support-operator-journey.spec.js"
+      ],
       "runtime_dependency_removed": false,
       "pr472_claimed_status": "inventory",
       "pr472_claimed_runtime_dependency_removed": false,
-      "integration_missing_evidence": []
+      "integration_missing_evidence": [
+        "real deployed PostgreSQL multi-process delegated-consent E2E",
+        "live support/operator credential issuance and revocation on production",
+        "ClientPlatform support-data migration parity and donor cutover"
+      ]
     },
     {
       "id": "support.case_queue",
