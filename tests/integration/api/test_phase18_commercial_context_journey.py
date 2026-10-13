@@ -411,6 +411,7 @@ def test_owner_approved_followup_routes_to_canonical_provider_and_blocks_replay_
     register_business_workspace_commercial_routes(
         router=router, auth_bundle=auth, purchases=ctx["purchase"],
         context_reader=ctx["context"], provider_handlers=Provider(),
+        customers=ctx["customers"],
     )
     app = FastAPI()
     app.include_router(router)
@@ -436,6 +437,11 @@ def test_owner_approved_followup_routes_to_canonical_provider_and_blocks_replay_
         assert duplicate.json()["canonical_provider_execution"]["execution"]["dispatch"]["job_id"] == job_id
         assert reopened.count(tenant_id="tenant-a", queue_name="provider_sync", state=JobState.PENDING) == 1
         assert len(calls) == 2
+        metadata["approval_resume_context"]["payload"]["chat_id"] = "not-this-customer"
+        assert client.post(path, headers={"X-API-Key": owner}).status_code == 404
+        assert len(calls) == 2
+        metadata["approval_resume_context"]["payload"]["chat_id"] = "123"
+        metadata["approval_resume_context"]["payload"]["chat_id"] = "123"
         metadata["approval_resume_context"]["payload"]["text"] = "tampered"
         assert client.post(path, headers={"X-API-Key": owner}).status_code == 403
         assert len(calls) == 2
