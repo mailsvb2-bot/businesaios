@@ -11,6 +11,7 @@ Infrastructure only:
 from __future__ import annotations
 
 import threading
+from contextlib import closing
 from datetime import datetime, timedelta
 from pathlib import Path
 
@@ -319,8 +320,28 @@ class SqliteJobStore:
         self._ensure_open()
         tid = require_tenant_id(tenant_id)
         qn = _require_queue_name(queue_name)
-        with self._lock, self._tx() as db:
-            return reap_expired_claims_sqlite(db=db, tenant_id=tid, queue_name=qn, now=now)
+        moment = normalize_now(now)
+        with self._lock:
+            # Normal polling has no expired claims. A write transaction on every
+            # tick serializes all worker processes even when nothing must change.
+            # Probe via a read-only connection; the actual reclaim re-checks all
+            # candidates inside a transaction for cross-process correctness.
+            with closing(self._connect()) as db:
+                expired = db.execute(
+                    """
+                    SELECT 1 FROM runtime_queue_jobs
+                    WHERE tenant_id = ? AND queue_name = ? AND state = ?
+                      AND lease_expires_at IS NOT NULL AND lease_expires_at <= ?
+                    LIMIT 1
+                    """,
+                    (tid, qn, JobState.CLAIMED.value, iso_datetime(moment)),
+                ).fetchone()
+            if expired is None:
+                return 0
+            with self._tx() as db:
+                return reap_expired_claims_sqlite(
+                    db=db, tenant_id=tid, queue_name=qn, now=moment
+                )
 
 
     def _tx(self):
