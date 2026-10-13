@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 from types import SimpleNamespace
+
 from fastapi import APIRouter, FastAPI
 from fastapi.testclient import TestClient
 
@@ -12,9 +13,9 @@ from application.commerce.phase18_program_publication_registry import ProgramPub
 from application.lead.registry import LeadRegistry
 from application.organization import OrganizationRegistry
 from application.partner import PartnerRegistry
-from contracts.partner import PartnerPartyKind
 from billing.invoice_registry import InvoiceRegistry
 from contracts.customer import Customer, CustomerRecord
+from contracts.partner import PartnerPartyKind
 from core.offers.offer_types import OfferSummary
 from entrypoints.api.api_key_policy import ApiKeyPolicy, PersistentApiKeyStore
 from entrypoints.api.security_owner_bundle import ApiSecurityOwnerBundle

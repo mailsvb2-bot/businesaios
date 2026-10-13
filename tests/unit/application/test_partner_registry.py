@@ -5,9 +5,9 @@ from dataclasses import fields
 import pytest
 
 from application.organization import OrganizationRegistry
-from contracts.event_store import canonical_business_event_contract
 from application.partner import PartnerProjector, PartnerRegistry
 from application.person import PersonRegistry
+from contracts.event_store import canonical_business_event_contract
 from contracts.organization import OrganizationNotFound
 from contracts.partner import Partner, PartnerNotFound, PartnerPartyKind, PartnerStatus
 from contracts.person import PersonNotFound
