@@ -265,6 +265,16 @@ def register_public_api_routes(
             # Configure the *existing* checkout and Billing owners only when
             # all external money and reversal authorities are explicitly supplied
             # by server bootstrap. Partial configuration is a startup error.
+            from runtime.platform.config.env_flags import env_str
+
+            commercial_yookassa_opt_in = env_str(
+                "BUSINESAIOS_COMMERCIAL_YOOKASSA_ENABLED", "0",
+            ).strip().lower() in {"1", "true", "yes", "on"}
+            if commercial_yookassa_opt_in and any(part is not None for part in (
+                commercial_payment_adapter, commercial_payment_verifier,
+                commercial_reversal_reader, commercial_merchant_id,
+            )):
+                raise RuntimeError("commercial_yookassa_conflicting_authorities")
             commercial_provider_parts = (
                 commercial_payment_adapter, commercial_payment_verifier,
                 commercial_reversal_reader, commercial_merchant_id,
@@ -296,6 +306,20 @@ def register_public_api_routes(
                         purchases=commercial_purchases, checkouts=commercial_checkout,
                         reversal_reader=commercial_reversal_reader,
                     )
+                )
+            if commercial_yookassa_opt_in:
+                from application.commerce.phase18_commercial_provider_binding import (
+                    build_sealed_yookassa_commercial_bundle,
+                )
+
+                merchant_bundle = build_sealed_yookassa_commercial_bundle(
+                    purchases=commercial_purchases, event_store=event_store,
+                    idempotency_store=dependency_container.api_idempotency_store,
+                )
+                commercial_checkout = merchant_bundle.checkout
+                commercial_settlement = merchant_bundle.settlement
+                canonical_programs.bind_paid_access_authority(
+                    merchant_bundle.paid_access,
                 )
             register_business_workspace_program_routes(
                 router=router, auth_bundle=auth_bundle,
