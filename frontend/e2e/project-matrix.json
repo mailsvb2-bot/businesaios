@@ -63,10 +63,10 @@
     },
     {
       "id": "commercial_owner_sale_checkout_ui",
-      "title": "owner selects real lead and catalog offer, reuses retry identity and refuses unverified PSP checkout; browser contract fixture",
+      "title": "owner can quote, create and recover a canonical sale without inventing payment",
       "file": "commercial-sale-journey.spec.js",
       "proof_mode": "source_locked_execution",
-      "source_sha256": "7f418c6d09cd30ddec24b1fa0e1edb5b6d889d99158fdb84f21f4c84f8e5b8cb"
+      "source_sha256": "02a3a2117e3e99a8d64a3fc334f3a17994ef1ffe5450efdaac922e63afde3a27"
     }
   ]
 }
