@@ -34,6 +34,49 @@ def register_business_workspace_commercial_routes(*, router: APIRouter, auth_bun
             if lead.customer_id and lead.conversation_id and lead.channel
         ]}
 
+    @router.post("/business-workspace/commercial/partner-opportunities/prepare", tags=["business-workspace"])
+    async def prepare_partner_campaign_proposal(request: Request):
+        """Generate an owner-reviewable proposal, never dispatch partner outreach."""
+        from application.partner.growth_advisory import (
+            PartnerOpportunity,
+            prepare_partner_proposal,
+        )
+
+        tenant, business = scope(request)
+        if partner_registry is None:
+            raise HTTPException(status_code=503, detail="canonical_partner_owner_unavailable")
+        body = await json_body(request)
+        if set(body) != {
+            "candidate", "business_name", "offering", "campaign_topic", "target_url",
+        }:
+            raise HTTPException(status_code=422, detail="partner_proposal_fields_invalid")
+        row = body["candidate"]
+        allowed = {
+            "partner_id", "name", "topics", "audience_summary", "recent_topic",
+            "followers", "contact_basis", "contact_value", "source_url", "competitor",
+        }
+        if not isinstance(row, dict) or not set(row) <= allowed:
+            raise HTTPException(status_code=422, detail="partner_candidate_fields_invalid")
+        try:
+            candidate = PartnerOpportunity(
+                business_id=business,
+                **{**row, "topics": tuple(row.get("topics") or ())},
+            )
+            partner = partner_registry.get(
+                tenant_id=tenant, business_id=business,
+                partner_id=candidate.partner_id,
+            )
+            draft = prepare_partner_proposal(
+                partner=partner, candidate=candidate,
+                business_name=body["business_name"], offering=body["offering"],
+                campaign_topic=body["campaign_topic"], target_url=body["target_url"],
+            )
+        except (TypeError, ValueError) as exc:
+            raise HTTPException(status_code=422, detail="partner_proposal_invalid") from exc
+        except (LookupError, PermissionError) as exc:
+            raise HTTPException(status_code=404, detail="partner_not_available") from exc
+        return {"proposal": asdict(draft), "outbound_sent": False, "advisory_only": True}
+
     @router.post("/business-workspace/commercial/partner-opportunities/rank", tags=["business-workspace"])
     async def rank_partner_opportunities(request: Request):
         """Owner-scoped partner shortlist with no outbound or new partner owner."""
