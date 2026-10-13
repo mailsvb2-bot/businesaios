@@ -7,13 +7,19 @@ used by canonical Billing reconciliation and the one Execution Engine.
 from __future__ import annotations
 
 import time
+from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Any
 from urllib.parse import urlsplit
 
+from application.commerce.phase18_commercial_access import CanonicalPaidProgramAccess
 from application.ontology import EventFactLifecycleWriter
 from billing.commercial_cycle_contract import InvoiceLifecycleStatus
 from billing.payment_provider_contract import PaymentCheckoutRequest
+from billing.phase18_commercial_settlement import (
+    CommercialSettlementReconciler,
+    YooKassaCommercialAuthority,
+)
 from contracts.event_store import BUSINESS_FACT_EVENT_TYPE
 from contracts.order import OrderLifecycleStatus
 
@@ -186,3 +192,82 @@ def _secure_url(url: object) -> bool:
 
 __all__ = ["CANON_PHASE18_COMMERCIAL_CHECKOUT_COORDINATOR",
            "CommercialCheckout", "CommercialCheckoutCoordinator"]
+
+
+
+
+@dataclass(frozen=True)
+class CommercialMerchantBundle:
+    checkout: CommercialCheckoutCoordinator
+    settlement: CommercialSettlementReconciler
+    paid_access: CanonicalPaidProgramAccess
+    merchant_authority: YooKassaCommercialAuthority
+
+
+
+def build_yookassa_commercial_bundle(
+    *, purchases: Any, event_store: Any, idempotency_store: Any,
+    merchant_id: str, sealed_create_payment: Callable[..., object],
+    sealed_fetch_payment: Callable[[str], object],
+) -> CommercialMerchantBundle:
+    """Assembly never creates a second money, checkout, or entitlement owner.
+
+    This only wires capabilities. It does NOT enable merchant payments or
+    outbound networking automatically; the caller supplies authenticated
+    effects from the existing sealed runtime and its authorized credential
+    scope. Missing or ambiguous facts fail closed.
+    """
+    def canonical_checkout_reader(
+        *, tenant_id: str, business_id: str, order_id: str | None = None,
+        invoice_id: str | None = None, provider_name: str | None = None,
+        external_reference: str | None = None,
+    ):
+        matched = []
+        for order in purchases.orders.list_for_business(
+            tenant_id=tenant_id, business_id=business_id,
+        ):
+            if order.order_kind != "commercial_program":
+                continue
+            if order_id is not None and order.order_id != order_id:
+                continue
+            saved = checkout._saved(
+                tenant_id=tenant_id, business_id=business_id, order_id=order.order_id,
+            )
+            if saved is None:
+                continue
+            if (invoice_id is not None and invoice_id != saved.invoice_id
+                    or provider_name is not None and provider_name != saved.provider_name
+                    or external_reference is not None
+                    and external_reference != saved.external_reference):
+                continue
+            matched.append(saved)
+        if len(matched) > 1:
+            raise RuntimeError("commercial_merchant_reference_not_unique")
+        return matched[0] if matched else None
+
+    authority = YooKassaCommercialAuthority(
+        merchant_id=merchant_id, create_payment=sealed_create_payment,
+        fetch_payment=sealed_fetch_payment, checkout_reader=canonical_checkout_reader,
+    )
+    checkout = CommercialCheckoutCoordinator(
+        purchase_service=purchases, payment_adapter=authority,
+        event_store=event_store, idempotency_store=idempotency_store,
+    )
+    settlement = CommercialSettlementReconciler(
+        purchases=purchases, checkouts=checkout,
+        payment_verifier=authority, configured_merchant_id=merchant_id,
+    )
+    paid_access = CanonicalPaidProgramAccess(
+        purchases=purchases, checkouts=checkout,
+        reversal_reader=authority.reversal_reader,
+    )
+    return CommercialMerchantBundle(
+        checkout=checkout, settlement=settlement,
+        paid_access=paid_access, merchant_authority=authority,
+    )
+
+
+
+
+__all__ = [
+           "CommercialMerchantBundle", "build_yookassa_commercial_bundle"]

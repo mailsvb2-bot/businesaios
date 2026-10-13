@@ -505,3 +505,29 @@ __all__ = [
 # The implementation stays runtime-internal; entrypoints import only from this
 # executor surface to preserve one guarded execution contract and prevent
 # route-level provider dispatch logic from becoming a second execution brain.
+
+
+def build_sealed_commercial_merchant_bundle(
+    *, purchases, event_store, idempotency_store, transport=None,
+):
+    """Only executor may compose merchant HTTP effects; no second payment owner."""
+    from functools import partial
+
+    from application.commerce.phase18_commercial_checkout import (
+        build_yookassa_commercial_bundle,
+    )
+    from runtime._internal.effects_clients.yookassa_client import (
+        create_merchant_payment,
+        fetch_merchant_payment,
+        resolve_credentials,
+    )
+
+    merchant_id, secret, api = resolve_credentials()
+    if not merchant_id or not secret :
+        raise RuntimeError("commercial_merchant_configuration_missing")
+    return build_yookassa_commercial_bundle(
+        purchases=purchases, event_store=event_store,
+        idempotency_store=idempotency_store, merchant_id=merchant_id,
+        sealed_create_payment=partial(create_merchant_payment, transport=transport),
+        sealed_fetch_payment=partial(fetch_merchant_payment, transport=transport),
+    )
