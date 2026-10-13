@@ -82,9 +82,11 @@ class AdPublicationAssetEvidence:
             raise ValueError("ad_asset_size_invalid")
         if kind is AdAssetKind.IMAGE and self.size_bytes > 20_000_000:
             raise ValueError("ad_asset_image_too_large")
-        if self.duration_seconds is not None:
-            if kind is not AdAssetKind.VIDEO or type(self.duration_seconds) is not int or not 0 < self.duration_seconds <= 3600:
-                raise ValueError("ad_asset_duration_invalid")
+        if self.duration_seconds is not None and (
+            kind is not AdAssetKind.VIDEO or type(self.duration_seconds) is not int
+            or not 0 < self.duration_seconds <= 3600
+        ):
+            raise ValueError("ad_asset_duration_invalid")
         for field in ("provider_image_hash", "provider_video_id", "provider_creative_id"):
             value = getattr(self, field)
             if value is not None:
