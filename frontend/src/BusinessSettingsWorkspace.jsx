@@ -70,19 +70,25 @@ export function BusinessSettingsWorkspace({ apiBase, apiKey, getJson, postJson, 
     event.preventDefault();
     if (!apiKey || busy || submitting.current || !settings || !name.trim()) return;
     submitting.current = true;
-    const payload = {
-      business_name: name.trim(), activity_description: activity.trim(),
-      timezone_name: timezone, expected_revision: settings.revision,
-    };
-    const signature = JSON.stringify(payload);
-    if (!pending.current || pending.current.signature !== signature) {
-      pending.current = { signature, key: "settings-" + crypto.randomUUID() };
-    }
     const seq = generation.current;
     setBusy("save");
     setError("");
     setNotice("");
     try {
+      const payload = {
+        business_name: name.trim(), activity_description: activity.trim(),
+        timezone_name: timezone, expected_revision: settings.revision,
+      };
+      const signature = JSON.stringify(payload);
+      if (!pending.current || pending.current.signature !== signature) {
+        // getRandomValues is available in WebKit even where randomUUID isn't.
+        const nonce = new Uint8Array(16);
+        crypto.getRandomValues(nonce);
+        pending.current = {
+          signature,
+          key: "settings-" + Array.from(nonce, (v) => v.toString(16).padStart(2, "0")).join(""),
+        };
+      }
       const result = await postJson(url, payload, {
         ...headers, "X-Idempotency-Key": pending.current.key,
       });
