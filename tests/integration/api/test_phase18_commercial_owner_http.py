@@ -82,6 +82,16 @@ def test_owner_scoped_order_payment_visibility_and_psp_guard(tmp_path):
         assert client.post(base + "/orders", headers={"X-API-Key": alien},
                            json=body).status_code == 404
         owner_headers = {"X-API-Key": owner}
+        before_metrics = client.get(base + "/funnel-metrics", headers=owner_headers)
+        assert before_metrics.status_code == 200
+        assert before_metrics.json()["lead_count"] == 1
+        assert before_metrics.json()["order_count"] == 0
+        assert before_metrics.json()["verified_gross_captured_minor_by_currency"] == {}
+        foreign_metrics = client.get(base + "/funnel-metrics", headers={"X-API-Key": alien})
+        assert foreign_metrics.status_code == 200
+        assert foreign_metrics.json()["lead_count"] == 0
+        assert foreign_metrics.json()["order_count"] == 0
+        assert client.get(base + "/funnel-metrics").status_code == 401
         leads_response = client.get(base + "/leads", headers=owner_headers)
         assert leads_response.status_code == 200
         assert leads_response.json()["leads"][0]["customer_id"] == "customer-a"
@@ -101,6 +111,12 @@ def test_owner_scoped_order_payment_visibility_and_psp_guard(tmp_path):
                           headers={"X-API-Key": alien}).status_code == 404
         assert client.get(base + "/orders", headers={"X-API-Key": alien}).json() == {"orders": []}
         assert len(client.get(base + "/orders", headers=owner_headers).json()["orders"]) == 1
+        metrics = client.get(base + "/funnel-metrics", headers=owner_headers).json()
+        assert metrics["order_count"] == 1
+        assert metrics["externally_verified_order_count"] == 0
+        assert metrics["verified_gross_captured_minor_by_currency"] == {}
+        assert metrics["external_payment_proof_required"] is True
+
         denied = client.post(base + "/orders/" + order["order_id"] + "/checkout",
                              headers=owner_headers)
         assert denied.status_code == 503
