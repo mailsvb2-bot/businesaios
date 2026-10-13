@@ -75,7 +75,7 @@ class YooKassaCommercialAuthority:
                 or not isinstance(payment.get("id"), str) or not payment["id"]
                 or _minor(_mapping(payment.get("amount")).get("value")) != req.amount_minor
                 or _mapping(payment["amount"]).get("currency") != "RUB"
-                or _mapping(payment.get("metadata")) != metadata):
+                or any(_mapping(payment.get("metadata")).get(k) != v for k, v in metadata.items())):
             raise RuntimeError("commercial_yookassa_checkout_unverified")
         confirmation = _mapping(payment.get("confirmation"))
         return PaymentCheckoutSession(
