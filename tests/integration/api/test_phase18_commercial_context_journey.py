@@ -355,7 +355,27 @@ def test_owner_approved_followup_routes_to_canonical_provider_and_blocks_replay_
         "approval_resume_context": {**subject, "business_id": "business-a",
                                      "operation": "message_send"},
     }
+    from application.business_autonomy.provider_catalog import provider_map
+    from runtime.business_autonomy.provider_queue_execution import ProviderQueueExecutionRuntime
+    from runtime.queue.job_contract import JobState
+    from runtime.queue.job_store_sqlite import SqliteJobStore
+    from security.secret_vault import InMemorySecretVault
+
     calls = []
+    durable_store = SqliteJobStore(tmp_path / "real-provider-queue.sqlite3")
+
+    class ApprovedGuard:
+        def evaluate(self, **kwargs):
+            return SimpleNamespace(
+                allowed=True, status="allowed_live_write_operation",
+                metadata={"approval": {"subject_fingerprint": digest}},
+            )
+
+    queue = ProviderQueueExecutionRuntime(
+        secret_vault=InMemorySecretVault(),
+        live_runtime=SimpleNamespace(),
+        store=durable_store, write_guard=ApprovedGuard(),
+    )
 
     class Provider:
         def approval_store_factory(self):
@@ -375,7 +395,16 @@ def test_owner_approved_followup_routes_to_canonical_provider_and_blocks_replay_
 
         def resume_approved_message(self, **kwargs):
             calls.append(kwargs)
-            return {"execution": {"result": {"accepted": False, "status": "ambiguous_delivery"}}}
+            accepted = queue.enqueue_sync(
+                provider=provider_map()["telegram_bot"],
+                tenant_id=kwargs["tenant_id"], business_id="business-a",
+                operation="message_send", mode="live",
+                payload=metadata["approval_resume_context"]["payload"],
+            )
+            return {"execution": {
+                "dispatch": {"queued": accepted.queued, "job_id": accepted.job_id},
+                "result": {"accepted": False, "status": "durably_queued"},
+            }}
 
     router = APIRouter()
     register_business_workspace_commercial_routes(
@@ -395,9 +424,18 @@ def test_owner_approved_followup_routes_to_canonical_provider_and_blocks_replay_
         assert response.status_code == 200, response.text
         assert response.json()["canonical_provider_execution"]["execution"]["result"]["accepted"] is False
         assert calls == [{"tenant_id": "tenant-a", "approval_id": "approval-a"}]
+        job_id = response.json()["canonical_provider_execution"]["execution"]["dispatch"]["job_id"]
+        assert durable_store.get(tenant_id="tenant-a", job_id=job_id).state is JobState.PENDING
+        reopened = SqliteJobStore(tmp_path / "real-provider-queue.sqlite3")
+        assert reopened.get(tenant_id="tenant-a", job_id=job_id).state is JobState.PENDING
+        duplicate = client.post(path, headers={"X-API-Key": owner})
+        assert duplicate.status_code == 200
+        assert duplicate.json()["canonical_provider_execution"]["execution"]["dispatch"]["job_id"] == job_id
+        assert reopened.count(tenant_id="tenant-a", queue_name="provider_sync", state=JobState.PENDING) == 1
+        assert len(calls) == 2
         metadata["approval_resume_context"]["payload"]["text"] = "tampered"
         assert client.post(path, headers={"X-API-Key": owner}).status_code == 403
-        assert len(calls) == 1
+        assert len(calls) == 2
         metadata["approval_resume_context"]["payload"]["text"] = "A reviewed followup"
         ctx["leads"].update(**ctx["scope"], lead_id=ctx["lead"].lead_id,
                             status="qualified", idempotency_key="after-approval")
