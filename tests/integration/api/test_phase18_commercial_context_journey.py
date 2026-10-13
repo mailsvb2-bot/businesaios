@@ -492,7 +492,7 @@ def test_canonical_inbound_count_does_not_include_outbound_messages():
     scope = ctx["scope"]
     before = ctx["context"].read(**scope, lead_id=ctx["lead"].lead_id)
     assert before.inbound_message_count == 1
-    ctx["messages"].record(
+    sent = ctx["messages"].record(
         identity=MessageIdentity(
             message_id="outbound-after-inbound", **scope,
             channel="telegram", direction=MessageDirection.OUTBOUND,
@@ -502,5 +502,5 @@ def test_canonical_inbound_count_does_not_include_outbound_messages():
     )
     after = ctx["context"].read(**scope, lead_id=ctx["lead"].lead_id)
     assert after.inbound_message_count == 1
-    assert after.latest_message_id == "outbound-after-inbound"
+    assert after.latest_message_id == sent.message_id
     assert after.context_fingerprint != before.context_fingerprint
