@@ -119,4 +119,5 @@ def build_sealed_yookassa_commercial_bundle(
 
 
 __all__ = ["CANON_PHASE18_COMMERCIAL_MERCHANT_BINDING",
-           "CommercialMerchantBundle", "build_yookassa_commercial_bundle",\n           "build_sealed_yookassa_commercial_bundle"]
+           "CommercialMerchantBundle", "build_yookassa_commercial_bundle",
+           "build_sealed_yookassa_commercial_bundle"]
