@@ -125,11 +125,12 @@ class CommercialSettlementReconciler:
             ):
                 raise RuntimeError("commercial_settlement_paid_without_matching_proof")
             return result(invoice, verified=True)
-        if invoice.status not in (
-            InvoiceLifecycleStatus.ISSUED,
-            InvoiceLifecycleStatus.PARTIALLY_PAID,
-            InvoiceLifecycleStatus.PAID,
-        ):
+        # PSP proof covers the *full* checkout amount. Applying it to an
+        # already partially paid invoice would falsely turn mixed/manual money
+        # into a verified customer entitlement and could double count receipts.
+        if invoice.status is InvoiceLifecycleStatus.PARTIALLY_PAID:
+            raise RuntimeError("commercial_settlement_mixed_invoice_payments_not_supported")
+        if invoice.status is not InvoiceLifecycleStatus.ISSUED or invoice.paid_minor != 0:
             raise RuntimeError("commercial_settlement_invoice_closed")
         # Same PSP payment identity always resolves to one semantic mutation.
         # Canonical InvoiceRegistry owns idempotency, concurrency and history.
