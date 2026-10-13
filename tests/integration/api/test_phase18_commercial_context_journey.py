@@ -424,6 +424,8 @@ def test_owner_approved_followup_routes_to_canonical_provider_and_blocks_replay_
         response = client.post(path, headers={"X-API-Key": owner})
         assert response.status_code == 200, response.text
         assert response.json()["canonical_provider_execution"]["execution"]["result"]["accepted"] is False
+        assert response.json()["delivery_confirmed"] is False
+        assert response.json()["delivery_state"] == "queued_or_unconfirmed"
         assert calls == [{"tenant_id": "tenant-a", "approval_id": "approval-a"}]
         job_id = response.json()["canonical_provider_execution"]["execution"]["dispatch"]["job_id"]
         assert durable_store.get(tenant_id="tenant-a", job_id=job_id).state is JobState.PENDING
