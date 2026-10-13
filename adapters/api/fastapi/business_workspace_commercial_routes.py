@@ -203,7 +203,8 @@ def register_business_workspace_commercial_routes(*, router: APIRouter, auth_bun
             if (binding.get("customer_id") != current.customer_id
                     or binding.get("conversation_id") != current.conversation_id
                     or binding.get("channel") != current.channel
-                    or current.orders):
+                    or current.orders
+                    or current.sales_stage in {"lost", "closed", "do_not_contact"}):
                 raise PermissionError("commercial_followup_identity_or_order_changed")
             approved_resume = metadata.get("approval_resume_context")
             if not isinstance(approved_resume, dict):
