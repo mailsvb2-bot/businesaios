@@ -248,6 +248,49 @@ export function CommercialSalesWorkspace({
     }
   };
 
+  const reconcilePayment = async (order) => {
+    if (!apiKey || busy || !checkoutLinks[order.order_id] || !receiptIsOrder(order)) return;
+    setBusy(true);
+    setError("");
+    setNotice("");
+    try {
+      // Owner sends *no* claimed payment amount, merchant, token, or status.
+      // Only server-trusted PSP evidence may change canonical Billing.
+      const result = await postJson(endpoint + "/orders/" +
+        encodeURIComponent(order.order_id) + "/reconcile", {}, auth);
+      if (result?.order_id !== order.order_id || result?.invoice_id !== order.invoice_id ||
+          typeof result.provider_verified !== "boolean" ||
+          !Number.isSafeInteger(result.paid_minor) ||
+          !Number.isSafeInteger(result.total_minor) ||
+          result.total_minor !== order.amount_minor ||
+          result.paid_minor < 0 || result.paid_minor > result.total_minor) {
+        throw new Error("PSP не вернул привязанное к счёту подтверждение");
+      }
+      const persisted = await getJson(endpoint + "/orders/" +
+        encodeURIComponent(order.order_id), auth);
+      if (!receiptIsOrder(persisted) || persisted.invoice_id !== order.invoice_id ||
+          persisted.amount_minor !== order.amount_minor ||
+          persisted.currency !== order.currency) {
+        throw new Error("Не подтверждено сохранение итогового состояния Billing");
+      }
+      if (result.provider_verified === true &&
+          (persisted.provider_verified !== true ||
+            persisted.invoice_status !== "paid" ||
+            persisted.paid_minor !== persisted.amount_minor)) {
+        throw new Error("Статус PSP не совпадает с каноническим счётом");
+      }
+      await refresh();
+      setNotice(result.provider_verified === true
+        ? "PSP-платёж подтверждён и отражён в Billing. Доставка ещё не доказана."
+        : "PSP не подтвердил окончательную оплату. Счёт остаётся неоплаченным.");
+    } catch (reason) {
+      setError("Сверка оплаты не завершена: " + (reason?.message || "ошибка сервера") +
+        ". Состояние оплаты определяет только сервер.");
+    } finally {
+      setBusy(false);
+    }
+  };
+
   return (
     <section className="panel" aria-labelledby="commercial-orders-heading">
       <div className="panel-title-row">
@@ -380,8 +423,12 @@ export function CommercialSalesWorkspace({
                   ) : null}
                   {order.status === "active" && order.invoice_status === "issued" &&
                   order.paid_minor === 0 && checkoutLinks[order.order_id] ? (
-                    <p><a href={checkoutLinks[order.order_id]} target="_blank"
-                      rel="noopener noreferrer">Перейти к защищённой оплате</a></p>
+                    <div>
+                      <p><a href={checkoutLinks[order.order_id]} target="_blank"
+                        rel="noopener noreferrer">Перейти к защищённой оплате</a></p>
+                      <button type="button" className="ghost" disabled={busy}
+                        onClick={() => void reconcilePayment(order)}>Сверить платёж с PSP</button>
+                    </div>
                   ) : null}
                   <p>Пока сервер не подтвердил PSP и исполнение, продажа не считается завершённой.</p>
                 </div>
