@@ -174,14 +174,19 @@ class SupportCaseDiagnosticAccess:
         state = self.state(tenant_id=tenant_id, business_id=business_id, case_id=case["id"], now_ms=now)
         if not state["active"] or state["grant_id"] != grant_id:
             raise RuntimeError("support_access_grant_not_active")
-        self._writer.append_transition_once(
-            tenant_id=tenant_id, business_id=business_id, entity_id=case["id"],
-            expected_state_token="access:" + str(state["fact_revision"]),
-            operation="revoke_access", idempotency_key=effective,
-            fact_type=_REVOKED, payload={"grant_id": grant_id, "owner_id": owner_id,
-                                         "revoked_at_ms": now},
-            occurred_at_ms=now, event_metadata={"actor_id": owner_id},
-        )
+        try:
+            self._writer.append_transition_once(
+                tenant_id=tenant_id, business_id=business_id, entity_id=case["id"],
+                expected_state_token="access:" + str(state["fact_revision"]),
+                operation="revoke_access", idempotency_key=effective,
+                fact_type=_REVOKED, payload={"grant_id": grant_id, "owner_id": owner_id,
+                                             "revoked_at_ms": now},
+                occurred_at_ms=now, event_metadata={"actor_id": owner_id},
+            )
+        except RuntimeError as exc:
+            if str(exc).startswith("ontology transition rejected:"):
+                raise RuntimeError("support_access_revision_conflict") from exc
+            raise
         return self.state(tenant_id=tenant_id, business_id=business_id, case_id=case["id"], now_ms=now)
 
     def diagnostics(self, *, tenant_id: str, business_id: str, case_id: str,
