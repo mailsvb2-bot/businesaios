@@ -171,3 +171,36 @@ def test_partner_event_metadata_propagates_and_replay_rejects_change() -> None:
     assert partners.archive( tenant_id="tenant-1", business_id="business-1", partner_id="partner-meta", idempotency_key="archive-meta", occurred_at_ms=999, event_metadata=archive_metadata, ) == archived
     with pytest.raises(ValueError, match="event metadata"):
         partners.archive( tenant_id="tenant-1", business_id="business-1", partner_id="partner-meta", idempotency_key="archive-meta", occurred_at_ms=20, event_metadata={**archive_metadata, "actor_id": "owner-2"}, )
+
+
+
+def test_phase18_partner_growth_reads_existing_partner_and_prevents_foreign_scope():
+    from application.partner.growth_advisory import ContactBasis, PartnerOpportunity
+
+    _, organizations, people, partners = _stack()
+    _seed(organizations, people)
+    partners.create(
+        tenant_id="tenant-1", business_id="business-1",
+        partner_id="partner-growth", party_kind=PartnerPartyKind.ORGANIZATION,
+        party_id="org-1", idempotency_key="growth-partner", occurred_at_ms=3,
+    )
+    candidate = PartnerOpportunity(
+        partner_id="partner-growth", business_id="business-1",
+        name="Therapy magazine", topics=("therapy", "mental health"),
+        followers=8000, contact_basis=ContactBasis.PUBLIC_BUSINESS_CONTACT,
+        contact_value="business@example.org",
+        source_url="https://example.org",
+    )
+    ranking = partners.assess_growth_opportunities(
+        tenant_id="tenant-1", business_id="business-1",
+        candidates=(candidate,), audience_terms=("therapy",),
+    )
+    assert len(ranking) == 1
+    assert ranking[0].partner_id == "partner-growth"
+    assert ranking[0].eligible_for_manual_review
+    assert not ranking[0].eligible_for_automatic_contact
+    with pytest.raises(LookupError):
+        partners.assess_growth_opportunities(
+            tenant_id="tenant-1", business_id="another-business",
+            candidates=(candidate,), audience_terms=("therapy",),
+        )
