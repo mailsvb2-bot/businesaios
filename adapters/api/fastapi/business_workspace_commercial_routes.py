@@ -10,7 +10,7 @@ from adapters.api.fastapi.router_support import business_owner_scope, json_body
 CANON_PHASE18_COMMERCIAL_OWNER_API = True
 
 
-def register_business_workspace_commercial_routes(*, router: APIRouter, auth_bundle, purchases, checkout=None, context_reader=None):
+def register_business_workspace_commercial_routes(*, router: APIRouter, auth_bundle, purchases, checkout=None, context_reader=None, settlement=None):
     def scope(request):
         _, tenant, business = business_owner_scope(request=request, auth_bundle=auth_bundle)
         return tenant, business
@@ -91,14 +91,14 @@ def register_business_workspace_commercial_routes(*, router: APIRouter, auth_bun
         result = []
         for order in purchases.orders.list_for_business(tenant_id=tenant, business_id=business):
             if order.order_kind == "commercial_program":
-                result.append(_order_status(purchases, tenant, business, order.order_id))
+                result.append(_order_status(purchases, tenant, business, order.order_id, checkout=checkout))
         return {"orders": result}
 
     @router.get("/business-workspace/commercial/orders/{order_id}", tags=["business-workspace"])
     async def get_order(order_id: str, request: Request):
         tenant, business = scope(request)
         try:
-            return _order_status(purchases, tenant, business, order_id)
+            return _order_status(purchases, tenant, business, order_id, checkout=checkout)
         except LookupError as exc:
             raise HTTPException(status_code=404, detail="commercial_order_not_found") from exc
 
@@ -114,8 +114,27 @@ def register_business_workspace_commercial_routes(*, router: APIRouter, auth_bun
         except ValueError as exc:
             raise HTTPException(status_code=409, detail=str(exc)) from exc
 
+    @router.post("/business-workspace/commercial/orders/{order_id}/reconcile", tags=["business-workspace"])
+    async def reconcile_verified_payment(order_id: str, request: Request):
+        tenant, business = scope(request)
+        if settlement is None:
+            raise HTTPException(status_code=503, detail="commercial_settlement_authority_unconfigured")
+        body = await json_body(request)
+        if body:
+            raise HTTPException(status_code=422, detail="commercial_settlement_accepts_no_claimed_payment_fields")
+        try:
+            # The server-held verifier fetches authoritative PSP evidence;
+            # client-supplied status, money or evidence can never create revenue.
+            return asdict(settlement.reconcile(
+                tenant_id=tenant, business_id=business, order_id=order_id,
+            ))
+        except LookupError as exc:
+            raise HTTPException(status_code=404, detail="commercial_order_not_found") from exc
+        except ValueError as exc:
+            raise HTTPException(status_code=409, detail=str(exc)) from exc
 
-def _order_status(purchases, tenant, business, order_id):
+
+def _order_status(purchases, tenant, business, order_id, *, checkout=None):
     order, link = purchases._read(tenant_id=tenant, business_id=business, order_id=order_id)
     invoice = purchases.invoices.get(tenant_id=tenant, business_id=business, invoice_id=link["invoice_id"])
     if (invoice.tenant_id != tenant or invoice.business_id != business
@@ -123,6 +142,18 @@ def _order_status(purchases, tenant, business, order_id):
             or invoice.currency != link["currency"]
             or dict(invoice.metadata).get("order_id") != order_id):
         raise RuntimeError("commercial_invoice_provenance_invalid")
+    verified = False
+    if checkout is not None and invoice.status.value == "paid":
+        saved = checkout._saved(tenant_id=tenant, business_id=business, order_id=order_id)
+        if saved is not None and (saved.invoice_id != invoice.invoice_id
+                                  or saved.amount_minor != invoice.total_minor
+                                  or saved.currency != invoice.currency):
+            raise RuntimeError("commercial_checkout_invoice_provenance_invalid")
+        if saved is not None:
+            verified = purchases.invoices.has_verified_commercial_settlement(
+                tenant_id=tenant, business_id=business, invoice_id=invoice.invoice_id,
+                provider_name=saved.provider_name, external_reference=saved.external_reference,
+            )
     return {
         "order_id": order_id, "status": order.lifecycle_status.value,
         "invoice_id": invoice.invoice_id, "invoice_status": invoice.status.value,
@@ -130,7 +161,7 @@ def _order_status(purchases, tenant, business, order_id):
         "currency": invoice.currency, "offer_id": link["offer_id"],
         "lead_id": link["lead_id"], "customer_id": link["customer_id"],
         "program_id": link["program_id"],
-        "provider_verified": False,
+        "provider_verified": verified,
     }
 
 
