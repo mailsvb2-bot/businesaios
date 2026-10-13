@@ -75,3 +75,47 @@ proof of external payment or delivery.
 
 The five-browser release verdict fixture was extended to match the fifth
 scenario rather than relaxing artifact integrity checks or suppressing CI.
+
+
+## Next Phase 18 capability: owner-consented audited SUPPORT diagnostic access
+
+The donor manifest slice `support.audited_access_session` is now **mapped**
+to the existing BusinessAIOS SUPPORT authentication, `SupportCaseRegistry`
+and **one** `EventFactLifecycleWriter`, not a new support database, owner or
+independent privilege elevation mechanism.
+
+End-to-end route:
+
+- Business OWNER creates a scoped support case; an explicitly issued
+  SUPPORT-only API key claims it through normal case lifecycle CAS.
+- OWNER inspects the exact case, chooses 5/15/60 minutes and creates
+  explicit, short-lived consent for the **currently assigned** operator.
+  New grant requires the current case revision. No operator-supplied tenant,
+  customer identity, role or destination is accepted.
+- SUPPORT checks consent and requests a diagnostic snapshot. Authentication,
+  business identity, case assignment, current revision, owner grant,
+  expiry and revocation are checked on every request.
+- Diagnostic snapshot contains only 24-hour **counts** of canonical message,
+  invoice, program and support facts. It returns no raw events, personal
+  messages, customer identities, credentials, payment data or support secrets.
+- The same canonical Event Spine records grants, withdrawals and each
+  successful diagnostic disclosure, with source-derived idempotency and an
+  optimistic transition guard shared by consent changes and views. An
+  ambiguous retry replays the original receipt without duplicating a view.
+- OWNER sees a scrubbed immutable audit trail and can revoke access at any
+  time. Case release/resolve, claimant change and permission expiry
+  immediately fail closed; a new claim requires a new consent.
+- Existing support-case history and queue remain intact. The global security
+  policy admits only exact UUID-scoped SUPPORT access/diagnostics paths;
+  it still denies broad audit, data export and owner impersonation.
+
+Evidence added:
+`tests/unit/application/test_phase18_support_case_consent_access.py`,
+`tests/integration/api/test_phase18_support_consent_diagnostics_http.py`,
+`tests/unit/security/test_support_case_route_access_policy_phase18.py`
+and an expanded source-locked Playwright support-console user journey.
+The manifest is **mapped**, not parity-proven: complete donor semantics,
+production PostgreSQL multi-worker contention, independently issued actual
+support credentials, real customer consent in deployment and ClientPlatform
+shutdown/migration all remain to be proven. These features must not be
+advertised as available in production solely from fixtures and CI.
