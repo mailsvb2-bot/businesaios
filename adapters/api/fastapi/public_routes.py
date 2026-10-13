@@ -339,10 +339,16 @@ def register_public_api_routes(
                 orders=commercial_purchases.orders,
                 invoices=commercial_purchases.invoices,
             )
+            from application.partner.registry import PartnerRegistry
+
             register_business_workspace_commercial_routes(
                 router=router, auth_bundle=auth_bundle,
                 purchases=commercial_purchases, checkout=commercial_checkout,
                 context_reader=commercial_context, settlement=commercial_settlement,
+                partner_registry=PartnerRegistry(
+                    event_store=event_store,
+                    idempotency_store=dependency_container.api_idempotency_store,
+                ),
             )
         if event_landing_registry is not None:
             register_business_workspace_event_landing_routes(
