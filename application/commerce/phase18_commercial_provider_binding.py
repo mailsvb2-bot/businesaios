@@ -89,5 +89,34 @@ def build_yookassa_commercial_bundle(
     )
 
 
+
+def build_sealed_yookassa_commercial_bundle(
+    *, purchases: Any, event_store: Any, idempotency_store: Any,
+    transport: Any = None,
+) -> CommercialMerchantBundle:
+    """Opt-in composition with current server-held credentials and HTTP transport.
+
+    Production bootstrap must explicitly select this factory; it is never
+    invoked implicitly from a request, webhook or unauthenticated process.
+    """
+    from functools import partial
+
+    from runtime._internal.effects_clients.yookassa_client import resolve_credentials
+    from runtime._internal.effects_clients.yookassa_commercial_merchant import (
+        create_merchant_payment,
+        fetch_merchant_payment,
+    )
+
+    merchant_id, secret, api = resolve_credentials()
+    if not merchant_id or not secret or api != "https://api.yookassa.ru":
+        raise RuntimeError("commercial_merchant_configuration_missing")
+    return build_yookassa_commercial_bundle(
+        purchases=purchases, event_store=event_store,
+        idempotency_store=idempotency_store, merchant_id=merchant_id,
+        sealed_create_payment=partial(create_merchant_payment, transport=transport),
+        sealed_fetch_payment=partial(fetch_merchant_payment, transport=transport),
+    )
+
+
 __all__ = ["CANON_PHASE18_COMMERCIAL_MERCHANT_BINDING",
-           "CommercialMerchantBundle", "build_yookassa_commercial_bundle"]
+           "CommercialMerchantBundle", "build_yookassa_commercial_bundle",\n           "build_sealed_yookassa_commercial_bundle"]
