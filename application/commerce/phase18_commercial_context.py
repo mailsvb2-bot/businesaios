@@ -14,6 +14,7 @@ from typing import Any
 
 from contracts.customer import CustomerStatus
 from contracts.lead import LeadLifecycleStatus
+from contracts.messaging_event_identity import MessageDirection
 from runtime.messaging.conversation_registry import ConversationLifecycleStatus
 
 CANON_PHASE18_COMMERCIAL_CONTEXT_PROJECTION = True
@@ -146,7 +147,7 @@ class CommercialJourneyContextReader:
             "customer_updated_at_ms": customer.updated_at_ms,
             "conversation_status": conversation.lifecycle_status.value,
             "conversation_updated_at_ms": conversation.updated_at_ms,
-            "messages": [(item.message_id, item.created_at_ms, item.lifecycle_status.value)
+            "messages": [(item.message_id, item.created_at_ms, item.direction.value, item.lifecycle_status.value)
                          for item in rows],
             "active_program_ids": active_programs,
             "orders": [item.__dict__ for item in linked_orders],
@@ -161,7 +162,7 @@ class CommercialJourneyContextReader:
             lead_active=lead.lifecycle_status is LeadLifecycleStatus.ACTIVE,
             customer_active=customer.status is CustomerStatus.ACTIVE,
             conversation_open=conversation.lifecycle_status is ConversationLifecycleStatus.OPEN,
-            inbound_message_count=len(rows),
+            inbound_message_count=sum(1 for item in rows if item.direction is MessageDirection.INBOUND),
             latest_message_id=rows[-1].message_id if rows else None,
             active_program_ids=active_programs,
             orders=tuple(linked_orders),
