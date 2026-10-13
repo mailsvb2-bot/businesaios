@@ -1422,7 +1422,8 @@ function Workspace({ data, apiBase, businesses, onRestart, onRetryAccess, onSwit
        <SupportCasesWorkspace key={`support:${data.tenant_id}:${data.business_id}`} apiBase={baseApi} apiKey={apiKey} getJson={getJson} postJson={postJson} />
 
       <CommercialSalesWorkspace key={"commercial:" + data.tenant_id + ":" + data.business_id}
-        apiBase={baseApi} apiKey={apiKey} getJson={getJson} />
+        apiBase={baseApi} apiKey={apiKey} tenantId={data.tenant_id}
+        businessId={data.business_id} getJson={getJson} postJson={postJson} />
 
       <ProgramPublicationWorkspace key={`programs:${data.tenant_id}:${data.business_id}`}
         apiBase={baseApi} apiKey={apiKey} tenantId={data.tenant_id}
