@@ -16,6 +16,7 @@ COMMERCIAL_JOURNEY_FILES = (
     "tests/integration/api/test_phase18_commercial_owner_http.py",
     "tests/integration/api/test_phase18_commercial_settlement_journey.py",
     "tests/integration/api/test_phase18_paid_program_access_journey.py",
+    "tests/integration/api/test_phase18_paid_program_commercial_journey.py",
     "tests/integration/api/test_phase18_program_enrollment_canonical_customer.py",
     "tests/integration/api/test_phase18_program_publication_journey.py",
 )
