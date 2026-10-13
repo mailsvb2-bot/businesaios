@@ -235,9 +235,25 @@ def register_business_workspace_commercial_routes(*, router: APIRouter, auth_bun
             result = provider_handlers.resume_approved_message(
                 tenant_id=tenant, approval_id=approval_id,
             )
+            from application.business_autonomy.provider_delivery_truth import (
+                provider_approval_completion_truth,
+            )
+
+            outcome = dict(result.get("execution") or {}).get("result") or {}
+            delivered, ambiguous, terminal = provider_approval_completion_truth(
+                provider_key=provider_key, result=outcome,
+            )
+            delivery_state = (
+                "confirmed_delivered" if delivered else
+                "ambiguous" if ambiguous else
+                "terminal_non_delivery" if terminal else
+                "queued_or_unconfirmed"
+            )
             return {
                 "tenant_id": tenant, "business_id": business, "lead_id": lead_id,
                 "approval_id": approval_id, "canonical_provider_execution": result,
+                "delivery_state": delivery_state,
+                "delivery_confirmed": delivered,
                 "delivery_status_from_provider_only": True,
             }
         except LookupError as exc:
