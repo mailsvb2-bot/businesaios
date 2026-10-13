@@ -71,10 +71,6 @@ test("owner can quote, create and recover a canonical sale without inventing pay
       expect(body.customer_id).toBe(lead.customer_id);
       expect(body.program_id).toBe(program.id);
       expect(body.offer_id).toBe(offer.offer_id);
-      if (failedOrderAttempt) {
-        failedOrderAttempt = false;
-        return json(route, { detail: "temporary_failure" }, 503);
-      }
       const order = {
         order_id: "order-fixture", invoice_id: "invoice-fixture",
         customer_id: lead.customer_id, lead_id: lead.lead_id,
@@ -84,7 +80,13 @@ test("owner can quote, create and recover a canonical sale without inventing pay
         status: "active", provider_verified: false
       };
       if (!created.length) created.push(order);
-      return json(route, order);
+      if (failedOrderAttempt) {
+        // Persistence succeeded, but the transport returned an ambiguous error.
+        // Retrying with a new operation ID would create a duplicate invoice.
+        failedOrderAttempt = false;
+        return json(route, { detail: "response_lost_after_commit" }, 503);
+      }
+      return json(route, created[0]);
     }
     if (path.endsWith("/orders/order-fixture") && req.method() === "GET")
       return json(route, created[0]);
@@ -111,7 +113,7 @@ test("owner can quote, create and recover a canonical sale without inventing pay
   await expect(submit).toBeEnabled();
   await submit.click();
   await expect(panel.getByRole("alert")).toContainText("Создание счёта не завершено");
-  expect(created).toHaveLength(0);
+  expect(created).toHaveLength(1);
   await submit.click();
   await expect(panel.getByRole("status")).toContainText("Заказ и счёт сохранены");
   expect(seenKeys).toHaveLength(2);
