@@ -5,7 +5,7 @@ from unittest.mock import Mock
 
 import pytest
 
-from runtime._internal.effects_clients import yookassa_commercial_merchant as merchant
+from runtime._internal.effects_clients import yookassa_client as merchant
 
 
 def test_authenticated_create_and_read_use_exact_merchant_api_and_idempotency(monkeypatch):

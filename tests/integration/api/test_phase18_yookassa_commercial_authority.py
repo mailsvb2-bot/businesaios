@@ -9,7 +9,7 @@ from dataclasses import replace
 import pytest
 
 from billing.payment_provider_contract import PaymentCheckoutRequest
-from billing.phase18_yookassa_authority import YooKassaCommercialAuthority
+from billing.phase18_commercial_settlement import YooKassaCommercialAuthority
 
 SCOPE = {"tenant_id": "tenant-a", "business_id": "business-a"}
 

@@ -270,7 +270,7 @@ def register_public_api_routes(
             from runtime.platform.config.env_flags import env_str
 
             commercial_yookassa_opt_in = env_str(
-                "BUSINESAIOS_COMMERCIAL_YOOKASSA_ENABLED", "0",
+                "BUSINESAIOS_COMMERCIAL_PSP_ENABLED", "0",
             ).strip().lower() in {"1", "true", "yes", "on"}
             if commercial_yookassa_opt_in and any(part is not None for part in (
                 commercial_payment_adapter, commercial_payment_verifier,
@@ -310,11 +310,9 @@ def register_public_api_routes(
                     )
                 )
             if commercial_yookassa_opt_in:
-                from application.commerce.phase18_commercial_provider_binding import (
-                    build_sealed_yookassa_commercial_bundle,
-                )
+                from runtime.executor_api_support import build_sealed_commercial_merchant_bundle
 
-                merchant_bundle = build_sealed_yookassa_commercial_bundle(
+                merchant_bundle = build_sealed_commercial_merchant_bundle(
                     purchases=commercial_purchases, event_store=event_store,
                     idempotency_store=dependency_container.api_idempotency_store,
                 )
