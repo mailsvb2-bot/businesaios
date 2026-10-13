@@ -11,6 +11,8 @@ test("support console rejects owner credentials and processes bounded cases with
     claimed_at: null, resolved_at: null
   };
   const observed = [];
+  let diagnosticGrant = false;
+  let diagnosticViews = 0;
   await page.route("**/api/platform-support/**", async (route) => {
     const req = route.request();
     const key = req.headers()["x-api-key"];
@@ -37,6 +39,23 @@ test("support console rejects owner credentials and processes bounded cases with
       return respond(200, {
         case_id: item.id, revision: item.revision, total: entries.length,
         truncated: false, entries
+      });
+    }
+    if (req.method() === "GET" && path.endsWith("/cases/" + item.id + "/access")) {
+      return respond(200, {
+        case_id: item.id, active: diagnosticGrant && item.status === "claimed",
+        grant_id: diagnosticGrant ? "consent-fixture" : null,
+        reason: diagnosticGrant ? "active" : "not_granted",
+      });
+    }
+    if (req.method() === "POST" && path.endsWith("/cases/" + item.id + "/diagnostics")) {
+      if (!diagnosticGrant || item.status !== "claimed")
+        return respond(409, { detail: "support_access_no_live_consent" });
+      expect(Object.keys(req.postDataJSON())).toEqual(["idempotency_key"]);
+      diagnosticViews++;
+      return respond(200, {
+        case_id: item.id, grant_id: "consent-fixture", observed_at_ms: 1000,
+        window_hours: 24, counts: { messages: 3, payments: 0, programs: 1, support: 2 },
       });
     }
     if (req.method() === "GET" && path.endsWith("/cases/" + item.id)) {
@@ -82,6 +101,16 @@ test("support console rejects owner credentials and processes bounded cases with
   await page.getByRole("button", { name: "Скрыть историю" }).click();
   await page.getByRole("button", { name: "Взять в работу" }).click();
   await expect(page.getByRole("button", { name: "Закрыть обращение" })).toBeVisible();
+  await page.getByRole("button", { name: "Проверить согласие владельца" }).click();
+  await expect(page.getByText("Согласие: отсутствует.")).toBeVisible();
+  await expect(page.getByRole("button", { name: "Просмотреть ограниченную диагностику" })).toHaveCount(0);
+  diagnosticGrant = true;
+  await page.getByRole("button", { name: "Проверить согласие владельца" }).click();
+  await expect(page.getByText("Согласие: действует.")).toBeVisible();
+  await page.getByRole("button", { name: "Просмотреть ограниченную диагностику" }).click();
+  await expect(page.getByText(/сообщения — 3/)).toBeVisible();
+  await expect(page.getByText(/программы — 1/)).toBeVisible();
+  expect(diagnosticViews).toBe(1);
   await page.getByRole("button", { name: "Закрыть обращение" }).click();
   await expect(page.getByText("В очереди нет открытых обращений.")).toBeVisible();
   await expect(page.getByText("Messages are not delivered")).toHaveCount(0);
