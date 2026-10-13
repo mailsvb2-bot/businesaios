@@ -28,6 +28,29 @@ from runtime.platform.event_store.memory_event_store import MemoryEventStore
 from security.secret_vault import InMemorySecretVault
 
 
+class CanonicalOrderBackendFixture:
+    """Same durable-backend contract survives recreation of OrderStore."""
+    def __init__(self):
+        self.rows = {}
+
+    def replace(self, key, value):
+        self.rows[key] = value
+
+    def register_unique(self, key, value):
+        if key in self.rows:
+            raise ValueError("duplicate")
+        self.rows[key] = value
+
+    def get(self, key):
+        return self.rows[key]
+
+    def maybe_get(self, key):
+        return self.rows.get(key)
+
+    def items(self):
+        return tuple(self.rows.items())
+
+
 class Catalog:
     def resolve(self, *, key):
         return SimpleNamespace(
@@ -88,7 +111,8 @@ def environment():
         customer_id=customer.customer_id, conversation_id="conversation-one",
         channel="telegram",
     )
-    orders = OrderStore(event_store=events)
+    order_backend = CanonicalOrderBackendFixture()
+    orders = OrderStore(event_store=events, backend=order_backend)
     invoices = InvoiceRegistry(event_store=events, idempotency_store=idem)
     purchases = CommercialProgramPurchaseService(
         leads=leads, customers=customers, programs=programs,
@@ -161,7 +185,7 @@ def test_whole_sale_paid_program_access_durable_replay_and_live_revocation():
 
     # Re-create read owners from the same canonical event spine, not a local grant.
     restored_invoices = InvoiceRegistry(event_store=e.events, idempotency_store=e.idem)
-    restored_orders = OrderStore(event_store=e.events)
+    restored_orders = OrderStore(event_store=e.events, backend=e.order_backend)
     restored_purchases = CommercialProgramPurchaseService(
         leads=e.leads, customers=e.customers, programs=e.programs,
         offers=Catalog(), orders=restored_orders, invoices=restored_invoices,
@@ -220,11 +244,10 @@ def test_manual_paid_and_mixed_partial_money_do_not_launder_as_verified_psp():
 
 def test_wrong_psp_proof_cross_business_and_missing_reversal_are_fail_closed():
     e = environment()
-    with pytest.raises(LookupError):
-        e.paid_access.require_access(
-            tenant_id="tenant-a", business_id="business-b",
-            program_id=e.program["id"], customer_id=e.customer.customer_id,
-        )
+    assert e.paid_access.require_access(
+        tenant_id="tenant-a", business_id="business-b",
+        program_id=e.program["id"], customer_id=e.customer.customer_id,
+    ) is False
     e.verifier.evidence = replace(e.verifier.evidence, merchant_id="wrong-merchant")
     with pytest.raises(RuntimeError, match="commercial_settlement_provider_provenance_invalid"):
         e.settlement.reconcile(**e.scope, order_id=e.order.order_id)
