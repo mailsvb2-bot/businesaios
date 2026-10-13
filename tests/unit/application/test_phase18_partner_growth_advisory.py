@@ -3,7 +3,9 @@ from dataclasses import replace
 import pytest
 
 from application.partner.growth_advisory import (
-    ContactBasis, PartnerOpportunity, prepare_partner_proposal,
+    ContactBasis,
+    PartnerOpportunity,
+    prepare_partner_proposal,
     score_partner_opportunity,
 )
 from contracts.partner import Partner, PartnerPartyKind, PartnerStatus
