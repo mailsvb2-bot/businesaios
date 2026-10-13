@@ -10,7 +10,7 @@ from adapters.api.fastapi.router_support import business_owner_scope, json_body
 CANON_PHASE18_COMMERCIAL_OWNER_API = True
 
 
-def register_business_workspace_commercial_routes(*, router: APIRouter, auth_bundle, purchases, checkout=None, context_reader=None, settlement=None):
+def register_business_workspace_commercial_routes(*, router: APIRouter, auth_bundle, purchases, checkout=None, context_reader=None, settlement=None, partner_registry=None):
     def scope(request):
         _, tenant, business = business_owner_scope(request=request, auth_bundle=auth_bundle)
         return tenant, business
@@ -33,6 +33,51 @@ def register_business_workspace_commercial_routes(*, router: APIRouter, auth_bun
             for lead in leads
             if lead.customer_id and lead.conversation_id and lead.channel
         ]}
+
+    @router.post("/business-workspace/commercial/partner-opportunities/rank", tags=["business-workspace"])
+    async def rank_partner_opportunities(request: Request):
+        """Owner-scoped partner shortlist with no outbound or new partner owner."""
+        from application.partner.growth_advisory import PartnerOpportunity
+
+        tenant, business = scope(request)
+        if partner_registry is None:
+            raise HTTPException(status_code=503, detail="canonical_partner_owner_unavailable")
+        body = await json_body(request)
+        if set(body) != {"candidates", "audience_terms"}:
+            raise HTTPException(status_code=422, detail="partner_ranking_fields_invalid")
+        candidates = body["candidates"]
+        terms = body["audience_terms"]
+        if (not isinstance(candidates, list) or len(candidates) > 100
+                or not isinstance(terms, list) or len(terms) > 48
+                or any(not isinstance(term, str) or len(term) > 100 for term in terms)):
+            raise HTTPException(status_code=422, detail="partner_ranking_batch_invalid")
+        allowed = {
+            "partner_id", "name", "topics", "audience_summary", "recent_topic",
+            "followers", "contact_basis", "contact_value", "source_url", "competitor",
+        }
+        try:
+            rows = []
+            for row in candidates:
+                if not isinstance(row, dict) or not set(row) <= allowed:
+                    raise ValueError("partner_candidate_fields_invalid")
+                rows.append(PartnerOpportunity(
+                    business_id=business, **{
+                        **row, "topics": tuple(row.get("topics") or ()),
+                    },
+                ))
+            ranked = partner_registry.assess_growth_opportunities(
+                tenant_id=tenant, business_id=business,
+                candidates=tuple(rows), audience_terms=tuple(terms),
+            )
+        except (TypeError, ValueError) as exc:
+            raise HTTPException(status_code=422, detail="partner_candidate_invalid") from exc
+        except (LookupError, PermissionError) as exc:
+            raise HTTPException(status_code=404, detail="canonical_partner_not_found") from exc
+        return {
+            "tenant_id": tenant, "business_id": business,
+            "advisory_only": True, "outbound_sent": False,
+            "ranking": [asdict(value) for value in ranked],
+        }
 
     @router.get("/business-workspace/commercial/funnel-metrics", tags=["business-workspace"])
     async def commercial_funnel_metrics(request: Request):
