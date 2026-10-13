@@ -208,6 +208,84 @@ class CommercialJourneyContextReader:
             "can_prepare_offer": snapshot.can_prepare_offer,
         }
 
+    def evaluate_sales_engagement(
+        self, *, tenant_id: str, business_id: str, lead_id: str,
+        expected_fingerprint: str, model_confidence: float,
+        human_requested: bool = False, sensitive_context: bool = False,
+        pricing_exception: bool = False, negative_sentiment: bool = False,
+        failed_attempts: int = 0, customer_opted_out: bool = False,
+    ) -> dict[str, Any]:
+        """Donor sales-handoff and follow-up policy over canonical facts only.
+
+        Advisory only: no provider sends, queue writes, or duplicate scheduler.
+        The canonical send owner must recheck context and consent separately.
+        """
+        import math
+
+        from execution.canonical_operator_handoff import canonical_operator_handoff
+
+        snapshot = self.require_current(
+            tenant_id=tenant_id, business_id=business_id, lead_id=lead_id,
+            expected_fingerprint=expected_fingerprint,
+        )
+        flags = (human_requested, sensitive_context, pricing_exception,
+                 negative_sentiment, customer_opted_out)
+        if any(type(flag) is not bool for flag in flags):
+            raise ValueError("sales_engagement_invalid_flags")
+        if (type(model_confidence) not in (float, int)
+                or not math.isfinite(model_confidence)
+                or not 0 <= model_confidence <= 1):
+            raise ValueError("sales_engagement_invalid_confidence")
+        if type(failed_attempts) is not int or not 0 <= failed_attempts <= 100:
+            raise ValueError("sales_engagement_invalid_attempts")
+        reason, priority = None, None
+        if sensitive_context:
+            reason, priority = "sensitive_context", "urgent"
+        elif human_requested:
+            reason, priority = "explicit_human_request", "high"
+        elif pricing_exception:
+            reason, priority = "pricing_exception", "high"
+        elif failed_attempts >= 2:
+            reason, priority = "repeated_failure", "high"
+        elif negative_sentiment:
+            reason, priority = "negative_sentiment", "normal"
+        elif model_confidence < 0.72:
+            reason, priority = "low_confidence", "normal"
+        blocked = (customer_opted_out or not snapshot.can_prepare_offer
+                   or snapshot.sales_stage in {"lost", "closed", "do_not_contact"})
+        has_order = bool(snapshot.orders)
+        followup = (not blocked and reason is None and not has_order
+                    and snapshot.inbound_message_count > 0)
+        handoff = None
+        if reason and not customer_opted_out:
+            handoff = canonical_operator_handoff({
+                "run_id": f"sales:{tenant_id}:{business_id}:{lead_id}",
+                "decision_id": snapshot.context_fingerprint,
+                "action": "commercial_sales_review",
+                "handoff_reason": reason, "reason": reason,
+                "handoff_state": "awaiting_operator",
+                "approval_required": True,
+                "blocked_by_policy": blocked or sensitive_context,
+                "autonomy_tier": "supervised",
+            })
+        return {
+            "tenant_id": tenant_id, "business_id": business_id,
+            "lead_id": lead_id, "context_fingerprint": snapshot.context_fingerprint,
+            "handoff": handoff, "handoff_priority": priority,
+            "handoff_reason": reason,
+            "outreach_suppressed": blocked or reason is not None or has_order,
+            "suppression_reason": (
+                "customer_opt_out" if customer_opted_out else
+                "party_or_conversation_inactive" if blocked else
+                "operator_review_required" if reason else
+                "existing_order_requires_billing_truth" if has_order else None
+            ),
+            "followup_candidate": followup,
+            "followup_queued": False, "message_sent": False,
+            "operator_handoff_persisted": False,
+            "manual_approval_required": True,
+        }
+
     def require_current(self, *, tenant_id: str, business_id: str,
                         lead_id: str, expected_fingerprint: str) -> CommercialJourneyContext:
         snapshot = self.read(
