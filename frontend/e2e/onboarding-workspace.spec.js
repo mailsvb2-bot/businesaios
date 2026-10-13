@@ -233,10 +233,14 @@ test(canonicalScenario.title, async ({ page }, testInfo) => {
   await settingsPanel.getByLabel("Название бизнеса").fill(renamedBusiness);
   await settingsPanel.getByLabel("Описание деятельности").fill("Owner settings browser journey");
   await settingsPanel.getByLabel("Часовой пояс").selectOption("Europe/Moscow");
-  const settingWrite = page.waitForResponse((response) =>
-    response.url().includes("/api/business-workspace/settings") && response.request().method() === "POST");
-  await settingsPanel.getByRole("button", { name: "Сохранить настройки" }).click();
-  const settingReceipt = await settingWrite;
+  const saveButton = settingsPanel.getByRole("button", { name: "Сохранить настройки" });
+  await expect(saveButton).toBeEnabled();
+  const [settingReceipt] = await Promise.all([
+    page.waitForResponse((response) =>
+      response.url().includes("/api/business-workspace/settings") &&
+      response.request().method() === "POST"),
+    saveButton.click(),
+  ]);
   expect(settingReceipt.status()).toBe(200);
   const saved = await settingReceipt.json();
   expect(saved.business_name).toBe(renamedBusiness);

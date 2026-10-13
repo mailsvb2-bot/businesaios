@@ -40,6 +40,7 @@ AGENT_IDENTITY_EVENT_FACT_OWNER = Path("application/business_autonomy/registry.p
 EVENT_LANDING_EVENT_FACT_OWNER = Path("application/public_site/event_landing_registry.py")
 SUPPORT_CASE_EVENT_FACT_OWNER = Path("application/business_autonomy/support_case_registry.py")
 PROGRAM_PUBLICATION_EVENT_FACT_OWNER = Path("application/commerce/phase18_program_publication_registry.py")
+COMMERCIAL_CHECKOUT_EVENT_FACT_OWNER = Path("application/commerce/phase18_commercial_checkout.py")
 DIRECT_BUSINESS_FACT_MUTATION_OWNERS = (OWNER, CUSTOMER_DIRECT_OWNER)
 SPECIAL_EVENT_STORE_WRITER_MODULES = (
     "crm.customer_registry",
@@ -107,6 +108,7 @@ def test_shared_event_fact_writer_consumers_are_review_locked() -> None:
             EVENT_LANDING_EVENT_FACT_OWNER,
             SUPPORT_CASE_EVENT_FACT_OWNER,
             PROGRAM_PUBLICATION_EVENT_FACT_OWNER,
+            COMMERCIAL_CHECKOUT_EVENT_FACT_OWNER,
         )
     )
 
@@ -114,7 +116,11 @@ def test_shared_event_fact_writer_consumers_are_review_locked() -> None:
 def test_phase18_event_fact_owners_delegate_to_canonical_spine() -> None:
     # These Phase 18 surfaces are approved consumers of the existing ontology
     # fact writer, not parallel event sinks or competing business owners.
-    for path in (SUPPORT_CASE_EVENT_FACT_OWNER, PROGRAM_PUBLICATION_EVENT_FACT_OWNER,):
+    for path in (
+        SUPPORT_CASE_EVENT_FACT_OWNER,
+        PROGRAM_PUBLICATION_EVENT_FACT_OWNER,
+        COMMERCIAL_CHECKOUT_EVENT_FACT_OWNER,
+    ):
         source = (ROOT / path).read_text(encoding="utf-8")
         assert "EventFactLifecycleWriter(" in source
         assert "BusinessFactV1(" not in source
