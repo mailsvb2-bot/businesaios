@@ -10,7 +10,7 @@ from adapters.api.fastapi.router_support import business_owner_scope, json_body
 CANON_PHASE18_COMMERCIAL_OWNER_API = True
 
 
-def register_business_workspace_commercial_routes(*, router: APIRouter, auth_bundle, purchases, checkout=None, context_reader=None, settlement=None, partner_registry=None):
+def register_business_workspace_commercial_routes(*, router: APIRouter, auth_bundle, purchases, checkout=None, context_reader=None, settlement=None, partner_registry=None, provider_handlers=None):
     def scope(request):
         _, tenant, business = business_owner_scope(request=request, auth_bundle=auth_bundle)
         return tenant, business
@@ -153,6 +153,79 @@ def register_business_workspace_commercial_routes(*, router: APIRouter, auth_bun
             "net_revenue_not_computed": True,
             "external_payment_proof_required": True,
         }
+
+    @router.post("/business-workspace/commercial/leads/{lead_id}/approved-followups/{approval_id}/deliver", tags=["business-workspace"])
+    async def deliver_approved_followup(lead_id: str, approval_id: str, request: Request):
+        """Resume an archived, precisely bound human-approved commercial message.
+
+        No independent sender or scheduler. Only the canonical provider approval
+        resume can enqueue and observe a real provider result.
+        """
+        tenant, business = scope(request)
+        if context_reader is None or provider_handlers is None:
+            raise HTTPException(status_code=503, detail="canonical_followup_execution_unavailable")
+        body = await json_body(request)
+        if body:
+            raise HTTPException(status_code=422, detail="approved_followup_accepts_no_mutable_payload")
+        try:
+            record = provider_handlers.approval_store_factory().get(approval_id)
+            if record is None:
+                raise LookupError("commercial_followup_approval_not_found")
+            req = record.request
+            if str(req.tenant_id) != tenant or str(getattr(record.status, "value", record.status)) != "approved":
+                raise PermissionError("commercial_followup_approval_denied")
+            metadata = dict(req.metadata or {})
+            decision_id = str(metadata.get("decision_id") or "").strip()
+            if not decision_id:
+                raise PermissionError("commercial_followup_decision_missing")
+            envelope = provider_handlers.decision_loader(
+                tenant_id=tenant, decision_id=decision_id,
+            )
+            decision = getattr(envelope, "decision", None)
+            if decision is None or getattr(decision, "decision_id", None) != decision_id:
+                raise PermissionError("commercial_followup_archive_invalid")
+            archived = dict(getattr(decision, "payload", None) or {})
+            binding = archived.get("commercial_followup")
+            if not isinstance(binding, dict) or any(
+                binding.get(name) != expected
+                for name, expected in (
+                    ("tenant_id", tenant), ("business_id", business),
+                    ("lead_id", lead_id),
+                )
+            ):
+                raise PermissionError("commercial_followup_archive_scope_mismatch")
+            current = context_reader.require_current(
+                tenant_id=tenant, business_id=business, lead_id=lead_id,
+                expected_fingerprint=str(binding.get("context_fingerprint") or ""),
+            )
+            if (binding.get("customer_id") != current.customer_id
+                    or binding.get("conversation_id") != current.conversation_id
+                    or binding.get("channel") != current.channel
+                    or current.orders):
+                raise PermissionError("commercial_followup_identity_or_order_changed")
+            approved_business = provider_handlers.resolve_approved_message_business_id(
+                tenant_id=tenant, approval_id=approval_id,
+            )
+            if approved_business != business:
+                raise PermissionError("commercial_followup_provider_scope_mismatch")
+            # Critical: do not accept customer text, recipient or provider payload
+            # from this endpoint. The approval resume reads its archived subject.
+            result = provider_handlers.resume_approved_message(
+                tenant_id=tenant, approval_id=approval_id,
+            )
+            return {
+                "tenant_id": tenant, "business_id": business, "lead_id": lead_id,
+                "approval_id": approval_id, "canonical_provider_execution": result,
+                "delivery_status_from_provider_only": True,
+            }
+        except LookupError as exc:
+            raise HTTPException(status_code=404, detail="commercial_followup_not_found") from exc
+        except (PermissionError, ValueError) as exc:
+            raise HTTPException(status_code=403, detail="commercial_followup_denied") from exc
+        except RuntimeError as exc:
+            if str(exc).startswith("commercial_context_"):
+                raise HTTPException(status_code=409, detail=str(exc)) from exc
+            raise HTTPException(status_code=409, detail="approved_followup_not_executable") from exc
 
     @router.post("/business-workspace/commercial/leads/{lead_id}/engagement-review", tags=["business-workspace"])
     async def review_sales_engagement(lead_id: str, request: Request):
