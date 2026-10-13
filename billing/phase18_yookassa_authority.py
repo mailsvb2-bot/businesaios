@@ -7,9 +7,10 @@ No invoice, refund, entitlement or duplicate financial storage is introduced.
 """
 from __future__ import annotations
 
+from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from decimal import Decimal, InvalidOperation
-from typing import Any, Callable, Mapping
+from typing import Any
 
 from billing.payment_provider_contract import PaymentCheckoutRequest, PaymentCheckoutSession
 from billing.phase18_commercial_settlement import ProviderSettlementEvidence

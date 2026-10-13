@@ -1,8 +1,8 @@
 """Full canonical lead -> paid program -> merchant settlement -> entitlement proof."""
 from __future__ import annotations
 
-from application.commerce.phase18_commercial_provider_binding import build_yookassa_commercial_bundle
 from application.commerce.phase18_commercial_order import CommercialProgramPurchaseService
+from application.commerce.phase18_commercial_provider_binding import build_yookassa_commercial_bundle
 from application.commerce.phase18_program_publication_registry import ProgramPublicationRegistry
 from application.lead.registry import LeadRegistry
 from billing.invoice_registry import InvoiceRegistry

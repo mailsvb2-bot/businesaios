@@ -7,8 +7,9 @@ Only server bootstrap may assemble this object with sealed provider effects.
 """
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass
-from typing import Any, Callable
+from typing import Any
 
 from application.commerce.phase18_commercial_access import CanonicalPaidProgramAccess
 from application.commerce.phase18_commercial_checkout import CommercialCheckoutCoordinator
