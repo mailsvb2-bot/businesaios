@@ -1,6 +1,8 @@
 """Verified owner commercial API; uses the canonical order/invoice/offer owners."""
 from __future__ import annotations
 
+import hashlib
+import json
 from dataclasses import asdict
 
 from fastapi import APIRouter, HTTPException, Request
@@ -203,6 +205,22 @@ def register_business_workspace_commercial_routes(*, router: APIRouter, auth_bun
                     or binding.get("channel") != current.channel
                     or current.orders):
                 raise PermissionError("commercial_followup_identity_or_order_changed")
+            approved_resume = metadata.get("approval_resume_context")
+            if not isinstance(approved_resume, dict):
+                raise PermissionError("commercial_followup_approved_payload_unbound")
+            provider_key = str(approved_resume.get("provider_key") or "")
+            provider_payload = approved_resume.get("payload")
+            if not provider_key or not isinstance(provider_payload, dict):
+                raise PermissionError("commercial_followup_payload_invalid")
+            canonical_subject = {
+                "provider_key": provider_key, "payload": provider_payload,
+            }
+            fingerprint = hashlib.sha256(json.dumps(
+                canonical_subject, ensure_ascii=False, sort_keys=True,
+                separators=(",", ":"), allow_nan=False,
+            ).encode("utf-8")).hexdigest()
+            if binding.get("approved_provider_subject_sha256") != fingerprint:
+                raise PermissionError("commercial_followup_approved_subject_mismatch")
             approved_business = provider_handlers.resolve_approved_message_business_id(
                 tenant_id=tenant, approval_id=approval_id,
             )
