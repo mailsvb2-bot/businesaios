@@ -7,12 +7,14 @@ from fastapi import APIRouter, HTTPException, Request, Response, status
 
 from adapters.api.fastapi.analytics_routes import register_analytics_routes
 from adapters.api.fastapi.business_workspace_acquisition_routes import register_business_workspace_acquisition_routes
+from adapters.api.fastapi.business_workspace_commercial_routes import register_business_workspace_commercial_routes
 from adapters.api.fastapi.business_workspace_decision_routes import register_business_workspace_decision_routes
 from adapters.api.fastapi.business_workspace_discovery_routes import register_business_workspace_discovery_routes
-from adapters.api.fastapi.business_workspace_event_landing_routes import register_business_workspace_event_landing_routes
-from adapters.api.fastapi.business_workspace_program_routes import register_business_workspace_program_routes
-from adapters.api.fastapi.business_workspace_commercial_routes import register_business_workspace_commercial_routes
+from adapters.api.fastapi.business_workspace_event_landing_routes import (
+    register_business_workspace_event_landing_routes,
+)
 from adapters.api.fastapi.business_workspace_process_routes import register_business_workspace_process_routes
+from adapters.api.fastapi.business_workspace_program_routes import register_business_workspace_program_routes
 from adapters.api.fastapi.business_workspace_provider_routes import register_business_workspace_provider_routes
 from adapters.api.fastapi.business_workspace_support_case_routes import register_business_workspace_support_case_routes
 from adapters.api.fastapi.public_client_outcome_routes import register_public_client_outcome_routes
@@ -25,11 +27,11 @@ from adapters.api.fastapi.public_site_routes import (
 from adapters.api.fastapi.router_support import authorize_request
 from application.business_autonomy.provider_catalog import provider_map
 from application.business_autonomy.support_case_registry import SupportCaseRegistry
-from application.public_site.event_landing_registry import EventLandingRegistry
 from application.commerce.phase18_program_publication_registry import ProgramPublicationRegistry
+from application.public_site.event_landing_registry import EventLandingRegistry
 from crm.customer_registry import CustomerRegistry
-from entrypoints.api.provider_admin_route_handlers import ProviderAdminRouteHandlers
 from entrypoints.api.owner_action_draft import OwnerActionDraftProjector
+from entrypoints.api.provider_admin_route_handlers import ProviderAdminRouteHandlers
 from entrypoints.api.public_surface_security_guard import PublicSurfaceSecurityGuard
 from entrypoints.api.request_context import RequestContext
 from runtime.business_autonomy.provider_webhook_runtime import ProviderWebhookRuntime
@@ -236,15 +238,15 @@ def register_public_api_routes(
                     ),
                 )
         if event_landing_registry is not None:
+            from application.commerce.phase18_commercial_context import CommercialJourneyContextReader
             from application.commerce.phase18_commercial_order import CommercialProgramPurchaseService
             from application.lead.registry import LeadRegistry
             from billing.invoice_registry import InvoiceRegistry
             from core.offers.offer_catalog_resolver import OfferCatalogResolver
             from lead_outcomes.client_outcome_order_store import OrderStore
-            from runtime.platform.client_outcome_persistence import ClientOutcomePersistenceOwner
             from runtime.messaging.conversation_registry import ConversationRegistry
             from runtime.messaging.message_registry import MessageRegistry
-            from application.commerce.phase18_commercial_context import CommercialJourneyContextReader
+            from runtime.platform.client_outcome_persistence import ClientOutcomePersistenceOwner
 
             canonical_programs = ProgramPublicationRegistry(
                 event_store=event_store,
