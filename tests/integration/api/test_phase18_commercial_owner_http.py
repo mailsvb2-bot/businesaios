@@ -83,9 +83,19 @@ def test_owner_scoped_order_payment_visibility_and_psp_guard(tmp_path):
         party_id="org-partner-a", idempotency_key="partner-a", occurred_at_ms=2,
     )
     router = APIRouter()
+    def preview_engagement(**values):
+        assert values["tenant_id"] == "tenant-a"
+        assert values["business_id"] in {"business-a", "business-b"}
+        return {"business_id": values["business_id"],
+                "followup_queued": False, "message_sent": False,
+                "expected_fingerprint": values["expected_fingerprint"]}
+
     register_business_workspace_commercial_routes(router=router, auth_bundle=auth,
                                                    purchases=purchasing,
-                                                   partner_registry=partner_registry)
+                                                   partner_registry=partner_registry,
+                                                   context_reader=SimpleNamespace(
+                                                       evaluate_sales_engagement=preview_engagement,
+                                                   ))
     app = FastAPI()
     app.include_router(router)
     base = "/business-workspace/commercial"
@@ -97,6 +107,22 @@ def test_owner_scoped_order_payment_visibility_and_psp_guard(tmp_path):
         assert client.post(base + "/orders", headers={"X-API-Key": alien},
                            json=body).status_code == 404
         owner_headers = {"X-API-Key": owner}
+        engage_path = base + "/leads/lead-a/engagement-review"
+        review_body = {"expected_fingerprint": "fingerprint-one",
+                       "model_confidence": 0.9, "customer_opted_out": True}
+        assert client.post(engage_path, json=review_body).status_code == 401
+        reviewed = client.post(engage_path, json=review_body, headers=owner_headers)
+        assert reviewed.status_code == 200, reviewed.text
+        assert reviewed.json()["business_id"] == "business-a"
+        assert reviewed.json()["message_sent"] is False
+        assert reviewed.json()["followup_queued"] is False
+        another = client.post(engage_path, json=review_body,
+                              headers={"X-API-Key": alien})
+        assert another.status_code == 200
+        assert another.json()["business_id"] == "business-b"
+        assert client.post(engage_path, json={
+            **review_body, "execute_now": True,
+        }, headers=owner_headers).status_code == 422
         candidates = [{
             "partner_id": "partner-a", "name": "Health magazine",
             "topics": ["psychology", "health"], "followers": 8000,
