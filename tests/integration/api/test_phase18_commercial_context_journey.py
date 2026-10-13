@@ -441,4 +441,10 @@ def test_owner_approved_followup_routes_to_canonical_provider_and_blocks_replay_
         ctx["leads"].update(**ctx["scope"], lead_id=ctx["lead"].lead_id,
                             status="qualified", idempotency_key="after-approval")
         assert client.post(path, headers={"X-API-Key": owner}).status_code == 409
-        assert len(calls) == 1
+        assert len(calls) == 2
+        ctx["leads"].update(**ctx["scope"], lead_id=ctx["lead"].lead_id,
+                            status="do_not_contact", idempotency_key="after-optout")
+        newest = ctx["context"].read(**ctx["scope"], lead_id=ctx["lead"].lead_id)
+        binding["context_fingerprint"] = newest.context_fingerprint
+        assert client.post(path, headers={"X-API-Key": owner}).status_code == 403
+        assert len(calls) == 2
