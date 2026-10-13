@@ -409,3 +409,39 @@ def test_repository_scan_handles_os_errors_and_post_stat_growth(
         with pytest.raises(ValueError, match="source file exceeds"):
             repository_sources.read_python_source(path, max_bytes=4)
     assert Path.open is real_open
+
+
+def test_business_critical_ci_uses_bounded_full_coverage_shards(monkeypatch):
+    from scripts.ci import step_business_critical_tests
+
+    captured = {}
+
+    def fake_runner(**kwargs):
+        captured.update(kwargs)
+        return True, "all business-critical shards passed"
+
+    monkeypatch.setattr(
+        step_business_critical_tests, "run_pytest_sharded_with_report", fake_runner
+    )
+    assert step_business_critical_tests.run() == (
+        True, "business critical invariant gate passed"
+    )
+    assert captured["target_args"] == ["tests/business_critical"]
+    assert captured["max_files_per_shard"] == 16
+    assert captured["timeout_per_shard"] == 240
+
+
+def test_business_critical_shard_failure_is_release_blocker(monkeypatch):
+    """The integrated CI must not turn shard failures into an overall success."""
+    from scripts.ci import step_business_critical_tests
+
+    def failed_runner(**kwargs):
+        assert kwargs["target_args"] == ["tests/business_critical"]
+        assert kwargs["timeout_per_shard"] == 240
+        assert 0 < kwargs["max_files_per_shard"] <= 16
+        return False, "shard failed: business invariant violated"
+
+    monkeypatch.setattr(step_business_critical_tests, "run_pytest_sharded_with_report", failed_runner)
+    assert step_business_critical_tests.run() == (
+        False, "shard failed: business invariant violated"
+    )

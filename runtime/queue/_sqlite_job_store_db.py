@@ -4,6 +4,7 @@ import importlib
 from contextlib import contextmanager
 from dataclasses import replace
 from pathlib import Path
+from time import monotonic, sleep
 
 from runtime.platform.outbox.sqlite_pragmas import configure_sqlite, is_prod_env
 from runtime.queue._sqlite_job_store_codec import row_to_job, write_full_row
@@ -43,7 +44,21 @@ def connect_sqlite_job_store(
 def sqlite_job_store_tx(*, path: Path, busy_timeout_ms: int):
     db = connect_sqlite_job_store(path=path, busy_timeout_ms=busy_timeout_ms)
     try:
-        db.execute("BEGIN IMMEDIATE;")
+        # Only BEGIN is retried: no application writes or external side effects
+        # have occurred yet, so retrying cannot duplicate a claimed job.
+        deadline = monotonic() + max(1.0, busy_timeout_ms / 1000.0 * 2)
+        while True:
+            try:
+                db.execute("BEGIN IMMEDIATE;")
+                break
+            except sqlite3.OperationalError as exc:
+                # Preserve non-contention SQL errors unchanged.
+                if not any(word in str(exc).lower() for word in ("locked", "busy")):
+                    raise
+                remaining = deadline - monotonic()
+                if remaining <= 0:
+                    raise
+                sleep(min(0.05, remaining))
         yield db
         db.commit()
     except Exception:
