@@ -319,8 +319,26 @@ class SqliteJobStore:
         self._ensure_open()
         tid = require_tenant_id(tenant_id)
         qn = _require_queue_name(queue_name)
+        moment = normalize_now(now)
+        # Workers poll frequently; most scans have nothing to reclaim. Do not
+        # acquire a SQLite RESERVED writer lock for the empty case: it starves
+        # real claim/complete transactions across processes under load.
+        # This is only an advisory preflight; the canonical write transaction
+        # must re-read and fence each expiry before modifying any job.
+        with self._lock, self._connect() as db:
+            due = db.execute(
+                """
+                SELECT 1 FROM runtime_queue_jobs
+                WHERE tenant_id = ? AND queue_name = ? AND state = ?
+                  AND lease_expires_at IS NOT NULL AND lease_expires_at <= ?
+                LIMIT 1
+                """,
+                (tid, qn, JobState.CLAIMED.value, iso_datetime(moment)),
+            ).fetchone()
+            if due is None:
+                return 0
         with self._lock, self._tx() as db:
-            return reap_expired_claims_sqlite(db=db, tenant_id=tid, queue_name=qn, now=now)
+            return reap_expired_claims_sqlite(db=db, tenant_id=tid, queue_name=qn, now=moment)
 
 
     def _tx(self):
