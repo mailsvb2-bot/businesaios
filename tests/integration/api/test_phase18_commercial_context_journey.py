@@ -369,6 +369,7 @@ def test_owner_approved_followup_routes_to_canonical_provider_and_blocks_replay_
             return SimpleNamespace(
                 allowed=True, status="allowed_live_write_operation",
                 metadata={"approval": {"subject_fingerprint": digest}},
+                to_metadata=lambda: {"approval": {"subject_fingerprint": digest}},
             )
 
     queue = ProviderQueueExecutionRuntime(
