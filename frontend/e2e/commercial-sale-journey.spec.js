@@ -43,6 +43,8 @@ test("owner can quote, create and recover a canonical sale without inventing pay
   let failedOrderAttempt = true;
   let unsafeCheckout = true;
   let checkoutAttempts = 0;
+  let providerSettled = false;
+  let reconcileAttempts = 0;
   let capturedAuthorization = 0;
   const json = (route, body, status = 200) => route.fulfill({
     status, contentType: "application/json", body: JSON.stringify(body)
@@ -98,6 +100,21 @@ test("owner can quote, create and recover a canonical sale without inventing pay
         checkout_url: unsafeCheckout ? "http://unsafe.example/pay" : "https://payments.example.test/pay"
       });
     }
+    if (path.endsWith("/orders/order-fixture/reconcile") && req.method() === "POST") {
+      reconcileAttempts++;
+      expect(req.postDataJSON()).toEqual({});
+      if (providerSettled) {
+        Object.assign(created[0], {
+          invoice_status: "paid", paid_minor: offer.amount_minor, provider_verified: true
+        });
+      }
+      return json(route, {
+        order_id: created[0].order_id, invoice_id: created[0].invoice_id,
+        paid_minor: created[0].paid_minor, total_minor: offer.amount_minor,
+        billing_status: created[0].invoice_status,
+        provider_verified: created[0].provider_verified,
+      });
+    }
     return json(route, { detail: "fixture_unhandled_route" }, 404);
   });
   const panel = page.getByRole("region", { name: "Заказы и платежи" });
@@ -129,8 +146,18 @@ test("owner can quote, create and recover a canonical sale without inventing pay
   await expect(paymentLink).toHaveAttribute("href", "https://payments.example.test/pay");
   await expect(paymentLink).toHaveAttribute("rel", "noopener noreferrer");
   await expect(panel.getByText(/Пока сервер не подтвердил PSP и исполнение/)).toBeVisible();
-  await panel.getByRole("button", { name: "Обновить" }).click();
+  await panel.getByRole("button", { name: "Сверить платёж с PSP" }).click();
+  await expect(panel.getByRole("status")).toContainText("PSP не подтвердил окончательную оплату");
   await expect(panel.getByText("Счёт выставлен, оплата не подтверждена")).toBeVisible();
+  providerSettled = true;
+  await panel.getByRole("button", { name: "Сверить платёж с PSP" }).click();
+  await expect(panel.getByRole("status")).toContainText("PSP-платёж подтверждён");
+  await expect(panel.getByText("Платёж подтверждён PSP")).toBeVisible();
+  await expect(panel.getByRole("link", { name: "Перейти к защищённой оплате" })).toHaveCount(0);
+  await expect(submit).toBeDisabled();
+  await panel.getByRole("button", { name: "Обновить" }).click();
+  await expect(panel.getByText("Платёж подтверждён PSP")).toBeVisible();
+  expect(reconcileAttempts).toBe(2);
   expect(checkoutAttempts).toBe(2);
   expect(capturedAuthorization).toBeGreaterThan(0);
   const leaked = await page.evaluate(() =>
