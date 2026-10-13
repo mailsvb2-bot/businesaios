@@ -12,7 +12,7 @@ from adapters.api.fastapi.router_support import business_owner_scope, json_body
 CANON_PHASE18_COMMERCIAL_OWNER_API = True
 
 
-def register_business_workspace_commercial_routes(*, router: APIRouter, auth_bundle, purchases, checkout=None, context_reader=None, settlement=None, partner_registry=None, provider_handlers=None):
+def register_business_workspace_commercial_routes(*, router: APIRouter, auth_bundle, purchases, checkout=None, context_reader=None, settlement=None, partner_registry=None, provider_handlers=None, customers=None):
     def scope(request):
         _, tenant, business = business_owner_scope(request=request, auth_bundle=auth_bundle)
         return tenant, business
@@ -167,7 +167,7 @@ def register_business_workspace_commercial_routes(*, router: APIRouter, auth_bun
             request=request, auth_bundle=auth_bundle,
             required_scope="provider_control_plane",
         )
-        if context_reader is None or provider_handlers is None:
+        if context_reader is None or provider_handlers is None or customers is None:
             raise HTTPException(status_code=503, detail="canonical_followup_execution_unavailable")
         body = await json_body(request)
         if body:
@@ -216,6 +216,33 @@ def register_business_workspace_commercial_routes(*, router: APIRouter, auth_bun
             provider_payload = approved_resume.get("payload")
             if not provider_key or not isinstance(provider_payload, dict):
                 raise PermissionError("commercial_followup_payload_invalid")
+            destinations = {
+                "telegram_bot": ("telegram", ("chat_id", "user_id", "recipient")),
+                "vk_messaging": ("vk", ("peer_id", "user_id")),
+                "max_messaging": ("max", ("user_id", "chat_id")),
+                "whatsapp_cloud": ("whatsapp", ("to", "user_id")),
+                "email_connector": ("email", ("recipient", "to")),
+            }
+            if provider_key not in destinations:
+                raise PermissionError("commercial_followup_provider_not_supported")
+            channel, recipient_fields = destinations[provider_key]
+            recipients = {
+                str(provider_payload.get(field) or "").strip()
+                for field in recipient_fields
+                if str(provider_payload.get(field) or "").strip()
+            }
+            if channel != current.channel or len(recipients) != 1:
+                raise PermissionError("commercial_followup_recipient_ambiguous")
+            external_subject = next(iter(recipients))
+            recipient_record = customers.find_by_identity(
+                tenant_id=tenant, business_id=business,
+                channel=channel, external_subject=external_subject,
+            )
+            from contracts.customer import CustomerStatus
+
+            if (recipient_record.customer.customer_id != current.customer_id
+                    or recipient_record.customer.status is not CustomerStatus.ACTIVE):
+                raise PermissionError("commercial_followup_recipient_not_customer")
             canonical_subject = {
                 "provider_key": provider_key, "payload": provider_payload,
             }
