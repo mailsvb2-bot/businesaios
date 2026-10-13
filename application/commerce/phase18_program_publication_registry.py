@@ -97,6 +97,18 @@ class ProgramPublicationRegistry:
             id_prefix="program-lesson-provider-outcome",
         )
 
+    def bind_paid_access_authority(self, authority: Any) -> None:
+        """One-time server boot binding, before API routes become reachable.
+
+        The paid entitlement is a read of existing Order/Invoice facts, not a
+        mutable second grant registry or user-supplied flag.
+        """
+        if self._paid_access_authority is not None:
+            raise RuntimeError("program_paid_access_authority_already_bound")
+        if not callable(getattr(authority, "require_access", None)):
+            raise TypeError("program_paid_access_authority_invalid")
+        self._paid_access_authority = authority
+
     def _records(self, *, tenant_id: str, business_id: str, program_id: str | None = None) -> list[dict[str, object]]:
         tenant_id = _required(tenant_id, "tenant_id")
         business_id = _required(business_id, "business_id")
