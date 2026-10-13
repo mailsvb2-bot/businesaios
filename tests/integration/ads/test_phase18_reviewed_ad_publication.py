@@ -71,3 +71,103 @@ def test_media_scope_violation_never_changes_asset_provenance():
             tenant_id="tenant-a", business_id="business-a",
             publication_job_id="job-a",
         )
+
+
+@pytest.mark.asyncio
+async def test_verified_provider_requires_one_durable_claim_and_matching_readback(monkeypatch):
+    from interfaces.ads import registry
+    monkeypatch.setitem(registry.CONNECTORS, "yandex_direct", {
+        **registry.CONNECTORS["yandex_direct"],
+        "implemented": True, "write": True, "verify": True, "production_ready": True,
+    })
+
+    class Gateway:
+        def __init__(self):
+            self.sent = []
+
+        async def apply_plan(self, payload):
+            self.sent.append(payload)
+            return {"status": "ok", "results": [{"object_id": "provider-ad-1"}]}
+
+    gateway = Gateway()
+    claims = set()
+
+    def approve(**kwargs):
+        return kwargs["approval_reference"] == "approved-a" and kwargs["asset"].sha256 == "a" * 64
+
+    def reserve_execution(**kwargs):
+        key = kwargs["execution_reference"]
+        if key in claims:
+            return "already_claimed"
+        claims.add(key)
+        return "claimed"
+
+    def verify_provider(**kwargs):
+        return {"verified": True, "object_id": kwargs["object_id"]}
+
+    call = dict(
+        gateway=gateway, request=request(),
+        verify_approval=approve,
+        reserve_execution=reserve_execution,
+        verify_provider=verify_provider,
+    )
+    first = await submit_reviewed_ad_publication(**call)
+    assert first["status"] == "verified"
+    assert gateway.sent[0].plan["ops"][0]["payload"]["image"] == "media-hash-a"
+    repeated = await submit_reviewed_ad_publication(**call)
+    assert repeated["reason"] == "publication_execution_already_reserved"
+    assert len(gateway.sent) == 1
+
+
+@pytest.mark.asyncio
+async def test_ambiguous_provider_response_blocks_retry_under_durable_claim(monkeypatch):
+    from interfaces.ads import registry
+    monkeypatch.setitem(registry.CONNECTORS, "yandex_direct", {
+        **registry.CONNECTORS["yandex_direct"],
+        "implemented": True, "write": True, "verify": True, "production_ready": True,
+    })
+    claims = set()
+    writes = []
+
+    class UncertainGateway:
+        async def apply_plan(self, request):
+            writes.append(request)
+            return {"status": "ok", "results": [{"status": "accepted"}]}
+
+    def claim(**kwargs):
+        key = kwargs["execution_reference"]
+        if key in claims:
+            return "already_claimed"
+        claims.add(key)
+        return "claimed"
+
+    args = dict(
+        gateway=UncertainGateway(), request=request(),
+        verify_approval=lambda **kwargs: True,
+        reserve_execution=claim,
+        verify_provider=lambda **kwargs: {"verified": True},
+    )
+    first = await submit_reviewed_ad_publication(**args)
+    second = await submit_reviewed_ad_publication(**args)
+    assert first["reason"] == "provider_acceptance_ambiguous"
+    assert second["reason"] == "publication_execution_already_reserved"
+    assert len(writes) == 1
+
+
+@pytest.mark.asyncio
+async def test_approval_rejected_before_reserving_or_sending(monkeypatch):
+    from interfaces.ads import registry
+    monkeypatch.setitem(registry.CONNECTORS, "yandex_direct", {
+        **registry.CONNECTORS["yandex_direct"],
+        "implemented": True, "write": True, "verify": True, "production_ready": True,
+    })
+    claim = Mock(side_effect=AssertionError("claim forbidden"))
+    sent = Mock(side_effect=AssertionError("write forbidden"))
+    result = await submit_reviewed_ad_publication(
+        gateway=SimpleNamespace(apply_plan=sent), request=request(),
+        verify_approval=lambda **kwargs: False,
+        reserve_execution=claim, verify_provider=Mock(),
+    )
+    assert result["reason"] == "owner_approval_not_verified"
+    claim.assert_not_called()
+    sent.assert_not_called()
