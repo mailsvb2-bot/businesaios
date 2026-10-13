@@ -440,6 +440,18 @@ def test_owner_approved_followup_routes_to_canonical_provider_and_blocks_replay_
         assert client.post(path, headers={"X-API-Key": owner}).status_code == 403
         assert len(calls) == 2
 
+        metadata["approval_resume_context"]["payload"]["text"] = "A reviewed followup"
+        ctx["leads"].update(**ctx["scope"], lead_id=ctx["lead"].lead_id,
+                            status="qualified", idempotency_key="after-approval")
+        assert client.post(path, headers={"X-API-Key": owner}).status_code == 409
+        assert len(calls) == 2
+        ctx["leads"].update(**ctx["scope"], lead_id=ctx["lead"].lead_id,
+                            status="do_not_contact", idempotency_key="after-optout")
+        newest = ctx["context"].read(**ctx["scope"], lead_id=ctx["lead"].lead_id)
+        binding["context_fingerprint"] = newest.context_fingerprint
+        assert client.post(path, headers={"X-API-Key": owner}).status_code == 403
+        assert len(calls) == 2
+
     from application.business_autonomy.provider_runtime_contract import ProviderSyncRunResult
 
     def accepted_transport(**kwargs):
@@ -466,14 +478,3 @@ def test_owner_approved_followup_routes_to_canonical_provider_and_blocks_replay_
         tenant_id="tenant-a", job_id=job_id,
     ).state is JobState.SUCCEEDED
 
-        metadata["approval_resume_context"]["payload"]["text"] = "A reviewed followup"
-        ctx["leads"].update(**ctx["scope"], lead_id=ctx["lead"].lead_id,
-                            status="qualified", idempotency_key="after-approval")
-        assert client.post(path, headers={"X-API-Key": owner}).status_code == 409
-        assert len(calls) == 2
-        ctx["leads"].update(**ctx["scope"], lead_id=ctx["lead"].lead_id,
-                            status="do_not_contact", idempotency_key="after-optout")
-        newest = ctx["context"].read(**ctx["scope"], lead_id=ctx["lead"].lead_id)
-        binding["context_fingerprint"] = newest.context_fingerprint
-        assert client.post(path, headers={"X-API-Key": owner}).status_code == 403
-        assert len(calls) == 2
