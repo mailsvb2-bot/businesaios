@@ -5,12 +5,15 @@ from fastapi import APIRouter, HTTPException, Request
 
 from adapters.api.fastapi.router_support import authorize_request, business_owner_scope, json_body
 from application.business_autonomy.support_case_registry import SupportCaseRegistry
+from application.business_autonomy.support_case_access import SupportCaseDiagnosticAccess
 from governance.rbac_contract import RoleId
 
 
 def register_business_workspace_support_case_routes(
     *, router: APIRouter, auth_bundle, support_cases: SupportCaseRegistry,
 ) -> None:
+    diagnostic_access = SupportCaseDiagnosticAccess(support_cases=support_cases)
+
     def owner(request: Request):
         principal, tenant_id, business_id = business_owner_scope(request=request, auth_bundle=auth_bundle)
         actor_id = str(getattr(principal, "actor_id", None) or getattr(principal, "subject", "") or "").strip()
@@ -34,7 +37,7 @@ def register_business_workspace_support_case_routes(
             raise HTTPException(status_code=404, detail="support_case_not_found") from exc
         if isinstance(exc, (ValueError, TypeError)):
             raise HTTPException(status_code=422, detail=str(exc)) from exc
-        if isinstance(exc, RuntimeError) and str(exc).startswith("support_case_"):
+        if isinstance(exc, RuntimeError) and str(exc).startswith(("support_case_", "support_access_")):
             raise HTTPException(status_code=409, detail=str(exc)) from exc
         raise exc
 
@@ -69,6 +72,44 @@ def register_business_workspace_support_case_routes(
             return support_cases.create(
                 tenant_id=tenant_id, business_id=business_id, actor_id=actor_id,
                 category=body["category"], summary=body["summary"],
+                idempotency_key=body["idempotency_key"],
+            )
+        except (ValueError, TypeError, RuntimeError, KeyError) as exc:
+            fail(exc)
+
+    @router.get("/business-workspace/support-cases/{case_id}/access", tags=["business-workspace"])
+    async def owner_support_access_state(case_id: str, request: Request):
+        tenant, business, _ = owner(request)
+        try:
+            return diagnostic_access.audit(tenant_id=tenant, business_id=business, case_id=case_id)
+        except (ValueError, TypeError, RuntimeError, KeyError) as exc:
+            fail(exc)
+
+    @router.post("/business-workspace/support-cases/{case_id}/grant-access", tags=["business-workspace"])
+    async def owner_grant_diagnostics(case_id: str, request: Request):
+        tenant, business, actor = owner(request)
+        body = await json_body(request)
+        if set(body) != {"expected_case_revision", "duration_seconds", "idempotency_key"}:
+            raise HTTPException(status_code=422, detail="support_access_grant_fields_invalid")
+        try:
+            return diagnostic_access.grant(
+                tenant_id=tenant, business_id=business, case_id=case_id,
+                owner_id=actor, expected_case_revision=body["expected_case_revision"],
+                duration_seconds=body["duration_seconds"], idempotency_key=body["idempotency_key"],
+            )
+        except (ValueError, TypeError, RuntimeError, KeyError) as exc:
+            fail(exc)
+
+    @router.post("/business-workspace/support-cases/{case_id}/revoke-access", tags=["business-workspace"])
+    async def owner_revoke_diagnostics(case_id: str, request: Request):
+        tenant, business, actor = owner(request)
+        body = await json_body(request)
+        if set(body) != {"grant_id", "idempotency_key"}:
+            raise HTTPException(status_code=422, detail="support_access_revoke_fields_invalid")
+        try:
+            return diagnostic_access.revoke(
+                tenant_id=tenant, business_id=business, case_id=case_id,
+                owner_id=actor, grant_id=body["grant_id"],
                 idempotency_key=body["idempotency_key"],
             )
         except (ValueError, TypeError, RuntimeError, KeyError) as exc:
@@ -117,6 +158,31 @@ def register_business_workspace_support_case_routes(
             return support_cases.history(
                 tenant_id=tenant_id, business_id=business_id,
                 case_id=case_id, limit=limit,
+            )
+        except (ValueError, TypeError, RuntimeError, KeyError) as exc:
+            fail(exc)
+
+    @router.get("/platform-support/cases/{case_id}/access", tags=["platform-support"])
+    async def operator_support_access(case_id: str, request: Request):
+        tenant, business, actor = operator(request)
+        try:
+            case = support_cases.get(tenant_id=tenant, business_id=business, case_id=case_id)
+            if case["claimed_by_operator_user_id"] != actor:
+                raise HTTPException(status_code=403, detail="support_access_not_assigned_to_operator")
+            return diagnostic_access.state(tenant_id=tenant, business_id=business, case_id=case_id)
+        except (ValueError, TypeError, RuntimeError, KeyError) as exc:
+            fail(exc)
+
+    @router.post("/platform-support/cases/{case_id}/diagnostics", tags=["platform-support"])
+    async def operator_view_diagnostics(case_id: str, request: Request):
+        tenant, business, actor = operator(request)
+        body = await json_body(request)
+        if set(body) != {"idempotency_key"}:
+            raise HTTPException(status_code=422, detail="support_access_diagnostics_fields_invalid")
+        try:
+            return diagnostic_access.diagnostics(
+                tenant_id=tenant, business_id=business, case_id=case_id,
+                operator_id=actor, idempotency_key=body["idempotency_key"],
             )
         except (ValueError, TypeError, RuntimeError, KeyError) as exc:
             fail(exc)
