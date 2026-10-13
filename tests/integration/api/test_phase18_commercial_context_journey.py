@@ -439,6 +439,33 @@ def test_owner_approved_followup_routes_to_canonical_provider_and_blocks_replay_
         metadata["approval_resume_context"]["payload"]["text"] = "tampered"
         assert client.post(path, headers={"X-API-Key": owner}).status_code == 403
         assert len(calls) == 2
+
+    from application.business_autonomy.provider_runtime_contract import ProviderSyncRunResult
+
+    def accepted_transport(**kwargs):
+        return ProviderSyncRunResult(
+            provider_key=kwargs["provider"].provider_key,
+            operation=kwargs["operation"], mode=kwargs["mode"],
+            status="live_executed", accepted=True,
+            metadata={"parsed_response": {"resource_id": "provider-receipt-123"}},
+        )
+
+    after_restart = ProviderQueueExecutionRuntime(
+        secret_vault=InMemorySecretVault(),
+        live_runtime=SimpleNamespace(run=accepted_transport),
+        store=SqliteJobStore(tmp_path / "real-provider-queue.sqlite3"),
+        write_guard=ApprovedGuard(),
+    )
+    report = after_restart.tick(
+        provider_registry={"telegram_bot": provider_map()["telegram_bot"]},
+        tenant_id="tenant-a", worker_id="followup-restart-worker",
+        job_id=job_id,
+    )
+    assert report["succeeded"] == 1
+    assert after_restart.store.get(
+        tenant_id="tenant-a", job_id=job_id,
+    ).state is JobState.SUCCEEDED
+
         metadata["approval_resume_context"]["payload"]["text"] = "A reviewed followup"
         ctx["leads"].update(**ctx["scope"], lead_id=ctx["lead"].lead_id,
                             status="qualified", idempotency_key="after-approval")
