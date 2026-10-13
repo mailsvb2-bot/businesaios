@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
 import pytest
 
@@ -86,7 +86,7 @@ def test_followup_constraints_block_terminal_and_frequency_conditions() -> None:
 
 
 def test_followup_constraints_compute_latest_defer_and_quiet_hours() -> None:
-    now = datetime(2026, 10, 5, 22, 30, tzinfo=timezone.utc)
+    now = datetime(2026, 10, 5, 22, 30, tzinfo=UTC)
     result = assess_followup_constraints(
         FollowupConstraintContext(
             last_sent_at=now - timedelta(minutes=10),
@@ -98,7 +98,7 @@ def test_followup_constraints_compute_latest_defer_and_quiet_hours() -> None:
     assert result.blocked
     assert "minimum_gap" in result.reasons
     assert "quiet_hours" in result.reasons
-    assert result.defer_until == datetime(2026, 10, 6, 9, 0, tzinfo=timezone.utc)
+    assert result.defer_until == datetime(2026, 10, 6, 9, 0, tzinfo=UTC)
 
 
 def test_invalid_partial_price_is_rejected() -> None:

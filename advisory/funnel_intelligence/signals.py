@@ -1,7 +1,7 @@
 from __future__ import annotations
 
+from collections.abc import Mapping
 from dataclasses import dataclass
-from typing import Mapping
 
 
 def _probability(value: object) -> float:
@@ -51,7 +51,7 @@ class ConversationSignals:
             object.__setattr__(self, name, _probability(getattr(self, name)))
 
     @classmethod
-    def from_mapping(cls, values: Mapping[str, object]) -> "ConversationSignals":
+    def from_mapping(cls, values: Mapping[str, object]) -> ConversationSignals:
         allowed = set(cls.__dataclass_fields__)
         return cls(**{key: value for key, value in values.items() if key in allowed})
 
