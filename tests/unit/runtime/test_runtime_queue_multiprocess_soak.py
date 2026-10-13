@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import multiprocessing as mp
+import sqlite3
 import time
 
 from runtime.queue.job_contract import JobDispatchRequest, JobState
@@ -66,3 +67,14 @@ def test_runtime_queue_multiprocess_soak_finishes_all_jobs(tmp_path):
     assert store.count(tenant_id='tenant-a', queue_name='ops', state=JobState.SUCCEEDED) == total_jobs
     assert store.count(tenant_id='tenant-a', queue_name='ops', state=JobState.PENDING) == 0
     assert store.count(tenant_id='tenant-a', queue_name='ops', state=JobState.CLAIMED) == 0
+
+
+def test_idle_reaper_does_not_acquire_writer_lock(tmp_path):
+    """Concurrent worker polling must not block actual queue writes when no leases expired."""
+    db_path = tmp_path / 'jobs.sqlite3'
+    store = SqlitePersistentJobStore(path=db_path)
+    with sqlite3.connect(db_path, timeout=0.1) as writer:
+        writer.execute("BEGIN IMMEDIATE")
+        # A second BEGIN IMMEDIATE would time out while this writer holds
+        # the SQLite lock. A read-only expiry preflight must still succeed.
+        assert store.reap_expired_claims(tenant_id='tenant-a', queue_name='ops') == 0
