@@ -132,6 +132,12 @@ export function CommercialSalesWorkspace({
   const liveLead = leads.find((lead) =>
     lead.lead_id === selectedLead && lead.lifecycle_status === "active");
   const quote = offers.find((item) => item.offer_id === selectedOffer);
+  const existingOpenSale = Boolean(liveLead && quote && orders.some((order) =>
+    order.lead_id === liveLead.lead_id &&
+    order.customer_id === liveLead.customer_id &&
+    order.program_id === selectedProgram && order.offer_id === quote.offer_id &&
+    order.status === "active" &&
+    ["issued", "partially_paid", "paid"].includes(order.invoice_status)));
   const money = (minor, currency) => (minor / 100).toLocaleString("ru-RU", {
     minimumFractionDigits: 2, maximumFractionDigits: 2
   }) + " " + currency;
@@ -174,7 +180,8 @@ export function CommercialSalesWorkspace({
 
   const createOrder = async (event) => {
     event.preventDefault();
-    if (!loaded || busy || !apiKey || !liveLead || !quote || !selectedProgram) return;
+    if (!loaded || busy || !apiKey || !liveLead || !quote ||
+        !selectedProgram || existingOpenSale) return;
     const combination = [tenantId, businessId, liveLead.lead_id,
       liveLead.customer_id, selectedProgram, quote.offer_id].join(":");
     if (pendingRequest.current?.combination !== combination) {
@@ -216,7 +223,7 @@ export function CommercialSalesWorkspace({
   };
 
   const startCheckout = async (order) => {
-    if (!apiKey || busy || !receiptIsOrder(order) ||
+    if (!apiKey || busy || !receiptIsOrder(order) || order.status !== "active" ||
         order.invoice_status !== "issued" || order.paid_minor !== 0) return;
     setBusy(true);
     setError("");
@@ -307,7 +314,9 @@ export function CommercialSalesWorkspace({
             <p className="muted-text">Нет опубликованных платных программ.</p> : null}
           {selectedProgram && !quoteBusy && !offers.length ?
             <p className="muted-text">Для программы не найдено ни одного разрешённого предложения.</p> : null}
-          <button type="submit" disabled={busy || quoteBusy || !liveLead || !quote}>
+          {existingOpenSale ? <p className="muted-text">Для этого клиента и предложения уже есть
+            активный заказ. Откройте существующий счёт вместо создания дубликата.</p> : null}
+          <button type="submit" disabled={busy || quoteBusy || !liveLead || !quote || existingOpenSale}>
             {busy ? "Сохраняем…" : "Создать заказ и счёт"}
           </button>
         </form>
@@ -365,11 +374,12 @@ export function CommercialSalesWorkspace({
                   <p><strong>Счёт:</strong> {order.invoice_id}</p>
                   <p><strong>Предложение:</strong> {order.offer_id}</p>
                   <p><strong>Учтено в Billing:</strong> {money(order.paid_minor, order.currency)}</p>
-                  {order.invoice_status === "issued" && order.paid_minor === 0 ? (
+                  {order.status === "active" && order.invoice_status === "issued" && order.paid_minor === 0 ? (
                     <button type="button" className="ghost" disabled={busy}
                       onClick={() => void startCheckout(order)}>Получить ссылку PSP</button>
                   ) : null}
-                  {checkoutLinks[order.order_id] ? (
+                  {order.status === "active" && order.invoice_status === "issued" &&
+                  order.paid_minor === 0 && checkoutLinks[order.order_id] ? (
                     <p><a href={checkoutLinks[order.order_id]} target="_blank"
                       rel="noopener noreferrer">Перейти к защищённой оплате</a></p>
                   ) : null}
