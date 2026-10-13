@@ -10,6 +10,9 @@ from adapters.api.fastapi.business_workspace_commercial_routes import register_b
 from application.commerce.phase18_commercial_order import CommercialProgramPurchaseService
 from application.commerce.phase18_program_publication_registry import ProgramPublicationRegistry
 from application.lead.registry import LeadRegistry
+from application.organization import OrganizationRegistry
+from application.partner import PartnerRegistry
+from contracts.partner import PartnerPartyKind
 from billing.invoice_registry import InvoiceRegistry
 from contracts.customer import Customer, CustomerRecord
 from core.offers.offer_types import OfferSummary
@@ -68,9 +71,20 @@ def test_owner_scoped_order_payment_visibility_and_psp_guard(tmp_path):
         orders=OrderStore(event_store=events),
         invoices=InvoiceRegistry(event_store=events, idempotency_store=idem),
     )
+    organizations = OrganizationRegistry(event_store=events, idempotency_store=idem)
+    organizations.create(
+        **scope, organization_id="org-partner-a", idempotency_key="org-partner",
+        occurred_at_ms=1,
+    )
+    partner_registry = PartnerRegistry(event_store=events, idempotency_store=idem)
+    partner_registry.create(
+        **scope, partner_id="partner-a", party_kind=PartnerPartyKind.ORGANIZATION,
+        party_id="org-partner-a", idempotency_key="partner-a", occurred_at_ms=2,
+    )
     router = APIRouter()
     register_business_workspace_commercial_routes(router=router, auth_bundle=auth,
-                                                   purchases=purchasing)
+                                                   purchases=purchasing,
+                                                   partner_registry=partner_registry)
     app = FastAPI()
     app.include_router(router)
     base = "/business-workspace/commercial"
@@ -82,6 +96,29 @@ def test_owner_scoped_order_payment_visibility_and_psp_guard(tmp_path):
         assert client.post(base + "/orders", headers={"X-API-Key": alien},
                            json=body).status_code == 404
         owner_headers = {"X-API-Key": owner}
+        candidates = [{
+            "partner_id": "partner-a", "name": "Health magazine",
+            "topics": ["psychology", "health"], "followers": 8000,
+            "contact_basis": "public_business_contact",
+            "contact_value": "media@example.org", "source_url": "https://example.org",
+        }]
+        rank_body = {"audience_terms": ["psychology"], "candidates": candidates}
+        rank = client.post(base + "/partner-opportunities/rank",
+                           headers=owner_headers, json=rank_body)
+        assert rank.status_code == 200, rank.text
+        assert rank.json()["outbound_sent"] is False
+        assert rank.json()["advisory_only"] is True
+        assert rank.json()["ranking"][0]["eligible_for_automatic_contact"] is False
+        alien_rank = client.post(base + "/partner-opportunities/rank",
+                                 headers={"X-API-Key": alien}, json=rank_body)
+        assert alien_rank.status_code == 404
+        assert client.post(base + "/partner-opportunities/rank", json=rank_body).status_code == 401
+        assert client.post(
+            base + "/partner-opportunities/rank", headers=owner_headers,
+            json={"audience_terms": ["psychology"], "candidates": [
+                {**candidates[0], "business_id": "business-b"},
+            ]},
+        ).status_code == 422
         before_metrics = client.get(base + "/funnel-metrics", headers=owner_headers)
         assert before_metrics.status_code == 200
         assert before_metrics.json()["lead_count"] == 1
