@@ -298,3 +298,108 @@ def test_commercial_followup_approved_subject_hash_binding_is_stable():
         }},
         ensure_ascii=False, sort_keys=True, separators=(",", ":"), allow_nan=False,
     ).encode("utf-8")).hexdigest() != subject
+
+
+
+def test_owner_approved_followup_routes_to_canonical_provider_and_blocks_replay_tampering(tmp_path):
+    import hashlib
+    import json
+    from types import SimpleNamespace
+
+    from fastapi import APIRouter, FastAPI
+    from fastapi.testclient import TestClient
+
+    from adapters.api.fastapi.auth_dependencies import AuthDependencyBundle, CompositeAuthPolicy
+    from adapters.api.fastapi.business_workspace_commercial_routes import (
+        register_business_workspace_commercial_routes,
+    )
+    from entrypoints.api.api_key_policy import ApiKeyPolicy, PersistentApiKeyStore
+    from entrypoints.api.security_owner_bundle import ApiSecurityOwnerBundle
+
+    ctx = _build()
+    policy = ApiKeyPolicy(store=PersistentApiKeyStore(
+        path=tmp_path / "keys.json", pepper="followup-approval-test",
+    ))
+    _, owner = policy.issue_owner_session(
+        tenant_id="tenant-a", business_id="business-a", subject="owner-a",
+    )
+    _, alien = policy.issue_owner_session(
+        tenant_id="tenant-a", business_id="business-b", subject="owner-b",
+    )
+    auth = AuthDependencyBundle(
+        auth_policy=CompositeAuthPolicy(api_key_policy=policy),
+        security_guard=ApiSecurityOwnerBundle.default(
+            audit_path=tmp_path / "audit.jsonl",
+        ).api_surface_guard,
+    )
+    before = ctx["context"].read(**ctx["scope"], lead_id=ctx["lead"].lead_id)
+    subject = {
+        "provider_key": "telegram_bot",
+        "payload": {"chat_id": "123", "text": "A reviewed followup"},
+    }
+    digest = hashlib.sha256(json.dumps(
+        subject, sort_keys=True, ensure_ascii=False,
+        separators=(",", ":"), allow_nan=False,
+    ).encode()).hexdigest()
+    binding = {
+        **ctx["scope"], "lead_id": ctx["lead"].lead_id,
+        "customer_id": before.customer_id,
+        "conversation_id": before.conversation_id,
+        "channel": before.channel,
+        "context_fingerprint": before.context_fingerprint,
+        "approved_provider_subject_sha256": digest,
+    }
+    metadata = {
+        "decision_id": "decision-a",
+        "action_name": "provider.telegram_bot.message_send",
+        "approval_resume_context": {**subject, "business_id": "business-a",
+                                     "operation": "message_send"},
+    }
+    calls = []
+
+    class Provider:
+        def approval_store_factory(self):
+            return SimpleNamespace(get=lambda key: SimpleNamespace(
+                status=SimpleNamespace(value="approved"),
+                request=SimpleNamespace(tenant_id="tenant-a", metadata=metadata),
+            ) if key == "approval-a" else None)
+
+        def decision_loader(self, **kwargs):
+            return SimpleNamespace(decision=SimpleNamespace(
+                decision_id="decision-a", action="send_message@v1",
+                payload={"commercial_followup": binding},
+            ))
+
+        def resolve_approved_message_business_id(self, **kwargs):
+            return "business-a"
+
+        def resume_approved_message(self, **kwargs):
+            calls.append(kwargs)
+            return {"execution": {"result": {"accepted": False, "status": "ambiguous_delivery"}}}
+
+    router = APIRouter()
+    register_business_workspace_commercial_routes(
+        router=router, auth_bundle=auth, purchases=ctx["purchase"],
+        context_reader=ctx["context"], provider_handlers=Provider(),
+    )
+    app = FastAPI()
+    app.include_router(router)
+    path = "/business-workspace/commercial/leads/canonical-lead/approved-followups/approval-a/deliver"
+    with TestClient(app, base_url="https://testserver") as client:
+        assert client.post(path).status_code == 401
+        assert client.post(path, headers={"X-API-Key": alien}).status_code == 403
+        assert client.post(path, headers={"X-API-Key": owner},
+                           json={"text": "tampered"}).status_code == 422
+        assert calls == []
+        response = client.post(path, headers={"X-API-Key": owner})
+        assert response.status_code == 200, response.text
+        assert response.json()["canonical_provider_execution"]["execution"]["result"]["accepted"] is False
+        assert calls == [{"tenant_id": "tenant-a", "approval_id": "approval-a"}]
+        metadata["approval_resume_context"]["payload"]["text"] = "tampered"
+        assert client.post(path, headers={"X-API-Key": owner}).status_code == 403
+        assert len(calls) == 1
+        metadata["approval_resume_context"]["payload"]["text"] = "A reviewed followup"
+        ctx["leads"].update(**ctx["scope"], lead_id=ctx["lead"].lead_id,
+                            status="qualified", idempotency_key="after-approval")
+        assert client.post(path, headers={"X-API-Key": owner}).status_code == 409
+        assert len(calls) == 1
