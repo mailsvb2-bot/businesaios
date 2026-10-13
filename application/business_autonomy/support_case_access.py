@@ -238,7 +238,7 @@ class SupportCaseDiagnosticAccess:
             if str(exc).startswith("ontology transition rejected:"):
                 raise RuntimeError("support_access_revision_conflict") from exc
             raise
-        if not self.state(tenant_id=tenant_id, business_id=business_id, case_id=case["id"])["active"]:
+        if not self.state(tenant_id=tenant_id, business_id=business_id, case_id=case["id"], now_ms=now)["active"]:
             raise RuntimeError("support_access_no_live_consent")
         return self._diagnostic_receipt(case["id"], row)
 
