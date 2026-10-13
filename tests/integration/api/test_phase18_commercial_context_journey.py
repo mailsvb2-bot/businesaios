@@ -484,3 +484,23 @@ def test_owner_approved_followup_routes_to_canonical_provider_and_blocks_replay_
         tenant_id="tenant-a", job_id=job_id,
     ).state is JobState.SUCCEEDED
 
+
+
+
+def test_canonical_inbound_count_does_not_include_outbound_messages():
+    ctx = _build()
+    scope = ctx["scope"]
+    before = ctx["context"].read(**scope, lead_id=ctx["lead"].lead_id)
+    assert before.inbound_message_count == 1
+    ctx["messages"].record(
+        identity=MessageIdentity(
+            message_id="outbound-after-inbound", **scope,
+            channel="telegram", direction=MessageDirection.OUTBOUND,
+        ),
+        customer_id=ctx["customer"].customer_id,
+        conversation_id=ctx["conversation"].conversation_id,
+    )
+    after = ctx["context"].read(**scope, lead_id=ctx["lead"].lead_id)
+    assert after.inbound_message_count == 1
+    assert after.latest_message_id == "outbound-after-inbound"
+    assert after.context_fingerprint != before.context_fingerprint
