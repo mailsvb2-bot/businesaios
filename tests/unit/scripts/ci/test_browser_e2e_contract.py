@@ -31,7 +31,7 @@ PROGRAM_SPEC = "program-publication-journey.spec.js"
 PROGRAM_SOURCE_SHA = "3039752db26e3cde7aada0088fcc8e83e21ef1809a220a6c351e47d3300a04ee"
 COMMERCIAL_TITLE = "owner can quote, create and recover a canonical sale without inventing payment"
 COMMERCIAL_SPEC = "commercial-sale-journey.spec.js"
-COMMERCIAL_SOURCE_SHA = "02a3a2117e3e99a8d64a3fc334f3a17994ef1ffe5450efdaac922e63afde3a27"
+COMMERCIAL_SOURCE_SHA = "178e295519feed1c180fcd1705c375aad7a027211d7e5d71bf500b59b5b05923"
 BROWSER_SCENARIOS = (
     (TITLE, SPEC), (EVENT_TITLE, EVENT_SPEC), (SUPPORT_TITLE, SUPPORT_SPEC),
     (PROGRAM_TITLE, PROGRAM_SPEC), (COMMERCIAL_TITLE, COMMERCIAL_SPEC),
