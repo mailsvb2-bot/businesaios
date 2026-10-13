@@ -110,6 +110,35 @@ def test_owner_scoped_order_payment_visibility_and_psp_guard(tmp_path):
         assert rank.json()["outbound_sent"] is False
         assert rank.json()["advisory_only"] is True
         assert rank.json()["ranking"][0]["eligible_for_automatic_contact"] is False
+        prepared = client.post(
+            base + "/partner-opportunities/prepare", headers=owner_headers,
+            json={
+                "candidate": candidates[0], "business_name": "Practice",
+                "offering": "Workshop", "campaign_topic": "Psychology",
+                "target_url": "https://example.org/workshop",
+            },
+        )
+        assert prepared.status_code == 200, prepared.text
+        assert prepared.json()["outbound_sent"] is False
+        assert prepared.json()["proposal"]["requires_human_approval"] is True
+        assert "Psychology" in prepared.json()["proposal"]["outreach_draft"]
+        assert client.post(
+            base + "/partner-opportunities/prepare",
+            headers={"X-API-Key": alien},
+            json={
+                "candidate": candidates[0], "business_name": "Practice",
+                "offering": "Workshop", "campaign_topic": "Psychology",
+                "target_url": "https://example.org/workshop",
+            },
+        ).status_code == 404
+        assert client.post(
+            base + "/partner-opportunities/prepare", headers=owner_headers,
+            json={
+                "candidate": candidates[0], "business_name": "Practice",
+                "offering": "Workshop", "campaign_topic": "Psychology",
+                "target_url": "http://example.org/unsafe",
+            },
+        ).status_code == 422
         alien_rank = client.post(base + "/partner-opportunities/rank",
                                  headers={"X-API-Key": alien}, json=rank_body)
         assert alien_rank.status_code == 404
