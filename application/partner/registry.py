@@ -5,6 +5,7 @@ from typing import Any
 
 from application.ontology import EventFactLifecycleWriter
 from application.organization.projector import OrganizationProjector
+from application.partner.growth_advisory import PartnerFitAssessment, PartnerOpportunity
 from application.partner.projector import PARTNER_ARCHIVED, PARTNER_CREATED, PartnerProjector
 from application.person.projector import PersonProjector
 from contracts.organization import OrganizationStatus
@@ -97,9 +98,9 @@ class PartnerRegistry:
 
     def assess_growth_opportunities(
         self, *, tenant_id: str, business_id: str,
-        candidates: tuple["PartnerOpportunity", ...],
+        candidates: tuple[PartnerOpportunity, ...],
         audience_terms: tuple[str, ...] = (),
-    ) -> tuple["PartnerFitAssessment", ...]:
+    ) -> tuple[PartnerFitAssessment, ...]:
         """Read canonical partner identities; no campaign or outbound side effects."""
         from application.partner.growth_advisory import (
             score_partner_opportunity,
