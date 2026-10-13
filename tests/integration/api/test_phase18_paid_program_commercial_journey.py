@@ -10,6 +10,7 @@ from fastapi.testclient import TestClient
 
 from adapters.api.fastapi.auth_dependencies import AuthDependencyBundle, CompositeAuthPolicy
 from adapters.api.fastapi.business_workspace_commercial_routes import register_business_workspace_commercial_routes
+from adapters.api.fastapi.business_workspace_program_routes import register_business_workspace_program_routes
 from application.commerce.phase18_commercial_access import CanonicalPaidProgramAccess
 from application.commerce.phase18_commercial_checkout import CommercialCheckoutCoordinator
 from application.commerce.phase18_commercial_order import CommercialProgramPurchaseService
@@ -281,11 +282,19 @@ def test_authenticated_settlement_route_denies_forged_money_and_reads_canonical_
         router=router, auth_bundle=auth, purchases=e.purchases,
         checkout=e.checkout, settlement=e.settlement,
     )
+    register_business_workspace_program_routes(
+        router=router, auth_bundle=auth, programs=e.programs,
+    )
     app = FastAPI()
     app.include_router(router)
     base = "/business-workspace/commercial/orders/" + e.order.order_id
+    program_base = "/business-workspace/programs/" + e.program["id"]
     with TestClient(app, base_url="https://testserver") as client:
         headers = {"X-API-Key": owner}
+        payload = {"customer_id": e.customer.customer_id}
+        denied = client.post(program_base + "/enrollments", headers=headers, json=payload)
+        assert denied.status_code == 409
+        assert denied.json()["detail"] == "program_paid_entitlement_not_verified"
         assert client.post(base + "/reconcile").status_code == 401
         assert client.post(base + "/reconcile", headers={"X-API-Key": alien}).status_code == 404
         assert client.post(base + "/reconcile", headers=headers, json={
@@ -297,8 +306,28 @@ def test_authenticated_settlement_route_denies_forged_money_and_reads_canonical_
         receipt = client.post(base + "/reconcile", headers=headers, json={})
         assert receipt.status_code == 200, receipt.text
         assert receipt.json()["provider_verified"] is True
+        allowed = client.post(program_base + "/enrollments", headers=headers, json=payload)
+        assert allowed.status_code == 200, allowed.text
+        enrolled = allowed.json()
+        assert enrolled["customer_id"] == e.customer.customer_id
+        assert enrolled["status"] == "awaiting_delivery"
+        assert len(client.get(program_base + "/enrollments", headers=headers).json()["enrollments"]) == 1
+        plan = client.get(
+            program_base + "/enrollments/" + enrolled["id"] + "/lessons/1/send-plan",
+            params={"channel": "telegram"}, headers=headers,
+        )
+        assert plan.status_code == 200 and plan.json()["execution_allowed"] is False
         after = client.get(base, headers=headers)
         assert after.json()["provider_verified"] is True
         assert after.json()["paid_minor"] == e.order.amount_minor
         assert client.post(base + "/reconcile", headers=headers, json={}).json() == receipt.json()
         assert client.get(base, headers={"X-API-Key": alien}).status_code == 404
+        assert client.post(program_base + "/enrollments", headers={"X-API-Key": alien},
+                           json=payload).status_code == 404
+        e.invoices.credit(**e.scope, invoice_id=e.order.invoice_id, idempotency_key="credit-after-http")
+        denied_plan = client.get(
+            program_base + "/enrollments/" + enrolled["id"] + "/lessons/1/send-plan",
+            params={"channel": "telegram"}, headers=headers,
+        )
+        assert denied_plan.status_code == 409
+        assert denied_plan.json()["detail"] == "program_paid_entitlement_not_verified"
