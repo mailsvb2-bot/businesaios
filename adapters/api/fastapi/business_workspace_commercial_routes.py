@@ -163,7 +163,10 @@ def register_business_workspace_commercial_routes(*, router: APIRouter, auth_bun
         No independent sender or scheduler. Only the canonical provider approval
         resume can enqueue and observe a real provider result.
         """
-        tenant, business = scope(request)
+        _, tenant, business = business_owner_scope(
+            request=request, auth_bundle=auth_bundle,
+            required_scope="provider_control_plane",
+        )
         if context_reader is None or provider_handlers is None:
             raise HTTPException(status_code=503, detail="canonical_followup_execution_unavailable")
         body = await json_body(request)
