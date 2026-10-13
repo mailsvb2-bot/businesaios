@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import multiprocessing as mp
+import sqlite3
 import time
 
 from runtime.queue.job_contract import JobDispatchRequest, JobState
@@ -66,3 +67,16 @@ def test_runtime_queue_multiprocess_soak_finishes_all_jobs(tmp_path):
     assert store.count(tenant_id='tenant-a', queue_name='ops', state=JobState.SUCCEEDED) == total_jobs
     assert store.count(tenant_id='tenant-a', queue_name='ops', state=JobState.PENDING) == 0
     assert store.count(tenant_id='tenant-a', queue_name='ops', state=JobState.CLAIMED) == 0
+
+
+def test_empty_expiry_reap_does_not_take_sqlite_writer_lock(tmp_path):
+    """Routine scheduler polling must remain read-only under writer contention."""
+    db_path = tmp_path / "jobs.sqlite3"
+    store = SqlitePersistentJobStore(path=db_path)
+    try:
+        with sqlite3.connect(db_path, timeout=0.1) as writer:
+            writer.execute("BEGIN IMMEDIATE;")
+            assert store.reap_expired_claims(tenant_id="tenant-a", queue_name="ops") == 0
+            writer.rollback()
+    finally:
+        store.close()

@@ -33,6 +33,9 @@ export function SupportOperatorConsole({ apiBase }) {
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
   const [history, setHistory] = useState(null);
+  const [diagnosticState, setDiagnosticState] = useState({});
+  const [diagnosticReceipt, setDiagnosticReceipt] = useState({});
+  const diagnosticPending = useRef(null);
   const [lookupId, setLookupId] = useState("");
   const [lookupCase, setLookupCase] = useState(null);
   const [historyBusy, setHistoryBusy] = useState("");
@@ -65,6 +68,9 @@ export function SupportOperatorConsole({ apiBase }) {
     epoch.current += 1;
     historyEpoch.current += 1;
     setHistory(null);
+    setDiagnosticState({});
+    setDiagnosticReceipt({});
+    diagnosticPending.current = null;
     setLookupId("");
     setLookupCase(null);
     setHistoryBusy("");
@@ -275,6 +281,60 @@ export function SupportOperatorConsole({ apiBase }) {
     }
   };
 
+  const diagnostics = async (item, action) => {
+    if (!session || busy || !item || item.status !== "claimed" ||
+        item.claimed_by_operator_user_id !== session.identity.operator_id) return;
+    const generation = epoch.current;
+    setError("");
+    setNotice("");
+    setBusy("diagnostics:" + item.id);
+    try {
+      if (action === "status") {
+        const state = await request(session.key, "/cases/" + encodeURIComponent(item.id) + "/access");
+        if (generation !== epoch.current) return;
+        if (state?.case_id !== item.id || typeof state.active !== "boolean") {
+          throw new Error("Сервер не подтвердил доступ.");
+        }
+        setDiagnosticState((old) => ({ ...old, [item.id]: state }));
+        setDiagnosticReceipt((old) => ({ ...old, [item.id]: null }));
+      } else {
+        const state = diagnosticState[item.id];
+        if (!state?.active || !state.grant_id) {
+          throw new Error("Владелец ещё не разрешил диагностику.");
+        }
+        const signature = [item.id, item.revision, state.grant_id].join(":");
+        if (diagnosticPending.current?.signature !== signature) {
+          diagnosticPending.current = { signature, key: "support-diagnostic-" + crypto.randomUUID() };
+        }
+        const receipt = await request(session.key,
+          "/cases/" + encodeURIComponent(item.id) + "/diagnostics",
+          { idempotency_key: diagnosticPending.current.key });
+        if (generation !== epoch.current) return;
+        if (receipt?.case_id !== item.id || receipt?.grant_id !== state.grant_id ||
+            receipt?.window_hours !== 24 ||
+            !receipt.counts || ["messages", "payments", "programs", "support"]
+              .some((key) => !Number.isSafeInteger(receipt.counts[key]) || receipt.counts[key] < 0)) {
+          throw new Error("Диагностический результат не подтверждён.");
+        }
+        diagnosticPending.current = null;
+        setDiagnosticReceipt((old) => ({ ...old, [item.id]: receipt }));
+        setNotice("Просмотр агрегированных данных записан в аудите BusinessAIOS.");
+      }
+    } catch (reason) {
+      if (generation !== epoch.current) return;
+      if (reason.httpStatus === 401 || reason.httpStatus === 403) {
+        if (reason.httpStatus === 401) logout();
+        else {
+          setDiagnosticState((old) => ({ ...old, [item.id]: null }));
+          setDiagnosticReceipt((old) => ({ ...old, [item.id]: null }));
+        }
+      }
+      setError("Диагностика недоступна: " + reason.message);
+    } finally {
+      if (generation === epoch.current) setBusy("");
+    }
+  };
+
   if (!session) {
     return (
       <main className="onboarding-shell">
@@ -350,6 +410,29 @@ export function SupportOperatorConsole({ apiBase }) {
                   <p>{item.summary}</p>
                   <small>{item.id} · Версия: {item.revision} · {item.updated_at}</small>
                   {item.status === "claimed" && !mine ? <p className="muted-text">Взято другим оператором.</p> : null}
+                  {mine ? (
+                    <div aria-label={"Диагностика обращения " + item.id}>
+                      <button type="button" className="ghost" disabled={Boolean(busy)}
+                        onClick={() => void diagnostics(item, "status")}>
+                        Проверить согласие владельца
+                      </button>
+                      {diagnosticState[item.id] ? (
+                        <p>Согласие: {diagnosticState[item.id].active ? "действует" : "отсутствует"}.</p>
+                      ) : null}
+                      {diagnosticState[item.id]?.active ? (
+                        <button type="button" className="ghost" disabled={Boolean(busy)}
+                          onClick={() => void diagnostics(item, "view")}>
+                          Просмотреть ограниченную диагностику
+                        </button>
+                      ) : null}
+                      {diagnosticReceipt[item.id] ? (
+                        <p>За последние 24 часа: сообщения — {diagnosticReceipt[item.id].counts.messages},
+                          платежи — {diagnosticReceipt[item.id].counts.payments},
+                          программы — {diagnosticReceipt[item.id].counts.programs},
+                          обращения — {diagnosticReceipt[item.id].counts.support}.</p>
+                      ) : null}
+                    </div>
+                  ) : null}
                   <div className="panel-title-row">
                     {item.status === "open" ? (
                       <button type="button" className="primary" disabled={Boolean(busy)}

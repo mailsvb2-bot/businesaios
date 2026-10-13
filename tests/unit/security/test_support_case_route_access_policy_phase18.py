@@ -34,6 +34,8 @@ def test_support_key_can_authenticate_only_bounded_support_routes():
         "GET:/platform-support/session", "GET:/platform-support/cases",
         "GET:/platform-support/cases/0c2d6f9e-558a-42ba-aa3e-99135c3be0aa",
         "GET:/platform-support/cases/0c2d6f9e-558a-42ba-aa3e-99135c3be0aa/history",
+        "GET:/platform-support/cases/0c2d6f9e-558a-42ba-aa3e-99135c3be0aa/access",
+        "POST:/platform-support/cases/0c2d6f9e-558a-42ba-aa3e-99135c3be0aa/diagnostics",
         "POST:/platform-support/cases/0c2d6f9e-558a-42ba-aa3e-99135c3be0aa/claim",
         "POST:/platform-support/cases/0c2d6f9e-558a-42ba-aa3e-99135c3be0aa/release",
         "POST:/platform-support/cases/0c2d6f9e-558a-42ba-aa3e-99135c3be0aa/resolve",
@@ -46,10 +48,10 @@ def test_support_key_can_authenticate_only_bounded_support_routes():
 
 def test_support_uuid_case_normalization_agrees_with_authentication_allowlist():
     uppercase_id = "0C2D6F9E-558A-42BA-AA3E-99135C3BE0AA"
-    for suffix in ("", "/history"):
+    for suffix in ("", "/history", "/access"):
         response = _route_verdict(f"GET:/platform-support/cases/{uppercase_id}{suffix}")
         assert response.allowed and response.required_permission is Permission.VIEW_SUPPORT_CASE
-    for action in ("claim", "release", "resolve"):
+    for action in ("claim", "release", "resolve", "diagnostics"):
         response = _route_verdict(f"POST:/platform-support/cases/{uppercase_id}/{action}")
         assert response.allowed and response.required_permission is Permission.VIEW_SUPPORT_CASE
     assert not _route_verdict("GET:/platform-support/cases/not-uuid").allowed
@@ -66,6 +68,9 @@ def test_support_key_cannot_read_audit_other_business_or_unregistered_endpoint()
         "GET:/platform-support/cases/stolen",
         "GET:/platform-support/cases/not-a-uuid/history",
         "GET:/platform-support/cases/0c2d6f9e-558a-42ba-aa3e-99135c3be0aa/raw-audit",
+        "GET:/platform-support/cases/0c2d6f9e-558a-42ba-aa3e-99135c3be0aa/diagnostics",
+        "POST:/platform-support/cases/0c2d6f9e-558a-42ba-aa3e-99135c3be0aa/access",
+        "POST:/platform-support/cases/0c2d6f9e-558a-42ba-aa3e-99135c3be0aa/raw-export",
         "GET:/platform-support/cases/0c2d6f9e-558a-42ba-aa3e-99135c3be0aa/history/../../audit",
         "POST:/platform-support/cases/0c2d6f9e-558a-42ba-aa3e-99135c3be0aa/history",
         "DELETE:/platform-support/cases",

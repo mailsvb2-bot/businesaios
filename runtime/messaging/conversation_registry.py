@@ -252,6 +252,13 @@ class ConversationRegistry:
         if current.lifecycle_status is ConversationLifecycleStatus.ARCHIVED:
             raise ValueError("archived conversation cannot receive ingress")
         contact_digest = hashlib.sha256(contact.encode("utf-8")).hexdigest()
+        # Transport message IDs are often only unique inside a provider chat
+        # or business. Namespace every activity claim by the canonical
+        # conversation identity before entering the shared tenant-wide
+        # IdempotencyStore; do not weaken scope-mismatch enforcement.
+        scoped_contact_digest = hashlib.sha256(
+            "\0".join((tenant, business, conversation_id, contact)).encode("utf-8")
+        ).hexdigest()
         payload = {
             "schema_version": CONVERSATION_SCHEMA_VERSION,
             "contact_digest": contact_digest,
@@ -262,7 +269,7 @@ class ConversationRegistry:
             entity_id=conversation_id,
             expected_state_token=self._state_token(current),
             operation="observe_activity",
-            idempotency_key=f"activity:{contact_digest}",
+            idempotency_key=f"activity:{scoped_contact_digest}",
             fact_type=CONVERSATION_ACTIVITY_OBSERVED,
             payload=payload,
             occurred_at_ms=max(current.updated_at_ms, when),

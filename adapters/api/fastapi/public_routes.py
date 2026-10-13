@@ -11,6 +11,7 @@ from adapters.api.fastapi.business_workspace_decision_routes import register_bus
 from adapters.api.fastapi.business_workspace_discovery_routes import register_business_workspace_discovery_routes
 from adapters.api.fastapi.business_workspace_event_landing_routes import register_business_workspace_event_landing_routes
 from adapters.api.fastapi.business_workspace_program_routes import register_business_workspace_program_routes
+from adapters.api.fastapi.business_workspace_commercial_routes import register_business_workspace_commercial_routes
 from adapters.api.fastapi.business_workspace_process_routes import register_business_workspace_process_routes
 from adapters.api.fastapi.business_workspace_provider_routes import register_business_workspace_provider_routes
 from adapters.api.fastapi.business_workspace_support_case_routes import register_business_workspace_support_case_routes
@@ -89,6 +90,10 @@ def register_public_api_routes(
     process_workspace=None,
     process_request_idempotency=None,
     business_discovery_workspace=None,
+    commercial_payment_adapter=None,
+    commercial_payment_verifier=None,
+    commercial_reversal_reader=None,
+    commercial_merchant_id=None,
 ) -> None:
     if tenant_registry is None and dependency_container is not None:
         tenant_registry = getattr(dependency_container, 'tenant_registry', None)
@@ -218,16 +223,6 @@ def register_public_api_routes(
         register_business_workspace_provider_routes(
             router=router, auth_bundle=auth_bundle, provider_admin_handlers=provider_handlers,
         )
-        if event_landing_registry is not None:
-            register_business_workspace_program_routes(
-                router=router, auth_bundle=auth_bundle,
-                provider_admin_handlers=provider_handlers,
-                programs=ProgramPublicationRegistry(
-                    event_store=event_store,
-                    idempotency_store=dependency_container.api_idempotency_store,
-                    customer_registry=canonical_customers,
-                ),
-            )
         if dependency_container is not None and getattr(dependency_container, "api_idempotency_store", None) is not None:
             # Canonical event/idempotency owners only: never invent an isolated
             # support ledger if the application has no durable Event Spine.
@@ -240,6 +235,91 @@ def register_public_api_routes(
                         idempotency_store=dependency_container.api_idempotency_store,
                     ),
                 )
+        if event_landing_registry is not None:
+            from application.commerce.phase18_commercial_order import CommercialProgramPurchaseService
+            from application.lead.registry import LeadRegistry
+            from billing.invoice_registry import InvoiceRegistry
+            from core.offers.offer_catalog_resolver import OfferCatalogResolver
+            from lead_outcomes.client_outcome_order_store import OrderStore
+            from runtime.platform.client_outcome_persistence import ClientOutcomePersistenceOwner
+            from runtime.messaging.conversation_registry import ConversationRegistry
+            from runtime.messaging.message_registry import MessageRegistry
+            from application.commerce.phase18_commercial_context import CommercialJourneyContextReader
+
+            canonical_programs = ProgramPublicationRegistry(
+                event_store=event_store,
+                idempotency_store=dependency_container.api_idempotency_store,
+                customer_registry=canonical_customers,
+            )
+            commercial_purchases = CommercialProgramPurchaseService(
+                leads=LeadRegistry(event_store=event_store, idempotency_store=dependency_container.api_idempotency_store),
+                customers=canonical_customers,
+                programs=canonical_programs,
+                offers=OfferCatalogResolver(),
+                orders=OrderStore(
+                    backend=ClientOutcomePersistenceOwner.default().registry("order"),
+                    event_store=event_store, require_event_spine=True,
+                ),
+                invoices=InvoiceRegistry(event_store=event_store, idempotency_store=dependency_container.api_idempotency_store),
+            )
+            # Configure the *existing* checkout and Billing owners only when
+            # all external money and reversal authorities are explicitly supplied
+            # by server bootstrap. Partial configuration is a startup error.
+            commercial_provider_parts = (
+                commercial_payment_adapter, commercial_payment_verifier,
+                commercial_reversal_reader, commercial_merchant_id,
+            )
+            if any(part is not None for part in commercial_provider_parts) and not all(
+                part is not None for part in commercial_provider_parts
+            ):
+                raise RuntimeError("commercial_payment_authorities_incomplete")
+            commercial_checkout = None
+            commercial_settlement = None
+            if all(part is not None for part in commercial_provider_parts):
+                from application.commerce.phase18_commercial_access import CanonicalPaidProgramAccess
+                from application.commerce.phase18_commercial_checkout import CommercialCheckoutCoordinator
+                from billing.phase18_commercial_settlement import CommercialSettlementReconciler
+
+                commercial_checkout = CommercialCheckoutCoordinator(
+                    purchase_service=commercial_purchases,
+                    payment_adapter=commercial_payment_adapter,
+                    event_store=event_store,
+                    idempotency_store=dependency_container.api_idempotency_store,
+                )
+                commercial_settlement = CommercialSettlementReconciler(
+                    purchases=commercial_purchases, checkouts=commercial_checkout,
+                    payment_verifier=commercial_payment_verifier,
+                    configured_merchant_id=commercial_merchant_id,
+                )
+                canonical_programs.bind_paid_access_authority(
+                    CanonicalPaidProgramAccess(
+                        purchases=commercial_purchases, checkouts=commercial_checkout,
+                        reversal_reader=commercial_reversal_reader,
+                    )
+                )
+            register_business_workspace_program_routes(
+                router=router, auth_bundle=auth_bundle,
+                provider_admin_handlers=provider_handlers, programs=canonical_programs,
+            )
+            commercial_context = CommercialJourneyContextReader(
+                leads=commercial_purchases.leads,
+                customers=canonical_customers,
+                conversations=ConversationRegistry(
+                    event_store=event_store, idempotency_store=dependency_container.api_idempotency_store,
+                    customer_registry=canonical_customers,
+                ),
+                messages=MessageRegistry(
+                    event_store=event_store, idempotency_store=dependency_container.api_idempotency_store,
+                ),
+                programs=commercial_purchases.programs,
+                orders=commercial_purchases.orders,
+                invoices=commercial_purchases.invoices,
+            )
+            register_business_workspace_commercial_routes(
+                router=router, auth_bundle=auth_bundle,
+                purchases=commercial_purchases, checkout=commercial_checkout,
+                context_reader=commercial_context, settlement=commercial_settlement,
+            )
         if event_landing_registry is not None:
             register_business_workspace_event_landing_routes(
                 router=router, auth_bundle=auth_bundle,

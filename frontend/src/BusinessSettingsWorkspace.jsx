@@ -20,6 +20,9 @@ export function BusinessSettingsWorkspace({ apiBase, apiKey, getJson, postJson, 
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
   const pending = useRef(null);
+  // The native submit event can be lost on a remount in WebKit. Both click
+  // and keyboard submit use the same guarded mutation path, never two writes.
+  const submitting = useRef(false);
   const generation = useRef(0);
   const url = apiBase.replace(/\/$/, "") + "/business-workspace/settings";
   const headers = apiKey ? { "X-API-Key": apiKey } : {};
@@ -65,20 +68,27 @@ export function BusinessSettingsWorkspace({ apiBase, apiKey, getJson, postJson, 
 
   const save = async (event) => {
     event.preventDefault();
-    if (!apiKey || busy || !settings || !name.trim()) return;
-    const payload = {
-      business_name: name.trim(), activity_description: activity.trim(),
-      timezone_name: timezone, expected_revision: settings.revision,
-    };
-    const signature = JSON.stringify(payload);
-    if (!pending.current || pending.current.signature !== signature) {
-      pending.current = { signature, key: "settings-" + crypto.randomUUID() };
-    }
+    if (!apiKey || busy || submitting.current || !settings || !name.trim()) return;
+    submitting.current = true;
     const seq = generation.current;
     setBusy("save");
     setError("");
     setNotice("");
     try {
+      const payload = {
+        business_name: name.trim(), activity_description: activity.trim(),
+        timezone_name: timezone, expected_revision: settings.revision,
+      };
+      const signature = JSON.stringify(payload);
+      if (!pending.current || pending.current.signature !== signature) {
+        // getRandomValues is available in WebKit even where randomUUID isn't.
+        const nonce = new Uint8Array(16);
+        crypto.getRandomValues(nonce);
+        pending.current = {
+          signature,
+          key: "settings-" + Array.from(nonce, (v) => v.toString(16).padStart(2, "0")).join(""),
+        };
+      }
       const result = await postJson(url, payload, {
         ...headers, "X-Idempotency-Key": pending.current.key,
       });
@@ -100,6 +110,7 @@ export function BusinessSettingsWorkspace({ apiBase, apiKey, getJson, postJson, 
         setError("Результат сохранения неизвестен: " + reason.message + ". Повтор использует тот же ключ операции.");
       }
     } finally {
+      submitting.current = false;
       if (seq === generation.current) setBusy("");
     }
   };
@@ -141,7 +152,7 @@ export function BusinessSettingsWorkspace({ apiBase, apiKey, getJson, postJson, 
               {zoneOptions.map(([id, title]) => <option value={id} key={id}>{title}</option>)}
             </select>
           </label>
-          <button type="submit" className="primary" disabled={!apiKey || Boolean(busy) || !name.trim()}>
+          <button type="submit" onClick={save} className="primary" disabled={!apiKey || Boolean(busy) || !name.trim()}>
             {busy === "save" ? "Сохраняем…" : "Сохранить настройки"}
           </button>
         </form>

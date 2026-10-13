@@ -56,6 +56,9 @@ class LeadProjector:
         lead = Lead(
             lead_id=str(lead_id), tenant_id=str(tenant_id), business_id=str(business_id),
             source=payload.get("source"), status=payload.get("status"),
+            customer_id=payload.get("customer_id"),
+            conversation_id=payload.get("conversation_id"),
+            channel=payload.get("channel"),
             created_at_ms=int(created["event_time_ms"]), updated_at_ms=int(created["event_time_ms"]),
         )
         for row in facts[1:]:
@@ -67,6 +70,9 @@ class LeadProjector:
                 next_source = update.get("source", lead.source)
                 if lead.source is not None and next_source != lead.source:
                     raise LeadHistoryInvariantViolation("lead source cannot be rewritten")
+                if any(name in update and update[name] != getattr(lead, name)
+                       for name in ("customer_id", "conversation_id", "channel")):
+                    raise LeadHistoryInvariantViolation("commercial lead binding cannot be rewritten")
                 lead = replace(
                     lead, source=next_source, status=update.get("status", lead.status),
                     updated_at_ms=max(lead.updated_at_ms, when),

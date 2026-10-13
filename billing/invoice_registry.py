@@ -147,6 +147,9 @@ class InvoiceProjector:
                     "observed_at_ms": int(envelope.get("observed_at_ms") or event.get("timestamp_ms") or 0),
                     "append_order": append_order,
                     "payload": dict(envelope.get("payload") or {}),
+                    "source": str(event.get("source") or ""),
+                    "evidence_ids": tuple(envelope.get("evidence_ids") or ()),
+                    "provenance": dict(envelope.get("provenance") or {}),
                 }
             )
         rows.sort(key=lambda row: (row["event_time_ms"], row["observed_at_ms"], row["append_order"], row["fact_id"]))
@@ -190,9 +193,76 @@ class InvoiceProjector:
             current = candidate
         return current
 
+    def has_verified_commercial_settlement(
+        self, *, tenant_id: str, business_id: str, invoice_id: str,
+        provider_name: str, external_reference: str,
+    ) -> bool:
+        """Verify a *whole* commercial invoice from canonical immutable facts.
+
+        A manual PAID transition, partial payment mixed with a PSP payment,
+        unbound evidence, replayed proof, or credited invoice cannot entitle a
+        customer. No second financial or entitlement ledger is created.
+        """
+        from hashlib import sha256
+
+        invoice = self.get(tenant_id=tenant_id, business_id=business_id, invoice_id=invoice_id)
+        if invoice.status is not InvoiceLifecycleStatus.PAID or invoice.paid_minor != invoice.total_minor:
+            return False
+        if not isinstance(provider_name, str) or not provider_name.strip():
+            raise ValueError("commercial_provider_name_required")
+        if not isinstance(external_reference, str) or not external_reference.strip():
+            raise ValueError("commercial_external_reference_required")
+        digest = sha256(external_reference.encode("utf-8")).hexdigest()
+        payments = [
+            fact for fact in self._facts(
+                tenant_id=tenant_id, business_id=business_id, invoice_id=invoice_id,
+            ) if fact["fact_type"] == INVOICE_PAYMENT_RECORDED
+        ]
+        if len(payments) != 1:
+            return False
+        fact = payments[0]
+        evidence_ids = fact["evidence_ids"]
+        provenance = fact["provenance"]
+        return bool(
+            fact["source"] == "invoice_registry"
+            and len(evidence_ids) == 1
+            and isinstance(evidence_ids[0], str)
+            and 0 < len(evidence_ids[0]) <= 256
+            and provenance.get("authority") == "verified_psp"
+            and provenance.get("provider") == provider_name
+            and provenance.get("external_reference_digest") == digest
+            and isinstance(provenance.get("merchant_digest"), str)
+            and len(provenance["merchant_digest"]) == 64
+            and fact["payload"].get("paid_minor") == invoice.total_minor
+        )
+
     def list_for_business(self, *, tenant_id: str, business_id: str) -> tuple[CommercialInvoiceEnvelope, ...]:
         ids = sorted({str(row["entity_id"]) for row in self._facts(tenant_id=tenant_id, business_id=business_id)})
         return tuple(self.get(tenant_id=tenant_id, business_id=business_id, invoice_id=value) for value in ids)
+
+
+    def has_verified_psp_payment_evidence(
+        self, *, tenant_id: str, business_id: str,
+        invoice_id: str, evidence_id: str,
+    ) -> bool:
+        """Read PSP proof only from the canonical immutable invoice facts."""
+        if not isinstance(evidence_id, str) or not evidence_id.strip():
+            raise ValueError("invoice_payment_evidence_id_required")
+        matches = [
+            fact for fact in self._facts(
+                tenant_id=tenant_id, business_id=business_id, invoice_id=invoice_id,
+            )
+            if fact["fact_type"] == INVOICE_PAYMENT_RECORDED
+            and evidence_id in fact["evidence_ids"]
+        ]
+        if len(matches) > 1:
+            raise InvoiceHistoryInvariantViolation("duplicate PSP evidence in invoice history")
+        if matches and (
+            matches[0]["source"] != "invoice_registry"
+            or matches[0]["provenance"].get("authority") != "verified_psp"
+        ):
+            raise InvoiceHistoryInvariantViolation("PSP evidence lacks canonical billing provenance")
+        return bool(matches)
 
 
 class InvoiceRegistry:
@@ -558,6 +628,24 @@ class InvoiceRegistry:
 
     def get(self, *, tenant_id: str, business_id: str, invoice_id: str) -> CommercialInvoiceEnvelope:
         return self._projector.get(tenant_id=tenant_id, business_id=business_id, invoice_id=invoice_id)
+
+    def has_verified_psp_payment_evidence(
+        self, *, tenant_id: str, business_id: str,
+        invoice_id: str, evidence_id: str,
+    ) -> bool:
+        return self._projector.has_verified_psp_payment_evidence(
+            tenant_id=tenant_id, business_id=business_id,
+            invoice_id=invoice_id, evidence_id=evidence_id,
+        )
+
+    def has_verified_commercial_settlement(
+        self, *, tenant_id: str, business_id: str, invoice_id: str,
+        provider_name: str, external_reference: str,
+    ) -> bool:
+        return self._projector.has_verified_commercial_settlement(
+            tenant_id=tenant_id, business_id=business_id, invoice_id=invoice_id,
+            provider_name=provider_name, external_reference=external_reference,
+        )
 
     def list_for_business(self, *, tenant_id: str, business_id: str) -> tuple[CommercialInvoiceEnvelope, ...]:
         return self._projector.list_for_business(tenant_id=tenant_id, business_id=business_id)

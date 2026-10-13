@@ -34,19 +34,28 @@ class LeadRegistry:
         self, *, tenant_id: str, business_id: str, lead_id: str, idempotency_key: str,
         source: str | None = None, status: str | None = None, occurred_at_ms: int | None = None,
         event_metadata: dict[str, object] | None = None,
+        customer_id: str | None = None, conversation_id: str | None = None,
+        channel: str | None = None,
     ) -> Lead:
         when = self._time(occurred_at_ms)
         candidate = Lead(
             lead_id=lead_id, tenant_id=tenant_id, business_id=business_id,
-            source=source, status=status, created_at_ms=when, updated_at_ms=when,
+            source=source, status=status, customer_id=customer_id,
+            conversation_id=conversation_id, channel=channel,
+            created_at_ms=when, updated_at_ms=when,
         )
         payload = {"source": candidate.source, "status": candidate.status}
+        for ref_name in ("customer_id", "conversation_id", "channel"):
+            if getattr(candidate, ref_name) is not None:
+                payload[ref_name] = getattr(candidate, ref_name)
         try:
             current = self._projector.get(tenant_id=tenant_id, business_id=business_id, lead_id=lead_id)
         except LookupError:
             current = None
         if current is not None:
-            if current.source != candidate.source or current.status != candidate.status:
+            if (current.source != candidate.source or current.status != candidate.status
+                    or any(getattr(current, field) != getattr(candidate, field)
+                           for field in ("customer_id", "conversation_id", "channel"))):
                 raise ValueError("lead already exists with different identity metadata")
             self._writer.repair_existing(
                 tenant_id=tenant_id, business_id=business_id, entity_id=lead_id,

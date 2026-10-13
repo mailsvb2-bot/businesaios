@@ -74,9 +74,13 @@ def _lessons(value: object, *, allow_empty: bool = False) -> list[dict[str, obje
 class ProgramPublicationRegistry:
     """Business-scoped immutable publication using the shared ontology writer."""
 
-    def __init__(self, *, event_store: Any, idempotency_store: Any, customer_registry: Any = None) -> None:
+    def __init__(
+        self, *, event_store: Any, idempotency_store: Any,
+        customer_registry: Any = None, paid_access_authority: Any = None,
+    ) -> None:
         self._events = event_store
         self._customers = customer_registry
+        self._paid_access_authority = paid_access_authority
         self._writer = EventFactLifecycleWriter(
             event_store=event_store, idempotency_store=idempotency_store,
             namespace="phase18_program_publication", source=_SOURCE,
@@ -92,6 +96,18 @@ class ProgramPublicationRegistry:
             namespace="phase18_program_lesson_provider_observation", source=_DELIVERY_SOURCE,
             id_prefix="program-lesson-provider-outcome",
         )
+
+    def bind_paid_access_authority(self, authority: Any) -> None:
+        """One-time server boot binding, before API routes become reachable.
+
+        The paid entitlement is a read of existing Order/Invoice facts, not a
+        mutable second grant registry or user-supplied flag.
+        """
+        if self._paid_access_authority is not None:
+            raise RuntimeError("program_paid_access_authority_already_bound")
+        if not callable(getattr(authority, "require_access", None)):
+            raise TypeError("program_paid_access_authority_invalid")
+        self._paid_access_authority = authority
 
     def _records(self, *, tenant_id: str, business_id: str, program_id: str | None = None) -> list[dict[str, object]]:
         tenant_id = _required(tenant_id, "tenant_id")
@@ -144,6 +160,8 @@ class ProgramPublicationRegistry:
                 raise RuntimeError("program_durable_content_invalid")
             if row.get("status") != ("active" if first_kind == _PUBLISHED else "draft"):
                 raise RuntimeError("program_durable_status_invalid")
+            if row.get("access_mode", "free") not in {"free", "paid"}:
+                raise RuntimeError("program_durable_access_mode_invalid")
             if first_kind == _PUBLISHED and len(facts) != 1:
                 raise RuntimeError("program_duplicate_publication")
             revision = 1
@@ -315,7 +333,10 @@ class ProgramPublicationRegistry:
     def publish(
         self, *, tenant_id: str, business_id: str, actor_id: str,
         title: str, lessons: object, idempotency_key: str,
+        access_mode: str = "free",
     ) -> dict[str, object]:
+        if access_mode not in {"free", "paid"}:
+            raise ValueError("program_access_mode_invalid")
         tenant_id = _required(tenant_id, "tenant_id")
         business_id = _required(business_id, "business_id")
         actor_id = _required(actor_id, "actor_id")
@@ -336,7 +357,9 @@ class ProgramPublicationRegistry:
         except KeyError:
             old = None
         if old is not None:
-            if old["title"] != title or old["lessons"] != items or old["created_by_actor_id"] != actor_id:
+            if (old["title"] != title or old["lessons"] != items
+                    or old["created_by_actor_id"] != actor_id
+                    or old.get("access_mode", "free") != access_mode):
                 raise RuntimeError("program_idempotency_conflict")
             if not self._writer.repair_existing(
                 tenant_id=tenant_id, business_id=business_id, entity_id=program_id,
@@ -349,6 +372,7 @@ class ProgramPublicationRegistry:
         row: dict[str, object] = {
             "id": program_id, "tenant_id": tenant_id, "business_id": business_id,
             "title": title, "status": "active", "lessons": items,
+            "access_mode": access_mode,
             "created_by_actor_id": actor_id, "published_at_ms": when,
         }
         try:
@@ -410,6 +434,28 @@ class ProgramPublicationRegistry:
         rows.sort(key=lambda item: (int(item["enrolled_at_ms"]), str(item["id"])), reverse=True)
         return rows
 
+    def _require_program_access(
+        self, *, tenant_id: str, business_id: str,
+        program_id: str, customer_id: str,
+        program: dict[str, object] | None = None,
+    ) -> None:
+        published = program or self.get(
+            tenant_id=tenant_id, business_id=business_id, program_id=program_id,
+        )
+        if published.get("access_mode", "free") != "paid":
+            return
+        authority = getattr(self._paid_access_authority, "require_access", None)
+        if not callable(authority):
+            raise RuntimeError("program_paid_access_authority_unavailable")
+        # The verifier is injected by the *server*, never from a client JSON
+        # body or AI model output. A positive result must be exactly True.
+        decision = authority(
+            tenant_id=tenant_id, business_id=business_id,
+            program_id=program_id, customer_id=customer_id,
+        )
+        if type(decision) is not bool or decision is not True:
+            raise RuntimeError("program_paid_entitlement_not_verified")
+
     def enroll_customer(
         self, *, tenant_id: str, business_id: str, actor_id: str,
         program_id: str, customer_id: str,
@@ -437,6 +483,10 @@ class ProgramPublicationRegistry:
             raise KeyError("enrollment_customer_not_found") from exc
         if customer.customer.status is not CustomerStatus.ACTIVE:
             raise RuntimeError("enrollment_customer_not_active")
+        self._require_program_access(
+            tenant_id=tenant_id, business_id=business_id,
+            program_id=program_id, customer_id=customer_id, program=program,
+        )
         identity = str(uuid5(NAMESPACE_URL,
             f"businessaios:phase18:enrollment:{tenant_id}:{business_id}:{program_id}:{customer_id}",
         ))
@@ -523,6 +573,10 @@ class ProgramPublicationRegistry:
             tenant_id=tenant_id, business_id=business_id,
             program_id=program_id, enrollment_id=enrollment_id,
         )
+        self._require_program_access(
+            tenant_id=tenant_id, business_id=business_id,
+            program_id=program_id, customer_id=enrollment["customer_id"],
+        )
         if type(lesson_position) is not int or not 1 <= lesson_position <= len(enrollment["progress"]):
             raise ValueError("program_lesson_position_invalid")
         provider_key = _required(provider_key, "provider_key")
@@ -597,6 +651,10 @@ class ProgramPublicationRegistry:
         enrollment = self.get_enrollment(
             tenant_id=tenant_id, business_id=business_id,
             program_id=program_id, enrollment_id=enrollment_id,
+        )
+        self._require_program_access(
+            tenant_id=tenant_id, business_id=business_id,
+            program_id=program_id, customer_id=enrollment["customer_id"],
         )
         if self._customers is None:
             raise RuntimeError("enrollment_canonical_customer_owner_unavailable")

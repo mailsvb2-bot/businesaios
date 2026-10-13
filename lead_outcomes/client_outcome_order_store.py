@@ -3,7 +3,7 @@ from __future__ import annotations
 import hashlib
 import json
 from collections.abc import Mapping
-from dataclasses import dataclass, replace
+from dataclasses import asdict, dataclass, replace
 from datetime import UTC, datetime
 from typing import Any
 from uuid import UUID, uuid5
@@ -52,12 +52,8 @@ def _epoch_ms(value: datetime) -> int:
 
 
 def _legacy_fingerprint(payload: Mapping[str, Any]) -> str:
-    encoded = json.dumps(
-        dict(payload),
-        ensure_ascii=False,
-        sort_keys=True,
-        separators=(",", ":"),
-    ).encode("utf-8")
+    encoded = json.dumps(dict(payload), ensure_ascii=False, sort_keys=True,
+                         separators=(",", ":")).encode("utf-8")
     return hashlib.sha256(encoded).hexdigest()
 
 
@@ -100,16 +96,10 @@ class _OrderEventSpineProjection:
         specialization_key = ""
         if event_type == ORDER_UPDATED:
             specialization_key = _legacy_fingerprint(cls._specialization_projection(specialization))
-        semantic = ":".join(
-            (
-                order.tenant_id,
-                order.business_id,
-                order.order_id,
-                event_type,
-                str(int(occurred_at_ms)),
-                specialization_key,
-            )
-        )
+        semantic = ":".join((
+            order.tenant_id, order.business_id, order.order_id,
+            event_type, str(int(occurred_at_ms)), specialization_key,
+        ))
         return str(uuid5(_ORDER_EVENT_NAMESPACE, semantic))
 
     def _matches(
@@ -265,18 +255,8 @@ class OrderStore(BaseRegistry):
 
     @staticmethod
     def _serialize_order(order: Order) -> dict[str, Any]:
-        return {
-            "order_id": order.order_id,
-            "tenant_id": order.tenant_id,
-            "business_id": order.business_id,
-            "order_kind": order.order_kind,
-            "state_key": order.state_key,
-            "schema_version": order.schema_version,
-            "lifecycle_status": order.lifecycle_status.value,
-            "created_at_ms": order.created_at_ms,
-            "updated_at_ms": order.updated_at_ms,
-            "terminal_at_ms": order.terminal_at_ms,
-        }
+        # Persist lifecycle as a primitive for existing JSON readers.
+        return {**asdict(order), "lifecycle_status": order.lifecycle_status.value}
 
     @staticmethod
     def _deserialize_order(payload: Mapping[str, Any]) -> Order:
@@ -345,22 +325,35 @@ class OrderStore(BaseRegistry):
         self._project(order=order, specialization=dict(specialization or {}))
         return order
 
-    def get_canonical_order(
-        self,
-        order_id: str,
-        *,
-        tenant_id: str | None = None,
+    def _scoped_order(
+        self, *, order_id: str, tenant_id: str | None = None,
         business_id: str | None = None,
-    ) -> Order:
+    ) -> tuple[Order, dict[str, Any], dict[str, Any]]:
         payload = self.maybe_get(str(order_id))
         if payload is None:
             raise OrderNotFound(f"order not found: {order_id}")
-        order, _, _ = self._decode_envelope(payload)
+        order, specialization, migration = self._decode_envelope(payload)
         if tenant_id is not None and order.tenant_id != str(tenant_id).strip():
             raise OrderNotFound(f"order not found: {order_id}")
         if business_id is not None and order.business_id != str(business_id).strip():
             raise OrderNotFound(f"order not found: {order_id}")
-        return order
+        return order, specialization, migration
+
+    def get_canonical_order(
+        self, order_id: str, *, tenant_id: str | None = None,
+        business_id: str | None = None,
+    ) -> Order:
+        return self._scoped_order(
+            order_id=order_id, tenant_id=tenant_id, business_id=business_id,
+        )[0]
+
+    def get_order_specialization(
+        self, *, order_id: str, tenant_id: str, business_id: str,
+    ) -> dict[str, Any]:
+        """Read order links with the same owner and scope as the canonical order."""
+        return dict(self._scoped_order(
+            order_id=order_id, tenant_id=tenant_id, business_id=business_id,
+        )[1])
 
     def list_for_business(self, *, tenant_id: str, business_id: str) -> tuple[Order, ...]:
         tenant = str(tenant_id).strip()
@@ -381,12 +374,9 @@ class OrderStore(BaseRegistry):
         lifecycle_status: OrderLifecycleStatus | str,
         occurred_at_ms: int,
     ) -> Order:
-        payload = self.maybe_get(str(order_id))
-        if payload is None:
-            raise OrderNotFound(f"order not found: {order_id}")
-        current, specialization, migration = self._decode_envelope(payload)
-        if current.tenant_id != str(tenant_id).strip() or current.business_id != str(business_id).strip():
-            raise OrderNotFound(f"order not found: {order_id}")
+        current, specialization, migration = self._scoped_order(
+            order_id=order_id, tenant_id=tenant_id, business_id=business_id,
+        )
         self._project(order=current, specialization=specialization)
         target = OrderLifecycleStatus(lifecycle_status)
         if target is current.lifecycle_status:
@@ -417,20 +407,7 @@ class OrderStore(BaseRegistry):
 
     @staticmethod
     def _package_payload(package: ClientOutcomePackage) -> dict[str, Any]:
-        normalized = package.normalized_copy()
-        return {
-            "package_id": normalized.package_id,
-            "label": normalized.label,
-            "requested_clients": normalized.requested_clients,
-            "price_per_verified_client": normalized.price_per_verified_client,
-            "currency": normalized.currency,
-            "attribution_window_days": normalized.attribution_window_days,
-            "new_client_window_days": normalized.new_client_window_days,
-            "allow_returning_clients": normalized.allow_returning_clients,
-            "require_payment_proof": normalized.require_payment_proof,
-            "require_crm_proof": normalized.require_crm_proof,
-            "trust_tier": normalized.trust_tier,
-        }
+        return asdict(package.normalized_copy())
 
     @classmethod
     def _specialization_payload(cls, order: ClientOutcomeOrder) -> dict[str, Any]:

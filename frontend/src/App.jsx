@@ -6,6 +6,7 @@ import { EventLandingWorkspace } from "./EventLandingWorkspace.jsx";
 import { BusinessSettingsWorkspace } from "./BusinessSettingsWorkspace.jsx";
 import { SupportCasesWorkspace } from "./SupportCasesWorkspace.jsx";
 import { ProgramPublicationWorkspace } from "./ProgramPublicationWorkspace.jsx";
+import { CommercialSalesWorkspace } from "./CommercialSalesWorkspace.jsx";
 import { DiscoverBuildMeasurePanel } from "./DiscoverBuildMeasurePanel.jsx";
 
 const DEFAULT_API = import.meta.env.VITE_API_BASE || "https://api.businessaios.ru";
@@ -1419,6 +1420,10 @@ function Workspace({ data, apiBase, businesses, onRestart, onRetryAccess, onSwit
       <BusinessSettingsWorkspace key={`settings:${data.tenant_id}:${data.business_id}`} apiBase={baseApi} apiKey={apiKey} getJson={getJson} postJson={postJson} onSaved={(value) => { setBusinessName(value.business_name); onBusinessRenamed?.(data.business_id, value.business_name); }} />
 
        <SupportCasesWorkspace key={`support:${data.tenant_id}:${data.business_id}`} apiBase={baseApi} apiKey={apiKey} getJson={getJson} postJson={postJson} />
+
+      <CommercialSalesWorkspace key={"commercial:" + data.tenant_id + ":" + data.business_id}
+        apiBase={baseApi} apiKey={apiKey} tenantId={data.tenant_id}
+        businessId={data.business_id} getJson={getJson} postJson={postJson} />
 
       <ProgramPublicationWorkspace key={`programs:${data.tenant_id}:${data.business_id}`}
         apiBase={baseApi} apiKey={apiKey} tenantId={data.tenant_id}

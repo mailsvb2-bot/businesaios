@@ -9,6 +9,9 @@ export function SupportCasesWorkspace({ apiBase, apiKey, getJson, postJson }) {
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
   const [caseHistory, setCaseHistory] = useState(null);
+  const [diagnosticAccess, setDiagnosticAccess] = useState({});
+  const [durationSeconds, setDurationSeconds] = useState(900);
+  const diagnosticPending = useRef(null);
   const [historyBusy, setHistoryBusy] = useState("");
   const [historyError, setHistoryError] = useState(null);
   const historyEpoch = useRef(0);
@@ -67,6 +70,66 @@ export function SupportCasesWorkspace({ apiBase, apiKey, getJson, postJson }) {
       setNotice("Статусы получены из защищённого журнала BusinessAIOS.");
     } catch (reason) {
       setError("Не удалось обновить обращения: " + (reason.message || "ошибка сети"));
+    } finally {
+      setBusy("");
+    }
+  };
+
+  const accessState = async (item) => {
+    if (busy || !apiKey) return;
+    const label = "access:" + item.id;
+    setBusy(label);
+    setError("");
+    try {
+      const state = await getJson(url + "/" + encodeURIComponent(item.id) + "/access", headers);
+      if (state?.case_id !== item.id || typeof state.active !== "boolean" ||
+          !Array.isArray(state.entries) || !Number.isInteger(state.total)) {
+        throw new Error("Сервер не подтвердил журнал диагностических разрешений.");
+      }
+      setDiagnosticAccess((old) => ({ ...old, [item.id]: state }));
+    } catch (reason) {
+      setError("Не удалось проверить доступ поддержки: " + (reason.message || "ошибка сети"));
+    } finally {
+      setBusy("");
+    }
+  };
+
+  const changeAccess = async (item, action) => {
+    if (busy || !apiKey) return;
+    const current = diagnosticAccess[item.id];
+    if (action === "revoke" && (!current?.active || !current?.grant_id)) return;
+    if (action === "grant" && (item.status !== "claimed" || current?.active)) return;
+    const signature = [item.id, item.revision, action,
+      action === "grant" ? durationSeconds : current.grant_id].join(":");
+    if (diagnosticPending.current?.signature !== signature) {
+      diagnosticPending.current = { signature, key: "support-consent-" + crypto.randomUUID() };
+    }
+    setBusy("consent:" + item.id);
+    setError("");
+    setNotice("");
+    try {
+      const response = await postJson(url + "/" + encodeURIComponent(item.id) +
+        (action === "grant" ? "/grant-access" : "/revoke-access"),
+      action === "grant"
+        ? { expected_case_revision: item.revision, duration_seconds: durationSeconds,
+            idempotency_key: diagnosticPending.current.key }
+        : { grant_id: current.grant_id, idempotency_key: diagnosticPending.current.key },
+      headers);
+      if (response?.case_id !== item.id || response.active !== (action === "grant")) {
+        throw new Error("Изменение диагностического доступа не подтверждено.");
+      }
+      diagnosticPending.current = null;
+      const audit = await getJson(url + "/" + encodeURIComponent(item.id) + "/access", headers);
+      if (audit?.case_id !== item.id || !Array.isArray(audit.entries)) {
+        throw new Error("Не получено подтверждение в журнале.");
+      }
+      setDiagnosticAccess((old) => ({ ...old, [item.id]: audit }));
+      setNotice(action === "grant"
+        ? "Доступ к агрегированной диагностике разрешён на ограниченный срок."
+        : "Диагностический доступ поддержки отозван.");
+    } catch (reason) {
+      setError("Разрешение не подтверждено: " + (reason.message || "ошибка сети") +
+        ". Повтор сохраняет идентификатор операции.");
     } finally {
       setBusy("");
     }
@@ -153,6 +216,49 @@ export function SupportCasesWorkspace({ apiBase, apiKey, getJson, postJson }) {
                   {historyBusy === item.id ? "Загружаем историю…" :
                     caseHistory?.case_id === item.id ? "Скрыть историю" : "Показать историю"}
                 </button>
+                {item.status === "claimed" ? (
+                  <button type="button" className="ghost" disabled={Boolean(busy)}
+                    onClick={() => void accessState(item)}>
+                    Проверить диагностический доступ
+                  </button>
+                ) : null}
+                {diagnosticAccess[item.id] ? (
+                  <div aria-label={"Согласие на диагностику " + item.id}>
+                    <p>Диагностика: {diagnosticAccess[item.id].active
+                      ? "разрешена" : "запрещена"}.
+                      Просмотров: {diagnosticAccess[item.id].total ?? 0} событий аудита.</p>
+                    {diagnosticAccess[item.id].active ? (
+                      <button type="button" className="ghost" disabled={Boolean(busy)}
+                        onClick={() => void changeAccess(item, "revoke")}>
+                        Отозвать согласие
+                      </button>
+                    ) : item.status === "claimed" ? (
+                      <>
+                        <label>Срок согласия
+                          <select value={durationSeconds} disabled={Boolean(busy)}
+                            onChange={(e) => { setDurationSeconds(Number(e.target.value)); diagnosticPending.current = null; }}>
+                            <option value={300}>5 минут</option>
+                            <option value={900}>15 минут</option>
+                            <option value={3600}>60 минут</option>
+                          </select>
+                        </label>
+                        <button type="button" className="ghost" disabled={Boolean(busy)}
+                          onClick={() => void changeAccess(item, "grant")}>
+                          Разрешить ограниченную диагностику
+                        </button>
+                      </>
+                    ) : null}
+                    <ol>
+                      {diagnosticAccess[item.id].entries.map((entry, index) => (
+                        <li key={index}>
+                          {entry.action === "granted" ? "Согласие выдано" :
+                           entry.action === "revoked" ? "Согласие отозвано" : "Просмотр диагностики"}
+                          {" · "}{new Date(entry.at_ms).toLocaleString("ru-RU")}
+                        </li>
+                      ))}
+                    </ol>
+                  </div>
+                ) : null}
                 {historyError?.caseId === item.id && !historyBusy ? <p role="alert">{historyError.message}</p> : null}
                 {caseHistory?.case_id === item.id ? (
                   <div aria-label={"История обращения " + item.id}>
