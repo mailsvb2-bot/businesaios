@@ -133,3 +133,34 @@ def test_snapshot_rejects_foreign_lead_and_closed_conversation():
     with pytest.raises(RuntimeError, match="commercial_context_stale_decision"):
         reader.require_current(**scope, lead_id=lead.lead_id,
                                expected_fingerprint=expected.context_fingerprint)
+
+
+def test_canonical_funnel_advisory_uses_live_customer_and_order_facts_not_fake_payment():
+    ctx = _build()
+    reader, scope, lead = ctx["context"], ctx["scope"], ctx["lead"]
+    first = reader.read_funnel_advisory(**scope, lead_id=lead.lead_id)
+    assert first["derived_stage"] == "engaged"
+    assert first["advisory_only"] is True
+    assert first["externally_verified_payment"] is False
+    ctx["leads"].update(**scope, lead_id=lead.lead_id, status="qualified",
+                        idempotency_key="advisory-stage-qualified")
+    qualified = reader.read_funnel_advisory(**scope, lead_id=lead.lead_id)
+    assert qualified["derived_stage"] == "qualified"
+    assert qualified["context_fingerprint"] != first["context_fingerprint"]
+    order = ctx["purchase"].prepare_purchase(
+        **scope, lead_id=lead.lead_id, customer_id=ctx["customer"].customer_id,
+        program_id=ctx["published"]["id"], offer_id="verified",
+        idempotency_key="advisory-create-order",
+    )
+    ctx["invoices"].record_payment(**scope, invoice_id=order.invoice_id,
+                                   amount_minor=order.amount_minor,
+                                   idempotency_key="advisory-unverified-invoice")
+    after = reader.read_funnel_advisory(**scope, lead_id=lead.lead_id)
+    assert after["has_order"] is True
+    assert after["externally_verified_payment"] is False
+    assert after["derived_stage"] != "won"
+    with pytest.raises(LookupError):
+        reader.read_funnel_advisory(
+            tenant_id=scope["tenant_id"], business_id="foreign-business",
+            lead_id=lead.lead_id,
+        )

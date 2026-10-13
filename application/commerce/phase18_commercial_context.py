@@ -168,6 +168,46 @@ class CommercialJourneyContextReader:
             context_fingerprint=digest,
         )
 
+    def read_funnel_advisory(self, *, tenant_id: str, business_id: str,
+                             lead_id: str) -> dict[str, Any]:
+        """Evidence-only stage projection; never makes sales or PSP decisions."""
+        from advisory.funnel_intelligence import (
+            CommercialEvidence,
+            derive_conversation_stage,
+        )
+
+        snapshot = self.read(
+            tenant_id=tenant_id, business_id=business_id, lead_id=lead_id,
+        )
+        # Invoices are intentionally excluded as payment proof here:
+        # canonical Billing settlement may exist without verified PSP capture.
+        checkout_found = bool(snapshot.orders)
+        evidence = CommercialEvidence(
+            inbound_seen=snapshot.inbound_message_count > 0,
+            contact_seen=snapshot.customer_active,
+            need_captured=snapshot.sales_stage in {
+                "need_known", "qualified", "offer_presented",
+            },
+            qualified=snapshot.sales_stage in {"qualified", "offer_presented"},
+            offer_presented=snapshot.sales_stage == "offer_presented",
+            checkout_requested=checkout_found,
+            checkout_created=False,
+            payment_confirmed=False,
+            declined=snapshot.sales_stage == "lost",
+        )
+        stage = derive_conversation_stage(evidence)
+        return {
+            "tenant_id": snapshot.tenant_id,
+            "business_id": snapshot.business_id,
+            "lead_id": snapshot.lead_id,
+            "context_fingerprint": snapshot.context_fingerprint,
+            "derived_stage": stage.value,
+            "has_order": checkout_found,
+            "externally_verified_payment": False,
+            "advisory_only": True,
+            "can_prepare_offer": snapshot.can_prepare_offer,
+        }
+
     def require_current(self, *, tenant_id: str, business_id: str,
                         lead_id: str, expected_fingerprint: str) -> CommercialJourneyContext:
         snapshot = self.read(

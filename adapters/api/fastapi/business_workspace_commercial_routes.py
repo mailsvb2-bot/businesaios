@@ -46,6 +46,18 @@ def register_business_workspace_commercial_routes(*, router: APIRouter, auth_bun
         except LookupError as exc:
             raise HTTPException(status_code=404, detail="commercial_lead_not_found") from exc
 
+    @router.get("/business-workspace/commercial/leads/{lead_id}/funnel-advisory", tags=["business-workspace"])
+    async def read_commercial_funnel_advisory(lead_id: str, request: Request):
+        tenant, business = scope(request)
+        if context_reader is None:
+            raise HTTPException(status_code=503, detail="commercial_context_owner_not_configured")
+        try:
+            return context_reader.read_funnel_advisory(
+                tenant_id=tenant, business_id=business, lead_id=lead_id,
+            )
+        except LookupError as exc:
+            raise HTTPException(status_code=404, detail="commercial_lead_not_found") from exc
+
     @router.get("/business-workspace/commercial/offers/{program_id}", tags=["business-workspace"])
     async def offers(program_id: str, request: Request):
         tenant, business = scope(request)
