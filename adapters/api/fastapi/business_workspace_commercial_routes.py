@@ -8,6 +8,7 @@ from dataclasses import asdict
 from fastapi import APIRouter, HTTPException, Request
 
 from adapters.api.fastapi.router_support import business_owner_scope, json_body
+from contracts.customer import CustomerNotFound, CustomerStatus
 
 CANON_PHASE18_COMMERCIAL_OWNER_API = True
 
@@ -238,8 +239,6 @@ def register_business_workspace_commercial_routes(*, router: APIRouter, auth_bun
                 tenant_id=tenant, business_id=business,
                 channel=channel, external_subject=external_subject,
             )
-            from contracts.customer import CustomerStatus
-
             if (recipient_record.customer.customer_id != current.customer_id
                     or recipient_record.customer.status is not CustomerStatus.ACTIVE):
                 raise PermissionError("commercial_followup_recipient_not_customer")
@@ -283,7 +282,7 @@ def register_business_workspace_commercial_routes(*, router: APIRouter, auth_bun
                 "delivery_confirmed": delivered,
                 "delivery_status_from_provider_only": True,
             }
-        except LookupError as exc:
+        except (LookupError, CustomerNotFound) as exc:
             raise HTTPException(status_code=404, detail="commercial_followup_not_found") from exc
         except (PermissionError, ValueError) as exc:
             raise HTTPException(status_code=403, detail="commercial_followup_denied") from exc
