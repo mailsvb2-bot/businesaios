@@ -106,13 +106,16 @@ class CommercialSettlementReconciler:
                 or proof.amount_minor <= 0 or not proof.evidence_id
                 or len(proof.evidence_id) > 256):
             raise RuntimeError("commercial_settlement_provider_provenance_invalid")
-        if proof.status != "succeeded":
+        def result(row, *, verified: bool) -> CommercialSettlementOutcome:
             return CommercialSettlementOutcome(
-                order_id=order_id, invoice_id=invoice.invoice_id,
-                billing_status=invoice.status.value, paid_minor=invoice.paid_minor,
-                total_minor=invoice.total_minor,
-                provider_verified=False, evidence_id=proof.evidence_id,
+                order_id=order_id, invoice_id=row.invoice_id,
+                billing_status=row.status.value, paid_minor=row.paid_minor,
+                total_minor=row.total_minor, provider_verified=verified,
+                evidence_id=proof.evidence_id,
             )
+
+        if proof.status != "succeeded":
+            return result(invoice, verified=False)
         if invoice.status is InvoiceLifecycleStatus.PAID:
             # A previously paid invoice cannot be re-labelled as verified
             # by an unrelated PSP. Canonical evidence must already exist.
@@ -121,12 +124,7 @@ class CommercialSettlementReconciler:
                 invoice_id=invoice.invoice_id, evidence_id=proof.evidence_id,
             ):
                 raise RuntimeError("commercial_settlement_paid_without_matching_proof")
-            return CommercialSettlementOutcome(
-                order_id=order_id, invoice_id=invoice.invoice_id,
-                billing_status=invoice.status.value, paid_minor=invoice.paid_minor,
-                total_minor=invoice.total_minor,
-                provider_verified=True, evidence_id=proof.evidence_id,
-            )
+            return result(invoice, verified=True)
         if invoice.status not in (
             InvoiceLifecycleStatus.ISSUED,
             InvoiceLifecycleStatus.PARTIALLY_PAID,
@@ -161,12 +159,7 @@ class CommercialSettlementReconciler:
         if (updated.status is not InvoiceLifecycleStatus.PAID
                 or updated.paid_minor != updated.total_minor):
             raise RuntimeError("commercial_settlement_incomplete_financial_posting")
-        return CommercialSettlementOutcome(
-            order_id=order_id, invoice_id=invoice.invoice_id,
-            billing_status=updated.status.value, paid_minor=updated.paid_minor,
-            total_minor=updated.total_minor,
-            provider_verified=True, evidence_id=proof.evidence_id,
-        )
+        return result(updated, verified=True)
 
 
 __all__ = ["CANON_PHASE18_COMMERCIAL_SETTLEMENT",
