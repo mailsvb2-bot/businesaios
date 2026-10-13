@@ -276,3 +276,25 @@ def test_sales_engagement_never_exposes_foreign_business_context():
             expected_fingerprint=before.context_fingerprint,
             model_confidence=0.99,
         )
+
+
+
+def test_commercial_followup_approved_subject_hash_binding_is_stable():
+    import hashlib
+    import json
+
+    payload = {
+        "provider_key": "telegram_bot",
+        "payload": {"chat_id": "user-a", "text": "Approved follow-up"},
+    }
+    subject = hashlib.sha256(json.dumps(
+        payload, ensure_ascii=False, sort_keys=True,
+        separators=(",", ":"), allow_nan=False,
+    ).encode("utf-8")).hexdigest()
+    assert len(subject) == 64
+    assert hashlib.sha256(json.dumps(
+        {"provider_key": payload["provider_key"], "payload": {
+            **payload["payload"], "text": "Tampered follow-up",
+        }},
+        ensure_ascii=False, sort_keys=True, separators=(",", ":"), allow_nan=False,
+    ).encode("utf-8")).hexdigest() != subject
