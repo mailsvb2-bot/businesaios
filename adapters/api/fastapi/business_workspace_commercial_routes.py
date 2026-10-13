@@ -154,6 +154,39 @@ def register_business_workspace_commercial_routes(*, router: APIRouter, auth_bun
             "external_payment_proof_required": True,
         }
 
+    @router.post("/business-workspace/commercial/leads/{lead_id}/engagement-review", tags=["business-workspace"])
+    async def review_sales_engagement(lead_id: str, request: Request):
+        """Owner sees safe follow-up eligibility or canonical handoff signal.
+
+        The read-only review does not send to a customer or persist approvals.
+        """
+        tenant, business = scope(request)
+        if context_reader is None:
+            raise HTTPException(status_code=503, detail="commercial_context_owner_not_configured")
+        body = await json_body(request)
+        fields = {
+            "expected_fingerprint", "model_confidence", "human_requested",
+            "sensitive_context", "pricing_exception", "negative_sentiment",
+            "failed_attempts", "customer_opted_out",
+        }
+        if not set(body) <= fields or not {
+            "expected_fingerprint", "model_confidence",
+        } <= set(body):
+            raise HTTPException(status_code=422, detail="commercial_engagement_fields_invalid")
+        try:
+            return context_reader.evaluate_sales_engagement(
+                tenant_id=tenant, business_id=business, lead_id=lead_id,
+                **body,
+            )
+        except LookupError as exc:
+            raise HTTPException(status_code=404, detail="commercial_lead_not_found") from exc
+        except ValueError as exc:
+            raise HTTPException(status_code=422, detail="commercial_engagement_input_invalid") from exc
+        except RuntimeError as exc:
+            if str(exc).startswith("commercial_context_"):
+                raise HTTPException(status_code=409, detail=str(exc)) from exc
+            raise
+
     @router.get("/business-workspace/commercial/leads/{lead_id}/context", tags=["business-workspace"])
     async def read_commercial_context(lead_id: str, request: Request):
         tenant, business = scope(request)
