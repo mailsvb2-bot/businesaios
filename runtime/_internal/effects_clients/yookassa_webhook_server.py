@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import base64
 import hmac
+import ipaddress
 import threading
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from typing import Any
@@ -52,6 +53,15 @@ def start_yookassa_webhook_server_in_thread(
     hmac_secret = env_str("YOOKASSA_WEBHOOK_HMAC_SECRET", "") or None
     token_secret = webhook_token or (env_str("YOOKASSA_WEBHOOK_TOKEN", "") or None)
 
+    allowed_networks = tuple(
+        ipaddress.ip_network(value.strip(), strict=False)
+        for value in env_str("YOOKASSA_WEBHOOK_IP_ALLOWLIST", "").split(",")
+        if value.strip()
+    )
+    production = env_str("APP_ENV", env_str("ENV", "dev")).lower().strip() in {"prod", "production"}
+    if production and not allowed_networks:
+        raise RuntimeError("YOOKASSA_WEBHOOK_IP_ALLOWLIST required in production")
+
     from runtime.payments import (
         parse_yookassa_notification as parse_notification,
     )
@@ -66,6 +76,16 @@ def start_yookassa_webhook_server_in_thread(
                     self.send_response(404)
                     self.end_headers()
                     self.wfile.write(b"not_found")
+                    return
+
+                # Client IP is the direct TCP peer; never trust an unverified
+                # X-Forwarded-For supplied by the caller.
+                if allowed_networks and not any(
+                    ipaddress.ip_address(self.client_address[0]) in net
+                    for net in allowed_networks
+                ):
+                    self.send_response(403)
+                    self.end_headers()
                     return
 
                 # Auth
@@ -149,7 +169,9 @@ def start_yookassa_webhook_server_in_thread(
                         else:
                             raise AttributeError("payment_outbox has no enqueue/enqueue_once")
                 except Exception:
-                    swallow(__name__, "payment_outbox.enqueue")
+                    self.send_response(503)
+                    self.end_headers()
+                    return
 
                 self.send_response(200)
                 self.end_headers()
