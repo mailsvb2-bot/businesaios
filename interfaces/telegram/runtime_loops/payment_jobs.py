@@ -55,8 +55,12 @@ def _normalize_webhook_job(raw: dict) -> dict:
         raw = raw.get("payload") or {}
 
     obj = raw.get('object') if isinstance(raw.get('object'), dict) else {}
-    external_id = raw.get('external_id') or raw.get('external_payment_id') or obj.get('id')
     event = raw.get('event')
+    refund_event = str(event or '').startswith('refund.')
+    payment_id = obj.get('payment_id') if refund_event else obj.get('id')
+    if refund_event and (not isinstance(payment_id, str) or not payment_id.strip()):
+        raise ValueError('MISSING_REFUND_PAYMENT_ID')
+    external_id = payment_id if refund_event else (raw.get('external_id') or raw.get('external_payment_id') or payment_id)
     notification_id = raw.get('notification_id') or raw.get('id')
     out = {
         'type': 'yookassa_webhook',
@@ -65,6 +69,11 @@ def _normalize_webhook_job(raw: dict) -> dict:
         'notification_id': str(notification_id) if notification_id is not None else None,
         'raw': raw.get('raw') if raw.get('raw') is not None else raw,
     }
+    if refund_event:
+        refund_id = obj.get('id')
+        if not isinstance(refund_id, str) or not refund_id.strip():
+            raise ValueError('MISSING_REFUND_ID')
+        out['refund_id'] = refund_id
     if not out['external_id']:
         raise ValueError('MISSING_EXTERNAL_ID')
     if not out['event']:
