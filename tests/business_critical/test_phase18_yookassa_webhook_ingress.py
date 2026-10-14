@@ -45,3 +45,36 @@ def test_unknown_auth_scheme_refuses_startup(monkeypatch, auth):
 def test_production_without_trusted_ip_allowlist_refuses_startup(monkeypatch):
     with pytest.raises(RuntimeError, match="IP_ALLOWLIST required"):
         _start(monkeypatch, outbox=DurableOutbox(), production=True)
+
+
+def test_refund_job_uses_original_payment_id_and_preserves_refund_identity():
+    from interfaces.telegram.runtime_loops.payment_jobs import _normalize_webhook_job
+
+    job = _normalize_webhook_job({
+        "type": "yookassa_webhook",
+        "payload": {
+            "event": "refund.succeeded",
+            "object": {
+                "id": "refund-1", "payment_id": "payment-1",
+                "status": "succeeded",
+            },
+        },
+    })
+    assert job["external_id"] == "payment-1"
+    assert job["refund_id"] == "refund-1"
+    assert job["event"] == "refund.succeeded"
+
+
+@pytest.mark.parametrize("object_", [
+    {"id": "refund-1"},
+    {"id": "refund-1", "payment_id": ""},
+    {"payment_id": "payment-1"},
+])
+def test_refund_missing_provider_identity_is_never_normalized(object_):
+    from interfaces.telegram.runtime_loops.payment_jobs import _normalize_webhook_job
+
+    with pytest.raises(ValueError):
+        _normalize_webhook_job({
+            "type": "yookassa_webhook",
+            "payload": {"event": "refund.succeeded", "object": object_},
+        })
