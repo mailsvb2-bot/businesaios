@@ -27,8 +27,16 @@ _RECIPIENT_FIELD = {
 
 def _recipient_and_text(*, provider_key: str, payload: Mapping[str, Any]) -> tuple[str, str]:
     fields = _RECIPIENT_FIELD.get(provider_key, ())
-    recipient = next((str(payload.get(key) or "").strip() for key in fields
-                      if str(payload.get(key) or "").strip()), "")
+    recipients = {
+        str(payload.get(key)).strip()
+        for key in fields
+        if isinstance(payload.get(key), (str, int))
+        and not isinstance(payload.get(key), bool)
+        and str(payload.get(key)).strip()
+    }
+    if len(recipients) > 1:
+        raise ValueError("program_delivery_recipient_ambiguous")
+    recipient = next(iter(recipients), "")
     raw = payload.get("text")
     if isinstance(raw, Mapping):
         message = str(raw.get("body") or "")
