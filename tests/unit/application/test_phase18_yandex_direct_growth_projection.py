@@ -1,5 +1,6 @@
 """Donor Yandex analytics parity: source identity, money, and canonical outcomes."""
 from datetime import date
+
 import pytest
 
 from application.analytics.yandex_direct_growth_projection import (
