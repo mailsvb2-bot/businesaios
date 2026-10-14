@@ -132,6 +132,13 @@ class CommercialSettlementReconciler:
                 evidence_id=proof.evidence_id,
             )
 
+        if proof.status == "refunded" and invoice.status is InvoiceLifecycleStatus.PAID:
+            if not self._purchases.invoices.has_verified_psp_payment_evidence(
+                tenant_id=tenant_id, business_id=business_id,
+                invoice_id=invoice.invoice_id, evidence_id=proof.evidence_id,
+            ):
+                raise RuntimeError("commercial_settlement_refunded_without_matching_proof")
+            return result(invoice, verified=True)
         if proof.status != "succeeded":
             return result(invoice, verified=False)
         if invoice.status is InvoiceLifecycleStatus.PAID:
@@ -310,14 +317,14 @@ class YooKassaCommercialAuthority:
             snapshot.get("status") == "succeeded"
             and snapshot.get("paid") is True
             and bool(snapshot.get("captured_at"))
-            and (refunded is None or refund_decimal == 0)
         )
+        refunded_after_capture = confirmed and refunded is not None and refund_decimal > 0
         return ProviderSettlementEvidence(
             provider_name="yookassa", merchant_id=self.merchant_id,
             external_reference=external_reference, order_id=checkout.order_id,
             invoice_id=checkout.invoice_id, tenant_id=tenant_id, business_id=business_id,
             currency=checkout.currency, amount_minor=checkout.amount_minor,
-            status="succeeded" if confirmed else "pending",
+            status="refunded" if refunded_after_capture else "succeeded" if confirmed else "pending",
             evidence_id="yookassa:payment:" + external_reference,
         )
 
