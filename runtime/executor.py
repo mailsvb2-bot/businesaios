@@ -70,8 +70,6 @@ from runtime.execution.executor_trace_runtime import (
 )
 from runtime.executor_api_support import (
     _deny_autonomy_execution as executor_api_deny_autonomy_execution,
-)
-from runtime.executor_api_support import (
     _dispatch as executor_api_dispatch,
 )
 from runtime.executor_api_support import (
