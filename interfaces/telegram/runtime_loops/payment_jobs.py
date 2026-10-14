@@ -147,6 +147,10 @@ class PaymentJobsLoop:
                 continue
 
             try:
+                if payload["event"].startswith("refund."):
+                    # Legacy reconcile_payment@v1 only knows payment terminal
+                    # events. Never turn a refund into a second payment success.
+                    raise RuntimeError("REFUND_REQUIRES_VERIFIED_COMMERCIAL_RECONCILIATION")
                 ws = build_system_world_state(
                     purpose="payments_webhook_reconcile",
                     tenant_id=current_tenant_id(),
