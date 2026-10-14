@@ -145,3 +145,26 @@ def fetch_merchant_payment(payment_id: str, *,
     if not isinstance(response, dict) or response.get("id") != payment_id:
         raise RuntimeError("commercial_merchant_payment_response_invalid")
     return response
+
+
+def fetch_merchant_refund(refund_id: str, *,
+                          transport: HttpTransport | None = None) -> dict[str, Any]:
+    """Read refund from merchant API, never trust the webhook body as proof."""
+    if not isinstance(refund_id, str) or not _PAYMENT_ID.fullmatch(refund_id):
+        raise ValueError("commercial_merchant_refund_id_invalid")
+    _, api, headers = _merchant()
+    response = http_json(
+        "GET", api + "/v3/refunds/" + refund_id, None,
+        headers=headers, timeout_s=20, transport=transport,
+    )
+    if not isinstance(response, dict) or response.get("id") != refund_id:
+        raise RuntimeError("commercial_merchant_refund_response_invalid")
+    if (
+        response.get("status") not in {"pending", "succeeded", "canceled"}
+        or not isinstance(response.get("payment_id"), str)
+        or not _PAYMENT_ID.fullmatch(response["payment_id"])
+        or not isinstance(response.get("amount"), dict)
+        or response["amount"].get("currency") != "RUB"
+    ):
+        raise RuntimeError("commercial_merchant_refund_provenance_invalid")
+    return response
