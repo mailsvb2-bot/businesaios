@@ -80,3 +80,33 @@ def test_merchant_read_drives_one_canonical_invoice_and_revokes_access_on_refund
         **scope, invoice_id=order.invoice_id,
         evidence_id="yookassa:payment:merchant-payment-1",
     ) is True
+
+    # Restart reconstructs the canonical merchant integration from durable
+    # event facts. Idempotent checkout and settlement must not mint new money.
+    restored_purchases = CommercialProgramPurchaseService(
+        leads=LeadRegistry(event_store=events, idempotency_store=claims),
+        customers=Customers(),
+        programs=ProgramPublicationRegistry(event_store=events, idempotency_store=claims),
+        offers=Offers(), orders=OrderStore(event_store=events),
+        invoices=restored,
+    )
+    restarted = build_yookassa_commercial_bundle(
+        purchases=restored_purchases, event_store=events, idempotency_store=claims,
+        merchant_id="merchant-a", sealed_create_payment=create, sealed_fetch_payment=read,
+    )
+    assert restarted.checkout.open_checkout(**scope, order_id=order.order_id) == checkout
+    assert restarted.settlement.reconcile(**scope, order_id=order.order_id) == paid
+    assert restarted.paid_access.require_access(
+        **scope, customer_id="customer-a", program_id=program["id"],
+    ) is False
+
+    # Reconciliation must not reverse an already-settled invoice when the
+    # provider later reports a refund. The durable payment evidence remains,
+    # but revoked entitlement must be recomputed on every attempt.
+    snapshot["status"] = "canceled"
+    assert restarted.settlement.reconcile(
+        **scope, order_id=order.order_id,
+    ).provider_verified is False
+    assert restarted.paid_access.require_access(
+        **scope, customer_id="customer-a", program_id=program["id"],
+    ) is False
