@@ -7,6 +7,7 @@ import pytest
 from billing.telegram_stars_commercial_proof import (
     StarsInvoiceBinding,
     invoice_payload,
+    verified_provider_transaction,
     validate_pre_checkout,
     verified_receipt,
 )
@@ -76,3 +77,42 @@ def test_stars_fail_closed_on_invalid_scopes_and_secret():
     ):
         with pytest.raises(ValueError):
             invoice_payload(invalid, secret=SECRET)
+
+
+def test_stars_provider_snapshot_is_authoritative_and_refund_sensitive():
+    binding = _binding()
+    payment = {
+        "id": "telegram-charge-1", "amount": 42, "date": 1791970000,
+        "source": {
+            "type": "user", "transaction_type": "invoice_payment",
+            "user": {"id": 183}, "invoice_payload": invoice_payload(binding, secret=SECRET),
+        },
+    }
+    assert verified_provider_transaction(
+        binding=binding, secret=SECRET, transactions=(),
+    ) is None
+    verified = verified_provider_transaction(
+        binding=binding, secret=SECRET, transactions=(payment,),
+    )
+    assert verified is not None and verified.charge_id == "telegram-charge-1"
+    refund = {
+        "id": "telegram-charge-1", "amount": -42, "date": 1791971000,
+        "receiver": {"type": "user", "user": {"id": 183}},
+    }
+    assert verified_provider_transaction(
+        binding=binding, secret=SECRET, transactions=(payment, refund),
+    ) is None
+    with pytest.raises(RuntimeError, match="duplicate_invoice_charges"):
+        verified_provider_transaction(
+            binding=binding, secret=SECRET,
+            transactions=(payment, {**payment, "id": "telegram-charge-2"}),
+        )
+    with pytest.raises(RuntimeError, match="purchase_scope_mismatch"):
+        verified_provider_transaction(
+            binding=binding, secret=SECRET,
+            transactions=({**payment, "source": {**payment["source"], "user": {"id": 184}}},),
+        )
+    with pytest.raises(RuntimeError, match="purchase_scope_mismatch"):
+        verified_provider_transaction(
+            binding=binding, secret=SECRET, transactions=({**payment, "amount": 41},),
+        )
