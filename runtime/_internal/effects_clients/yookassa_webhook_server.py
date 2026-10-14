@@ -61,6 +61,10 @@ def start_yookassa_webhook_server_in_thread(
     production = env_str("APP_ENV", env_str("ENV", "dev")).lower().strip() in {"prod", "production"}
     if production and not allowed_networks:
         raise RuntimeError("YOOKASSA_WEBHOOK_IP_ALLOWLIST required in production")
+    if auth_mode not in {"none", "basic", "token", "hmac_sha256"}:
+        raise RuntimeError("YOOKASSA_WEBHOOK_AUTH_MODE unsupported")
+    if payment_outbox is None or not callable(getattr(payment_outbox, "enqueue_once", None)):
+        raise RuntimeError("YOOKASSA_WEBHOOK_DURABLE_IDEMPOTENT_OUTBOX_REQUIRED")
 
     from runtime.payments import (
         parse_yookassa_notification as parse_notification,
@@ -164,10 +168,8 @@ def start_yookassa_webhook_server_in_thread(
                         }
                         if hasattr(payment_outbox, "enqueue_once"):
                             payment_outbox.enqueue_once(dedupe_key=str(notif.dedupe_key), payload=payload)
-                        elif hasattr(payment_outbox, "enqueue"):
-                            payment_outbox.enqueue(payload)
                         else:
-                            raise AttributeError("payment_outbox has no enqueue/enqueue_once")
+                            raise RuntimeError("YOOKASSA_WEBHOOK_DURABLE_IDEMPOTENT_OUTBOX_REQUIRED")
                 except Exception:
                     self.send_response(503)
                     self.end_headers()
