@@ -87,7 +87,7 @@ def test_merchant_read_drives_one_canonical_invoice_and_revokes_access_on_refund
         leads=LeadRegistry(event_store=events, idempotency_store=claims),
         customers=Customers(),
         programs=ProgramPublicationRegistry(event_store=events, idempotency_store=claims),
-        offers=Offers(), orders=OrderStore(event_store=events),
+        offers=Offers(), orders=purchases.orders,
         invoices=restored,
     )
     restarted = build_yookassa_commercial_bundle(
