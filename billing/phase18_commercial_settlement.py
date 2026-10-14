@@ -49,16 +49,26 @@ class CommercialSettlementReconciler:
     """Only injected server-owned payment authority may provide evidence."""
 
     def __init__(self, *, purchases: Any, checkouts: Any, payment_verifier: Any,
-                 configured_merchant_id: str) -> None:
-        merchant = str(configured_merchant_id or "").strip()
-        if not merchant:
-            raise ValueError("commercial_settlement_merchant_configuration_required")
+                 configured_merchant_id: str | Mapping[str, str]) -> None:
+        if isinstance(configured_merchant_id, Mapping):
+            merchants = dict(configured_merchant_id)
+            if (not merchants or any(
+                not isinstance(name, str) or not name.strip()
+                or not isinstance(merchant, str) or not merchant.strip()
+                for name, merchant in merchants.items()
+            )):
+                raise ValueError("commercial_settlement_merchant_configuration_required")
+        else:
+            merchant = str(configured_merchant_id or "").strip()
+            if not merchant:
+                raise ValueError("commercial_settlement_merchant_configuration_required")
+            merchants = {"*": merchant}
         if not callable(getattr(payment_verifier, "fetch_settlement_evidence", None)):
             raise TypeError("commercial_settlement_authoritative_provider_required")
         self._purchases = purchases
         self._checkouts = checkouts
         self._verifier = payment_verifier
-        self._merchant_id = merchant
+        self._merchant_ids = merchants
 
     @staticmethod
     def _hash(value: str) -> str:
@@ -95,8 +105,13 @@ class CommercialSettlementReconciler:
         )
         if type(proof) is not ProviderSettlementEvidence:
             raise RuntimeError("commercial_settlement_authoritative_evidence_invalid")
+        expected_merchant = self._merchant_ids.get(session.provider_name)
+        if expected_merchant is None:
+            expected_merchant = self._merchant_ids.get("*")
+        if not expected_merchant:
+            raise RuntimeError("commercial_settlement_provider_not_authorized")
         expected = (
-            session.provider_name, self._merchant_id, session.external_reference,
+            session.provider_name, expected_merchant, session.external_reference,
             order_id, invoice.invoice_id, tenant_id, business_id, invoice.currency,
             invoice.total_minor,
         )
