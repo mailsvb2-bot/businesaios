@@ -532,3 +532,63 @@ def build_sealed_commercial_merchant_bundle(
         sealed_fetch_payment=partial(fetch_merchant_payment, transport=transport),
     )
 
+
+def _sealed_stars_merchant(*, transport=None):
+    """Bind one real Bot API identity and explicit merchant signing key."""
+    from runtime._internal.effects_clients import telegram_client
+    from runtime.platform.config.env_flags import env_str
+
+    signing_key = env_str("TELEGRAM_STARS_SIGNING_KEY", "").encode("utf-8")
+    if len(signing_key) < 32:
+        raise RuntimeError("commercial_stars_signing_key_missing")
+    client = telegram_client.TelegramClient(transport=transport)
+    bot = client.get_me()
+    bot_user = bot.get("result") if isinstance(bot, dict) and bot.get("ok") is True else None
+    bot_id = bot_user.get("id") if isinstance(bot_user, dict) else None
+    if type(bot_id) is not int or bot_id <= 0 or bot_user.get("is_bot") is not True:
+        raise RuntimeError("commercial_stars_bot_identity_unverified")
+    return client, str(bot_id), signing_key
+
+
+def build_sealed_stars_commercial_merchant_bundle(
+    *, purchases, event_store, idempotency_store, payer_resolver, transport=None,
+):
+    """Executor-owned Stars effects, canonical payment/entitlement state."""
+    from application.commerce.phase18_commercial_checkout import (
+        build_telegram_stars_commercial_bundle,
+    )
+
+    client, bot_id, key = _sealed_stars_merchant(transport=transport)
+    return build_telegram_stars_commercial_bundle(
+        purchases=purchases, event_store=event_store,
+        idempotency_store=idempotency_store, bot_id=bot_id,
+        signing_secret=key, payer_resolver=payer_resolver,
+        sealed_create_invoice_link=client.create_stars_invoice_link,
+        sealed_read_transactions=client.list_stars_transactions,
+    )
+
+
+def build_sealed_dual_commercial_merchant_bundle(
+    *, purchases, event_store, idempotency_store, payer_resolver, transport=None,
+):
+    """RUB and XTR have separate verified providers but only one Billing owner."""
+    from functools import partial
+
+    from application.commerce.phase18_commercial_checkout import (
+        build_dual_commercial_merchant_bundle,
+    )
+    from runtime._internal.effects_clients import yookassa_client
+
+    merchant_id, secret, api = yookassa_client.resolve_credentials()
+    if not merchant_id or not secret:
+        raise RuntimeError("commercial_merchant_configuration_missing")
+    client, bot_id, key = _sealed_stars_merchant(transport=transport)
+    return build_dual_commercial_merchant_bundle(
+        purchases=purchases, event_store=event_store,
+        idempotency_store=idempotency_store, merchant_id=merchant_id,
+        sealed_create_payment=partial(yookassa_client.create_merchant_payment, transport=transport),
+        sealed_fetch_payment=partial(yookassa_client.fetch_merchant_payment, transport=transport),
+        bot_id=bot_id, signing_secret=key, payer_resolver=payer_resolver,
+        sealed_create_invoice_link=client.create_stars_invoice_link,
+        sealed_read_transactions=client.list_stars_transactions,
+    )
