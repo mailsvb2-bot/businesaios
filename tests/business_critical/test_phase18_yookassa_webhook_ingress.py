@@ -78,3 +78,44 @@ def test_refund_missing_provider_identity_is_never_normalized(object_):
             "type": "yookassa_webhook",
             "payload": {"event": "refund.succeeded", "object": object_},
         })
+
+
+def test_refund_job_never_executes_legacy_payment_success_path():
+    from interfaces.telegram.runtime_loops.payment_jobs import PaymentJobsConfig, PaymentJobsLoop
+
+    class Once:
+        def __init__(self):
+            self.jobs = [{
+                "id": "job-refund-1", "attempts": 0,
+                "payload": {
+                    "type": "yookassa_webhook", "payload": {
+                        "event": "refund.succeeded",
+                        "object": {"id": "refund-1", "payment_id": "payment-1"},
+                    },
+                },
+            }]
+            self.retry = []
+            self.delivered = []
+
+        def list_pending(self, *, limit):
+            return self.jobs
+
+        def claim(self, job_id):
+            return True
+
+        def schedule_retry(self, job_id, *, after_ms, error):
+            self.retry.append((job_id, after_ms, error))
+
+        def mark_delivered(self, job_id):
+            self.delivered.append(job_id)
+
+    outbox = Once()
+    loop = PaymentJobsLoop(
+        decide_fn=lambda *_: pytest.fail("legacy decision invoked for refund"),
+        execute_fn=lambda *_: pytest.fail("legacy execution invoked for refund"),
+        payment_outbox=outbox, cfg=PaymentJobsConfig(every_ms=1, retry_after_ms=100),
+    )
+    loop.tick()
+    assert not outbox.delivered
+    assert len(outbox.retry) == 1
+    assert "REFUND_REQUIRES_VERIFIED_COMMERCIAL_RECONCILIATION" in outbox.retry[0][2]
