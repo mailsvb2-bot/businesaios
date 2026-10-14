@@ -91,6 +91,92 @@ class TelegramClient:
         base = f"{telegram_api_base()}/bot{t}"
         return http_json("GET", f"{base}/getWebhookInfo", None, timeout_s=int(timeout_s or 20), transport=self.transport)
 
+    def _stars_call(self, method: str, payload: Mapping[str, Any]) -> Any:
+        """All financial Bot API I/O stays inside the existing sealed client."""
+        from .telegram_endpoint import telegram_method_url
+
+        token = _token()
+        if not token:
+            raise RuntimeError("stars_bot_token_missing")
+        response = self._http_post(
+            url=telegram_method_url(token, method),
+            payload=payload, timeout_s=8 if method == "answerPreCheckoutQuery" else 25,
+        )
+        if not isinstance(response, dict) or response.get("ok") is not True:
+            raise RuntimeError("stars_provider_request_failed")
+        return response.get("result")
+
+    def create_stars_invoice_link(
+        self, *, title: str, description: str, invoice_payload: str,
+        amount_stars: int,
+    ) -> str:
+        """Create the exact one-price XTR invoice, never use fiat provider_token."""
+        from urllib.parse import urlsplit
+
+        if (not isinstance(title, str) or not 1 <= len(title) <= 32
+                or not isinstance(description, str) or not 1 <= len(description) <= 255
+                or not isinstance(invoice_payload, str)
+                or not 1 <= len(invoice_payload.encode("utf-8")) <= 128
+                or type(amount_stars) is not int or amount_stars <= 0):
+            raise ValueError("stars_invoice_invalid")
+        link = self._stars_call("createInvoiceLink", {
+            "title": title, "description": description, "payload": invoice_payload,
+            "currency": "XTR", "prices": [{"label": title, "amount": amount_stars}],
+        })
+        if not isinstance(link, str):
+            raise RuntimeError("stars_invoice_link_invalid")
+        parts = urlsplit(link)
+        if (parts.scheme != "https" or parts.hostname not in {"t.me", "telegram.me"}
+                or parts.username or parts.password or parts.fragment):
+            raise RuntimeError("stars_invoice_link_invalid")
+        return link
+
+    def answer_stars_pre_checkout(self, *, query_id: str, approved: bool) -> None:
+        """A provider answer must be explicit; never silently accept an order."""
+        if (not isinstance(query_id, str) or not 1 <= len(query_id) <= 256
+                or type(approved) is not bool):
+            raise ValueError("stars_pre_checkout_answer_invalid")
+        body: dict[str, Any] = {
+            "pre_checkout_query_id": query_id, "ok": approved,
+        }
+        if not approved:
+            body["error_message"] = "Платёж не подтверждён. Попробуйте ещё раз."
+        if self._stars_call("answerPreCheckoutQuery", body) is not True:
+            raise RuntimeError("stars_pre_checkout_answer_unconfirmed")
+
+    def list_stars_transactions(self, *, maximum: int = 10000) -> tuple[dict[str, Any], ...]:
+        """Read complete provider transactions or fail closed on truncation."""
+        if type(maximum) is not int or not 1 <= maximum <= 10000:
+            raise ValueError("stars_transaction_scan_limit_invalid")
+        rows: list[dict[str, Any]] = []
+        for offset in range(0, maximum + 1, 100):
+            result = self._stars_call("getStarTransactions", {
+                "offset": offset, "limit": min(100, maximum - offset)
+                if offset < maximum else 1,
+            })
+            if not isinstance(result, dict) or not isinstance(result.get("transactions"), list):
+                raise RuntimeError("stars_transaction_history_invalid")
+            page = result["transactions"]
+            if any(not isinstance(item, dict) for item in page):
+                raise RuntimeError("stars_transaction_history_invalid")
+            if offset == maximum and page:
+                raise RuntimeError("stars_transaction_history_truncated")
+            rows.extend(page)
+            if len(page) < min(100, maximum - offset):
+                return tuple(rows)
+        raise RuntimeError("stars_transaction_history_truncated")
+
+    def refund_stars_payment(self, *, payer_user_id: int, charge_id: str) -> None:
+        """Sealed effect only: caller must hold canonical refund authorization."""
+        if (type(payer_user_id) is not int or payer_user_id <= 0
+                or not isinstance(charge_id, str) or not 1 <= len(charge_id) <= 256):
+            raise ValueError("stars_refund_identity_invalid")
+        if self._stars_call("refundStarPayment", {
+            "user_id": payer_user_id,
+            "telegram_payment_charge_id": charge_id,
+        }) is not True:
+            raise RuntimeError("stars_provider_refund_unconfirmed")
+
     def answer_callback_query(self, callback_query_id: str, *, text: str | None = None, show_alert: bool = False) -> None:
         token = _token()
         if not token:
