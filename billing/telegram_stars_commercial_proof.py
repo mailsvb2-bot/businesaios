@@ -186,3 +186,172 @@ def verified_provider_transaction(
         charge_id=matched[0], provider_charge_id="",
         amount_stars=binding.amount_stars, invoice_payload=expected,
     )
+
+
+class TelegramStarsCommercialAuthority:
+    """Scoped XTR adapter over canonical checkout/InvoiceRegistry ownership.
+
+    The injected callbacks MUST be bound to the existing sealed Telegram Bot API
+    and canonical CustomerRegistry, not to user-provided HTTP payloads.
+    """
+    provider_name = "telegram_stars"
+
+    def __init__(
+        self, *, bot_id: str, signing_secret: bytes,
+        purchases: Any, checkout_reader: Any, payer_resolver: Any,
+        create_invoice_link: Any, read_transactions: Any,
+    ) -> None:
+        from collections.abc import Callable
+
+        if not _text(bot_id):
+            raise ValueError("stars_bot_identity_required")
+        if not isinstance(signing_secret, bytes) or len(signing_secret) < 32:
+            raise ValueError("stars_signing_secret_invalid")
+        for function in (checkout_reader, payer_resolver, create_invoice_link, read_transactions):
+            if not isinstance(function, Callable):
+                raise TypeError("stars_server_authority_missing")
+        self.bot_id = bot_id
+        self._secret = signing_secret
+        self._purchases = purchases
+        self._checkout_reader = checkout_reader
+        self._payer = payer_resolver
+        self._create_invoice = create_invoice_link
+        self._transactions = read_transactions
+
+    def _binding(
+        self, *, tenant_id: str, business_id: str,
+        order_id: str, invoice_id: str, amount_stars: int,
+    ) -> StarsInvoiceBinding:
+        _, link = self._purchases._read(
+            tenant_id=tenant_id, business_id=business_id, order_id=order_id,
+        )
+        if (
+            link["invoice_id"] != invoice_id
+            or link["amount_minor"] != amount_stars
+            or link["currency"] != "XTR"
+        ):
+            raise RuntimeError("stars_canonical_order_invoice_mismatch")
+        user_id = self._payer(
+            tenant_id=tenant_id, business_id=business_id,
+            customer_id=link["customer_id"],
+        )
+        binding = StarsInvoiceBinding(
+            tenant_id=tenant_id, business_id=business_id, order_id=order_id,
+            invoice_id=invoice_id, customer_id=link["customer_id"],
+            telegram_user_id=user_id, amount_stars=amount_stars,
+        )
+        binding.validate()
+        return binding
+
+    def create_checkout(self, request: Any) -> Any:
+        from billing.payment_provider_contract import PaymentCheckoutSession
+
+        req = request.normalized_copy()
+        if req.currency != "XTR":
+            raise ValueError("stars_currency_must_be_xtr")
+        meta = dict(req.metadata)
+        for field in ("business_id", "order_id", "invoice_id", "program_id"):
+            if not _text(meta.get(field)):
+                raise ValueError("stars_checkout_scope_required")
+        binding = self._binding(
+            tenant_id=req.tenant_id, business_id=meta["business_id"],
+            order_id=meta["order_id"], invoice_id=meta["invoice_id"],
+            amount_stars=req.amount_minor,
+        )
+        if req.customer_reference != binding.customer_id:
+            raise ValueError("stars_checkout_customer_mismatch")
+        payload = invoice_payload(binding, secret=self._secret)
+        link = self._create_invoice(
+            title="Digital program", description=req.description[:255],
+            invoice_payload=payload, amount_stars=binding.amount_stars,
+        )
+        if not isinstance(link, str) or not link.startswith("https://t.me/"):
+            raise RuntimeError("stars_checkout_link_unverified")
+        return PaymentCheckoutSession(
+            tenant_id=req.tenant_id, provider_name=self.provider_name,
+            external_reference=payload, checkout_url=link, status="pending",
+            amount_minor=req.amount_minor, currency="XTR",
+        ).normalized_copy()
+
+    def _checkout_binding(
+        self, *, tenant_id: str, business_id: str,
+        provider_name: str | None = None,
+        external_reference: str | None = None,
+        order_id: str | None = None, invoice_id: str | None = None,
+    ) -> StarsInvoiceBinding:
+        checkout = self._checkout_reader(
+            tenant_id=tenant_id, business_id=business_id,
+            provider_name=provider_name, external_reference=external_reference,
+            order_id=order_id, invoice_id=invoice_id,
+        )
+        if checkout is None or checkout.provider_name != self.provider_name:
+            raise LookupError("stars_checkout_not_found")
+        binding = self._binding(
+            tenant_id=tenant_id, business_id=business_id,
+            order_id=checkout.order_id, invoice_id=checkout.invoice_id,
+            amount_stars=checkout.amount_minor,
+        )
+        if (
+            checkout.currency != "XTR"
+            or checkout.external_reference != invoice_payload(binding, secret=self._secret)
+        ):
+            raise RuntimeError("stars_checkout_binding_invalid")
+        return binding
+
+    def _receipt(self, binding: StarsInvoiceBinding) -> StarsPaymentReceipt | None:
+        transactions = self._transactions()
+        if not isinstance(transactions, tuple):
+            raise RuntimeError("stars_provider_history_not_authoritative")
+        return verified_provider_transaction(
+            binding=binding, secret=self._secret, transactions=transactions,
+        )
+
+    def fetch_settlement_evidence(
+        self, *, tenant_id: str, business_id: str,
+        provider_name: str, external_reference: str,
+    ) -> Any:
+        from billing.phase18_commercial_settlement import ProviderSettlementEvidence
+
+        binding = self._checkout_binding(
+            tenant_id=tenant_id, business_id=business_id,
+            provider_name=provider_name, external_reference=external_reference,
+        )
+        receipt = self._receipt(binding)
+        evidence = (
+            "telegram_stars:payment:" + receipt.charge_id
+            if receipt is not None
+            else "telegram_stars:pending:" + hashlib.sha256(
+                external_reference.encode("utf-8"),
+            ).hexdigest()
+        )
+        if len(evidence) > 256:
+            raise RuntimeError("stars_charge_id_oversized")
+        return ProviderSettlementEvidence(
+            provider_name=self.provider_name, merchant_id=self.bot_id,
+            external_reference=external_reference, order_id=binding.order_id,
+            invoice_id=binding.invoice_id, tenant_id=tenant_id,
+            business_id=business_id, currency="XTR",
+            amount_minor=binding.amount_stars,
+            status="succeeded" if receipt is not None else "pending",
+            evidence_id=evidence,
+        )
+
+    def reversal_reader(
+        self, *, tenant_id: str, business_id: str,
+        order_id: str, invoice_id: str,
+    ) -> bool:
+        binding = self._checkout_binding(
+            tenant_id=tenant_id, business_id=business_id,
+            order_id=order_id, invoice_id=invoice_id,
+        )
+        return self._receipt(binding) is None
+
+    def get_payment_status(
+        self, *, tenant_id: str, currency: str,
+        provider_name: str, external_reference: str,
+    ) -> str:
+        # Tenant-only status lookups cannot prove the business/order identity.
+        # Settlement verification must go through the scoped reader above.
+        if currency != "XTR" or provider_name != self.provider_name:
+            raise ValueError("stars_status_provider_invalid")
+        return "pending"
