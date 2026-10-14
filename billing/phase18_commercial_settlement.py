@@ -292,7 +292,26 @@ class YooKassaCommercialAuthority:
             order_id=checkout.order_id, invoice_id=checkout.invoice_id,
             amount_minor=checkout.amount_minor, currency=checkout.currency,
         )
-        confirmed = snapshot.get("status") == "succeeded" and snapshot.get("paid") is True and bool(snapshot.get("captured_at"))
+        refunded = snapshot.get("refunded_amount")
+        if refunded is not None:
+            refunded_amount = _mapping(refunded)
+            if refunded_amount.get("currency") != "RUB":
+                raise RuntimeError("commercial_yookassa_refund_currency_invalid")
+            refund_value = refunded_amount.get("value")
+            if not isinstance(refund_value, str):
+                raise RuntimeError("commercial_yookassa_refund_amount_invalid")
+            try:
+                refund_decimal = Decimal(refund_value)
+            except InvalidOperation as exc:
+                raise RuntimeError("commercial_yookassa_refund_amount_invalid") from exc
+            if not refund_decimal.is_finite() or refund_decimal < 0 or refund_decimal * 100 > amount_minor:
+                raise RuntimeError("commercial_yookassa_refund_amount_invalid")
+        confirmed = (
+            snapshot.get("status") == "succeeded"
+            and snapshot.get("paid") is True
+            and bool(snapshot.get("captured_at"))
+            and (refunded is None or refund_decimal == 0)
+        )
         return ProviderSettlementEvidence(
             provider_name="yookassa", merchant_id=self.merchant_id,
             external_reference=external_reference, order_id=checkout.order_id,
