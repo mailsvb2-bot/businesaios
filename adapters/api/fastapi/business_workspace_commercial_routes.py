@@ -361,13 +361,15 @@ def register_business_workspace_commercial_routes(*, router: APIRouter, auth_bun
             ))
             result = []
             for item in catalog.list_offers():
-                try:
-                    proof = purchases.priced_offer(
-                        tenant_id=tenant, business_id=business, program_id=program_id, offer_id=item.offer_id,
-                    )
-                except ValueError:
-                    continue
-                result.append(asdict(proof))
+                for currency in ("RUB", "XTR"):
+                    try:
+                        proof = purchases.priced_offer(
+                            tenant_id=tenant, business_id=business, program_id=program_id,
+                            offer_id=item.offer_id, currency=currency,
+                        )
+                    except ValueError:
+                        continue
+                    result.append(asdict(proof))
             return {"program_id": program_id, "offers": result}
         except KeyError as exc:
             raise HTTPException(status_code=404, detail="commercial_program_or_offer_not_found") from exc
@@ -376,9 +378,10 @@ def register_business_workspace_commercial_routes(*, router: APIRouter, auth_bun
     async def create_order(request: Request):
         tenant, business = scope(request)
         body = await json_body(request)
-        if set(body) != {"lead_id", "customer_id", "program_id", "offer_id", "idempotency_key"} or (
-            not all(isinstance(x, str) for x in body.values())
-        ):
+        required = {"lead_id", "customer_id", "program_id", "offer_id", "idempotency_key"}
+        if (not required <= set(body) or set(body) - required - {"currency"}
+                or not all(isinstance(x, str) for x in body.values())
+                or body.get("currency", "RUB") not in {"RUB", "XTR"}):
             raise HTTPException(status_code=422, detail="commercial_order_fields_invalid")
         try:
             return asdict(purchases.prepare_purchase(tenant_id=tenant, business_id=business, **body))
