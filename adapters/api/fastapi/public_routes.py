@@ -272,11 +272,16 @@ def register_public_api_routes(
             commercial_yookassa_opt_in = env_str(
                 "BUSINESAIOS_COMMERCIAL_PSP_ENABLED", "0",
             ).strip().lower() in {"1", "true", "yes", "on"}
-            if commercial_yookassa_opt_in and any(part is not None for part in (
-                commercial_payment_adapter, commercial_payment_verifier,
-                commercial_reversal_reader, commercial_merchant_id,
-            )):
-                raise RuntimeError("commercial_yookassa_conflicting_authorities")
+            commercial_stars_opt_in = env_str(
+                "BUSINESAIOS_COMMERCIAL_STARS_ENABLED", "0",
+            ).strip().lower() in {"1", "true", "yes", "on"}
+            if (commercial_yookassa_opt_in or commercial_stars_opt_in) and any(
+                part is not None for part in (
+                    commercial_payment_adapter, commercial_payment_verifier,
+                    commercial_reversal_reader, commercial_merchant_id,
+                )
+            ):
+                raise RuntimeError("commercial_conflicting_payment_authorities")
             commercial_provider_parts = (
                 commercial_payment_adapter, commercial_payment_verifier,
                 commercial_reversal_reader, commercial_merchant_id,
@@ -309,7 +314,47 @@ def register_public_api_routes(
                         reversal_reader=commercial_reversal_reader,
                     )
                 )
-            if commercial_yookassa_opt_in:
+            if commercial_stars_opt_in:
+                from contracts.customer import CustomerIdentityStatus, CustomerStatus
+                from runtime.executor_api_support import (
+                    build_sealed_dual_commercial_merchant_bundle,
+                    build_sealed_stars_commercial_merchant_bundle,
+                )
+
+                def canonical_stars_payer(*, tenant_id, business_id, customer_id):
+                    customer = canonical_customers.get_customer(
+                        tenant_id=tenant_id, business_id=business_id,
+                        customer_id=customer_id,
+                    )
+                    if customer.customer.status is not CustomerStatus.ACTIVE:
+                        raise RuntimeError("stars_customer_inactive")
+                    identities = [
+                        identity for identity in customer.identities
+                        if identity.channel == "telegram"
+                        and identity.status is CustomerIdentityStatus.ACTIVE
+                    ]
+                    if len(identities) != 1:
+                        raise RuntimeError("stars_telegram_identity_missing_or_ambiguous")
+                    subject = identities[0].external_subject
+                    if (not isinstance(subject, str) or not subject.isascii()
+                            or not subject.isdecimal() or int(subject) < 1):
+                        raise RuntimeError("stars_telegram_payer_id_invalid")
+                    return int(subject)
+
+                builder = (
+                    build_sealed_dual_commercial_merchant_bundle
+                    if commercial_yookassa_opt_in
+                    else build_sealed_stars_commercial_merchant_bundle
+                )
+                merchant_bundle = builder(
+                    purchases=commercial_purchases, event_store=event_store,
+                    idempotency_store=dependency_container.api_idempotency_store,
+                    payer_resolver=canonical_stars_payer,
+                )
+                commercial_checkout = merchant_bundle.checkout
+                commercial_settlement = merchant_bundle.settlement
+                canonical_programs.bind_paid_access_authority(merchant_bundle.paid_access)
+            elif commercial_yookassa_opt_in:
                 from runtime.executor_api_support import build_sealed_commercial_merchant_bundle
 
                 merchant_bundle = build_sealed_commercial_merchant_bundle(
