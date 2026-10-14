@@ -127,3 +127,62 @@ def verified_receipt(
         amount_stars=binding.amount_stars,
         invoice_payload=expected,
     )
+
+
+def verified_provider_transaction(
+    *, binding: StarsInvoiceBinding, secret: bytes,
+    transactions: tuple[Mapping[str, Any], ...],
+) -> StarsPaymentReceipt | None:
+    """Independently verify a *complete* Bot API getStarTransactions snapshot.
+
+    A positive incoming invoice payment must match exactly one original charge.
+    A same-charge outgoing transaction represents a refund; any ambiguity
+    denies settlement and entitlement. The caller must fetch every page using
+    the sealed Telegram client; incomplete history is not acceptable.
+    """
+    expected = invoice_payload(binding, secret=secret)
+    if not isinstance(transactions, tuple):
+        raise ValueError("stars_provider_transactions_invalid")
+    matched: list[str] = []
+    reversed_charges: set[str] = set()
+    for row in transactions:
+        if not isinstance(row, Mapping):
+            raise RuntimeError("stars_provider_transaction_invalid")
+        charge = _text(row.get("id"))
+        if not charge:
+            raise RuntimeError("stars_provider_transaction_invalid")
+        receiver = row.get("receiver")
+        if receiver is not None:
+            if type(row.get("amount")) is not int or row["amount"] >= 0:
+                raise RuntimeError("stars_provider_refund_invalid")
+            reversed_charges.add(charge)
+        source = row.get("source")
+        if source is None:
+            continue
+        if not isinstance(source, Mapping):
+            raise RuntimeError("stars_provider_transaction_invalid")
+        if source.get("type") != "user" or source.get("transaction_type") != "invoice_payment":
+            continue
+        payload = _text(source.get("invoice_payload"))
+        if not hmac.compare_digest(payload, expected):
+            continue
+        user = source.get("user")
+        if (
+            not isinstance(user, Mapping)
+            or type(user.get("id")) is not int
+            or user["id"] != binding.telegram_user_id
+            or type(row.get("amount")) is not int
+            or row["amount"] != binding.amount_stars
+        ):
+            raise RuntimeError("stars_provider_purchase_scope_mismatch")
+        matched.append(charge)
+    if len(matched) > 1 or len(set(matched)) != len(matched):
+        raise RuntimeError("stars_provider_duplicate_invoice_charges")
+    if not matched:
+        return None
+    if matched[0] in reversed_charges:
+        return None
+    return StarsPaymentReceipt(
+        charge_id=matched[0], provider_charge_id="",
+        amount_stars=binding.amount_stars, invoice_payload=expected,
+    )
