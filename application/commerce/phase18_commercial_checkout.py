@@ -209,6 +209,8 @@ def build_yookassa_commercial_bundle(
     *, purchases: Any, event_store: Any, idempotency_store: Any,
     merchant_id: str, sealed_create_payment: Callable[..., object],
     sealed_fetch_payment: Callable[[str], object],
+    sealed_fetch_refund: Callable[[str], object] | None = None,
+    verified_refund_reference_reader: Callable[..., str | None] | None = None,
 ) -> CommercialMerchantBundle:
     """Assembly never creates a second money, checkout, or entitlement owner.
 
@@ -248,6 +250,8 @@ def build_yookassa_commercial_bundle(
     authority = YooKassaCommercialAuthority(
         merchant_id=merchant_id, create_payment=sealed_create_payment,
         fetch_payment=sealed_fetch_payment, checkout_reader=canonical_checkout_reader,
+        fetch_refund=sealed_fetch_refund,
+        refund_reference_reader=verified_refund_reference_reader,
     )
     checkout = CommercialCheckoutCoordinator(
         purchase_service=purchases, payment_adapter=authority,
