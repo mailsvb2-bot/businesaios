@@ -149,20 +149,19 @@ class TelegramClient:
         if type(maximum) is not int or not 1 <= maximum <= 10000:
             raise ValueError("stars_transaction_scan_limit_invalid")
         rows: list[dict[str, Any]] = []
-        for offset in range(0, maximum + 1, 100):
+        for offset in range(0, maximum + 100, 100):
             result = self._stars_call("getStarTransactions", {
-                "offset": offset, "limit": min(100, maximum - offset)
-                if offset < maximum else 1,
+                "offset": offset, "limit": 100,
             })
             if not isinstance(result, dict) or not isinstance(result.get("transactions"), list):
                 raise RuntimeError("stars_transaction_history_invalid")
             page = result["transactions"]
             if any(not isinstance(item, dict) for item in page):
                 raise RuntimeError("stars_transaction_history_invalid")
-            if offset == maximum and page:
+            if len(rows) + len(page) > maximum:
                 raise RuntimeError("stars_transaction_history_truncated")
             rows.extend(page)
-            if len(page) < min(100, maximum - offset):
+            if len(page) < 100:
                 return tuple(rows)
         raise RuntimeError("stars_transaction_history_truncated")
 
