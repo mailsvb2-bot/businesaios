@@ -7,8 +7,8 @@ import pytest
 from billing.telegram_stars_commercial_proof import (
     StarsInvoiceBinding,
     invoice_payload,
-    verified_provider_transaction,
     validate_pre_checkout,
+    verified_provider_transaction,
     verified_receipt,
 )
 
