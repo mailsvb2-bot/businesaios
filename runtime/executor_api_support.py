@@ -180,7 +180,9 @@ def build_sealed_dual_commercial_merchant_bundle(
         build_dual_commercial_merchant_bundle,
     )
     from runtime._internal.effects_clients.yookassa_client import (
-        create_merchant_payment, fetch_merchant_payment, resolve_credentials,
+        create_merchant_payment,
+        fetch_merchant_payment,
+        resolve_credentials,
     )
 
     merchant_id, secret, api = resolve_credentials()
