@@ -334,3 +334,127 @@ def build_telegram_stars_commercial_bundle(
         checkout=checkout, settlement=settlement,
         paid_access=access, merchant_authority=authority,
     )
+
+
+class _CanonicalMerchantPortfolio:
+    """Provider choice only. One checkout owner, invoice owner and Event Spine."""
+
+    def __init__(self, *, rub_authority: Any, stars_authority: Any) -> None:
+        self._by_currency = {"RUB": rub_authority, "XTR": stars_authority}
+        self._by_provider = {
+            "yookassa": rub_authority, "telegram_stars": stars_authority,
+        }
+        self.checkout: CommercialCheckoutCoordinator | None = None
+
+    def create_checkout(self, request: PaymentCheckoutRequest) -> Any:
+        req = request.normalized_copy()
+        provider = self._by_currency.get(req.currency)
+        if provider is None:
+            raise ValueError("commercial_payment_currency_unsupported")
+        return provider.create_checkout(req)
+
+    def fetch_settlement_evidence(self, *, provider_name: str, **scope: Any) -> Any:
+        provider = self._by_provider.get(provider_name)
+        if provider is None:
+            raise RuntimeError("commercial_unknown_payment_provider")
+        return provider.fetch_settlement_evidence(provider_name=provider_name, **scope)
+
+    def get_payment_status(self, *, provider_name: str, **scope: Any) -> str:
+        provider = self._by_provider.get(provider_name)
+        if provider is None:
+            raise RuntimeError("commercial_unknown_payment_provider")
+        return provider.get_payment_status(provider_name=provider_name, **scope)
+
+    def reversal_reader(
+        self, *, tenant_id: str, business_id: str,
+        order_id: str, invoice_id: str,
+    ) -> bool:
+        if self.checkout is None:
+            raise RuntimeError("commercial_provider_route_unbound")
+        checkout = self.checkout._saved(
+            tenant_id=tenant_id, business_id=business_id, order_id=order_id,
+        )
+        if checkout is None or checkout.invoice_id != invoice_id:
+            raise RuntimeError("commercial_provider_checkout_missing")
+        provider = self._by_provider.get(checkout.provider_name)
+        if provider is None:
+            raise RuntimeError("commercial_unknown_payment_provider")
+        return provider.reversal_reader(
+            tenant_id=tenant_id, business_id=business_id,
+            order_id=order_id, invoice_id=invoice_id,
+        )
+
+
+def build_dual_commercial_merchant_bundle(
+    *, purchases: Any, event_store: Any, idempotency_store: Any,
+    merchant_id: str, sealed_create_payment: Callable[..., object],
+    sealed_fetch_payment: Callable[[str], object],
+    bot_id: str, signing_secret: bytes, payer_resolver: Callable[..., int],
+    sealed_create_invoice_link: Callable[..., str],
+    sealed_read_transactions: Callable[[], tuple[dict[str, Any], ...]],
+) -> CommercialMerchantBundle:
+    """Select fiat/Stars based on immutable invoice currency, never user status."""
+    from billing.telegram_stars_commercial_proof import TelegramStarsCommercialAuthority
+
+    def canonical_checkout_reader(
+        *, tenant_id: str, business_id: str,
+        order_id: str | None = None, invoice_id: str | None = None,
+        provider_name: str | None = None, external_reference: str | None = None,
+    ) -> CommercialCheckout | None:
+        matched = []
+        for order in purchases.orders.list_for_business(
+            tenant_id=tenant_id, business_id=business_id,
+        ):
+            if order.order_kind != "commercial_program":
+                continue
+            if order_id is not None and order_id != order.order_id:
+                continue
+            saved = checkout._saved(
+                tenant_id=tenant_id, business_id=business_id, order_id=order.order_id,
+            )
+            if saved is None:
+                continue
+            if (
+                invoice_id is not None and saved.invoice_id != invoice_id
+                or provider_name is not None and saved.provider_name != provider_name
+                or external_reference is not None
+                and saved.external_reference != external_reference
+            ):
+                continue
+            matched.append(saved)
+        if len(matched) > 1:
+            raise RuntimeError("commercial_merchant_reference_not_unique")
+        return matched[0] if matched else None
+
+    rub = YooKassaCommercialAuthority(
+        merchant_id=merchant_id, create_payment=sealed_create_payment,
+        fetch_payment=sealed_fetch_payment, checkout_reader=canonical_checkout_reader,
+    )
+    stars = TelegramStarsCommercialAuthority(
+        bot_id=bot_id, signing_secret=signing_secret,
+        purchases=purchases, checkout_reader=canonical_checkout_reader,
+        payer_resolver=payer_resolver, create_invoice_link=sealed_create_invoice_link,
+        read_transactions=sealed_read_transactions,
+    )
+    portfolio = _CanonicalMerchantPortfolio(
+        rub_authority=rub, stars_authority=stars,
+    )
+    checkout = CommercialCheckoutCoordinator(
+        purchase_service=purchases, payment_adapter=portfolio,
+        event_store=event_store, idempotency_store=idempotency_store,
+    )
+    portfolio.checkout = checkout
+    settlement = CommercialSettlementReconciler(
+        purchases=purchases, checkouts=checkout, payment_verifier=portfolio,
+        configured_merchant_id={
+            "yookassa": merchant_id, "telegram_stars": bot_id,
+        },
+    )
+    access = CanonicalPaidProgramAccess(
+        purchases=purchases, checkouts=checkout,
+        reversal_reader=portfolio.reversal_reader,
+    )
+    return CommercialMerchantBundle(
+        checkout=checkout, settlement=settlement,
+        paid_access=access, merchant_authority=portfolio,
+    )
