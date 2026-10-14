@@ -259,3 +259,24 @@ def test_real_owner_http_program_to_provider_acceptance_is_durable_and_isolated(
         assert forged_reconciliation.json()["detail"] == "program_delivery_approval_content_mismatch"
         assert len(event_store) == before_second_program + 2
 
+
+
+def test_lesson_provider_recipient_projection_rejects_ambiguous_or_boolean_aliases():
+    """Never attribute a provider action to a different customer identity."""
+    import pytest
+
+    from application.commerce.phase18_program_lesson_delivery import _recipient_and_text
+
+    with pytest.raises(ValueError, match="program_delivery_recipient_ambiguous"):
+        _recipient_and_text(
+            provider_key="max_messaging",
+            payload={"user_id": "customer-A", "chat_id": "customer-B", "text": "Lesson"},
+        )
+    assert _recipient_and_text(
+        provider_key="max_messaging",
+        payload={"user_id": "customer-A", "chat_id": "customer-A", "text": "Lesson"},
+    ) == ("customer-A", "Lesson")
+    assert _recipient_and_text(
+        provider_key="max_messaging",
+        payload={"user_id": True, "chat_id": "customer-A", "text": "Lesson"},
+    ) == ("customer-A", "Lesson")

@@ -27,8 +27,10 @@ _RECIPIENT_FIELD = {
 
 def _recipient_and_text(*, provider_key: str, payload: Mapping[str, Any]) -> tuple[str, str]:
     fields = _RECIPIENT_FIELD.get(provider_key, ())
-    recipient = next((str(payload.get(key) or "").strip() for key in fields
-                      if str(payload.get(key) or "").strip()), "")
+    recipients = {str(payload[key]).strip() for key in fields if type(payload.get(key)) in (str, int) and str(payload[key]).strip()}
+    if len(recipients) > 1:
+        raise ValueError("program_delivery_recipient_ambiguous")
+    recipient = next(iter(recipients), "")
     raw = payload.get("text")
     if isinstance(raw, Mapping):
         message = str(raw.get("body") or "")
@@ -155,7 +157,6 @@ def reconcile_program_lesson_provider_acceptance(
         "outcome": observed,
     }
 
-
 @dataclass(frozen=True)
 class SaleEvidence:
     tenant_id: str
@@ -229,6 +230,5 @@ def evaluate_sale_evidence(
         payment_confirmed=paid, product_published=published,
         lead_active=lead_active, can_request_fulfilment=allowed, reason=reason,
     )
-
 
 __all__ = ["CANON_PHASE18_LESSON_DELIVERY_VERIFIER", "reconcile_program_lesson_provider_acceptance", "SaleEvidence", "evaluate_sale_evidence"]

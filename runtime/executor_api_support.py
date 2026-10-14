@@ -127,3 +127,20 @@ __all__ = [
     'campaign_or_heartbeat_recovery_leader',
     'run_queue_tick_as_leader',
 ]
+
+
+def build_sealed_commercial_merchant_bundle(**kwargs):
+    from runtime.executor import build_sealed_commercial_merchant_bundle as compose
+
+    return compose(**kwargs)
+
+
+
+def build_sealed_stars_commercial_merchant_bundle(**kwargs):
+    from runtime.executor import build_sealed_stars_commercial_merchant_bundle as compose
+    return compose(**kwargs)
+
+
+def build_sealed_dual_commercial_merchant_bundle(**kwargs):
+    from runtime.executor import build_sealed_dual_commercial_merchant_bundle as compose
+    return compose(**kwargs)

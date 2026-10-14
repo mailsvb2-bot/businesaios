@@ -108,7 +108,7 @@ class CommercialProgramPurchaseService:
             raise ValueError("commercial_product_not_configured_for_paid_access")
 
     def priced_offer(self, *, tenant_id: str, business_id: str,
-                     program_id: str, offer_id: str) -> PricedProgramOffer:
+                     program_id: str, offer_id: str, currency: str = "RUB") -> PricedProgramOffer:
         """Accept only a catalog offer explicitly bound to this program+business."""
         catalog = self.offers.resolve(key=OfferCatalogKey(
             tenant_id=tenant_id, business_id=business_id,
@@ -125,18 +125,25 @@ class CommercialProgramPurchaseService:
         rub = item.base_price_rub
         if type(rub) is not int or not 1 <= rub <= 100_000_000:
             raise ValueError("commercial_offer_price_invalid")
+        if currency == "RUB":
+            amount = rub * 100
+        elif currency == "XTR":
+            amount = meta.get("price_stars")
+            if type(amount) is not int or not 1 <= amount <= 1_000_000:
+                raise ValueError("commercial_offer_stars_price_missing_or_invalid")
+        else:
+            raise ValueError("commercial_currency_unsupported")
         catalog_id = _required("catalog_id", catalog.id)
-        amount = rub * 100
         fingerprint = hashlib.sha256(json.dumps(
             {"catalog_id": catalog_id, "offer_id": offer_id,
              "program_id": program_id, "business_id": business_id,
-             "currency": "RUB", "amount_minor": amount,
+             "currency": currency, "amount_minor": amount,
              "title": item.title, "meta": meta},
             sort_keys=True, ensure_ascii=False, separators=(",", ":"),
         ).encode("utf-8")).hexdigest()
         return PricedProgramOffer(
             catalog_id=catalog_id, offer_id=offer_id, program_id=program_id,
-            currency="RUB", amount_minor=amount, fingerprint=fingerprint,
+            currency=currency, amount_minor=amount, fingerprint=fingerprint,
         )
 
     @staticmethod
@@ -165,13 +172,15 @@ class CommercialProgramPurchaseService:
 
     def prepare_purchase(self, *, tenant_id: str, business_id: str,
                          lead_id: str, customer_id: str, program_id: str,
-                         offer_id: str, idempotency_key: str) -> CommercialPurchase:
+                         offer_id: str, idempotency_key: str, currency: str = "RUB") -> CommercialPurchase:
         scope = {key: _required(key, value) for key, value in (
             ("tenant_id", tenant_id), ("business_id", business_id),
             ("lead_id", lead_id), ("customer_id", customer_id),
             ("program_id", program_id), ("offer_id", offer_id),
         )}
         tenant_id, business_id = scope["tenant_id"], scope["business_id"]
+        if currency not in {"RUB", "XTR"} or not isinstance(currency, str):
+            raise ValueError("commercial_currency_unsupported")
         order_id, invoice_id = self._ids(tenant_id, business_id, idempotency_key)
         requested = {key: scope[key] for key in ("customer_id", "lead_id", "program_id", "offer_id")}
         try:
@@ -180,13 +189,14 @@ class CommercialProgramPurchaseService:
         except OrderNotFound:
             order, link = None, None
         if order is not None:
-            if any(link.get(key) != val for key, val in requested.items()):
+            if (any(link.get(key) != val for key, val in requested.items())
+                    or link.get("currency") != currency):
                 raise ValueError("commercial_idempotency_conflict")
         else:
             self._parties(**{key: scope[key] for key in
                 ("tenant_id", "business_id", "lead_id", "customer_id", "program_id")})
             quote = self.priced_offer(tenant_id=tenant_id, business_id=business_id,
-                                       program_id=scope["program_id"], offer_id=scope["offer_id"])
+                                       program_id=scope["program_id"], offer_id=scope["offer_id"], currency=currency)
             link = {
                 "format": _FORMAT, **requested, "invoice_id": invoice_id,
                 "catalog_id": quote.catalog_id, "offer_fingerprint": quote.fingerprint,

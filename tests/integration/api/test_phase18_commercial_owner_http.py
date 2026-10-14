@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 from types import SimpleNamespace
+
 from fastapi import APIRouter, FastAPI
 from fastapi.testclient import TestClient
 
@@ -10,8 +11,11 @@ from adapters.api.fastapi.business_workspace_commercial_routes import register_b
 from application.commerce.phase18_commercial_order import CommercialProgramPurchaseService
 from application.commerce.phase18_program_publication_registry import ProgramPublicationRegistry
 from application.lead.registry import LeadRegistry
+from application.organization import OrganizationRegistry
+from application.partner import PartnerRegistry
 from billing.invoice_registry import InvoiceRegistry
 from contracts.customer import Customer, CustomerRecord
+from contracts.partner import PartnerPartyKind
 from core.offers.offer_types import OfferSummary
 from entrypoints.api.api_key_policy import ApiKeyPolicy, PersistentApiKeyStore
 from entrypoints.api.security_owner_bundle import ApiSecurityOwnerBundle
@@ -68,9 +72,30 @@ def test_owner_scoped_order_payment_visibility_and_psp_guard(tmp_path):
         orders=OrderStore(event_store=events),
         invoices=InvoiceRegistry(event_store=events, idempotency_store=idem),
     )
+    organizations = OrganizationRegistry(event_store=events, idempotency_store=idem)
+    organizations.create(
+        **scope, organization_id="org-partner-a", idempotency_key="org-partner",
+        occurred_at_ms=1,
+    )
+    partner_registry = PartnerRegistry(event_store=events, idempotency_store=idem)
+    partner_registry.create(
+        **scope, partner_id="partner-a", party_kind=PartnerPartyKind.ORGANIZATION,
+        party_id="org-partner-a", idempotency_key="partner-a", occurred_at_ms=2,
+    )
     router = APIRouter()
+    def preview_engagement(**values):
+        assert values["tenant_id"] == "tenant-a"
+        assert values["business_id"] in {"business-a", "business-b"}
+        return {"business_id": values["business_id"],
+                "followup_queued": False, "message_sent": False,
+                "expected_fingerprint": values["expected_fingerprint"]}
+
     register_business_workspace_commercial_routes(router=router, auth_bundle=auth,
-                                                   purchases=purchasing)
+                                                   purchases=purchasing,
+                                                   partner_registry=partner_registry,
+                                                   context_reader=SimpleNamespace(
+                                                       evaluate_sales_engagement=preview_engagement,
+                                                   ))
     app = FastAPI()
     app.include_router(router)
     base = "/business-workspace/commercial"
@@ -82,6 +107,84 @@ def test_owner_scoped_order_payment_visibility_and_psp_guard(tmp_path):
         assert client.post(base + "/orders", headers={"X-API-Key": alien},
                            json=body).status_code == 404
         owner_headers = {"X-API-Key": owner}
+        engage_path = base + "/leads/lead-a/engagement-review"
+        review_body = {"expected_fingerprint": "fingerprint-one",
+                       "model_confidence": 0.9, "customer_opted_out": True}
+        assert client.post(engage_path, json=review_body).status_code == 401
+        reviewed = client.post(engage_path, json=review_body, headers=owner_headers)
+        assert reviewed.status_code == 200, reviewed.text
+        assert reviewed.json()["business_id"] == "business-a"
+        assert reviewed.json()["message_sent"] is False
+        assert reviewed.json()["followup_queued"] is False
+        another = client.post(engage_path, json=review_body,
+                              headers={"X-API-Key": alien})
+        assert another.status_code == 200
+        assert another.json()["business_id"] == "business-b"
+        assert client.post(engage_path, json={
+            **review_body, "execute_now": True,
+        }, headers=owner_headers).status_code == 422
+        candidates = [{
+            "partner_id": "partner-a", "name": "Health magazine",
+            "topics": ["psychology", "health"], "followers": 8000,
+            "contact_basis": "public_business_contact",
+            "contact_value": "media@example.org", "source_url": "https://example.org",
+        }]
+        rank_body = {"audience_terms": ["psychology"], "candidates": candidates}
+        rank = client.post(base + "/partner-opportunities/rank",
+                           headers=owner_headers, json=rank_body)
+        assert rank.status_code == 200, rank.text
+        assert rank.json()["outbound_sent"] is False
+        assert rank.json()["advisory_only"] is True
+        assert rank.json()["ranking"][0]["eligible_for_automatic_contact"] is False
+        prepared = client.post(
+            base + "/partner-opportunities/prepare", headers=owner_headers,
+            json={
+                "candidate": candidates[0], "business_name": "Practice",
+                "offering": "Workshop", "campaign_topic": "Psychology",
+                "target_url": "https://example.org/workshop",
+            },
+        )
+        assert prepared.status_code == 200, prepared.text
+        assert prepared.json()["outbound_sent"] is False
+        assert prepared.json()["proposal"]["requires_human_approval"] is True
+        assert "Psychology" in prepared.json()["proposal"]["outreach_draft"]
+        assert client.post(
+            base + "/partner-opportunities/prepare",
+            headers={"X-API-Key": alien},
+            json={
+                "candidate": candidates[0], "business_name": "Practice",
+                "offering": "Workshop", "campaign_topic": "Psychology",
+                "target_url": "https://example.org/workshop",
+            },
+        ).status_code == 404
+        assert client.post(
+            base + "/partner-opportunities/prepare", headers=owner_headers,
+            json={
+                "candidate": candidates[0], "business_name": "Practice",
+                "offering": "Workshop", "campaign_topic": "Psychology",
+                "target_url": "http://example.org/unsafe",
+            },
+        ).status_code == 422
+        alien_rank = client.post(base + "/partner-opportunities/rank",
+                                 headers={"X-API-Key": alien}, json=rank_body)
+        assert alien_rank.status_code == 404
+        assert client.post(base + "/partner-opportunities/rank", json=rank_body).status_code == 401
+        assert client.post(
+            base + "/partner-opportunities/rank", headers=owner_headers,
+            json={"audience_terms": ["psychology"], "candidates": [
+                {**candidates[0], "business_id": "business-b"},
+            ]},
+        ).status_code == 422
+        before_metrics = client.get(base + "/funnel-metrics", headers=owner_headers)
+        assert before_metrics.status_code == 200
+        assert before_metrics.json()["lead_count"] == 1
+        assert before_metrics.json()["order_count"] == 0
+        assert before_metrics.json()["verified_gross_captured_minor_by_currency"] == {}
+        foreign_metrics = client.get(base + "/funnel-metrics", headers={"X-API-Key": alien})
+        assert foreign_metrics.status_code == 200
+        assert foreign_metrics.json()["lead_count"] == 0
+        assert foreign_metrics.json()["order_count"] == 0
+        assert client.get(base + "/funnel-metrics").status_code == 401
         leads_response = client.get(base + "/leads", headers=owner_headers)
         assert leads_response.status_code == 200
         assert leads_response.json()["leads"][0]["customer_id"] == "customer-a"
@@ -101,6 +204,12 @@ def test_owner_scoped_order_payment_visibility_and_psp_guard(tmp_path):
                           headers={"X-API-Key": alien}).status_code == 404
         assert client.get(base + "/orders", headers={"X-API-Key": alien}).json() == {"orders": []}
         assert len(client.get(base + "/orders", headers=owner_headers).json()["orders"]) == 1
+        metrics = client.get(base + "/funnel-metrics", headers=owner_headers).json()
+        assert metrics["order_count"] == 1
+        assert metrics["externally_verified_order_count"] == 0
+        assert metrics["verified_gross_captured_minor_by_currency"] == {}
+        assert metrics["external_payment_proof_required"] is True
+
         denied = client.post(base + "/orders/" + order["order_id"] + "/checkout",
                              headers=owner_headers)
         assert denied.status_code == 503

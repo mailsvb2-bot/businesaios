@@ -5,6 +5,7 @@ from typing import Any
 
 from application.ontology import EventFactLifecycleWriter
 from application.organization.projector import OrganizationProjector
+from application.partner.growth_advisory import PartnerFitAssessment, PartnerOpportunity
 from application.partner.projector import PARTNER_ARCHIVED, PARTNER_CREATED, PartnerProjector
 from application.person.projector import PersonProjector
 from contracts.organization import OrganizationStatus
@@ -94,6 +95,31 @@ class PartnerRegistry:
 
     def get(self, *, tenant_id: str, business_id: str, partner_id: str) -> Partner:
         return self._projector.get(tenant_id=tenant_id, business_id=business_id, partner_id=partner_id)
+
+    def assess_growth_opportunities(
+        self, *, tenant_id: str, business_id: str,
+        candidates: tuple[PartnerOpportunity, ...],
+        audience_terms: tuple[str, ...] = (),
+    ) -> tuple[PartnerFitAssessment, ...]:
+        """Read canonical partner identities; no campaign or outbound side effects."""
+        from application.partner.growth_advisory import (
+            score_partner_opportunity,
+        )
+
+        if len(candidates) > 500:
+            raise ValueError("partner_growth_candidate_limit_exceeded")
+        assessments = []
+        for candidate in candidates:
+            partner = self.get(
+                tenant_id=tenant_id, business_id=business_id,
+                partner_id=candidate.partner_id,
+            )
+            if partner.tenant_id != tenant_id or partner.business_id != business_id:
+                raise PermissionError("partner_growth_scope_conflict")
+            assessments.append(score_partner_opportunity(
+                partner=partner, candidate=candidate, audience_terms=audience_terms,
+            ))
+        return tuple(sorted(assessments, key=lambda item: (-item.fit, item.partner_id)))
 
     def list_for_business(self, *, tenant_id: str, business_id: str) -> tuple[Partner, ...]:
         return self._projector.list_for_business(tenant_id=tenant_id, business_id=business_id)

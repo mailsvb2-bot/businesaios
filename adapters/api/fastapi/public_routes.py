@@ -7,12 +7,14 @@ from fastapi import APIRouter, HTTPException, Request, Response, status
 
 from adapters.api.fastapi.analytics_routes import register_analytics_routes
 from adapters.api.fastapi.business_workspace_acquisition_routes import register_business_workspace_acquisition_routes
+from adapters.api.fastapi.business_workspace_commercial_routes import register_business_workspace_commercial_routes
 from adapters.api.fastapi.business_workspace_decision_routes import register_business_workspace_decision_routes
 from adapters.api.fastapi.business_workspace_discovery_routes import register_business_workspace_discovery_routes
-from adapters.api.fastapi.business_workspace_event_landing_routes import register_business_workspace_event_landing_routes
-from adapters.api.fastapi.business_workspace_program_routes import register_business_workspace_program_routes
-from adapters.api.fastapi.business_workspace_commercial_routes import register_business_workspace_commercial_routes
+from adapters.api.fastapi.business_workspace_event_landing_routes import (
+    register_business_workspace_event_landing_routes,
+)
 from adapters.api.fastapi.business_workspace_process_routes import register_business_workspace_process_routes
+from adapters.api.fastapi.business_workspace_program_routes import register_business_workspace_program_routes
 from adapters.api.fastapi.business_workspace_provider_routes import register_business_workspace_provider_routes
 from adapters.api.fastapi.business_workspace_support_case_routes import register_business_workspace_support_case_routes
 from adapters.api.fastapi.public_client_outcome_routes import register_public_client_outcome_routes
@@ -25,11 +27,11 @@ from adapters.api.fastapi.public_site_routes import (
 from adapters.api.fastapi.router_support import authorize_request
 from application.business_autonomy.provider_catalog import provider_map
 from application.business_autonomy.support_case_registry import SupportCaseRegistry
-from application.public_site.event_landing_registry import EventLandingRegistry
 from application.commerce.phase18_program_publication_registry import ProgramPublicationRegistry
+from application.public_site.event_landing_registry import EventLandingRegistry
 from crm.customer_registry import CustomerRegistry
-from entrypoints.api.provider_admin_route_handlers import ProviderAdminRouteHandlers
 from entrypoints.api.owner_action_draft import OwnerActionDraftProjector
+from entrypoints.api.provider_admin_route_handlers import ProviderAdminRouteHandlers
 from entrypoints.api.public_surface_security_guard import PublicSurfaceSecurityGuard
 from entrypoints.api.request_context import RequestContext
 from runtime.business_autonomy.provider_webhook_runtime import ProviderWebhookRuntime
@@ -236,15 +238,15 @@ def register_public_api_routes(
                     ),
                 )
         if event_landing_registry is not None:
+            from application.commerce.phase18_commercial_context import CommercialJourneyContextReader
             from application.commerce.phase18_commercial_order import CommercialProgramPurchaseService
             from application.lead.registry import LeadRegistry
             from billing.invoice_registry import InvoiceRegistry
             from core.offers.offer_catalog_resolver import OfferCatalogResolver
             from lead_outcomes.client_outcome_order_store import OrderStore
-            from runtime.platform.client_outcome_persistence import ClientOutcomePersistenceOwner
             from runtime.messaging.conversation_registry import ConversationRegistry
             from runtime.messaging.message_registry import MessageRegistry
-            from application.commerce.phase18_commercial_context import CommercialJourneyContextReader
+            from runtime.platform.client_outcome_persistence import ClientOutcomePersistenceOwner
 
             canonical_programs = ProgramPublicationRegistry(
                 event_store=event_store,
@@ -265,6 +267,21 @@ def register_public_api_routes(
             # Configure the *existing* checkout and Billing owners only when
             # all external money and reversal authorities are explicitly supplied
             # by server bootstrap. Partial configuration is a startup error.
+            from runtime.platform.config.env_flags import env_str
+
+            commercial_yookassa_opt_in = env_str(
+                "BUSINESAIOS_COMMERCIAL_PSP_ENABLED", "0",
+            ).strip().lower() in {"1", "true", "yes", "on"}
+            commercial_stars_opt_in = env_str(
+                "BUSINESAIOS_COMMERCIAL_STARS_ENABLED", "0",
+            ).strip().lower() in {"1", "true", "yes", "on"}
+            if (commercial_yookassa_opt_in or commercial_stars_opt_in) and any(
+                part is not None for part in (
+                    commercial_payment_adapter, commercial_payment_verifier,
+                    commercial_reversal_reader, commercial_merchant_id,
+                )
+            ):
+                raise RuntimeError("commercial_conflicting_payment_authorities")
             commercial_provider_parts = (
                 commercial_payment_adapter, commercial_payment_verifier,
                 commercial_reversal_reader, commercial_merchant_id,
@@ -297,6 +314,58 @@ def register_public_api_routes(
                         reversal_reader=commercial_reversal_reader,
                     )
                 )
+            if commercial_stars_opt_in:
+                from contracts.customer import CustomerIdentityStatus, CustomerStatus
+                from runtime.executor_api_support import (
+                    build_sealed_dual_commercial_merchant_bundle,
+                    build_sealed_stars_commercial_merchant_bundle,
+                )
+
+                def canonical_stars_payer(*, tenant_id, business_id, customer_id):
+                    customer = canonical_customers.get_customer(
+                        tenant_id=tenant_id, business_id=business_id,
+                        customer_id=customer_id,
+                    )
+                    if customer.customer.status is not CustomerStatus.ACTIVE:
+                        raise RuntimeError("stars_customer_inactive")
+                    identities = [
+                        identity for identity in customer.identities
+                        if identity.channel == "telegram"
+                        and identity.status is CustomerIdentityStatus.ACTIVE
+                    ]
+                    if len(identities) != 1:
+                        raise RuntimeError("stars_telegram_identity_missing_or_ambiguous")
+                    subject = identities[0].external_subject
+                    if (not isinstance(subject, str) or not subject.isascii()
+                            or not subject.isdecimal() or int(subject) < 1):
+                        raise RuntimeError("stars_telegram_payer_id_invalid")
+                    return int(subject)
+
+                builder = (
+                    build_sealed_dual_commercial_merchant_bundle
+                    if commercial_yookassa_opt_in
+                    else build_sealed_stars_commercial_merchant_bundle
+                )
+                merchant_bundle = builder(
+                    purchases=commercial_purchases, event_store=event_store,
+                    idempotency_store=dependency_container.api_idempotency_store,
+                    payer_resolver=canonical_stars_payer,
+                )
+                commercial_checkout = merchant_bundle.checkout
+                commercial_settlement = merchant_bundle.settlement
+                canonical_programs.bind_paid_access_authority(merchant_bundle.paid_access)
+            elif commercial_yookassa_opt_in:
+                from runtime.executor_api_support import build_sealed_commercial_merchant_bundle
+
+                merchant_bundle = build_sealed_commercial_merchant_bundle(
+                    purchases=commercial_purchases, event_store=event_store,
+                    idempotency_store=dependency_container.api_idempotency_store,
+                )
+                commercial_checkout = merchant_bundle.checkout
+                commercial_settlement = merchant_bundle.settlement
+                canonical_programs.bind_paid_access_authority(
+                    merchant_bundle.paid_access,
+                )
             register_business_workspace_program_routes(
                 router=router, auth_bundle=auth_bundle,
                 provider_admin_handlers=provider_handlers, programs=canonical_programs,
@@ -315,10 +384,17 @@ def register_public_api_routes(
                 orders=commercial_purchases.orders,
                 invoices=commercial_purchases.invoices,
             )
+            from application.partner.registry import PartnerRegistry
+
             register_business_workspace_commercial_routes(
                 router=router, auth_bundle=auth_bundle,
                 purchases=commercial_purchases, checkout=commercial_checkout,
                 context_reader=commercial_context, settlement=commercial_settlement,
+                provider_handlers=provider_handlers, customers=canonical_customers,
+                partner_registry=PartnerRegistry(
+                    event_store=event_store,
+                    idempotency_store=dependency_container.api_idempotency_store,
+                ),
             )
         if event_landing_registry is not None:
             register_business_workspace_event_landing_routes(
