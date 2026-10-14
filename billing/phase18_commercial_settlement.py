@@ -222,6 +222,8 @@ class YooKassaCommercialAuthority:
     create_payment: Callable[..., object]
     fetch_payment: Callable[[str], object]
     checkout_reader: Any
+    fetch_refund: Callable[[str], object] | None = None
+    refund_reference_reader: Callable[..., str | None] | None = None
 
     def __post_init__(self) -> None:
         if not self.merchant_id or not self.merchant_id.strip():
@@ -314,6 +316,27 @@ class YooKassaCommercialAuthority:
             order_id=order_id, invoice_id=invoice_id,
             amount_minor=checkout.amount_minor, currency=checkout.currency,
         )
+        if self.refund_reference_reader is not None:
+            refund_id = self.refund_reference_reader(
+                tenant_id=tenant_id, business_id=business_id,
+                order_id=order_id, invoice_id=invoice_id,
+            )
+            if refund_id is not None:
+                if not isinstance(refund_id, str) or not refund_id:
+                    raise RuntimeError("commercial_yookassa_refund_reference_invalid")
+                if self.fetch_refund is None:
+                    raise RuntimeError("commercial_yookassa_refund_verifier_missing")
+                refund = _mapping(self.fetch_refund(refund_id))
+                if (refund.get("id") != refund_id
+                        or refund.get("payment_id") != checkout.external_reference
+                        or _mapping(refund.get("amount")).get("currency") != checkout.currency
+                        or _minor(_mapping(refund["amount"]).get("value")) > checkout.amount_minor
+                        or refund.get("status") not in ("pending", "succeeded", "canceled")):
+                    raise RuntimeError("commercial_yookassa_refund_binding_invalid")
+                if refund["status"] == "succeeded":
+                    return True
+                if refund["status"] == "pending":
+                    return True  # deny access while the refund state is unresolved
         refunded = snapshot.get("refunded_amount")
         if refunded is not None:
             obj = _mapping(refunded)
