@@ -508,7 +508,6 @@ __all__ = [
 def build_sealed_commercial_merchant_bundle(
     *, purchases, event_store, idempotency_store, transport=None,
 ):
-    """Only executor may compose merchant HTTP effects; no second payment owner."""
     from functools import partial
 
     from application.commerce.phase18_commercial_checkout import (
@@ -532,7 +531,6 @@ def build_sealed_commercial_merchant_bundle(
 
 
 def _sealed_stars_merchant(*, transport=None):
-    """Bind one real Bot API identity and explicit merchant signing key."""
     from runtime._internal.effects_clients import telegram_client
     from runtime.platform.config.env_flags import env_str
 
@@ -551,7 +549,6 @@ def _sealed_stars_merchant(*, transport=None):
 def build_sealed_stars_commercial_merchant_bundle(
     *, purchases, event_store, idempotency_store, payer_resolver, transport=None,
 ):
-    """Executor-owned Stars effects, canonical payment/entitlement state."""
     from application.commerce.phase18_commercial_checkout import (
         build_telegram_stars_commercial_bundle,
     )
@@ -569,7 +566,6 @@ def build_sealed_stars_commercial_merchant_bundle(
 def build_sealed_dual_commercial_merchant_bundle(
     *, purchases, event_store, idempotency_store, payer_resolver, transport=None,
 ):
-    """RUB and XTR have separate verified providers but only one Billing owner."""
     from functools import partial
 
     from application.commerce.phase18_commercial_checkout import (
