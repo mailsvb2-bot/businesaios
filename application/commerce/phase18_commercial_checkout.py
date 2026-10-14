@@ -201,7 +201,7 @@ class CommercialMerchantBundle:
     checkout: CommercialCheckoutCoordinator
     settlement: CommercialSettlementReconciler
     paid_access: CanonicalPaidProgramAccess
-    merchant_authority: YooKassaCommercialAuthority
+    merchant_authority: Any
 
 
 
@@ -271,3 +271,66 @@ def build_yookassa_commercial_bundle(
 
 __all__ = [
            "CommercialMerchantBundle", "build_yookassa_commercial_bundle"]
+
+
+def build_telegram_stars_commercial_bundle(
+    *, purchases: Any, event_store: Any, idempotency_store: Any,
+    bot_id: str, signing_secret: bytes, payer_resolver: Callable[..., int],
+    sealed_create_invoice_link: Callable[..., str],
+    sealed_read_transactions: Callable[[], tuple[dict[str, Any], ...]],
+) -> CommercialMerchantBundle:
+    """One XTR path through existing checkout, Billing and paid-access owners."""
+    from billing.telegram_stars_commercial_proof import TelegramStarsCommercialAuthority
+
+    def canonical_checkout_reader(
+        *, tenant_id: str, business_id: str,
+        order_id: str | None = None, invoice_id: str | None = None,
+        provider_name: str | None = None, external_reference: str | None = None,
+    ) -> CommercialCheckout | None:
+        matched = []
+        for order in purchases.orders.list_for_business(
+            tenant_id=tenant_id, business_id=business_id,
+        ):
+            if order.order_kind != "commercial_program":
+                continue
+            if order_id is not None and order_id != order.order_id:
+                continue
+            saved = checkout._saved(
+                tenant_id=tenant_id, business_id=business_id, order_id=order.order_id,
+            )
+            if saved is None:
+                continue
+            if (
+                invoice_id is not None and saved.invoice_id != invoice_id
+                or provider_name is not None and saved.provider_name != provider_name
+                or external_reference is not None
+                and saved.external_reference != external_reference
+            ):
+                continue
+            matched.append(saved)
+        if len(matched) > 1:
+            raise RuntimeError("stars_checkout_reference_not_unique")
+        return matched[0] if matched else None
+
+    authority = TelegramStarsCommercialAuthority(
+        bot_id=bot_id, signing_secret=signing_secret, purchases=purchases,
+        checkout_reader=canonical_checkout_reader, payer_resolver=payer_resolver,
+        create_invoice_link=sealed_create_invoice_link,
+        read_transactions=sealed_read_transactions,
+    )
+    checkout = CommercialCheckoutCoordinator(
+        purchase_service=purchases, payment_adapter=authority,
+        event_store=event_store, idempotency_store=idempotency_store,
+    )
+    settlement = CommercialSettlementReconciler(
+        purchases=purchases, checkouts=checkout, payment_verifier=authority,
+        configured_merchant_id=bot_id,
+    )
+    access = CanonicalPaidProgramAccess(
+        purchases=purchases, checkouts=checkout,
+        reversal_reader=authority.reversal_reader,
+    )
+    return CommercialMerchantBundle(
+        checkout=checkout, settlement=settlement,
+        paid_access=access, merchant_authority=authority,
+    )
