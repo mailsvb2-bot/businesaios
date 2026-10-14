@@ -145,4 +145,4 @@ def test_refunded_provider_payment_cannot_be_newly_settled(refunded):
         evidence = authority.fetch_settlement_evidence(
             **SCOPE, provider_name="yookassa", external_reference="payment-1",
         )
-        assert evidence.status == "pending"
+        assert evidence.status == "refunded"
