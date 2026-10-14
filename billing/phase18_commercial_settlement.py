@@ -304,7 +304,7 @@ class YooKassaCommercialAuthority:
                 refund_decimal = Decimal(refund_value)
             except InvalidOperation as exc:
                 raise RuntimeError("commercial_yookassa_refund_amount_invalid") from exc
-            if not refund_decimal.is_finite() or refund_decimal < 0 or refund_decimal * 100 > amount_minor:
+            if not refund_decimal.is_finite() or refund_decimal < 0 or refund_decimal * 100 > checkout.amount_minor:
                 raise RuntimeError("commercial_yookassa_refund_amount_invalid")
         confirmed = (
             snapshot.get("status") == "succeeded"
