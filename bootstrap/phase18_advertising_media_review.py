@@ -47,6 +47,7 @@ def prepare_reviewed_generated_ad(
     if (destination.scheme != "https" or not hostname or "." not in hostname
             or destination.username is not None or destination.password is not None
             or any(ord(char) < 33 or ord(char) == 127 for char in destination_url)
+            or chr(92) in destination_url
             or port == 0):
         raise ValueError("advertising_destination_https_required")
     asset = AdPublicationAssetEvidence(
