@@ -6,6 +6,7 @@ approval/reservation/provider-readback authorities in ads_write_gateway.
 from __future__ import annotations
 
 from collections.abc import Mapping
+from urllib.parse import urlsplit
 
 from application.visual_creative_semantics.phase18_advertising_studio import (
     AdvertisingCreativeBrief, require_approved_visual_result,
@@ -33,7 +34,20 @@ def prepare_reviewed_generated_ad(
         raise RuntimeError("advertising_media_provider_proof_missing")
     if not isinstance(content_type, str) or type(size_bytes) is not int:
         raise RuntimeError("advertising_media_metadata_missing")
-    if not isinstance(destination_url, str) or not destination_url.startswith("https://"):
+    # An ad destination is an externally visible, spend-bearing field.
+    # Reject misleading HTTPS prefixes, credentials and URL control characters.
+    if not isinstance(destination_url, str) or destination_url != destination_url.strip():
+        raise ValueError("advertising_destination_https_required")
+    try:
+        destination = urlsplit(destination_url)
+        hostname = destination.hostname
+        port = destination.port
+    except ValueError as exc:
+        raise ValueError("advertising_destination_invalid") from exc
+    if (destination.scheme != "https" or not hostname or "." not in hostname
+            or destination.username is not None or destination.password is not None
+            or any(ord(char) < 33 or ord(char) == 127 for char in destination_url)
+            or port == 0):
         raise ValueError("advertising_destination_https_required")
     asset = AdPublicationAssetEvidence(
         tenant_id=brief.tenant_id, business_id=brief.business_id,
