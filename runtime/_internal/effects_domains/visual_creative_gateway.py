@@ -11,7 +11,7 @@ _SCOPE_ID_RE = re.compile(r"[A-Za-z0-9_.:@/-]{1,160}")
 
 _DIRECTION_FIELDS = ("subject", "action", "setting", "light", "angle", "style", "palette")
 _DIRECTION_LABELS = {"light": "Свет", "angle": "Ракурс", "style": "Стиль", "palette": "Палитра"}
-_FACT_RE = re.compile(r"\\d|%|₽|\\$|€|руб|скидк|акци|бесплатн|гаранти|лучш|№|сертифик|наград|отзыв|цена|стоимост", re.I)
+_FACT_RE = re.compile(r"\d|%|₽|\$|€|руб|скидк|акци|бесплатн|гаранти|лучш|№|сертифик|наград|отзыв|цена|стоимост", re.I)
 VISUAL_NEGATIVE_PROMPT = "водяной знак, надпись, буквы, текст, искажённые руки, размытость, низкое качество"
 
 
