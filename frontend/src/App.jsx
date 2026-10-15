@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { AcquisitionPlanner } from "./AcquisitionPlanner.jsx";
+import { AdvertisingStudioWorkspace } from "./AdvertisingStudioWorkspace.jsx";
 import { BusinessIntelligencePanel } from "./BusinessIntelligencePanel.jsx";
 import { BusinessDiscoveryPanel } from "./BusinessDiscoveryPanel.jsx";
 import { EventLandingWorkspace } from "./EventLandingWorkspace.jsx";
@@ -1432,6 +1433,8 @@ function Workspace({ data, apiBase, businesses, onRestart, onRetryAccess, onSwit
         sendableProviders={readyOperationProviders.map((provider) => provider.provider_key)}
         onPrepareLessonSend={prepareProgramLesson}
         suggestedApprovalIds={programApprovalIds} />
+
+      <AdvertisingStudioWorkspace key={`ads:${data.tenant_id}:${data.business_id}`} apiBase={baseApi} apiKey={apiKey} postJson={postJson} />
 
       <AcquisitionPlanner enabled={Boolean(apiKey)} onEvaluate={(payload) => postJson(acquisitionUrl, payload, authHeaders)} />
 
