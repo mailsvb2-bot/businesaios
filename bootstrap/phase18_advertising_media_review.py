@@ -5,7 +5,7 @@ approval/reservation/provider-readback authorities in ads_write_gateway.
 """
 from __future__ import annotations
 
-from typing import Mapping
+from collections.abc import Mapping
 
 from application.visual_creative_semantics.phase18_advertising_studio import (
     AdvertisingCreativeBrief, require_approved_visual_result,
