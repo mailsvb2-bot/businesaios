@@ -71,11 +71,9 @@ class JobWorker:
         self._dead_letter_store = dead_letter_store
         self._lease_manager = lease_manager or JobLeaseManager(store=store, default_owner_id=worker)
         self._lease_seconds = max(5, int(lease_seconds))
-
     @property
     def worker_id(self) -> str:
         return self._worker_id
-
     @contextmanager
     def _lease_heartbeat(self, job: JobRecord) -> Iterator[None]:
         current = self._store.get(tenant_id=job.tenant_id, job_id=job.job_id) or job
@@ -104,7 +102,6 @@ class JobWorker:
             thread.join(timeout=max(1.0, float(window.heartbeat_seconds) + 1.0))
             if lease_lost.is_set():
                 raise LeaseLostError(f"lease lost while executing job {job.job_id}")
-
     def tick(self, *, tenant_id: str, queue_name: str, now: datetime | None = None, job_id: str | None = None) -> WorkerTickReport:
         moment = normalize_now(now)
         normalized_tenant_id = require_tenant_id(tenant_id)
@@ -131,7 +128,6 @@ class JobWorker:
             report = self._run_claimed(tenant_id=claimed.tenant_id, job=claimed, report=report, now=normalize_now())
 
         return report
-
     def _run_claimed(self, *, tenant_id: str, job: JobRecord, report: WorkerTickReport, now: datetime) -> WorkerTickReport:
         try:
             with self._lease_heartbeat(job):
@@ -152,7 +148,6 @@ class JobWorker:
             self._store.mark_succeeded(tenant_id=tenant_id, job_id=job.job_id, owner_id=self._worker_id, fencing_token=job.lease.fencing_token, now=normalize_now())
             return self._replace(report, succeeded=report.succeeded + 1)
         return self._handle_failure(tenant_id=tenant_id, job=job, report=report, exc=RuntimeError(result.error or result.status or "runner_reported_failure"), result=result, now=now)
-
     def _handle_failure(self, *, tenant_id: str, job: JobRecord, report: WorkerTickReport, exc: Exception, result: JobResult | None, now: datetime) -> WorkerTickReport:
         failure_moment = normalize_now(now)
         error_text = self._format_error(exc)
@@ -167,7 +162,6 @@ class JobWorker:
             return self._replace(report, retried=report.retried + 1)
         self._store.mark_failed(tenant_id=tenant_id, job_id=job.job_id, error=error_text, owner_id=self._worker_id, fencing_token=(job.lease.fencing_token if job.lease is not None else None), now=failure_moment)
         return self._replace(report, failed=report.failed + 1)
-
     def _normalize_result(self, *, job: JobRecord, outcome: Any) -> JobResult:
         if isinstance(outcome, JobResult):
             return outcome
@@ -182,7 +176,6 @@ class JobWorker:
             output = raw_output if isinstance(raw_output, dict) else {k: v for k, v in outcome.items() if k not in {"ok", "status", "error", "retry_delay_seconds", "output"}}
             return JobResult(ok=ok, status=status, job_id=job.job_id, tenant_id=job.tenant_id, attempts=job.attempts, output=output, error=None if error is None else str(error), retry_delay_seconds=retry_delay_seconds)
         return JobResult(ok=True, status="ok", job_id=job.job_id, tenant_id=job.tenant_id, attempts=job.attempts, output={"result": outcome})
-
     @staticmethod
     def _format_error(exc: Exception) -> str:
         message = str(exc).strip()
