@@ -121,10 +121,7 @@ class JobWorker:
                 job_id=candidate.job_id,
                 owner_id=self._worker_id,
                 lease_seconds=self._lease_seconds,
-                # A large due batch may spend substantial time waiting behind
-                # other workers. Lease time must advance with real elapsed time,
-                # even when the scheduler was supplied a fixed clock for tests.
-                now=moment + timedelta(seconds=monotonic() - tick_started),
+                        now=moment + timedelta(seconds=monotonic() - tick_started),
             )
             if claimed is None:
                 report = self._replace(report, skipped=report.skipped + 1)
@@ -136,9 +133,6 @@ class JobWorker:
         return report
 
     def _run_claimed(self, *, tenant_id: str, job: JobRecord, report: WorkerTickReport, now: datetime) -> WorkerTickReport:
-        # Only execution errors enter retry policy. A failed terminal transition
-        # must never be reclassified as a runner error: another worker may have
-        # legitimately reclaimed the lease in the meantime.
         try:
             with self._lease_heartbeat(job):
                 outcome = self._runner(job)
@@ -148,30 +142,16 @@ class JobWorker:
         except Exception as exc:
             return self._handle_failure(tenant_id=tenant_id, job=job, report=report, exc=exc, result=None, now=now)
 
-        # Ensure a lost lease cannot overwrite the newer owner's outcome.
+        # Never retry a successful runner because the terminal transition raced.
         active = self._store.get(tenant_id=tenant_id, job_id=job.job_id)
-        if (
-            active is None
-            or active.lease is None
-            or active.lease.owner_id != self._worker_id
-            or job.lease is None
-            or active.lease.fencing_token != job.lease.fencing_token
-        ):
+        if not (active and active.lease and job.lease
+                and active.lease.owner_id == self._worker_id
+                and active.lease.fencing_token == job.lease.fencing_token):
             return self._replace(report, skipped=report.skipped + 1)
         if result.ok:
-            self._store.mark_succeeded(
-                tenant_id=tenant_id,
-                job_id=job.job_id,
-                owner_id=self._worker_id,
-                fencing_token=(job.lease.fencing_token if job.lease is not None else None),
-                now=normalize_now(),
-            )
+            self._store.mark_succeeded(tenant_id=tenant_id, job_id=job.job_id, owner_id=self._worker_id, fencing_token=job.lease.fencing_token, now=normalize_now())
             return self._replace(report, succeeded=report.succeeded + 1)
-        synthetic_error = result.error or result.status or "runner_reported_failure"
-        return self._handle_failure(
-            tenant_id=tenant_id, job=job, report=report,
-            exc=RuntimeError(synthetic_error), result=result, now=now,
-        )
+        return self._handle_failure(tenant_id=tenant_id, job=job, report=report, exc=RuntimeError(result.error or result.status or "runner_reported_failure"), result=result, now=now)
 
     def _handle_failure(self, *, tenant_id: str, job: JobRecord, report: WorkerTickReport, exc: Exception, result: JobResult | None, now: datetime) -> WorkerTickReport:
         failure_moment = normalize_now(now)
