@@ -39,6 +39,7 @@ class AdvertisingCreativeBrief:
     description: str
     formats: tuple[str, ...]
     brand_fingerprint: str
+    brand_context: str
     approval_fingerprint: str
     generation_status: str = "draft"
     publication_status: str = "not_authorized"
@@ -93,7 +94,7 @@ def prepare_advertising_creatives(
             kind=kind, angle=angle, prompt=prompt,
             headline=scope["headline"], description=scope["description"],
             formats=normalized, brand_fingerprint=brand_digest,
-            approval_fingerprint=fingerprint,
+            brand_context=scope["brand_context"], approval_fingerprint=fingerprint,
         ))
     return tuple(rows)
 
@@ -144,7 +145,7 @@ def build_approved_generation_action(
         "payload": {
             "tenant_id": brief.tenant_id, "user_id": actor,
             "kind": brief.kind, "prompt": brief.prompt,
-            "brand_context": brief.brand_fingerprint,
+            "brand_context": brief.brand_context,
             "country_code": country_code, "aspect_ratio": "9:16" if "story" in brief.formats else "1:1",
             "approval_reference": approval_reference,
             "approval_fingerprint": brief.approval_fingerprint,
