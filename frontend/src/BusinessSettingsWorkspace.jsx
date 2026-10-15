@@ -152,7 +152,7 @@ export function BusinessSettingsWorkspace({ apiBase, apiKey, getJson, postJson, 
               {zoneOptions.map(([id, title]) => <option value={id} key={id}>{title}</option>)}
             </select>
           </label>
-          <button type="submit" onClick={save} className="primary" disabled={!apiKey || Boolean(busy) || !name.trim()}>
+          <button type="button" onClick={save} className="primary" disabled={!apiKey || Boolean(busy) || !name.trim()}>
             {busy === "save" ? "Сохраняем…" : "Сохранить настройки"}
           </button>
         </form>
