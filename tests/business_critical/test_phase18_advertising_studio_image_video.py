@@ -7,7 +7,7 @@ from types import SimpleNamespace
 import pytest
 
 from application.visual_creative_semantics.phase18_advertising_studio import (
-    prepare_advertising_creatives, require_approved_visual_result,
+    build_approved_generation_action, prepare_advertising_creatives, require_approved_visual_result,
 )
 
 
@@ -78,3 +78,34 @@ def test_generation_receipt_cannot_publish_spend_or_cross_scope():
             require_approved_visual_result(
                 brief=brief, approved_fingerprint=brief.approval_fingerprint, receipt=bad,
             )
+
+
+def test_reviewed_ad_uses_existing_visual_action_without_direct_provider_effects():
+    brief = prepare_advertising_creatives(
+        tenant_id="t1", business_id="b1", campaign_id="campaign-1",
+        headline="Consultation", description="Professional service",
+        brand_context="Real brand identity", campaign_goal="Bookings",
+        kind="video", formats=("story",),
+    )[0]
+    seen = []
+
+    def approval(**kwargs):
+        seen.append(kwargs)
+        return kwargs["fingerprint"] == brief.approval_fingerprint
+
+    action = build_approved_generation_action(
+        brief=brief, approval_reference="signed-review-1",
+        verify_approval=approval, user_id="owner-1",
+    )
+    assert action["action_type"] == "visual_creative_generate@v1"
+    assert action["requires_canonical_execution"] is True
+    assert action["spend_authorized"] is False
+    assert action["payload"]["kind"] == "video"
+    assert action["payload"]["aspect_ratio"] == "9:16"
+    assert seen[0]["tenant_id"] == "t1"
+    assert seen[0]["campaign_id"] == "campaign-1"
+    with pytest.raises(PermissionError, match="approval_denied"):
+        build_approved_generation_action(
+            brief=brief, approval_reference="signed-review-1",
+            verify_approval=lambda **kwargs: False, user_id="owner-1",
+        )
