@@ -144,36 +144,27 @@ def start_yookassa_webhook_server_in_thread(
                 notif = parse_notification(body_bytes=raw)
                 tenant_id = _extract_webhook_tenant_id(notif.raw)
 
-                # Write to event store and outbox
+                # Acknowledge only after the durable idempotent outbox commits.
+                # Audit events are secondary observations, not settlement proofs.
+                payload = {"type": "yookassa_webhook", "payload": notif.raw}
                 try:
-                    if event_store is not None:
-                        event_store.emit(
-                            tenant_id=tenant_id,
-                            event_type="yookassa_webhook_received",
-                            payload={
-                                "type": "yookassa_webhook",
-                                "notification": notif,
-                                "tenant_id": tenant_id,
-                            },
-                        )
-                except Exception:
-                    swallow(__name__, "event_store.emit")
-
-                try:
-                    if payment_outbox is not None:
-                        payload = {
-                            "type": "yookassa_webhook",
-                            # Keep raw notification for downstream handlers.
-                            "payload": notif.raw,
-                        }
-                        if hasattr(payment_outbox, "enqueue_once"):
-                            payment_outbox.enqueue_once(dedupe_key=str(notif.dedupe_key), payload=payload)
-                        else:
-                            raise RuntimeError("YOOKASSA_WEBHOOK_DURABLE_IDEMPOTENT_OUTBOX_REQUIRED")
+                    payment_outbox.enqueue_once(
+                        dedupe_key=str(notif.dedupe_key), payload=payload,
+                    )
                 except Exception:
                     self.send_response(503)
                     self.end_headers()
                     return
+                if event_store is not None:
+                    try:
+                        event_store.emit(
+                            tenant_id=tenant_id,
+                            event_type="yookassa_webhook_received",
+                            payload={"type": "yookassa_webhook", "notification": notif,
+                                     "tenant_id": tenant_id},
+                        )
+                    except Exception:
+                        swallow(__name__, "event_store.emit")
 
                 self.send_response(200)
                 self.end_headers()
