@@ -98,6 +98,8 @@ def test_reviewed_ad_uses_existing_visual_action_without_direct_provider_effects
     assert action["requires_canonical_execution"] is True
     assert action["spend_authorized"] is False
     assert action["payload"]["kind"] == "video"
+    assert action["payload"]["brand_context"] == "Real brand identity"
+    assert action["payload"]["brand_context"] != brief.brand_fingerprint
     assert action["payload"]["aspect_ratio"] == "9:16"
     assert seen[0]["tenant_id"] == "t1"
     assert seen[0]["campaign_id"] == "campaign-1"
