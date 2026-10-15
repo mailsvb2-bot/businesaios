@@ -1,9 +1,6 @@
 """Production-side boundaries for imported donor creative workflow."""
 from __future__ import annotations
 
-from dataclasses import replace
-from types import SimpleNamespace
-
 import pytest
 
 from application.visual_creative_semantics.phase18_advertising_studio import (
