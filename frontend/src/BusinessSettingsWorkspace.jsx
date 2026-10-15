@@ -20,8 +20,8 @@ export function BusinessSettingsWorkspace({ apiBase, apiKey, getJson, postJson, 
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
   const pending = useRef(null);
-  // The native submit event can be lost on a remount in WebKit. Both click
-  // and keyboard submit use the same guarded mutation path, never two writes.
+  // One native form submission path for mouse, touch and keyboard.
+  // The ref fences duplicate requests before React commits the busy state.
   const submitting = useRef(false);
   const generation = useRef(0);
   const url = apiBase.replace(/\/$/, "") + "/business-workspace/settings";
@@ -152,7 +152,7 @@ export function BusinessSettingsWorkspace({ apiBase, apiKey, getJson, postJson, 
               {zoneOptions.map(([id, title]) => <option value={id} key={id}>{title}</option>)}
             </select>
           </label>
-          <button type="submit" onClick={save} className="primary" disabled={!apiKey || Boolean(busy) || !name.trim()}>
+          <button type="submit" className="primary" disabled={!apiKey || Boolean(busy) || !name.trim()}>
             {busy === "save" ? "Сохраняем…" : "Сохранить настройки"}
           </button>
         </form>

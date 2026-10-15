@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import base64
 import hmac
+import ipaddress
 import threading
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from typing import Any
@@ -52,6 +53,19 @@ def start_yookassa_webhook_server_in_thread(
     hmac_secret = env_str("YOOKASSA_WEBHOOK_HMAC_SECRET", "") or None
     token_secret = webhook_token or (env_str("YOOKASSA_WEBHOOK_TOKEN", "") or None)
 
+    allowed_networks = tuple(
+        ipaddress.ip_network(value.strip(), strict=False)
+        for value in env_str("YOOKASSA_WEBHOOK_IP_ALLOWLIST", "").split(",")
+        if value.strip()
+    )
+    production = env_str("APP_ENV", env_str("ENV", "dev")).lower().strip() in {"prod", "production"}
+    if production and not allowed_networks:
+        raise RuntimeError("YOOKASSA_WEBHOOK_IP_ALLOWLIST required in production")
+    if auth_mode not in {"none", "basic", "token", "hmac_sha256"}:
+        raise RuntimeError("YOOKASSA_WEBHOOK_AUTH_MODE unsupported")
+    if payment_outbox is None or not callable(getattr(payment_outbox, "enqueue_once", None)):
+        raise RuntimeError("YOOKASSA_WEBHOOK_DURABLE_IDEMPOTENT_OUTBOX_REQUIRED")
+
     from runtime.payments import (
         parse_yookassa_notification as parse_notification,
     )
@@ -66,6 +80,16 @@ def start_yookassa_webhook_server_in_thread(
                     self.send_response(404)
                     self.end_headers()
                     self.wfile.write(b"not_found")
+                    return
+
+                # Client IP is the direct TCP peer; never trust an unverified
+                # X-Forwarded-For supplied by the caller.
+                if allowed_networks and not any(
+                    ipaddress.ip_address(self.client_address[0]) in net
+                    for net in allowed_networks
+                ):
+                    self.send_response(403)
+                    self.end_headers()
                     return
 
                 # Auth
@@ -120,36 +144,27 @@ def start_yookassa_webhook_server_in_thread(
                 notif = parse_notification(body_bytes=raw)
                 tenant_id = _extract_webhook_tenant_id(notif.raw)
 
-                # Write to event store and outbox
+                # Acknowledge only after the durable idempotent outbox commits.
+                # Audit events are secondary observations, not settlement proofs.
+                payload = {"type": "yookassa_webhook", "payload": notif.raw}
                 try:
-                    if event_store is not None:
+                    payment_outbox.enqueue_once(
+                        dedupe_key=str(notif.dedupe_key), payload=payload,
+                    )
+                except Exception:
+                    self.send_response(503)
+                    self.end_headers()
+                    return
+                if event_store is not None:
+                    try:
                         event_store.emit(
                             tenant_id=tenant_id,
                             event_type="yookassa_webhook_received",
-                            payload={
-                                "type": "yookassa_webhook",
-                                "notification": notif,
-                                "tenant_id": tenant_id,
-                            },
+                            payload={"type": "yookassa_webhook", "notification": notif,
+                                     "tenant_id": tenant_id},
                         )
-                except Exception:
-                    swallow(__name__, "event_store.emit")
-
-                try:
-                    if payment_outbox is not None:
-                        payload = {
-                            "type": "yookassa_webhook",
-                            # Keep raw notification for downstream handlers.
-                            "payload": notif.raw,
-                        }
-                        if hasattr(payment_outbox, "enqueue_once"):
-                            payment_outbox.enqueue_once(dedupe_key=str(notif.dedupe_key), payload=payload)
-                        elif hasattr(payment_outbox, "enqueue"):
-                            payment_outbox.enqueue(payload)
-                        else:
-                            raise AttributeError("payment_outbox has no enqueue/enqueue_once")
-                except Exception:
-                    swallow(__name__, "payment_outbox.enqueue")
+                    except Exception:
+                        swallow(__name__, "event_store.emit")
 
                 self.send_response(200)
                 self.end_headers()

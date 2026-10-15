@@ -18,6 +18,37 @@ def register_business_workspace_commercial_routes(*, router: APIRouter, auth_bun
         _, tenant, business = business_owner_scope(request=request, auth_bundle=auth_bundle)
         return tenant, business
 
+    @router.post("/business-workspace/commercial/advertising/creatives/prepare", tags=["business-workspace"])
+    async def prepare_ad_creatives(request: Request):
+        """Authenticated image/video creative variants; never generate or spend."""
+        from application.visual_creative_semantics.phase18_advertising_studio import (
+            prepare_advertising_creatives,
+        )
+
+        tenant, business = scope(request)
+        body = await json_body(request)
+        allowed = {"campaign_id", "headline", "description", "brand_context",
+                   "campaign_goal", "kind", "formats", "country_code"}
+        if not isinstance(body, dict) or set(body) != allowed - {"country_code"} and set(body) != allowed:
+            raise HTTPException(status_code=422, detail="advertising_brief_fields_invalid")
+        if not isinstance(body.get("formats"), list):
+            raise HTTPException(status_code=422, detail="advertising_formats_invalid")
+        try:
+            variants = prepare_advertising_creatives(
+                tenant_id=tenant, business_id=business,
+                campaign_id=body["campaign_id"], headline=body["headline"],
+                description=body["description"], brand_context=body["brand_context"],
+                campaign_goal=body["campaign_goal"], kind=body["kind"],
+                formats=tuple(body["formats"]),
+                country_code=body.get("country_code", ""),
+            )
+        except (TypeError, ValueError, AttributeError) as exc:
+            raise HTTPException(status_code=422, detail="advertising_brief_invalid") from exc
+        return {"tenant_id": tenant, "business_id": business,
+                "draft_only": True, "generation_submitted": False,
+                "campaign_launched": False, "spend_authorized": False,
+                "creatives": [asdict(item) for item in variants]}
+
     @router.get("/business-workspace/commercial/leads", tags=["business-workspace"])
     async def list_commercial_leads(request: Request):
         tenant, business = scope(request)

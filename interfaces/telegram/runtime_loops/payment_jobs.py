@@ -55,8 +55,12 @@ def _normalize_webhook_job(raw: dict) -> dict:
         raw = raw.get("payload") or {}
 
     obj = raw.get('object') if isinstance(raw.get('object'), dict) else {}
-    external_id = raw.get('external_id') or raw.get('external_payment_id') or obj.get('id')
     event = raw.get('event')
+    refund_event = str(event or '').startswith('refund.')
+    payment_id = obj.get('payment_id') if refund_event else obj.get('id')
+    if refund_event and (not isinstance(payment_id, str) or not payment_id.strip()):
+        raise ValueError('MISSING_REFUND_PAYMENT_ID')
+    external_id = payment_id if refund_event else (raw.get('external_id') or raw.get('external_payment_id') or payment_id)
     notification_id = raw.get('notification_id') or raw.get('id')
     out = {
         'type': 'yookassa_webhook',
@@ -65,6 +69,11 @@ def _normalize_webhook_job(raw: dict) -> dict:
         'notification_id': str(notification_id) if notification_id is not None else None,
         'raw': raw.get('raw') if raw.get('raw') is not None else raw,
     }
+    if refund_event:
+        refund_id = obj.get('id')
+        if not isinstance(refund_id, str) or not refund_id.strip():
+            raise ValueError('MISSING_REFUND_ID')
+        out['refund_id'] = refund_id
     if not out['external_id']:
         raise ValueError('MISSING_EXTERNAL_ID')
     if not out['event']:
@@ -81,11 +90,12 @@ class PaymentJobsConfig:
 
 
 class PaymentJobsLoop:
-    def __init__(self, *, decide_fn: Any, execute_fn: Any, payment_outbox: Any, cfg: PaymentJobsConfig):
+    def __init__(self, *, decide_fn: Any, execute_fn: Any, payment_outbox: Any, cfg: PaymentJobsConfig, commercial_reconcile_fn: Any = None):
         self._decide = decide_fn
         self._execute = execute_fn
         self._outbox = payment_outbox
         self._cfg = cfg
+        self._commercial_reconcile = commercial_reconcile_fn
         self._last_ms: int = 0
         self._last_err_ms: dict[str, int] = {}
 
@@ -138,15 +148,24 @@ class PaymentJobsLoop:
                 continue
 
             try:
-                ws = build_system_world_state(
-                    purpose="payments_webhook_reconcile",
-                    tenant_id=current_tenant_id(),
-                    meta={"job": payload},
-                    user_timezone=env_str("SYSTEM_TZ", "Europe/Amsterdam"),
-                    now_ms=self._now_ms(),
-                )
-                env = self._decide(ws)
-                self._execute(env)
+                if payload["event"].startswith("refund."):
+                    # Commercial refund is a separate merchant-verified fact.
+                    # Never route it through legacy payment-success decisions.
+                    if self._commercial_reconcile is None:
+                        raise RuntimeError("REFUND_REQUIRES_VERIFIED_COMMERCIAL_RECONCILIATION")
+                    outcome = self._commercial_reconcile(payload)
+                    if outcome is not True:
+                        raise RuntimeError("REFUND_VERIFICATION_NOT_CONFIRMED")
+                else:
+                    ws = build_system_world_state(
+                        purpose="payments_webhook_reconcile",
+                        tenant_id=current_tenant_id(),
+                        meta={"job": payload},
+                        user_timezone=env_str("SYSTEM_TZ", "Europe/Amsterdam"),
+                        now_ms=self._now_ms(),
+                    )
+                    env = self._decide(ws)
+                    self._execute(env)
                 try:
                     self._outbox.mark_delivered(job_id)
                 except Exception:

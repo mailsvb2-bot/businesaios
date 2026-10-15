@@ -4,6 +4,8 @@ from typing import Any
 
 from runtime._internal.effects_clients.visual_gateway_client import visual_gateway_json
 from runtime._internal.effects_domains.visual_creative_gateway import (
+    VISUAL_NEGATIVE_PROMPT,
+    visual_direction_prompt,
     assert_visual_creative_binding,
     visual_creative_evidence,
     visual_creative_idempotency_key,
@@ -58,19 +60,41 @@ class MarketingEffectsMixin:
                 notification = {"ok": False, "error": exc.__class__.__name__}
         return {"ok": True, "status": "verified", "copy": payload, "notification": notification, "router_evidence": evidence}
 
-    def generate_visual_creative(self, *, decision_id: str, correlation_id: str, tenant_id: str, user_id: str, kind: str, prompt: str, country_code: str = "", preferred_provider: str = "", aspect_ratio: str = "1:1", duration_seconds: int = 5, negative_prompt: str = "", reference_url: str = "", brand_context: str = "", wait_seconds: int = 0) -> dict[str, Any]:
+    def generate_visual_creative(self, *, decision_id: str, correlation_id: str, tenant_id: str, user_id: str, kind: str, prompt: str, country_code: str = "", preferred_provider: str = "", aspect_ratio: str = "1:1", duration_seconds: int = 5, negative_prompt: str = "", reference_url: str = "", brand_context: str = "", wait_seconds: int = 0, visual_direction: dict[str, Any] | None = None, seed: int | None = None, variants: int = 1, overlay: dict[str, Any] | None = None) -> dict[str, Any]:
         assert_called_from_executor()
         tenant = self._visual_tenant(tenant_id, "generate_visual_creative")
         decision, correlation, user = _visual_identity(decision_id=decision_id, correlation_id=correlation_id, user_id=user_id)
         visual_kind, visual_prompt = str(kind or "").strip().lower(), str(prompt or "").strip()
         if visual_kind not in {"image", "video"} or not visual_prompt:
             raise ValueError("valid visual kind and prompt are required")
-        bounded_wait = max(0, min(int(wait_seconds or 0), 60))
-        request = {"kind": visual_kind, "prompt": visual_prompt, "country_code": str(country_code or ""), "preferred_provider": str(preferred_provider or ""), "aspect_ratio": str(aspect_ratio or "1:1"), "duration_seconds": max(2, min(int(duration_seconds or 5), 15)), "negative_prompt": str(negative_prompt or ""), "reference_url": str(reference_url or ""), "brand_context": str(brand_context or ""), "wait_seconds": bounded_wait, "scope_id": tenant, "idempotency_key": visual_creative_idempotency_key(tenant_id=tenant, decision_id=decision, kind=visual_kind)}
-        job = visual_creative_job_payload(visual_gateway_json("POST", "/v1/creative/generations", request, timeout_s=max(30, bounded_wait + 15), transport=self.http_transport))
-        assert_visual_creative_binding(tenant_id=tenant, job=job, expected_kind=visual_kind)
-        event_type = "visual_creative_generated" if job["status"] == "succeeded" else "visual_creative_submitted"
-        return self._visual_result(tenant=tenant, user=user, decision=decision, correlation=correlation, job=job, event_type=event_type)
+        if visual_direction is not None:
+            visual_prompt = visual_direction_prompt(visual_direction, owner_context=f"{visual_prompt} {brand_context}")
+            negative_prompt = negative_prompt or VISUAL_NEGATIVE_PROMPT
+        if type(variants) is not int or not 1 <= variants <= 4 or (visual_kind == "video" and variants != 1):
+            raise ValueError("visual_variants_invalid")
+        if seed is not None and (type(seed) is not int or not 0 <= seed <= 2147459889):
+            raise ValueError("visual_seed_invalid")
+        if overlay is not None and (not isinstance(overlay, dict) or
+                not set(overlay) <= {"headline", "body", "cta", "layout", "brand", "formats"}):
+            raise ValueError("visual_overlay_invalid")
+        wait = max(0, min(int(wait_seconds or 0), 60)) // variants
+        request = {"kind": visual_kind, "prompt": visual_prompt, "country_code": str(country_code or ""), "preferred_provider": str(preferred_provider or ""), "aspect_ratio": str(aspect_ratio or "1:1"), "duration_seconds": max(2, min(int(duration_seconds or 5), 15)), "negative_prompt": str(negative_prompt or ""), "reference_url": str(reference_url or ""), "brand_context": str(brand_context or ""), "wait_seconds": wait, "scope_id": tenant}
+        jobs = []
+        for index in range(variants):
+            key = visual_creative_idempotency_key(tenant_id=tenant, decision_id=decision, kind=visual_kind, variant=index)
+            variant_seed = None if seed is None and variants == 1 else (seed if seed is not None else 1000) + index * 7919
+            payload = {**request, "idempotency_key": key}
+            if variant_seed is not None:
+                payload["seed"] = variant_seed
+            job = visual_creative_job_payload(visual_gateway_json("POST", "/v1/creative/generations", payload, timeout_s=max(30, wait + 15), transport=self.http_transport))
+            assert_visual_creative_binding(tenant_id=tenant, job=job, expected_kind=visual_kind)
+            if overlay and job["status"] == "succeeded":
+                pack = visual_gateway_json("POST", "/v1/creative/render-packs", {"source_job_id": job["id"], "scope_id": tenant, "idempotency_key": key + ":render", "formats": list(overlay.get("formats") or ["feed"]), "composition": {k: v for k, v in overlay.items() if k != "formats"}}, timeout_s=300, transport=self.http_transport)
+                job["render_pack"] = {k: pack.get(k) for k in ("id", "status", "error_code")}
+            jobs.append(job)
+        event_type = "visual_creative_generated" if jobs[0]["status"] == "succeeded" else "visual_creative_submitted"
+        result = self._visual_result(tenant=tenant, user=user, decision=decision, correlation=correlation, job=jobs[0], event_type=event_type)
+        return {**result, "candidates": jobs} if variants > 1 else result
 
     def poll_visual_creative(self, *, decision_id: str, correlation_id: str, tenant_id: str, user_id: str, job_id: str) -> dict[str, Any]:
         assert_called_from_executor()

@@ -78,3 +78,49 @@ def test_untrusted_merchant_origin_is_rejected_before_network(monkeypatch):
     monkeypatch.setattr(merchant, "http_json", Mock(side_effect=AssertionError("network forbidden")))
     with pytest.raises(RuntimeError, match="credentials_or_origin_invalid"):
         merchant.fetch_merchant_payment("payment-1")
+
+
+def test_authenticated_refund_get_requires_exact_merchant_receipt(monkeypatch):
+    calls = []
+    monkeypatch.setattr(merchant, "resolve_credentials",
+                        lambda: ("shop-1", "secret-test", "https://api.yookassa.ru"))
+
+    def provider(method, url, payload, *, headers, **kwargs):
+        calls.append((method, url, payload, headers))
+        return {
+            "id": "refund-1", "payment_id": "payment-1", "status": "succeeded",
+            "amount": {"value": "10.00", "currency": "RUB"},
+        }
+
+    monkeypatch.setattr(merchant, "http_json", provider)
+    proof = merchant.fetch_merchant_refund("refund-1")
+    assert proof["payment_id"] == "payment-1"
+    assert calls[0][0:3] == (
+        "GET", "https://api.yookassa.ru/v3/refunds/refund-1", None,
+    )
+    assert calls[0][3]["Authorization"].startswith("Basic ")
+
+
+@pytest.mark.parametrize("body", [
+    {"id": "other", "payment_id": "payment-1", "status": "succeeded",
+     "amount": {"value": "10.00", "currency": "RUB"}},
+    {"id": "refund-1", "payment_id": "", "status": "succeeded",
+     "amount": {"value": "10.00", "currency": "RUB"}},
+    {"id": "refund-1", "payment_id": "payment-1", "status": "unknown",
+     "amount": {"value": "10.00", "currency": "RUB"}},
+    {"id": "refund-1", "payment_id": "payment-1", "status": "succeeded",
+     "amount": {"value": "10.00", "currency": "USD"}},
+])
+def test_refund_provider_provenance_cannot_be_forged(monkeypatch, body):
+    monkeypatch.setattr(merchant, "resolve_credentials",
+                        lambda: ("shop-1", "secret-test", "https://api.yookassa.ru"))
+    monkeypatch.setattr(merchant, "http_json", lambda *args, **kwargs: body)
+    with pytest.raises(RuntimeError, match="refund_"):
+        merchant.fetch_merchant_refund("refund-1")
+
+
+@pytest.mark.parametrize("id_", ["../payments", "id?token=x", "", "/refund-1"])
+def test_refund_reference_never_escapes_merchant_endpoint(monkeypatch, id_):
+    monkeypatch.setattr(merchant, "http_json", Mock(side_effect=AssertionError("network forbidden")))
+    with pytest.raises(ValueError, match="refund_id_invalid"):
+        merchant.fetch_merchant_refund(id_)

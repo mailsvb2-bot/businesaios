@@ -127,3 +127,22 @@ def test_cross_business_scope_and_untrusted_checkout_fail_closed():
     assert authority.fetch_settlement_evidence(
         **SCOPE, provider_name="yookassa", external_reference="payment-1",
     ).status == "pending"
+
+
+@pytest.mark.parametrize("refunded", ["0.01", "890.00", "NaN", "-1.00", "891.00"])
+def test_refunded_provider_payment_cannot_be_newly_settled(refunded):
+    merchant, _, authority = setup()
+    merchant.snapshot.update(
+        status="succeeded", paid=True, captured_at="2026-10-13T12:00:00Z",
+        refunded_amount={"value": refunded, "currency": "RUB"},
+    )
+    if refunded in {"NaN", "-1.00", "891.00"}:
+        with pytest.raises(RuntimeError, match="refund_amount_invalid"):
+            authority.fetch_settlement_evidence(
+                **SCOPE, provider_name="yookassa", external_reference="payment-1",
+            )
+    else:
+        evidence = authority.fetch_settlement_evidence(
+            **SCOPE, provider_name="yookassa", external_reference="payment-1",
+        )
+        assert evidence.status == "refunded"
