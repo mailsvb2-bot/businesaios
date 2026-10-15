@@ -101,6 +101,10 @@ def test_reviewed_ad_uses_existing_visual_action_without_direct_provider_effects
     assert action["payload"]["brand_context"] == "Real brand identity"
     assert action["payload"]["brand_context"] != brief.brand_fingerprint
     assert action["payload"]["aspect_ratio"] == "9:16"
+    assert action["payload"]["variants"] == 1
+    assert action["payload"]["overlay"] == {}
+    assert action["approval_binding"]["creative_id"] == brief.creative_id
+    assert not {"approval_reference", "approval_fingerprint", "creative_id", "campaign_id"} & set(action["payload"])
     assert seen[0]["tenant_id"] == "t1"
     assert seen[0]["campaign_id"] == "campaign-1"
     with pytest.raises(PermissionError, match="approval_denied"):
@@ -108,3 +112,25 @@ def test_reviewed_ad_uses_existing_visual_action_without_direct_provider_effects
             brief=brief, approval_reference="signed-review-1",
             verify_approval=lambda **kwargs: False, user_id="owner-1",
         )
+
+
+def test_reviewed_image_action_generates_owner_selectable_candidates_and_overlay():
+    from core.actions.catalog_groups import ads_catalog
+    brief = prepare_advertising_creatives(
+        tenant_id="tenant-1", business_id="business-1", campaign_id="campaign-1",
+        headline="Сервис", description="Запись на приём",
+        brand_context="Сдержанный синий стиль", campaign_goal="Записи",
+        kind="image", formats=("square", "story"),
+    )[0]
+    action = build_approved_generation_action(
+        brief=brief, approval_reference="approval-1",
+        verify_approval=lambda **kwargs: True, user_id="owner-1",
+    )
+    payload = action["payload"]
+    assert payload["variants"] == 3
+    assert payload["overlay"]["headline"] == "Сервис"
+    assert payload["overlay"]["formats"] == ["square", "story"]
+    assert action["spend_authorized"] is False
+    schema = ads_catalog()["visual_creative_generate@v1"]
+    assert schema is not None
+    assert action["approval_binding"]["approval_fingerprint"] == brief.approval_fingerprint
