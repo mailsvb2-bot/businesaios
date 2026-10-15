@@ -149,13 +149,14 @@ class JobWorker:
             return self._handle_failure(tenant_id=tenant_id, job=job, report=report, exc=exc, result=None, now=now)
 
         # Ensure a lost lease cannot overwrite the newer owner's outcome.
-        active = self._store.get_active_claim(
-            tenant_id=tenant_id,
-            job_id=job.job_id,
-            owner_id=self._worker_id,
-            fencing_token=(job.lease.fencing_token if job.lease is not None else None),
-        )
-        if active is None:
+        active = self._store.get(tenant_id=tenant_id, job_id=job.job_id)
+        if (
+            active is None
+            or active.lease is None
+            or active.lease.owner_id != self._worker_id
+            or job.lease is None
+            or active.lease.fencing_token != job.lease.fencing_token
+        ):
             return self._replace(report, skipped=report.skipped + 1)
         if result.ok:
             self._store.mark_succeeded(
