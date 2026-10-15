@@ -119,3 +119,39 @@ def require_approved_visual_result(
         raise RuntimeError("advertising_media_hash_invalid")
     return {"creative_id": brief.creative_id, "sha256": sha, "kind": brief.kind,
             "verified_generation": True, "published": False, "spend_authorized": False}
+
+
+def build_approved_generation_action(
+    *, brief: AdvertisingCreativeBrief, approval_reference: str,
+    verify_approval, user_id: str, country_code: str = "",
+) -> dict[str, object]:
+    """Prepare existing visual_creative_generate@v1 ActionIntent payload only.
+
+    Caller must submit through the canonical DecisionCore/Execution path.
+    This function cannot invoke providers, make approvals, or start spending.
+    """
+    if not callable(verify_approval) or not isinstance(approval_reference, str) or not approval_reference.strip():
+        raise PermissionError("advertising_approval_authority_required")
+    if verify_approval(
+        tenant_id=brief.tenant_id, business_id=brief.business_id,
+        campaign_id=brief.campaign_id, creative_id=brief.creative_id,
+        fingerprint=brief.approval_fingerprint, approval_reference=approval_reference,
+    ) is not True:
+        raise PermissionError("advertising_owner_approval_denied")
+    actor = _required(user_id, "user_id", 128)
+    return {
+        "action_type": "visual_creative_generate@v1",
+        "payload": {
+            "tenant_id": brief.tenant_id, "user_id": actor,
+            "kind": brief.kind, "prompt": brief.prompt,
+            "brand_context": brief.brand_fingerprint,
+            "country_code": country_code, "aspect_ratio": "9:16" if "story" in brief.formats else "1:1",
+            "approval_reference": approval_reference,
+            "approval_fingerprint": brief.approval_fingerprint,
+            "creative_id": brief.creative_id,
+            "campaign_id": brief.campaign_id,
+        },
+        "requires_canonical_execution": True,
+        "requires_human_approval": True,
+        "spend_authorized": False,
+    }
