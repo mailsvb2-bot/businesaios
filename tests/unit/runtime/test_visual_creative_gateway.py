@@ -129,3 +129,69 @@ def test_visual_actions_are_known_and_keep_canonical_execution_contracts() -> No
     assert runtime_poll.execution_category == "advisory"
     assert runtime_poll.external_confirmation_mode == "not_required"
     assert runtime_poll.requires_idempotency_key is True
+
+
+def test_creative_direction_is_bounded_and_drops_unverified_marketing_claims() -> None:
+    from runtime._internal.effects_domains.visual_creative_gateway import visual_direction_prompt
+    result = visual_direction_prompt(
+        {"subject": "пекарь", "setting": "пекарня", "light": "тёплый свет",
+         "style": "скидка 30%", "palette": "янтарные тона"},
+        owner_context="пекарь пекарня",
+    )
+    assert result.startswith("Пекарь")
+    assert "скидка" not in result
+    assert len(result) <= 350
+    with pytest.raises(ValueError):
+        visual_direction_prompt({"subject": "кот", "discount": "99%"}, owner_context="кот")
+
+
+def test_visual_variants_are_distinct_and_motion_is_honestly_labelled() -> None:
+    assert visual_creative_idempotency_key(tenant_id="t", decision_id="d", kind="image") != visual_creative_idempotency_key(tenant_id="t", decision_id="d", kind="image", variant=1)
+    assert _job(provider="yandexart_motion")["media_label"] == "animated_banner"
+
+
+def test_visual_generation_routes_candidates_and_render_pack_through_sealed_gateway(monkeypatch) -> None:
+    from runtime._internal.effects_domains import marketing
+
+    requests = []
+
+    def gateway(method, path, payload, *, timeout_s=30, transport=None):
+        requests.append((path, payload))
+        if path.endswith("render-packs"):
+            return {"id": "pack", "status": "succeeded"}
+        return {"id": f"job{len(requests)}", "provider": "yandexart", "scope_id": "tenant-1",
+                "kind": "image", "status": "succeeded", "asset_ready": True}
+
+    monkeypatch.setattr(marketing, "visual_gateway_json", gateway)
+    monkeypatch.setattr(marketing, "assert_called_from_executor", lambda: None)
+    effects = marketing.MarketingEffectsMixin()
+    effects.http_transport = None
+    effects.event_log = Mock()
+    monkeypatch.setattr(effects, "_visual_tenant", lambda tenant_id, op: tenant_id, raising=False)
+    result = effects.generate_visual_creative(
+        decision_id="decision1", correlation_id="correlation1", tenant_id="tenant-1",
+        user_id="user1", kind="image", prompt="булочная", brand_context="пекарь",
+        visual_direction={"subject": "пекарь", "light": "дневной свет"},
+        variants=2, seed=100, overlay={"headline": "Булочная", "formats": ["feed"]},
+    )
+    assert len(result["candidates"]) == 2
+    generation_calls = [payload for path, payload in requests if path.endswith("generations")]
+    assert len(generation_calls) == 2
+    assert generation_calls[0]["idempotency_key"] != generation_calls[1]["idempotency_key"]
+    assert generation_calls[0]["seed"] == 100
+    assert generation_calls[1]["seed"] == 8019
+    assert len([path for path, _ in requests if path.endswith("render-packs")]) == 2
+
+
+@pytest.mark.parametrize("variants", [0, -1, 5, True])
+def test_invalid_visual_variant_count_denied_before_provider(monkeypatch, variants):
+    from runtime._internal.effects_domains import marketing
+    monkeypatch.setattr(marketing, "assert_called_from_executor", lambda: None)
+    monkeypatch.setattr(marketing, "visual_gateway_json", lambda *a, **k: pytest.fail("provider called"))
+    effects = marketing.MarketingEffectsMixin()
+    monkeypatch.setattr(effects, "_visual_tenant", lambda tenant_id, op: tenant_id, raising=False)
+    with pytest.raises(ValueError, match="visual_variants_invalid"):
+        effects.generate_visual_creative(
+            decision_id="d", correlation_id="c", tenant_id="t", user_id="u",
+            kind="image", prompt="пекарня", variants=variants,
+        )
