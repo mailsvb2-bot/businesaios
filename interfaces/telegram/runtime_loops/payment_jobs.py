@@ -90,11 +90,12 @@ class PaymentJobsConfig:
 
 
 class PaymentJobsLoop:
-    def __init__(self, *, decide_fn: Any, execute_fn: Any, payment_outbox: Any, cfg: PaymentJobsConfig):
+    def __init__(self, *, decide_fn: Any, execute_fn: Any, payment_outbox: Any, cfg: PaymentJobsConfig, commercial_reconcile_fn: Any = None):
         self._decide = decide_fn
         self._execute = execute_fn
         self._outbox = payment_outbox
         self._cfg = cfg
+        self._commercial_reconcile = commercial_reconcile_fn
         self._last_ms: int = 0
         self._last_err_ms: dict[str, int] = {}
 
@@ -148,18 +149,23 @@ class PaymentJobsLoop:
 
             try:
                 if payload["event"].startswith("refund."):
-                    # Legacy reconcile_payment@v1 only knows payment terminal
-                    # events. Never turn a refund into a second payment success.
-                    raise RuntimeError("REFUND_REQUIRES_VERIFIED_COMMERCIAL_RECONCILIATION")
-                ws = build_system_world_state(
+                    # Commercial refund is a separate merchant-verified fact.
+                    # Never route it through legacy payment-success decisions.
+                    if self._commercial_reconcile is None:
+                        raise RuntimeError("REFUND_REQUIRES_VERIFIED_COMMERCIAL_RECONCILIATION")
+                    outcome = self._commercial_reconcile(payload)
+                    if outcome is not True:
+                        raise RuntimeError("REFUND_VERIFICATION_NOT_CONFIRMED")
+                else:
+                    ws = build_system_world_state(
                     purpose="payments_webhook_reconcile",
                     tenant_id=current_tenant_id(),
                     meta={"job": payload},
                     user_timezone=env_str("SYSTEM_TZ", "Europe/Amsterdam"),
                     now_ms=self._now_ms(),
                 )
-                env = self._decide(ws)
-                self._execute(env)
+                    env = self._decide(ws)
+                    self._execute(env)
                 try:
                     self._outbox.mark_delivered(job_id)
                 except Exception:
