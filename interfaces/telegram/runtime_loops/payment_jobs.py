@@ -158,12 +158,12 @@ class PaymentJobsLoop:
                         raise RuntimeError("REFUND_VERIFICATION_NOT_CONFIRMED")
                 else:
                     ws = build_system_world_state(
-                    purpose="payments_webhook_reconcile",
-                    tenant_id=current_tenant_id(),
-                    meta={"job": payload},
-                    user_timezone=env_str("SYSTEM_TZ", "Europe/Amsterdam"),
-                    now_ms=self._now_ms(),
-                )
+                        purpose="payments_webhook_reconcile",
+                        tenant_id=current_tenant_id(),
+                        meta={"job": payload},
+                        user_timezone=env_str("SYSTEM_TZ", "Europe/Amsterdam"),
+                        now_ms=self._now_ms(),
+                    )
                     env = self._decide(ws)
                     self._execute(env)
                 try:
