@@ -45,3 +45,37 @@ def test_reviewed_media_reuses_one_existing_publication_owner(kind, mime, refere
                    {"sha256": "wrong"}, {reference: ""}):
         with pytest.raises((RuntimeError, ValueError)):
             convert({**receipt, **change})
+
+
+@pytest.mark.parametrize("destination", [
+    "https://example.org@evil.example/book",
+    "https://example.org/book\\nX-Injected: true",
+    "https://example.org:0/book",
+    "https://example.org:bad/book",
+    "https://example.org:443@evil.example/",
+    "https://example.org\\t.evil.example/",
+    "https://example.org ",
+    "http://example.org/book",
+    "https://localhost/book",
+])
+def test_ad_publication_rejects_misleading_or_unsafe_destinations(destination):
+    brief = prepare_advertising_creatives(
+        tenant_id="t1", business_id="b1", campaign_id="c1",
+        headline="Consultation", description="Booking",
+        brand_context="Blue logo", campaign_goal="Bookings",
+        kind="image", formats=("square",),
+    )[0]
+    receipt = {
+        "tenant_id": brief.tenant_id, "business_id": brief.business_id,
+        "creative_id": brief.creative_id, "approval_fingerprint": brief.approval_fingerprint,
+        "kind": "image", "status": "succeeded", "sha256": "a" * 64,
+        "content_type": "image/png", "size_bytes": 4096,
+        "provider_image_hash": "verified-provider-hash",
+    }
+    with pytest.raises(ValueError, match="advertising_destination"):
+        prepare_reviewed_generated_ad(
+            brief=brief, approved_fingerprint=brief.approval_fingerprint,
+            receipt=receipt, publication_job_id="job-1", platform="yandex_direct",
+            account_id="account-1", approval_reference="approval-1",
+            execution_reference="execution-1", destination_url=destination,
+        )
