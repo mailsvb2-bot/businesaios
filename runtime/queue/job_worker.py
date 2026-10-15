@@ -9,8 +9,9 @@ from __future__ import annotations
 from collections.abc import Callable, Iterator, Mapping
 from contextlib import contextmanager
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import datetime, timedelta
 from threading import Event, Thread
+from time import monotonic
 from typing import Any
 
 from core.tenancy.normalization import require_tenant_id
@@ -110,6 +111,7 @@ class JobWorker:
         normalized_queue_name = str(queue_name or '').strip()
         if not normalized_queue_name:
             raise ValueError('queue_name is required')
+        tick_started = monotonic()
         batch = self._scheduler.select_due_jobs(tenant_id=normalized_tenant_id, queue_name=normalized_queue_name, now=moment)
         report = WorkerTickReport(worker_id=self._worker_id, queue_name=normalized_queue_name, reclaimed_expired_claims=batch.reclaimed_expired_claims)
 
@@ -119,7 +121,10 @@ class JobWorker:
                 job_id=candidate.job_id,
                 owner_id=self._worker_id,
                 lease_seconds=self._lease_seconds,
-                now=moment,
+                # A large due batch may spend substantial time waiting behind
+                # other workers. Lease time must advance with real elapsed time,
+                # even when the scheduler was supplied a fixed clock for tests.
+                now=moment + timedelta(seconds=monotonic() - tick_started),
             )
             if claimed is None:
                 report = self._replace(report, skipped=report.skipped + 1)
@@ -131,20 +136,41 @@ class JobWorker:
         return report
 
     def _run_claimed(self, *, tenant_id: str, job: JobRecord, report: WorkerTickReport, now: datetime) -> WorkerTickReport:
+        # Only execution errors enter retry policy. A failed terminal transition
+        # must never be reclassified as a runner error: another worker may have
+        # legitimately reclaimed the lease in the meantime.
         try:
             with self._lease_heartbeat(job):
                 outcome = self._runner(job)
             result = self._normalize_result(job=job, outcome=outcome)
-            if result.ok:
-                completed_at = normalize_now()
-                self._store.mark_succeeded(tenant_id=tenant_id, job_id=job.job_id, owner_id=self._worker_id, fencing_token=(job.lease.fencing_token if job.lease is not None else None), now=completed_at)
-                return self._replace(report, succeeded=report.succeeded + 1)
-            synthetic_error = result.error or result.status or "runner_reported_failure"
-            return self._handle_failure(tenant_id=tenant_id, job=job, report=report, exc=RuntimeError(synthetic_error), result=result, now=now)
         except LeaseLostError:
             return self._replace(report, skipped=report.skipped + 1)
         except Exception as exc:
             return self._handle_failure(tenant_id=tenant_id, job=job, report=report, exc=exc, result=None, now=now)
+
+        # Ensure a lost lease cannot overwrite the newer owner's outcome.
+        active = self._store.get_active_claim(
+            tenant_id=tenant_id,
+            job_id=job.job_id,
+            owner_id=self._worker_id,
+            fencing_token=(job.lease.fencing_token if job.lease is not None else None),
+        )
+        if active is None:
+            return self._replace(report, skipped=report.skipped + 1)
+        if result.ok:
+            self._store.mark_succeeded(
+                tenant_id=tenant_id,
+                job_id=job.job_id,
+                owner_id=self._worker_id,
+                fencing_token=(job.lease.fencing_token if job.lease is not None else None),
+                now=normalize_now(),
+            )
+            return self._replace(report, succeeded=report.succeeded + 1)
+        synthetic_error = result.error or result.status or "runner_reported_failure"
+        return self._handle_failure(
+            tenant_id=tenant_id, job=job, report=report,
+            exc=RuntimeError(synthetic_error), result=result, now=now,
+        )
 
     def _handle_failure(self, *, tenant_id: str, job: JobRecord, report: WorkerTickReport, exc: Exception, result: JobResult | None, now: datetime) -> WorkerTickReport:
         failure_moment = normalize_now(now)
