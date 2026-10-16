@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 
-const newLesson = () => ({ title: "", content_kind: "link", content_ref: "" });
+const newLesson = () => ({ editor_id: crypto.randomUUID(), title: "", content_kind: "link", content_ref: "" });
 const KINDS = [
   ["link", "Ссылка"], ["text", "Текстовый материал"], ["audio", "Аудио"],
   ["video", "Видео"], ["document", "Документ"], ["image", "Изображение"],
@@ -349,7 +349,7 @@ export function ProgramPublicationWorkspace({ apiBase, apiKey, tenantId, busines
   const continueDraft = (draft) => {
     if (busy || !draft || draft.status !== "draft") return;
     const restoredLessons = (draft.lessons || []).map((item) => ({
-      title: item.title, content_kind: item.content_kind, content_ref: item.content_ref,
+      editor_id: crypto.randomUUID(), title: item.title, content_kind: item.content_kind, content_ref: item.content_ref,
     }));
     const normalized = { title: draft.title, lessons: restoredLessons };
     setTitle(draft.title);
@@ -498,7 +498,7 @@ export function ProgramPublicationWorkspace({ apiBase, apiKey, tenantId, busines
         ) : null}
         <h3>Уроки ({lessons.length} из 100)</h3>
         {lessons.map((item, index) => (
-          <fieldset key={index} disabled={Boolean(busy)}>
+          <fieldset key={item.editor_id} disabled={Boolean(busy)}>
             <legend>Урок {index + 1}</legend>
             <label>Название урока
               <input type="text" maxLength={200} value={item.title}
