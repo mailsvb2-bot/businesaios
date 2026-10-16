@@ -30,6 +30,7 @@ from runtime.ads import (
     EventStoreSpendLedger,
 )
 from bootstrap.ads_write_gateway import AdsWriteGateway
+from runtime.ads.metrics_ingress import AdsMetricsIngress
 from runtime.events import EventLog
 from runtime.platform.config.env_flags import env_bool, env_csv, env_float
 from runtime.platform.outbox.ads_token_store_sqlite import SqliteAdsTokenStore
@@ -99,6 +100,11 @@ def build_ads_runtime(*, tenant_paths: TenantPaths, event_store: Any, event_log:
     )
 
     return AdsRuntime(read=AdsReadService(registry=read_registry), write_gateway=write_gateway)
+
+
+def build_ads_metrics_ingress(*, ads_runtime: AdsRuntime, event_store: Any) -> AdsMetricsIngress:
+    """Read-only connector observations into canonical Event Store, no second ads owner."""
+    return AdsMetricsIngress(read_service=ads_runtime.read, event_store=event_store)
 
 
 class _AdsRuntimePort(AdsPort):
