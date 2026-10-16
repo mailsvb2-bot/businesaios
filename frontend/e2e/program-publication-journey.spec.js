@@ -36,6 +36,8 @@ test("owner creates and publishes a multi-lesson program through the canonical c
   await panel.getByLabel("Ссылка HTTPS или идентификатор сохранённого материала")
     .fill("https://example.org/lesson-one");
   await panel.getByRole("button", { name: "Добавить урок" }).click();
+  await expect(panel.getByRole("heading", { name: "Уроки (2 из 100)" })).toBeVisible();
+  await expect(panel.getByLabel("Название урока")).toHaveCount(2);
   await panel.getByLabel("Название урока").nth(1).fill("Практическое занятие");
   await panel.getByLabel("Тип материала").nth(1).selectOption("task");
   await panel.getByLabel("Ссылка HTTPS или идентификатор сохранённого материала")
