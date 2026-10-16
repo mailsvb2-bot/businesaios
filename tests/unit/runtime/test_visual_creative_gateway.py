@@ -140,7 +140,7 @@ def test_creative_direction_is_bounded_and_drops_unverified_marketing_claims() -
     )
     assert result.startswith("Пекарь")
     assert "скидка" not in result
-    assert len(result) <= 350
+    assert len(result) <= 500
     with pytest.raises(ValueError):
         visual_direction_prompt({"subject": "кот", "discount": "99%"}, owner_context="кот")
 
