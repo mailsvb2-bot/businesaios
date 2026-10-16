@@ -71,6 +71,14 @@ def build_system_boot_surface(
                 owned_event_store_stack
             )
 
+    if resolved_shared.get("marketing_llm") is None:
+        import logging
+
+        from runtime.boot.builders.marketing_llm import build_marketing_llm_agent
+
+        resolved_shared["marketing_llm"] = build_marketing_llm_agent(
+            settings=None, event_store=resolved_shared["canonical_business_event_store"], logger=logging.getLogger("llm"),
+        )
     try:
         dependency_container = FastAPIDependencyContainer(
             boot_result=app_boot_surface.result,
