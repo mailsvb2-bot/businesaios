@@ -146,6 +146,9 @@ class FastAPIDependencyContainer:
         store = getattr(_resolve_runtime_infra(self.boot_result), "event_store", None)
         return store if store is not None else getattr(self.boot_result.decision_application, "event_store", None)
 
+    def marketing_llm_agent(self) -> object | None:
+        return self._shared("marketing_llm")
+
     def shutdown(self) -> None:
         close = getattr(self._shared("canonical_business_event_store_stack"), "close", None)
         if callable(close):

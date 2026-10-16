@@ -22,6 +22,7 @@ _TASK_CONTEXT_FIELDS: dict[TaskType, tuple[str, ...]] = {
     TaskType.ADS_CREATIVE_CRITIQUE: ("business", "offer", "audience", "campaign", "constraints"),
     TaskType.ADS_PLAN_BUILD: ("business", "offer", "audience", "campaign", "metrics", "constraints"),
     TaskType.ADS_ANALYTICS_SUMMARY: ("business", "campaign", "metrics", "constraints"),
+    TaskType.ADS_VISUAL_SCENE: ("offer", "constraints"),
     TaskType.OFFER_GENERATE: ("business", "offer", "audience", "constraints"),
     TaskType.OFFER_RISK_REDUCE: ("business", "offer", "audience", "constraints"),
     TaskType.PRICING_SUGGEST: ("business", "offer", "audience", "metrics", "constraints"),
@@ -148,6 +149,14 @@ def build_user_prompt(
             "Сделай аналитическую сводку по метрикам: что работает/не работает и что делать дальше.\n"
             "Формат JSON:\n"
             "{ summary, problems:[...], next_actions:[...], experiments:[...] }\n\n"
+            f"INPUT:\n{json.dumps(payload, ensure_ascii=False)}"
+        )
+    if task == TaskType.ADS_VISUAL_SCENE:
+        return (
+            "Ты арт-директор рекламного кадра. Разбери запрос как сцену и верни только JSON-объект с ключами "
+            "subject, action, setting, mood, light, angle, style, palette, before, process, after. "
+            "subject — кто или что в кадре, action — что видно в действии; before/process/after заполняй "
+            "только если в запросе есть изменение состояния. Без цифр, цен, брендов и текста в кадре.\n\n"
             f"INPUT:\n{json.dumps(payload, ensure_ascii=False)}"
         )
     if task == TaskType.OFFER_GENERATE:

@@ -13,7 +13,7 @@ from core.llm.templated import TemplatedLLM
 
 from .guardrails import validate_creative
 from .models import CreativeCandidate, CreativeGuardrails, CreativeSelection
-from .prompting import CreativeBrief, build_messages
+from .prompting import CreativeBrief, build_messages, parse_scene_json, scene_from_text
 
 _FIELD_NAMES = {"headline", "primary", "description", "cta"}
 _CTA_VALUES = {
@@ -283,6 +283,16 @@ def select_creative(
 
     best = max(candidates, key=lambda cc: scores.get(cc.creative_id, -1.0))
     return CreativeSelection(selected=best, reason="heuristic_best", scores=scores, guardrails_ok=ok_any)
+
+
+def visual_scene_breakdown(llm: LLMAgent | None, ctx: LLMTaskContext, request: str) -> dict[str, str]:
+    """Use canonical LLMAgent; deterministic rule fallback on unavailable response."""
+    try:
+        res = llm.run_task(TaskType.ADS_VISUAL_SCENE, ctx) if llm is not None else None
+        scene = parse_scene_json(res.json or res.text) if res is not None else None
+    except Exception:
+        scene = None
+    return scene or scene_from_text(request)
 
 
 @dataclass(frozen=True)

@@ -65,7 +65,9 @@ def run() -> tuple[bool, str]:
     if not tests:
         return True, "targeted-domain checks passed: changed Python compiled; no matching domain tests"
 
-    mark_expression = "not slow and not integration and not gate"
+    # Run matching domain tests even when every selected test carries the integration marker.
+    # The previous filter silently deselected the entire impacted-domain matrix.
+    mark_expression = "not slow and not gate"
     chunk_size = max(1, int(os.environ.get("TARGETED_DOMAIN_CHUNK_SIZE", "40")))
     chunks = _chunks(tests, chunk_size)
     collected_chunks = 0

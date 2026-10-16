@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from typing import Any
 
+from core.growth.ads.creative.prompting import scene_from_text, scene_key_elements
+
 from runtime._internal.effects_clients.visual_gateway_client import visual_gateway_json
 from runtime._internal.effects_domains.visual_creative_gateway import (
     VISUAL_NEGATIVE_PROMPT,
@@ -13,6 +15,7 @@ from runtime._internal.effects_domains.visual_creative_gateway import (
 )
 from runtime._internal.effects_tenant import assert_event_log_tenant
 from runtime.observability.error_handling import swallow
+from runtime.platform.config.env_flags import env_bool
 from runtime.security.runtime_asserts import assert_called_from_executor
 
 
@@ -67,8 +70,11 @@ class MarketingEffectsMixin:
         visual_kind, visual_prompt = str(kind or "").strip().lower(), str(prompt or "").strip()
         if visual_kind not in {"image", "video"} or not visual_prompt:
             raise ValueError("valid visual kind and prompt are required")
+        owner_context = f"{visual_prompt} {brand_context}"
+        if visual_direction is None and "before" in (scene := scene_from_text(visual_prompt)):
+            visual_direction = scene
         if visual_direction is not None:
-            visual_prompt = visual_direction_prompt(visual_direction, owner_context=f"{visual_prompt} {brand_context}")
+            visual_prompt = visual_direction_prompt(visual_direction, owner_context=owner_context)
             negative_prompt = negative_prompt or VISUAL_NEGATIVE_PROMPT
         if type(variants) is not int or not 1 <= variants <= 4 or (visual_kind == "video" and variants != 1):
             raise ValueError("visual_variants_invalid")
@@ -88,6 +94,8 @@ class MarketingEffectsMixin:
                 payload["seed"] = variant_seed
             job = visual_creative_job_payload(visual_gateway_json("POST", "/v1/creative/generations", payload, timeout_s=max(30, wait + 15), transport=self.http_transport))
             assert_visual_creative_binding(tenant_id=tenant, job=job, expected_kind=visual_kind)
+            if visual_direction is not None and env_bool("VISUAL_SEMANTIC_RETRY", True):
+                job = self._visual_quality_retry(job, payload, key, dict(visual_direction), owner_context, tenant, wait)
             if overlay and job["status"] == "succeeded":
                 pack = visual_gateway_json("POST", "/v1/creative/render-packs", {"source_job_id": job["id"], "scope_id": tenant, "idempotency_key": key + ":render", "formats": list(overlay.get("formats") or ["feed"]), "composition": {k: v for k, v in overlay.items() if k != "formats"}}, timeout_s=300, transport=self.http_transport)
                 job["render_pack"] = {k: pack.get(k) for k in ("id", "status", "error_code")}
@@ -95,6 +103,29 @@ class MarketingEffectsMixin:
         event_type = "visual_creative_generated" if jobs[0]["status"] == "succeeded" else "visual_creative_submitted"
         result = self._visual_result(tenant=tenant, user=user, decision=decision, correlation=correlation, job=jobs[0], event_type=event_type)
         return {**result, "candidates": jobs} if variants > 1 else result
+
+    def _visual_quality_retry(self, job: dict[str, Any], payload: dict[str, Any], key: str, direction: dict[str, str], owner_context: str, tenant: str, wait: int) -> dict[str, Any]:
+        """One bounded regeneration on provider failure or semantic QA review."""
+        elements, missing = scene_key_elements(direction), []
+        if job["status"] == "succeeded" and job["kind"] == "image":
+            request = ("; ".join(f"видно: {item}" for item in elements) + ". " + payload["prompt"])[:1500]
+            contract = {"version": 1, "kind": "image", "country_code": payload["country_code"], "owner_request": request, "semantic_flags": []}
+            try:
+                qa = visual_gateway_json("POST", f"/v1/creative/generations/{job['id']}/semantic-qa", {"scope_id": tenant, "contract": contract}, timeout_s=60, transport=self.http_transport)
+            except Exception:
+                qa = {"status": "unavailable"}
+            job["semantic_qa"] = str(qa.get("status") or "unavailable") if isinstance(qa, dict) else "unavailable"
+            if job["semantic_qa"] != "needs_review":
+                return job
+            issues = " ".join(str(item) for item in qa.get("issues") or ()).casefold()
+            missing = [item for item in elements if item.casefold()[:12] in issues]
+        elif job["status"] != "failed":
+            return job
+        emphasis = "; ".join(missing or elements)
+        retry = {**payload, "idempotency_key": key + (":q1" if job["status"] == "succeeded" else ":r1"), "prompt": visual_direction_prompt(direction, owner_context=owner_context, emphasis=emphasis)}
+        fresh = visual_creative_job_payload(visual_gateway_json("POST", "/v1/creative/generations", retry, timeout_s=max(30, wait + 15), transport=self.http_transport))
+        assert_visual_creative_binding(tenant_id=tenant, job=fresh, expected_kind=job["kind"])
+        return {**fresh, "retry_of": job["id"]}
 
     def poll_visual_creative(self, *, decision_id: str, correlation_id: str, tenant_id: str, user_id: str, job_id: str) -> dict[str, Any]:
         assert_called_from_executor()

@@ -1,6 +1,7 @@
 """Verified owner commercial API; uses the canonical order/invoice/offer owners."""
 from __future__ import annotations
 
+import asyncio
 import hashlib
 import json
 from dataclasses import asdict
@@ -13,7 +14,7 @@ from contracts.customer import CustomerNotFound, CustomerStatus
 CANON_PHASE18_COMMERCIAL_OWNER_API = True
 
 
-def register_business_workspace_commercial_routes(*, router: APIRouter, auth_bundle, purchases, checkout=None, context_reader=None, settlement=None, partner_registry=None, provider_handlers=None, customers=None):
+def register_business_workspace_commercial_routes(*, router: APIRouter, auth_bundle, purchases, checkout=None, context_reader=None, settlement=None, partner_registry=None, provider_handlers=None, customers=None, scene_agent=None):
     def scope(request):
         _, tenant, business = business_owner_scope(request=request, auth_bundle=auth_bundle)
         return tenant, business
@@ -24,6 +25,8 @@ def register_business_workspace_commercial_routes(*, router: APIRouter, auth_bun
         from application.visual_creative_semantics.phase18_advertising_studio import (
             prepare_advertising_creatives,
         )
+        from core.growth.ads.creative.pipeline import visual_scene_breakdown
+        from core.llm.agent import LLMTaskContext
 
         tenant, business = scope(request)
         body = await json_body(request)
@@ -33,6 +36,9 @@ def register_business_workspace_commercial_routes(*, router: APIRouter, auth_bun
             raise HTTPException(status_code=422, detail="advertising_brief_fields_invalid")
         if not isinstance(body.get("formats"), list):
             raise HTTPException(status_code=422, detail="advertising_formats_invalid")
+        request_text = f"{body.get('headline')}. {body.get('description')}"
+        scene = await asyncio.to_thread(visual_scene_breakdown, scene_agent, LLMTaskContext(
+            tenant_id=tenant, offer={"request": request_text}, correlation_key=f"ad-scene:{business}"), request_text)
         try:
             variants = prepare_advertising_creatives(
                 tenant_id=tenant, business_id=business,
@@ -40,7 +46,7 @@ def register_business_workspace_commercial_routes(*, router: APIRouter, auth_bun
                 description=body["description"], brand_context=body["brand_context"],
                 campaign_goal=body["campaign_goal"], kind=body["kind"],
                 formats=tuple(body["formats"]),
-                country_code=body.get("country_code", ""),
+                country_code=body.get("country_code", ""), scene=scene,
             )
         except (TypeError, ValueError, AttributeError) as exc:
             raise HTTPException(status_code=422, detail="advertising_brief_invalid") from exc

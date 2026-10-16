@@ -20,7 +20,7 @@ def test_three_deterministic_ad_drafts_without_implicit_publication(kind):
     assert len({item.creative_id for item in first}) == 3
     assert all(row.generation_status == "draft" and row.publication_status == "not_authorized"
                and row.spend_authorized is False for row in first)
-    assert all("fake reviews" in row.prompt for row in first)
+    assert all(row.prompt.startswith("Рекламный") and "Avoid" not in row.prompt for row in first)
     for variation in ("other tenant", "different brand"):
         modified = dict(args)
         if variation == "other tenant":

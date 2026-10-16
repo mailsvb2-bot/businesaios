@@ -8,6 +8,7 @@ class TaskType(str, Enum):
     ADS_CREATIVE_CRITIQUE = "ads.creative.critique"
     ADS_PLAN_BUILD = "ads.plan.build"
     ADS_ANALYTICS_SUMMARY = "ads.analytics.summary"
+    ADS_VISUAL_SCENE = "ads.visual.scene"
 
     OFFER_GENERATE = "offer.generate"
     OFFER_RISK_REDUCE = "offer.risk_reduce"

@@ -10,12 +10,15 @@ import json
 from collections.abc import Mapping
 from dataclasses import dataclass
 
+from core.growth.ads.creative.prompting import parse_scene_json, scene_from_text
+
 CANON_PHASE18_AD_STUDIO_ADVISORY_ONLY = True
 ANGLES = (
-    ("human_trust", "Credible professional presence, natural light, no invented endorsements."),
-    ("clear_process", "Show the next practical service step with uncluttered copy space."),
-    ("calm_value", "Show everyday usefulness without guarantees or dramatic before/after."),
+    ("human_trust", "живой специалист в работе, естественный свет, спокойная достоверная атмосфера"),
+    ("clear_process", "крупно ключевой шаг услуги, чистый фон, свободное место под текст"),
+    ("calm_value", "результат в повседневной жизни клиента, мягкий свет, аккуратная композиция"),
 )
+AD_NEGATIVE_PROMPT = "выдуманные отзывы, цифры, цены, медицинские обещания, ложная срочность, надписи, логотипы, водяной знак"
 FORMATS = {"square": (1080, 1080), "feed": (1080, 1350),
            "story": (1080, 1920), "landscape": (1200, 628)}
 
@@ -41,6 +44,7 @@ class AdvertisingCreativeBrief:
     brand_fingerprint: str
     brand_context: str
     approval_fingerprint: str
+    visual_direction: tuple[tuple[str, str], ...] = ()
     generation_status: str = "draft"
     publication_status: str = "not_authorized"
     spend_authorized: bool = False
@@ -49,7 +53,7 @@ class AdvertisingCreativeBrief:
 def prepare_advertising_creatives(
     *, tenant_id: str, business_id: str, campaign_id: str, headline: str,
     description: str, brand_context: str, kind: str, formats: tuple[str, ...],
-    campaign_goal: str, country_code: str = "",
+    campaign_goal: str, country_code: str = "", scene: Mapping[str, str] | None = None,
 ) -> tuple[AdvertisingCreativeBrief, ...]:
     scope = {name: _required(value, name, limit) for name, value, limit in (
         ("tenant_id", tenant_id, 128), ("business_id", business_id, 128),
@@ -70,24 +74,19 @@ def prepare_advertising_creatives(
     brand_digest = hashlib.sha256(scope["brand_context"].encode()).hexdigest()
     rows = []
     for angle, direction in ANGLES:
+        shot = parse_scene_json(dict(scene or {})) or scene_from_text(f"{scope['headline']}. {scope['description']}")
+        shot["style"] = direction
         subject = {
             "tenant_id": scope["tenant_id"], "business_id": scope["business_id"],
             "campaign_id": scope["campaign_id"], "headline": scope["headline"],
             "description": scope["description"], "brand_fingerprint": brand_digest,
             "goal": scope["campaign_goal"], "kind": kind,
-            "angle": angle, "formats": normalized, "country_code": country,
+            "angle": angle, "formats": normalized, "country_code": country, "scene": shot,
         }
         fingerprint = hashlib.sha256(json.dumps(
             subject, ensure_ascii=False, sort_keys=True, separators=(",", ":"),
         ).encode()).hexdigest()
-        prompt = (
-            f"Create a {kind} advertising asset. Goal: {scope['campaign_goal']}. "
-            f"Service: {scope['headline']}. Context: {scope['description']}. "
-            f"Visual direction: {direction} Brand context: {scope['brand_context']}. "
-            "Avoid fake reviews, invented statistics, medical or income guarantees, "
-            "misleading urgency, or before/after transformation claims. "
-            "Leave copy space; typography is applied by the approved compositor."
-        )
+        prompt = f"Рекламный {'видеоролик' if kind == 'video' else 'кадр'}: {shot.get('action') or shot['subject']}. {direction}."
         rows.append(AdvertisingCreativeBrief(
             tenant_id=scope["tenant_id"], business_id=scope["business_id"],
             campaign_id=scope["campaign_id"], creative_id="ad_" + fingerprint[:24],
@@ -95,6 +94,7 @@ def prepare_advertising_creatives(
             headline=scope["headline"], description=scope["description"],
             formats=normalized, brand_fingerprint=brand_digest,
             brand_context=scope["brand_context"], approval_fingerprint=fingerprint,
+            visual_direction=tuple(shot.items()),
         ))
     return tuple(rows)
 
@@ -145,7 +145,8 @@ def build_approved_generation_action(
         "payload": {
             "tenant_id": brief.tenant_id, "user_id": actor,
             "kind": brief.kind, "prompt": brief.prompt,
-            "brand_context": brief.brand_context,
+            "brand_context": brief.brand_context, "negative_prompt": AD_NEGATIVE_PROMPT,
+            "visual_direction": dict(brief.visual_direction),
             "country_code": country_code, "aspect_ratio": "9:16" if "story" in brief.formats else "1:1",
             "variants": 3 if brief.kind == "image" else 1,
             "overlay": {"headline": brief.headline, "body": brief.description,
