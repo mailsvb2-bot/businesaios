@@ -5,17 +5,20 @@ import re
 from collections.abc import Mapping
 from typing import Any
 
+from core.growth.ads.creative.prompting import SCENE_FIELDS
+from runtime.platform.config.env_flags import env_bool
+
 _JOB_ID_RE = re.compile(r"[A-Za-z0-9_-]{1,128}")
 _SCOPE_ID_RE = re.compile(r"[A-Za-z0-9_.:@/-]{1,160}")
 
 
-_DIRECTION_FIELDS = ("subject", "action", "setting", "light", "angle", "style", "palette")
-_DIRECTION_LABELS = {"light": "Свет", "angle": "Ракурс", "style": "Стиль", "palette": "Палитра"}
-_FACT_RE = re.compile(r"\d|%|₽|\$|€|руб|скидк|акци|бесплатн|гаранти|лучш|№|сертифик|наград|отзыв|цена|стоимост", re.I)
-VISUAL_NEGATIVE_PROMPT = "водяной знак, надпись, буквы, текст, искажённые руки, размытость, низкое качество"
+_DIRECTION_FIELDS = SCENE_FIELDS
+_DIRECTION_LABELS = {"mood": "Настроение", "light": "Свет", "angle": "Ракурс", "style": "Стиль", "palette": "Палитра"}
+_FACT_RE = re.compile(r"\d|%|₽|\$|€|руб|скидк|акци|бесплатн|гаранти|лучш|№|сертифик|наград|отзыв|цена|стоимост|[A-Za-z]{2,}", re.I)
+VISUAL_NEGATIVE_PROMPT = "водяной знак, надпись, буквы, текст, логотип, искажённые руки, лишние пальцы, размытость, низкое качество"
 
 
-def visual_direction_prompt(value: object, *, owner_context: str) -> str:
+def visual_direction_prompt(value: object, *, owner_context: str, emphasis: str = "") -> str:
     if not isinstance(value, Mapping) or not set(value) <= set(_DIRECTION_FIELDS):
         raise ValueError("visual_direction_invalid")
     context = owner_context.casefold()
@@ -30,11 +33,19 @@ def visual_direction_prompt(value: object, *, owner_context: str) -> str:
         clean[key] = item.rstrip(".")
     if not clean["subject"]:
         raise ValueError("visual_direction_subject_required")
-    parts = [", ".join(clean[k] for k in ("subject", "action", "setting") if clean[k])]
+    head = ": ".join(x for x in (clean["action"], ", ".join(clean[k] for k in ("subject", "setting") if clean[k])) if x)
+    parts = [head]
+    if clean["before"] and clean["after"] and env_bool("VISUAL_TRANSFORMATION_DIPTYCH", True):
+        steps = [("до", clean["before"])] + ([("процесс", clean["process"])] if clean["process"] else []) + [("после", clean["after"])]
+        layout = "Триптих, три кадра слева направо" if len(steps) == 3 else "Диптих, два кадра слева направо"
+        parts[0] = f"{layout}, один и тот же объект: " + "; ".join(f"{i}) {n}: {t}" for i, (n, t) in enumerate(steps, 1))
+        parts.append(head)
+    if emphasis:
+        parts.append(f"Обязательно видно: {emphasis[:120]}")
     parts.extend(f"{_DIRECTION_LABELS[k]}: {clean[k]}" for k in _DIRECTION_LABELS if clean[k])
-    while len(prompt := ". ".join(parts) + ".") > 350 and len(parts) > 1:
+    while len(prompt := ". ".join(parts) + ".") > 500 and len(parts) > 1:
         parts.pop()
-    return prompt[0].upper() + prompt[1:350]
+    return prompt[0].upper() + prompt[1:500]
 
 
 def visual_creative_idempotency_key(*, tenant_id: str, decision_id: str, kind: str, variant: int = 0) -> str:
