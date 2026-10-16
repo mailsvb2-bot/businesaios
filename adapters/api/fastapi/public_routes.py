@@ -391,6 +391,7 @@ def register_public_api_routes(
                 purchases=commercial_purchases, checkout=commercial_checkout,
                 context_reader=commercial_context, settlement=commercial_settlement,
                 provider_handlers=provider_handlers, customers=canonical_customers,
+                scene_agent=getattr(dependency_container, "marketing_llm_agent", lambda: None)(),
                 partner_registry=PartnerRegistry(
                     event_store=event_store,
                     idempotency_store=dependency_container.api_idempotency_store,
