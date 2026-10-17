@@ -94,7 +94,7 @@ def llm_generate_gigachat(*, base_url: str, api_key: str, payload: dict[str, Any
     base = str(base_url or "").strip().rstrip("/")
     return llm_post_json(
         provider="gigachat",
-        url=base + "/chat/completions",
+        url=base if base.endswith("/chat/completions") else base + "/chat/completions",
         api_key=api_key,
         payload=payload,
         timeout_s=timeout_s,
