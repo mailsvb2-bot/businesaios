@@ -4,7 +4,7 @@ import time
 from typing import Any
 from uuid import uuid4
 
-from runtime._internal.http_transport import form_urlencode, sync_post_json, sync_request
+from runtime._internal.http_transport import form_urlencode as encode_oauth_form, sync_post_json, sync_request
 from runtime.observability.error_handling import swallow
 from runtime.platform.config.env_flags import env_str
 
@@ -104,7 +104,7 @@ def _gigachat_access_token(api_key: str, timeout_s: int) -> str:
         raise RuntimeError("gigachat_oauth_endpoint_untrusted")
     resp = sync_request(
         method="POST", url=url, timeout_s=float(timeout_s or 20),
-        body=form_urlencode({"scope": env_str("GIGACHAT_SCOPE", "GIGACHAT_API_PERS").strip()}),
+        body=encode_oauth_form({"scope": env_str("GIGACHAT_SCOPE", "GIGACHAT_API_PERS").strip()}),
         headers={"Authorization": f"Basic {key}", "RqUID": str(uuid4()),
                  "Accept": "application/json", "Content-Type": "application/x-www-form-urlencoded"},
     )
