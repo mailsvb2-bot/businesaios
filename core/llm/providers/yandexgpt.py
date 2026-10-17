@@ -5,7 +5,6 @@ from dataclasses import dataclass
 from typing import Any
 
 from ..contracts import LLMClient, LLMMessage, LLMRequest, LLMResponse, LLMUsage
-from ..redaction import safe_metadata
 
 YandexGPTTransport = Callable[[str, str, dict[str, Any], int], dict[str, Any]]
 
@@ -28,8 +27,6 @@ class YandexGPTClient(LLMClient):
             },
             "messages": _messages(req.messages),
         }
-        if req.metadata:
-            payload["metadata"] = safe_metadata(req.metadata)
         return payload
 
     def generate_sync(self, req: LLMRequest) -> LLMResponse:

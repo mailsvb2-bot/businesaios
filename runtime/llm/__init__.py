@@ -4,6 +4,9 @@ from __future__ import annotations
 
 from collections.abc import Callable, Mapping
 from dataclasses import replace
+from urllib.parse import urlsplit
+
+from runtime.platform.config.env_flags import env_str
 
 from core.llm import (
     LLMClient,
@@ -41,7 +44,7 @@ _PROVIDER_DEFAULTS = {
         "model": "GigaChat",
     },
     "yandexgpt": {
-        "base_url": "",
+        "base_url": "https://llm.api.cloud.yandex.net/foundationModels/v1/completion",
         "model": "yandexgpt-lite",
     },
 }
@@ -55,7 +58,7 @@ _PROVIDER_KEYS = {
 
 
 def normalize_provider(provider: str | None) -> str:
-    value = str(provider or "openai_compat").strip().lower()
+    value = str(provider or "yandexgpt").strip().lower()
     aliases = {
         "openai": "openai_compat",
         "openai_compat": "openai_compat",
@@ -66,7 +69,7 @@ def normalize_provider(provider: str | None) -> str:
         "yandex": "yandexgpt",
         "yandexgpt": "yandexgpt",
     }
-    return aliases.get(value, value or "openai_compat")
+    return aliases.get(value, value or "yandexgpt")
 
 
 def resolve_runtime_llm_settings(
@@ -127,6 +130,21 @@ def build_runtime_llm_client(
         raise RuntimeError("llm_api_key_missing")
     if not default_model:
         raise RuntimeError("llm_model_missing")
+    parsed = urlsplit(base)
+    hostname = (parsed.hostname or "").lower()
+    trusted = ("yandex.net", "yandexcloud.net", "yandex.ru", "cloud.ru", "sberbank.ru", "sber.ru")
+    extra = tuple(v.strip().lower() for v in env_str("LLM_SOVEREIGN_HOSTS", "").split(",") if v.strip())
+    if normalized == "anthropic":
+        raise RuntimeError("llm_provider_forbidden:anthropic")
+    if env_str("LLM_ALLOW_FOREIGN_PROVIDERS", "0") != "1" and (
+        parsed.scheme != "https" or not any(hostname == host or hostname.endswith("." + host) for host in trusted + extra)
+    ):
+        raise RuntimeError("llm_provider_non_sovereign_host")
+    if normalized == "yandexgpt" and not default_model.startswith("gpt://"):
+        folder = env_str("YANDEXGPT_FOLDER_ID", "").strip() or env_str("YANDEX_FOLDER_ID", "").strip()
+        if not folder:
+            raise RuntimeError("llm_yandex_folder_id_missing")
+        default_model = f"gpt://{folder}/{default_model.removesuffix('/latest')}/latest"
 
     if normalized == "openai_compat":
         if openai_transport is None:

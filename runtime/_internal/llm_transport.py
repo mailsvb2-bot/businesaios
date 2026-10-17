@@ -1,8 +1,10 @@
 from __future__ import annotations
 
+import time
 from typing import Any
+from uuid import uuid4
 
-from runtime._internal.http_transport import sync_post_json
+from runtime._internal.http_transport import form_urlencode as encode_oauth_form, sync_post_json, sync_request
 from runtime.observability.error_handling import swallow
 from runtime.platform.config.env_flags import env_str
 
@@ -90,12 +92,36 @@ def llm_generate_anthropic(*, base_url: str, api_key: str, payload: dict[str, An
         payload=payload,
         timeout_s=timeout_s,
     )
+_GIGACHAT_TOKENS: dict[str, tuple[str, float]] = {}
+
+def _gigachat_access_token(api_key: str, timeout_s: int) -> str:
+    key = str(api_key or "").strip()
+    token, expires_at = _GIGACHAT_TOKENS.get(key, ("", 0.0))
+    if token and expires_at - 60 > time.time():
+        return token
+    url = env_str("GIGACHAT_AUTH_URL", "https://ngw.devices.sberbank.ru:9443/api/v2/oauth").strip()
+    if url != "https://ngw.devices.sberbank.ru:9443/api/v2/oauth":
+        raise RuntimeError("gigachat_oauth_endpoint_untrusted")
+    resp = sync_request(
+        method="POST", url=url, timeout_s=float(timeout_s or 20),
+        body=encode_oauth_form({"scope": env_str("GIGACHAT_SCOPE", "GIGACHAT_API_PERS").strip()}),
+        headers={"Authorization": f"Basic {key}", "RqUID": str(uuid4()),
+                 "Accept": "application/json", "Content-Type": "application/x-www-form-urlencoded"},
+    )
+    _raise_for_transport_failure(provider="gigachat_oauth", url=url, response=resp)
+    data = resp.json if isinstance(resp.json, dict) else {}
+    token = str(data.get("access_token") or "").strip()
+    if not token:
+        raise RuntimeError("gigachat_oauth_missing_token")
+    _GIGACHAT_TOKENS[key] = (token, float(data.get("expires_at") or 0) / 1000.0 or time.time() + 1500)
+    return token
+
 def llm_generate_gigachat(*, base_url: str, api_key: str, payload: dict[str, Any], timeout_s: int = 20) -> dict[str, Any]:
     base = str(base_url or "").strip().rstrip("/")
     return llm_post_json(
         provider="gigachat",
-        url=base + "/chat/completions",
-        api_key=api_key,
+        url=base if base.endswith("/chat/completions") else base + "/chat/completions",
+        api_key=_gigachat_access_token(api_key, timeout_s),
         payload=payload,
         timeout_s=timeout_s,
     )
