@@ -73,3 +73,54 @@ def test_scene_changes_approval_fingerprint():
     llm = prepare_advertising_creatives(**kwargs, scene={"subject": "диван", "action": "мастер чистит диван"})
     assert dict(llm[0].visual_direction)["action"] == "мастер чистит диван"
     assert rule[0].approval_fingerprint != llm[0].approval_fingerprint
+
+
+def _marketing_effects(monkeypatch, gateway):
+    from runtime._internal.effects_domains import marketing
+    monkeypatch.setattr(marketing, "visual_gateway_json", gateway)
+    monkeypatch.setattr(marketing, "assert_called_from_executor", lambda: None)
+    effects = marketing.MarketingEffectsMixin()
+    effects.http_transport, effects.event_log = None, Mock()
+    monkeypatch.setattr(effects, "_visual_tenant", lambda tenant_id, op: tenant_id, raising=False)
+    return effects
+
+
+@pytest.mark.parametrize(("qa", "should_retry"), [
+    ({"status": "needs_review", "issues": ["не видно: собака ловит мяч"], "summary": ""}, True),
+    ({"status": "pass", "issues": [], "summary": ""}, False),
+    (RuntimeError("gateway unavailable"), False),
+])
+def test_semantic_qa_is_bounded_and_fails_safe(monkeypatch, qa, should_retry):
+    calls = []
+    def gateway(method, path, payload, *, timeout_s=30, transport=None):
+        calls.append((path, payload))
+        if path.endswith("semantic-qa"):
+            if isinstance(qa, Exception):
+                raise qa
+            return qa
+        return {"id": f"j{len(calls)}", "provider": "yandexart", "scope_id": "t",
+                "kind": "image", "status": "succeeded", "asset_ready": True}
+    result = _marketing_effects(monkeypatch, gateway).generate_visual_creative(
+        decision_id="d", correlation_id="c", tenant_id="t", user_id="u", kind="image",
+        prompt="собака в парке", visual_direction={"subject": "собака", "action": "собака ловит мяч", "setting": "парк"})
+    qa_calls = [p for url, p in calls if url.endswith("semantic-qa")]
+    generations = [p for url, p in calls if url.endswith("generations")]
+    assert len(qa_calls) == 1
+    assert len(generations) == (2 if should_retry else 1)
+    if should_retry:
+        assert generations[1]["idempotency_key"].endswith(":q1")
+        assert "Обязательно видно" in generations[1]["prompt"]
+    assert result is not None
+
+
+def test_semantic_qa_can_be_disabled_without_network_call(monkeypatch):
+    monkeypatch.setenv("VISUAL_SEMANTIC_RETRY", "0")
+    paths = []
+    def gateway(method, path, payload, *, timeout_s=30, transport=None):
+        paths.append(path)
+        return {"id": "j", "provider": "yandexart", "scope_id": "t",
+                "kind": "image", "status": "succeeded", "asset_ready": True}
+    _marketing_effects(monkeypatch, gateway).generate_visual_creative(
+        decision_id="d", correlation_id="c", tenant_id="t", user_id="u", kind="image",
+        prompt="кот", visual_direction={"subject": "кот"})
+    assert paths == ["/v1/creative/generations"]
