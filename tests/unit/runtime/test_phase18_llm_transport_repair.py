@@ -56,7 +56,7 @@ def test_yandex_model_uri_and_metadata_not_sent(monkeypatch):
         api_key="dummy", model="yandexgpt-lite",
         yandexgpt_transport=lambda base, key, body, timeout: captured.append(body) or {"result": {"alternatives": [{"message": {"text": "ok"}}]}})
     from core.llm.contracts import LLMMessage, LLMRequest
-    request = LLMRequest(messages=[LLMMessage(role="user", content="hello")], metadata={"tenant_id": "secret"})
+    request = LLMRequest(messages=[LLMMessage(role="user", content="hello")], model="yandexgpt-lite", metadata={"tenant_id": "secret"})
     client.generate_sync(request)
     assert captured[0]["modelUri"] == "gpt://folder/yandexgpt-lite/latest"
     assert "metadata" not in captured[0]
