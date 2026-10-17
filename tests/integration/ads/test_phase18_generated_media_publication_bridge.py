@@ -57,6 +57,15 @@ def test_reviewed_media_reuses_one_existing_publication_owner(kind, mime, refere
     "https://example.org ",
     "http://example.org/book",
     "https://localhost/book",
+    "https://127.0.0.1/book",
+    "https://10.1.2.3/book",
+    "https://192.168.1.1/book",
+    "https://169.254.169.254/latest/meta-data",
+    "https://public.localdomain/book",
+    "https://service.internal/book",
+    "https://site.local/book",
+    "https://service.example/book",
+    "https://example..org/book",
 ])
 def test_ad_publication_rejects_misleading_or_unsafe_destinations(destination):
     brief = prepare_advertising_creatives(
