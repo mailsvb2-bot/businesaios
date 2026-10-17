@@ -1,6 +1,6 @@
 """LLM network facade.
 
-Real HTTP is implemented in runtime/_internal/_effects_impl.py.
+Real HTTP is implemented in runtime/_internal/llm_transport.py.
 This module remains import-safe for the repository bypass guard.
 """
 
@@ -10,7 +10,7 @@ import importlib
 
 
 def _effects_impl():
-    return importlib.import_module("runtime._internal" + "._effects_impl")
+    return importlib.import_module("runtime._internal" + ".llm_transport")
 
 
 def llm_generate_openai_compat(*, base_url: str, api_key: str, payload: dict[str, object], timeout_s: int = 20) -> dict[str, object]:
