@@ -115,3 +115,43 @@ def validate_publication_context(
         raise ValueError("direct_image_hash_invalid")
     return DirectAdIdentity(ad_id=0, ad_group_id=ad_group_id,
                             campaign_id=campaign_id, media_hash=image_hash, destination_url="")
+
+
+def prepare_ads_add(*, ad_group_id: int, title: str, description: str,
+                    destination_url: str, image_hash: str) -> dict[str, object]:
+    """Prepare a single combinatorial ad; the canonical gateway owns the write.
+
+    A caller must have separately verified owner approval, campaign/ad-group
+    binding, tenant, spending limits and the durable execution reservation.
+    """
+    from urllib.parse import urlsplit
+
+    _positive_id(ad_group_id, "ad_group_id")
+    if not isinstance(title, str) or not title.strip() or len(title) > 56:
+        raise ValueError("direct_title_invalid")
+    if not isinstance(description, str) or not description.strip() or len(description) > 81:
+        raise ValueError("direct_text_invalid")
+    if not isinstance(image_hash, str) or not 5 <= len(image_hash) <= 256 or any(ord(c) < 33 for c in image_hash):
+        raise ValueError("direct_image_hash_invalid")
+    if not isinstance(destination_url, str) or destination_url != destination_url.strip():
+        raise ValueError("direct_destination_invalid")
+    try:
+        parts = urlsplit(destination_url)
+        host = parts.hostname
+        port = parts.port
+    except ValueError as exc:
+        raise ValueError("direct_destination_invalid") from exc
+    if (parts.scheme != "https" or not host or "." not in host or
+            parts.username is not None or parts.password is not None or
+            port == 0 or "\\" in destination_url or
+            any(ord(c) <= 32 or ord(c) == 127 for c in destination_url)):
+        raise ValueError("direct_destination_invalid")
+    return {"method": "add", "params": {"Ads": [{
+        "AdGroupId": ad_group_id,
+        "ResponsiveAd": {
+            "Titles": [title.strip()],
+            "Texts": [description.strip()],
+            "Href": destination_url,
+            "AdImageHashes": [image_hash],
+        },
+    }]}}
