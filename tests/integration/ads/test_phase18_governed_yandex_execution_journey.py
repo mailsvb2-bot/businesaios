@@ -159,15 +159,12 @@ async def test_canonical_gateway_requires_owner_approval_and_durable_claim(monke
         **{**args, "verify_approval": lambda **kw: False})
     assert denied["reason"] == "owner_approval_not_verified"
     assert claims == set() and calls == []
-    # Current gateway provider verifier is synchronous: resolve async readback in
-    # an authorized canonical owner adapter, not by running a nested event loop.
-    def sync_verify(**kw):
-        return {"verified": False, "object_id": kw["object_id"]}
     first = await submit_reviewed_ad_publication(
-        **{**args, "verify_approval": lambda **kw: True, "verify_provider": sync_verify})
-    assert first["reason"] == "provider_publication_unconfirmed"
-    assert [x[0] for x in calls] == ["add"]
+        **{**args, "verify_approval": lambda **kw: True})
+    assert first["status"] == "verified"
+    assert first["provider_object_id"] == "109"
+    assert [x[0] for x in calls] == ["add", "get"]
     retry = await submit_reviewed_ad_publication(
-        **{**args, "verify_approval": lambda **kw: True, "verify_provider": sync_verify})
+        **{**args, "verify_approval": lambda **kw: True})
     assert retry["reason"] == "publication_execution_already_reserved"
-    assert [x[0] for x in calls] == ["add"]
+    assert [x[0] for x in calls] == ["add", "get"]
