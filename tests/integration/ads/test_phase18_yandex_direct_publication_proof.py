@@ -95,3 +95,32 @@ def test_owner_approval_and_execution_are_mandatory():
     for key in ("ad_group_id", "campaign_id"):
         with pytest.raises(ValueError):
             validate_publication_context(**{**args, key: True})
+
+
+def test_combinatorial_add_request_is_scoped_to_one_existing_group():
+    from interfaces.ads.yandex_direct_publication_proof import prepare_ads_add
+    body = prepare_ads_add(ad_group_id=11, title="Консультация", description="Запись на встречу",
+                           destination_url="https://shop.example.org/book", image_hash="hash-123")
+    assert body == {"method": "add", "params": {"Ads": [{
+        "AdGroupId": 11, "ResponsiveAd": {
+            "Titles": ["Консультация"], "Texts": ["Запись на встречу"],
+            "Href": "https://shop.example.org/book", "AdImageHashes": ["hash-123"],
+        }}]}}
+    assert "TextAd" not in str(body)
+
+
+@pytest.mark.parametrize(("field", "value"), [
+    ("ad_group_id", True), ("ad_group_id", 0),
+    ("title", ""), ("title", "a" * 57),
+    ("description", ""), ("description", "a" * 82),
+    ("image_hash", "x"), ("image_hash", "hash with spaces"),
+    ("destination_url", "http://shop.example.org"),
+    ("destination_url", "https://shop.example.org@evil.org/path"),
+    ("destination_url", "https://shop.example.org\\\\evil.org"),
+])
+def test_add_builder_rejects_bad_unapproved_inputs(field, value):
+    from interfaces.ads.yandex_direct_publication_proof import prepare_ads_add
+    args = dict(ad_group_id=11, title="Заголовок", description="Описание",
+                destination_url="https://shop.example.org/book", image_hash="hash-123")
+    with pytest.raises(ValueError):
+        prepare_ads_add(**{**args, field: value})
