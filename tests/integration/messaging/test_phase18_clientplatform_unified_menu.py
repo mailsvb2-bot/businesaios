@@ -37,7 +37,10 @@ def test_role_visibility_cannot_expose_admin_or_payments_to_operator():
     assert admin[-1].callback == CB_ADMIN_MENU
 
 
-@pytest.mark.parametrize("channel", ["telegram", "vk", "max"])
+@pytest.mark.parametrize("channel", [
+    "telegram", "vk", "max", "whatsapp", "viber", "instagram",
+    "messenger", "line", "slack", "discord", "wechat", "kakaotalk",
+])
 def test_channels_share_exact_same_navigation_semantics(channel):
     result = plain_channel_menu(channel=channel, role="owner")
     assert result["channel"] == channel
@@ -57,3 +60,12 @@ def test_placeholder_sections_never_pretend_live_crm_route_is_connected():
     assert "рабочем пространстве" in section_text("cp:section:sales")
     assert section_text("ads:apply:confirm") is None
     assert back_button()["inline_keyboard"][0][0]["callback_data"] == CB_MENU_MAIN
+
+
+def test_every_registered_messaging_channel_has_text_navigation():
+    from application.business_autonomy.provider_catalog import MESSAGING_CHANNEL_PROVIDER_KEYS
+
+    for channel in MESSAGING_CHANNEL_PROVIDER_KEYS:
+        page = plain_channel_menu(channel=channel, role="owner")
+        assert page["text"].startswith("🏠 ClientPlatform")
+        assert page["actions"]
