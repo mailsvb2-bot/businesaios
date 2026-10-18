@@ -25,34 +25,11 @@ from .common import mk
 
 
 def kb_main(*, is_admin: bool = False, role: UserRoleInfo | None = None) -> dict[str, Any]:
-    r = (role or UserRoleInfo("owner")).role
-    rows: list[list[dict[str, str]]] = [
-        [
-            {"text": "🎧 Демо", "callback_data": CB_DEMO},
-            {"text": "🔐 Полный доступ", "callback_data": "full"},
-        ],
-        [{"text": "🚀 Автопилот: +прибыль за 7 дней", "callback_data": CB_AUTOPILOT_MENU}],
-        [{"text": "🧠 AI Growth Strategy", "callback_data": CB_GROWTH_MENU}],
-        [
-            {"text": "💳 Тарифы", "callback_data": CB_SUB_MENU},
-            {"text": "🎁 Подарить", "callback_data": CB_GIFT_MENU},
-        ],
-        [
-            {"text": "🧠 Настройки", "callback_data": CB_SETTINGS_MENU},
-            {"text": "📈 Анализ", "callback_data": CB_SETTINGS_STATE},
-        ],
-        [
-            {"text": "📣 Посоветовать", "callback_data": CB_SHARE_MENU},
-            {"text": "🌤 Погода", "callback_data": CB_WEATHER_SHOW},
-        ],
-    ]
-    if r in ("marketer", "operator"):
-        rows.insert(2, [{"text": "🧩 Ads Apply (prod)", "callback_data": CB_ADS_APPLY_MENU}])
-    if r == "operator":
-        rows.insert(2, [{"text": "📊 Сегодня: KPI", "callback_data": CB_AUTOPILOT_DASHBOARD_TODAY}])
-    if is_admin:
-        rows.append([{"text": "🛠 Панель", "callback_data": CB_ADMIN_MENU}])
-    return mk(rows)
+    """Unified ClientPlatform navigation; existing canonical callbacks stay stable."""
+    from core.ux.clientplatform_unified_menu import telegram_menu
+
+    normalized_role = (role or UserRoleInfo("owner")).role
+    return telegram_menu(role=normalized_role, is_admin=is_admin)
 
 
 def kb_back_main() -> dict[str, Any]:
