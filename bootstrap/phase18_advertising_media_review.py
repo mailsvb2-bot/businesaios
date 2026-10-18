@@ -6,6 +6,7 @@ approval/reservation/provider-readback authorities in ads_write_gateway.
 from __future__ import annotations
 
 from collections.abc import Mapping
+from ipaddress import ip_address
 from urllib.parse import urlsplit
 
 from application.visual_creative_semantics.phase18_advertising_studio import (
@@ -15,6 +16,17 @@ from bootstrap.ads_write_gateway import ReviewedAdPublication
 from contracts.ad_publication_asset import (
     AdAssetKind, AdAssetSource, AdAssetState, AdPublicationAssetEvidence,
 )
+
+
+def _public_destination_hostname(hostname: str) -> bool:
+    host = hostname.lower().rstrip(".")
+    if not host or host.endswith((".local", ".internal", ".localhost", ".test", ".invalid", ".example", ".localdomain")):
+        return False
+    try:
+        ip_address(host)
+    except ValueError:
+        return bool("." in host and ".." not in host and host != "localhost")
+    return False
 
 
 def prepare_reviewed_generated_ad(
@@ -44,7 +56,7 @@ def prepare_reviewed_generated_ad(
         port = destination.port
     except ValueError as exc:
         raise ValueError("advertising_destination_invalid") from exc
-    if (destination.scheme != "https" or not hostname or "." not in hostname
+    if (destination.scheme != "https" or not hostname or not _public_destination_hostname(hostname)
             or destination.username is not None or destination.password is not None
             or any(ord(char) < 33 or ord(char) == 127 for char in destination_url)
             or chr(92) in destination_url
