@@ -13,7 +13,7 @@ from core.ux.callbacks import (
 )
 
 BRAND = "ClientPlatform"
-SUPPORTED_CHANNELS = frozenset({"telegram", "vk", "max"})
+
 SECTION_PREFIX = "cp:section:"
 
 
@@ -62,9 +62,11 @@ def plain_channel_menu(*, channel: str, role: str, is_admin: bool = False) -> di
     """Provider-neutral UI, safe for VK/MAX without claiming unsupported buttons.
 
     Native button serialization is performed only by existing provider egress.
-    Text always works even when a channel doesn't have callback capability.
+    Text is the baseline for every registered messaging channel. Native callback\n    transport remains the responsibility of the existing provider egress.
     """
-    if channel not in SUPPORTED_CHANNELS:
+    from application.business_autonomy.provider_catalog import MESSAGING_CHANNEL_PROVIDER_KEYS
+
+    if channel not in MESSAGING_CHANNEL_PROVIDER_KEYS:
         raise ValueError("unsupported_clientplatform_channel")
     return {"channel": channel, "text": menu_text(role=role, is_admin=is_admin),
             "actions": tuple({"key": x.key, "label": x.label, "callback": x.callback}
