@@ -56,7 +56,7 @@ class AdsWriteGateway:
         if not self._guard.allow_apply(platform=req.platform, plan=req.plan):
             return {"status": "skipped", "reason": "guardrails"}
 
-        c: AdsConnector | None = self._registry.get(req.platform)
+        c: AdsConnector | None = self._registry.get_optional(req.platform)
         if c is None:
             return {"status": "skipped", "reason": "connector_not_configured", "platform": req.platform}
 
@@ -88,7 +88,7 @@ class AdsWriteGateway:
                 swallow(__name__, "ads_write_gateway.apply_plan")
                 results.append({"status": "error", "reason": "connector_error"})
 
-        out: Json = {"status": "ok", "applied": len(results), "results": results}
+        out: Json = {"status": "ok" if all(isinstance(row, dict) and row.get("status") not in {"error", "skipped", "failed"} for row in results) else "blocked", "applied": len(results), "results": results}
         try:
             self._sink.emit(
                 tenant_id=req.tenant_id,
