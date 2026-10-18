@@ -21,6 +21,7 @@ from core.policies.telegram.routes.marketing_routes import handle_marketing_rout
 from core.policies.telegram.routes.settings_routes import handle_settings_routes
 from core.users.roles import UserRoleInfo
 from core.ux.callbacks import CB_MENU_MAIN
+from core.ux.clientplatform_unified_menu import menu_text, section_text, back_button
 from core.ux.telegram_keyboards import kb_back_main, kb_main
 
 
@@ -54,11 +55,15 @@ def handle(ctx: TelegramCtx, *, default_price_rub: int, bot_username: str = "", 
         if out is not None:
             return out
 
+    section = section_text(str(ctx.callback_data or ""))
+    if section is not None:
+        return pm(text=section, reply_markup=back_button())
+
     if ctx.cmd in {"/start", "/menu"} or ctx.callback_data in {CB_MENU_MAIN, "menu_main"}:
         step = "menu_main"
         variant = choose_marketing_variant(user_id=str(user_id), step_key=step, seed=str(ctx.marketing_seed or "1"), bandit=(ctx.marketing_bandit or {}).get(step))
         variants = (ctx.marketing_variants or {}).get(step) or {}
-        msg = str(variants.get(variant) or variants.get("a") or variants.get("b") or ("BusinesAIOS Workspace: переобучение нервной системы через ритм повседневности.\n\nГлавное меню — выбери, что сейчас нужно:"))
+        msg = menu_text(role="admin" if ctx.is_admin else "owner", is_admin=ctx.is_admin)
         return pm(text=msg, reply_markup=kb_main(is_admin=ctx.is_admin), track_event_type="marketing_copy_chosen", track_payload={"step_key": step, "variant": variant})
 
     if ctx.callback_data == "full":
