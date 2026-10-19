@@ -2,7 +2,7 @@ from dataclasses import replace
 
 import pytest
 
-from runtime.business_autonomy.clientplatform_bot_cutover_admission import (
+from runtime.business_autonomy.messenger_cutover_admission import (
     CHANNELS, ChannelTransferEvidence, check_cutover_admission,
 )
 
