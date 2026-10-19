@@ -70,3 +70,14 @@ def test_survival_veto_remains_for_message(layer):
     assert not result.allow
     assert result.reason.startswith("survival_block:")
     assert policy.called == 0
+
+
+def test_real_economic_policy_is_still_invoked_for_menu(monkeypatch):
+    monkeypatch.setattr(economics, "is_strict_mode", lambda: True)
+    evaluator = economics.EconomicAutonomyLayer(survival=_Survival())
+    result = evaluator.review(
+        decision_env=_envelope("send_message@v1", {"user_id": "u", "text": "Welcome"}),
+        world_state={"economy": {}},
+    )
+    assert result.allow is True, result.reason
+    assert result.economic is not None
