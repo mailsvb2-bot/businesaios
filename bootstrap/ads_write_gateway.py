@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from inspect import isawaitable
 from typing import Any
 
 from interfaces.ads.base import AdsConnector
@@ -197,6 +198,8 @@ async def submit_reviewed_ad_publication(
             object_id=receipt["object_id"],
             asset=request.asset,
         )
+        if isawaitable(evidence):
+            evidence = await evidence
         if not isinstance(evidence, dict) or evidence.get("verified") is not True:
             return blocked("provider_publication_unconfirmed")
         if evidence.get("object_id") != receipt["object_id"]:
