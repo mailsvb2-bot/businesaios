@@ -9,7 +9,7 @@ from core.ux.keyboards.common import mk
 
 
 def kb_main(*, is_admin: bool = False, role: UserRoleInfo | None = None) -> dict[str, Any]:
-    from core.ux.clientplatform_unified_menu import telegram_menu
+    from core.ux.unified_messenger_menu import telegram_menu
 
     normalized_role = (role or UserRoleInfo("owner")).role
     return telegram_menu(role=normalized_role, is_admin=is_admin)
