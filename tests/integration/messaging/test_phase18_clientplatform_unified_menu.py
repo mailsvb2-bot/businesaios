@@ -6,7 +6,7 @@ from core.ux.callbacks import (
     CB_ADMIN_MENU, CB_AUTOPILOT_MENU, CB_GROWTH_MENU, CB_MENU_MAIN,
     CB_SETTINGS_MENU, CB_SETTINGS_STATE, CB_SUB_MENU,
 )
-from core.ux.clientplatform_unified_menu import (
+from core.ux.unified_messenger_menu import (
     BRAND, menu_items, menu_text, telegram_menu, plain_channel_menu,
     section_text, back_button,
 )
@@ -52,7 +52,7 @@ def test_channels_share_exact_same_navigation_semantics(channel):
 
 def test_unsupported_provider_fails_closed_without_fake_button_support():
     with pytest.raises(ValueError):
-        plain_channel_menu(channel="whatsapp", role="owner")
+        plain_channel_menu(channel="fictional_messenger", role="owner")
 
 
 def test_placeholder_sections_never_pretend_live_crm_route_is_connected():
