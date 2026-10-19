@@ -27,18 +27,23 @@ class ChannelTransferEvidence:
 def check_cutover_admission(
     evidence: tuple[ChannelTransferEvidence, ...], *,
     expected_callback_host: str,
+    selected_providers: tuple[str, ...] = CHANNELS,
 ) -> dict[str, object]:
     """Allow switching only after the donor is quiesced and receiver can answer.
 
-    Identity is the existing provider bot/group identifier, never a newly issued
+    Selected providers can be transferred one by one; the default still requires\n    all three. Each selected provider requires its own real evidence.\n    Identity is the existing provider bot/group identifier, never a newly issued
     token or changed bot name. Evidence must come from real operational probes,
     not from configuration guesses or passing unit tests.
     """
     problems: list[str] = []
     if not expected_callback_host or expected_callback_host.lower() != expected_callback_host:
         return {"ready": False, "reasons": ("callback_host_invalid",)}
-    if len(evidence) != len(CHANNELS) or {e.provider_key for e in evidence} != set(CHANNELS):
-        return {"ready": False, "reasons": ("three_unique_provider_evidence_required",)}
+    if (not selected_providers or len(set(selected_providers)) != len(selected_providers)
+            or not set(selected_providers).issubset(CHANNELS)):
+        return {"ready": False, "reasons": ("selected_providers_invalid",)}
+    if (len(evidence) != len(selected_providers)
+            or {e.provider_key for e in evidence} != set(selected_providers)):
+        return {"ready": False, "reasons": ("exact_selected_provider_evidence_required",)}
     if len({e.account_identity for e in evidence}) != len(CHANNELS):
         problems.append("duplicate_provider_identity")
     for item in evidence:
