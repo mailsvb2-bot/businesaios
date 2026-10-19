@@ -69,3 +69,16 @@ def test_every_registered_messaging_channel_has_text_navigation():
         page = plain_channel_menu(channel=channel, role="owner")
         assert page["text"].startswith("🏠 ClientPlatform")
         assert page["actions"]
+
+
+def test_canonical_user_role_from_settings_controls_unified_keyboard():
+    from core.users.roles import UserRoleInfo
+
+    marketer = UserRoleInfo.from_settings({"user:role": "marketer"})
+    owner = UserRoleInfo.from_settings({"user:role": "owner"})
+    assert "🧩 Ads Apply (prod)" in [
+        button["text"] for row in kb_main(role=marketer)["inline_keyboard"] for button in row
+    ]
+    assert "🧩 Ads Apply (prod)" not in [
+        button["text"] for row in kb_main(role=owner)["inline_keyboard"] for button in row
+    ]
