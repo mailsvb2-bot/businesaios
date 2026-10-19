@@ -21,7 +21,7 @@ from core.policies.telegram.routes.marketing_routes import handle_marketing_rout
 from core.policies.telegram.routes.settings_routes import handle_settings_routes
 from core.users.roles import UserRoleInfo
 from core.ux.callbacks import CB_MENU_MAIN
-from core.ux.clientplatform_unified_menu import menu_text, section_text, back_button
+from core.ux.unified_messenger_menu import menu_text, section_text, back_button
 from core.ux.telegram_keyboards import kb_back_main, kb_main
 
 
