@@ -119,7 +119,23 @@ class EconomicAutonomyLayer:
         capital_state = self._coerce_capital_state(self._read_field(world_state, "capital", None))
         horizon_state = self._coerce_horizon_state(world_state, self._read_field(world_state, "horizon_state", None))
 
-        if strict:
+        # A message-only UX effect is not a capital allocation. Survival and
+        # economic policy still review it; financial actions remain fail-closed.
+        raw_action = self._read_field(decision_env, "decision", decision_env)
+        action = str(self._read_field(raw_action, "action", ""))
+        raw_payload = self._read_field(raw_action, "payload", {})
+        payload = raw_payload if isinstance(raw_payload, Mapping) else {}
+        message_only = (
+            action == "send_message@v1"
+            and self._coerce_float(self._read_field(raw_action, "cost", 0.0), 0.0) == 0.0
+            and not any(key in payload for key in (
+                "economy", "requested_budget", "budget_delta", "amount",
+                "payment", "charge", "spend", "transfer", "publish",
+            ))
+        )
+        require_capital = strict and not message_only
+
+        if require_capital:
             if capital_state is None:
                 return EconomicLayerVerdict(False, "missing_capital_state", survival=survival_verdict)
             if horizon_state is None:
@@ -151,7 +167,7 @@ class EconomicAutonomyLayer:
                 logging.getLogger(__name__).exception("capital_engine failed: %s", engine_err)
                 if strict:
                     return EconomicLayerVerdict(False, "capital_engine_error", survival=survival_verdict)
-        elif strict:
+        elif require_capital:
             return EconomicLayerVerdict(False, "capital_state_missing", survival=survival_verdict)
 
         strategic = None
@@ -173,7 +189,7 @@ class EconomicAutonomyLayer:
                 logging.getLogger(__name__).exception("horizon_engine failed: %s", horizon_err)
                 if strict:
                     return EconomicLayerVerdict(False, "horizon_engine_error", allocation=allocation, survival=survival_verdict)
-        elif strict:
+        elif require_capital:
             return EconomicLayerVerdict(False, "horizon_state_missing", allocation=allocation, survival=survival_verdict)
 
         economic_verdict = self._economic_policy_engine.review(decision_env, world_state)
