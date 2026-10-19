@@ -21,6 +21,7 @@ from core.policies.telegram.routes.marketing_routes import handle_marketing_rout
 from core.policies.telegram.routes.settings_routes import handle_settings_routes
 from core.users.roles import UserRoleInfo
 from core.ux.callbacks import CB_MENU_MAIN
+from core.ux.unified_messenger_menu import menu_text, section_text, back_button
 from core.ux.telegram_keyboards import kb_back_main, kb_main
 
 
@@ -34,7 +35,7 @@ def _has_perm(ctx: TelegramCtx, perm: str) -> bool:
 
 def handle(ctx: TelegramCtx, *, default_price_rub: int, bot_username: str = "", gift_ttl_sec: int = 7 * 24 * 3600) -> ProposedAction:
     user_id = ctx.state.user_id or "anonymous"
-    _ = UserRoleInfo.from_settings(ctx.settings if isinstance(ctx.settings, dict) else {})
+    user_role = UserRoleInfo.from_settings(ctx.settings if isinstance(ctx.settings, dict) else {})
     legacy_prices = build_legacy_prices(default_price_rub=default_price_rub)
 
     def pm(*, text: str, reply_markup: dict | None = None, track_event_type: str | None = None, track_payload: dict | None = None) -> ProposedAction:
@@ -54,12 +55,16 @@ def handle(ctx: TelegramCtx, *, default_price_rub: int, bot_username: str = "", 
         if out is not None:
             return out
 
+    section = section_text(str(ctx.callback_data or ""))
+    if section is not None:
+        return pm(text=section, reply_markup=back_button())
+
     if ctx.cmd in {"/start", "/menu"} or ctx.callback_data in {CB_MENU_MAIN, "menu_main"}:
         step = "menu_main"
         variant = choose_marketing_variant(user_id=str(user_id), step_key=step, seed=str(ctx.marketing_seed or "1"), bandit=(ctx.marketing_bandit or {}).get(step))
         variants = (ctx.marketing_variants or {}).get(step) or {}
-        msg = str(variants.get(variant) or variants.get("a") or variants.get("b") or ("BusinesAIOS Workspace: переобучение нервной системы через ритм повседневности.\n\nГлавное меню — выбери, что сейчас нужно:"))
-        return pm(text=msg, reply_markup=kb_main(is_admin=ctx.is_admin), track_event_type="marketing_copy_chosen", track_payload={"step_key": step, "variant": variant})
+        msg = menu_text(role=user_role.role, is_admin=ctx.is_admin)
+        return pm(text=msg, reply_markup=kb_main(is_admin=ctx.is_admin, role=user_role), track_event_type="marketing_copy_chosen", track_payload={"step_key": step, "variant": variant})
 
     if ctx.callback_data == "full":
         if ctx.full_access:
@@ -81,4 +86,4 @@ def handle(ctx: TelegramCtx, *, default_price_rub: int, bot_username: str = "", 
         msg = "Я здесь. Напиши, что сейчас происходит в твоём дне — и мы настроим ритм."
     else:
         msg = "Я здесь. Напиши, что сейчас происходит. Если нужен полный доступ — /pay или кнопка «Полный доступ»."
-    return pm(text=msg, reply_markup=kb_main(is_admin=ctx.is_admin))
+    return pm(text=msg, reply_markup=kb_main(is_admin=ctx.is_admin, role=user_role))
