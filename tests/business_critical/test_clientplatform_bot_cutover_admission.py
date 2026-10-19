@@ -55,3 +55,38 @@ def test_missing_duplicate_or_renamed_provider_denied():
     assert not check((items[0], items[0], items[2]))["ready"]
     assert not check((replace(items[0], provider_key="new_telegram_bot"), *items[1:]))["ready"]
     assert not check((replace(items[0], account_identity=items[1].account_identity), *items[1:]))["ready"]
+
+
+def test_telegram_only_staged_cutover_is_admitted_without_vk_or_max():
+    telegram = valid()[0]
+    assert check_cutover_admission(
+        (telegram,), expected_callback_host="new.example.org",
+        selected_providers=("telegram_bot",),
+    ) == {"ready": True, "reasons": ()}
+
+
+@pytest.mark.parametrize("field", [
+    "legacy_worker_stopped", "legacy_polling_stopped",
+    "new_credential_in_vault", "new_ingress_ready", "ownership_confirmed",
+])
+def test_telegram_only_still_requires_every_operational_proof(field):
+    telegram = replace(valid()[0], **{field: False})
+    result = check_cutover_admission(
+        (telegram,), expected_callback_host="new.example.org",
+        selected_providers=("telegram_bot",),
+    )
+    assert result["ready"] is False
+    assert any(field in reason for reason in result["reasons"])
+
+
+def test_selected_provider_identity_must_match_exactly():
+    telegram = valid()[0]
+    assert not check_cutover_admission(
+        (telegram,), expected_callback_host="new.example.org",
+        selected_providers=("vk_messaging",),
+    )["ready"]
+    for selection in ((), ("telegram_bot", "telegram_bot"), ("unknown",)):
+        assert not check_cutover_admission(
+            (telegram,), expected_callback_host="new.example.org",
+            selected_providers=selection,
+        )["ready"]
