@@ -14,7 +14,6 @@ Responsibilities:
 NO side-effects. Deterministic.
 """
 
-import math
 from dataclasses import dataclass, field
 from typing import Optional, Any, Mapping
 
@@ -35,6 +34,7 @@ from core.strategic_horizon.engine import (
     StrategicVector,
     UserDynamics,
 )
+from governance.economic.action_economics_model import ActionEconomicsIntent
 from governance.economic_layer_env import is_strict_mode
 from governance.economic import EconomicPolicyConfig, EconomicPolicyEngine, EconomicPolicyVerdict
 
@@ -120,25 +120,11 @@ class EconomicAutonomyLayer:
         capital_state = self._coerce_capital_state(self._read_field(world_state, "capital", None))
         horizon_state = self._coerce_horizon_state(world_state, self._read_field(world_state, "horizon_state", None))
 
-        # A message-only UX effect is not a capital allocation. Survival and
-        # economic policy still review it; financial actions remain fail-closed.
-        raw_action = self._read_field(decision_env, "decision", decision_env)
-        action = str(self._read_field(raw_action, "action", ""))
-        raw_payload = self._read_field(raw_action, "payload", {})
-        payload = raw_payload if isinstance(raw_payload, Mapping) else {}
-        raw_cost = self._read_field(raw_action, "cost", None)
-        message_only = (
-            action == "send_message@v1"
-            and isinstance(raw_cost, (int, float))
-            and not isinstance(raw_cost, bool)
-            and raw_cost == 0
-            and math.isfinite(raw_cost)
-            and not any(key in payload for key in (
-                "economy", "requested_budget", "budget_delta", "amount",
-                "payment", "charge", "spend", "transfer", "publish",
-            ))
+        # Governance applies the existing economic intent contract to the
+        # already-issued decision; it does not classify Telegram payloads.
+        require_capital = (
+            strict and not ActionEconomicsIntent.is_unfunded_message_allowed(decision_env)
         )
-        require_capital = strict and not message_only
 
         if require_capital:
             if capital_state is None:
