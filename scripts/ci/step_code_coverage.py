@@ -246,7 +246,7 @@ def run() -> tuple[bool, str]:
     percent = float(total.get("percent_covered", 0.0))
     status = "ready" if report_outcome.returncode == 0 else "blocked"
     violations = [] if status == "ready" else ["coverage_below_minimum"]
-    if json_outcome.returncode != 0:
+    if json_outcome.returncode != 0 or not coverage_payload:
         violations.append("coverage_json_failed")
     if xml_outcome.returncode != 0:
         violations.append("coverage_xml_failed")
