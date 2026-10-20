@@ -39,7 +39,13 @@ def check_cutover_admission(
     not from configuration guesses or passing unit tests.
     """
     problems: list[str] = []
-    if not expected_callback_host or expected_callback_host.lower() != expected_callback_host:
+    # Validate the expected host as a DNS authority, not merely a string.
+    # This value is compared with urlsplit().hostname for webhook channels.
+    if (not isinstance(expected_callback_host, str)
+            or not expected_callback_host
+            or expected_callback_host.lower() != expected_callback_host
+            or urlsplit("https://" + expected_callback_host).hostname != expected_callback_host
+            or any(ch in expected_callback_host for ch in "/?#@: ")):
         return {"ready": False, "reasons": ("callback_host_invalid",)}
     if (not selected_providers or len(set(selected_providers)) != len(selected_providers)
             or not set(selected_providers).issubset(CHANNELS)):
@@ -51,7 +57,9 @@ def check_cutover_admission(
         problems.append("duplicate_provider_identity")
     for item in evidence:
         name = item.provider_key
-        if not item.account_identity.strip() or len(item.account_identity) > 160:
+        if (not isinstance(item.account_identity, str)
+                or not item.account_identity.strip()
+                or len(item.account_identity) > 160):
             problems.append(f"{name}:provider_identity_missing")
         for field in (
             "legacy_worker_stopped", "legacy_polling_stopped",
