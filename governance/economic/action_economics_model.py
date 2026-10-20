@@ -186,9 +186,14 @@ class ActionEconomicsIntent:
         cost = _read_field(raw, "cost", None)
         if _read_field(raw, "action") != "send_message@v1":
             return False
-        if isinstance(cost, bool) or not isinstance(cost, (int, float)):
-            return False
-        if not math.isfinite(cost) or cost != 0:
+        # The canonical signed Decision has no cost attribute. Legacy
+        # envelopes with a cost attribute must prove its value is zero.
+        from contracts.decisioning.sovereign_decision_contract import Decision
+        if isinstance(raw, Decision):
+            if not isinstance(decision, Mapping) and _read_field(decision, "decision", None) is not raw:
+                return False
+        elif (isinstance(cost, bool) or not isinstance(cost, (int, float))
+              or not math.isfinite(cost) or cost != 0):
             return False
         if not isinstance(payload, Mapping):
             return False
