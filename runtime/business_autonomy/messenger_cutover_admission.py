@@ -60,8 +60,11 @@ def check_cutover_admission(
     if (not isinstance(evidence, tuple)
             or any(not isinstance(item, ChannelTransferEvidence) for item in evidence)
             or len(evidence) != len(selected_providers)
+            or any(not isinstance(e.provider_key, str) for e in evidence)
             or {e.provider_key for e in evidence} != set(selected_providers)):
         return {"ready": False, "reasons": ("exact_selected_provider_evidence_required",)}
+    if any(not isinstance(e.account_identity, str) for e in evidence):
+        return {"ready": False, "reasons": ("provider_identity_invalid",)}
     if len({e.account_identity for e in evidence}) != len(evidence):
         problems.append("duplicate_provider_identity")
     for item in evidence:
@@ -79,11 +82,14 @@ def check_cutover_admission(
         if item.transport_mode == "long_polling" and name == "telegram_bot":
             # A polling connector must not claim a webhook route. The operational
             # evidence above still requires verified donor shutdown and ingress.
-            if item.callback_url:
+            if not isinstance(item.callback_url, str) or item.callback_url:
                 problems.append(f"{name}:polling_callback_must_be_empty")
             continue
         if item.transport_mode != "webhook":
             problems.append(f"{name}:transport_mode_invalid")
+            continue
+        if not isinstance(item.callback_url, str):
+            problems.append(f"{name}:callback_url_invalid")
             continue
         try:
             parts = urlsplit(item.callback_url)
