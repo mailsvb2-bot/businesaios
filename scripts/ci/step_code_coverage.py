@@ -227,7 +227,7 @@ def run() -> tuple[bool, str]:
         _write_summary(payload)
         return False, "coverage combine failed"
 
-    json_outcome = run_command(_python_command("-m", "coverage", "json", "-o", str(paths["json"])), timeout=60)
+    json_outcome = run_command(_python_command("-m", "coverage", "json", "-o", str(paths["json"])), timeout=240)
     xml_outcome = run_command(_python_command("-m", "coverage", "xml", "-o", str(paths["xml"])), timeout=60)
     html_outcome = run_command(_python_command("-m", "coverage", "html", "-d", str(paths["html"])), timeout=120)
     report_outcome = run_command(_python_command("-m", "coverage", "report", "--fail-under", str(MIN_TOTAL_COVERAGE)), timeout=60)
