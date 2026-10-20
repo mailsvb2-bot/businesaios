@@ -122,6 +122,22 @@ def _copy_world_state(
     )
 
 
+def _configured_telegram_tenant_id() -> str:
+    """Bind the long-poll transport to the configured production tenant.
+
+    Never silently route production messages into the legacy "default" tenant.
+    The canonical deployment already validates SMOKE_TENANT_ID as an active
+    tenant; TENANT_ID remains the explicit transport-specific override.
+    """
+    tenant_id = env_str("TENANT_ID", "").strip() or env_str("SMOKE_TENANT_ID", "").strip()
+    if not tenant_id or tenant_id == "default":
+        from governance.economic_layer_env import is_strict_mode
+        if is_strict_mode():
+            raise RuntimeError("telegram_production_tenant_id_required")
+        return "default"
+    return tenant_id
+
+
 def _world_state_from_update(
     update: dict[str, Any],
     *,
@@ -129,7 +145,7 @@ def _world_state_from_update(
 ) -> WorldStateV1:
     event = telegram_update_to_messaging_event(
         update,
-        tenant_id=env_str("TENANT_ID", "default").strip() or "default",
+        tenant_id=_configured_telegram_tenant_id(),
         product_name=env_str("PRODUCT_NAME", "BusinesAIOS"),
         timezone=env_str("SYSTEM_TZ", "Europe/Amsterdam"),
     )
