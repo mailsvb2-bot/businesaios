@@ -149,3 +149,19 @@ def test_invalid_provider_identity_never_crashes_or_admits(bad_identity):
         expected_callback_host="new.example.org",
     )
     assert result["ready"] is False
+
+
+@pytest.mark.parametrize("selection", [None, [], ["telegram_bot"], ("telegram_bot", None), (42,)])
+def test_malformed_provider_selection_fails_closed(selection):
+    assert check_cutover_admission(
+        (valid()[0],), expected_callback_host="new.example.org",
+        selected_providers=selection,
+    )["ready"] is False
+
+
+@pytest.mark.parametrize("evidence", [None, [], (None,), ({"provider_key": "telegram_bot"},)])
+def test_malformed_evidence_fails_closed(evidence):
+    assert check_cutover_admission(
+        evidence, expected_callback_host="new.example.org",
+        selected_providers=("telegram_bot",),
+    )["ready"] is False
