@@ -43,6 +43,7 @@ def test_unknown_or_false_operational_proof_denies_cutover(field):
     "https://new.example.org:444/providers/webhook/tenant/business/telegram_bot",
     "https://new.example.org/providers/webhook/tenant/business/vk_messaging",
     "https://new.example.org/providers/webhook/tenant/business/telegram_bot#fragment",
+    "https://new.example.org/providers/webhook/tenant/business/telegram_bot?token=spoofed",
 ])
 def test_bad_callback_route_never_admitted(url):
     items = valid()
