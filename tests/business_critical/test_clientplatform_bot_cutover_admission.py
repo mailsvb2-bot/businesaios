@@ -130,3 +130,21 @@ def test_polling_must_not_claim_webhook_and_other_channels_cannot_poll():
         (unknown,), expected_callback_host="new.example.org",
         selected_providers=("telegram_bot",),
     )["ready"]
+
+
+@pytest.mark.parametrize("bad_host", [
+    "", "NEW.example.org", "new.example.org:443", "new.example.org/path",
+    "new.example.org@attacker.org", "new.example.org?x=1", "[",
+])
+def test_invalid_expected_callback_authority_fails_closed(bad_host):
+    assert check_cutover_admission(valid(), expected_callback_host=bad_host)["ready"] is False
+
+
+@pytest.mark.parametrize("bad_identity", [None, 123, "", "  "])
+def test_invalid_provider_identity_never_crashes_or_admits(bad_identity):
+    items = valid()
+    result = check_cutover_admission(
+        (replace(items[0], account_identity=bad_identity), *items[1:]),
+        expected_callback_host="new.example.org",
+    )
+    assert result["ready"] is False
