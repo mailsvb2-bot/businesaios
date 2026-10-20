@@ -165,3 +165,23 @@ def test_malformed_evidence_fails_closed(evidence):
         evidence, expected_callback_host="new.example.org",
         selected_providers=("telegram_bot",),
     )["ready"] is False
+
+
+@pytest.mark.parametrize("field,bad_value", [
+    ("account_identity", []), ("account_identity", {}),
+    ("provider_key", []), ("provider_key", {}),
+    ("callback_url", None), ("callback_url", []),
+])
+def test_unhashable_or_malformed_cutover_evidence_fails_closed(field, bad_value):
+    items = valid()
+    result = check((replace(items[0], **{field: bad_value}), *items[1:]))
+    assert result["ready"] is False
+
+
+def test_polling_malformed_callback_fails_closed():
+    telegram = replace(valid()[0], transport_mode="long_polling", callback_url=None)
+    result = check_cutover_admission(
+        (telegram,), expected_callback_host="new.example.org",
+        selected_providers=("telegram_bot",),
+    )
+    assert result["ready"] is False
