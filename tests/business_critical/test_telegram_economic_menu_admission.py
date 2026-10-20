@@ -53,6 +53,11 @@ def test_start_menu_message_needs_no_fictional_capital(layer):
     ("send_message@v1", {"text": "hi"}, "not-a-number"),
     ("send_message@v1", {"text": "hi"}, None),
     ("send_message@v1", {"text": "hi"}, False),
+    ("send_message@v1", {"user_id": "u", "amount": 12, "text": "hi"}, 0.0),
+    ("send_message@v1", {"user_id": "u", "economy": {"requested_budget": 12}, "text": "hi"}, 0.0),
+    ("send_message@v1", {"user_id": "u", "text": "hi", "unexpected": True}, 0.0),
+    ("send_message@v1", {"user_id": "u"}, 0.0),
+    ("send_message@v1", {"text": "hi"}, 0.0),
 ])
 def test_strict_economic_guards_remain_for_financial_requests(layer, action, payload, cost):
     evaluator, policy = layer
