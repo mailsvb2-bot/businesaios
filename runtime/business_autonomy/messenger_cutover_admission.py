@@ -44,7 +44,7 @@ def check_cutover_admission(
     if (len(evidence) != len(selected_providers)
             or {e.provider_key for e in evidence} != set(selected_providers)):
         return {"ready": False, "reasons": ("exact_selected_provider_evidence_required",)}
-    if len({e.account_identity for e in evidence}) != len(CHANNELS):
+    if len({e.account_identity for e in evidence}) != len(evidence):
         problems.append("duplicate_provider_identity")
     for item in evidence:
         name = item.provider_key
