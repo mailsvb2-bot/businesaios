@@ -14,6 +14,7 @@ Responsibilities:
 NO side-effects. Deterministic.
 """
 
+import math
 from dataclasses import dataclass, field
 from typing import Optional, Any, Mapping
 
@@ -125,9 +126,13 @@ class EconomicAutonomyLayer:
         action = str(self._read_field(raw_action, "action", ""))
         raw_payload = self._read_field(raw_action, "payload", {})
         payload = raw_payload if isinstance(raw_payload, Mapping) else {}
+        raw_cost = self._read_field(raw_action, "cost", None)
         message_only = (
             action == "send_message@v1"
-            and self._coerce_float(self._read_field(raw_action, "cost", 0.0), 0.0) == 0.0
+            and isinstance(raw_cost, (int, float))
+            and not isinstance(raw_cost, bool)
+            and raw_cost == 0
+            and math.isfinite(raw_cost)
             and not any(key in payload for key in (
                 "economy", "requested_budget", "budget_delta", "amount",
                 "payment", "charge", "spend", "transfer", "publish",
