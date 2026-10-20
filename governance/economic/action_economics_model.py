@@ -178,6 +178,27 @@ class ActionEconomicsIntent:
     required_liquidity_buffer: float = 0.0
     metadata: Mapping[str, Any] = field(default_factory=dict)
 
+    @staticmethod
+    def is_unfunded_message_allowed(decision: Any) -> bool:
+        """Constrain an issued message, without choosing or changing its action."""
+        raw = _read_field(decision, "decision", decision)
+        payload = _read_field(raw, "payload", None)
+        cost = _read_field(raw, "cost", None)
+        if _read_field(raw, "action") != "send_message@v1":
+            return False
+        if isinstance(cost, bool) or not isinstance(cost, (int, float)):
+            return False
+        if not math.isfinite(cost) or cost != 0:
+            return False
+        if not isinstance(payload, Mapping):
+            return False
+        fields = {"user_id", "text", "reply_markup", "callback_query_id",
+                  "track_event_type", "track_payload"}
+        return (set(payload).issubset(fields)
+                and isinstance(payload.get("user_id"), str)
+                and bool(payload["user_id"])
+                and isinstance(payload.get("text"), str))
+
     @classmethod
     def from_decision(cls, decision: Any, *, config: EconomicPolicyConfig | None = None) -> "ActionEconomicsIntent":
         policy_config = config or EconomicPolicyConfig()
