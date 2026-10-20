@@ -44,7 +44,7 @@ def check_cutover_admission(
     if (not isinstance(expected_callback_host, str)
             or not expected_callback_host
             or expected_callback_host.lower() != expected_callback_host
-            or any(ch in expected_callback_host for ch in "/?#@: []\\t\\n\\r")):
+            or any(ch.isspace() or ch in "/?#@:[]" for ch in expected_callback_host)):
         return {"ready": False, "reasons": ("callback_host_invalid",)}
     try:
         if urlsplit("https://" + expected_callback_host).hostname != expected_callback_host:
