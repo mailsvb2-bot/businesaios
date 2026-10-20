@@ -86,7 +86,7 @@ def check_cutover_admission(
                 parts.scheme == "https"
                 and parts.hostname == expected_callback_host
                 and parts.username is None and parts.password is None
-                and parts.port is None and not parts.fragment
+                and parts.port is None and not parts.query and not parts.fragment
                 and parts.path.endswith("/" + name)
                 and "/providers/webhook/" in parts.path
             )
