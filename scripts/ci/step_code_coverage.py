@@ -227,17 +227,26 @@ def run() -> tuple[bool, str]:
         _write_summary(payload)
         return False, "coverage combine failed"
 
-    json_outcome = run_command(_python_command("-m", "coverage", "json", "-o", str(paths["json"])), timeout=60)
+    json_outcome = run_command(_python_command("-m", "coverage", "json", "-o", str(paths["json"])), timeout=240)
     xml_outcome = run_command(_python_command("-m", "coverage", "xml", "-o", str(paths["xml"])), timeout=60)
     html_outcome = run_command(_python_command("-m", "coverage", "html", "-d", str(paths["html"])), timeout=120)
     report_outcome = run_command(_python_command("-m", "coverage", "report", "--fail-under", str(MIN_TOTAL_COVERAGE)), timeout=60)
 
-    coverage_payload = json.loads(paths["json"].read_text(encoding="utf-8")) if paths["json"].exists() else {}
+    # Coverage tooling may fail or leave a truncated/empty report. Preserve the
+    # actual failure instead of crashing before writing the canonical summary.
+    coverage_payload = {}
+    try:
+        if json_outcome.returncode == 0:
+            coverage_payload = json.loads(paths["json"].read_text(encoding="utf-8"))
+            if not isinstance(coverage_payload, dict) or not isinstance(coverage_payload.get("totals"), dict):
+                raise ValueError("coverage totals missing")
+    except (OSError, UnicodeError, ValueError, TypeError):
+        coverage_payload = {}
     total = dict(coverage_payload.get("totals") or {})
     percent = float(total.get("percent_covered", 0.0))
     status = "ready" if report_outcome.returncode == 0 else "blocked"
     violations = [] if status == "ready" else ["coverage_below_minimum"]
-    if json_outcome.returncode != 0:
+    if json_outcome.returncode != 0 or not coverage_payload:
         violations.append("coverage_json_failed")
     if xml_outcome.returncode != 0:
         violations.append("coverage_xml_failed")

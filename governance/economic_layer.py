@@ -34,6 +34,7 @@ from core.strategic_horizon.engine import (
     StrategicVector,
     UserDynamics,
 )
+from governance.economic.action_economics_model import ActionEconomicsIntent
 from governance.economic_layer_env import is_strict_mode
 from governance.economic import EconomicPolicyConfig, EconomicPolicyEngine, EconomicPolicyVerdict
 
@@ -119,7 +120,13 @@ class EconomicAutonomyLayer:
         capital_state = self._coerce_capital_state(self._read_field(world_state, "capital", None))
         horizon_state = self._coerce_horizon_state(world_state, self._read_field(world_state, "horizon_state", None))
 
-        if strict:
+        # Governance applies the existing economic intent contract to the
+        # already-issued decision; it does not classify Telegram payloads.
+        require_capital = (
+            strict and not ActionEconomicsIntent.is_unfunded_message_allowed(decision_env)
+        )
+
+        if require_capital:
             if capital_state is None:
                 return EconomicLayerVerdict(False, "missing_capital_state", survival=survival_verdict)
             if horizon_state is None:
@@ -151,7 +158,7 @@ class EconomicAutonomyLayer:
                 logging.getLogger(__name__).exception("capital_engine failed: %s", engine_err)
                 if strict:
                     return EconomicLayerVerdict(False, "capital_engine_error", survival=survival_verdict)
-        elif strict:
+        elif require_capital:
             return EconomicLayerVerdict(False, "capital_state_missing", survival=survival_verdict)
 
         strategic = None
@@ -173,7 +180,7 @@ class EconomicAutonomyLayer:
                 logging.getLogger(__name__).exception("horizon_engine failed: %s", horizon_err)
                 if strict:
                     return EconomicLayerVerdict(False, "horizon_engine_error", allocation=allocation, survival=survival_verdict)
-        elif strict:
+        elif require_capital:
             return EconomicLayerVerdict(False, "horizon_state_missing", allocation=allocation, survival=survival_verdict)
 
         economic_verdict = self._economic_policy_engine.review(decision_env, world_state)
