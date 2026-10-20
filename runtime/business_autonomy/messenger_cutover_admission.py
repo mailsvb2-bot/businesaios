@@ -51,10 +51,15 @@ def check_cutover_admission(
             return {"ready": False, "reasons": ("callback_host_invalid",)}
     except ValueError:
         return {"ready": False, "reasons": ("callback_host_invalid",)}
-    if (not selected_providers or len(set(selected_providers)) != len(selected_providers)
+    if (not isinstance(selected_providers, tuple)
+            or not selected_providers
+            or any(not isinstance(name, str) for name in selected_providers)
+            or len(set(selected_providers)) != len(selected_providers)
             or not set(selected_providers).issubset(CHANNELS)):
         return {"ready": False, "reasons": ("selected_providers_invalid",)}
-    if (len(evidence) != len(selected_providers)
+    if (not isinstance(evidence, tuple)
+            or any(not isinstance(item, ChannelTransferEvidence) for item in evidence)
+            or len(evidence) != len(selected_providers)
             or {e.provider_key for e in evidence} != set(selected_providers)):
         return {"ready": False, "reasons": ("exact_selected_provider_evidence_required",)}
     if len({e.account_identity for e in evidence}) != len(evidence):
