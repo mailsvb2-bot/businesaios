@@ -90,3 +90,43 @@ def test_selected_provider_identity_must_match_exactly():
             (telegram,), expected_callback_host="new.example.org",
             selected_providers=selection,
         )["ready"]
+
+
+def test_telegram_long_polling_cutover_needs_no_webhook_but_real_proof():
+    telegram = replace(valid()[0], transport_mode="long_polling", callback_url="")
+    assert check_cutover_admission(
+        (telegram,), expected_callback_host="new.example.org",
+        selected_providers=("telegram_bot",),
+    ) == {"ready": True, "reasons": ()}
+
+
+@pytest.mark.parametrize("field", [
+    "legacy_worker_stopped", "legacy_polling_stopped",
+    "new_credential_in_vault", "new_ingress_ready", "ownership_confirmed",
+])
+def test_telegram_polling_missing_proof_fails_closed(field):
+    telegram = replace(valid()[0], transport_mode="long_polling", callback_url="", **{field: False})
+    result = check_cutover_admission(
+        (telegram,), expected_callback_host="new.example.org",
+        selected_providers=("telegram_bot",),
+    )
+    assert result["ready"] is False
+    assert any(field in reason for reason in result["reasons"])
+
+
+def test_polling_must_not_claim_webhook_and_other_channels_cannot_poll():
+    telegram = replace(valid()[0], transport_mode="long_polling")
+    assert not check_cutover_admission(
+        (telegram,), expected_callback_host="new.example.org",
+        selected_providers=("telegram_bot",),
+    )["ready"]
+    vk = replace(valid()[1], transport_mode="long_polling", callback_url="")
+    assert not check_cutover_admission(
+        (vk,), expected_callback_host="new.example.org",
+        selected_providers=("vk_messaging",),
+    )["ready"]
+    unknown = replace(valid()[0], transport_mode="unknown", callback_url="")
+    assert not check_cutover_admission(
+        (unknown,), expected_callback_host="new.example.org",
+        selected_providers=("telegram_bot",),
+    )["ready"]
