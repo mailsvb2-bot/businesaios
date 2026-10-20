@@ -22,6 +22,7 @@ class ChannelTransferEvidence:
     new_ingress_ready: bool
     callback_url: str
     ownership_confirmed: bool
+    transport_mode: str = "webhook"
 
 
 def check_cutover_admission(
@@ -31,7 +32,9 @@ def check_cutover_admission(
 ) -> dict[str, object]:
     """Allow switching only after the donor is quiesced and receiver can answer.
 
-    Selected providers can be transferred one by one; the default still requires\n    all three. Each selected provider requires its own real evidence.\n    Identity is the existing provider bot/group identifier, never a newly issued
+    Selected providers can be transferred one by one; the default still requires
+    all three. Each selected provider requires its own real evidence.
+    Identity is the existing provider bot/group identifier, never a newly issued
     token or changed bot name. Evidence must come from real operational probes,
     not from configuration guesses or passing unit tests.
     """
@@ -56,6 +59,15 @@ def check_cutover_admission(
         ):
             if getattr(item, field) is not True:
                 problems.append(f"{name}:{field}_not_verified")
+        if item.transport_mode == "long_polling" and name == "telegram_bot":
+            # A polling connector must not claim a webhook route. The operational
+            # evidence above still requires verified donor shutdown and ingress.
+            if item.callback_url:
+                problems.append(f"{name}:polling_callback_must_be_empty")
+            continue
+        if item.transport_mode != "webhook":
+            problems.append(f"{name}:transport_mode_invalid")
+            continue
         try:
             parts = urlsplit(item.callback_url)
             valid_url = (
