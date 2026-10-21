@@ -200,7 +200,7 @@ class ActionEconomicsIntent:
         fields = {"user_id", "text", "reply_markup", "callback_query_id",
                   "track_event_type", "track_payload", "tenant_id",
                   "product_id", "domain", "product_version", "actor_id",
-                  "idempotency_key", "world_model_meta"}
+                  "idempotency_key", "world_model_meta", "meta"}
         tenant_id = payload.get("tenant_id")
         if tenant_id is not None and (not isinstance(tenant_id, str) or not tenant_id.strip()):
             return False
@@ -214,6 +214,17 @@ class ActionEconomicsIntent:
         wm = payload.get("world_model_meta")
         if wm is not None and not isinstance(wm, Mapping):
             return False
+        # DecisionCore may attach world-model provenance after the policy
+        # proposal. Never admit economic instructions or unknown meta keys.
+        metadata = payload.get("meta")
+        if metadata is not None:
+            if not isinstance(metadata, Mapping) or not set(metadata).issubset({
+                "world_model_meta", "world_model_explainability",
+                "constraint_explainability",
+            }):
+                return False
+            if "world_model_meta" in metadata and not isinstance(metadata["world_model_meta"], Mapping):
+                return False
         return (set(payload).issubset(fields)
                 and isinstance(payload.get("user_id"), str)
                 and bool(payload["user_id"])
