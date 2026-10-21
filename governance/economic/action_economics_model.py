@@ -193,7 +193,7 @@ class ActionEconomicsIntent:
             return False
         if not isinstance(payload.get("text"), str): return False
         for key in ("tenant_id", "product_id", "domain", "product_version", "actor_id"):
-            if key in payload and (not isinstance(payload[key], str) or not payload[key].strip()): return False
+            if payload.get(key) is not None and (not isinstance(payload[key], str) or not payload[key].strip()): return False
         idem = payload.get("idempotency_key")
         if idem is not None and (not isinstance(idem, str) or not idem.startswith("decision:") or len(idem) <= 9): return False
         wm = payload.get("world_model_meta")
