@@ -200,8 +200,7 @@ class ActionEconomicsIntent:
         fields = {"user_id", "text", "reply_markup", "callback_query_id",
                   "track_event_type", "track_payload", "tenant_id"}
         tenant_id = payload.get("tenant_id")
-        if tenant_id is not None and (not isinstance(tenant_id, str) or not tenant_id.strip()):
-            return False
+        if tenant_id is not None and (not isinstance(tenant_id, str) or not tenant_id.strip()): return False
         return (set(payload).issubset(fields)
                 and isinstance(payload.get("user_id"), str)
                 and bool(payload["user_id"])
