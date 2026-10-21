@@ -109,12 +109,7 @@ def _copy_world_state(
 
 
 def _configured_telegram_tenant_id() -> str:
-    """Bind the long-poll transport to the configured production tenant.
-
-    Never silently route production messages into the legacy "default" tenant.
-    The canonical deployment already validates SMOKE_TENANT_ID as an active
-    tenant; TENANT_ID remains the explicit transport-specific override.
-    """
+    """Reject legacy default routing in strict production."""
     tenant_id = env_str("TENANT_ID", "").strip() or env_str("SMOKE_TENANT_ID", "").strip()
     if not tenant_id or tenant_id == "default":
         from governance.economic_layer_env import is_strict_mode
