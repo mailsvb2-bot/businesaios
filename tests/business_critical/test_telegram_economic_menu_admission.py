@@ -34,10 +34,7 @@ def layer(monkeypatch):
 
 def test_start_menu_message_needs_no_fictional_capital(layer):
     evaluator, policy = layer
-    result = evaluator.review(
-        decision_env=_envelope("send_message@v1", {"user_id": "u", "text": "ClientPlatform menu"}),
-        world_state={"economy": {}},
-    )
+    result = evaluator.review(decision_env=_envelope("send_message@v1", {"user_id": "u", "text": "ClientPlatform menu"}), world_state={"economy": {}})
     assert result.allow is True
     assert policy.called == 1
 
@@ -61,10 +58,7 @@ def test_start_menu_message_needs_no_fictional_capital(layer):
 ])
 def test_strict_economic_guards_remain_for_financial_requests(layer, action, payload, cost):
     evaluator, policy = layer
-    result = evaluator.review(
-        decision_env=_envelope(action, payload, cost),
-        world_state={"economy": {}},
-    )
+    result = evaluator.review(decision_env=_envelope(action, payload, cost), world_state={"economy": {}})
     assert result.allow is False
     assert result.reason == "missing_capital_state"
     assert policy.called == 0
@@ -73,10 +67,7 @@ def test_strict_economic_guards_remain_for_financial_requests(layer, action, pay
 def test_survival_veto_remains_for_message(layer):
     evaluator, policy = layer
     evaluator.survival = SimpleNamespace(evaluate=lambda: SimpleNamespace(allow_execution=False, reason="offline"))
-    result = evaluator.review(
-        decision_env=_envelope("send_message@v1", {"text": "menu"}),
-        world_state={},
-    )
+    result = evaluator.review(decision_env=_envelope("send_message@v1", {"text": "menu"}), world_state={})
     assert not result.allow
     assert result.reason.startswith("survival_block:")
     assert policy.called == 0
