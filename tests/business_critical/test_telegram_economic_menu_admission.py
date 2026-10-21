@@ -4,11 +4,9 @@ import pytest
 
 import governance.economic_layer as economics
 
-
 class _Survival:
     def evaluate(self):
         return SimpleNamespace(allow_execution=True, reason="ok")
-
 
 class _Policy:
     def __init__(self):
@@ -18,10 +16,8 @@ class _Policy:
         self.called += 1
         return SimpleNamespace(allowed=True, operator_required=False, reason="ok", metadata={})
 
-
 def _envelope(action, payload=None, cost=0.0):
     return SimpleNamespace(decision=SimpleNamespace(action=action, payload=payload or {}, cost=cost))
-
 
 @pytest.fixture
 def layer(monkeypatch):
@@ -31,13 +27,11 @@ def layer(monkeypatch):
     layer._economic_policy_engine = policy
     return layer, policy
 
-
 def test_start_menu_message_needs_no_fictional_capital(layer):
     evaluator, policy = layer
     result = evaluator.review(decision_env=_envelope("send_message@v1", {"user_id": "u", "text": "ClientPlatform menu"}), world_state={"economy": {}})
     assert result.allow is True
     assert policy.called == 1
-
 
 @pytest.mark.parametrize("action,payload,cost", [
     ("purchase@v1", {"text": "buy"}, 0.0),
@@ -63,7 +57,6 @@ def test_strict_economic_guards_remain_for_financial_requests(layer, action, pay
     assert result.reason == "missing_capital_state"
     assert policy.called == 0
 
-
 def test_survival_veto_remains_for_message(layer):
     evaluator, policy = layer
     evaluator.survival = SimpleNamespace(evaluate=lambda: SimpleNamespace(allow_execution=False, reason="offline"))
@@ -72,14 +65,10 @@ def test_survival_veto_remains_for_message(layer):
     assert result.reason.startswith("survival_block:")
     assert policy.called == 0
 
-
 def test_real_economic_policy_is_still_invoked_for_menu(monkeypatch):
     monkeypatch.setattr(economics, "is_strict_mode", lambda: True)
     evaluator = economics.EconomicAutonomyLayer(survival=_Survival())
-    result = evaluator.review(
-        decision_env=_envelope("send_message@v1", {"user_id": "u", "text": "Welcome"}),
-        world_state={"economy": {}},
-    )
+    result = evaluator.review(decision_env=_envelope("send_message@v1", {"user_id": "u", "text": "Welcome"}), world_state={"economy": {}})
     assert result.allow is True, result.reason
     assert result.economic is not None
 
@@ -96,21 +85,16 @@ def test_real_economic_policy_is_still_invoked_for_menu(monkeypatch):
 def test_canonical_decision_without_cost_can_open_menu(layer, extra, allowed):
     from contracts.decisioning.sovereign_decision_contract import Decision, DecisionEnvelope
 
-    decision = Decision(
-        decision_id="d", issuer_id="issuer", issued_at_ms=1, expires_at_ms=2,
-        policy_id="telegram", action="send_message@v1",
-        payload={"user_id": "u", "text": "ClientPlatform menu", **extra},
-        snapshot_id="s", state_hash="h", correlation_id="c",
-        state_schema_version=1, action_schema_version=1,
-    )
-    envelope = DecisionEnvelope(decision=decision, payload_hash="h",
-                                signature="test-only", kid="test-only")
+    decision = Decision(decision_id="d", issuer_id="issuer", issued_at_ms=1, expires_at_ms=2,
+                        policy_id="telegram", action="send_message@v1",
+                        payload={"user_id": "u", "text": "ClientPlatform menu", **extra},
+                        snapshot_id="s", state_hash="h", correlation_id="c",
+                        state_schema_version=1, action_schema_version=1)
+    envelope = DecisionEnvelope(decision=decision, payload_hash="h", signature="test-only", kid="test-only")
     evaluator, policy = layer
     result = evaluator.review(decision_env=envelope, world_state={})
     assert result.allow is allowed, result.reason
     assert policy.called == int(allowed)
-
-
 
 @pytest.mark.parametrize("tenant_id,allowed", [("tenant-live", True), ("", False), (" ", False), (7, False), (None, True)])
 def test_tenant_scoped_free_menu_admission(layer, tenant_id, allowed):
