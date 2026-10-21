@@ -302,8 +302,8 @@ def _run_longpoll(
                 if not isinstance(update, dict):
                     continue
                 raw_update_id = update.get("update_id")
-                if raw_update_id is not None:
-                    offset = int(raw_update_id) + 1
+                # Advance acknowledgement only after successful execution. Failed
+                # decisions must remain eligible for replay on the next poll.
                 _execute_update(
                     core=core,
                     executor=executor,
@@ -311,6 +311,8 @@ def _run_longpoll(
                     update=update,
                     transport="longpoll",
                 )
+                if raw_update_id is not None:
+                    offset = int(raw_update_id) + 1
             if not updates and idle_sleep_s > 0:
                 time.sleep(idle_sleep_s)
         except KeyboardInterrupt:
