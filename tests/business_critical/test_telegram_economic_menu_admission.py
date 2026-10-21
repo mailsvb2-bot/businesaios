@@ -92,13 +92,23 @@ def test_real_economic_policy_is_still_invoked_for_menu(monkeypatch):
     assert result.allow is True, result.reason
     assert result.economic is not None
 
-def test_canonical_decision_without_cost_can_open_menu(layer):
+@pytest.mark.parametrize("extra,allowed", [
+    ({"tenant_id": "tenant-live", "product_id": "organization_platform", "domain": "organization_platform", "product_version": "v1", "actor_id": "10001", "idempotency_key": "decision:abc123", "world_model_meta": {}}, True),
+    ({"amount": 200}, False),
+    ({"expected_cost": 20}, False),
+    ({"idempotency_key": "random"}, False),
+    ({"world_model_meta": 7}, False),
+    ({"meta": {"world_model_meta": {"semantic_state_id": "s"}}}, True),
+    ({"meta": {"requested_budget": 100}}, False),
+    ({"meta": {"world_model_meta": 0}}, False),
+])
+def test_canonical_decision_without_cost_can_open_menu(layer, extra, allowed):
     from contracts.decisioning.sovereign_decision_contract import Decision, DecisionEnvelope
 
     decision = Decision(
         decision_id="d", issuer_id="issuer", issued_at_ms=1, expires_at_ms=2,
         policy_id="telegram", action="send_message@v1",
-        payload={"user_id": "u", "text": "ClientPlatform menu"},
+        payload={"user_id": "u", "text": "ClientPlatform menu", **extra},
         snapshot_id="s", state_hash="h", correlation_id="c",
         state_schema_version=1, action_schema_version=1,
     )
@@ -106,8 +116,8 @@ def test_canonical_decision_without_cost_can_open_menu(layer):
                                 signature="test-only", kid="test-only")
     evaluator, policy = layer
     result = evaluator.review(decision_env=envelope, world_state={})
-    assert result.allow is True, result.reason
-    assert policy.called == 1
+    assert result.allow is allowed, result.reason
+    assert policy.called == int(allowed)
 
 
 
@@ -121,25 +131,3 @@ def test_tenant_scoped_free_menu_admission(layer, tenant_id, allowed):
     if not allowed:
         assert result.reason == "missing_capital_state"
 
-
-@pytest.mark.parametrize("extra,allowed", [
-    ({"tenant_id": "tenant-live", "product_id": "organization_platform", "domain": "organization_platform", "product_version": "v1", "actor_id": "10001", "idempotency_key": "decision:abc123", "world_model_meta": {}}, True),
-    ({"amount": 200}, False),
-    ({"expected_cost": 20}, False),
-    ({"idempotency_key": "random"}, False),
-    ({"world_model_meta": 7}, False),
-    ({"meta": {"world_model_meta": {"semantic_state_id": "s"}}}, True),
-    ({"meta": {"requested_budget": 100}}, False),
-    ({"meta": {"world_model_meta": 0}}, False),
-])
-def test_signed_decision_metadata_economic_admission(layer, extra, allowed):
-    from contracts.decisioning.sovereign_decision_contract import Decision, DecisionEnvelope
-    payload = {"user_id": "10001", "text": "Menu", **extra}
-    signed = Decision(decision_id="d", issuer_id="issuer", issued_at_ms=1, expires_at_ms=2,
-                      policy_id="telegram_policy@v3", action="send_message@v1", payload=payload,
-                      snapshot_id="s", state_hash="h", correlation_id="c",
-                      state_schema_version=1, action_schema_version=1)
-    envelope = DecisionEnvelope(decision=signed, payload_hash="h", signature="test", kid="test")
-    evaluator, _ = layer
-    verdict = evaluator.review(decision_env=envelope, world_state={})
-    assert verdict.allow is allowed, verdict.reason
