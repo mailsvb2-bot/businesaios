@@ -8,7 +8,6 @@ from governance.economic.economic_policy_contract import EconomicPolicyConfig
 
 CANON_NON_DECISION_MODULE = True
 
-
 def _safe_float(value: Any, default: float = 0.0) -> float:
     try:
         result = float(value)
@@ -18,13 +17,11 @@ def _safe_float(value: Any, default: float = 0.0) -> float:
         return float(default)
     return result
 
-
 def _safe_int(value: Any, default: int = 0) -> int:
     try:
         return int(value)
     except (TypeError, ValueError):
         return int(default)
-
 
 def _safe_bool(value: Any, default: bool = False) -> bool:
     if isinstance(value, bool):
@@ -41,20 +38,16 @@ def _safe_bool(value: Any, default: bool = False) -> bool:
             return False
     return bool(value)
 
-
 def _to_mapping(value: Any) -> Mapping[str, Any]:
     return value if isinstance(value, Mapping) else {}
-
 
 def _read_field(source: Any, name: str, default: Any = None) -> Any:
     if isinstance(source, Mapping):
         return source.get(name, default)
     return getattr(source, name, default)
 
-
 def _read_payload(source: Any) -> Mapping[str, Any]:
     return _to_mapping(_read_field(source, "payload", {}))
-
 
 def _normalize_str_tuple(value: Any) -> tuple[str, ...]:
     if value is None:
@@ -72,7 +65,6 @@ def _normalize_str_tuple(value: Any) -> tuple[str, ...]:
     normalized = str(value).strip()
     return (normalized,) if normalized else ()
 
-
 def _normalize_float_map(value: Any) -> dict[str, float]:
     mapping = _to_mapping(value)
     result: dict[str, float] = {}
@@ -80,10 +72,8 @@ def _normalize_float_map(value: Any) -> dict[str, float]:
         result[str(key)] = _safe_float(raw, 0.0)
     return result
 
-
 def _pick_requested_budget(requested_budget: float, budget_delta: float) -> float:
     return max(0.0, requested_budget, budget_delta)
-
 
 @dataclass(frozen=True)
 class ActionEconomicsSnapshot:
@@ -160,7 +150,6 @@ class ActionEconomicsSnapshot:
             channel_risk_scores=_normalize_float_map(merged.get("channel_risk_scores")),
             metadata=_to_mapping(merged.get("metadata")),
         )
-
 
 @dataclass(frozen=True)
 class ActionEconomicsIntent:
