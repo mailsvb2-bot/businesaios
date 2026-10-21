@@ -128,6 +128,9 @@ def test_tenant_scoped_free_menu_admission(layer, tenant_id, allowed):
     ({"expected_cost": 20}, False),
     ({"idempotency_key": "random"}, False),
     ({"world_model_meta": 7}, False),
+    ({"meta": {"world_model_meta": {"semantic_state_id": "s"}}}, True),
+    ({"meta": {"requested_budget": 100}}, False),
+    ({"meta": {"world_model_meta": 0}}, False),
 ])
 def test_signed_decision_metadata_economic_admission(layer, extra, allowed):
     from contracts.decisioning.sovereign_decision_contract import Decision, DecisionEnvelope
