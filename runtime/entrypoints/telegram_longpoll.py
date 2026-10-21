@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import logging
 import time
+from dataclasses import replace
 from typing import Any
 
 from core.ai.world_state import WorldStateV1
@@ -102,24 +103,20 @@ def _copy_world_state(
     meta: dict[str, Any],
     timestamp_ms: int,
 ) -> WorldStateV1:
-    return WorldStateV1(
-        schema_version=state.schema_version,
-        user=user,
-        session=session,
-        product=dict(state.product or {}),
-        economy=dict(state.economy or {}),
-        timestamp_ms=int(timestamp_ms or state.timestamp_ms or _now_ms()),
-        tenant_id=state.tenant_id,
-        meta=meta,
-        user_id=state.user_id,
-        safe_mode=state.safe_mode,
-        capital=state.capital,
-        horizon_state=state.horizon_state,
-        behavior=state.behavior,
-        price_constraints=state.price_constraints,
-        deployment_proposal=state.deployment_proposal,
-        manual_override=state.manual_override,
-    )
+    # Evolve the canonical state without manually cloning every governance field.
+    return replace(state, user=user, session=session, meta=meta,
+                   timestamp_ms=int(timestamp_ms or state.timestamp_ms or _now_ms()))
+
+
+def _configured_telegram_tenant_id() -> str:
+    """Reject legacy default routing in strict production."""
+    tenant_id = env_str("TENANT_ID", "").strip() or env_str("SMOKE_TENANT_ID", "").strip()
+    if not tenant_id or tenant_id == "default":
+        from governance.economic_layer_env import is_strict_mode
+        if is_strict_mode():
+            raise RuntimeError("telegram_production_tenant_id_required")
+        return "default"
+    return tenant_id
 
 
 def _world_state_from_update(
@@ -129,7 +126,7 @@ def _world_state_from_update(
 ) -> WorldStateV1:
     event = telegram_update_to_messaging_event(
         update,
-        tenant_id=env_str("TENANT_ID", "default").strip() or "default",
+        tenant_id=_configured_telegram_tenant_id(),
         product_name=env_str("PRODUCT_NAME", "BusinesAIOS"),
         timezone=env_str("SYSTEM_TZ", "Europe/Amsterdam"),
     )

@@ -109,3 +109,14 @@ def test_canonical_decision_without_cost_can_open_menu(layer):
     assert result.allow is True, result.reason
     assert policy.called == 1
 
+
+
+@pytest.mark.parametrize("tenant_id,allowed", [("tenant-live", True), ("", False), (" ", False), (7, False), (None, True)])
+def test_tenant_scoped_free_menu_admission(layer, tenant_id, allowed):
+    evaluator, policy = layer
+    payload = {"tenant_id": tenant_id, "user_id": "u", "text": "Menu"}
+    result = evaluator.review(decision_env=_envelope("send_message@v1", payload), world_state={})
+    assert result.allow is allowed, result.reason
+    assert policy.called == int(allowed)
+    if not allowed:
+        assert result.reason == "missing_capital_state"
