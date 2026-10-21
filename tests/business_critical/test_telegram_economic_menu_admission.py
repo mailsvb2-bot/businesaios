@@ -111,33 +111,12 @@ def test_canonical_decision_without_cost_can_open_menu(layer):
 
 
 
-def test_tenant_scoped_menu_message_requires_no_capital(layer):
+@pytest.mark.parametrize("tenant_id,allowed", [("tenant-live", True), ("", False), (" ", False), (7, False), (None, True)])
+def test_tenant_scoped_free_menu_admission(layer, tenant_id, allowed):
     evaluator, policy = layer
-    result = evaluator.review(
-        decision_env=_envelope(
-            "send_message@v1",
-            {"tenant_id": "tenant-live", "user_id": "u", "text": "Menu",
-             "reply_markup": {"inline_keyboard": []}},
-        ),
-        world_state={"economy": {}},
-    )
-    assert result.allow is True, result.reason
-    assert policy.called == 1
-
-
-@pytest.mark.parametrize("tenant_id", ["", " ", 7, None])
-def test_invalid_tenant_metadata_does_not_bypass_economic_gate(layer, tenant_id):
-    evaluator, policy = layer
-    result = evaluator.review(
-        decision_env=_envelope("send_message@v1", {
-            "tenant_id": tenant_id, "user_id": "u", "text": "Menu",
-        }),
-        world_state={},
-    )
-    # An explicitly supplied malformed tenant cannot grant an exemption.
-    if tenant_id is None:
-        # None is treated as an absent tenant by the envelope-level helper.
-        assert result.allow is True
-    else:
-        assert result.allow is False
+    payload = {"tenant_id": tenant_id, "user_id": "u", "text": "Menu"}
+    result = evaluator.review(decision_env=_envelope("send_message@v1", payload), world_state={})
+    assert result.allow is allowed, result.reason
+    assert policy.called == int(allowed)
+    if not allowed:
         assert result.reason == "missing_capital_state"
