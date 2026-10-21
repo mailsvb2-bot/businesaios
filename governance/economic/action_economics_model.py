@@ -197,15 +197,16 @@ class ActionEconomicsIntent:
             return False
         if not isinstance(payload, Mapping):
             return False
-        fields = {"user_id", "text", "reply_markup", "callback_query_id",
-                  "track_event_type", "track_payload", "tenant_id",
-                  "product_id", "domain", "product_version", "actor_id",
-                  "idempotency_key", "world_model_meta", "meta"}
-        tenant_id = payload.get("tenant_id")
-        if tenant_id is not None and (not isinstance(tenant_id, str) or not tenant_id.strip()):
+        allowed = {"user_id", "text", "reply_markup", "callback_query_id",
+                   "track_event_type", "track_payload", "tenant_id",
+                   "product_id", "domain", "product_version", "actor_id",
+                   "idempotency_key", "world_model_meta", "meta"}
+        if set(payload) - allowed:
             return False
-        for field_name in ("product_id", "domain", "product_version", "actor_id"):
-            value = payload.get(field_name)
+        if not isinstance(payload.get("user_id"), str) or not payload["user_id"] or not isinstance(payload.get("text"), str):
+            return False
+        for key in ("tenant_id", "product_id", "domain", "product_version", "actor_id"):
+            value = payload.get(key)
             if value is not None and (not isinstance(value, str) or not value.strip()):
                 return False
         idem = payload.get("idempotency_key")
@@ -214,21 +215,15 @@ class ActionEconomicsIntent:
         wm = payload.get("world_model_meta")
         if wm is not None and not isinstance(wm, Mapping):
             return False
-        # DecisionCore may attach world-model provenance after the policy
-        # proposal. Never admit economic instructions or unknown meta keys.
         metadata = payload.get("meta")
         if metadata is not None:
-            if not isinstance(metadata, Mapping) or not set(metadata).issubset({
-                "world_model_meta", "world_model_explainability",
-                "constraint_explainability",
-            }):
+            if not isinstance(metadata, Mapping) or set(metadata) - {
+                "world_model_meta", "world_model_explainability", "constraint_explainability"
+            }:
                 return False
             if "world_model_meta" in metadata and not isinstance(metadata["world_model_meta"], Mapping):
                 return False
-        return (set(payload).issubset(fields)
-                and isinstance(payload.get("user_id"), str)
-                and bool(payload["user_id"])
-                and isinstance(payload.get("text"), str))
+        return True
 
     @classmethod
     def from_decision(cls, decision: Any, *, config: EconomicPolicyConfig | None = None) -> "ActionEconomicsIntent":
