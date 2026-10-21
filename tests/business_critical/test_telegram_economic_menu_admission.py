@@ -84,12 +84,9 @@ def test_real_economic_policy_is_still_invoked_for_menu(monkeypatch):
 ])
 def test_canonical_decision_without_cost_can_open_menu(layer, extra, allowed):
     from contracts.decisioning.sovereign_decision_contract import Decision, DecisionEnvelope
-
     decision = Decision(decision_id="d", issuer_id="issuer", issued_at_ms=1, expires_at_ms=2,
-                        policy_id="telegram", action="send_message@v1",
-                        payload={"user_id": "u", "text": "ClientPlatform menu", **extra},
-                        snapshot_id="s", state_hash="h", correlation_id="c",
-                        state_schema_version=1, action_schema_version=1)
+                        policy_id="telegram", action="send_message@v1", payload={"user_id": "u", "text": "ClientPlatform menu", **extra},
+                        snapshot_id="s", state_hash="h", correlation_id="c", state_schema_version=1, action_schema_version=1)
     envelope = DecisionEnvelope(decision=decision, payload_hash="h", signature="test-only", kid="test-only")
     evaluator, policy = layer
     result = evaluator.review(decision_env=envelope, world_state={})
