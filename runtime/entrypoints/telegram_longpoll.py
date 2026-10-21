@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import logging
 import time
+from dataclasses import replace
 from typing import Any
 
 from core.ai.world_state import WorldStateV1
@@ -102,24 +103,9 @@ def _copy_world_state(
     meta: dict[str, Any],
     timestamp_ms: int,
 ) -> WorldStateV1:
-    return WorldStateV1(
-        schema_version=state.schema_version,
-        user=user,
-        session=session,
-        product=dict(state.product or {}),
-        economy=dict(state.economy or {}),
-        timestamp_ms=int(timestamp_ms or state.timestamp_ms or _now_ms()),
-        tenant_id=state.tenant_id,
-        meta=meta,
-        user_id=state.user_id,
-        safe_mode=state.safe_mode,
-        capital=state.capital,
-        horizon_state=state.horizon_state,
-        behavior=state.behavior,
-        price_constraints=state.price_constraints,
-        deployment_proposal=state.deployment_proposal,
-        manual_override=state.manual_override,
-    )
+    # Evolve the canonical state without manually cloning every governance field.
+    return replace(state, user=user, session=session, meta=meta,
+                   timestamp_ms=int(timestamp_ms or state.timestamp_ms or _now_ms()))
 
 
 def _configured_telegram_tenant_id() -> str:
