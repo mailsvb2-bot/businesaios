@@ -198,9 +198,22 @@ class ActionEconomicsIntent:
         if not isinstance(payload, Mapping):
             return False
         fields = {"user_id", "text", "reply_markup", "callback_query_id",
-                  "track_event_type", "track_payload", "tenant_id"}
+                  "track_event_type", "track_payload", "tenant_id",
+                  "product_id", "domain", "product_version", "actor_id",
+                  "idempotency_key", "world_model_meta"}
         tenant_id = payload.get("tenant_id")
-        if tenant_id is not None and (not isinstance(tenant_id, str) or not tenant_id.strip()): return False
+        if tenant_id is not None and (not isinstance(tenant_id, str) or not tenant_id.strip()):
+            return False
+        for field_name in ("product_id", "domain", "product_version", "actor_id"):
+            value = payload.get(field_name)
+            if value is not None and (not isinstance(value, str) or not value.strip()):
+                return False
+        idem = payload.get("idempotency_key")
+        if idem is not None and (not isinstance(idem, str) or not idem.startswith("decision:") or len(idem) <= 9):
+            return False
+        wm = payload.get("world_model_meta")
+        if wm is not None and not isinstance(wm, Mapping):
+            return False
         return (set(payload).issubset(fields)
                 and isinstance(payload.get("user_id"), str)
                 and bool(payload["user_id"])
