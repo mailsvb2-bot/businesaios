@@ -45,3 +45,24 @@ def test_nested_and_back_callbacks_never_fall_through(monkeypatch, callback):
     result = UnifiedTelegramPolicyV3().propose(_callback_state(callback))
     assert result.action == "send_message@v1"
     assert "Я здесь. Напиши" not in result.payload["text"]
+
+
+def _nested_buttons():
+    from core.ux.keyboards.admin import kb_staff_menu
+    from core.ux.keyboards.autopilot import kb_autopilot_menu, kb_growth_menu, kb_profit_sprint_lead_sources
+    from core.ux.keyboards.settings import kb_settings_menu, kb_state_menu, kb_mood_rate
+    keyboards = (kb_staff_menu(), kb_autopilot_menu(), kb_growth_menu(),
+                 kb_profit_sprint_lead_sources(), kb_settings_menu(), kb_state_menu(), kb_mood_rate())
+    return tuple(sorted({button["callback_data"] for keyboard in keyboards
+                         for row in keyboard["inline_keyboard"] for button in row}))
+
+
+@pytest.mark.parametrize("callback", _nested_buttons())
+def test_all_nested_visible_buttons_have_concrete_route(monkeypatch, callback):
+    monkeypatch.setattr("runtime.entrypoints.telegram_longpoll._configured_telegram_tenant_id", lambda: "tenant-live")
+    state = _callback_state(callback)
+    result = UnifiedTelegramPolicyV3(admin_user_ids=("4001",)).propose(state)
+    assert result.action, callback
+    if result.action == "send_message@v1":
+        assert result.payload.get("text"), callback
+        assert not result.payload["text"].startswith("Я здесь. Напиши"), callback
