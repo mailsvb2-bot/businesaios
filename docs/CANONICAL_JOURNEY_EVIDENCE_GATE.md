@@ -45,3 +45,9 @@ This workflow aggregates test evidence only. It performs no repairs, external ac
 5. Set `canonical-journey-evidence` as a required status check **only after the workflow passes on the exact integration head**.
 
 The workflow is an additional gate, not a substitute for `full`, `release`, browser E2E or trusted production certification.
+
+## Entry-point matrix extension
+
+The CI integration evidence now also runs existing tests for VK/MAX messaging parity, WhatsApp signed webhook contracts, Slack and Discord inbound normalization, LINE/Viber transport foundation, SMS transport truth, Meta messenger outbound contracts, canonical multichannel registry/routing, CRM webhook ingestion, website/public site and headless acquisition/decision paths. These are **not all the same evidence level**: platform contracts and mocked inbound tests do not imply live-network readiness. All mapped suites must pass and report at least one real JUnit testcase.
+
+This is intentionally a growing **cross-channel evidence matrix**, not yet exhaustive evidence of every externally reachable entry point. Full coverage additionally requires machine-generated route/connector inventory with drift detection, each provider's live readiness proof, and outcome attribution through DecisionCore/RuntimeExecutor. Avoid inferring production acceptance from generic route or provider contracts.
