@@ -84,7 +84,7 @@ jobs:
               pass
           records = []
           for name, marker in expected.items():
-              scoped = [x for x in cases if marker in (x.get("classname", "") + x.get("file", ""))]
+              scoped = [x for x in cases if marker.removesuffix(".py") in (x.get("classname", "") + x.get("file", "") + x.get("name", ""))]
               failures = sum(x.find("failure") is not None or x.find("error") is not None for x in scoped)
               skips = sum(x.find("skipped") is not None for x in scoped)
               passed = len(scoped) - failures - skips
