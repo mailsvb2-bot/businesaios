@@ -127,6 +127,7 @@ def project_shape_config(root: Path) -> ProjectShapeConfig:
             ".githooks/pre-push",
         ),
         allowed_workflows=(
+            ".github/workflows/canonical-journey-evidence.yml",
             ".github/workflows/ci-doctor.yml",
             ".github/workflows/ci-fast.yml",
             ".github/workflows/ci-full.yml",
