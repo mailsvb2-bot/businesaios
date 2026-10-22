@@ -36,6 +36,8 @@ def register_business_workspace_commercial_routes(*, router: APIRouter, auth_bun
             raise HTTPException(status_code=422, detail="advertising_brief_fields_invalid")
         if not isinstance(body.get("formats"), list):
             raise HTTPException(status_code=422, detail="advertising_formats_invalid")
+        if not all(isinstance(body.get(k), str) and body[k].strip() for k in ("headline", "description")):
+            raise HTTPException(status_code=422, detail="advertising_brief_invalid")
         request_text = f"{body.get('headline')}. {body.get('description')}"
         scene = await asyncio.to_thread(visual_scene_breakdown, scene_agent, LLMTaskContext(
             tenant_id=tenant, offer={"request": request_text}, correlation_key=f"ad-scene:{business}"), request_text)

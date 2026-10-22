@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import hashlib
 import json
+import weakref
+from collections import OrderedDict
 from dataclasses import dataclass
 from typing import Any
 
@@ -285,13 +287,28 @@ def select_creative(
     return CreativeSelection(selected=best, reason="heuristic_best", scores=scores, guardrails_ok=ok_any)
 
 
+_SCENE_CACHE: weakref.WeakKeyDictionary[Any, OrderedDict[tuple[str, str], dict[str, str]]] = weakref.WeakKeyDictionary()
+
+
 def visual_scene_breakdown(llm: LLMAgent | None, ctx: LLMTaskContext, request: str) -> dict[str, str]:
     """Use canonical LLMAgent; deterministic rule fallback on unavailable response."""
+    key = (str(ctx.tenant_id or ""), str(request or "").strip())
+    try:
+        cache = _SCENE_CACHE.setdefault(llm, OrderedDict()) if llm is not None else None
+    except TypeError:
+        cache = None
+    if cache is not None and key in cache:
+        cache.move_to_end(key)
+        return dict(cache[key])
     try:
         res = llm.run_task(TaskType.ADS_VISUAL_SCENE, ctx) if llm is not None else None
         scene = parse_scene_json(res.json or res.text) if res is not None else None
     except Exception:
         scene = None
+    if scene and cache is not None:
+        cache[key] = dict(scene)
+        while len(cache) > 256:
+            cache.popitem(last=False)
     return scene or scene_from_text(request)
 
 
