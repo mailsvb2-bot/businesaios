@@ -82,6 +82,9 @@ def handle(ctx: TelegramCtx, *, default_price_rub: int, bot_username: str = "", 
         if out is not None:
             return out
 
+    if ctx.callback_data:
+        return pm(text="Этот раздел пока недоступен в Telegram. Вернись в главное меню.", reply_markup=kb_back_main())
+
     if ctx.full_access:
         msg = "Я здесь. Напиши, что сейчас происходит в твоём дне — и мы настроим ритм."
     else:
