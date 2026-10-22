@@ -8,7 +8,6 @@ from governance.economic.economic_policy_contract import EconomicPolicyConfig
 
 CANON_NON_DECISION_MODULE = True
 
-
 def _safe_float(value: Any, default: float = 0.0) -> float:
     try:
         result = float(value)
@@ -18,13 +17,11 @@ def _safe_float(value: Any, default: float = 0.0) -> float:
         return float(default)
     return result
 
-
 def _safe_int(value: Any, default: int = 0) -> int:
     try:
         return int(value)
     except (TypeError, ValueError):
         return int(default)
-
 
 def _safe_bool(value: Any, default: bool = False) -> bool:
     if isinstance(value, bool):
@@ -41,20 +38,16 @@ def _safe_bool(value: Any, default: bool = False) -> bool:
             return False
     return bool(value)
 
-
 def _to_mapping(value: Any) -> Mapping[str, Any]:
     return value if isinstance(value, Mapping) else {}
-
 
 def _read_field(source: Any, name: str, default: Any = None) -> Any:
     if isinstance(source, Mapping):
         return source.get(name, default)
     return getattr(source, name, default)
 
-
 def _read_payload(source: Any) -> Mapping[str, Any]:
     return _to_mapping(_read_field(source, "payload", {}))
-
 
 def _normalize_str_tuple(value: Any) -> tuple[str, ...]:
     if value is None:
@@ -72,7 +65,6 @@ def _normalize_str_tuple(value: Any) -> tuple[str, ...]:
     normalized = str(value).strip()
     return (normalized,) if normalized else ()
 
-
 def _normalize_float_map(value: Any) -> dict[str, float]:
     mapping = _to_mapping(value)
     result: dict[str, float] = {}
@@ -80,10 +72,8 @@ def _normalize_float_map(value: Any) -> dict[str, float]:
         result[str(key)] = _safe_float(raw, 0.0)
     return result
 
-
 def _pick_requested_budget(requested_budget: float, budget_delta: float) -> float:
     return max(0.0, requested_budget, budget_delta)
-
 
 @dataclass(frozen=True)
 class ActionEconomicsSnapshot:
@@ -161,7 +151,6 @@ class ActionEconomicsSnapshot:
             metadata=_to_mapping(merged.get("metadata")),
         )
 
-
 @dataclass(frozen=True)
 class ActionEconomicsIntent:
     action_type: str
@@ -197,14 +186,24 @@ class ActionEconomicsIntent:
             return False
         if not isinstance(payload, Mapping):
             return False
-        fields = {"user_id", "text", "reply_markup", "callback_query_id",
-                  "track_event_type", "track_payload", "tenant_id"}
-        tenant_id = payload.get("tenant_id")
-        if tenant_id is not None and (not isinstance(tenant_id, str) or not tenant_id.strip()): return False
-        return (set(payload).issubset(fields)
-                and isinstance(payload.get("user_id"), str)
-                and bool(payload["user_id"])
-                and isinstance(payload.get("text"), str))
+        allowed = {"user_id", "text", "reply_markup", "callback_query_id",
+                   "track_event_type", "track_payload", "tenant_id", "product_id",
+                   "domain", "product_version", "actor_id", "idempotency_key", "world_model_meta", "meta"}
+        if set(payload) - allowed or not isinstance(payload.get("user_id"), str) or not payload["user_id"]:
+            return False
+        if not isinstance(payload.get("text"), str): return False
+        for key in ("tenant_id", "product_id", "domain", "product_version", "actor_id"):
+            if payload.get(key) is not None and (not isinstance(payload[key], str) or not payload[key].strip()): return False
+        idem = payload.get("idempotency_key")
+        if idem is not None and (not isinstance(idem, str) or not idem.startswith("decision:") or len(idem) <= 9): return False
+        wm = payload.get("world_model_meta")
+        if wm is not None and not isinstance(wm, Mapping): return False
+        meta = payload.get("meta")
+        if meta is not None and (not isinstance(meta, Mapping) or set(meta) - {
+            "world_model_meta", "world_model_explainability", "constraint_explainability"
+        }): return False
+        if isinstance(meta, Mapping) and "world_model_meta" in meta and not isinstance(meta["world_model_meta"], Mapping): return False
+        return True
 
     @classmethod
     def from_decision(cls, decision: Any, *, config: EconomicPolicyConfig | None = None) -> "ActionEconomicsIntent":
