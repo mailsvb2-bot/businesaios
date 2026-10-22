@@ -7,6 +7,8 @@ from core.ux.telegram_keyboards import kb_back_main, kb_staff_menu
 
 
 def handle_analytics(ctx: TelegramCtx, *, user_id: str, pm) -> ProposedAction | None:
+    if ctx.callback_data in {"admin:segments", "admin:ab", "admin:giftshare", "admin:funnel2"} and not hasattr(ctx, "event_store"):
+        return pm(text="Аналитика событий сейчас недоступна в Telegram.", reply_markup=kb_staff_menu())
     if ctx.callback_data in {"admin:demo:brief", "admin:demo:full"}:
         denied = deny_if_not_admin(ctx.is_admin, pm=pm)
         if denied is not None:

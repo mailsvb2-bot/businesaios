@@ -6,7 +6,6 @@ from dataclasses import dataclass
 from typing import Any
 
 from ..contracts import LLMClient, LLMRequest, LLMResponse, LLMUsage
-from ..redaction import safe_metadata
 
 OpenAICompatTransport = Callable[[str, str, dict[str, Any], int], dict[str, Any]]
 
@@ -20,7 +19,7 @@ class OpenAICompatConfig:
 
 
 class OpenAICompatClient(LLMClient):
-    """OpenAI-compatible client (Responses API preferred).
+    """OpenAI-compatible client (Chat Completions API).
 
     Network is executed by `transport` wired from runtime.effects.
     """
@@ -32,16 +31,11 @@ class OpenAICompatClient(LLMClient):
         model = req.model or self._cfg.default_model
         payload: dict[str, Any] = {
             "model": model,
-            "input": [
-                {"role": m.role, "content": [{"type": "input_text", "text": m.content}]}
-                for m in req.messages
-            ],
+            "messages": [{"role": m.role, "content": m.content} for m in req.messages],
             "temperature": req.temperature,
             "top_p": req.top_p,
-            "max_output_tokens": req.max_tokens,
+            "max_tokens": req.max_tokens,
         }
-        if req.metadata:
-            payload["metadata"] = safe_metadata(req.metadata)
         return payload
 
     @staticmethod
