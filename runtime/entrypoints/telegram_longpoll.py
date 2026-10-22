@@ -222,7 +222,7 @@ def _execute_update(
     event_log: Any,
     update: dict[str, Any],
     transport: str,
-) -> None:
+) -> Any:
     raw_update_id = update.get("update_id")
     state = _world_state_from_update(update, transport=transport)
     result = execute_runtime_decision(
@@ -240,6 +240,7 @@ def _execute_update(
             "ok": bool(getattr(result, "ok", False)),
         },
     )
+    return result
 
 def _run_longpoll(
     *,
@@ -297,13 +298,15 @@ def _run_longpoll(
                 raw_update_id = update.get("update_id")
                 # Advance acknowledgement only after successful execution. Failed
                 # decisions must remain eligible for replay on the next poll.
-                _execute_update(
+                result = _execute_update(
                     core=core,
                     executor=executor,
                     event_log=event_log,
                     update=update,
                     transport="longpoll",
                 )
+                if not bool(getattr(result, "ok", False)):
+                    raise RuntimeError("telegram_update_outcome_unconfirmed")
                 if raw_update_id is not None:
                     offset = int(raw_update_id) + 1
             if not updates and idle_sleep_s > 0:
