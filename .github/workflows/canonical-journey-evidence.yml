@@ -56,6 +56,14 @@ jobs:
             tests/unit/application/test_multichannel_whatsapp_webhook_contract.py \
             tests/unit/application/test_multichannel_slack_native_ingress.py \
             tests/unit/application/test_multichannel_discord_native_ingress.py \
+            tests/unit/application/test_multichannel_line_viber_native_foundation.py \
+            tests/unit/application/test_multichannel_sms_truth_contract.py \
+            tests/unit/application/test_multichannel_meta_native_outbound.py \
+            tests/unit/application/test_multichannel_provider_parity_contract.py \
+            tests/unit/application/test_provider_truth_contract_only_fail_closed.py \
+            tests/test_multichannel_runtime_flow_v11.py \
+            tests/application/public_site/test_public_site_contract.py \
+            tests/contract/headless/test_headless_acquisition_public_api.py \
             --junitxml=artifacts/ci/journey-evidence/junit.xml
           result=$?
           echo "pytest_exit=$result" >> "$GITHUB_OUTPUT"
@@ -89,6 +97,14 @@ jobs:
               "whatsapp_webhook": "test_multichannel_whatsapp_webhook_contract.py",
               "slack_ingress": "test_multichannel_slack_native_ingress.py",
               "discord_ingress": "test_multichannel_discord_native_ingress.py",
+              "line_viber_contract": "test_multichannel_line_viber_native_foundation.py",
+              "sms_truth_contract": "test_multichannel_sms_truth_contract.py",
+              "meta_messaging_contract": "test_multichannel_meta_native_outbound.py",
+              "provider_parity": "test_multichannel_provider_parity_contract.py",
+              "provider_truth_fail_closed": "test_provider_truth_contract_only_fail_closed.py",
+              "generic_multichannel_runtime": "test_multichannel_runtime_flow_v11.py",
+              "public_site_entrypoint": "test_public_site_contract.py",
+              "headless_public_api": "test_headless_acquisition_public_api.py",
           }
           cases = []
           try:
