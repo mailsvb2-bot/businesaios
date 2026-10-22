@@ -49,6 +49,13 @@ jobs:
             tests/business_critical/test_execution_crash_window_recovery_contract.py \
             tests/integration/execution/test_runtime_capability_health_feedback_loop.py \
             tests/test_world_model_self_check.py \
+            tests/arch/test_multichannel_runtime_single_registry.py \
+            tests/business_critical/test_vk_max_messaging_parity.py \
+            tests/crm/test_crm_webhook_ingestion.py \
+            tests/integration/headless/test_goal_bound_v2_closed_loop.py \
+            tests/unit/application/test_multichannel_whatsapp_webhook_contract.py \
+            tests/unit/application/test_multichannel_slack_native_ingress.py \
+            tests/unit/application/test_multichannel_discord_native_ingress.py \
             --junitxml=artifacts/ci/journey-evidence/junit.xml
           result=$?
           echo "pytest_exit=$result" >> "$GITHUB_OUTPUT"
@@ -75,6 +82,13 @@ jobs:
               "executor_crash_recovery": "test_execution_crash_window_recovery_contract.py",
               "capability_outcome_feedback": "test_runtime_capability_health_feedback_loop.py",
               "world_model_integrity": "test_world_model_self_check.py",
+              "multichannel_registry_contract": "test_multichannel_runtime_single_registry.py",
+              "vk_max_messaging": "test_vk_max_messaging_parity.py",
+              "crm_webhook": "test_crm_webhook_ingestion.py",
+              "headless_decision_closed_loop": "test_goal_bound_v2_closed_loop.py",
+              "whatsapp_webhook": "test_multichannel_whatsapp_webhook_contract.py",
+              "slack_ingress": "test_multichannel_slack_native_ingress.py",
+              "discord_ingress": "test_multichannel_discord_native_ingress.py",
           }
           cases = []
           try:
