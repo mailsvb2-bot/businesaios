@@ -42,16 +42,13 @@ CANON_TELEGRAM_EXECUTES_ONLY_THROUGH_DECISION_GATEWAY = True
 
 _LOG = logging.getLogger("businesaios.telegram.entrypoint")
 
-
 def _now_ms() -> int:
     return int(time.time() * 1000)
-
 
 def _telegram_api_url(token: str, method: str) -> str:
     """Compatibility helper delegating to the sole endpoint owner."""
 
     return telegram_method_url(token, method)
-
 
 def _http_json(
     method: str,
@@ -64,13 +61,11 @@ def _http_json(
 
     return http_json(method, url, payload or {}, timeout_s=timeout_s)
 
-
 def _response_payload(response: Any) -> dict[str, Any]:
     payload = getattr(response, "json", None)
     if isinstance(payload, dict):
         return payload
     return {}
-
 
 def _append_event(
     event_log: Any,
