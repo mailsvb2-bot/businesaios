@@ -36,6 +36,8 @@ jobs:
       - name: Install locked dependencies
         run: |
           python -m pip install --disable-pip-version-check -r requirements.lock.txt
+      - name: Check canonical CI invariants
+        run: python -m scripts.ci.cli --gate doctor
       - name: Run canonical integrated journeys (no live provider claims)
         id: run
         shell: bash
