@@ -309,6 +309,7 @@ def _run_longpoll(
                     transport="longpoll",
                 )
                 if not bool(getattr(result, "ok", False)):
+                    _LOG.warning("telegram canonical execution did not confirm outcome; retrying update_id=%s", raw_update_id)
                     raise RuntimeError("telegram_update_outcome_unconfirmed")
                 if raw_update_id is not None:
                     offset = int(raw_update_id) + 1
