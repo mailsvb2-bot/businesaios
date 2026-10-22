@@ -64,6 +64,7 @@ jobs:
             tests/test_multichannel_runtime_flow_v11.py \
             tests/application/public_site/test_public_site_contract.py \
             tests/contract/headless/test_headless_acquisition_public_api.py \
+            tests/integration/entrypoints/test_every_registered_messaging_channel.py \
             --junitxml=artifacts/ci/journey-evidence/junit.xml
           result=$?
           echo "pytest_exit=$result" >> "$GITHUB_OUTPUT"
@@ -105,6 +106,7 @@ jobs:
               "generic_multichannel_runtime": "test_multichannel_runtime_flow_v11.py",
               "public_site_entrypoint": "test_public_site_contract.py",
               "headless_public_api": "test_headless_acquisition_public_api.py",
+              "all_registered_messaging_channels": "test_every_registered_messaging_channel.py",
           }
           cases = []
           try:
@@ -122,7 +124,25 @@ jobs:
                               "passed": passed, "failed": failures, "skipped": skips,
                               "status": "PASS" if passed > 0 and failures == 0 and skips == 0 else "FAIL",
                               "evidence_type": "controlled_integration"})
-          ok = str(os.getenv("TEST_EXIT")) == "0" and all(x["status"] == "PASS" for x in records)
+          # Derive coverage from the canonical provider registry, not a hand-maintained channel list.
+          from application.business_autonomy.provider_catalog import MESSAGING_CHANNEL_PROVIDER_KEYS
+          channel_cases = [x for x in cases if "test_every_registered_messaging_channel" in (x.get("classname", "") + x.get("file", ""))]
+          channel_inventory = {}
+          for channel, provider_key in sorted(MESSAGING_CHANNEL_PROVIDER_KEYS.items()):
+              tests = [x for x in channel_cases if x.get("name", "").startswith("test_every_registered_messaging_channel_has_canonical_provider_binding") and
+                       (x.get("name", "").endswith("-" + channel + "-" + provider_key + "]") or
+                        ("-" + channel + "-" + provider_key + "-") in x.get("name", ""))]
+              # pytest IDs may be made unique or escaped; prove coverage by substring if needed.
+              if not tests:
+                  tests = [x for x in channel_cases if channel in x.get("name", "") and provider_key in x.get("name", "")]
+              success = bool(tests) and all(x.find("failure") is None and x.find("error") is None and x.find("skipped") is None for x in tests)
+              channel_inventory[channel] = {
+                  "provider_key": provider_key,
+                  "canonical_binding": "PASS" if success else "FAIL",
+                  "decisioncore_to_outcome_live": "NOT_PROVEN",
+                  "external_delivery": "NOT_PROVEN",
+              }
+          ok = str(os.getenv("TEST_EXIT")) == "0" and all(x["status"] == "PASS" for x in records) and all(v["canonical_binding"] == "PASS" for v in channel_inventory.values())
           result = {
               "schema": "businessaios.canonical_journey_evidence.v1",
               "exact_sha": os.environ["BAIOS_CI_TARGET_SHA"],
@@ -132,6 +152,7 @@ jobs:
               "real_merchant_settlement_proven": False,
               "customer_outcome_in_production_proven": False,
               "cases": records,
+              "channels": channel_inventory,
               "limitations": ["Controlled integrations are not evidence of real external delivery.",
                               "Production synthetic and actual post-deploy outcome probes remain separate."],
           }
