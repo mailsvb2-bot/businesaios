@@ -107,19 +107,25 @@ class UnifiedTelegramPolicyV3:
         )
         return context, is_admin
 
+    @staticmethod
+    def _bind_callback(action: ProposedAction, context: TelegramCtx) -> ProposedAction:
+        if action.action != "send_message@v1" or not context.callback_query_id:
+            return action
+        return replace(action, payload={**action.payload, "callback_query_id": context.callback_query_id})
+
     def _propose_base(self, state: WorldStateV1) -> ProposedAction:
         domain = self._domain_proposal(state)
         if domain is not None:
             return domain
         context, _is_admin = self._context(state)
-        return normalize_proposed_action(
+        return self._bind_callback(normalize_proposed_action(
             handle(
                 context,
                 default_price_rub=self._default_price_rub,
                 bot_username=self._bot_username,
                 gift_ttl_sec=self._gift_ttl_sec,
             )
-        )
+        ), context)
 
     def propose(self, state: WorldStateV1) -> ProposedAction:
         """Compatibility: produce the unchanged base UX action."""
@@ -136,14 +142,14 @@ class UnifiedTelegramPolicyV3:
         telegram_update = getattr(state, "telegram_update", None)
         if self._retention is None or is_admin or telegram_update is None:
             return [
-                normalize_proposed_action(
+                self._bind_callback(normalize_proposed_action(
                     handle(
                         context,
                         default_price_rub=self._default_price_rub,
                         bot_username=self._bot_username,
                         gift_ttl_sec=self._gift_ttl_sec,
                     )
-                )
+                ), context)
             ]
 
         evaluation = self._retention.evaluate(state)
@@ -153,14 +159,14 @@ class UnifiedTelegramPolicyV3:
         )
         if constrained_state is not state:
             context = replace(context, state=constrained_state)
-        base = normalize_proposed_action(
+        base = self._bind_callback(normalize_proposed_action(
             handle(
                 context,
                 default_price_rub=self._default_price_rub,
                 bot_username=self._bot_username,
                 gift_ttl_sec=self._gift_ttl_sec,
             )
-        )
+        ), context)
         return self._retention.propose_candidates(
             state=constrained_state,
             base=base,
