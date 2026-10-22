@@ -86,8 +86,11 @@ def _append_event(
             try:
                 fn(event)
                 return
-            except TypeError:
+            except (TypeError, ValueError):
                 continue
+            except Exception:
+                _LOG.warning("telegram event diagnostics write failed", exc_info=True)
+                return
 
 def _copy_world_state(
     state: WorldStateV1,
