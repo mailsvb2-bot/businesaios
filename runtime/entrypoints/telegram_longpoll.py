@@ -42,16 +42,13 @@ CANON_TELEGRAM_EXECUTES_ONLY_THROUGH_DECISION_GATEWAY = True
 
 _LOG = logging.getLogger("businesaios.telegram.entrypoint")
 
-
 def _now_ms() -> int:
     return int(time.time() * 1000)
-
 
 def _telegram_api_url(token: str, method: str) -> str:
     """Compatibility helper delegating to the sole endpoint owner."""
 
     return telegram_method_url(token, method)
-
 
 def _http_json(
     method: str,
@@ -64,13 +61,11 @@ def _http_json(
 
     return http_json(method, url, payload or {}, timeout_s=timeout_s)
 
-
 def _response_payload(response: Any) -> dict[str, Any]:
     payload = getattr(response, "json", None)
     if isinstance(payload, dict):
         return payload
     return {}
-
 
 def _append_event(
     event_log: Any,
@@ -94,7 +89,6 @@ def _append_event(
             except TypeError:
                 continue
 
-
 def _copy_world_state(
     state: WorldStateV1,
     *,
@@ -107,7 +101,6 @@ def _copy_world_state(
     return replace(state, user=user, session=session, meta=meta,
                    timestamp_ms=int(timestamp_ms or state.timestamp_ms or _now_ms()))
 
-
 def _configured_telegram_tenant_id() -> str:
     """Reject legacy default routing in strict production."""
     tenant_id = env_str("TENANT_ID", "").strip() or env_str("SMOKE_TENANT_ID", "").strip()
@@ -117,7 +110,6 @@ def _configured_telegram_tenant_id() -> str:
             raise RuntimeError("telegram_production_tenant_id_required")
         return "default"
     return tenant_id
-
 
 def _world_state_from_update(
     update: dict[str, Any],
@@ -138,10 +130,15 @@ def _world_state_from_update(
         "telegram_user_id": event.user_id,
         "telegram_chat_id": event.chat_id,
     }
+    callback = update.get("callback_query")
+    callback = callback if isinstance(callback, dict) else {}
     session = {
         **dict(state.session or {}),
         "telegram_update_id": event.update_id,
         "telegram_chat_id": event.chat_id,
+        "is_callback": bool(callback),
+        "callback_data": str(callback.get("data") or "") if callback else "",
+        "callback_query_id": str(callback.get("id")) if callback.get("id") is not None else None,
     }
     meta = {
         **dict(state.meta or {}),
@@ -154,7 +151,6 @@ def _world_state_from_update(
         meta=meta,
         timestamp_ms=timestamp_ms,
     )
-
 
 def _validate_startup(token: str) -> None:
     from runtime.effects import classify_startup
@@ -202,7 +198,6 @@ def _validate_startup(token: str) -> None:
     if not report.ok:
         raise RuntimeError(f"{report.code}: {report.hint}")
 
-
 def _start_health_if_enabled(event_log: Any) -> Any:
     if not env_bool("TELEGRAM_HEALTH_ENABLED", True):
         return None
@@ -219,7 +214,6 @@ def _start_health_if_enabled(event_log: Any) -> Any:
         host=host,
         port=port,
     )
-
 
 def _execute_update(
     *,
@@ -246,7 +240,6 @@ def _execute_update(
             "ok": bool(getattr(result, "ok", False)),
         },
     )
-
 
 def _run_longpoll(
     *,
@@ -334,7 +327,6 @@ def _run_longpoll(
             _LOG.exception("telegram polling iteration failed")
             time.sleep(max(1, env_int("TELEGRAM_ERROR_SLEEP_S", 3)))
 
-
 def _webhook_public_url(path: str) -> str:
     explicit = env_str("TELEGRAM_WEBHOOK_URL", "").strip()
     if explicit:
@@ -344,7 +336,6 @@ def _webhook_public_url(path: str) -> str:
         return ""
     normalized_path = "/" + str(path or "").strip().lstrip("/")
     return f"{base}{normalized_path}"
-
 
 def _set_webhook_if_configured(
     *,
@@ -375,7 +366,6 @@ def _set_webhook_if_configured(
     )
     if not response.get("ok"):
         raise RuntimeError(str(response.get("description") or response))
-
 
 def _run_webhook(
     *,
@@ -440,7 +430,6 @@ def _run_webhook(
     _LOG.info("telegram webhook receiver started")
     while True:
         time.sleep(max(1, env_int("TELEGRAM_WEBHOOK_IDLE_SLEEP_S", 3600)))
-
 
 def runtime_bootstrap() -> None:
     mark_telegram_token_source()
