@@ -138,10 +138,15 @@ def _world_state_from_update(
         "telegram_user_id": event.user_id,
         "telegram_chat_id": event.chat_id,
     }
+    callback = update.get("callback_query")
+    callback = callback if isinstance(callback, dict) else {}
     session = {
         **dict(state.session or {}),
         "telegram_update_id": event.update_id,
         "telegram_chat_id": event.chat_id,
+        "is_callback": bool(callback),
+        "callback_data": str(callback.get("data") or "") if callback else "",
+        "callback_query_id": str(callback.get("id")) if callback.get("id") is not None else None,
     }
     meta = {
         **dict(state.meta or {}),
