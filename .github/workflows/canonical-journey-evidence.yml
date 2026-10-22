@@ -1,0 +1,172 @@
+name: Canonical Production Journey Evidence
+
+on:
+  workflow_dispatch:
+  pull_request:
+    types: [opened, synchronize, reopened]
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: journey-evidence-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  canonical-journey-evidence:
+    name: canonical-journey-evidence
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    env:
+      PYTHONDONTWRITEBYTECODE: "1"
+      PYTEST_DISABLE_PLUGIN_AUTOLOAD: "1"
+      BAIOS_CI_TARGET_SHA: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
+        with:
+          ref: ${{ env.BAIOS_CI_TARGET_SHA }}
+          persist-credentials: false
+      - name: Verify exact checkout
+        run: test "$(git rev-parse HEAD)" = "$BAIOS_CI_TARGET_SHA"
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+        with:
+          python-version: '3.12'
+      - name: Install locked dependencies
+        run: |
+          python -m pip install --disable-pip-version-check -r requirements.lock.txt
+      - name: Check canonical CI invariants
+        run: python -m scripts.ci.cli --gate doctor
+      - name: Run canonical integrated journeys (no live provider claims)
+        id: run
+        shell: bash
+        run: |
+          mkdir -p artifacts/ci/journey-evidence
+          set +e
+          python -m pytest -q -p pytest_asyncio.plugin \
+            tests/integration/api/test_phase18_commercial_ingress_journey.py \
+            tests/integration/api/test_phase18_yookassa_merchant_full_journey.py \
+            tests/integration/api/test_phase18_stars_dual_commercial_journey.py \
+            tests/business_critical/test_execution_crash_window_recovery_contract.py \
+            tests/integration/execution/test_runtime_capability_health_feedback_loop.py \
+            tests/test_world_model_self_check.py \
+            tests/arch/test_multichannel_runtime_single_registry.py \
+            tests/business_critical/test_vk_max_messaging_parity.py \
+            tests/crm/test_crm_webhook_ingestion.py \
+            tests/integration/headless/test_goal_bound_v2_closed_loop.py \
+            tests/unit/application/test_multichannel_whatsapp_webhook_contract.py \
+            tests/unit/application/test_multichannel_slack_native_ingress.py \
+            tests/unit/application/test_multichannel_discord_native_ingress.py \
+            tests/unit/application/test_multichannel_line_viber_native_foundation.py \
+            tests/unit/application/test_multichannel_sms_truth_contract.py \
+            tests/unit/application/test_multichannel_meta_native_outbound.py \
+            tests/unit/application/test_multichannel_provider_parity_contract.py \
+            tests/unit/application/test_provider_truth_contract_only_fail_closed.py \
+            tests/test_multichannel_runtime_flow_v11.py \
+            tests/application/public_site/test_public_site_contract.py \
+            tests/contract/headless/test_headless_acquisition_public_api.py \
+            tests/integration/entrypoints/test_every_registered_messaging_channel.py \
+            --junitxml=artifacts/ci/journey-evidence/junit.xml
+          result=$?
+          echo "pytest_exit=$result" >> "$GITHUB_OUTPUT"
+          exit 0
+      - name: Produce strict evidence verdict
+        if: always()
+        env:
+          TEST_EXIT: ${{ steps.run.outputs.pytest_exit }}
+        shell: bash
+        run: |
+          python - <<'PY'
+          import json
+          import os
+          import pathlib
+          import xml.etree.ElementTree as ET
+
+          root = pathlib.Path("artifacts/ci/journey-evidence")
+          root.mkdir(parents=True, exist_ok=True)
+          xml = root / "junit.xml"
+          expected = {
+              "ingress_to_canonical_crm": "test_phase18_commercial_ingress_journey.py",
+              "merchant_settlement_and_reversal": "test_phase18_yookassa_merchant_full_journey.py",
+              "multi_provider_billing": "test_phase18_stars_dual_commercial_journey.py",
+              "executor_crash_recovery": "test_execution_crash_window_recovery_contract.py",
+              "capability_outcome_feedback": "test_runtime_capability_health_feedback_loop.py",
+              "world_model_integrity": "test_world_model_self_check.py",
+              "multichannel_registry_contract": "test_multichannel_runtime_single_registry.py",
+              "vk_max_messaging": "test_vk_max_messaging_parity.py",
+              "crm_webhook": "test_crm_webhook_ingestion.py",
+              "headless_decision_closed_loop": "test_goal_bound_v2_closed_loop.py",
+              "whatsapp_webhook": "test_multichannel_whatsapp_webhook_contract.py",
+              "slack_ingress": "test_multichannel_slack_native_ingress.py",
+              "discord_ingress": "test_multichannel_discord_native_ingress.py",
+              "line_viber_contract": "test_multichannel_line_viber_native_foundation.py",
+              "sms_truth_contract": "test_multichannel_sms_truth_contract.py",
+              "meta_messaging_contract": "test_multichannel_meta_native_outbound.py",
+              "provider_parity": "test_multichannel_provider_parity_contract.py",
+              "provider_truth_fail_closed": "test_provider_truth_contract_only_fail_closed.py",
+              "generic_multichannel_runtime": "test_multichannel_runtime_flow_v11.py",
+              "public_site_entrypoint": "test_public_site_contract.py",
+              "headless_public_api": "test_headless_acquisition_public_api.py",
+              "all_registered_messaging_channels": "test_every_registered_messaging_channel.py",
+          }
+          cases = []
+          try:
+              tree = ET.parse(xml)
+              cases = tree.findall(".//testcase")
+          except (ET.ParseError, OSError):
+              pass
+          records = []
+          for name, marker in expected.items():
+              scoped = [x for x in cases if marker.removesuffix(".py") in (x.get("classname", "") + x.get("file", "") + x.get("name", ""))]
+              failures = sum(x.find("failure") is not None or x.find("error") is not None for x in scoped)
+              skips = sum(x.find("skipped") is not None for x in scoped)
+              passed = len(scoped) - failures - skips
+              records.append({"journey": name, "tests": len(scoped),
+                              "passed": passed, "failed": failures, "skipped": skips,
+                              "status": "PASS" if passed > 0 and failures == 0 and skips == 0 else "FAIL",
+                              "evidence_type": "controlled_integration"})
+          # Derive coverage from the canonical provider registry, not a hand-maintained channel list.
+          from application.business_autonomy.provider_catalog import MESSAGING_CHANNEL_PROVIDER_KEYS
+          channel_cases = [x for x in cases if "test_every_registered_messaging_channel" in (x.get("classname", "") + x.get("file", ""))]
+          channel_inventory = {}
+          for channel, provider_key in sorted(MESSAGING_CHANNEL_PROVIDER_KEYS.items()):
+              tests = [x for x in channel_cases if x.get("name", "").startswith("test_every_registered_messaging_channel_has_canonical_provider_binding") and
+                       (x.get("name", "").endswith("-" + channel + "-" + provider_key + "]") or
+                        ("-" + channel + "-" + provider_key + "-") in x.get("name", ""))]
+              # pytest IDs may be made unique or escaped; prove coverage by substring if needed.
+              if not tests:
+                  tests = [x for x in channel_cases if channel in x.get("name", "") and provider_key in x.get("name", "")]
+              success = bool(tests) and all(x.find("failure") is None and x.find("error") is None and x.find("skipped") is None for x in tests)
+              channel_inventory[channel] = {
+                  "provider_key": provider_key,
+                  "canonical_binding": "PASS" if success else "FAIL",
+                  "decisioncore_to_outcome_live": "NOT_PROVEN",
+                  "external_delivery": "NOT_PROVEN",
+              }
+          ok = str(os.getenv("TEST_EXIT")) == "0" and all(x["status"] == "PASS" for x in records) and all(v["canonical_binding"] == "PASS" for v in channel_inventory.values())
+          result = {
+              "schema": "businessaios.canonical_journey_evidence.v1",
+              "exact_sha": os.environ["BAIOS_CI_TARGET_SHA"],
+              "status": "PASS" if ok else "FAIL",
+              "claims_production_ready": False,
+              "live_provider_delivery_proven": False,
+              "real_merchant_settlement_proven": False,
+              "customer_outcome_in_production_proven": False,
+              "cases": records,
+              "channels": channel_inventory,
+              "limitations": ["Controlled integrations are not evidence of real external delivery.",
+                              "Production synthetic and actual post-deploy outcome probes remain separate."],
+          }
+          (root / "verdict.json").write_text(json.dumps(result, ensure_ascii=False, indent=2, sort_keys=True) + "\n")
+          print(json.dumps(result, ensure_ascii=False, indent=2))
+          if not ok:
+              raise SystemExit("Canonical journey evidence gate failed")
+          PY
+      - name: Publish diagnostic evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: canonical-journey-evidence-${{ env.BAIOS_CI_TARGET_SHA }}
+          path: artifacts/ci/journey-evidence
+          if-no-files-found: warn

@@ -32,6 +32,14 @@ os.environ["BUSINESAIOS_TEST_RUN"] = "1"
 os.environ["BUSINESAIOS_TESTS_CONFTEST_LOADED"] = "1"
 os.environ["BUSINESAIOS_ALLOW_TEST_SQLITE_FALLBACK"] = "1"
 
+os.environ.setdefault("DATA_DIR", tempfile.mkdtemp(prefix="businesaios-test-data-"))
+try:
+    from hypothesis import settings as _hypothesis_settings
+    _hypothesis_settings.register_profile("businesaios-no-db", database=None)
+    _hypothesis_settings.load_profile("businesaios-no-db")
+except ImportError:
+    pass
+
 _RELEASE_INTEGRITY_TESTS = {
     "tests/test_release_clean.py",
     "tests/arch/test_archive_hygiene_runtime_artifacts_excluded.py",

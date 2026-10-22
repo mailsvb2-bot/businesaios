@@ -12,8 +12,8 @@ def _env(name: str, default: str) -> str:
 
 def _run_api() -> int:
     os.environ.setdefault('APP_PROFILE', 'api')
-    os.environ.setdefault('HEALTH_HOST', '0.0.0.0')
-    host = _env('API_HOST', '0.0.0.0')
+    os.environ.setdefault('HEALTH_HOST', '127.0.0.1')
+    host = _env('API_HOST', '127.0.0.1')
     port = int(_env('API_PORT', '8000'))
     try:
         import uvicorn
@@ -30,7 +30,7 @@ def _run_api() -> int:
 
 def _run_telegram() -> int:
     os.environ.setdefault('RUN_MODE', 'telegram')
-    os.environ.setdefault('HEALTH_HOST', '0.0.0.0')
+    os.environ.setdefault('HEALTH_HOST', '127.0.0.1')
     os.environ.setdefault('TELEGRAM_HEALTH_PORT', _env('TELEGRAM_HEALTH_PORT', '8088'))
     from main import main as telegram_main
 
@@ -51,7 +51,7 @@ def _run_webhook() -> int:
 def _run_worker() -> int:
     os.environ.setdefault('RUN_MODE', 'evolution')
     os.environ.setdefault('EVOLUTION_ENABLED', '1')
-    os.environ.setdefault('HEALTH_HOST', '0.0.0.0')
+    os.environ.setdefault('HEALTH_HOST', '127.0.0.1')
     os.environ.setdefault('EVOLUTION_HEALTH_PORT', _env('WORKER_HEALTH_PORT', _env('EVOLUTION_HEALTH_PORT', '8087')))
     from runtime.evolution.main import main as worker_main
 
