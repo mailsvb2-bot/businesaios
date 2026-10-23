@@ -223,6 +223,18 @@ def _followups(done, push, st, op, arg, now, *, tenant_id, event_store):
 PROMO_OPS = frozenset({"promote", "promotions", "promo_open", "promo_book"})
 
 
+def _destination(camp, *, tenant_id, event_store):
+    """Acquisition destination for a campaign over the replayed bot + native channel connections."""
+    from application.business_flows import bot_provisioning as botprov
+    from application.business_flows import promotions as pm
+    from runtime.handler_impl.domains.business_flow_ops import _messenger_connections
+    from runtime.platform.config.env_flags import env_str
+
+    bots = list(botprov.replay(flow_payloads(event_store, tenant_id=tenant_id, event_type="bot_provisioning@v1")).values())
+    conns = _messenger_connections(flow_payloads(event_store, tenant_id=tenant_id, event_type="business_admin@v1"))
+    return pm.acquisition_destination(camp, base_url=env_str("PUBLIC_BASE_URL", ""), bots=bots, connections=conns)
+
+
 def _promotions(done, bk, op, arg, now, slots, facts, *, user_id, tenant_id, event_store):
     """Slot promotions (donor ``promotions``): owner creates/refreshes, customer opens/books with attribution."""
     import secrets
@@ -241,8 +253,10 @@ def _promotions(done, bk, op, arg, now, slots, facts, *, user_id, tenant_id, eve
     if op == "promote":
         n, _, channel = arg.partition(" ")
         opens = bk.upcoming(slots, now_ms=now, status="open")
+        if not n.isdigit() and opens:  # donor prepare_nearest_acquisition_destination: no N -> nearest open slot
+            n, channel = str(opens.index(pm.nearest_open_slot(opens)) + 1), arg.strip()
         if not n.isdigit() or not 0 < int(n) <= len(opens):
-            raise ValueError("/promote N [канал] — N из /slots")
+            raise ValueError("/promote [N] [канал] — N из /slots; без N — ближайшее свободное время")
         slot = opens[int(n) - 1]
         oid = next(
             (
@@ -265,8 +279,11 @@ def _promotions(done, bk, op, arg, now, slots, facts, *, user_id, tenant_id, eve
             camps, slot_id=slot.slot_id, channel=channel or "telegram", brief=brief, new_token=secrets.token_urlsafe(12)
         )
         camp = pm.replay([ch])[ch["promotion_id"]]
+        links = pm.destination_lines(_destination(camp, tenant_id=tenant_id, event_store=event_store))
         return done(
-            f"📣 Кампания [{camp.channel}] готова. Ссылка: /start {pm.PREFIX}{camp.token}\n\n"
+            f"📣 Кампания [{camp.channel}] готова. Ссылка: /start {pm.PREFIX}{camp.token}\n"
+            + "".join(x + "\n" for x in links)
+            + "\n"
             + pm.card(camp, line(slot.slot_id)),
             ch,
         )

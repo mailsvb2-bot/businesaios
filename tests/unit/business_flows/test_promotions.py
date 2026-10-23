@@ -91,3 +91,33 @@ def test_candidates_fallback_when_profile_empty():
     for c in cs:
         txt = " ".join(str(v) for v in dataclasses.asdict(c).values())
         assert "от\n" not in txt and ". ." not in txt and not txt.rstrip().endswith("от")
+
+
+def test_acquisition_destination_url_and_native_links() -> None:
+    from types import SimpleNamespace
+
+    from application.business_flows import promotions as pm
+
+    camp = SimpleNamespace(campaign_id="p1", token="Tok_1234567890ab")
+    bots = [SimpleNamespace(username="my_shop_bot", status="completed")]
+    conns = [{"platform": "vk", "status": "active", "connection_type": "vk_community", "external_account_id": "42"}]
+    d = pm.acquisition_destination(camp, base_url="https://ex.ru/l", bots=bots, connections=conns)
+    assert d.public_url == "https://ex.ru/l" + pm.PUBLIC_PATH + "?source=Tok_1234567890ab" and d.has_native_messenger
+    assert {m.url for m in d.messengers} == {"https://t.me/my_shop_bot?start=cpa_Tok_1234567890ab", "https://vk.com/write-42?ref=cpa_Tok_1234567890ab"}
+    assert pm.acquisition_destination(camp, base_url="http://bad").public_url is None  # never blocks links
+    assert not pm.acquisition_destination(camp).has_native_messenger
+    assert pm.resolve_destination({"p1": camp}, "Tok_1234567890ab").campaign_id == "p1"
+    slots = [SimpleNamespace(slot_id="a", starts_at_ms=5), SimpleNamespace(slot_id="b", starts_at_ms=3)]
+    assert pm.nearest_open_slot(slots).slot_id == "b"
+    assert pm.nearest_open_slot(slots, offering_ids={"a": "o1"}, offering_id="o1").slot_id == "a"
+    assert pm.nearest_open_slot([]) is None
+
+
+def test_promote_without_n_uses_nearest_slot_and_shows_url(flow, monkeypatch) -> None:
+    monkeypatch.setenv("PUBLIC_BASE_URL", "https://ex.ru")
+    run = partial(flow.run, partial(handle_bookings, now_ms=NOW))
+    run(op="add_slot", arg="2027-01-22 15:00 60 Поздний")
+    run(op="add_slot", arg="2027-01-20 15:00 60 Ранний")
+    _, text = run(op="promote", arg="vk")
+    saved = flow.store.events[-1]["payload"]
+    assert "[vk]" in text and "Ранний" in text and "🌐 https://ex.ru" in text and saved["source_token"] in text

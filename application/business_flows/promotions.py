@@ -11,9 +11,12 @@ from __future__ import annotations
 
 import hashlib
 import re
+from collections.abc import Iterable, Mapping
 from dataclasses import dataclass, field
 from typing import Any
 from urllib.parse import urlsplit, urlunsplit
+
+from application.business_flows import messenger_switching as ms
 
 CANON_PROMOTIONS = True
 PREFIX = "cpa_"
@@ -344,3 +347,49 @@ def open_channel_for_identity(
     if not key[1] or customer_id is None:
         raise ValueError("атрибуция промо требует активной идентичности клиента в канале")
     return open_channel(camps, token, customer_id=customer_id, active_customers={customer_id})
+
+
+@dataclass(frozen=True)
+class Destination:
+    """Donor acquisition_destination: channel-neutral URL + native messenger deep links for one token."""
+
+    campaign_id: str
+    source_token: str
+    public_url: str | None
+    messengers: tuple[ms.PublicDestination, ...]
+
+    @property
+    def has_native_messenger(self) -> bool:
+        return bool(self.messengers)
+
+
+def acquisition_destination(campaign: Any, *, base_url: str = "", bots: Iterable[Any] = (),
+          connections: Iterable[Mapping[str, Any]] = ()) -> Destination:  # fmt: skip
+    token = normalize_token(campaign.token)
+    try:
+        url = public_url(base_url, token) if str(base_url or "").strip() else None
+    except ValueError:
+        url = None  # misconfigured base URL never blocks messenger links
+    links = ms.public_destinations(start_payload(token), bots=list(bots), connections=list(connections))
+    return Destination(str(campaign.campaign_id), token, url, links)
+
+
+def resolve_destination(camps: Mapping[str, Any], token: str, **kw: Any) -> Destination:
+    """Donor resolve_acquisition_destination: public source token -> the same destination."""
+    return acquisition_destination(by_token(dict(camps), token), **kw)
+
+
+def nearest_open_slot(slots: Iterable[Any], *, offering_ids: Mapping[str, str] | None = None,
+                 offering_id: str = "") -> Any | None:  # fmt: skip
+    """Donor prepare_nearest_acquisition_destination slot choice: earliest open slot (optionally of one offering)."""
+    pool = [s for s in slots if not offering_id or (offering_ids or {}).get(s.slot_id) == offering_id]
+    return min(pool, key=lambda s: s.starts_at_ms) if pool else None
+
+
+_LABEL = {"telegram": "Telegram", "vk": "ВКонтакте", "max": "MAX"}
+
+
+def destination_lines(d: Destination) -> list[str]:
+    out = [f"🌐 {d.public_url}"] if d.public_url else []
+    out += [f"💬 {_LABEL.get(m.platform, m.platform)}: {m.url}" for m in d.messengers]
+    return out
