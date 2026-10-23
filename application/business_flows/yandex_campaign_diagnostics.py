@@ -112,8 +112,8 @@ def provider_rows(tracked: list[Tracked], *, session_for, date_from: str, date_t
         sess = session_for(cid)
         login = items[0].external_login
         for batch in campaign_batches(tuple(sorted({t.campaign_id for t in items}, key=int))):
-            report = sess.call(lambda tok, b=batch, s=sess: s.provider.campaign_performance_report(
-                tok, b, date_from, date_to, login))
+            report = sess.call(lambda tok, b=batch, s=sess, lg=login: s.provider.campaign_performance_report(
+                tok, b, date_from, date_to, lg))
             expected = set(batch)
             for row in report:
                 if row.campaign_id not in expected:
