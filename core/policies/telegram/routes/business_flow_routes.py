@@ -117,6 +117,8 @@ BUSINESS_FLOW_COMMANDS: dict[str, tuple[str, str, bool]] = {
     "/format_off": ("business_admin@v1", "format_off", True),
     "/profile": ("business_admin@v1", "profile", True),
     "/profile_set": ("business_admin@v1", "profile_set", True),
+    "/profile_details": ("business_admin@v1", "profile_details", True),
+    "/profile_confirm": ("business_admin@v1", "profile_confirm", True),
     "/ad_stats": ("business_admin@v1", "ad_stats", True),
     "/ad_report": ("business_admin@v1", "ad_report", True),
     "/ad_creatives": ("business_admin@v1", "ad_creatives", True),

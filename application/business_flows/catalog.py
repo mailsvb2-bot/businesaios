@@ -7,6 +7,7 @@ Archive never deletes: archived directions/offerings keep history and can be res
 
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -48,6 +49,8 @@ class Catalog:
     formats: set[str] = field(default_factory=lambda: set(DEFAULT_ON))
     activity: str = ""
     timezone: str = "Europe/Moscow"
+    details: dict[str, Any] = field(default_factory=dict)
+    details_confirmed: bool = False
 
 
 def replay(payloads: list[dict[str, Any]]) -> Catalog:
@@ -77,6 +80,10 @@ def replay(payloads: list[dict[str, Any]]) -> Catalog:
             c.offerings[p["offering_id"]].title = p["title"]
         elif s == "profile_saved":
             c.activity, c.timezone = p["activity"], p["timezone"]
+        elif s == "profile_details_saved":
+            c.details, c.details_confirmed = dict(p["details"]), False
+        elif s == "profile_details_confirmed" and c.details:
+            c.details_confirmed = True
         elif s == "format_toggled":
             (c.formats.add if p["enabled"] else c.formats.discard)(p["format"])
     return c
@@ -282,11 +289,92 @@ def save_profile(c: Catalog, arg: str) -> dict[str, Any]:
     return {"step": "profile_saved", "activity": parts[0], "timezone": tz}
 
 
+# donor domain.business_profile.extract_explicit_business_profile_details: explicit facts only, never guessed
+_LISTS = (
+    ("services", "Услуги", ("услуги", "услуга", "services")),
+    ("products", "Продукты", ("продукты", "продукт", "products")),
+    ("audiences", "Для кого", ("аудитория", "клиенты", "для кого", "audience")),
+    ("geo", "География", ("география", "город", "регион", "geo")),
+)
+_TEXTS = (
+    ("working_hours", "Часы работы", ("часы работы", "график", "working hours")),
+    ("booking_rules", "Правила записи", ("правила записи", "запись", "booking rules")),
+    ("tone_of_voice", "Стиль общения", ("тон", "стиль общения", "tone of voice")),
+    ("sales_terms", "Условия продажи", ("условия продажи", "возврат", "условия возврата")),
+)
+_PRICE = re.compile(r"(?<!\w)\d[\d\s]{0,8}(?:[.,]\d{1,2})?\s*(?:₽|руб(?:\.|лей|ля)?|RUB|€|\$)", re.IGNORECASE)
+_EMAIL = re.compile(r"(?<![\w.+-])[\w.+-]+@[\w.-]+\.[A-Za-zА-Яа-я]{2,}(?![\w.-])")
+_PHONE = re.compile(r"(?<!\d)(?:\+\d[\d ()-]{8,}\d)(?!\d)")
+_HANDLE = re.compile(r"(?<![\w@])@[A-Za-z0-9_]{4,32}\b")
+
+
+def _norm(items: list[str]) -> list[str]:
+    out: list[str] = []
+    for x in items:
+        v = " ".join(str(x).split())[:120]
+        if v and v.casefold() not in {o.casefold() for o in out}:
+            out.append(v)
+    return out[:12]
+
+
+def _labeled(text: str, labels: tuple[str, ...]) -> list[str]:
+    pat = "|".join(re.escape(x) for x in labels)
+    m = re.search(rf"(?im)(?:^|[;.\n])\s*(?:{pat})\s*:\s*([^;\n]+)", text)
+    return _norm([x for x in re.split(r",|\|", m.group(1)) if x.strip()]) if m else []
+
+
+def extract_profile_details(description: str) -> dict[str, Any]:
+    """Donor suggest_business_profile_details: deterministic, prefers missing over invented."""
+    text = str(description or "").replace("\x00", " ").strip()[:2000]
+    out: dict[str, Any] = {k: _labeled(text, labels) for k, _, labels in _LISTS}
+    out["prices"] = _norm(_PRICE.findall(text))
+    out["contacts"] = _norm([*_EMAIL.findall(text), *_PHONE.findall(text), *_HANDLE.findall(text)])
+    for k, _, labels in _TEXTS:
+        vals = _labeled(text, labels)
+        out[k] = vals[0] if vals else ""
+    return {k: v for k, v in out.items() if v}
+
+
+def save_profile_details(c: Catalog, text: str) -> dict[str, Any] | None:
+    """Donor save_business_profile_details (reset_confirmation): None when nothing explicit or unchanged."""
+    details = extract_profile_details(text)
+    if not details:
+        raise ValueError("ничего не распознано: укажите «Услуги: …; Город: …; Цены: 1500 ₽; Контакты: …»")
+    return None if details == c.details else {"step": "profile_details_saved", "details": details}
+
+
+def confirm_profile_details(c: Catalog) -> dict[str, Any] | None:
+    if not c.details:
+        raise ValueError("сначала /profile_details текст")
+    return None if c.details_confirmed else {"step": "profile_details_confirmed"}
+
+
+def profile_review_lines(details: dict[str, Any]) -> list[str]:
+    titles = {k: t for k, t, _ in (*_LISTS, *_TEXTS)} | {"prices": "Цены", "contacts": "Контакты"}
+    order = ("services", "products", "prices", "audiences", "geo", "contacts", *(k for k, _, _ in _TEXTS))
+    return [
+        f"{titles[k]}: {', '.join(v) if isinstance(v, list) else v}" for k in order if (v := details.get(k))
+    ]
+
+
+def profile_review_text(c: Catalog) -> str:
+    """Donor profile_review_text: confirm-or-edit boundary before details are used."""
+    facts = "\n".join(f"• {x}" for x in profile_review_lines(c.details))
+    return (
+        "Я правильно понял?\n\n"
+        + (c.activity or "Деятельность не описана.")
+        + (f"\n\nЯ также выделил из Вашего текста:\n{facts}" if facts else "")
+        + "\n\nЕсли что-то неверно — /profile_details заново. Иначе подтвердите: /profile_confirm"
+    )
+
+
 def profile_text(c: Catalog) -> str:
     return (
         f"🏢 Профиль бизнеса\nДеятельность: {c.activity or 'не описана'}\nЧасовой пояс: {c.timezone}\n"
-        f"Направлений: {len(active_directions(c))} · предложений: {len(active_offerings(c))}\n\n"
-        "/profile_set описание | часовой пояс"
+        f"Направлений: {len(active_directions(c))} · предложений: {len(active_offerings(c))}\n"
+        + "".join(f"{x}\n" for x in profile_review_lines(c.details))
+        + ("✅ Детали подтверждены\n" if c.details_confirmed else "⏳ Детали не подтверждены\n" if c.details else "")
+        + "\n/profile_set описание | часовой пояс · /profile_details текст"
     )
 
 

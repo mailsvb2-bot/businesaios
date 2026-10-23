@@ -103,3 +103,23 @@ def test_offering_direction_bind_and_unbind() -> None:
     assert cg_.bind_offering(c, "1 | 1") is None
     facts.append(cg_.bind_offering(c, "1 | -"))
     assert next(iter(cg_.replay(facts).offerings.values())).direction_id is None
+
+
+def test_profile_details_extract_review_confirm(flow) -> None:
+    from application.business_flows import catalog as cg
+
+    d = cg.extract_profile_details("Услуги: хатха, йога-нидра; Город: Казань\nЦены: от 1 500 ₽. Пишите @yoga_kzn или +7 900 123-45-67")
+    assert d["services"] == ["хатха", "йога-нидра"] and d["geo"] == ["Казань"]
+    assert d["prices"] == ["1 500 ₽"] and d["contacts"] == ["+7 900 123-45-67", "@yoga_kzn"]
+    assert "audiences" not in d  # never guessed
+    run = partial(flow.run, H)
+    assert "ничего не распознано" in run(op="profile_details", arg="просто текст")[1]
+    assert "сначала" in run(op="profile_confirm")[1]
+    review = run(op="profile_details", arg="Услуги: хатха; Город: Казань")[1]
+    assert "Я правильно понял" in review and "• Услуги: хатха" in review and "География: Казань" in review
+    assert "не подтверждены" in run(op="profile")[1]
+    assert "подтверждены." in run(op="profile_confirm")[1]
+    assert "Уже" in run(op="profile_confirm")[1]
+    assert "✅ Детали подтверждены" in run(op="profile")[1]
+    run(op="profile_details", arg="Услуги: хатха, пилатес")  # new details reset confirmation
+    assert "не подтверждены" in run(op="profile")[1]

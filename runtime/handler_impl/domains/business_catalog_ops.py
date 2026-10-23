@@ -22,6 +22,8 @@ CATALOG_OPS = frozenset(
         "format_off",
         "profile",
         "profile_set",
+        "profile_details",
+        "profile_confirm",
     }
 )
 
@@ -63,6 +65,12 @@ def _catalog(done, op, arg, facts_):
         return done("✅ Профиль обновлён.", cg.save_profile(c, arg))
     if op == "profile":
         return done(cg.profile_text(c))
+    if op == "profile_details":
+        ch = cg.save_profile_details(c, arg)
+        return done(cg.profile_review_text(cg.replay([*facts_, ch]) if ch else c), ch)
+    if op == "profile_confirm":
+        ch = cg.confirm_profile_details(c)
+        return done("✅ Детали профиля подтверждены." if ch else "Уже подтверждено.", ch)
     return done(cg.offerings_text(c))
 
 
