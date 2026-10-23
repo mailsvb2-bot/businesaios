@@ -94,6 +94,8 @@ BUSINESS_FLOW_COMMANDS: dict[str, tuple[str, str, bool]] = {
     "/ad_publish": ("business_admin@v1", "ad_publish", True),
     "/leads": ("sales_pipeline@v1", "list", True),
     "/lead_add": ("sales_pipeline@v1", "add", True),
+    "/retention": ("sales_pipeline@v1", "retention", True),
+    "/reactivate": ("sales_pipeline@v1", "reactivate", True),
     "/lead": ("sales_pipeline@v1", "event", True),
     "/lead_reopen": ("sales_pipeline@v1", "reopen", True),
     "/lead_next": ("sales_pipeline@v1", "next", True),

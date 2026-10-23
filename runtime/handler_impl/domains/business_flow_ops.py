@@ -958,6 +958,26 @@ def handle_sales_pipeline(payload, effects, env, *, event_store, now_ms: int | N
         if op == "event":
             ch = sl.apply_event(st, arg)
             return done(f"🎯 {st.leads[ch['lead_id']].name}: {sl.LABELS[sl.Stage(ch['stage'])]}", ch)
+        if op in {"retention", "reactivate"}:
+            from application.business_flows import admin as ad
+            from application.business_flows import bookings as bk
+            from application.business_flows import retention as rt
+
+            settings = ad.replay(
+                flow_payloads(event_store, tenant_id=tenant_id, event_type="business_admin@v1")
+            ).settings
+            days = int(settings.get("retention_days", "45")) if settings.get("retention_days", "45").isdigit() else 45
+            slots = bk.replay(flow_payloads(event_store, tenant_id=tenant_id, event_type="bookings@v1"))
+            cands = rt.candidates(slots, now_ms=now, inactive_days=days)
+            if op == "retention":
+                return done(rt.text(cands, st, inactive_days=days))
+            ch, cand = rt.prepare(st, cands, arg)
+            return done(
+                f"🎯 Лид на возврат: {cand.customer_id}. Следующий шаг: {cand.next_action}. Отправка — только через /followups"
+                if ch
+                else "ℹ️ Лид на этот цикл уже есть: /leads",
+                ch,
+            )
         if op == "reopen":
             ch = sl.reopen(st, arg)
             return done("🔄 Лид снова в работе", ch)
