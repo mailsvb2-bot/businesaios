@@ -80,7 +80,7 @@ def test_every_declared_action_schema_accepts_only_its_contract() -> None:
     # visual_direction, seed, variants, overlay. Each adds one invalid-type
     # case; the existing checks still execute for every field in the catalog.
     # Port wave PD export: privacy_export@v1 adds 11 schema cases.
-    assert cases == 927 + 4 + 11 + 13
+    assert cases == 927 + 4 + 11 + 13 + 13
 
 
 def test_every_runtime_handler_and_compatibility_import_door_resolves() -> None:
@@ -103,7 +103,7 @@ def test_every_runtime_handler_and_compatibility_import_door_resolves() -> None:
         for export_name in exports:
             assert hasattr(module, export_name), (module_name, export_name)
             cases += 1
-    assert len(SPECS) == 62
+    assert len(SPECS) == 63
     assert cases == 1016
 
 

@@ -14,6 +14,11 @@ BUSINESS_FLOW_COMMANDS: dict[str, tuple[str, str, bool]] = {
     "/connect_bot": ("bot_provisioning@v1", "request", True),
     "/bot_status": ("bot_provisioning@v1", "status", True),
     "/cancel_bot": ("bot_provisioning@v1", "cancel", True),
+    "/add_slot": ("bookings@v1", "add_slot", True),
+    "/slots": ("bookings@v1", "list", False),
+    "/book": ("bookings@v1", "book", False),
+    "/my_bookings": ("bookings@v1", "mine", False),
+    "/cancel_booking": ("bookings@v1", "cancel", False),
 }
 
 

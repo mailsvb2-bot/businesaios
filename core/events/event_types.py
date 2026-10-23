@@ -44,6 +44,7 @@ ADMIN_NOTIFICATION_FAILED = "admin_notification_failed"
 ADMIN_USER_CARD = "admin_user_card@v1"
 ADMIN_USER_CARD_FAILED = "admin_user_card_failed@v1"
 PRIVACY_EXPORT = "privacy_export@v1"
+BOOKINGS = "bookings@v1"
 BOT_PROVISIONING = "bot_provisioning@v1"
 PRIVACY_EXPORT_FAILED = "privacy_export_failed@v1"
 ADMIN_PRICING_CHANGE_REQUESTED = "admin_pricing_change_requested"
@@ -216,6 +217,7 @@ KNOWN_EVENT_TYPES: set[str] = {
     ADMIN_USER_CARD,
     ADMIN_USER_CARD_FAILED,
     PRIVACY_EXPORT,
+    BOOKINGS,
     BOT_PROVISIONING,
     PRIVACY_EXPORT_FAILED,
     ADMIN_PRICING_CHANGE_REQUESTED,

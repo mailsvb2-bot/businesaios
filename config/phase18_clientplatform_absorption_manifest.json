@@ -748,6 +748,22 @@
         "live PostgreSQL run not executed in this box (no server",
         " contract tested on SQL-compatible port)"
       ]
+    },
+    {
+      "id": "events.bookings_and_reminders",
+      "status": "implemented",
+      "canonical_owner": "runtime.handler_impl.domains.business_flow_ops",
+      "source_of_truth": "event_store:bookings@v1",
+      "evidence": [
+        "bookings@v1"
+      ],
+      "runtime_dependency_removed": false,
+      "pr472_claimed_status": null,
+      "pr472_claimed_runtime_dependency_removed": null,
+      "integration_missing_evidence": [
+        "push reminder dispatch via provider queue worker (pull reminders on next participant reply today)",
+        "paid slots linked to orders"
+      ]
     }
   ],
   "integration_provenance": {
