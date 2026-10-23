@@ -59,6 +59,10 @@ def handle(ctx: TelegramCtx, *, default_price_rub: int, bot_username: str = "", 
     if section is not None:
         return pm(text=section, reply_markup=back_button())
 
+    if ctx.cmd == "/start" and str(ctx.args or "").strip().startswith("cpa_"):
+        from core.policies.telegram.routes.business_flow_routes import handle_business_flow_routes
+
+        return handle_business_flow_routes(ctx, user_id=str(user_id))
     if ctx.cmd in {"/start", "/menu"} or ctx.callback_data in {CB_MENU_MAIN, "menu_main"}:
         step = "menu_main"
         variant = choose_marketing_variant(user_id=str(user_id), step_key=step, seed=str(ctx.marketing_seed or "1"), bandit=(ctx.marketing_bandit or {}).get(step))

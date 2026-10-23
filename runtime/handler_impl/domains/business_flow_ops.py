@@ -17,9 +17,11 @@ from runtime.handler_impl.domains.admin_ops import _card_outcome
 from runtime.handler_impl.domains.business_catalog_ops import (
     CATALOG_OPS,
     FOLLOWUP_OPS,
+    PROMO_OPS,
     _ads,
     _catalog,
     _followups,
+    _promotions,
     _retention,
     _sales_inbound,
     _slot_with_offering,
@@ -153,6 +155,26 @@ def handle_bookings(payload, effects, env, *, event_store, now_ms: int | None = 
     mine = bk.upcoming(slots, now_ms=now, customer_id=user_id)
     if op == "dispatch":
         return _dispatch_reminders(body, effects, env, bk, slots, facts, now)
+    if op in PROMO_OPS:
+        try:
+            return _promotions(
+                lambda t, ch: send_tracked(
+                    body, effects, env, text=t, event_type="bookings@v1" if ch else None, event_payload=ch
+                ),
+                bk,
+                op,
+                arg,
+                now,
+                slots,
+                facts,
+                user_id=user_id,
+                tenant_id=tenant_id,
+                event_store=event_store,
+            )
+        except ValueError as exc:
+            return send_tracked(
+                body, effects, env, text=f"📣 Не получилось: {exc}", event_type=None, event_payload=None
+            )
     pick = {"book": open_slots, "cancel": mine}.get(op, [])
     chosen = pick[int(arg) - 1] if arg.isdigit() and 0 < int(arg) <= len(pick) else None
     try:

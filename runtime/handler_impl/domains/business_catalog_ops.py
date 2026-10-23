@@ -188,3 +188,68 @@ def _followups(done, push, st, op, arg, now, *, tenant_id, event_store):
         for x in due
     )
     return done(f"✉️ Напоминаний отправлено: {sent} из {len(due)}.")
+
+
+PROMO_OPS = frozenset({"promote", "promotions", "promo_open", "promo_book"})
+
+
+def _promotions(done, bk, op, arg, now, slots, facts, *, user_id, tenant_id, event_store):
+    """Slot promotions (donor ``promotions``): owner creates/refreshes, customer opens/books with attribution."""
+    import secrets
+
+    from application.business_flows import catalog as cg
+    from application.business_flows import promotions as pm
+
+    camps = pm.replay(facts)
+    c = cg.replay(flow_payloads(event_store, tenant_id=tenant_id, event_type="business_admin@v1"))
+
+    def line(slot_id: str) -> str:
+        return bk.fmt(slots[slot_id], c.timezone) if slot_id in slots else "слот удалён"
+
+    if op == "promotions":
+        return done(pm.stats_text(camps, line), None)
+    if op == "promote":
+        n, _, channel = arg.partition(" ")
+        opens = bk.upcoming(slots, now_ms=now, status="open")
+        if not n.isdigit() or not 0 < int(n) <= len(opens):
+            raise ValueError("/promote N [канал] — N из /slots")
+        slot = opens[int(n) - 1]
+        oid = next(
+            (
+                f.get("offering_id")
+                for f in facts
+                if f.get("step") == "slot_opened" and f.get("slot_id") == slot.slot_id
+            ),
+            None,
+        )
+        off = c.offerings.get(str(oid or ""))
+        brief = pm.Brief(
+            c.activity[:80],
+            c.activity,
+            off.title if off else slot.title,
+            off.description if off else "",
+            bk.fmt(slot, c.timezone),
+            slot.duration_min,
+        )
+        ch = pm.save(
+            camps, slot_id=slot.slot_id, channel=channel or "telegram", brief=brief, new_token=secrets.token_urlsafe(12)
+        )
+        camp = pm.replay([ch])[ch["promotion_id"]]
+        return done(
+            f"📣 Кампания [{camp.channel}] готова. Ссылка: /start {pm.PREFIX}{camp.token}\n\n"
+            + pm.card(camp, line(slot.slot_id)),
+            ch,
+        )
+    token = pm.parse_start_payload(arg) or arg
+    camp = pm.by_token(camps, token)
+    slot = slots.get(camp.slot_id)
+    if op == "promo_open":
+        return done(pm.card(camp, line(camp.slot_id)), pm.opened_fact(camp, user_id))
+    if slot is None or slot.status != "open" or slot.starts_at_ms <= now:
+        raise ValueError("это время уже недоступно, смотрите /slots")
+    ch = {
+        **bk.book(slots, slot, customer_id=user_id, now_ms=now),
+        "promotion_id": camp.campaign_id,
+        "source_token": camp.token,
+    }
+    return done(f"✅ Вы записаны: {line(slot.slot_id)}", ch)

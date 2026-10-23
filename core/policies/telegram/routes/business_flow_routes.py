@@ -28,6 +28,9 @@ BUSINESS_FLOW_COMMANDS: dict[str, tuple[str, str, bool]] = {
     "/ops": ("business_ops_summary@v1", "show", True),
     "/cockpit": ("business_ops_summary@v1", "cockpit", True),
     "/send_reminders": ("bookings@v1", "dispatch", True),
+    "/promote": ("bookings@v1", "promote", True),
+    "/promotions": ("bookings@v1", "promotions", True),
+    "/promo_book": ("bookings@v1", "promo_book", False),
     "/bot_secret": ("bot_provisioning@v1", "attach", True),
     "/verify_bot": ("bot_provisioning@v1", "verify", True),
     "/partner_status": ("partners@v1", "status", True),
@@ -119,6 +122,9 @@ def handle_business_flow_routes(ctx: TelegramCtx, *, user_id: str) -> ProposedAc
         return propose("business_ops_summary@v1", {"user_id": user_id, "op": "cockpit", "arg": data[:120], **ack})
     if data.startswith("cpe:") and ctx.is_admin:
         return propose("event_series@v1", {"user_id": user_id, "op": "wizard", "arg": data[:64], **ack})
+    args = str(ctx.args or "").strip()
+    if ctx.cmd == "/start" and args.startswith("cpa_"):  # promotion deep link -> verified opened touch
+        return propose("bookings@v1", {"user_id": user_id, "op": "promo_open", "arg": args[:64]})
     route = BUSINESS_FLOW_COMMANDS.get(str(ctx.cmd or ""))
     if route is None:
         return None
