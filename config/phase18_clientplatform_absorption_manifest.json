@@ -712,6 +712,42 @@
         "clientplatform/services/privacy_controls.py erase/anonymize",
         "clientplatform/services/privacy_export_links.py gzip download link"
       ]
+    },
+    {
+      "id": "messaging.managed_bot_provisioning",
+      "status": "implemented",
+      "canonical_owner": "application.business_flows.bot_provisioning + bot_provisioning@v1 action",
+      "source_of_truth": "canonical Event Store (bot_provisioning@v1 transitions)",
+      "evidence": [
+        "application/business_flows/bot_provisioning.py",
+        "runtime/handler_impl/domains/business_flow_ops.py",
+        "tests/unit/business_flows/test_bot_provisioning_flow.py"
+      ],
+      "runtime_dependency_removed": false,
+      "pr472_claimed_status": null,
+      "pr472_claimed_runtime_dependency_removed": null,
+      "integration_missing_evidence": [
+        "server-side secret intake + Telegram getMe/webhook verification step (verify_started/verified/failed are modelled, not yet driven by a provider adapter)"
+      ]
+    },
+    {
+      "id": "commerce.orders_postgres_and_fulfilment",
+      "status": "implemented",
+      "canonical_owner": "CommercialProgramPurchaseService.record_fulfilment + OrderStore on PostgresJsonRegistryBackend",
+      "source_of_truth": "client-outcome registry (PostgreSQL when BUSINESAIOS_CLIENT_OUTCOME_BACKEND=postgres) + Event Store order spine",
+      "evidence": [
+        "runtime/platform/client_outcome_postgres_registry.py",
+        "application/commerce/phase18_commercial_order.py",
+        "tests/integration/api/test_order_fulfilment_and_postgres_orders.py"
+      ],
+      "runtime_dependency_removed": false,
+      "pr472_claimed_status": null,
+      "pr472_claimed_runtime_dependency_removed": null,
+      "integration_missing_evidence": [
+        "ledger postings and metrics samples still SQLite (multi-replica stays fail-closed)",
+        "live PostgreSQL run not executed in this box (no server",
+        " contract tested on SQL-compatible port)"
+      ]
     }
   ],
   "integration_provenance": {

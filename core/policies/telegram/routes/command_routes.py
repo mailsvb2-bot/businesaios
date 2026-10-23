@@ -4,10 +4,14 @@ from datetime import UTC, datetime, timedelta
 
 from core.policies.telegram.context import TelegramCtx
 from core.policies.telegram.helpers import ProposedAction, propose
+from core.policies.telegram.routes.business_flow_routes import handle_business_flow_routes
 from core.ux.telegram_keyboards import kb_back_main
 
 
 def handle_command_routes(ctx: TelegramCtx, *, user_id: str, pm) -> ProposedAction | None:
+    flow = handle_business_flow_routes(ctx, user_id=user_id)
+    if flow is not None:
+        return flow
     if ctx.cmd == "/help":
         return pm(
             text=(

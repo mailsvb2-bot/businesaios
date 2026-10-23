@@ -96,6 +96,7 @@ TELEGRAM_INTERACTIVE_ACTION_DESCRIPTORS: dict[str, ActionCategory] = {
     'growth_strategy_backlog@v1': ActionCategory.SAFE_READ,
     'answer_callback@v1': ActionCategory.OUTBOUND,
     'privacy_export@v1': ActionCategory.OUTBOUND,
+    'bot_provisioning@v1': ActionCategory.OUTBOUND,
     'log_mood@v1': ActionCategory.INTERNAL_WRITE,
     'set_user_setting@v1': ActionCategory.INTERNAL_WRITE,
     'track_event@v1': ActionCategory.INTERNAL_WRITE,
