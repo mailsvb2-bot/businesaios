@@ -282,10 +282,12 @@ def handle_offer_ladder(payload, effects, env, *, event_store):
     return send_tracked(body, effects, env, text=text, event_type=None, event_payload=None)
 
 
-def _cockpit(body, effects, env, future, steps, facts):
+def _cockpit(body, effects, env, future, steps, facts, now):
     """Owner cockpit screens (cpm:*) over the same projections; buttons re-enter this action."""
+    from application.business_flows import admin as ad
     from application.business_flows import bookings as bk
     from application.business_flows import cockpit as cp
+    from application.business_flows import event_series as es
     from application.business_flows import partners as pt
 
     snap = cp.Snapshot(
@@ -294,6 +296,11 @@ def _cockpit(body, effects, env, future, steps, facts):
         steps=steps,
         bots=list(botprov.replay(facts("bot_provisioning@v1")).values()),
         fmt_slot=bk.fmt,
+        admin=ad.replay(facts("business_admin@v1")),
+        series=es.replay(facts("event_series@v1")),
+        all_slots=sorted(bk.replay(facts("bookings@v1")).values(), key=lambda x: x.starts_at_ms),
+        now_ms=now,
+        money_text=ad.render_summary,
     )
     text, rows = cp.render(cp.parse(str(body.get("arg") or "cpm:menu")), snap, is_owner=True)
     return send_tracked(
@@ -318,7 +325,7 @@ def handle_business_ops_summary(payload, effects, env, *, event_store, now_ms: i
     booked = [s for s in future if s.status == "booked"]
     steps, _ = ld.replay(facts("offer_ladder@v1"))
     if str(body.get("op") or "") == "cockpit":
-        return _cockpit(body, effects, env, future, steps, facts)
+        return _cockpit(body, effects, env, future, steps, facts, now)
     deletions = len(facts("privacy_deleted@v1"))
     bots = {p.get("username") for p in facts("bot_provisioning@v1") if p.get("username")}
     text = (

@@ -25,6 +25,15 @@ PARENTS: dict[str, str] = {
     "ladder": "cpm:growth",
     "manage": "cpm:menu",
     "messengers": "cpm:manage",
+    "connections": "cpm:manage",
+    "money": "cpm:work",
+    "services": "cpm:manage",
+    "calendar": "cpm:work",
+    "customers": "cpm:work",
+    "customer": "cpm:customers:0",
+    "events": "cpm:work",
+    "automation": "cpm:manage",
+    "settings": "cpm:manage",
 }
 
 
@@ -42,6 +51,11 @@ class Snapshot:
     steps: list[Any] = field(default_factory=list)  # ladder.Step
     bots: list[Any] = field(default_factory=list)  # bot_provisioning.Provisioning
     fmt_slot: Any = str
+    admin: Any = None  # admin.State
+    series: Any = None  # event_series.State
+    all_slots: list[Any] = field(default_factory=list)  # every bookings.Slot, past included
+    now_ms: int = 0
+    money_text: Any = None  # admin.render_summary
 
 
 def recognizes(data: object) -> bool:
@@ -110,7 +124,12 @@ def _screen(parsed: Parsed, s: Snapshot) -> tuple[str, list[list[tuple[str, str]
         )
     if a == "work":
         return "📋 Работа\n\nСегодняшняя сводка и запись клиентов.", _rows(
-            ("📊 Что сегодня", "cpm:today"), ("📅 Запись", "cpm:bookings:0")
+            ("📊 Что сегодня", "cpm:today"),
+            ("📅 Запись", "cpm:bookings:0"),
+            ("🗓 Календарь", "cpm:calendar"),
+            ("👥 Клиенты", "cpm:customers:0"),
+            ("🎤 Встречи и серии", "cpm:events"),
+            ("💳 Деньги", "cpm:money"),
         )
     if a == "today":
         booked = [x for x in s.slots if x.status == "booked"]
@@ -138,13 +157,105 @@ def _screen(parsed: Parsed, s: Snapshot) -> tuple[str, list[list[tuple[str, str]
         body = "\n".join(f"{i}. {x.title}" for i, x in enumerate(s.steps, 1)) or "Ступеней нет. Добавьте: /ladder_add"
         return "🪜 Лестница предложений\n\n" + body, []
     if a == "manage":
-        return "⚙️ Управление", _rows(("💬 Мессенджеры", "cpm:messengers"))
-    if a == "messengers":
+        return "⚙️ Управление", _rows(
+            ("💬 Мессенджеры", "cpm:messengers"),
+            ("🧾 Услуги и цены", "cpm:services"),
+            ("🤖 Автоматизация", "cpm:automation"),
+            ("🔧 Настройки", "cpm:settings"),
+        )
+    extra = _extra_screen(a, parsed, s)
+    if extra is not None:
+        return extra
+    if a in ("messengers", "connections"):
         body = (
             "\n".join(f"• @{b.username} — {b.status}" for b in s.bots) or "Бот не подключён. Подключить: /connect_bot"
         )
         return "💬 Мессенджеры\n\n" + body, []
     raise ValueError(a)
+
+
+def customers(slots: list[Any]) -> list[tuple[str, int]]:
+    """Distinct participants with booking counts, most active first (no contact data shown)."""
+    counts: dict[str, int] = {}
+    for x in slots:
+        if x.customer_id:
+            counts[x.customer_id] = counts.get(x.customer_id, 0) + 1
+    return sorted(counts.items(), key=lambda kv: (-kv[1], kv[0]))
+
+
+def _extra_screen(a: str, parsed: Parsed, s: Snapshot) -> tuple[str, list[list[tuple[str, str]]]] | None:
+    adm, ser = s.admin, s.series
+    if a == "money":
+        body = s.money_text(adm) if adm is not None and s.money_text else "Платежей нет."
+        return body + "\n\nЗаписать: /pay Услуга | 1500 RUB | номер · Возврат: /refund", []
+    if a == "services":
+        prices = getattr(adm, "prices", {}) or {}
+        body = (
+            "\n".join(f"• {k} — {v}" for k, v in sorted(prices.items()))
+            or "Цен нет. Добавить: /price Услуга | 1500 RUB"
+        )
+        return "🧾 Услуги и цены\n\n" + body, []
+    if a == "settings":
+        settings = getattr(adm, "settings", {}) or {}
+        body = "\n".join(f"• {k} = {v}" for k, v in sorted(settings.items())) or "Настроек нет."
+        return "🔧 Настройки\n\n" + body + "\n\nИзменить: /setting ключ = значение", []
+    if a == "automation":
+        pending = [x for x in getattr(adm, "approvals", {}).values() if x.status == "pending"]
+        auto = "включён" if getattr(adm, "autopilot", False) else "выключен"
+        return (
+            f"🤖 Автоматизация\n\nАвтопилот: {auto} (/autopilot on|off)\n"
+            f"Ждут Вашего решения: {len(pending)} (/approvals)"
+        ), []
+    if a == "calendar":
+        if not s.slots:
+            return "🗓 Календарь\n\nВпереди ничего нет. Новая встреча: /new_event Название", []
+        days: dict[str, list[str]] = {}
+        for x in s.slots:
+            label = s.fmt_slot(x)
+            days.setdefault(label.split(" ")[0], []).append(label + (" — занято" if x.status == "booked" else ""))
+        body = "\n".join(f"{d}\n" + "\n".join(f"  • {v}" for v in vs) for d, vs in days.items())
+        return "🗓 Календарь\n\n" + body, []
+    if a == "customers":
+        people = customers(s.all_slots)
+        if not people:
+            return "👥 Клиенты\n\nПока никто не записывался.", []
+        page = page_number(parsed.args)
+        lines, nav, foot = _paged(people, page, "customers", lambda kv: f"Клиент {kv[0][-6:]} — записей: {kv[1]}")
+        start = page * PAGE_SIZE
+        open_rows = [
+            [(f"Карточка {cid[-6:]}", f"cpm:customer:{cid[:40]}")] for cid, _ in people[start : start + PAGE_SIZE]
+        ]
+        return "👥 Клиенты\n\n" + "\n".join(lines) + foot, open_rows + nav
+    if a == "customer":
+        if not parsed.args:
+            raise ValueError("customer id")
+        cid = parsed.args[0]
+        mine = [x for x in s.all_slots if x.customer_id == cid]
+        if not mine:
+            raise ValueError("unknown customer")
+        consent = getattr(ser, "consent", {}).get(cid)
+        att = getattr(ser, "attendance", {}) or {}
+        rows = [
+            f"• {s.fmt_slot(x)} — {att.get((x.slot_id, cid), 'впереди' if x.starts_at_ms > s.now_ms else 'не отмечено')}"
+            for x in mine
+        ]
+        flag = {True: "согласен", False: "отписался"}.get(consent, "не давал")
+        return f"👤 Клиент {cid[-6:]}\n\nСогласие на предложения: {flag}\n" + "\n".join(rows), []
+    if a == "events":
+        days = ", ".join(map(str, getattr(ser, "warmup_days", ()))) or "выключен"
+        opted = sum(1 for v in getattr(ser, "consent", {}).values() if v)
+        att = getattr(ser, "attendance", {}) or {}
+        unmarked = sum(
+            1
+            for x in s.all_slots
+            if x.status == "booked" and x.starts_at_ms <= s.now_ms and (x.slot_id, x.customer_id) not in att
+        )
+        return (
+            f"🎤 Встречи и серии\n\nПрогрев: за {days} дн.\nСогласны на предложения: {opted}\n"
+            f"Прошедшие без отметки посещения: {unmarked} (/attendance)\n"
+            "Новая встреча: /new_event Название · Тексты: /series"
+        ), []
+    return None
 
 
 def markup(rows: list[list[tuple[str, str]]]) -> dict[str, Any] | None:
