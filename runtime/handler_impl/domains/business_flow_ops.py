@@ -488,6 +488,35 @@ def handle_business_admin(payload, effects, env, *, event_store, now_ms: int | N
                 return done("✅ Вы подключены к бизнесу. /slots — расписание, /me — кабинет", ch)
             customers = len({i.claimed_by for i in invs.values() if i.claimed_by})
             return done(iv.invites_text(invs, now_ms=now, customers=customers))
+        if op.startswith("policy"):
+            from application.business_flows import automation_policy as apol
+
+            facts_ = flow_payloads(event_store, tenant_id=tenant_id, event_type="business_admin@v1")
+            pols, now = apol.replay(facts_), now_ms or _now_ms()
+            if op == "policy_draft":
+                ch = apol.draft(pols, arg, now_ms=now)
+                return done(f"📝 Черновик политики v{ch['version']}. Подтвердить: /policy_approve", ch)
+            if op == "policy_approve":
+                ch = apol.approve(pols, now_ms=now)
+                return done(f"✅ Политика v{ch['version']} действует", ch)
+            if op == "policy_revoke":
+                ch = apol.revoke(pols, now_ms=now)
+                return done(f"⛔ Политика v{ch['version']} отозвана — автоматизация остановлена", ch)
+            if op == "policy_check":
+                parts = [x.strip() for x in arg.split("|")]
+                amount = ad.parse_money(parts[2])[0] if len(parts) > 2 and parts[2] else 0
+                channel = parts[1] if len(parts) > 1 else ""
+                verdict, why = apol.check(pols, parts[0], channel=channel, amount_minor=amount, now_ms=now)
+                label = {"allow": "✅ Разрешено", "needs_approval": "🧾 Нужно подтверждение", "deny": "⛔ Запрещено"}[
+                    verdict
+                ]
+                ch = None
+                if verdict == "needs_approval":
+                    eff = apol.effective(pols, now_ms=now)
+                    ch = apol.approval_for(parts[0], channel, amount, version=eff.version, now_ms=now)
+                    ch = None if ch["approval_id"] in st.approvals else ch
+                return done(f"{label}: " + "; ".join(why) + ("\n/approvals" if verdict == "needs_approval" else ""), ch)
+            return done(apol.render(pols, now_ms=now))
         if op.startswith("ad_"):
             return _ads(
                 body, done, st, op, arg, flow_payloads(event_store, tenant_id=tenant_id, event_type="business_admin@v1")
