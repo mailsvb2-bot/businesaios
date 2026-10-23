@@ -33,6 +33,8 @@ def send_tracked(
     tenant_id = required_str(body, "tenant_id")
     user_id = to_user_id or required_str(body, "user_id")
     tracked = dict(event_payload or {}) if event_type else None
+    # Answer the button callback once, on the first message of this handler run.
+    cbq = body.pop("callback_query_id", None) if isinstance(body, dict) else None
     if tracked is not None:
         tracked.update(tenant_id=tenant_id, user_id=user_id)
     delivery = effects.send_message(
@@ -44,6 +46,7 @@ def send_tracked(
         reply_markup=reply_markup,
         track_event_type=event_type,
         track_payload=tracked,
+        **({"callback_query_id": str(cbq)} if cbq else {}),
         **delivery_kwargs(body),
     )
     return _card_outcome(delivery=delivery, ok=ok, reason=reason)
@@ -416,7 +419,7 @@ def handle_business_ops_summary(payload, effects, env, *, event_store, now_ms: i
     return send_tracked(body, effects, env, text=text, event_type=None, event_payload=None)
 
 
-def handle_business_admin(payload, effects, env, *, event_store):
+def handle_business_admin(payload, effects, env, *, event_store, now_ms: int | None = None):
     """Owner admin ops (settings, autopilot, prices, recorded payments/refunds, approvals)."""
     from application.business_flows import admin as ad
 
@@ -463,6 +466,39 @@ def handle_business_admin(payload, effects, env, *, event_store):
         if op in ad.APPROVAL_NEXT:
             ch = ad.decide_approval(st, op, arg)
             return done(f"✅ Решение записано: {ch['status']}", ch)
+        if op.startswith("post"):
+            from application.business_flows import publications as pb
+
+            pubs, now = (
+                pb.replay(flow_payloads(event_store, tenant_id=tenant_id, event_type="business_admin@v1")),
+                now_ms or _now_ms(),
+            )
+            if op == "posts":
+                due = pb.due(pubs, now_ms=now)
+                return done(
+                    "🗓 Календарь публикаций\n"
+                    + "\n".join(pb.calendar_lines(pubs))
+                    + (f"\n⏰ Пора опубликовать: {len(due)}" if due else "")
+                )
+            if op == "post_add":
+                ch = pb.draft(pubs, arg, now_ms=now)
+                return done("📝 Черновик сохранён" if ch else "📝 Такой черновик уже есть", ch)
+            if op == "post_schedule":
+                ch = pb.schedule(pubs, arg, now_ms=now)
+                return done(
+                    "🗓 Запланировано на " + pb.fmt_ts(ch["at_ms"]) + " МСК (опубликуете вы сами — напомню в /posts)", ch
+                )
+            ch = pb.transition(pubs, op.removeprefix("post_"), arg, now_ms=now)
+            return done(
+                {
+                    "post_unschedule": "↩️ Снято с расписания",
+                    "post_publish": "✅ Отмечено как опубликованное",
+                    "post_retire": "🗄 В архиве",
+                }[op]
+                if ch
+                else "🗄 Уже в архиве",
+                ch,
+            )
         if op == "approvals":
             rows = [ad.format_approval(i, a) for i, a in enumerate(st.approvals.values(), 1)]
             return done("🧾 Действия автоматизации на подтверждение\n" + ("\n".join(rows) or "Нет запросов."))

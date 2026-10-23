@@ -40,6 +40,12 @@ BUSINESS_FLOW_COMMANDS: dict[str, tuple[str, str, bool]] = {
     "/refund": ("business_admin@v1", "refund", True),
     "/payments": ("business_admin@v1", "summary", True),
     "/approvals": ("business_admin@v1", "approvals", True),
+    "/posts": ("business_admin@v1", "posts", True),
+    "/post_add": ("business_admin@v1", "post_add", True),
+    "/post_schedule": ("business_admin@v1", "post_schedule", True),
+    "/post_unschedule": ("business_admin@v1", "post_unschedule", True),
+    "/post_publish": ("business_admin@v1", "post_publish", True),
+    "/post_retire": ("business_admin@v1", "post_retire", True),
     "/approve": ("business_admin@v1", "approve", True),
     "/reject": ("business_admin@v1", "reject", True),
     "/revoke": ("business_admin@v1", "revoke", True),
@@ -70,10 +76,12 @@ BUSINESS_FLOW_COMMANDS: dict[str, tuple[str, str, bool]] = {
 
 def handle_business_flow_routes(ctx: TelegramCtx, *, user_id: str) -> ProposedAction | None:
     data = str(getattr(ctx, "callback_data", "") or "")
+    cbq = str(getattr(ctx, "callback_query_id", "") or "").strip()
+    ack = {"callback_query_id": cbq} if cbq else {}  # stop the Telegram button spinner
     if data.startswith("cpm:") and ctx.is_admin:
-        return propose("business_ops_summary@v1", {"user_id": user_id, "op": "cockpit", "arg": data[:120]})
+        return propose("business_ops_summary@v1", {"user_id": user_id, "op": "cockpit", "arg": data[:120], **ack})
     if data.startswith("cpe:") and ctx.is_admin:
-        return propose("event_series@v1", {"user_id": user_id, "op": "wizard", "arg": data[:64]})
+        return propose("event_series@v1", {"user_id": user_id, "op": "wizard", "arg": data[:64], **ack})
     route = BUSINESS_FLOW_COMMANDS.get(str(ctx.cmd or ""))
     if route is None:
         return None
