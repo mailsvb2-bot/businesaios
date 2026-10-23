@@ -264,7 +264,7 @@ DIRECT_SOURCE = "direct"
 def registration_url(*, public_base_url: str, public_slug: str, source: object | None = None,
                      campaign_ref: object | None = None) -> str:
     """First-party landing URL an acquisition campaign points to."""
-    from urllib.parse import urlencode, urlsplit
+    from urllib.parse import quote_plus, urlsplit
 
     base = str(public_base_url or "").strip()
     parts = urlsplit(base)
@@ -276,7 +276,7 @@ def registration_url(*, public_base_url: str, public_slug: str, source: object |
         raise ValueError("invalid public_slug")
     params = [(k, v) for k, v in (("source", pe.clean_dimension(source, "source", 160)),
                                   ("campaign_ref", pe.clean_dimension(campaign_ref, "campaign_ref", 200))) if v]
-    return f"{base.rstrip('/')}/e/{slug}" + ("?" + urlencode(params) if params else "")
+    return f"{base.rstrip('/')}/e/{slug}" + ("?" + "&".join(f"{k}={quote_plus(v)}" for k, v in params) if params else "")
 
 
 def yandex_registration_url(*, public_base_url: str, public_slug: str, external_campaign_id: object) -> str:
