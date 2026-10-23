@@ -16,11 +16,13 @@ from runtime.handler_impl.core.payloads import require_mapping, required_str
 from runtime.handler_impl.domains.admin_ops import _card_outcome
 from runtime.handler_impl.domains.business_catalog_ops import (
     CATALOG_OPS,
+    CHANNEL_OPS,
     EVENT_OPS,
     FOLLOWUP_OPS,
     PROMO_OPS,
     _ads,
     _catalog,
+    _event_channels,
     _events,
     _followups,
     _promotions,
@@ -176,6 +178,25 @@ def handle_bookings(payload, effects, env, *, event_store, now_ms: int | None = 
         except ValueError as exc:
             return send_tracked(
                 body, effects, env, text=f"📣 Не получилось: {exc}", event_type=None, event_payload=None
+            )
+    if op in CHANNEL_OPS:
+        try:
+            return _event_channels(
+                lambda t, ch: send_tracked(
+                    body, effects, env, text=t, event_type="bookings@v1" if ch else None, event_payload=ch
+                ),
+                bk,
+                op,
+                arg,
+                now,
+                slots,
+                facts,
+                user_id=user_id,
+                platform=str(body.get("platform") or "telegram"),
+            )
+        except ValueError as exc:
+            return send_tracked(
+                body, effects, env, text=f"🔗 Не получилось: {exc}", event_type=None, event_payload=None
             )
     if op in EVENT_OPS:
         try:

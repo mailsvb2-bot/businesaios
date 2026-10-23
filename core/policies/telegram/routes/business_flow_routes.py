@@ -33,6 +33,7 @@ BUSINESS_FLOW_COMMANDS: dict[str, tuple[str, str, bool]] = {
     "/edit_slot": ("bookings@v1", "edit_slot", True),
     "/reschedule_slot": ("bookings@v1", "reschedule_slot", True),
     "/schedule": ("bookings@v1", "schedule", True),
+    "/link_channels": ("bookings@v1", "link_channels", False),
     "/promotions": ("bookings@v1", "promotions", True),
     "/promo_book": ("bookings@v1", "promo_book", False),
     "/bot_secret": ("bot_provisioning@v1", "attach", True),
@@ -129,6 +130,8 @@ def handle_business_flow_routes(ctx: TelegramCtx, *, user_id: str) -> ProposedAc
     args = str(ctx.args or "").strip()
     if ctx.cmd == "/start" and args.startswith("cpa_"):  # promotion deep link -> verified opened touch
         return propose("bookings@v1", {"user_id": user_id, "op": "promo_open", "arg": args[:64]})
+    if ctx.cmd == "/start" and args.startswith("ecv_"):  # booking messenger verification link
+        return propose("bookings@v1", {"user_id": user_id, "op": "channel_verify", "arg": args[:200]})
     route = BUSINESS_FLOW_COMMANDS.get(str(ctx.cmd or ""))
     if route is None:
         return None

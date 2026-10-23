@@ -59,7 +59,7 @@ def handle(ctx: TelegramCtx, *, default_price_rub: int, bot_username: str = "", 
     if section is not None:
         return pm(text=section, reply_markup=back_button())
 
-    if ctx.cmd == "/start" and str(ctx.args or "").strip().startswith("cpa_"):
+    if ctx.cmd == "/start" and str(ctx.args or "").strip().startswith(("cpa_", "ecv_")):
         from core.policies.telegram.routes.business_flow_routes import handle_business_flow_routes
 
         return handle_business_flow_routes(ctx, user_id=str(user_id))

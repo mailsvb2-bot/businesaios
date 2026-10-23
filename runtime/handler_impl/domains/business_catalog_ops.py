@@ -285,3 +285,25 @@ def _events(done, push, bk, op, arg, now, slots, *, tenant_id, event_store):
     if slot.status == "booked" and slot.customer_id:
         push(en.rescheduled_text(moved, slot.starts_at_ms, tz), slot.customer_id)
     return done(f"🔁 Перенесено: {bk.fmt(moved, tz)}\nНапоминания пересчитаны (ревизия {ch['revision']}).", ch)
+
+
+CHANNEL_OPS = frozenset({"link_channels", "channel_verify"})
+
+
+def _event_channels(done, bk, op, arg, now, slots, facts, *, user_id, platform="telegram"):
+    """Booking messenger verification (donor event_registration_channels)."""
+    from application.business_flows import event_channels as ec
+
+    if op == "channel_verify":
+        ch = ec.consume(
+            facts, slots, token=ec.extract_token(arg) or "", platform=platform, external_subject=user_id, now_ms=now
+        )
+        slot = slots[ch["slot_id"]]
+        extra = "\nСогласие на рекламные сообщения записано." if ch["marketing_consent"] else ""
+        return done(f"✅ {platform}: аккаунт подтверждён для записи {bk.fmt(slot)}.\nНапоминания придут сюда.{extra}", ch)
+    n, _, rest = arg.partition(" ")
+    mine = bk.upcoming(slots, now_ms=now, customer_id=user_id)
+    slot = mine[int(n) - 1] if n.isdigit() and 0 < int(n) <= len(mine) else None
+    tokens, ch = ec.issue(slot, customer_id=user_id, marketing=rest.replace(",", " ").split(), now_ms=now)
+    rows = "\n".join(f"{p}: /start {ec.PREFIX}{t}" for p, t in tokens.items())
+    return done(f"🔗 Ссылки подтверждения (действуют 1 час, одноразовые):\n{rows}", ch)
