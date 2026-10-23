@@ -81,7 +81,7 @@ def test_every_declared_action_schema_accepts_only_its_contract() -> None:
     # case; the existing checks still execute for every field in the catalog.
     # Port wave PD export: privacy_export@v1 adds 11 schema cases.
     # Port: business_admin@v1, event_series@v1, sales_pipeline@v1 (+13 each, measured).
-    assert cases == 927 + 4 + 11 + 13 + 13 + 13 + 13 + 13 + 13 + 13 + 13 + 13
+    assert cases == 927 + 4 + 11 + 13 + 13 + 13 + 13 + 13 + 13 + 13 + 13 + 13 + 2  # +2: optional callback_query_id (event_series, ops_summary)
 
 
 def test_every_runtime_handler_and_compatibility_import_door_resolves() -> None:
