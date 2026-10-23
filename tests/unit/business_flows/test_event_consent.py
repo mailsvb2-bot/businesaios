@@ -103,3 +103,41 @@ def test_funnel_and_payment():
             currency=None,
             occurred_at=NOW,
         )
+
+
+def test_eg_registration_urls():
+    slug = "a" * 32
+    assert ec.registration_url(public_base_url="https://x.ru/", public_slug=slug) == f"https://x.ru/e/{slug}"
+    u = ec.yandex_registration_url(public_base_url="https://x.ru", public_slug=slug, external_campaign_id=" 123 ")
+    assert u.endswith("?source=yandex_direct&campaign_ref=123")
+    for bad in ("http://x.ru", "https://u:p@x.ru", "https://x.ru/a\nb"):
+        with pytest.raises(ValueError):
+            ec.registration_url(public_base_url=bad, public_slug=slug)
+    with pytest.raises(ValueError):
+        ec.registration_url(public_base_url="https://x.ru", public_slug="short")
+    with pytest.raises(ValueError):
+        ec.yandex_registration_url(public_base_url="https://x.ru", public_slug=slug, external_campaign_id="012")
+    with pytest.raises(ValueError):
+        ec.registration_url(public_base_url="https://x.ru", public_slug=slug, source="s" * 161)
+
+
+def test_eg_breakdown_and_roas():
+    f, rid, _ = _setup()
+    b = pe.replay(f)
+    r2, _ = pe.register(b, slug=f[0]["slug"], name="B", email="b@b.ru", consent=True, now=NOW,
+                        source="yandex_direct", campaign_ref="77")
+    r3, _ = pe.register(b, slug=f[0]["slug"], name="C", email="c@b.ru", consent=True, now=NOW,
+                        source=" yandex_direct ", campaign_ref="77")
+    f += [r2, r3, ec_an.mark(r2["registration_id"], "join_clicked")]
+    f += ec_an.link_verified_payment(f, event_id=f[0]["event_id"], registration_id=r3["registration_id"],
+                                     payment_ref="p1", amount_minor=500000, currency="RUB", occurred_at=NOW)
+    slices = ec.acquisition_breakdown(f, f[0]["event_id"])
+    assert [(s.source, s.campaign_ref, s.funnel.registered) for s in slices] == [("yandex_direct", "77", 2), ("direct", None, 1)]
+    ya = slices[0]
+    assert ya.funnel.join_clicked == 1 and ya.funnel.paid == 1 and slices[1].funnel.paid == 0
+    assert ya.funnel.join_click_rate == 0.5 and ya.funnel.offer_click_rate == 0.0 and ya.funnel.registration_to_paid_rate == 0.5
+    roi = ec.event_roas(ya, spend_minor=200000, currency="rub")
+    assert (roi.roas, roi.profit_after_ad_spend_minor) == (2.5, 300000)
+    assert ec.event_roas(ya, spend_minor=0, currency="USD").roas is None
+    with pytest.raises(ValueError):
+        ec.event_roas(ya, spend_minor=-1, currency="RUB")

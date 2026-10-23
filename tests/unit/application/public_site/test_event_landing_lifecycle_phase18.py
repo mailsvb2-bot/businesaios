@@ -37,3 +37,24 @@ def test_preview_never_leaks_unpublished_changes_to_public_snapshot() -> None:
     published = new_event_landing_state(event_id="event-1", content=_content("Public")).publish(expected_revision=1)
     draft = published.save_draft(content=_content("Secret draft"), source="ai", expected_revision=1)
     assert (draft.preview().hero_title, draft.public_content().hero_title) == ("Secret draft", "Public")
+
+
+def test_eps_render_landing_escapes_and_attribution() -> None:
+    from datetime import UTC, datetime
+
+    from application.business_flows.public_events import PubEvent
+    from application.public_site.landing_content import SECURITY_HEADERS, render_event_landing_body
+    ev = PubEvent("e1", "<b>Вебинар</b>", "webinar", datetime(2026, 11, 1, 9, tzinfo=UTC).isoformat(), "Europe/Moscow", "s" * 32)
+    assert ev.local_start_label() == "01.11.2026 12:00"
+    plain = render_event_landing_body(slug=ev.slug, title=ev.title, start_label=ev.local_start_label(),
+                                      source="yandex_direct", campaign_ref="7'><x")
+    assert "&lt;b&gt;Вебинар" in plain and "<b>Вебинар" not in plain
+    assert f"action='/e/{'s' * 32}/register'" in plain and "value='yandex_direct'" in plain
+    assert "7&#x27;&gt;&lt;x" in plain and "marketing_consent" not in plain
+    sales = render_event_landing_body(slug="a/b", title="t", start_label="x", landing=_content("Заголовок"),
+                                      advertiser_label="Ромашка")
+    assert "landing-faq" in sales and "/e/a%2Fb/register" in sales and "name=marketing_consent_hash" in sales
+    assert "«Ромашка»" in sales
+    preview = render_event_landing_body(slug="a", title="t", start_label="x", registration_enabled=False)
+    assert "<form" not in preview and "disabled" in preview
+    assert "frame-ancestors 'none'" in SECURITY_HEADERS["Content-Security-Policy"]

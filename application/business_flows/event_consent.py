@@ -155,6 +155,10 @@ class Funnel:
     def registration_to_paid_rate(self) -> float:
         return _rate(self.paid, self.registered)
 
+    @property
+    def offer_click_rate(self) -> float:
+        return _rate(self.offer_clicked, self.registered)
+
 
 def mark(registration_id: str, what: str) -> dict[str, Any]:
     if what not in MARKS:
@@ -250,3 +254,87 @@ def link_verified_payment(
             "scope": "commercial",
         },
     ]
+
+
+# --- acquisition attribution & ROAS (donor event_growth) ---
+# Reuses registration dimensions (source, campaign_ref) on ``pub_registration``; no second ads brain.
+DIRECT_SOURCE = "direct"
+
+
+def registration_url(*, public_base_url: str, public_slug: str, source: object | None = None,
+                     campaign_ref: object | None = None) -> str:
+    """First-party landing URL an acquisition campaign points to."""
+    from urllib.parse import urlencode, urlsplit
+
+    base = str(public_base_url or "").strip()
+    parts = urlsplit(base)
+    if (len(base) > 2048 or parts.scheme != "https" or not parts.hostname or parts.username or parts.password
+            or any(ord(c) < 33 or ord(c) == 127 for c in base)):
+        raise ValueError("public_base_url must be HTTPS")
+    slug = str(public_slug or "").strip()
+    if not 20 <= len(slug) <= 96 or not all(c.isascii() and (c.isalnum() or c in "_-") for c in slug):
+        raise ValueError("invalid public_slug")
+    params = [(k, v) for k, v in (("source", pe.clean_dimension(source, "source", 160)),
+                                  ("campaign_ref", pe.clean_dimension(campaign_ref, "campaign_ref", 200))) if v]
+    return f"{base.rstrip('/')}/e/{slug}" + ("?" + urlencode(params) if params else "")
+
+
+def yandex_registration_url(*, public_base_url: str, public_slug: str, external_campaign_id: object) -> str:
+    cid = str(external_campaign_id or "").strip()
+    if not (cid.isascii() and cid.isdigit() and 1 <= len(cid) <= 20 and cid[0] != "0"):
+        raise ValueError("external campaign id is invalid")
+    return registration_url(public_base_url=public_base_url, public_slug=public_slug,
+                            source="yandex_direct", campaign_ref=cid)
+
+
+@dataclass(frozen=True)
+class AcquisitionSlice:
+    source: str
+    campaign_ref: str | None
+    funnel: Funnel
+
+
+def acquisition_breakdown(payloads: list[dict[str, Any]], event_id: str) -> tuple[AcquisitionSlice, ...]:
+    """Event funnel grouped by exact (source, campaign_ref), biggest first (reuses ``funnel``)."""
+    dims: dict[str, tuple[str, str | None]] = {}
+    for p in payloads:
+        if p.get("step") == "pub_registration" and p.get("event_id") == event_id:
+            dims.setdefault(p["registration_id"], (p.get("source") or DIRECT_SOURCE, p.get("campaign_ref") or None))
+    groups: dict[tuple[str, str | None], set[str]] = {}
+    for rid, key in dims.items():
+        groups.setdefault(key, set()).add(rid)
+    out = []
+    for (src, camp), rids in groups.items():
+        scoped = [p for p in payloads if not p.get("registration_id") or p.get("registration_id") in rids]
+        f = funnel(scoped, event_id)
+        if f.registered:
+            out.append(AcquisitionSlice(src, camp, f))
+    return tuple(sorted(out, key=lambda s: (-s.funnel.registered, s.source, s.campaign_ref or "")))
+
+
+@dataclass(frozen=True)
+class Roas:
+    source: str
+    campaign_ref: str | None
+    currency: str
+    spend_minor: int
+    revenue_minor: int
+
+    @property
+    def roas(self) -> float | None:
+        return None if self.spend_minor <= 0 else round(self.revenue_minor / self.spend_minor, 4)
+
+    @property
+    def profit_after_ad_spend_minor(self) -> int:
+        return self.revenue_minor - self.spend_minor
+
+
+def event_roas(acq: AcquisitionSlice, *, spend_minor: int, currency: str) -> Roas:
+    """Combine already-trusted spend evidence (ad spend ledger) with first-party revenue; never invents spend."""
+    if isinstance(spend_minor, bool) or not isinstance(spend_minor, int) or spend_minor < 0:
+        raise ValueError("spend_minor must be a non-negative integer")
+    cur = str(currency or "").strip().upper()
+    if len(cur) != 3 or not cur.isalpha():
+        raise ValueError("currency must be a three-letter code")
+    revenue = sum(a for c, a in acq.funnel.revenue if c.upper() == cur)
+    return Roas(acq.source, acq.campaign_ref, cur, spend_minor, revenue)

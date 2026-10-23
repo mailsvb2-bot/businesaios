@@ -68,6 +68,9 @@ class PubEvent:
     def accepts_registrations(self, now: datetime) -> bool:
         return self.status == "published" and _dt(self.starts_at) > now
 
+    def local_start_label(self) -> str:
+        return _dt(self.starts_at).astimezone(ZoneInfo(self.timezone)).strftime("%d.%m.%Y %H:%M")
+
 
 @dataclass(frozen=True)
 class Registration:
@@ -221,6 +224,20 @@ def cancel(b: Board, event_id: str) -> list[dict[str, Any]]:
     ]
 
 
+def clean_dimension(value: object | None, field: str, maximum: int) -> str | None:
+    """Donor event_growth._clean_dimension: acquisition source/campaign as seen on the landing URL."""
+    if value is None:
+        return None
+    text = " ".join(str(value).replace("\x00", " ").split())
+    if not text:
+        return None
+    if len(text) > maximum:
+        raise ValueError(f"{field} is too long")
+    if any(ord(c) < 32 or ord(c) == 127 for c in text):
+        raise ValueError(f"{field} contains control characters")
+    return text
+
+
 def by_slug(b: Board, slug: str) -> PubEvent:
     ev = next((e for e in b.events.values() if e.slug == slug), None)
     if ev is None or ev.status not in {"published", "cancelled"}:
@@ -229,7 +246,8 @@ def by_slug(b: Board, slug: str) -> PubEvent:
 
 
 def register(
-    b: Board, *, slug: str, name: str, email: str, consent: bool, now: datetime
+    b: Board, *, slug: str, name: str, email: str, consent: bool, now: datetime,
+    source: object | None = None, campaign_ref: object | None = None,
 ) -> tuple[dict[str, Any] | None, str | None]:
     """(fact, raw_token). Repeat registration -> (None, None); the token is shown once, only its hash is kept."""
     if consent is not True:
@@ -256,6 +274,8 @@ def register(
             "token_hash": _h(token),
             "name": " ".join(str(name or "").split())[:120],
             "consent_version": CONSENT_VERSION,
+            **{k: v for k, v in (("source", clean_dimension(source, "source", 160)),
+                                 ("campaign_ref", clean_dimension(campaign_ref, "campaign_ref", 200))) if v},
         },
         token,
     )
