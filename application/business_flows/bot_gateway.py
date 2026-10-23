@@ -10,7 +10,7 @@ from __future__ import annotations
 import json
 from collections import deque
 from collections.abc import Mapping
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from typing import Any
 
 from application.business_flows import bot_provisioning as botprov
@@ -60,6 +60,20 @@ class Route:
     username: str
     credential_ref: str
     owner_user_id: str = ""
+    business: tuple[tuple[str, Any], ...] = ()  # non-secret per-business policy context (see business_context)
+
+
+def business_context(catalog: Any) -> tuple[tuple[str, Any], ...]:
+    """Public business facts the customer-bot policy may show: activity, live offerings, timezone."""
+    offerings = tuple(
+        o.title[:80] for o in sorted(catalog.offerings.values(), key=lambda o: o.offering_id) if not o.archived
+    )[:5]
+    return (("activity", str(catalog.activity or "")[:300]), ("offerings", offerings),
+            ("timezone", str(catalog.timezone or "Europe/Moscow")))  # fmt: skip
+
+
+def with_business(routes: list[Route], context: tuple[tuple[str, Any], ...]) -> list[Route]:
+    return [replace(r, business=context) for r in routes]
 
 
 def active_routes(state: dict[str, botprov.Provisioning], *, tenant_id: str) -> list[Route]:
@@ -156,9 +170,11 @@ __all__ = [
     "GatewayConfig",
     "Route",
     "active_routes",
+    "business_context",
     "gateway_config",
     "message_text",
     "resolve_route",
     "safe_error_code",
     "telegram_actor",
+    "with_business",
 ]

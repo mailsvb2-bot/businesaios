@@ -137,8 +137,14 @@ def build_customer_bot_gateway(
             vault = None
 
     def routes() -> list[gw.Route]:
+        from application.business_flows import catalog as cg
+
         payloads = flow_payloads(event_store, tenant_id=tenant_id, event_type="bot_provisioning@v1")
-        return gw.active_routes(botprov.replay(payloads), tenant_id=tenant_id)
+        live = gw.active_routes(botprov.replay(payloads), tenant_id=tenant_id)
+        if not live:
+            return live
+        admin = flow_payloads(event_store, tenant_id=tenant_id, event_type="business_admin@v1")
+        return gw.with_business(live, gw.business_context(cg.replay(admin)))
 
     def resolve(route: gw.Route) -> str:
         return str(mbc.resolve(route.credential_ref, tenant_id=route.tenant_id, vault=vault) or "").strip()

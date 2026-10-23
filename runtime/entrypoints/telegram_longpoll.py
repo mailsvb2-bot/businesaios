@@ -122,7 +122,7 @@ def _world_state_from_update(
 ) -> WorldStateV1:
     event = telegram_update_to_messaging_event(
         update,
-        tenant_id=_configured_telegram_tenant_id(),
+        tenant_id=customer_route.tenant_id if customer_route is not None else _configured_telegram_tenant_id(),
         product_name=env_str("PRODUCT_NAME", "BusinesAIOS"),
         timezone=env_str("SYSTEM_TZ", "Europe/Amsterdam"),
     )
@@ -156,7 +156,8 @@ def _world_state_from_update(
         state = replace(state, user_id=uid)
     elif customer_route is not None:  # update from a tenant's own bot (customer side)
         bot = {"bot_id": customer_route.external_bot_id, "username": customer_route.username,
-               "request_id": customer_route.request_id}  # fmt: skip
+               "request_id": customer_route.request_id, "tenant_id": customer_route.tenant_id,
+               "business": dict(customer_route.business)}  # fmt: skip
         session = {**session, "source": CUSTOMER_SOURCE, "customer_bot": bot}
     return _copy_world_state(
         state,

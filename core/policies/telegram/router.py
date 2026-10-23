@@ -17,6 +17,7 @@ from core.policies.telegram.helpers import (
     propose_message,
 )
 from core.policies.telegram.routes.command_routes import handle_command_routes
+from core.policies.telegram.routes.customer_bot_routes import handle_customer_bot, is_customer_session
 from core.policies.telegram.routes.marketing_routes import handle_marketing_routes
 from core.policies.telegram.routes.settings_routes import handle_settings_routes
 from core.users.roles import UserRoleInfo
@@ -35,6 +36,8 @@ def _has_perm(ctx: TelegramCtx, perm: str) -> bool:
 
 def handle(ctx: TelegramCtx, *, default_price_rub: int, bot_username: str = "", gift_ttl_sec: int = 7 * 24 * 3600) -> ProposedAction:
     user_id = ctx.state.user_id or "anonymous"
+    if is_customer_session(getattr(ctx.state, "session", None)):  # tenant's own bot: customer routes only
+        return handle_customer_bot(ctx, user_id=str(user_id))
     user_role = UserRoleInfo.from_settings(ctx.settings if isinstance(ctx.settings, dict) else {})
     legacy_prices = build_legacy_prices(default_price_rub=default_price_rub)
 
