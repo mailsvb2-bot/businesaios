@@ -506,7 +506,12 @@ def handle_business_admin(payload, effects, env, *, event_store, now_ms: int | N
                 parts = [x.strip() for x in arg.split("|")]
                 amount = ad.parse_money(parts[2])[0] if len(parts) > 2 and parts[2] else 0
                 channel = parts[1] if len(parts) > 1 else ""
-                verdict, why = apol.check(pols, parts[0], channel=channel, amount_minor=amount, now_ms=now)
+                from application.business_flows import catalog as cg
+
+                tz = cg.replay(flow_payloads(event_store, tenant_id=tenant_id, event_type="business_admin@v1")).timezone
+                verdict, why = apol.check(
+                    pols, parts[0], channel=channel, amount_minor=amount, now_ms=now, timezone_name=tz
+                )
                 label = {"allow": "✅ Разрешено", "needs_approval": "🧾 Нужно подтверждение", "deny": "⛔ Запрещено"}[
                     verdict
                 ]

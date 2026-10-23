@@ -128,7 +128,13 @@ def revoke(policies: list[Policy], *, now_ms: int) -> dict[str, Any]:
 
 
 def check(
-    policies: list[Policy], action: str, *, channel: str = "", amount_minor: int = 0, now_ms: int
+    policies: list[Policy],
+    action: str,
+    *,
+    channel: str = "",
+    amount_minor: int = 0,
+    now_ms: int,
+    timezone_name: str = "Europe/Moscow",
 ) -> tuple[str, list[str]]:
     """-> ("allow" | "needs_approval" | "deny", reasons). Fail-closed: no policy => deny."""
     p = effective(policies, now_ms=now_ms)
@@ -149,11 +155,43 @@ def check(
         elif amount_minor > cap:
             deny.append(f"сумма выше лимита {ad.money(cap, 'RUB')}")
         need.append("денежное действие")
+    scope = SCOPES.get(action)
+    if scope is not None:
+        if channel and channel not in scope["channels"]:
+            deny.append(f"канал {channel} вне области действия {action}")
+        if scope.get("quiet") and in_quiet_hours(now_ms, timezone_name):
+            deny.append("тихие часы 22:00–08:00 по времени бизнеса")
     if action in s.approval_required:
         need.append("требует подтверждения по политике")
     if deny:
         return "deny", deny
     return ("needs_approval", need) if need else ("allow", ["в рамках политики"])
+
+
+# Action scopes (donor _event_action_scope / _growth_action_scope): followups to opted-in
+# prospects only in owner-approved channels and never in quiet hours; growth is read-only.
+SCOPES: dict[str, dict[str, Any]] = {
+    "followup": {"channels": ("telegram", "max", "vk", "email"), "audience": "prospect_opted_in", "quiet": True},
+    "growth": {"channels": ("internal",), "audience": "business_owner", "quiet": False},
+}
+
+
+def in_quiet_hours(now_ms: int, timezone_name: str) -> bool:
+    from datetime import UTC, datetime
+    from zoneinfo import ZoneInfo
+
+    hour = datetime.fromtimestamp(now_ms / 1000, UTC).astimezone(ZoneInfo(timezone_name or "UTC")).hour
+    return hour >= 22 or hour < 8
+
+
+def authorize(approvals: dict[str, Any], approval_id: str, *, title: str, amount_minor: int) -> None:
+    """Executor-side binding check (donor get_automation_action_authorization): the approval must be
+    approved and bound to exactly this action title and amount, otherwise raise."""
+    ap_ = approvals.get(approval_id)
+    if ap_ is None or ap_.status != "approved":
+        raise PermissionError("нет одобрения")
+    if ap_.title != title or int(ap_.amount_minor) != int(amount_minor):
+        raise PermissionError("одобрение выдано на другое действие или сумму")
 
 
 def approval_for(action: str, channel: str, amount_minor: int, *, version: int, now_ms: int) -> dict[str, Any]:

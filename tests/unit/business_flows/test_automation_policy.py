@@ -42,3 +42,27 @@ def test_parse_rejects_conflicts() -> None:
         ap.parse_spec("allow=post | deny=post")
     with pytest.raises(ValueError):
         ap.parse_spec("deny=post")
+
+
+def test_scopes_quiet_hours_and_authorization_binding() -> None:
+    import pytest
+
+    from application.business_flows import admin as ad
+    from application.business_flows import automation_policy as ap
+
+    pols = ap.replay([ap.draft([], "allow=followup,growth | days=30", now_ms=0)])
+    pols = ap.replay([ap.draft([], "allow=followup,growth | days=30", now_ms=0), ap.approve(pols, now_ms=0)])
+    noon_msk, night_msk = 9 * 3600_000, 20 * 3600_000  # 12:00 / 23:00 MSK on day 0
+    assert ap.check(pols, "followup", channel="telegram", now_ms=noon_msk)[0] == "allow"
+    v, why = ap.check(pols, "followup", channel="telegram", now_ms=night_msk)
+    assert v == "deny" and "тихие часы" in why[0]
+    assert (
+        ap.check(pols, "followup", channel="telegram", now_ms=night_msk, timezone_name="America/New_York")[0] == "allow"
+    )
+    assert ap.check(pols, "growth", channel="sms", now_ms=noon_msk)[0] == "deny"
+    approvals = {"a1": ad.Approval("a1", "Автоматизация: ads (vk)", 5000, "RUB", status="approved")}
+    ap.authorize(approvals, "a1", title="Автоматизация: ads (vk)", amount_minor=5000)
+    with pytest.raises(PermissionError):
+        ap.authorize(approvals, "a1", title="Автоматизация: ads (vk)", amount_minor=9000)
+    with pytest.raises(PermissionError):
+        ap.authorize(approvals, "zz", title="x", amount_minor=0)
