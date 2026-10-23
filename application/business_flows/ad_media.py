@@ -65,6 +65,37 @@ def replay(payloads: list[dict[str, Any]]) -> dict[str, Asset]:
     return out
 
 
+IMAGE_OUTPUT_LIMIT = 10_000_000
+
+
+def normalize_image(payload: bytes) -> bytes:
+    """1080x1080 white-padded JPEG (q90), EXIF-oriented. Pillow is optional: not a repo dependency."""
+    if not payload or len(payload) > IMAGE_INPUT_LIMIT:
+        raise AssetError("image is too large")
+    try:
+        from io import BytesIO
+
+        from PIL import Image, ImageOps, UnidentifiedImageError
+    except ImportError as exc:  # pragma: no cover - depends on optional install
+        raise AssetError("image normalization unavailable (Pillow not installed)") from exc
+    try:
+        with Image.open(BytesIO(payload)) as src:
+            src.verify()
+        with Image.open(BytesIO(payload)) as again:
+            img = ImageOps.contain(ImageOps.exif_transpose(again).convert("RGB"), (1080, 1080),
+                                   method=Image.Resampling.LANCZOS)
+            canvas = Image.new("RGB", (1080, 1080), "white")
+            canvas.paste(img, ((1080 - img.width) // 2, (1080 - img.height) // 2))
+            out = BytesIO()
+            canvas.save(out, format="JPEG", quality=90, optimize=True)
+            data = out.getvalue()
+    except (UnidentifiedImageError, OSError, ValueError, Image.DecompressionBombError) as exc:
+        raise AssetError("image format is unsupported or damaged") from exc
+    if not data or len(data) > IMAGE_OUTPUT_LIMIT:
+        raise AssetError("image could not be normalized for advertising")
+    return data
+
+
 def sniff_image(payload: bytes) -> str:
     if not payload or len(payload) > IMAGE_INPUT_LIMIT:
         raise AssetError("image is too large")

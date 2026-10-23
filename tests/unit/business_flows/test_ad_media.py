@@ -61,3 +61,16 @@ def test_attach_file_rejects_symlink(tmp_path):
     with pytest.raises(m.AssetError):
         m.attach_image_file({}, "j", tmp_path / "l.jpg")
     assert m.attach_image_file({}, "j", f)[1][0]["name"] == "a.jpg"
+
+
+def test_normalize_image_with_optional_pillow():
+    import io
+
+    pil = pytest.importorskip("PIL.Image")
+    buf = io.BytesIO()
+    pil.new("RGB", (300, 100), "red").save(buf, format="PNG")
+    out = m.normalize_image(buf.getvalue())
+    with pil.open(io.BytesIO(out)) as img:
+        assert img.size == (1080, 1080) and img.format == "JPEG"
+    with pytest.raises(m.AssetError):
+        m.normalize_image(b"\x89PNGbroken")
