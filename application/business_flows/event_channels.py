@@ -62,17 +62,47 @@ def issue(
     return tokens, fact
 
 
+def issue_for_registration(
+    b: Any, registration_id: str, *, now_ms: int, ttl_seconds: int = 3600, skip_platforms: Iterable[object] = (),
+    marketing: Iterable[object] = (),
+) -> tuple[dict[str, str], dict[str, Any] | None]:
+    """Donor ``event_reminder_channels``: reminder link tokens after a public registration.
+
+    Only a registered, CRM-projected registration of a published event gets links; the participant must
+    consume the token inside the messenger (``consume``). Nothing is sent here.
+    """
+    reg = b.registrations.get(registration_id)
+    ev = b.events.get(reg.event_id) if reg is not None else None
+    if reg is None or reg.status != "registered" or not reg.customer_id or ev is None or ev.status != "published":
+        return {}, None
+    skip = {str(x).strip().lower() for x in skip_platforms}
+    wanted = marketing_platforms(marketing)
+    plats = [p for p in PLATFORMS if p not in skip]
+    if not plats:
+        return {}, None
+    tokens = {p: secrets.token_urlsafe(32) for p in plats}
+    fact = {
+        "step": "channel_links_issued",
+        "registration_id": registration_id,
+        "customer_id": reg.customer_id,
+        "expires_at_ms": now_ms + min(max(int(ttl_seconds), 60), 3600) * 1000,
+        "links": [{"platform": p, "digest": _digest(t), "marketing": p in wanted} for p, t in tokens.items()],
+    }
+    return tokens, fact
+
+
 def channels(payloads: list[dict[str, Any]]) -> dict[tuple[str, str, str], str]:
     """(slot, customer, platform) -> verified external subject."""
     return {
-        (str(p["slot_id"]), str(p["customer_id"]), str(p["platform"])): str(p["external_subject"])
+        (str(p.get("slot_id") or p.get("registration_id")), str(p["customer_id"]), str(p["platform"])): str(p["external_subject"])
         for p in payloads
         if p.get("step") == "channel_verified"
     }
 
 
 def consume(
-    payloads: list[dict[str, Any]], slots: dict[str, Any], *, token: str, platform: str, external_subject: str, now_ms: int
+    payloads: list[dict[str, Any]], slots: dict[str, Any], *, token: str, platform: str, external_subject: str, now_ms: int,
+    registrations: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     raw = str(token or "").strip()
     if not 20 <= len(raw) <= 160:
@@ -90,22 +120,29 @@ def consume(
     if hit is None:
         raise LinkRejected("event messenger verification token was not found")
     issued, link = hit
-    slot = slots.get(str(issued["slot_id"]))
-    if slot is None or slot.status != "booked" or slot.customer_id != issued["customer_id"]:
-        raise LinkRejected("event messenger verification token was not found")
+    if "registration_id" in issued:
+        reg = (registrations or {}).get(str(issued["registration_id"]))
+        if reg is None or reg.status != "registered" or reg.customer_id != issued["customer_id"]:
+            raise LinkRejected("event messenger verification token was not found")
+        scope_key, scope_id = "registration_id", reg.registration_id
+    else:
+        slot = slots.get(str(issued["slot_id"]))
+        if slot is None or slot.status != "booked" or slot.customer_id != issued["customer_id"]:
+            raise LinkRejected("event messenger verification token was not found")
+        scope_key, scope_id = "slot_id", slot.slot_id
     if link["platform"] != plat:
         raise LinkRejected("event messenger verification token belongs to another platform")
     if digest in consumed:
         raise LinkRejected("event messenger verification token was already consumed")
     if int(issued["expires_at_ms"]) <= now_ms:
         raise LinkRejected("event messenger verification token expired")
-    key = (slot.slot_id, str(issued["customer_id"]), plat)
+    key = (scope_id, str(issued["customer_id"]), plat)
     existing = channels(payloads).get(key)
     if existing is not None and existing != subject:
         raise LinkRejected("this booking is already verified to another messenger account")
     return {
         "step": "channel_verified",
-        "slot_id": slot.slot_id,
+        scope_key: scope_id,
         "customer_id": issued["customer_id"],
         "platform": plat,
         "external_subject": subject,
@@ -114,4 +151,4 @@ def consume(
     }
 
 
-__all__ = ["PLATFORMS", "PREFIX", "LinkRejected", "channels", "consume", "extract_token", "issue", "marketing_platforms"]
+__all__ = ["PLATFORMS", "PREFIX", "LinkRejected", "channels", "consume", "extract_token", "issue", "issue_for_registration", "marketing_platforms"]

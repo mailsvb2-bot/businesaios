@@ -80,6 +80,7 @@ class Registration:
     token_hash: str
     name: str
     status: str = "registered"
+    customer_id: str | None = None
 
 
 @dataclass
@@ -140,6 +141,9 @@ def replay(payloads: list[dict[str, Any]]) -> Board:
         elif s == "pub_registration_cancelled" and p["registration_id"] in b.registrations:
             r = b.registrations[p["registration_id"]]
             b.registrations[r.registration_id] = replace(r, status="cancelled")
+        elif s == "pub_registration_customer" and p["registration_id"] in b.registrations:
+            r = b.registrations[p["registration_id"]]
+            b.registrations[r.registration_id] = replace(r, customer_id=str(p["customer_id"]))
     return b
 
 
@@ -393,3 +397,53 @@ def owner_join_plan(ev: PubEvent, *, position: int, owner_member_id: str, actor_
     return [*steps, {"method": "IssueJoinGrant", "tenant_id": tenant_id, "store_url": False,
                      "idempotency_key": f"host-join:{ev.event_id}:{position}:{actor_member_id}:{att}",
                      "request": {"external_user_id": who, "ttl_seconds": int(ttl_seconds)}}]
+
+
+# --- CRM projection of a public registration (donor event_customer_projection) ---------------
+ACTOR_ROLES = ("owner", "administrator", "manager", "support")
+
+
+def automation_actor(members: list[dict[str, Any]], *, business_active: bool,
+                     created_by_member_id: str | None) -> dict[str, Any] | None:
+    """Active staff principal for canonical CRM writes: the event creator, else owner>admin>manager>support.
+
+    Public registration never manufactures a membership; no active principal -> None (projection skipped).
+    """
+    if not business_active:
+        return None
+    live = [m for m in members if m.get("status") == "active" and m.get("role") in ACTOR_ROLES]
+    if not live:
+        return None
+    rank = lambda m: (0 if created_by_member_id and m.get("member_id") == created_by_member_id  # noqa: E731
+                      else 1 + ACTOR_ROLES.index(m["role"]), str(m.get("created_at") or ""), str(m.get("member_id")))
+    return min(live, key=rank)
+
+
+def attach_registration_to_customer(registry: Any, b: Board, registration_id: str, *, tenant_id: str, business_id: str,
+                                    email: str, actor: dict[str, Any] | None, phone: str | None = None,
+                                    ) -> tuple[str | None, list[dict[str, Any]]]:
+    """Project a registration into crm.CustomerRegistry (email identity = idempotency key).
+
+    Registration durability never depends on this. A phone already owned by another customer is NOT merged.
+    The raw email must match the stored hash, so a caller cannot attach a foreign identity.
+    """
+    from contracts.customer import CustomerIdentityConflict
+    reg = b.registrations.get(registration_id)
+    if reg is None or reg.status != "registered" or actor is None:
+        return None, []
+    mail = str(email or "").strip().lower()
+    if _h(mail) != reg.email_hash:
+        raise PermissionError("registration_email_mismatch")
+    rec = registry.ensure_customer_identity(tenant_id=tenant_id, business_id=business_id, channel="email",
+                                            external_subject=mail, display_name=reg.name or None)
+    cid = rec.customer.customer_id
+    phone_linked = False
+    if phone:
+        try:
+            registry.attach_identity(tenant_id=tenant_id, business_id=business_id, customer_id=cid, channel="phone",
+                                     external_subject=phone, display_name=reg.name or None)
+            phone_linked = True
+        except CustomerIdentityConflict:
+            phone_linked = False
+    return cid, [{"step": "pub_registration_customer", "registration_id": registration_id, "customer_id": cid,
+                  "actor_member_id": str(actor.get("member_id")), "phone_linked": phone_linked}]

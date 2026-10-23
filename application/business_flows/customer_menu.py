@@ -8,9 +8,11 @@ Training programs are out of scope, so those buttons are not offered.
 
 from __future__ import annotations
 
+import base64
 import re
 from dataclasses import dataclass
 from typing import Any
+from uuid import UUID
 
 from application.business_flows import bookings as bk
 
@@ -62,6 +64,16 @@ def menu(*, linked: bool = False) -> Screen:
 
 def stale() -> Screen:
     return Screen("Эта кнопка уже неактуальна. Откройте нужный раздел заново.", (_MENU_ROW,))
+
+
+def uuid_token(value: str) -> str:
+    """Donor control_callbacks: 22-char urlsafe token for a UUID (fits Telegram's 64-byte callback_data)."""
+    return base64.urlsafe_b64encode(UUID(str(value)).bytes).decode("ascii").rstrip("=")
+
+
+def token_uuid(value: str) -> str:
+    padded = str(value) + "=" * (-len(str(value)) % 4)
+    return str(UUID(bytes=base64.urlsafe_b64decode(padded.encode("ascii"))))
 
 
 def page_index(raw: str | None) -> int | None:
