@@ -118,6 +118,11 @@ TELEGRAM_INTERACTIVE_ACTION_DESCRIPTORS: dict[str, ActionCategory] = {
 }
 
 
+# A reply to the user's own inbound update is bounded by inbound traffic, not by
+# tenant autonomy, so it must not consume the tenant's autonomous action budget.
+USER_REPLY_INTERACTION = 'user_reply'
+
+
 def build_default_operational_action_registry() -> OperationalActionRegistry:
     specs = {name: _spec_from_action_catalog(name) for name in _action_catalog.known_action_types()}
     # Explicit non-runtime helper entries still allowed when consumed outside the decision loop.
@@ -131,6 +136,7 @@ def build_default_operational_action_registry() -> OperationalActionRegistry:
             category=category,
             is_outbound=category is ActionCategory.OUTBOUND,
             outbound_count=1 if category is ActionCategory.OUTBOUND else 0,
+            dimensions={'interaction': USER_REPLY_INTERACTION},
         )
     specs['publish_listing@v1'] = ActionOperationalSpec(
         action_name='publish_listing@v1',
