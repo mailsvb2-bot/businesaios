@@ -105,6 +105,7 @@ BUSINESS_FLOW_COMMANDS: dict[str, tuple[str, str, bool]] = {
     "/direction_goal": ("business_admin@v1", "direction_goal", True),
     "/direction_archive": ("business_admin@v1", "direction_archive", True),
     "/direction_restore": ("business_admin@v1", "direction_restore", True),
+    "/offering_direction": ("business_admin@v1", "offering_direction", True),
     "/offerings": ("business_admin@v1", "offerings", True),
     "/offering_add": ("business_admin@v1", "offering_add", True),
     "/offering_retire": ("business_admin@v1", "offering_retire", True),

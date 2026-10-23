@@ -16,6 +16,7 @@ CATALOG_OPS = frozenset(
         "offerings",
         "offering_add",
         "offering_retire",
+        "offering_direction",
         "formats",
         "format_on",
         "format_off",
@@ -34,6 +35,9 @@ def _catalog(done, op, arg, facts_):
         return done(cg.directions_text(c, archived=arg.strip().casefold() == "archived"))
     if op == "direction":
         return done(cg.direction_text(c, arg))
+    if op == "offering_direction":
+        ch = cg.bind_offering(c, arg)
+        return done("🔗 Направление предложения обновлено. /offerings" if ch else "Уже так.", ch)
     if op == "direction_add":
         ch = cg.create_direction(c, arg)
         return done("✅ Направление создано. /directions" if ch else "Такое направление уже есть.", ch)

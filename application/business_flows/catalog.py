@@ -71,6 +71,8 @@ def replay(payloads: list[dict[str, Any]]) -> Catalog:
             c.offerings[p["offering_id"]].archived = True
         elif s == "offering_restored" and p["offering_id"] in c.offerings:
             c.offerings[p["offering_id"]].archived = False
+        elif s == "offering_direction_set" and p["offering_id"] in c.offerings:
+            c.offerings[p["offering_id"]].direction_id = p.get("direction_id")
         elif s == "offering_renamed" and p["offering_id"] in c.offerings:
             c.offerings[p["offering_id"]].title = p["title"]
         elif s == "profile_saved":
@@ -158,6 +160,20 @@ def create_offering(c: Catalog, arg: str) -> dict[str, Any] | None:
         "description": parts[2] if len(parts) > 2 else "",
         "direction_id": did,
     }
+
+
+def bind_offering(c: Catalog, arg: str) -> dict[str, Any] | None:
+    """Donor bind/unbind_activity_direction_subject for offerings: ``N | M`` binds, ``N | -`` unbinds."""
+    parts = _split(arg, 2, "/offering_direction N предложения | N направления (или -)")
+    items = active_offerings(c)
+    ref = parts[0].strip()
+    if not (ref.isdigit() and 0 < int(ref) <= len(items)):
+        raise ValueError("предложение не найдено, см. /offerings")
+    o = items[int(ref) - 1]
+    did = None if parts[1].strip() == "-" else direction_ref(c, parts[1]).direction_id
+    if o.direction_id == did:
+        return None
+    return {"step": "offering_direction_set", "offering_id": o.offering_id, "direction_id": did}
 
 
 def active_offerings(c: Catalog) -> list[Offering]:

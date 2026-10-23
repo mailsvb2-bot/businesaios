@@ -84,3 +84,22 @@ def test_rename_and_restore_offering():
     f.append(cg.restore_offering(c, "1"))
     c = cg.replay(f)
     assert cg.active_offerings(c)[0].title == r["title"]
+
+
+def test_offering_direction_bind_and_unbind() -> None:
+    from application.business_flows import catalog as cg_
+
+    facts = [cg_.create_direction(cg_.Catalog(), "Йога | утро")]
+    c = cg_.replay(facts)
+    c.formats.add(next(iter(cg_.FORMATS)))
+    fmt = next(iter(c.formats))
+    facts += [{"step": "format_toggled", "format": fmt, "enabled": True}, cg_.create_offering(c, f"{fmt} | Абонемент")]
+    c = cg_.replay(facts)
+    ch = cg_.bind_offering(c, "1 | 1")
+    facts.append(ch)
+    c = cg_.replay(facts)
+    assert next(iter(c.offerings.values())).direction_id == ch["direction_id"]
+    assert "Абонемент" in cg_.direction_text(c, "1")
+    assert cg_.bind_offering(c, "1 | 1") is None
+    facts.append(cg_.bind_offering(c, "1 | -"))
+    assert next(iter(cg_.replay(facts).offerings.values())).direction_id is None
