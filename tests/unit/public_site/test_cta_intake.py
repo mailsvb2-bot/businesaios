@@ -101,3 +101,32 @@ def test_tenancy_and_owner_onboarding_over_cta_ledger(tmp_path) -> None:
     svc.cancel_owner_onboarding(owner_account_id="acc-1", platform="telegram")
     assert svc.get_owner_onboarding_session(owner_account_id="acc-1", platform="telegram") is None
     assert len(svc.list_recent()) == 2
+
+
+def test_platform_directory_search_operator_only_bounded_audited(tmp_path) -> None:
+    from datetime import UTC, datetime
+
+    import pytest
+
+    from application.public_site.cta_intake import CTALandingIntakeService as Svc
+
+    path = tmp_path / "ledger.jsonl"
+    svc = Svc(storage_path=str(path))
+    a = svc.create_business(owner_account_id="acc-1", name="Йога Студия")
+    svc.create_business(owner_account_id="acc-2", name="Барбершоп")
+    ops = {"777"}
+    with pytest.raises(PermissionError):
+        svc.search_platform_directory("1", operator_ids=ops, query_kind="business_name", query="йога")
+    with pytest.raises(ValueError):
+        svc.search_platform_directory("777", operator_ids=ops, query_kind="business_name", query="*")
+    with pytest.raises(ValueError, match="timezone-aware"):
+        svc.search_platform_directory("777", operator_ids=ops, query_kind="business_id", query="x", now_utc=datetime(2027, 1, 1))
+    res = svc.search_platform_directory("777", operator_ids=ops, query_kind="business_name", query="  йога ",
+                                        now_utc=datetime(2027, 1, 1, tzinfo=UTC))
+    assert [m["business_id"] for m in res["matches"]] == [a["business_id"]] and not res["truncated"]
+    assert svc.search_platform_directory("777", operator_ids=ops, query_kind="user_id", query="acc-2")["matches"][0]["business_name"] == "Барбершоп"
+    svc.create_business(owner_account_id="acc-3", name="Йога 2")
+    assert svc.search_platform_directory("777", operator_ids=ops, query_kind="business_name", query="йога", limit=1)["truncated"]
+    audits = [json.loads(x) for x in path.read_text(encoding="utf-8").splitlines() if '"directory_lookup"' in x]
+    assert len(audits) == 3 and all("йога" not in json.dumps(x, ensure_ascii=False) for x in audits)
+    assert audits[0]["result_count"] == 1 and len(audits[0]["result_fingerprint"]) == 64

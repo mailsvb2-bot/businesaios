@@ -179,6 +179,45 @@ def _validate_business_settings(*, business_name: str, activity_description: str
     return name, activity, tz
 
 
+DIRECTORY_MAX, DIRECTORY_DEFAULT = 20, 10
+
+
+def _operator(user_id: object, operator_ids: object) -> str:
+    """Donor platform_directory._operator: only configured platform operators (ADMIN_USER_IDS) may search."""
+    uid = str(user_id or "").strip()
+    if not uid or uid not in {str(x).strip() for x in (operator_ids or ())}:
+        raise PermissionError("platform directory access required")
+    return uid
+
+
+def _clock(now_utc: datetime | None) -> datetime:
+    current = now_utc or datetime.now(tz=UTC)
+    if current.tzinfo is None or current.utcoffset() is None:
+        raise ValueError("now_utc must be timezone-aware")
+    return current.astimezone(UTC)
+
+
+def _sha256_json(value: object) -> str:
+    return sha256(json.dumps(value, ensure_ascii=True, sort_keys=True, separators=(",", ":")).encode("utf-8")).hexdigest()
+
+
+def _result_fingerprint(matches: tuple[dict[str, object], ...], *, truncated: bool) -> str:
+    keys = ("business_id", "matched_user_id")
+    return _sha256_json({"matches": [{k: m.get(k) for k in keys} for m in matches], "truncated": truncated})
+
+
+def _directory_query(kind: str, value: object) -> tuple[str, str]:
+    k = str(kind or "").strip()
+    if k not in {"business_id", "user_id", "business_name"}:
+        raise ValueError("unsupported platform directory query kind")
+    text = " ".join(str(value or "").replace("\x00", " ").split())
+    if k == "business_name" and (not 3 <= len(text) <= 80 or text in {"*", "%", "_"}):
+        raise ValueError("business name query must be 3..80 characters")
+    if not text:
+        raise ValueError(f"{k} required")
+    return k, text
+
+
 class CTALandingIntakeService:
     def __init__(self, *, storage_path: str = "runtime_state/pilot_applications.jsonl", app_base_url: str = "https://app.businessaios.ru") -> None:
         self._storage_path, self._app_base_url = Path(storage_path), app_base_url.rstrip("/")
@@ -348,6 +387,34 @@ class CTALandingIntakeService:
             }
             _append_intake_row(self._storage_path, next_row)
             return _settings_payload(next_row)
+
+    def search_platform_directory(self, operator_user_id: object, *, operator_ids: object, query_kind: str,
+                                  query: object, limit: int = DIRECTORY_DEFAULT, now_utc: datetime | None = None,
+                                  ) -> dict[str, object]:
+        """Donor platform_directory.search_platform_directory: operator-only, bounded, audited by fingerprints."""
+        operator = _operator(operator_user_id, operator_ids)
+        kind, needle = _directory_query(query_kind, query)
+        if isinstance(limit, bool) or not isinstance(limit, int) or not 1 <= limit <= DIRECTORY_MAX:
+            raise ValueError(f"directory limit must be 1..{DIRECTORY_MAX}")
+        searched_at = _clock(now_utc).isoformat()
+        found = []
+        for b in self.list_recent(limit=200):
+            name = str(b.get("business_name") or b.get("name") or "")
+            ok = {"business_id": lambda: b.get("business_id") == needle,
+                  "user_id": lambda: needle in {str(b.get("user_id") or ""), str(b.get("owner_account_id") or "")},
+                  "business_name": lambda: needle.casefold() in name.casefold()}[kind]()
+            if ok:
+                found.append({"business_id": str(b.get("business_id") or ""), "business_name": name,
+                              "tenant_id": str(b.get("tenant_id") or ""),
+                              "matched_user_id": needle if kind == "user_id" else None})
+        found.sort(key=lambda m: (m["business_name"].casefold(), m["business_id"]))
+        matches, truncated = tuple(found[:limit]), len(found) > limit
+        audit = self._put_kind("directory_lookup", f"operator:{operator}", "platform",
+                               query_kind=kind, query_fingerprint=_sha256_json({"kind": kind, "query": needle}),
+                               result_count=len(matches), result_fingerprint=_result_fingerprint(matches, truncated=truncated),
+                               created_at=searched_at, audit_id=f"dir-{uuid4().hex[:16]}")
+        return {"query_kind": kind, "matches": matches, "truncated": truncated,
+                "audit_id": audit["audit_id"], "searched_at": searched_at}
 
     # --- donor tenancy / owner_onboarding over the same ledger (kind rows carry no intake_id) ---
     def _owned(self, account_id: str, business_id: str) -> dict[str, object]:
