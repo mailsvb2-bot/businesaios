@@ -146,5 +146,59 @@ def build(*, role: str, business_id: str, business_name: str, period_days: int =
     )
 
 
+_DAY_MS = 86_400_000
+_LIMIT_TEXT = {
+    "leads_period_unfiltered": "обращения — за всё время",
+    "paid_customers_unavailable": "оплаты не привязаны к клиентам",
+    "attribution_unavailable": "источники выручки не отслеживаются",
+    "advertising_unavailable": "рекламных кабинетов нет",
+    "business_results_restricted_for_role": "результаты бизнеса недоступны для роли",
+}
+
+
+def snapshot_from_cockpit(s: Any, *, period_days: int = 7) -> Any:
+    """Donor-shaped snapshot from the port's own facts (sales, bookings, attendance, payments). No ad data."""
+    from datetime import UTC, datetime
+    from types import SimpleNamespace as NS
+
+    from application.business_flows import admin as ad
+
+    lo = s.now_ms - period_days * _DAY_MS
+    booked = [x for x in s.all_slots if x.status == "booked" and lo <= x.starts_at_ms <= s.now_ms]
+    att = getattr(s.series, "attendance", {}) or {}
+    came = sum(1 for x in booked if att.get((x.slot_id, x.customer_id)) == "attended")
+    leads = len(getattr(s.sales, "leads", {}) or {}) if s.sales is not None else 0
+    pay = ad.payment_summary(s.admin) if s.admin is not None else {}
+    money = [NS(amount_minor=r["net_minor"], currency=c) for c, r in sorted(pay.items())]
+    lim = ("leads_period_unfiltered", "paid_customers_unavailable", "attribution_unavailable", "advertising_unavailable")
+    day = lambda ms: datetime.fromtimestamp(ms / 1000, UTC).date()  # noqa: E731
+    return NS(
+        period_days=period_days, period_from=day(lo), period_to=day(s.now_ms),
+        period_metrics=[NS(key="bookings", value=len(booked), meaning="Записи за период"),
+                        NS(key="attended", value=came, meaning="Пришли")],
+        revenue=money, what_worked=[], attention=[], actions=[], advertising=None, limitations=lim,
+        journey=NS(leads=leads, bookings=len(booked), completed_bookings=came, paid_customers=0,
+                   reactivated_customers=0, verified_revenue_by_currency=money,
+                   attributed_revenue_by_currency=[], unattributed_revenue_by_currency=money, limitations=lim),
+    )
+
+
+def render_text(a: Analytics) -> str:
+    lines = [f"📊 Аналитика роста · {a.period_days} дн. ({a.period_from} — {a.period_to})", ""]
+    if a.business_results_available:
+        j = a.journey
+        lines.append(f"Обращения: {j.leads} · Записи: {j.bookings} · Пришли: {j.completed_bookings}")
+        lines += [f"Выручка {m.currency}: {m.display}" for m in j.verified_revenue] or ["Выручка: платежей нет"]
+    notes = [_LIMIT_TEXT.get(x, x) for x in a.limitations]
+    return "\n".join(lines + ([""] + ["Ограничения: " + "; ".join(notes)] if notes else []))
+
+
+def screen(s: Any, *, role: str = "owner", period_days: int = 7) -> str:
+    snap = snapshot_from_cockpit(s, period_days=period_days)
+    a = build(role=role, business_id="", business_name=s.business, period_days=period_days,
+              load_snapshot=lambda _d: snap, load_advertising=lambda _d: (_ for _ in ()).throw(ValueError("none")))
+    return render_text(a)
+
+
 __all__ = ["CANON_COCKPIT_GROWTH_ANALYTICS", "Analytics", "build", "can_manage_promotions",
-           "can_view_business_results", "restricted"]
+           "can_view_business_results", "render_text", "restricted", "screen", "snapshot_from_cockpit"]

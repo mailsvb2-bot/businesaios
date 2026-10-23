@@ -34,6 +34,7 @@ PARENTS: dict[str, str] = {
     "messengers": "cpm:manage",
     "connections": "cpm:manage",
     "switch": "cpm:messengers",
+    "growth-an": "cpm:growth",
     "money": "cpm:work",
     "services": "cpm:manage",
     "calendar": "cpm:work",
@@ -173,6 +174,7 @@ def _screen(parsed: Parsed, s: Snapshot) -> tuple[str, list[list[tuple[str, str]
             ("🤝 Партнёры", "cpm:partners:0"),
             ("🪜 Лестница предложений", "cpm:ladder"),
             ("📈 Отчёт о росте", "cpm:growth-report"),
+            ("📊 Аналитика 7/30 дн.", "cpm:growth-an:7"),
         )
     if a == "partners":
         if not s.partners:
@@ -207,6 +209,12 @@ def _screen(parsed: Parsed, s: Snapshot) -> tuple[str, list[list[tuple[str, str]
         return extra
     if a in ("messengers", "connections"):
         return messengers_screen(s)
+    if a == "growth-an":
+        from application.business_flows import cockpit_growth_analytics as ga
+
+        days = int(parsed.args[0]) if parsed.args and parsed.args[0] in ("7", "30") else 7
+        other = "30" if days == 7 else "7"
+        return ga.screen(s, period_days=days), _rows((f"📊 За {other} дн.", f"cpm:growth-an:{other}"))
     if a == "switch":
         return switch_screen(parsed, s)
     raise ValueError(a)
