@@ -33,6 +33,7 @@ PARENTS: dict[str, str] = {
     "manage": "cpm:menu",
     "messengers": "cpm:manage",
     "connections": "cpm:manage",
+    "switch": "cpm:messengers",
     "money": "cpm:work",
     "services": "cpm:manage",
     "calendar": "cpm:work",
@@ -72,6 +73,8 @@ class Snapshot:
     money_text: Any = None  # admin.render_summary
     sales: Any = None  # sales.State
     sales_rows: list[Any] = field(default_factory=list)  # [(timestamp_ms, sales_pipeline payload)]
+    viewer_id: int = 0  # Telegram user id of the staff member viewing the cockpit
+    connections: list[Any] = field(default_factory=list)  # messenger_switching connection rows
     team: dict = field(
         default_factory=dict
     )  # {"roles": {uid: [..]}, "perms": {uid: [..]}} (core.admin.roles_read_model)
@@ -203,11 +206,37 @@ def _screen(parsed: Parsed, s: Snapshot) -> tuple[str, list[list[tuple[str, str]
     if extra is not None:
         return extra
     if a in ("messengers", "connections"):
-        body = (
-            "\n".join(f"• @{b.username} — {b.status}" for b in s.bots) or "Бот не подключён. Подключить: /connect_bot"
-        )
-        return "💬 Мессенджеры\n\n" + body, []
+        return messengers_screen(s)
+    if a == "switch":
+        return switch_screen(parsed, s)
     raise ValueError(a)
+
+
+_PLATFORM_LABEL = {"telegram": "Telegram", "vk": "VK", "max": "MAX"}
+
+
+def messengers_screen(s: Snapshot) -> tuple[str, list[list[tuple[str, str]]]]:
+    """Connected bots/channels + staff switch buttons (donor messenger_switching, unambiguous targets only)."""
+    from application.business_flows import messenger_switching as ms
+
+    body = "\n".join(f"• @{b.username} — {b.status}" for b in s.bots) or "Бот не подключён. Подключить: /connect_bot"
+    body += "".join(f"\n• {_PLATFORM_LABEL.get(c['platform'], c['platform'])} — {c['status']}" for c in s.connections)
+    platforms = ms.available_switches(bots=s.bots, connections=s.connections) if s.viewer_id > 0 else ()
+    rows = [[(f"↪️ Перейти в {_PLATFORM_LABEL[p]}", ms.switch_command(s.viewer_id, p))] for p in platforms]
+    return "💬 Мессенджеры\n\n" + body, rows
+
+
+def switch_screen(parsed: Parsed, s: Snapshot) -> tuple[str, list[list[tuple[str, str]]]]:
+    from application.business_flows import messenger_switching as ms
+
+    try:
+        dest = ms.switch_destination(":".join(("cpm:switch", *parsed.args)), bots=s.bots, connections=s.connections)
+    except ms.MessengerSwitchRejected:
+        return "Этот мессенджер сейчас недоступен или подключён неоднозначно.", []
+    if dest is None or dest.user_id != s.viewer_id:
+        raise ValueError("switch")
+    url = ms.public_destination(dest.platform, f"staff{dest.user_id}", bots=s.bots, connections=s.connections)
+    return f"↪️ {_PLATFORM_LABEL[dest.platform]}: {url.url if url else dest.public_target}", []
 
 
 def customers(slots: list[Any]) -> list[tuple[str, int]]:
@@ -320,7 +349,10 @@ def _extra_screen(a: str, parsed: Parsed, s: Snapshot) -> tuple[str, list[list[t
         from application.business_flows import customer_timeline_sources as cts
 
         entries = sorted(
-            [*ct.build(cid, s.all_slots, ser, now_ms=s.now_ms), *cts.customer_sales_entries(cid, s.sales_rows, s.sales)],
+            [
+                *ct.build(cid, s.all_slots, ser, now_ms=s.now_ms),
+                *cts.customer_sales_entries(cid, s.sales_rows, s.sales),
+            ],
             key=lambda e: (e.at_ms, e.kind),
         )
         if not entries:

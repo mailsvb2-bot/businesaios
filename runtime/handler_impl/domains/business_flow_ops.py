@@ -312,6 +312,26 @@ def handle_offer_ladder(payload, effects, env, *, event_store):
     return send_tracked(body, effects, env, text=text, event_type=None, event_payload=None)
 
 
+def _viewer_id(body) -> int:
+    raw = str(body.get("user_id") or "")
+    return int(raw) if raw.isdigit() and len(raw) <= 19 else 0
+
+
+def _messenger_connections(admin_facts: list[dict]) -> list[dict]:
+    """Native VK/MAX routes as messenger_switching connection rows (ids/usernames only, no token refs)."""
+    from application.business_flows import native_channels as nc
+
+    return [
+        {
+            "platform": r.platform,
+            "status": r.status,
+            "connection_type": "vk_community" if r.platform == "vk" else r.platform,
+            "external_account_id": r.external_id if r.platform == "vk" else (r.username or r.external_id),
+        }
+        for r in nc.replay(admin_facts).values()
+    ]
+
+
 def _cockpit(body, effects, env, future, steps, facts, now, team=None, timed=None):
     """Owner cockpit screens (cpm:*) over the same projections; buttons re-enter this action."""
     from application.business_flows import admin as ad
@@ -339,6 +359,8 @@ def _cockpit(body, effects, env, future, steps, facts, now, team=None, timed=Non
         sales=sl.replay(facts("sales_pipeline@v1")),
         sales_rows=timed("sales_pipeline@v1") if timed else [],
         team=team or {},
+        viewer_id=_viewer_id(body),
+        connections=_messenger_connections(facts("business_admin@v1")),
     )
     parsed = cp.parse(str(body.get("arg") or "cpm:menu"))
     if parsed.action == "sales-ev":
