@@ -32,6 +32,19 @@ os.environ["BUSINESAIOS_TEST_RUN"] = "1"
 os.environ["BUSINESAIOS_TESTS_CONFTEST_LOADED"] = "1"
 os.environ["BUSINESAIOS_ALLOW_TEST_SQLITE_FALLBACK"] = "1"
 
+# Keep test state out of the repository working tree.
+os.environ.setdefault("DATA_DIR", tempfile.mkdtemp(prefix="bai-test-data-"))
+try:
+    from hypothesis import settings as _hyp_settings
+    from hypothesis.database import DirectoryBasedExampleDatabase as _HypDB
+
+    _hyp_settings.register_profile(
+        "hermetic", database=_HypDB(tempfile.mkdtemp(prefix="bai-hypothesis-"))
+    )
+    _hyp_settings.load_profile("hermetic")
+except ImportError:
+    pass
+
 _RELEASE_INTEGRITY_TESTS = {
     "tests/test_release_clean.py",
     "tests/arch/test_archive_hygiene_runtime_artifacts_excluded.py",
