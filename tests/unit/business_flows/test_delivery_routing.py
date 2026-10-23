@@ -46,3 +46,34 @@ def test_statuses_and_summary():
         outbox=[{"status": "retry"}, {"status": "sent"}, {"status": "dead"}],
     )
     assert (s.customers, s.programs, s.dispatch_pending, s.dispatch_sent, s.dispatch_attention) == (1, 0, 1, 1, 1)
+
+C = [
+    {"id": "e1", "platform": "email", "type": "email_smtp", "status": "active"},
+    {"id": "t1", "platform": "telegram", "type": "telegram_shared_bot", "status": "active", "created_at": "1"},
+    {"id": "v1", "platform": "vk", "type": "vk_community", "status": "active"},
+    {"id": "v2", "platform": "vk", "type": "vk_community", "status": "active"},
+]
+
+
+def test_email_and_scoped():
+    assert dr.event_email_target(C, notification_connection_id="e1", email="a@b.ru").connection_id == "e1"
+    assert dr.event_email_target(C, notification_connection_id=None, email="a@b.ru") is None
+    t = dr.event_registration_messenger_target(C, {"external_subject": "42", "connection_id": "gone"}, "telegram")
+    assert t and t.connection_id == "t1" and t.recipient_kind == "external_subject"
+    assert dr.event_registration_messenger_target(C, {"external_subject": "1"}, "vk") is None  # ambiguous
+    assert dr.event_registration_messenger_target(C, {"external_subject": "1", "connection_id": "v2"}, "vk").connection_id == "v2"
+    with pytest.raises(ValueError):
+        dr.event_registration_messenger_target(C, None, "sms")
+
+
+def test_identity_fallbacks_and_all():
+    ids = [{"id": "i1", "platform": "telegram", "external_subject": "77"}]
+    t = dr.event_messenger_target(C, platform="telegram", channel=None, identities=ids)
+    assert t and t.customer_identity_id == "i1"
+    h = dr.event_messenger_target(C, platform="vk", channel=None,
+                                  identities=[{"id": "i2", "platform": "vk", "external_subject": "5"}],
+                                  last_sent={"connection_id": "v2", "customer_identity_id": "i2"})
+    assert h and h.connection_id == "v2"
+    allt = dr.event_organizational_targets(C, notification_connection_id="e1", email="a@b.ru", channels={},
+                                           identities=ids)
+    assert [x.platform for x in allt] == ["email", "telegram"]

@@ -118,3 +118,77 @@ def delivery_summary(*, customers, programs, outbox) -> DeliveryCounts:
         count(outbox, "sent"),
         count(outbox, "dead"),
     )
+
+
+# --- event delivery targets (port of donor event_delivery_targets) ---
+
+CUSTOMER_CONNECTION_TYPES = {
+    "telegram": frozenset({"telegram_shared_bot", "telegram_managed_bot", "telegram_business"}),
+    "vk": frozenset({"vk_community"}),
+    "max": frozenset({"max_shared_bot", "max_personal_bot"}),
+}
+
+
+@dataclass(frozen=True)
+class EventTarget:
+    platform: str
+    connection_id: str
+    recipient_kind: str
+    customer_identity_id: str | None
+    external_subject: str
+
+
+def _eligible(connections: list[dict[str, Any]], platform: str) -> list[dict[str, Any]]:
+    rows = [c for c in connections if c.get("platform") == platform and c.get("status") == "active"
+            and c.get("type") in CUSTOMER_CONNECTION_TYPES[platform]]
+    return sorted(rows, key=lambda c: (str(c.get("created_at", "")), str(c["id"])))
+
+
+def event_email_target(connections: list[dict[str, Any]], *, notification_connection_id: str | None,
+                       email: str) -> EventTarget | None:
+    ok = any(c.get("id") == notification_connection_id and c.get("platform") == "email"
+             and c.get("type") == "email_smtp" and c.get("status") == "active" for c in connections)
+    return EventTarget("email", str(notification_connection_id), "external_subject", None, email) if ok else None
+
+
+def event_registration_messenger_target(connections: list[dict[str, Any]], channel: dict[str, Any] | None,
+                                        platform: str) -> EventTarget | None:
+    """``channel`` = registration-scoped {external_subject, connection_id} captured at signup."""
+    if platform not in NATIVE_PLATFORMS:
+        raise ValueError("unsupported event messenger platform")
+    subject = str((channel or {}).get("external_subject") or "").strip()
+    if not subject:
+        return None
+    eligible = _eligible(connections, platform)
+    stored = [c for c in eligible if str(c["id"]) == str(channel.get("connection_id"))]  # type: ignore[union-attr]
+    pick = stored or (eligible if len(eligible) == 1 else [])
+    return EventTarget(platform, str(pick[0]["id"]), "external_subject", None, subject) if pick else None
+
+
+def event_messenger_target(connections: list[dict[str, Any]], *, platform: str, channel: dict[str, Any] | None,
+                           identities: list[dict[str, Any]], last_sent: dict[str, Any] | None = None) -> EventTarget | None:
+    """Scoped channel first; then the identity of the last sent dispatch; then the single active identity."""
+    scoped = event_registration_messenger_target(connections, channel, platform)
+    if scoped is not None:
+        return scoped
+    live = {str(c["id"]) for c in connections if c.get("platform") == platform and c.get("status") == "active"}
+    idents = [i for i in identities if i.get("platform") == platform and i.get("status", "active") == "active"]
+    if last_sent and str(last_sent.get("connection_id")) in live:
+        hit = next((i for i in idents if i["id"] == last_sent.get("customer_identity_id")), None)
+        if hit is not None:
+            subj = str(hit.get("external_subject") or "").strip()
+            return EventTarget(platform, str(last_sent["connection_id"]), "customer_identity", hit["id"], subj) if subj else None
+    eligible = _eligible(connections, platform)
+    if len(idents) != 1 or len(eligible) != 1:
+        return None
+    subj = str(idents[0].get("external_subject") or "").strip()
+    return EventTarget(platform, str(eligible[0]["id"]), "customer_identity", idents[0]["id"], subj) if subj else None
+
+
+def event_organizational_targets(connections: list[dict[str, Any]], *, notification_connection_id: str | None,
+                                 email: str, channels: dict[str, dict[str, Any]], identities: list[dict[str, Any]],
+                                 last_sent: dict[str, dict[str, Any]] | None = None) -> tuple[EventTarget, ...]:
+    out = [event_email_target(connections, notification_connection_id=notification_connection_id, email=email)]
+    out += [event_messenger_target(connections, platform=p, channel=channels.get(p), identities=identities,
+                                   last_sent=(last_sent or {}).get(p)) for p in NATIVE_PLATFORMS]
+    return tuple(t for t in out if t is not None)
