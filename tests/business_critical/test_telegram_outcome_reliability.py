@@ -88,7 +88,7 @@ def test_success_is_acknowledged_without_retry(monkeypatch):
     monkeypatch.setattr(mod, "_start_health_if_enabled", lambda log: None)
     monkeypatch.setattr(mod, "_append_event", lambda *a, **kw: None)
     monkeypatch.setattr(mod, "_execute_update", lambda **kw: calls.append(kw["update"]["update_id"]) or SimpleNamespace(ok=True))
-    monkeypatch.setattr(mod, "_http_json", lambda *a, **kw: SimpleNamespace(json={"ok": True, "result": [{"update_id": 42}]}))
+    monkeypatch.setattr(mod, "_http_json", lambda *a, **kw: SimpleNamespace(json={"ok": True, "result": [{"update_id": 42}] if (kw.get("payload") or (a[2] if len(a) > 2 else {})).get("offset", 0) <= 42 else []}))
     monkeypatch.setattr(mod.time, "sleep", lambda delay: (_ for _ in ()).throw(StopPolling()))
     with pytest.raises(StopPolling):
         mod._run_longpoll(token="example", core=object(), executor=object(), event_log=None)
