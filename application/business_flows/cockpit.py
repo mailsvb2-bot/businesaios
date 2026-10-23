@@ -71,6 +71,7 @@ class Snapshot:
     now_ms: int = 0
     money_text: Any = None  # admin.render_summary
     sales: Any = None  # sales.State
+    sales_rows: list[Any] = field(default_factory=list)  # [(timestamp_ms, sales_pipeline payload)]
     team: dict = field(
         default_factory=dict
     )  # {"roles": {uid: [..]}, "perms": {uid: [..]}} (core.admin.roles_read_model)
@@ -316,7 +317,12 @@ def _extra_screen(a: str, parsed: Parsed, s: Snapshot) -> tuple[str, list[list[t
         from application.business_flows import customer_timeline as ct
 
         cid = parsed.args[0] if parsed.args else ""
-        entries = ct.build(cid, s.all_slots, ser, now_ms=s.now_ms)
+        from application.business_flows import customer_timeline_sources as cts
+
+        entries = sorted(
+            [*ct.build(cid, s.all_slots, ser, now_ms=s.now_ms), *cts.customer_sales_entries(cid, s.sales_rows, s.sales)],
+            key=lambda e: (e.at_ms, e.kind),
+        )
         if not entries:
             raise ValueError("unknown customer")
         return f"🕓 История клиента {cid[-6:]}\n\n" + "\n".join(ct.format_lines(entries)), []

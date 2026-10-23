@@ -182,7 +182,47 @@ def can_view_attribution(role: str) -> bool:
     return str(role or "") in _LEDGER_ROLES
 
 
+_PORT_STAGE = {"discovered": "new", "engaged": "contacted", "qualified": "qualified", "checkout": "checkout",
+               "won": "won", "lost": "lost"}
+
+
+def sales_fact_rows(timed: list[tuple[int, Mapping[str, Any]]], lead_ids: set[str]) -> list[dict[str, Any]]:
+    """Adapt this port's timed sales_pipeline facts to the donor sales-event row shape."""
+    out: list[dict[str, Any]] = []
+    for ts, p in timed:
+        if str(p.get("lead_id") or "") not in lead_ids or ts <= 0:
+            continue
+        at = datetime.fromtimestamp(ts / 1000, UTC).isoformat()
+        step = p.get("step")
+        if step in ("lead_inbound", "lead_added"):
+            row = {"event_type": "stage_changed", "payload": {"to_stage": "new"}}
+            if p.get("note"):
+                out.append({"event_type": "note_added", "payload": {"note": p["note"]}, "occurred_at": at})
+        elif step == "lead_event":
+            row = {"event_type": "stage_changed", "payload": {"to_stage": _PORT_STAGE.get(str(p.get("stage")), "")}}
+        elif step == "followup_planned":
+            due = datetime.fromtimestamp(int(p["due_ms"]) / 1000, UTC).strftime("%d.%m.%Y %H:%M UTC")
+            row = {"event_type": "followup_scheduled", "payload": {"scheduled_at": due}}
+        elif step == "followup_optout":
+            row = {"event_type": "followup_opt_out", "payload": {}}
+        else:
+            continue
+        out.append({**row, "occurred_at": at})
+    return out
+
+
+def customer_sales_entries(customer_id: str, timed: list[tuple[int, Mapping[str, Any]]], sales: Any) -> list[Entry]:
+    """Live feed: sales entries for every lead bound to ``customer_id`` in the sales projection."""
+    leads = getattr(sales, "leads", {}) or {}
+    ids = {lid for lid, lead in leads.items() if getattr(lead, "customer_id", "") == customer_id}
+    if not ids:
+        return []
+    return [e for e in map(sales_event_entry, sales_fact_rows(timed, ids)) if e is not None]
+
+
 __all__ = [
+    "customer_sales_entries",
+    "sales_fact_rows",
     "CANON_CUSTOMER_TIMELINE_SOURCES", "TimelineInvariantViolation", "bounded", "can_view_attribution",
     "can_view_outcomes", "direct_signed_money", "external_observation_entry", "outcome_entry", "outcome_money",
     "parse_timestamp", "payload", "sales_event_entry",

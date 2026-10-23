@@ -12,7 +12,7 @@ from functools import partial
 from typing import Any
 
 from application.business_flows import bot_provisioning as botprov
-from application.business_flows.projection import flow_payloads
+from application.business_flows.projection import flow_payloads, flow_rows
 from runtime.handler_impl.core.payloads import require_mapping, required_str
 from runtime.handler_impl.domains.admin_ops import _card_outcome
 from runtime.handler_impl.domains.business_catalog_ops import (
@@ -384,7 +384,7 @@ def handle_offer_ladder(payload, effects, env, *, event_store):
     return send_tracked(body, effects, env, text=text, event_type=None, event_payload=None)
 
 
-def _cockpit(body, effects, env, future, steps, facts, now, team=None):
+def _cockpit(body, effects, env, future, steps, facts, now, team=None, timed=None):
     """Owner cockpit screens (cpm:*) over the same projections; buttons re-enter this action."""
     from application.business_flows import admin as ad
     from application.business_flows import bookings as bk
@@ -409,6 +409,7 @@ def _cockpit(body, effects, env, future, steps, facts, now, team=None):
         now_ms=now,
         money_text=ad.render_summary,
         sales=sl.replay(facts("sales_pipeline@v1")),
+        sales_rows=timed("sales_pipeline@v1") if timed else [],
         team=team or {},
     )
     parsed = cp.parse(str(body.get("arg") or "cpm:menu"))
@@ -509,7 +510,10 @@ def handle_business_ops_summary(payload, effects, env, *, event_store, now_ms: i
             "roles": rr.team_roles_snapshot(event_store, tenant_id=tenant_id),
             "perms": rr.team_perms_snapshot(event_store, tenant_id=tenant_id),
         }
-        return _cockpit(body, effects, env, future, steps, facts, now, team)
+        return _cockpit(
+            body, effects, env, future, steps, facts, now, team,
+            timed=lambda et: flow_rows(event_store, tenant_id=tenant_id, event_type=et),
+        )
     deletions = len(facts("privacy_deleted@v1"))
     bots = {p.get("username") for p in facts("bot_provisioning@v1") if p.get("username")}
     text = (

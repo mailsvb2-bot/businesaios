@@ -10,14 +10,14 @@ from core.events.read_model_support import best_effort_iter_events
 CANON_BUSINESS_FLOW_PROJECTION = True
 
 
-def flow_payloads(
+def flow_rows(
     event_store: Any,
     *,
     tenant_id: str,
     event_type: str,
     user_id: str | None = None,
-) -> list[dict[str, Any]]:
-    """Return tracked flow payloads oldest-first (tenant-wide when user_id is None)."""
+) -> list[tuple[int, dict[str, Any]]]:
+    """Tracked flow payloads oldest-first with their recorded ``timestamp_ms``."""
     events = best_effort_iter_events(
         event_store=event_store,
         where=f"business_flows.{event_type}",
@@ -29,12 +29,18 @@ def flow_payloads(
     )
     rows = [ev for ev in events if str(ev.get("event_type") or ev.get("type")) == event_type]
     rows.sort(key=lambda ev: int(ev.get("timestamp_ms") or 0))
-    out: list[dict[str, Any]] = []
-    for ev in rows:
-        payload = ev.get("payload")
-        if isinstance(payload, dict):
-            out.append(dict(payload))
-    return out
+    return [(int(ev.get("timestamp_ms") or 0), dict(ev["payload"])) for ev in rows if isinstance(ev.get("payload"), dict)]
+
+
+def flow_payloads(
+    event_store: Any,
+    *,
+    tenant_id: str,
+    event_type: str,
+    user_id: str | None = None,
+) -> list[dict[str, Any]]:
+    """Return tracked flow payloads oldest-first (tenant-wide when user_id is None)."""
+    return [p for _, p in flow_rows(event_store, tenant_id=tenant_id, event_type=event_type, user_id=user_id)]
 
 
 def stable_id(prefix: str, *parts: object) -> str:
