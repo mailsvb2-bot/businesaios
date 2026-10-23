@@ -73,7 +73,7 @@ def test_phase18_absorption_manifest_is_valid_but_not_falsely_complete() -> None
     assert _complete(data) is (not unresolved)
 
 
-def test_businessaios_runtime_has_no_clientplatform_import_dependency() -> None:
+def test_businessaios_runtime_has_no_legacy_import_dependency() -> None:
     violations: list[str] = []
     for root_name in RUNTIME_ROOTS:
         root = ROOT / root_name
