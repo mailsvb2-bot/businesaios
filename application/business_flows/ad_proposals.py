@@ -43,6 +43,8 @@ def replay(payloads: list[dict[str, Any]]) -> dict[str, AdDraft]:
             d.weekly_cap_minor, d.currency = int(p["weekly_cap_minor"]), p["currency"]
         elif step == "ad_publish_blocked" and did in out:
             out[did].status = "blocked"
+        elif step == "ad_copy_edited" and did in out:
+            out[did].title, out[did].text = p["title"], p["text"]
     return out
 
 
@@ -62,6 +64,41 @@ def draft(arg: str) -> dict[str, Any]:
         "text": text,
         "url": url,
     }
+
+
+def _norm(value: object, *, limit: int, word: int, what: str) -> str:
+    """Donor ad_publication_customization._normalize_title/_normalize_text (Yandex Direct limits)."""
+    v = " ".join(str(value or "").split()).strip()
+    if not v or len(v) > limit:
+        raise ValueError(f"{what}: от 1 до {limit} символов")
+    if any(len(w) > word for w in v.split()):
+        raise ValueError(f"{what}: слово длиннее {word} символов")
+    return v
+
+
+def normalize_title(value: object) -> str:
+    return _norm(value, limit=TITLE_MAX, word=22, what="заголовок")
+
+
+def normalize_text(value: object) -> str:
+    return _norm(value, limit=TEXT_MAX, word=23, what="текст")
+
+
+EDITABLE = {"draft", "blocked"}  # donor: draft/failed/submitted (provider DRAFT, before spend consent)
+
+
+def edit_copy(drafts: dict[str, AdDraft], arg: str) -> dict[str, Any] | None:
+    """``N | Заголовок | Текст`` -> ``ad_copy_edited`` fact; only before consent; None if unchanged."""
+    parts = [x.strip() for x in str(arg or "").split("|")]
+    if len(parts) != 3:
+        raise ValueError("формат: /ad_edit N | Заголовок | Текст")
+    d = by_ref(drafts, parts[0])
+    if d.status not in EDITABLE:
+        raise ValueError("черновик уже нельзя редактировать")
+    title, text = normalize_title(parts[1]), normalize_text(parts[2])
+    if (title, text) == (d.title, d.text):
+        return None
+    return {"step": "ad_copy_edited", "draft_id": d.draft_id, "title": title, "text": text}
 
 
 def by_ref(drafts: dict[str, AdDraft], ref: str) -> AdDraft:

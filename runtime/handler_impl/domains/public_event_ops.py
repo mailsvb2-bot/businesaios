@@ -11,7 +11,7 @@ from datetime import UTC, datetime
 from types import SimpleNamespace
 from typing import Any
 
-PUB_OPS = frozenset({"pub_create", "pub_register", "pub_links", "pub_verify"})
+PUB_OPS = frozenset({"pub_create", "pub_register", "pub_links", "pub_live", "pub_verify"})
 
 
 class _ExecutorCrm:
@@ -97,6 +97,8 @@ def public_event_op(op: str, arg: str, *, body: dict[str, Any], effects: Any, en
             raise ValueError("ссылки недоступны")
         rows = "\n".join(f"{p}: /event_verify {ec.PREFIX}{t}" for p, t in tokens.items())
         return done(f"🔗 Ссылки для напоминаний (1 час, одноразовые):\n{rows}", ch)
+    if op == "pub_live":  # slug -> owner's exact room links per session
+        return done(eo.live_text(eo.live_snapshot(payloads, arg.strip())))
     if op == "pub_verify":
         ch = ec.consume(payloads, {}, token=ec.extract_token(arg) or "", platform=platform, external_subject=user_id,
                         now_ms=now_ms, registrations=b.registrations)

@@ -90,6 +90,9 @@ def _ads(body, done, st, op, arg, facts_, sl_replay=None):
         floor = int(env_str("BUSINESAIOS_AD_MIN_WEEKLY_MINOR", "30000") or 30000)
         ch = ap.consent(drafts, arg, min_weekly_minor=floor)
         return done("🧾 Запрошено согласие владельца на кап. Решение: /approvals → /approve N", ch)
+    if op == "ad_edit":
+        ch = ap.edit_copy(drafts, arg)
+        return done("✏️ Текст рекламы обновлён." if ch else "Без изменений.", ch)
     if op in {"ad_stats", "ad_report"}:
         from application.business_flows import ad_analytics as aa
 

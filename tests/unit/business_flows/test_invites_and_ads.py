@@ -104,3 +104,21 @@ def test_publish_decision_requires_approval_bound_to_exact_draft_and_cap() -> No
     wrong.status = "approved"
     text, fact = apz.publish_decision(d, {"a1": wrong}, production_ready=False)
     assert fact is None and "другое действие" in text
+
+
+def test_ad_copy_edit_before_consent_only(flow) -> None:
+    run = partial(flow.run, H)
+    run(op="ad_draft", arg="Йога | Пробное | https://example.ru")
+    _, text = run(op="ad_edit", arg="1 |  Йога   утром | Первое  занятие бесплатно ")
+    assert "обновлён" in text
+    _, text = run(op="ad_list")
+    assert "Йога утром" in text
+    _, text = run(op="ad_edit", arg="1 | Йога утром | Первое занятие бесплатно")
+    assert "Без изменений" in text
+    _, text = run(op="ad_edit", arg="1 | " + "я" * 23 + " | ок")
+    assert "слово длиннее 22" in text
+    run(op="ad_consent", arg="1 | 5000 RUB")
+    _, text = run(op="ad_edit", arg="1 | Другое | Другое")
+    assert "нельзя редактировать" in text
+    with pytest.raises(ValueError):
+        ap.normalize_text("x" * 82)

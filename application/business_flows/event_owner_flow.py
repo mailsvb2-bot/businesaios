@@ -9,6 +9,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from datetime import datetime
 from typing import Any
+from zoneinfo import ZoneInfo
 
 from application.business_flows import public_events as pe
 from application.business_flows.event_wizard import normalize_session_join_url
@@ -184,3 +185,21 @@ def set_session_join(payloads: list[dict[str, Any]], event_id: str, position: in
         raise ValueError("join_url required")
     ss[position - 1] = {**ss[position - 1], "join_url": join, "provider_key": pe.provider_key(provider, join_url=join)}
     return _sessions_fact(event_id, ss)
+
+
+def live_snapshot(payloads: list[dict[str, Any]], slug: str) -> dict[str, Any]:
+    """Owner's exact room links for every session (donor cockpit_events.resolve_event_live_snapshot)."""
+    ev = pe.by_slug(pe.replay(payloads), slug)
+    zone = ZoneInfo(ev.timezone)
+    ss = sessions_of(payloads, ev.event_id) or [{"starts_at": ev.starts_at, "join_url": ev.join_url,
+                                                 "provider_key": ev.provider_key}]
+    rows = [{"position": i, "local_start": pe._dt(s["starts_at"]).astimezone(zone).strftime("%d.%m.%Y %H:%M"),
+             "provider_key": s.get("provider_key") or "pending", "join_url": s.get("join_url"),
+             "join_ready": bool(s.get("join_url"))} for i, s in enumerate(ss, 1)]
+    return {"event_id": ev.event_id, "title": ev.title, "status": ev.status, "timezone": ev.timezone, "sessions": rows}
+
+
+def live_text(snap: dict[str, Any]) -> str:
+    rows = [f"{s['position']}. {s['local_start']} · {s['provider_key']} · "
+            + (s["join_url"] if s["join_ready"] else "ссылка не задана") for s in snap["sessions"]]
+    return f"🔴 {snap['title']} ({snap['status']}, {snap['timezone']})\n" + "\n".join(rows)

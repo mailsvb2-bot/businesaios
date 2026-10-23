@@ -94,3 +94,20 @@ def test_ad_creatives_advisory_text() -> None:
     assert "insufficient_data" in _creatives_text("A:j1:5000:5:1:0 ; B:j2:5000:5:1:0")
     with pytest.raises(ValueError):
         _creatives_text("A:j1")
+
+
+def test_event_live_snapshot_lists_session_rooms(flow) -> None:
+    from application.business_flows import event_owner_flow as eo
+
+    _run(flow, "pub_create", "Вебинар | 2027-02-01 19:00 | Europe/Moscow")
+    slug = _slug(flow)
+    text = _run(flow, "pub_live", slug)
+    assert "Вебинар" in text and "01.02.2027 19:00" in text and "ссылка не задана" in text
+    payloads = [e["payload"] for e in flow.store.events]
+    ev_id = payloads[0]["event_id"]
+    two = [{"starts_at": "2027-02-01T16:00:00+00:00", "join_url": "https://telemost.yandex.ru/j/1",
+            "provider_key": "telemost"},
+           {"starts_at": "2027-02-02T16:00:00+00:00", "join_url": None}]
+    snap = eo.live_snapshot([*payloads, {"step": "pub_event_sessions", "event_id": ev_id, "sessions": two}], slug)
+    assert [s["join_ready"] for s in snap["sessions"]] == [True, False]
+    assert snap["sessions"][1]["local_start"] == "02.02.2027 19:00" and snap["sessions"][1]["provider_key"] == "pending"
