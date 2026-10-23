@@ -69,3 +69,22 @@ def test_action_is_registered_once_and_routed_from_telegram_command() -> None:
     ctx = SimpleNamespace(cmd="/export_data", args="", callback_data=None, autopilot_dashboard={})
     proposed = handle_command_routes(ctx, user_id="u1", pm=lambda **kw: kw)
     assert proposed.action == "privacy_export@v1" and proposed.payload["user_id"] == "u1"
+
+
+def test_privacy_export_passes_operational_budget_without_human_approval(tmp_path) -> None:
+    from contracts.action_impact_contract import ActionExecutionContext
+    from core.safety.operational.factory import build_persistent_operational_safety_runtime
+
+    runtime = build_persistent_operational_safety_runtime(storage_path=tmp_path / "ledger.json", policy_provider=None)
+    result = runtime.service.precheck(
+        ActionExecutionContext(
+            tenant_id="t1",
+            user_id="42",
+            action_name="privacy_export@v1",
+            payload={"user_id": "42"},
+            metadata={},
+            execution_id="exec-1",
+        )
+    )
+    assert result.decision.status == "allow"
+    assert result.impact.requires_human_approval is False

@@ -94,6 +94,13 @@ def build_default_operational_action_registry() -> OperationalActionRegistry:
         action_name='read_metrics@v1',
         category=ActionCategory.SAFE_READ,
     )
+    # Self-service PD export: replies only to the requesting user (bounded outbound).
+    specs['privacy_export@v1'] = ActionOperationalSpec(
+        action_name='privacy_export@v1',
+        category=ActionCategory.OUTBOUND,
+        is_outbound=True,
+        outbound_count=1,
+    )
     specs['publish_listing@v1'] = ActionOperationalSpec(
         action_name='publish_listing@v1',
         category=ActionCategory.PUBLICATION,
