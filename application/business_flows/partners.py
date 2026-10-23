@@ -90,7 +90,15 @@ _NEXT = {
     "agreed": set(),
     "declined": {"new"},
 }
-_DENY = ("100% гарантия", "гарантированный результат", "избавим навсегда", "вылечим", "исцеляет")
+_DENY = (
+    "100% гарантия",
+    "гарантированный результат",
+    "избавим навсегда",
+    "вылечим",
+    "исцеляет",
+    "без побочных эффектов",
+)
+_FAKE_FAMILIARITY = ("мы изучили ваш канал", "давно слежу")
 
 
 def statuses(payloads: list[dict[str, Any]]) -> dict[str, str]:
@@ -110,21 +118,48 @@ def set_status(partner: Partner | None, current: str, status: str) -> dict[str, 
     return {"step": "partner_status", "partner_id": partner.partner_id, "status": status}
 
 
-def pitch(partner: Partner, *, business: str, offer: str, url: str = "") -> dict[str, str]:
+def _compact(value: object, maximum: int) -> str:
+    return " ".join(str(value or "").split())[:maximum].rstrip()
+
+
+def validate_pitch(pack: dict[str, str]) -> None:
+    """Donor partner_copy.validate_partner_content: no medical/guarantee claims, no invented familiarity."""
+    text = " ".join(pack.values()).casefold()
+    if any(d in text for d in _DENY):
+        raise ValueError("partner_copy_forbidden_claim")
+    if pack.get("outreach", "").count("!") > 3:
+        raise ValueError("partner_copy_too_promotional")
+    if any(f in text for f in _FAKE_FAMILIARITY):
+        raise ValueError("partner_copy_invented_familiarity")
+
+
+def ready_post(*, hook: str, target: str, business: str, url: str = "") -> str:
+    body = (
+        f"{_compact(hook, 180) or 'Практический разбор'}\n\n{_compact(target, 700)}\n\n"
+        f"Материал подготовил {business}. Без обещаний чудес: задача — дать понятную пользу, "
+        "показать метод и оставить человеку возможность самому решить, подходит ли ему следующий шаг."
+    )
+    return (body + (f"\n\nУзнать подробности: {url}" if url else ""))[:4900]
+
+
+def pitch(partner: Partner, *, business: str, offer: str, url: str = "", topic: str = "") -> dict[str, str]:
     """Deterministic, factual partner copy (ported from partner_copy.DeterministicPartnerCopyGenerator)."""
+    business, offer = _compact(business, 120), _compact(offer, 360)
     angle = f"полезный материал вокруг «{offer[:180]}»" if offer else "полезный гостевой материал для аудитории"
+    topic_line = f"У проекта сейчас заметна тема «{_compact(topic, 180)}». " if topic.strip() else ""
     pack = {
         "subject": f"Материал для аудитории {partner.name}"[:200],
         "outreach": (
-            f"Здравствуйте! Я представляю {business[:120]}. Предлагаю не рекламную вставку, а {angle}: "
+            f"Здравствуйте! {topic_line}Я представляю {business}. Предлагаю не рекламную вставку, а {angle}: "
             "мы подготовим текст и возьмём содержательную часть на себя. С вашей стороны — только решение, "
             "подходит ли это аудитории. Если интересно, пришлю готовый вариант поста без обязательств."
-        ),
+        )[:3900],
+        "ready_post": ready_post(hook=offer or "Практический разбор", target=offer, business=business, url=url),
         "followup": "Здравствуйте! Один раз напомню о предложении выше. Если тема не подходит — повторно писать не будем.",
+        "angle": angle[:480],
         "cta": f"Подробнее: {url}" if url else "Ответьте «интересно» — пришлю готовый материал.",
     }
-    if any(d in " ".join(pack.values()).casefold() for d in _DENY):
-        raise ValueError("partner_copy_forbidden_claim")
+    validate_pitch(pack)
     return pack
 
 
@@ -235,6 +270,13 @@ def prepare_run(
         if fit.total < min_fit:
             continue
         offer = offerings[0] if offerings else ""
-        facts += [added, {"step": "partner_pack_prepared", "partner_id": p.partner_id, "fit": round(fit.total, 1),
-                          "pack": pitch(p, business=business, offer=offer, url=url)}]
+        facts += [
+            added,
+            {
+                "step": "partner_pack_prepared",
+                "partner_id": p.partner_id,
+                "fit": round(fit.total, 1),
+                "pack": pitch(p, business=business, offer=offer, url=url),
+            },
+        ]
     return facts
