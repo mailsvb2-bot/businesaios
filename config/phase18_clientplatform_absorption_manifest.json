@@ -338,10 +338,15 @@
     },
     {
       "id": "ads.yandex_direct_owner_flow",
-      "status": "inventory",
-      "canonical_owner": null,
-      "source_of_truth": null,
-      "evidence": [],
+      "status": "mapped",
+      "canonical_owner": "interfaces.ads (AdsWriteGateway + yandex_direct_governed_execution) + application.analytics.yandex_direct_growth_projection",
+      "source_of_truth": "canonical AdsWriteGateway reservation/approval facts and Event Store",
+      "evidence": [
+        "interfaces/ads/yandex_direct_governed_execution.py",
+        "interfaces/ads/yandex_direct_publication_proof.py",
+        "interfaces/ads/oauth_exchange.py",
+        "application/analytics/yandex_direct_growth_projection.py"
+      ],
       "runtime_dependency_removed": false,
       "pr472_claimed_status": "inventory",
       "pr472_claimed_runtime_dependency_removed": false,
@@ -531,10 +536,14 @@
     },
     {
       "id": "commerce.offerings_program_delivery",
-      "status": "inventory",
-      "canonical_owner": null,
-      "source_of_truth": null,
-      "evidence": [],
+      "status": "mapped",
+      "canonical_owner": "application.commerce (phase18 commercial order/checkout/program lesson delivery)",
+      "source_of_truth": "canonical Event Store Order/Invoice/Program facts",
+      "evidence": [
+        "application/commerce/phase18_commercial_order.py",
+        "application/commerce/phase18_commercial_checkout.py",
+        "application/commerce/phase18_program_lesson_delivery.py"
+      ],
       "runtime_dependency_removed": false,
       "pr472_claimed_status": "inventory",
       "pr472_claimed_runtime_dependency_removed": false,
