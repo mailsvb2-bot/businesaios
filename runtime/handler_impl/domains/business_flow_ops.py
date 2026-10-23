@@ -332,6 +332,12 @@ def _messenger_connections(admin_facts: list[dict]) -> list[dict]:
     ]
 
 
+def _cat_replay(rows):
+    from application.business_flows import catalog as ct
+
+    return ct.replay(rows)
+
+
 def _cockpit(body, effects, env, future, steps, facts, now, team=None, timed=None):
     """Owner cockpit screens (cpm:*) over the same projections; buttons re-enter this action."""
     from application.business_flows import admin as ad
@@ -359,6 +365,7 @@ def _cockpit(body, effects, env, future, steps, facts, now, team=None, timed=Non
         sales=sl.replay(facts("sales_pipeline@v1")),
         sales_rows=timed("sales_pipeline@v1") if timed else [],
         team=team or {},
+        catalog=_cat_replay(facts("business_admin@v1")),
         viewer_id=_viewer_id(body),
         connections=_messenger_connections(facts("business_admin@v1")),
     )
@@ -945,6 +952,9 @@ def handle_sales_pipeline(payload, effects, env, *, event_store, now_ms: int | N
             ch = sl.claim_handoff(st, arg, user_id=str(body.get("user_id") or ""))
             name = sl.pick(st, arg.strip()).name
             return done(f"🙋 {name}: разговор у Вас" + ("" if ch else " (уже)"), ch)
+        if op == "closed":
+            rows = [f"• {x.name} — {sl.LABELS[x.stage]}" for x in sl.recent_closed(st)]
+            return done("🗂 Недавно закрытые\n\n" + ("\n".join(rows) or "Пока нет."))
         if op == "handoffs":
             work = sl.handoff_work(st)
             rows = [f"• {x.name}" + (f" — ведёт {x.assignee}" if x.assignee else " — свободен") for x in work]

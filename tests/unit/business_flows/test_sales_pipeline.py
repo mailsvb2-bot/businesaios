@@ -73,3 +73,29 @@ def test_claim_rejects_other_owner() -> None:
         sl.claim_handoff(st, "1", user_id="8")
     assert sl.claim_handoff(st, "1", user_id="7") is None
     assert [x.lead_id for x in sl.handoff_work(st)] == ["l1"]
+
+
+def test_local_due_rejects_dst_gaps_and_overlaps() -> None:
+    from datetime import datetime
+    from zoneinfo import ZoneInfo
+
+    berlin = ZoneInfo("Europe/Berlin")
+    with pytest.raises(ValueError, match="missing"):
+        sl.local_to_utc(datetime(2027, 3, 28, 2, 30), berlin)
+    with pytest.raises(ValueError, match="ambiguous"):
+        sl.local_to_utc(datetime(2027, 10, 31, 2, 30), berlin)
+    assert sl.local_to_utc(datetime(2027, 1, 15, 12, 0), ZoneInfo("Europe/Moscow")).hour == 9
+    st = sl.replay([{"step": "lead_added", "lead_id": "l1", "name": "A"}])
+    with pytest.raises(ValueError, match="ambiguous"):
+        sl.set_next(st, "1 | 2027-10-31 02:30 | x", now_ms=NOW, tz="Europe/Berlin")
+
+
+def test_recent_closed_most_recent_first(flow) -> None:
+    run = partial(flow.run, partial(handle_sales_pipeline, now_ms=NOW))
+    assert "Пока нет" in run(op="closed")[1]
+    run(op="add", arg="Анна")
+    run(op="add", arg="Борис")
+    run(op="event", arg="1 declined")  # Анна lost first
+    run(op="event", arg="1 paid")  # ordered: open Борис is now #1
+    text = run(op="closed")[1]
+    assert text.index("Борис") < text.index("Анна") and "купил" in text and "отказ" in text

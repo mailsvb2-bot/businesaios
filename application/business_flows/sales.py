@@ -73,6 +73,7 @@ class Lead:
 @dataclass
 class State:
     leads: dict[str, Lead] = field(default_factory=dict)
+    closed_order: list[str] = field(default_factory=list)
 
 
 def reduce(current: Stage, event: str) -> Stage:
@@ -129,6 +130,8 @@ def replay(payloads: list[dict[str, Any]]) -> State:
         elif step == "followup_optout":
             st.leads[lid] = replace(lead, followup_suppressed=True, followup_id="", followup_due_ms=0, followup_text="")
         elif step == "lead_event":
+            if p["stage"] in (Stage.WON.value, Stage.LOST.value):
+                st.closed_order = [x for x in st.closed_order if x != lid] + [lid]
             st.leads[lid] = replace(
                 lead,
                 stage=Stage(p["stage"]),
@@ -185,15 +188,37 @@ def reopen(st: State, ref: str) -> dict[str, Any]:
     return {"step": "lead_reopened", "lead_id": lead.lead_id}
 
 
+def local_to_utc(local: datetime, zone: ZoneInfo) -> datetime:
+    """Donor cockpit_sales_management._local_due_to_utc: reject non-existent/ambiguous DST wall times."""
+    from datetime import UTC
+
+    hits = []
+    for fold in (0, 1):
+        cand = local.replace(tzinfo=zone, fold=fold)
+        back = cand.astimezone(UTC).astimezone(zone)
+        if back.replace(tzinfo=None) == local and back.fold == fold:
+            hits.append(cand)
+    if not hits:
+        raise ValueError("next_time_missing_by_tz_transition")
+    if len(hits) > 1:
+        raise ValueError("next_time_ambiguous_by_tz_transition")
+    return hits[0].astimezone(UTC)
+
+
+def recent_closed(st: State, *, limit: int = 12) -> list[Lead]:
+    """Donor list_recent_closed_sales_work: won/lost leads, most recently closed first."""
+    return [st.leads[x] for x in reversed(st.closed_order) if st.leads[x].stage in (Stage.WON, Stage.LOST)][:limit]
+
+
 def set_next(st: State, arg: str, *, now_ms: int, tz: str = "Europe/Moscow") -> dict[str, Any]:
     parts = [x.strip() for x in str(arg or "").split("|")]
     if len(parts) != 3 or not parts[2]:
         raise ValueError("next_format: /lead_next N | 2027-01-20 10:00 | позвонить")
     lead = pick(st, parts[0])
     try:
-        due = int(datetime.strptime(parts[1], "%Y-%m-%d %H:%M").replace(tzinfo=ZoneInfo(tz)).timestamp() * 1000)
+        due = int(local_to_utc(datetime.strptime(parts[1], "%Y-%m-%d %H:%M"), ZoneInfo(tz)).timestamp() * 1000)
     except ValueError as exc:
-        raise ValueError("next_datetime_invalid") from exc
+        raise ValueError(str(exc) if "transition" in str(exc) else "next_datetime_invalid") from exc
     if due <= now_ms:
         raise ValueError("next_in_past")
     return {"step": "lead_next", "lead_id": lead.lead_id, "text": parts[2][:200], "due_ms": due}
@@ -279,6 +304,8 @@ __all__ = [
     "claim_handoff",
     "clear_next",
     "handoff_work",
+    "local_to_utc",
+    "recent_closed",
     "due_actions",
     "funnel",
     "ordered",

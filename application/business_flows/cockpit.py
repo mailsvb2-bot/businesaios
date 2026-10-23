@@ -74,6 +74,7 @@ class Snapshot:
     money_text: Any = None  # admin.render_summary
     sales: Any = None  # sales.State
     sales_rows: list[Any] = field(default_factory=list)  # [(timestamp_ms, sales_pipeline payload)]
+    catalog: Any = None  # catalog.Catalog (offerings + business timezone)
     viewer_id: int = 0  # Telegram user id of the staff member viewing the cockpit
     connections: list[Any] = field(default_factory=list)  # messenger_switching connection rows
     team: dict = field(
@@ -315,6 +316,18 @@ def team_screen(a: str, args: tuple[str, ...], team: dict) -> tuple[str, list[li
     return "👥 Команда\n\n" + "\n".join(lines) + foot, [*buttons, *nav]
 
 
+def calendar_management(cat: Any) -> str:
+    """Donor build_cockpit_calendar_management: business timezone + bookable offerings (sorted)."""
+    if cat is None:
+        return ""
+    from application.business_flows import catalog as _cat
+
+    offers = _cat.booking_offerings(cat)
+    lines = [f"Часовой пояс: {cat.timezone}"]
+    lines += [f"#{i} {o.title}" for i, o in enumerate(offers, 1)] or ["Услуг для записи нет: /offering_add"]
+    return "\n".join(lines) + "\nОкно: /add_slot #N ...\n\n"
+
+
 def _extra_screen(a: str, parsed: Parsed, s: Snapshot) -> tuple[str, list[list[tuple[str, str]]]] | None:
     adm, ser = s.admin, s.series
     if a in ("team", "member"):
@@ -343,14 +356,15 @@ def _extra_screen(a: str, parsed: Parsed, s: Snapshot) -> tuple[str, list[list[t
             f"Ждут Вашего решения: {len(pending)} (/approvals)"
         ), []
     if a == "calendar":
+        head = "🗓 Календарь\n\n" + calendar_management(s.catalog)
         if not s.slots:
-            return "🗓 Календарь\n\nВпереди ничего нет. Новая встреча: /new_event Название", []
+            return head + "Впереди ничего нет. Новая встреча: /new_event Название", []
         days: dict[str, list[str]] = {}
         for x in s.slots:
             label = s.fmt_slot(x)
             days.setdefault(label.split(" ")[0], []).append(label + (" — занято" if x.status == "booked" else ""))
         body = "\n".join(f"{d}\n" + "\n".join(f"  • {v}" for v in vs) for d, vs in days.items())
-        return "🗓 Календарь\n\n" + body, []
+        return head + body, []
     if a == "customers":
         arch = getattr(adm, "archived_customers", set()) or set()
         query = next((x for x in parsed.args if not x.isdigit() or len(x) > 4), "")

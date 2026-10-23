@@ -102,3 +102,12 @@ def test_customers_command_routes_to_search_screen() -> None:
     act = r.handle_business_flow_routes(ctx("0777;drop"), user_id="1")
     assert act is not None and "cpm:customers:0777drop" in str(act)
     assert r.BUSINESS_FLOW_COMMANDS["/customer_archive"] == ("business_admin@v1", "customer_archive", True)
+
+
+def test_calendar_management_lists_timezone_and_sorted_offerings(flow) -> None:
+    text = _screen(flow, "cpm:calendar")[0]
+    assert "Часовой пояс: Europe/Moscow" in text and "/offering_add" in text
+    flow.run(handle_business_admin, op="offering_add", arg="individual | Яблоко | x")
+    flow.run(handle_business_admin, op="offering_add", arg="individual | банан | y")
+    text = _screen(flow, "cpm:calendar")[0]
+    assert text.index("#1 банан") < text.index("#2 Яблоко")

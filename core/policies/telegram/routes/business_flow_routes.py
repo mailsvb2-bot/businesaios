@@ -141,6 +141,7 @@ BUSINESS_FLOW_COMMANDS: dict[str, tuple[str, str, bool]] = {
     "/lead_assign": ("sales_pipeline@v1", "assign", True),
     "/lead_claim": ("sales_pipeline@v1", "claim", True),
     "/leads_handoff": ("sales_pipeline@v1", "handoffs", True),
+    "/leads_closed": ("sales_pipeline@v1", "closed", True),
     "/lead_ai": ("sales_pipeline@v1", "ai", True),
     "/lead_card": ("sales_pipeline@v1", "card", True),
     "/leads_due": ("sales_pipeline@v1", "due", True),
