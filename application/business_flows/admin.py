@@ -35,6 +35,7 @@ class ManualPaymentRecord:
     reference: str
     refunded_minor: int = 0
     refunds: list[str] = field(default_factory=list)
+    customer_id: str = ""
 
     @property
     def remaining_minor(self) -> int:
@@ -100,7 +101,12 @@ def replay(payloads: list[dict[str, Any]]) -> State:
             st.prices[str(p["offering"])] = (int(p["amount_minor"]), str(p["currency"]))
         elif step == "payment_recorded" and p["payment_id"] not in st.payments:
             st.payments[p["payment_id"]] = ManualPaymentRecord(
-                p["payment_id"], p["offering"], int(p["amount_minor"]), p["currency"], p["reference"]
+                p["payment_id"],
+                p["offering"],
+                int(p["amount_minor"]),
+                p["currency"],
+                p["reference"],
+                customer_id=str(p.get("customer_id") or ""),
             )
         elif step == "payment_refunded" and p["payment_id"] in st.payments:
             pay = st.payments[p["payment_id"]]
@@ -142,7 +148,7 @@ def set_price(st: State, arg: str) -> dict[str, Any]:
 
 
 def record_payment(st: State, arg: str) -> tuple[dict[str, Any] | None, ManualPaymentRecord | None]:
-    """``Предложение | сумма [валюта] | внешняя ссылка``; same reference replays, never doubles."""
+    """``Предложение | сумма [валюта] | внешняя ссылка [| id клиента]``; same reference replays, never doubles."""
     p = _fields(arg, 3, "payment_format: /pay Предложение | 1500 RUB | номер платежа")
     payment_id = stable_id("pay", p[2].casefold())
     if payment_id in st.payments:
@@ -161,6 +167,9 @@ def record_payment(st: State, arg: str) -> tuple[dict[str, Any] | None, ManualPa
         "currency": cur,
         "reference": p[2][:120],
     }
+    customer = p[3].strip()[:80] if len(p) > 3 else ""
+    if customer:  # donor _payment_new_result links the payment to a customer
+        change["customer_id"] = customer
     return change, None
 
 

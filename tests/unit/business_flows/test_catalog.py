@@ -39,3 +39,29 @@ def test_business_profile(flow) -> None:
     run(op="profile_set", arg="Студия йоги | Asia/Yekaterinburg")
     text = run(op="profile")[1]
     assert "Студия йоги" in text and "Asia/Yekaterinburg" in text
+
+
+def test_slot_bound_to_offering_and_business_timezone(flow) -> None:
+    from runtime.handler_impl.domains.business_flow_ops import handle_bookings
+
+    run = partial(flow.run, H)
+    run(op="offering_add", arg="individual | Разбор | 1:1")
+    run(op="profile_set", arg="Студия | Asia/Yekaterinburg")
+    book = partial(flow.run, partial(handle_bookings, now_ms=1_800_000_000_000))
+    assert "не найдено" in book(op="add_slot", arg="2027-01-20 15:00 60 #2")[1]
+    book(op="add_slot", arg="2027-01-20 15:00 60 #1")
+    fact = flow.store.events[-1]["payload"]
+    assert fact["title"] == "Разбор" and fact["offering_id"]
+    from datetime import UTC, datetime
+
+    assert fact["starts_at_ms"] == int(datetime(2027, 1, 20, 10, 0, tzinfo=UTC).timestamp() * 1000)
+
+
+def test_payment_linked_to_customer() -> None:
+    from application.business_flows import admin
+
+    change, _ = admin.record_payment(admin.replay([]), "Разбор | 1500 RUB | P-1 | cust42")
+    assert change["customer_id"] == "cust42"
+    assert admin.replay([change]).payments[change["payment_id"]].customer_id == "cust42"
+    plain, _ = admin.record_payment(admin.replay([]), "Разбор | 1500 RUB | P-2")
+    assert "customer_id" not in plain

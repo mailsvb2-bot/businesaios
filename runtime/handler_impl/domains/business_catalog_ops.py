@@ -112,3 +112,16 @@ def _retention(done, st, op, arg, now, *, tenant_id, event_store):
         else "ℹ️ Лид на этот цикл уже есть: /leads",
         ch,
     )
+
+
+def _slot_with_offering(bk, arg, now, *, tenant_id, event_store):
+    """/add_slot in the business timezone; ``#N`` binds the slot to catalog offering N."""
+    from application.business_flows import catalog as cg
+
+    c = cg.replay(flow_payloads(event_store, tenant_id=tenant_id, event_type="business_admin@v1"))
+    change = bk.parse_slot(arg, now_ms=now, tz=c.timezone)
+    title, offering_id = cg.resolve_slot_title(c, change["title"])
+    if offering_id:
+        change = {**change, "title": title, "offering_id": offering_id}
+        change["slot_id"] = bk.stable_id("slot", change["starts_at_ms"], title)
+    return change

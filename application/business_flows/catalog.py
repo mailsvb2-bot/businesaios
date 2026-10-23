@@ -241,3 +241,22 @@ def profile_text(c: Catalog) -> str:
         f"Направлений: {len(active_directions(c))} · предложений: {len(active_offerings(c))}\n\n"
         "/profile_set описание | часовой пояс"
     )
+
+
+def booking_offerings(c: Catalog) -> list[Offering]:
+    """Active offerings bookable via slots, sorted like donor ``_active_booking_offerings``."""
+    return sorted(active_offerings(c), key=lambda o: (o.title.casefold(), o.offering_id))
+
+
+def resolve_slot_title(c: Catalog, title: str) -> tuple[str, str | None]:
+    """``#N`` -> (offering title, offering_id); stale N fails closed; free text passes through."""
+    t = str(title or "").strip()
+    if not t.startswith("#"):
+        exact = next((o for o in booking_offerings(c) if o.title.casefold() == t.casefold()), None)
+        return (exact.title, exact.offering_id) if exact else (t, None)
+    items = booking_offerings(c)
+    ref = t[1:]
+    if not (ref.isdigit() and 0 < int(ref) <= len(items)):
+        raise ValueError("предложение для записи не найдено, см. /offerings")
+    o = items[int(ref) - 1]
+    return o.title, o.offering_id

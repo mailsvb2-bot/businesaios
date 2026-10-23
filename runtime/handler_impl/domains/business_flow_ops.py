@@ -14,7 +14,13 @@ from application.business_flows import bot_provisioning as botprov
 from application.business_flows.projection import flow_payloads
 from runtime.handler_impl.core.payloads import require_mapping, required_str
 from runtime.handler_impl.domains.admin_ops import _card_outcome
-from runtime.handler_impl.domains.business_catalog_ops import CATALOG_OPS, _ads, _catalog, _retention
+from runtime.handler_impl.domains.business_catalog_ops import (
+    CATALOG_OPS,
+    _ads,
+    _catalog,
+    _retention,
+    _slot_with_offering,
+)
 from runtime.handlers.delivery_contract import delivery_kwargs
 
 
@@ -148,7 +154,7 @@ def handle_bookings(payload, effects, env, *, event_store, now_ms: int | None = 
     chosen = pick[int(arg) - 1] if arg.isdigit() and 0 < int(arg) <= len(pick) else None
     try:
         if op == "add_slot":
-            change = bk.parse_slot(arg, now_ms=now)
+            change = _slot_with_offering(bk, arg, now, tenant_id=tenant_id, event_store=event_store)
             text = f"📅 Слот открыт: {bk.fmt(bk.replay([change])[change['slot_id']])}"
         elif op == "book":
             change = bk.book(slots, chosen, customer_id=user_id, now_ms=now)
