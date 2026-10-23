@@ -62,3 +62,26 @@ def test_router_routes_customer_free_text_to_sales_inbound() -> None:
     from core.policies.telegram import router
 
     assert '"op": "inbound"' in inspect.getsource(router.handle)
+
+
+def test_managed_bot_wrapper_keeps_durable_keys_and_dedupes():
+    import pytest
+
+    from application.business_flows import sales_inbound as si
+    kw = dict(route_business_id="b1", link_business_id="b1", managed_bot_id="mb7", telegram_user_id=42,
+              update_id="9001", name="Аня", text="хочу записаться", ai_allowed=False)
+    f = si.record_managed_bot_message([], **kw)
+    assert f["dedupe_key"] == "managed-bot-message:mb7:9001" and f["surface"] == "managed_bot"
+    assert "note" not in f
+    assert si.record_managed_bot_message([f], **kw) is None
+    for bad in (dict(link_business_id="b2"), dict(telegram_user_id=True), dict(update_id="x1")):
+        with pytest.raises(ValueError):
+            si.record_managed_bot_message([], **{**kw, **bad})
+
+
+def test_record_message_rejects_non_bool_ai_flag():
+    import pytest
+
+    from application.business_flows import sales_inbound as si
+    with pytest.raises(ValueError):
+        si.record_message([], channel="vk", subject="1", name="", source_ref="s", event_id="e", text="hi", ai_allowed=1)
