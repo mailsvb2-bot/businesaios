@@ -518,8 +518,16 @@ def handle_business_admin(payload, effects, env, *, event_store, now_ms: int | N
                 return done(f"{label}: " + "; ".join(why) + ("\n/approvals" if verdict == "needs_approval" else ""), ch)
             return done(apol.render(pols, now_ms=now))
         if op.startswith("ad_"):
+            from application.business_flows import sales as sl
+
             return _ads(
-                body, done, st, op, arg, flow_payloads(event_store, tenant_id=tenant_id, event_type="business_admin@v1")
+                body,
+                done,
+                st,
+                op,
+                arg,
+                flow_payloads(event_store, tenant_id=tenant_id, event_type="business_admin@v1"),
+                lambda: sl.replay(flow_payloads(event_store, tenant_id=tenant_id, event_type="sales_pipeline@v1")),
             )
         if op == "audit":
             facts_ = flow_payloads(event_store, tenant_id=tenant_id, event_type="business_admin@v1")
@@ -568,7 +576,7 @@ def handle_business_admin(payload, effects, env, *, event_store, now_ms: int | N
     return done(ad.render_summary(st))
 
 
-def _ads(body, done, st, op, arg, facts_):
+def _ads(body, done, st, op, arg, facts_, sl_replay=None):
     """Governed ad proposals: drafts, exact-cap consent via approvals, publish gated by connector truth."""
     from application.business_flows import ad_proposals as ap
     from interfaces.ads.registry import CONNECTORS
@@ -584,6 +592,13 @@ def _ads(body, done, st, op, arg, facts_):
         floor = int(env_str("BUSINESAIOS_AD_MIN_WEEKLY_MINOR", "30000") or 30000)
         ch = ap.consent(drafts, arg, min_weekly_minor=floor)
         return done("🧾 Запрошено согласие владельца на кап. Решение: /approvals → /approve N", ch)
+    if op in {"ad_stats", "ad_report"}:
+        from application.business_flows import ad_analytics as aa
+
+        if op == "ad_stats":
+            return done("📈 Статистика записана. /ad_report", aa.record(drafts, arg))
+        leads = list(sl_replay().leads.values())
+        return done(aa.report(drafts, aa.replay(facts_), leads))
     if op == "ad_publish":
         truth = CONNECTORS["yandex_direct"]
         ready = bool(truth["production_ready"]) and bool(truth["requires_human_approval"])

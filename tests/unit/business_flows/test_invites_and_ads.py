@@ -69,3 +69,22 @@ def test_publish_never_goes_live_when_ready_flag_lies() -> None:
 def test_ad_draft_validation(arg) -> None:
     with pytest.raises(ValueError):
         ap.draft(arg)
+
+
+def test_ad_unit_economics_with_local_attribution(flow) -> None:
+    from runtime.handler_impl.domains.business_flow_ops import handle_sales_pipeline as S
+
+    run = partial(flow.run, H)
+    run(op="ad_draft", arg="Йога | Пробное | https://example.ru")
+    _, text = run(op="ad_report")
+    assert "Нет данных" in text
+    _, text = run(op="ad_stats", arg="1 | 10 | 20 | 100 RUB")
+    assert "кликов больше" in text
+    run(op="ad_stats", arg="1 | 1000 | 50 | 2000 RUB")
+    for name in ("Анна", "Борис"):
+        flow.run(S, op="add", arg=f"{name} | ad1")
+    flow.run(S, op="add", arg="Вера | сайт")
+    flow.run(S, op="event", arg="1 paid")
+    _, text = run(op="ad_report")
+    assert "CTR 5.00%" in text and "CPC 40,00" in text.replace(".", ",")
+    assert "лиды 2" in text and "клиенты 1" in text and "CAC 2" in text
