@@ -6,6 +6,8 @@ Owner-only commands require ``ctx.is_admin``.
 
 from __future__ import annotations
 
+import re
+
 from core.policies.telegram.context import TelegramCtx
 from core.policies.telegram.helpers import ProposedAction, propose
 
@@ -54,6 +56,7 @@ BUSINESS_FLOW_COMMANDS: dict[str, tuple[str, str, bool]] = {
     "/partner_pitch": ("partners@v1", "pitch", True),
     "/partner_ref": ("partners@v1", "ref", True),
     "/setting": ("business_admin@v1", "setting", True),
+    "/customer_archive": ("business_admin@v1", "customer_archive", True),
     "/autopilot": ("business_admin@v1", "autopilot", True),
     "/price": ("business_admin@v1", "price", True),
     "/pay": ("business_admin@v1", "pay", True),
@@ -163,6 +166,12 @@ def handle_business_flow_routes(ctx: TelegramCtx, *, user_id: str) -> ProposedAc
     if data.startswith("cpe:") and ctx.is_admin:
         return propose("event_series@v1", {"user_id": user_id, "op": "wizard", "arg": data[:64], **ack})
     args = str(ctx.args or "").strip()
+    if ctx.cmd == "/customers" and ctx.is_admin:  # donor search_customers: id-fragment search screen
+        q = re.sub(r"[^0-9A-Za-z_-]", "", args)[:40]
+        return propose(
+            "business_ops_summary@v1",
+            {"user_id": user_id, "op": "cockpit", "arg": f"cpm:customers:{q}" if q else "cpm:customers"},
+        )
     if ctx.cmd == "/start" and args.startswith("cpa_"):  # promotion deep link -> verified opened touch
         return propose("bookings@v1", {"user_id": user_id, "op": "promo_open", "arg": args[:64]})
     if ctx.cmd == "/start" and args.startswith("ecv_"):  # booking messenger verification link

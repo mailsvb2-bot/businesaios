@@ -57,6 +57,7 @@ class State:
     prices: dict[str, tuple[int, str]] = field(default_factory=dict)
     payments: dict[str, ManualPaymentRecord] = field(default_factory=dict)
     approvals: dict[str, Approval] = field(default_factory=dict)
+    archived_customers: set[str] = field(default_factory=set)
 
     @property
     def autopilot(self) -> bool:
@@ -117,6 +118,10 @@ def replay(payloads: list[dict[str, Any]]) -> State:
             st.approvals[p["approval_id"]] = Approval(
                 p["approval_id"], p["title"], int(p["amount_minor"]), p["currency"]
             )
+        elif step == "customer_archived":
+            st.archived_customers.add(str(p["customer_id"]))
+        elif step == "customer_restored":
+            st.archived_customers.discard(str(p["customer_id"]))
         elif step == "approval_decided" and p["approval_id"] in st.approvals:
             st.approvals[p["approval_id"]].status = str(p["status"])
     return st
@@ -128,6 +133,20 @@ def set_setting(st: State, arg: str) -> dict[str, Any]:
     if not _KEY.match(key) or not value or len(value) > 1000:
         raise ValueError("setting_format: /setting ключ = значение")
     return {"step": "setting_set", "key": key, "value": value}
+
+
+def archive_customer(st: State, arg: str, known: set[str]) -> dict[str, Any] | None:
+    """Donor archive_customer: ``ID`` hides a known customer from the cockpit list, ``ID off`` restores.
+
+    History and bookings stay intact (facts are never deleted); idempotent: None when already in that state.
+    """
+    parts = str(arg or "").split()
+    if not parts or parts[0] not in known:
+        raise ValueError("customer_unknown: /customer_archive ID [off]")
+    cid, restore = parts[0], len(parts) > 1 and parts[1].casefold() == "off"
+    if restore:
+        return {"step": "customer_restored", "customer_id": cid} if cid in st.archived_customers else None
+    return None if cid in st.archived_customers else {"step": "customer_archived", "customer_id": cid}
 
 
 def set_autopilot(st: State, arg: str) -> dict[str, Any] | None:

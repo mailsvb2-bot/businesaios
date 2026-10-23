@@ -511,6 +511,25 @@ def handle_business_admin(payload, effects, env, *, event_store, now_ms: int | N
                 return done("\n".join(f"{k} = {v}" for k, v in sorted(st.settings.items())) or "⚙️ Настроек пока нет.")
             ch = ad.set_setting(st, arg)
             return done(f"⚙️ {ch['key']} = {ch['value']}", ch)
+        if op == "customer_archive":
+            from application.business_flows import bookings as bk
+
+            slots = bk.replay(flow_payloads(event_store, tenant_id=tenant_id, event_type="bookings@v1"))
+            known = {x.customer_id for x in slots.values() if x.customer_id}
+            ch = ad.archive_customer(st, arg, known)
+            cid = arg.split()[0]
+            if ch is None:
+                return done(f"👤 Клиент {cid[-6:]}: без изменений.")
+            hidden = ch["step"] == "customer_archived"
+            return done(
+                f"👤 Клиент {cid[-6:]} "
+                + (
+                    "скрыт из списка (история сохранена). Вернуть: /customer_archive ID off"
+                    if hidden
+                    else "возвращён в список."
+                ),
+                ch,
+            )
         if op == "autopilot":
             ch = ad.set_autopilot(st, arg)
             on = ch["value"] == "1" if ch else st.autopilot

@@ -247,8 +247,14 @@ def switch_screen(parsed: Parsed, s: Snapshot) -> tuple[str, list[list[tuple[str
     return f"↪️ {_PLATFORM_LABEL[dest.platform]}: {url.url if url else dest.public_target}", []
 
 
-_CONTACT_LABEL = {"telegram": "Telegram", "vk": "ВКонтакте", "max": "MAX", "email": "Email", "phone": "Телефон",
-                  "web": "Сайт"}
+_CONTACT_LABEL = {
+    "telegram": "Telegram",
+    "vk": "ВКонтакте",
+    "max": "MAX",
+    "email": "Email",
+    "phone": "Телефон",
+    "web": "Сайт",
+}
 
 
 def safe_contact(platform: str, *, username: str = "", subject: str = "", display_name: str = "") -> str | None:
@@ -266,11 +272,15 @@ def safe_contact(platform: str, *, username: str = "", subject: str = "", displa
     return f"{label}: {display_name}" if display_name else f"{label} подключён"
 
 
-def customers(slots: list[Any]) -> list[tuple[str, int]]:
-    """Distinct participants with booking counts, most active first (no contact data shown)."""
+def customers(slots: list[Any], archived: set[str] = frozenset(), query: str = "") -> list[tuple[str, int]]:
+    """Distinct participants with booking counts, most active first (no contact data shown).
+
+    Donor list/search_customers: archived customers are hidden; ``query`` matches the id fragment.
+    """
     counts: dict[str, int] = {}
+    q = str(query or "").strip()
     for x in slots:
-        if x.customer_id:
+        if x.customer_id and x.customer_id not in archived and q in x.customer_id:
             counts[x.customer_id] = counts.get(x.customer_id, 0) + 1
     return sorted(counts.items(), key=lambda kv: (-kv[1], kv[0]))
 
@@ -342,10 +352,12 @@ def _extra_screen(a: str, parsed: Parsed, s: Snapshot) -> tuple[str, list[list[t
         body = "\n".join(f"{d}\n" + "\n".join(f"  • {v}" for v in vs) for d, vs in days.items())
         return "🗓 Календарь\n\n" + body, []
     if a == "customers":
-        people = customers(s.all_slots)
+        arch = getattr(adm, "archived_customers", set()) or set()
+        query = next((x for x in parsed.args if not x.isdigit() or len(x) > 4), "")
+        people = customers(s.all_slots, arch, query)
         if not people:
-            return "👥 Клиенты\n\nПока никто не записывался.", []
-        page = page_number(parsed.args)
+            return "👥 Клиенты\n\n" + ("Никого не найдено." if query else "Пока никто не записывался."), []
+        page = page_number(tuple(x for x in parsed.args if x != query))
         lines, nav, foot = _paged(people, page, "customers", lambda kv: f"Клиент {kv[0][-6:]} — записей: {kv[1]}")
         start = page * PAGE_SIZE
         open_rows = [

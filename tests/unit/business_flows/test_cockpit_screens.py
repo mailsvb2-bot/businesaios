@@ -68,3 +68,37 @@ def test_customer_card_routes_current_action_and_masks_contact(flow) -> None:
     assert cpk.safe_contact("email", subject="a@b.ru") == "Email: •••@b.ru"
     assert cpk.safe_contact("telegram", username="anna") == "Telegram: @anna"
     assert cpk.safe_contact("internal") is None
+
+
+def test_customer_search_and_archive_hide_but_keep_history(flow) -> None:
+    _seed(flow)
+    flow.run(partial(handle_bookings, now_ms=NOW), op="add_slot", arg="2027-01-21 15:00 60 Разбор")
+    flow.run(partial(handle_bookings, now_ms=NOW), op="book", arg="1", user_id="cust-000777")
+    text, _ = _screen(flow, "cpm:customers:000777")
+    assert "000777" in text and "000042" not in text
+    assert "Никого не найдено" in _screen(flow, "cpm:customers:zzz")[0]
+    flow.run(handle_business_admin, op="customer_archive", arg="cust-000042")
+    assert "скрыт из списка" in flow.effects.sent[-1]["text"]
+    flow.run(handle_business_admin, op="customer_archive", arg="cust-000042")
+    assert "без изменений" in flow.effects.sent[-1]["text"]
+    assert "000042" not in _screen(flow, "cpm:customers:0")[0]
+    assert "000042" in _screen(flow, "cpm:customer:cust-000042")[0]  # history intact
+    flow.run(handle_business_admin, op="customer_archive", arg="nobody")
+    assert "customer_unknown" in flow.effects.sent[-1]["text"]
+    flow.run(handle_business_admin, op="customer_archive", arg="cust-000042 off")
+    assert "000042" in _screen(flow, "cpm:customers:0")[0]
+
+
+def test_customers_command_routes_to_search_screen() -> None:
+    from types import SimpleNamespace
+
+    from core.policies.telegram.routes import business_flow_routes as r
+
+    def ctx(args, admin=True):
+        return SimpleNamespace(cmd="/customers", args=args, is_admin=admin, callback_data="", callback_query_id="",
+                               session={}, text="/customers " + args)  # fmt: skip
+
+    assert r.handle_business_flow_routes(ctx("x", admin=False), user_id="1") is None
+    act = r.handle_business_flow_routes(ctx("0777;drop"), user_id="1")
+    assert act is not None and "cpm:customers:0777drop" in str(act)
+    assert r.BUSINESS_FLOW_COMMANDS["/customer_archive"] == ("business_admin@v1", "customer_archive", True)
