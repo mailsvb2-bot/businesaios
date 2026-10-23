@@ -695,6 +695,13 @@ def handle_event_series(payload, effects, env, *, event_store, now_ms: int | Non
                 event_payload=None,
             )
             return sent
+        if op == "followups":
+            st = es.replay(facts("event_series@v1"))
+            if not arg.strip():
+                return done(es.followup_status(st), None)
+            ch = es.followup_settings(st, arg)
+            st2 = es.replay([*facts("event_series@v1"), ch])
+            return done(es.followup_status(st2), ch)
         if op == "place":
             from application.business_flows import event_wizard as wz
 
