@@ -26,6 +26,7 @@ from runtime.handler_impl.domains.business_catalog_ops import (
     _ads,
     _catalog,
     _event_channels,
+    channel_reminder_copies,
     _events,
     _external_products,
     _followups,
@@ -271,16 +272,15 @@ def handle_bookings(payload, effects, env, *, event_store, now_ms: int | None = 
 
 def _dispatch_reminders(body, effects, env, bk, slots, facts, now):
     """Push every due 24h/3h/15m reminder to its participant; each delivery records its own idempotent fact."""
-    from application.business_flows import event_notifications as en
-
     due = bk.due_reminders(slots, now_ms=now, sent=bk.sent_reminders(facts))
     delivered = 0
     for slot, minutes, label in due:
+        rtext = channel_reminder_copies(effects, env, body, facts, bk, slot, minutes, label)
         out = send_tracked(
             body,
             effects,
             env,
-            text=f"⏰ Напоминание ({label}): {bk.fmt(slot)}\n" + en.reminder_text(slot, minutes),
+            text=rtext,
             event_type="bookings@v1",
             event_payload={
                 "step": "reminder_sent",

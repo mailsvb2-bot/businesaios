@@ -42,3 +42,23 @@ def test_expired_and_foreign_booking() -> None:
     with pytest.raises(ValueError):
         ec.marketing_platforms(["email"])
     assert ec.extract_token("start ecv_abc") == "abc" and ec.extract_token("/start cpa_x") is None
+
+
+def test_due_reminder_mirrors_to_verified_vk_and_max(flow) -> None:
+    _run(flow, op="add_slot", arg="2027-01-15 14:00 Встреча")
+    _run(flow, op="book", arg="1")
+    _, text = _run(flow, op="link_channels", arg="1")
+    tokens = dict(re.findall(r"(\w+): /start ecv_(\S+)", text))
+    _run(flow, op="channel_verify", arg="ecv_" + tokens["vk"], platform="vk", user_id="vk:42")
+    _run(flow, op="channel_verify", arg="ecv_" + tokens["max"], platform="max", user_id="max:77")
+    flow.effects.sent.clear()
+    _, text = _run(flow, op="dispatch")
+    native = [m for m in flow.effects.sent if m.get("channel") in ("vk", "max")]
+    assert {m["channel"]: m["user_id"] for m in native} == {"vk": "42", "max": "77"}
+    vk = next(m for m in native if m["channel"] == "vk")["track_payload"]["_provider_native"]
+    assert vk["provider_key"] == "vk_messaging" and vk["peer_id"] == "42" and vk["random_id"] > 0
+    assert all("Напоминание" in m["text"] and not m.get("track_event_type") for m in native)
+    assert "1 из 1" in text
+    flow.effects.sent.clear()
+    _run(flow, op="dispatch")
+    assert not [m for m in flow.effects.sent if m.get("channel") in ("vk", "max")]

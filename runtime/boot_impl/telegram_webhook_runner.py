@@ -115,6 +115,24 @@ def _build_webhook_runtime(
     return webhook_runtime
 
 
+def _register_external_product_ingress(router, *, core: Any, executor: Any, event_store: Any) -> None:
+    """Signed external-product webhooks; owner = first ADMIN_USER_IDS entry (notifications go there)."""
+    import os
+
+    from adapters.api.fastapi.external_product_webhook_routes import register_external_product_webhook_routes
+    from runtime.integration import external_product_ingress as xpi
+
+    tenant_id = os.environ.get("TENANT_ID", "").strip() or "default"
+    admins = os.environ.get("ADMIN_USER_IDS", "") or os.environ.get("ADMIN_IDS", "")
+    owner = next((x.strip() for x in admins.split(",") if x.strip()), "")
+
+    def ingest(**kw):
+        return xpi.ingest(core=core, executor=executor, event_store=event_store, tenant_id=tenant_id,
+                          owner_user_id=owner, **kw)  # fmt: skip
+
+    register_external_product_webhook_routes(router=router, ingest=ingest)
+
+
 def build_telegram_webhook_app(
     *,
     core: Any,
@@ -155,6 +173,8 @@ def build_telegram_webhook_app(
         payload = await request.json()
         runtime.process_update(payload)
         return {"ok": True}
+
+    _register_external_product_ingress(router, core=core, executor=executor, event_store=event_store)
 
     @asynccontextmanager
     async def lifespan(app: FastAPI):

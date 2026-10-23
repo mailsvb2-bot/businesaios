@@ -85,8 +85,12 @@ def webhook_secret(server_key: str, rid: str) -> str:
     return hmac.new(server_key.encode(), f"nm-webhook:{rid}".encode(), hashlib.sha256).hexdigest()
 
 
-def webhook_url(base_url: str, platform: str, rid: str) -> str:
-    return f"{base_url}/businesaios/webhooks/{platform}/{rid}"
+PROVIDER_KEYS = {"vk": "vk_messaging", "max": "max_messaging"}
+
+
+def webhook_url(base_url: str, platform: str, *, tenant_id: str, business_id: str) -> str:
+    """Existing generic ingress (adapters/api/fastapi/provider_webhook_routes.py) owns VK/MAX inbound."""
+    return f"{base_url}/providers/webhook/{tenant_id}/{business_id}/{PROVIDER_KEYS[platform]}"
 
 
 def acquire_lease(
@@ -111,11 +115,11 @@ def _disabled(rid: str, reason: str) -> dict[str, Any]:
 
 
 def _provision(
-    platform, ext, *, provider, token_ref, base_url, server_key, routes, owner, now_ms, confirm, register, extra
+    platform, ext, *, provider, token_ref, base_url, server_key, routes, owner, now_ms, confirm, register, extra, scope
 ):
     lease = acquire_lease(routes, platform=platform, external_id=ext, owner=owner, now_ms=now_ms)
     rid = lease["route_id"]
-    url, secret = webhook_url(base_url, platform, rid), webhook_secret(server_key, rid)
+    url, secret = webhook_url(base_url, platform, **scope), webhook_secret(server_key, rid)
     try:
         register(url, secret)
     except (OSError, ValueError, RuntimeError) as exc:
@@ -125,7 +129,8 @@ def _provision(
 
 
 def provision_vk(*, group_id: str | int, token_ref: str, provider: Provider, base_url: str, server_key: str,
-                 routes: dict[str, Route], owner: str, now_ms: int) -> tuple[list[dict[str, Any]], str | None]:  # fmt: skip
+                 routes: dict[str, Route], owner: str, now_ms: int,
+                 tenant_id: str, business_id: str) -> tuple[list[dict[str, Any]], str | None]:  # fmt: skip
     base = public_base_url(base_url)
     if not _REF.match(str(token_ref or "")):
         raise ValueError("токен VK передаётся только ссылкой env:NAME или vault:NAME")
@@ -137,11 +142,13 @@ def provision_vk(*, group_id: str | int, token_ref: str, provider: Provider, bas
     reg = lambda url, secret: provider.ensure_callback_server(group_id=gid, url=url, secret=secret)  # noqa: E731
     extra = {"display_name": str(group.get("name") or "").strip() or None, "username": None}
     return _provision("vk", gid, provider=provider, token_ref=token_ref, base_url=base, server_key=server_key,
-                      routes=routes, owner=owner, now_ms=now_ms, confirm=code, register=reg, extra=extra)  # fmt: skip
+                      routes=routes, owner=owner, now_ms=now_ms, confirm=code, register=reg, extra=extra,
+                      scope={"tenant_id": tenant_id, "business_id": business_id})  # fmt: skip
 
 
 def provision_max(*, token_ref: str, provider: Provider, base_url: str, server_key: str,
-                  routes: dict[str, Route], owner: str, now_ms: int) -> tuple[list[dict[str, Any]], str | None]:  # fmt: skip
+                  routes: dict[str, Route], owner: str, now_ms: int,
+                 tenant_id: str, business_id: str) -> tuple[list[dict[str, Any]], str | None]:  # fmt: skip
     base = public_base_url(base_url)
     if not _REF.match(str(token_ref or "")):
         raise ValueError("токен MAX передаётся только ссылкой env:NAME или vault:NAME")
@@ -153,7 +160,8 @@ def provision_max(*, token_ref: str, provider: Provider, base_url: str, server_k
     name = str(me.get("first_name") or me.get("name") or "").strip() or None
     extra = {"display_name": name, "username": str(me.get("username") or "").strip() or None}
     return _provision("max", ext, provider=provider, token_ref=token_ref, base_url=base, server_key=server_key,
-                      routes=routes, owner=owner, now_ms=now_ms, confirm=None, register=reg, extra=extra)  # fmt: skip
+                      routes=routes, owner=owner, now_ms=now_ms, confirm=None, register=reg, extra=extra,
+                      scope={"tenant_id": tenant_id, "business_id": business_id})  # fmt: skip
 
 
 def disable(routes: dict[str, Route], rid: str) -> dict[str, Any]:
@@ -162,5 +170,5 @@ def disable(routes: dict[str, Route], rid: str) -> dict[str, Any]:
     return _disabled(rid, "owner")
 
 
-__all__ = ["PLATFORMS", "Provider", "Route", "acquire_lease", "disable", "provision_max", "provision_vk",
+__all__ = ["PLATFORMS", "PROVIDER_KEYS", "Provider", "Route", "acquire_lease", "disable", "provision_max", "provision_vk",
            "public_base_url", "replay", "route_id", "webhook_secret", "webhook_url"]  # fmt: skip

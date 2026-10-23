@@ -440,3 +440,30 @@ def _external_products(done, op, arg, facts_, *, tenant_id, body, now_ms, vault=
     except xp.SignatureError as exc:
         return done(f"rejected:{exc}")
     return done(f"accepted:{rid}" if fact else f"duplicate:{rid}", fact)
+
+
+def channel_reminder_copies(effects, env, body, facts, bk, slot, minutes, label) -> str:
+    """Mirror a due reminder to the participant's verified VK/MAX identities via the existing
+    native provider queue; returns the reminder text (channel vk/max -> _NativeProviderQueueAdapter; MAX paced by ProviderPacingCoordinator)."""
+    import hashlib
+
+    from application.business_flows import event_channels as ec
+    from application.business_flows import event_notifications as en
+
+    text = f"⏰ Напоминание ({label}): {bk.fmt(slot)}\n" + en.reminder_text(slot, minutes)
+    tenant_id = str(body.get("tenant_id") or "")
+    business_id = str(body.get("business_id") or tenant_id)
+    for (sid, cid, plat), subject in sorted(ec.channels(facts).items()):
+        if sid != slot.slot_id or cid != slot.customer_id or plat not in ("vk", "max"):
+            continue
+        subject = subject.split(":", 1)[1] if subject.startswith(plat + ":") else subject
+        native = {"provider_key": f"{plat}_messaging", "business_id": business_id}
+        if plat == "vk":
+            seed = f"{slot.slot_id}:{minutes}:{subject}".encode()
+            native.update(peer_id=subject, random_id=int(hashlib.sha256(seed).hexdigest()[:8], 16))
+        effects.send_message(
+            decision_id=env.decision.decision_id, correlation_id=env.decision.correlation_id, tenant_id=tenant_id,
+            business_id=business_id, user_id=subject, text=text, channel=plat,
+            track_payload={"_provider_native": native},
+        )  # fmt: skip
+    return text

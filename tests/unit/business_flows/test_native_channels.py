@@ -6,7 +6,12 @@ import pytest
 
 from application.business_flows import native_channels as nc
 from application.business_flows import promotions as pm
-from runtime.integration.native_messenger_inbound import handle_inbound, promotion_touch
+from application.business_autonomy.provider_catalog import provider_map
+from runtime.business_autonomy.provider_webhook_runtime import ProviderWebhookRuntime
+from runtime.integration.native_messenger_inbound import persist_route_secrets, promotion_touch
+from security.secret_vault import InMemorySecretVault
+
+SC = {"tenant_id": "t", "business_id": "b"}
 
 KEY = "k" * 40
 BASE = "https://bai.example.ru"
@@ -48,6 +53,7 @@ def test_base_url_and_refs() -> None:
             routes={},
             owner="o",
             now_ms=0,
+            **SC,
         )
     with pytest.raises(ValueError, match="positive"):
         nc.provision_vk(
@@ -59,17 +65,18 @@ def test_base_url_and_refs() -> None:
             routes={},
             owner="o",
             now_ms=0,
+            **SC,
         )
 
 
 def test_vk_lifecycle_lease_failure_and_inbound() -> None:
     p = Fake()
     facts, url = nc.provision_vk(
-        group_id="42", token_ref="env:VK", provider=p, base_url=BASE, server_key=KEY, routes={}, owner="o", now_ms=0
+        group_id="42", token_ref="env:VK", provider=p, base_url=BASE, server_key=KEY, routes={}, owner="o", now_ms=0, **SC
     )
     routes = nc.replay(facts)
     ((rid, r),) = routes.items()
-    assert r.status == "active" and url.endswith(f"/vk/{rid}") and p.calls[0][1] == nc.webhook_secret(KEY, rid)
+    assert r.status == "active" and url.endswith("/vk_messaging") and p.calls[0][1] == nc.webhook_secret(KEY, rid)
     assert KEY not in json.dumps(facts) and p.calls[0][1] not in json.dumps(facts)
     held = nc.replay([nc.acquire_lease({}, platform="vk", external_id="9", owner="a", now_ms=0)])
     with pytest.raises(ValueError, match="уже"):
@@ -84,40 +91,35 @@ def test_vk_lifecycle_lease_failure_and_inbound() -> None:
         routes={},
         owner="o",
         now_ms=0,
+        **SC,
     )
     assert url2 is None and nc.replay(bad)[bad[0]["route_id"]].status == "disabled"
-    kw = {"routes": routes, "platform": "vk", "rid": rid, "server_key": KEY, "tenant_id": "t"}
-    assert handle_inbound(payload={"type": "confirmation", "group_id": 42}, **kw) == ("confirm", "abc123")
-    assert handle_inbound(payload={"type": "message_new", "group_id": 42, "secret": "x"}, **kw) == (
-        "rejected",
-        "secret_invalid",
-    )
-    assert handle_inbound(payload={"type": "message_new", "group_id": 1}, **kw)[1] == "group_mismatch"
+    assert url == f"{BASE}/providers/webhook/t/b/vk_messaging"
+    vault, rt, vk = InMemorySecretVault(), None, provider_map()["vk_messaging"]
     secret = nc.webhook_secret(KEY, rid)
-    ok = {"type": "message_new", "group_id": 42, "secret": secret, "object": {"message": {"from_id": 5, "text": "hi"}}}
-    kind, ev = handle_inbound(payload=ok, **kw)
-    assert kind == "event" and ev.channel == "vk"
-    routes2 = nc.replay([*facts, nc.disable(routes, rid)])
-    assert handle_inbound(payload=ok, **{**kw, "routes": routes2})[1] == "route_inactive"
+    names = persist_route_secrets(vault, platform="vk", **SC, webhook_secret=secret, confirmation_code=r.confirmation_code, group_id="42")
+    assert secret not in json.dumps(names)
+    rt = ProviderWebhookRuntime(secret_vault=vault)
+    conf = json.dumps({"type": "confirmation", "group_id": 42}).encode()
+    assert rt.response_body(provider=vk, **SC, body=conf) == "abc123"
+    bad = json.dumps({"type": "message_new", "secret": "x"}).encode()
+    good = json.dumps({"type": "message_new", "secret": secret}).encode()
+    assert not rt.verify(provider=vk, **SC, headers={}, body=bad)
+    assert rt.verify(provider=vk, **SC, headers={}, body=good)
 
 
 def test_max_provision_and_secret_header() -> None:
     facts, _ = nc.provision_max(
-        token_ref="vault:MAX", provider=Fake(), base_url=BASE, server_key=KEY, routes={}, owner="o", now_ms=0
+        token_ref="vault:MAX", provider=Fake(), base_url=BASE, server_key=KEY, routes={}, owner="o", now_ms=0, **SC
     )
     routes = nc.replay(facts)
     ((rid, r),) = routes.items()
     assert r.username == "studio_bot" and r.external_id == "77"
-    kw = {
-        "routes": routes,
-        "platform": "max",
-        "rid": rid,
-        "server_key": KEY,
-        "tenant_id": "t",
-        "payload": {"message": {"text": "x"}},
-    }
-    assert handle_inbound(secret_header="no", **kw)[0] == "rejected"
-    assert handle_inbound(secret_header=nc.webhook_secret(KEY, rid), **kw)[0] == "event"
+    vault, mx = InMemorySecretVault(), provider_map()["max_messaging"]
+    persist_route_secrets(vault, platform="max", **SC, webhook_secret=nc.webhook_secret(KEY, rid))
+    rt = ProviderWebhookRuntime(secret_vault=vault)
+    assert not rt.verify(provider=mx, **SC, headers={"X-Max-Bot-Api-Secret": "no"}, body=b"{}")
+    assert rt.verify(provider=mx, **SC, headers={"X-Max-Bot-Api-Secret": nc.webhook_secret(KEY, rid)}, body=b"{}")
 
 
 def test_open_channel_promotion() -> None:

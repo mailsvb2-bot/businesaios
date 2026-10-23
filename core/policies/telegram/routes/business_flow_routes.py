@@ -134,6 +134,12 @@ BUSINESS_FLOW_COMMANDS: dict[str, tuple[str, str, bool]] = {
 
 
 def handle_business_flow_routes(ctx: TelegramCtx, *, user_id: str) -> ProposedAction | None:
+    session = getattr(getattr(ctx, "state", None), "session", None) or {}
+    if session.get("source") == "external_product_webhook":  # pre-authenticated HTTP ingress
+        return propose("business_admin@v1", {"user_id": user_id, "op": "xp_ingest", "arg": "",
+                                             "connector_id": str(session.get("connector_id") or "")[:64],
+                                             "raw_body": str(session.get("raw_body") or "")[:65536],
+                                             "headers": dict(session.get("headers") or {})})  # fmt: skip
     data = str(getattr(ctx, "callback_data", "") or "")
     cbq = str(getattr(ctx, "callback_query_id", "") or "").strip()
     ack = {"callback_query_id": cbq} if cbq else {}  # stop the Telegram button spinner

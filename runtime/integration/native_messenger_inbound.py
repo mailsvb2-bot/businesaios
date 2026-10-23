@@ -1,36 +1,30 @@
-"""VK Callback API / MAX webhook ingress for native routes, mapped through the existing
-``runtime.messaging_ingress`` adapters. Verification only; decisions stay with DecisionCore."""
+"""VK/MAX inbound helpers. Transport verification lives in the existing generic ingress
+(``/providers/webhook/...`` -> ProviderWebhookRuntime: VK secret/confirmation, MAX header secret);
+this module only persists the route secrets there and maps promotion start payloads."""
 
 from __future__ import annotations
 
-import hmac
 from typing import Any
 
+from application.business_autonomy.provider_catalog import provider_map
 from application.business_flows import native_channels as nc
 from application.business_flows import promotions as pm
-from runtime.messaging_ingress import max_payload_to_messaging_event, vk_payload_to_messaging_event
+from security.secret_contract import SecretRecord, SecretRef, SecretSource
 
 
-def handle_inbound(*, routes: dict[str, nc.Route], platform: str, rid: str, payload: dict[str, Any],
-                   secret_header: str = "", server_key: str, tenant_id: str) -> tuple[str, Any]:  # fmt: skip
-    """Returns ``("confirm", code)`` | ``("event", MessagingIngressEvent)`` | ``("ignored", reason)`` | ``("rejected", reason)``."""
-    r = routes.get(rid)
-    if r is None or r.platform != platform or r.status != "active":
-        return "rejected", "route_inactive"
-    expected = nc.webhook_secret(server_key, rid)
-    if platform == "vk":
-        if str(payload.get("group_id") or "") != r.external_id:
-            return "rejected", "group_mismatch"
-        if payload.get("type") == "confirmation":
-            return ("confirm", r.confirmation_code) if r.confirmation_code else ("rejected", "no_confirmation_code")
-        if not hmac.compare_digest(str(payload.get("secret") or ""), expected):
-            return "rejected", "secret_invalid"
-        if payload.get("type") != "message_new":
-            return "ignored", str(payload.get("type") or "")
-        return "event", vk_payload_to_messaging_event(payload, tenant_id=tenant_id)
-    if not hmac.compare_digest(str(secret_header or ""), expected):
-        return "rejected", "secret_invalid"
-    return "event", max_payload_to_messaging_event(payload, tenant_id=tenant_id)
+def persist_route_secrets(vault, *, platform: str, tenant_id: str, business_id: str, webhook_secret: str,
+                          confirmation_code: str | None = None, group_id: str | None = None) -> list[str]:  # fmt: skip
+    """Write the secrets the existing ProviderWebhookRuntime reads; returns secret names (never values)."""
+    provider = provider_map()[nc.PROVIDER_KEYS[platform]]
+    cid = provider.connector_id
+    values = {"webhook_secret": webhook_secret, "confirmation_code": confirmation_code, "group_id": group_id}
+    names = []
+    for name, value in values.items():
+        if value:
+            ref = SecretRef(tenant_id=tenant_id, connector_id=cid, scope=business_id, secret_name=f"{cid}.{name}")
+            vault.put(SecretRecord(ref=ref, ciphertext=b"pending", source=SecretSource.CONNECTOR), plaintext=str(value).encode())
+            names.append(f"{cid}.{name}")
+    return names
 
 
 def promotion_touch(*, camps: dict[str, pm.Campaign], text: str, platform: str, subject: str,
