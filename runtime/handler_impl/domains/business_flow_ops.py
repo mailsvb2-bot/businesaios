@@ -296,7 +296,9 @@ def _cockpit(body, effects, env, future, steps, facts):
         fmt_slot=bk.fmt,
     )
     text, rows = cp.render(cp.parse(str(body.get("arg") or "cpm:menu")), snap, is_owner=True)
-    return send_tracked(body, effects, env, text=text, event_type=None, event_payload=None, reply_markup=cp.markup(rows))
+    return send_tracked(
+        body, effects, env, text=text, event_type=None, event_payload=None, reply_markup=cp.markup(rows)
+    )
 
 
 def handle_business_ops_summary(payload, effects, env, *, event_store, now_ms: int | None = None):
@@ -331,8 +333,64 @@ def handle_business_ops_summary(payload, effects, env, *, event_store, now_ms: i
     return send_tracked(body, effects, env, text=text, event_type=None, event_payload=None)
 
 
+def handle_business_admin(payload, effects, env, *, event_store):
+    """Owner admin ops (settings, autopilot, prices, recorded payments/refunds, approvals)."""
+    from application.business_flows import admin as ad
+
+    body = require_mapping(payload or {})
+    tenant_id = required_str(body, "tenant_id")
+    op, arg = str(body.get("op") or "summary"), str(body.get("arg") or "").strip()
+    st = ad.replay(flow_payloads(event_store, tenant_id=tenant_id, event_type="business_admin@v1"))
+
+    def done(text, change=None):
+        return send_tracked(
+            body, effects, env, text=text, event_type="business_admin@v1" if change else None, event_payload=change
+        )
+
+    try:
+        if op == "setting":
+            if "=" not in arg:
+                return done("\n".join(f"{k} = {v}" for k, v in sorted(st.settings.items())) or "⚙️ Настроек пока нет.")
+            ch = ad.set_setting(st, arg)
+            return done(f"⚙️ {ch['key']} = {ch['value']}", ch)
+        if op == "autopilot":
+            ch = ad.set_autopilot(st, arg)
+            on = ch["value"] == "1" if ch else st.autopilot
+            return done(f"🤖 Автопилот {'включён' if on else 'выключен'}" + ("" if ch else " (без изменений)"), ch)
+        if op == "price":
+            if not arg:
+                rows = [f"• {o} — {ad.money(a, c)}" for o, (a, c) in sorted(st.prices.items())]
+                return done("🏷 Цены\n" + ("\n".join(rows) or "Цен пока нет."))
+            ch = ad.set_price(st, arg)
+            return done(f"🏷 {ch['offering']}: {ad.money(ch['amount_minor'], ch['currency'])}", ch)
+        if op == "pay":
+            ch, prior = ad.record_payment(st, arg)
+            if ch is None:
+                return done(f"💳 Платёж {prior.reference} уже записан ({ad.money(prior.amount_minor, prior.currency)})")
+            text = f"💳 Платёж {ch['reference']}: {ad.money(ch['amount_minor'], ch['currency'])} — {ch['offering']}"
+            return done(text, ch)
+        if op == "refund":
+            ch = ad.refund_payment(st, arg)
+            return done(
+                f"↩️ Возврат {ad.money(ch['amount_minor'], st.payments[ch['payment_id']].currency)} записан"
+                if ch
+                else "↩️ Этот возврат уже записан",
+                ch,
+            )
+        if op in ad.APPROVAL_NEXT:
+            ch = ad.decide_approval(st, op, arg)
+            return done(f"✅ Решение записано: {ch['status']}", ch)
+        if op == "approvals":
+            rows = [ad.format_approval(i, a) for i, a in enumerate(st.approvals.values(), 1)]
+            return done("🧾 Действия автоматизации на подтверждение\n" + ("\n".join(rows) or "Нет запросов."))
+    except ValueError as exc:
+        return done(f"⚠️ Не получилось: {exc}")
+    return done(ad.render_summary(st))
+
+
 __all__ = [
     "handle_bookings",
+    "handle_business_admin",
     "handle_business_ops_summary",
     "handle_bot_provisioning",
     "handle_offer_ladder",

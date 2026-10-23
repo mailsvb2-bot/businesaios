@@ -845,6 +845,24 @@
         "revenue/orders section",
         "per-period trends"
       ]
+    },
+    {
+      "id": "admin.business_admin",
+      "status": "implemented",
+      "canonical_owner": "runtime.handler_impl.domains.business_flow_ops",
+      "source_of_truth": "event_store:business_admin@v1",
+      "evidence": [
+        "business_admin@v1"
+      ],
+      "runtime_dependency_removed": false,
+      "pr472_claimed_status": null,
+      "pr472_claimed_runtime_dependency_removed": null,
+      "integration_missing_evidence": [
+        "approval producers (automation engine) not wired",
+        "subscription state",
+        "publication calendar",
+        "interaction metrics/alerts"
+      ]
     }
   ],
   "integration_provenance": {

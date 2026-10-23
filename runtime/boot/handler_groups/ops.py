@@ -14,6 +14,7 @@ from runtime.handlers_ops import (
     handle_apply_pricing_change,
     handle_bookings,
     handle_bot_provisioning,
+    handle_business_admin,
     handle_business_ops_summary,
     handle_capture_payment,
     handle_create_payment_and_send_link,
@@ -58,8 +59,13 @@ def register_ops_handlers(*, handlers: ActionHandlerRegistry, event_store) -> No
         ),
     )
     handlers.register(
+        "business_admin@v1",
         "bot_provisioning@v1",
         lambda payload, effects, env: handle_bot_provisioning(payload, effects, env, event_store=event_store),
+    )
+    handlers.register(
+        "business_admin@v1",
+        lambda payload, effects, env: handle_business_admin(payload, effects, env, event_store=event_store),
     )
     handlers.register(
         "bookings@v1",
