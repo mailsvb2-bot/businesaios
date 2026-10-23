@@ -40,6 +40,8 @@ class Offering:
     description: str
     direction_id: str | None
     archived: bool = False
+    archived_at_ms: int | None = None
+    process_purged: bool = False
 
 
 @dataclass
@@ -71,9 +73,13 @@ def replay(payloads: list[dict[str, Any]]) -> Catalog:
                 p["offering_id"], p["format"], p["title"], p["description"], p.get("direction_id")
             )
         elif s == "offering_archived" and p["offering_id"] in c.offerings:
-            c.offerings[p["offering_id"]].archived = True
+            o = c.offerings[p["offering_id"]]
+            o.archived, o.archived_at_ms = True, (int(p["at_ms"]) if p.get("at_ms") is not None else None)
         elif s == "offering_restored" and p["offering_id"] in c.offerings:
-            c.offerings[p["offering_id"]].archived = False
+            o = c.offerings[p["offering_id"]]
+            o.archived, o.archived_at_ms, o.process_purged = False, None, False  # purged process is rebuilt
+        elif s == "offering_process_purged" and p["offering_id"] in c.offerings:
+            c.offerings[p["offering_id"]].process_purged = True
         elif s == "offering_direction_set" and p["offering_id"] in c.offerings:
             c.offerings[p["offering_id"]].direction_id = p.get("direction_id")
         elif s == "offering_renamed" and p["offering_id"] in c.offerings:
@@ -187,11 +193,14 @@ def active_offerings(c: Catalog) -> list[Offering]:
     return [o for o in c.offerings.values() if not o.archived]
 
 
-def retire_offering(c: Catalog, ref: str) -> dict[str, Any]:
+def retire_offering(c: Catalog, ref: str, *, now_ms: int | None = None) -> dict[str, Any]:
     items = active_offerings(c)
     if not (str(ref).strip().isdigit() and 0 < int(ref) <= len(items)):
         raise ValueError("предложение не найдено, см. /offerings")
-    return {"step": "offering_archived", "offering_id": items[int(ref) - 1].offering_id}
+    fact: dict[str, Any] = {"step": "offering_archived", "offering_id": items[int(ref) - 1].offering_id}
+    if now_ms is not None:
+        fact["at_ms"] = int(now_ms)  # starts the offering-process retention window
+    return fact
 
 
 def archived_offerings(c: Catalog) -> list[Offering]:
@@ -395,3 +404,58 @@ def resolve_slot_title(c: Catalog, title: str) -> tuple[str, str | None]:
         raise ValueError("предложение для записи не найдено, см. /offerings")
     o = items[int(ref) - 1]
     return o.title, o.offering_id
+
+
+# --- Offering process (port of donor BusinessOfferingProcess / OfferingProcessRepository) -------------
+# The process is derived from offering facts (no duplicate title/customer/payment data): active while the
+# offering is active, frozen when archived, purged by the retention batch after PROCESS_RETENTION_DAYS,
+# rebuilt with defaults on restore.
+PROCESS_RETENTION_DAYS = 7
+_DAY_MS = 86_400_000
+DEFAULT_MECHANICS = {"customer_intake": True, "delivery_or_booking": True, "promotion": True, "sales_followup": True}
+DEFAULT_AI_PROFILE = {"ad_copy": True, "followup_copy": True, "image_generation": True}
+
+
+def offering_process(c: Catalog, ref: str) -> dict[str, Any]:
+    """Donor get_business_offering_process: ``N`` = active offering N, ``a N`` = archived offering N."""
+    word, _, num = str(ref or "").strip().partition(" ")
+    archived = word.casefold() == "a"
+    num = num.strip() if archived else word
+    items = archived_offerings(c) if archived else active_offerings(c)
+    if not (num.isdigit() and 0 < int(num) <= len(items)):
+        raise ValueError("формат: /offering_process N или /offering_process a N (архив)")
+    o = items[int(num) - 1]
+    state = "purged" if o.process_purged else ("frozen" if o.archived else "active")
+    purge_after = o.archived_at_ms + PROCESS_RETENTION_DAYS * _DAY_MS if o.archived and o.archived_at_ms else None
+    live = state != "purged"
+    return {
+        "offering_id": o.offering_id,
+        "title": o.title,
+        "state": state,
+        "mechanics": dict(DEFAULT_MECHANICS) if live else {},
+        "ai_profile": dict(DEFAULT_AI_PROFILE) if live else {},
+        "purge_after_ms": purge_after if state == "frozen" else None,
+    }
+
+
+def process_purge_due(c: Catalog, *, now_ms: int, limit: int = 100) -> list[dict[str, Any]]:
+    """Donor run_offering_process_retention_batch/purge_due: frozen + still archived + deadline passed."""
+    if not 1 <= int(limit) <= 1000:
+        raise ValueError("offering process purge limit must be between 1 and 1000")
+    due = sorted(
+        (o for o in archived_offerings(c) if not o.process_purged and o.archived_at_ms is not None),
+        key=lambda o: (o.archived_at_ms, o.offering_id),
+    )
+    cut = int(now_ms) - PROCESS_RETENTION_DAYS * _DAY_MS
+    return [
+        {"step": "offering_process_purged", "offering_id": o.offering_id, "at_ms": int(now_ms)}
+        for o in due
+        if o.archived_at_ms <= cut
+    ][: int(limit)]
+
+
+def process_text(view: dict[str, Any]) -> str:
+    label = {"active": "активен", "frozen": "заморожен", "purged": "очищен (восстановление пересоберёт)"}
+    on = ", ".join(k for k, v in {**view["mechanics"], **view["ai_profile"]}.items() if v) or "—"
+    tail = f"\nОчистка после: {view['purge_after_ms']} ms" if view["purge_after_ms"] else ""
+    return f"⚙️ Процесс «{view['title']}»: {label[view['state']]}\nМеханики: {on}{tail}"

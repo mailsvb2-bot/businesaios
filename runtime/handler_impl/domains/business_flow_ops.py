@@ -18,6 +18,7 @@ from runtime.handler_impl.domains.admin_ops import _card_outcome
 from runtime.handler_impl.domains.business_catalog_ops import (
     CATALOG_OPS,
     CHANNEL_OPS,
+    COMMERCE_OPS,
     EVENT_OPS,
     FOLLOWUP_OPS,
     PANEL_OPS,
@@ -25,6 +26,7 @@ from runtime.handler_impl.domains.business_catalog_ops import (
     XP_OPS,
     _ads,
     _catalog,
+    _commerce,
     _event_channels,
     _events,
     _external_products,
@@ -629,9 +631,10 @@ def handle_business_admin(payload, effects, env, *, event_store, now_ms: int | N
                 return done(f"{label}: " + "; ".join(why) + ("\n/approvals" if verdict == "needs_approval" else ""), ch)
             return done(apol.render(pols, now_ms=now))
         if op in CATALOG_OPS:
-            return _catalog(
-                done, op, arg, flow_payloads(event_store, tenant_id=tenant_id, event_type="business_admin@v1")
-            )
+            facts_ = flow_payloads(event_store, tenant_id=tenant_id, event_type="business_admin@v1")
+            return _catalog(done, op, arg, facts_, now_ms or _now_ms())
+        if op in COMMERCE_OPS:
+            return _commerce(done, body, st, op, arg, tenant_id=tenant_id, event_store=event_store)
         if op.startswith("ad_"):
             from application.business_flows import sales as sl
 

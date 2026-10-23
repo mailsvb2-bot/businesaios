@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from application.business_flows.projection import flow_payloads
+from application.business_flows.projection import flow_payloads, flow_rows
 
 CATALOG_OPS = frozenset(
     {
@@ -16,6 +16,7 @@ CATALOG_OPS = frozenset(
         "offerings",
         "offering_add",
         "offering_retire",
+        "offering_restore",
         "offering_direction",
         "formats",
         "format_on",
@@ -24,15 +25,28 @@ CATALOG_OPS = frozenset(
         "profile_set",
         "profile_details",
         "profile_confirm",
+        "offering_process",
+        "offering_process_purge",
     }
 )
+COMMERCE_OPS = frozenset({"commerce", "commerce_check", "commerce_expand"})
 
 
-def _catalog(done, op, arg, facts_):
+def _catalog(done, op, arg, facts_, now=None):
     """Directions / offerings / formats; archive keeps history (catalog.py)."""
     from application.business_flows import catalog as cg
 
     c = cg.replay(facts_)
+    if op == "offering_process":
+        return done(cg.process_text(cg.offering_process(c, arg)))
+    if op == "offering_process_purge":  # retention batch: one tracked fact per purged process, owner-triggered
+        due = cg.process_purge_due(c, now_ms=int(now), limit=int(arg) if arg.isdigit() else 100)
+        for fact in due[:-1]:
+            done(f"🧹 Процесс очищен: {c.offerings[fact['offering_id']].title}", fact)
+        if not due:
+            return done("🧹 Нечего очищать: нет замороженных процессов старше срока хранения.")
+        last = due[-1]
+        return done(f"🧹 Процесс очищен: {c.offerings[last['offering_id']].title}. Всего: {len(due)}", last)
     if op == "directions":
         return done(cg.directions_text(c, archived=arg.strip().casefold() == "archived"))
     if op == "direction":
@@ -55,7 +69,12 @@ def _catalog(done, op, arg, facts_):
         ch = cg.create_offering(c, arg)
         return done("✅ Предложение добавлено. /offerings" if ch else "Такое предложение уже есть.", ch)
     if op == "offering_retire":
-        return done("🗄 Убрано из активных; история сохранена.", cg.retire_offering(c, arg))
+        return done("🗄 Убрано из активных; история сохранена.", cg.retire_offering(c, arg, now_ms=now))
+    if op == "offering_restore":
+        if not arg:
+            rows = [f"{i}. {o.title}" for i, o in enumerate(cg.archived_offerings(c), 1)]
+            return done("🗄 Архив предложений\n" + ("\n".join(rows) or "Пусто.") + "\nВернуть: /offering_restore N")
+        return done("♻️ Предложение снова активно. /offerings", cg.restore_offering(c, arg))
     if op in {"format_on", "format_off"}:
         ch = cg.toggle_format(c, arg, enabled=op == "format_on")
         return done(("✅ Формат обновлён." if ch else "Уже так.") + "\n" + cg.formats_text(c), ch)
@@ -595,7 +614,6 @@ def _trials(op, arg, facts):
 def _revenue_text(op, arg, now, event_store, tenant_id):
     """Owner read-only attribution/outcome screens (promotions attribution spine; no spend input)."""
     from application.business_flows import promotions as pm
-    from application.business_flows.projection import flow_rows
 
     adm = flow_rows(event_store, tenant_id=tenant_id, event_type="business_admin@v1")
     bkg = flow_rows(event_store, tenant_id=tenant_id, event_type="bookings@v1")
@@ -701,3 +719,29 @@ def _sales_ai(send, body, effects, st, arg, *, decision, tenant_id, event_store)
     )
     text = f"🤖 {lead.name}: черновик ответа (не отправлен клиенту)\n\n{analysis['reply']}{flag}"
     return send(text, note, cp.markup(rows))
+
+
+def _commerce(done, body, st, op, arg, *, tenant_id, event_store):
+    """Tariff usage/limits (ai_commerce port): usage from team roles + bookings customers; no private ledger."""
+    from application.business_flows import admin as ad
+
+    usage = ad.commerce_usage(event_store, tenant_id, str(body.get("user_id") or ""), st.archived_customers)
+    if op == "commerce_check":
+        sku, _, units = arg.partition(" ")
+        if not units.strip().isdigit():
+            raise ValueError("формат: /commerce_check staff_seat|active_customer N")
+        lim = ad.allowances(st)
+        p = ad.commerce_proposal(
+            operation_id=f"owner-check:{sku}:{units.strip()}", tenant_id=tenant_id, sku=sku.strip(),
+            requested_units=int(units), used=usage.get(sku.strip(), 0), allowance=lim.get(sku.strip(), 0),
+        )
+        verdict = "нужен больший тариф" if p["kind"] == "upgrade" else "входит в тариф"
+        return done(f"🧮 {ad.SKU_LABELS[p['sku']]} +{p['requested_units']}: {p['projected_total']}/{p['allowance']} — {verdict}")
+    overview = ad.commerce_overview(st, tenant_id=tenant_id, usage=usage)
+    if op == "commerce_expand":
+        facts_ = flow_payloads(event_store, tenant_id=tenant_id, event_type="business_admin@v1")
+        ch = ad.expansion_request(overview, tenant_id=tenant_id, known=ad.requested_cases(facts_))
+        if ch is None:
+            return done("📨 Запрос на расширение уже зарегистрирован; оператор свяжется в боте.")
+        return done("📨 Запрос на расширение тарифа зарегистрирован (обращение billing).\n" + ch["title"], ch)
+    return done(ad.commerce_text(overview))

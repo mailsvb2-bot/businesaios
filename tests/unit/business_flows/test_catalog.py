@@ -123,3 +123,35 @@ def test_profile_details_extract_review_confirm(flow) -> None:
     assert "✅ Детали подтверждены" in run(op="profile")[1]
     run(op="profile_details", arg="Услуги: хатха, пилатес")  # new details reset confirmation
     assert "не подтверждены" in run(op="profile")[1]
+
+
+DAY = 86_400_000
+T0 = 1_780_000_000_000
+
+
+def test_offering_process_freeze_retention_purge_and_rebuild(flow) -> None:
+    at = lambda t: partial(flow.run, partial(H, now_ms=t))  # noqa: E731
+    at(T0)(op="offering_add", arg="group | Утро | 7:00")
+    assert "активен" in at(T0)(op="offering_process", arg="1")[1]
+    at(T0)(op="offering_retire", arg="1")
+    assert "заморожен" in at(T0)(op="offering_process", arg="a 1")[1]
+    assert "Нечего очищать" in at(T0 + 6 * DAY)(op="offering_process_purge")[1]
+    assert "Всего: 1" in at(T0 + 7 * DAY)(op="offering_process_purge")[1]
+    assert "Нечего очищать" in at(T0 + 8 * DAY)(op="offering_process_purge")[1]  # idempotent
+    assert "Утро" in flow.run(H, op="offering_restore")[1]
+    assert "очищен" in at(T0 + 8 * DAY)(op="offering_process", arg="a 1")[1]
+    flow.run(H, op="offering_restore", arg="1")
+    text = at(T0 + 9 * DAY)(op="offering_process", arg="1")[1]
+    assert "активен" in text and "customer_intake" in text  # rebuilt with default mechanics
+
+
+def test_commerce_limits_check_and_idempotent_expansion(flow) -> None:
+    run = partial(flow.run, H)
+    assert "сотрудники: 1/5" in run(op="commerce")[1] and "/commerce_expand" not in run(op="commerce")[1]
+    assert "входит в тариф" in run(op="commerce_check", arg="staff_seat 4")[1]
+    assert "нужен больший тариф" in run(op="commerce_check", arg="staff_seat 5")[1]
+    assert "sku:" in run(op="commerce_check", arg="gpu 1")[1]
+    run(op="setting", arg="plan.staff_seat = 1")
+    assert "/commerce_expand" in run(op="commerce")[1]
+    assert "зарегистрирован (обращение billing)" in run(op="commerce_expand")[1]
+    assert "уже зарегистрирован" in run(op="commerce_expand")[1]

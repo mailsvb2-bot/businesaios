@@ -278,7 +278,115 @@ def audit_lines(payloads: list[dict[str, Any]], *, limit: int = 20) -> list[str]
     return rows or ["• Записей пока нет."]
 
 
+# --- AI-commerce usage/limits (port of clientplatform.application.ai_commerce) ---------------------------
+# Usage is read from canonical projections (team roles, bookings customers); no private commerce ledger.
+STAFF_SEAT_SKU, ACTIVE_CUSTOMER_SKU = "staff_seat", "active_customer"
+DEFAULT_ALLOWANCES = {STAFF_SEAT_SKU: 5, ACTIVE_CUSTOMER_SKU: 500}  # donor 'base' plan
+SKU_LABELS = {STAFF_SEAT_SKU: "сотрудники", ACTIVE_CUSTOMER_SKU: "клиенты"}
+
+
+def allowances(st: State) -> dict[str, int]:
+    """Plan allowances: owner/operator settings ``plan.staff_seat`` / ``plan.active_customer`` or donor base."""
+    out = {}
+    for sku, default in DEFAULT_ALLOWANCES.items():
+        raw = st.settings.get(f"plan.{sku}", "")
+        out[sku] = int(raw) if raw.isdigit() else default
+    return out
+
+
+def commerce_proposal(
+    *, operation_id: str, tenant_id: str, sku: str, requested_units: int, used: int, allowance: int
+) -> dict[str, Any]:
+    """Donor prepare_ai_commerce_proposal/build_proposal: included vs upgrade, deterministic proposal id."""
+    if sku not in DEFAULT_ALLOWANCES:
+        raise ValueError("sku: " + ", ".join(DEFAULT_ALLOWANCES))
+    if not 1 <= int(requested_units) <= 100_000 or used < 0 or allowance < 0:
+        raise ValueError("количество: целое от 1")
+    projected = used + int(requested_units)
+    upgrade = projected > allowance
+    return {
+        "proposal_id": stable_id("aic", operation_id, tenant_id, sku, requested_units),
+        "operation_id": operation_id,
+        "sku": sku,
+        "kind": "upgrade" if upgrade else "included",
+        "reason": "canonical allowance exceeded" if upgrade else "covered by canonical allowance",
+        "used": used,
+        "allowance": allowance,
+        "requested_units": int(requested_units),
+        "projected_total": projected,
+    }
+
+
+def commerce_usage(event_store, tenant_id: str, user_id: str, archived: set[str]) -> dict[str, int]:
+    """Live usage from canonical projections: team roles (+ current owner) and distinct booking customers."""
+    from application.business_flows.projection import flow_payloads
+    from core.admin.roles_read_model import team_roles_snapshot
+
+    staff = set(team_roles_snapshot(event_store, tenant_id=tenant_id)) | {user_id}
+    seen = {
+        str(p.get("customer_id") or "")
+        for p in flow_payloads(event_store, tenant_id=tenant_id, event_type="bookings@v1")
+    }
+    return {STAFF_SEAT_SKU: len(staff - {""}), ACTIVE_CUSTOMER_SKU: len(seen - {""} - set(archived))}
+
+
+def commerce_overview(st: State, *, tenant_id: str, usage: dict[str, int]) -> dict[str, dict[str, Any]]:
+    """Donor get_commerce_overview: one-unit preview per SKU against the plan allowance."""
+    lim = allowances(st)
+    return {
+        sku: commerce_proposal(
+            operation_id=f"tariff-preview:{sku}:{usage.get(sku, 0)}:{lim[sku]}",
+            tenant_id=tenant_id,
+            sku=sku,
+            requested_units=1,
+            used=int(usage.get(sku, 0)),
+            allowance=lim[sku],
+        )
+        for sku in DEFAULT_ALLOWANCES
+    }
+
+
+def expansion_recommended(overview: dict[str, dict[str, Any]]) -> bool:
+    return any(p["kind"] == "upgrade" for p in overview.values())
+
+
+def commerce_text(overview: dict[str, dict[str, Any]]) -> str:
+    rows = [
+        f"• {SKU_LABELS[sku]}: {p['used']}/{p['allowance']}"
+        + (" — нужен больший тариф" if p["kind"] == "upgrade" else "")
+        for sku, p in overview.items()
+    ]
+    tail = "\nРекомендуем расширение: /commerce_expand" if expansion_recommended(overview) else ""
+    return "📊 Тариф и лимиты\n" + "\n".join(rows) + tail
+
+
+def expansion_request(overview: dict[str, dict[str, Any]], *, tenant_id: str, known: set[str]) -> dict[str, Any] | None:
+    """Donor request_subscription_expansion: idempotent billing support-case fact (operator handles it)."""
+    reasons = [f"{SKU_LABELS[s]} {p['used']}/{p['allowance']}" for s, p in overview.items() if p["kind"] == "upgrade"]
+    reasons = reasons or ["владелец запросил информацию о расширении до исчерпания текущих лимитов"]
+    fp = ":".join(f"{p['used']}:{p['allowance']}" for p in overview.values())
+    key = f"ai-commerce-expansion:{tenant_id}:{fp}"
+    if key in known:
+        return None
+    summary = "Запрос владельца на расширение тарифа: " + "; ".join(reasons)
+    return {"step": "support_case_requested", "category": "billing", "idempotency_key": key, "title": summary}
+
+
+def requested_cases(payloads: list[dict[str, Any]]) -> set[str]:
+    return {str(p["idempotency_key"]) for p in payloads if p.get("step") == "support_case_requested"}
+
+
 __all__ = [
+    "commerce_usage",
+    "ACTIVE_CUSTOMER_SKU",
+    "STAFF_SEAT_SKU",
+    "allowances",
+    "commerce_overview",
+    "commerce_proposal",
+    "commerce_text",
+    "expansion_recommended",
+    "expansion_request",
+    "requested_cases",
     "CANON_BUSINESS_ADMIN_FLOW",
     "audit_lines",
     "State",
