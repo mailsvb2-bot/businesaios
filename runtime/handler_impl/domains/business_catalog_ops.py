@@ -102,6 +102,8 @@ def _ads(body, done, st, op, arg, facts_, sl_replay=None):
         return done(aa.report(drafts, aa.replay(facts_), leads))
     if op == "ad_creatives":  # advisory only: never changes provider budget/allocation
         return done(_creatives_text(arg))
+    if op.startswith("ad_trial"):
+        return done(*_trials(op, arg, facts_))
     if op == "ad_publish":
         truth = CONNECTORS["yandex_direct"]
         ready = bool(truth["production_ready"]) and bool(truth["requires_human_approval"])
@@ -558,3 +560,33 @@ def _partner_growth(pt, op, arg, tenant_id, known, facts):
         return ("✅ Результат партнёра учтён." if ch else "ℹ️ Этот результат уже учтён."), ch
     except (ValueError, LookupError) as exc:
         return f"🤝 Не получилось: {exc}", None
+
+
+def _trials(op, arg, facts):
+    """Creative A/B trials (donor /experiments): owner-entered metrics, CAS winner apply; never touches ads."""
+    import time
+
+    from application.business_flows import creative_trials as ct
+    from application.business_flows import creative_winner as cw
+
+    trials, now = ct.replay(facts), int(time.time() * 1000)
+    try:
+        if op == "ad_trial":
+            ch = ct.record(arg, now_ms=now)
+            return (f"🧪 Тест креативов {ch['trial_id'][:8]} сохранён. /ad_trial_view {ch['trial_id'][:8]}",
+                    None if ch["trial_id"] in trials else ch)
+        if op == "ad_trials":
+            rows, more = ct.list_page(trials, role="owner", offset=int(arg) if arg.isdigit() else 0)
+            lines = [f"• {t['trial_id'][:8]} {t['date_from']}…{t['date_to']} r{t['revision']}" for t in rows]
+            return "🧪 Тесты креативов\n" + ("\n".join(lines) or "Пока нет: /ad_trial") + ("\n…ещё" if more else ""), None
+        ref, _, fp = arg.partition(" ")
+        trial = trials[ct.resolve_reference(trials, role="owner", reference=ref)]
+        if op == "ad_trial_view":
+            pv = cw.preview(trial)
+            rec = pv["recommendation"]
+            tail = f"\nПрименить: /ad_trial_apply {ref} {pv['fingerprint']}" if rec["status"] == "ready" else ""
+            return f"🧪 {ref}: {rec['status']} {rec.get('winner_variant_id') or ''}".rstrip() + tail, None
+        plan = cw.apply(trial, expected_revision=int(trial["revision"]), expected_fingerprint=fp.strip(), confirmed=True)
+        return f"✅ Победитель {plan['winner_variant_id']} применён (ревизия {plan['revision']}).", ct.applied(plan, trial, now_ms=now)
+    except (ValueError, PermissionError, cw.CreativeWinnerApplyError) as exc:
+        return f"🧪 Не получилось: {exc}", None

@@ -60,4 +60,34 @@ def resolve_reference(trials: dict[str, dict[str, Any]], *, role: str, reference
     return hits[0]
 
 
-__all__ = ["EVENT_TYPE", "list_page", "list_trials", "replay", "resolve_reference"]
+def record(arg: str, *, now_ms: int) -> dict[str, Any]:
+    """Owner-entered trial (no provider metrics feed): ``с|по|вариант:job:bps:лиды:записи:продажи;...``."""
+    import hashlib
+
+    parts = [p.strip() for p in str(arg or "").split("|")]
+    if len(parts) != 3 or not all(parts):
+        raise ValueError("формат: ГГГГ-ММ-ДД|ГГГГ-ММ-ДД|вариант:job:bps:лиды:записи:продажи;...")
+    keys = ("variant_id", "publication_job_id", "allocation_bps", "leads", "bookings", "won")
+    arms = []
+    for a in (x.strip() for x in parts[2].split(";") if x.strip()):
+        v = [x.strip() for x in a.split(":")]
+        if len(v) != 6 or not all(x.isdigit() for x in v[2:]):
+            raise ValueError("формат варианта: вариант:job:bps:лиды:записи:продажи")
+        arms.append({k: (x if i < 2 else int(x)) for i, (k, x) in enumerate(zip(keys, v, strict=True))})
+    if not 2 <= len(arms) <= 10:
+        raise ValueError("нужно от 2 до 10 вариантов")
+    raw = "|".join(parts).encode()
+    tid = hashlib.sha256(raw).hexdigest()[:8] + "-" + hashlib.sha256(raw[::-1]).hexdigest()[:4]
+    trial = {"revision": 1, "running": True, "date_from": parts[0], "date_to": parts[1], "arms": arms}
+    return {"step": "trial_recorded", "trial_id": tid, "trial": trial, "at_ms": int(now_ms)}
+
+
+def applied(plan: dict[str, Any], trial: dict[str, Any], *, now_ms: int) -> dict[str, Any]:
+    """creative_winner.apply plan -> CAS ``trial_updated`` (new revision + allocations)."""
+    alloc = {str(j): int(b) for j, b in plan["allocations"]}
+    arms = [{**a, "allocation_bps": alloc.get(str(a["variant_id"]), a["allocation_bps"])} for a in trial["arms"]]
+    return {"step": "trial_updated", "trial_id": plan["trial_id"], "at_ms": int(now_ms),
+            "changes": {"revision": plan["revision"], "arms": arms, "winner_variant_id": plan["winner_variant_id"]}}
+
+
+__all__ = ["EVENT_TYPE", "applied", "list_page", "list_trials", "record", "replay", "resolve_reference"]

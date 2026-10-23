@@ -128,3 +128,25 @@ def test_partner_campaign_start_and_rerun_without_contact(flow) -> None:
         pt.run_campaign(facts, cid, None, **kw)
     with pytest.raises(ValueError, match="not_found"):
         pt.run_campaign(facts, "x", None, **kw)
+
+
+def test_creative_trials_record_list_view_apply_cas(flow) -> None:
+    arms = "A:j1:5000:200:80:10;B:j2:5000:200:20:2"
+    _, text = flow.run(ops.handle_business_admin, op="ad_trial", arg=f"2026-10-01|2026-10-14|{arms}")
+    ref = text.split("/ad_trial_view ")[1].strip()
+    _, again = flow.run(ops.handle_business_admin, op="ad_trial", arg=f"2026-10-01|2026-10-14|{arms}")
+    assert sum(1 for e in flow.store.events if e["payload"].get("step") == "trial_recorded") == 1
+    _, text = flow.run(ops.handle_business_admin, op="ad_trials", arg="")
+    assert ref in text
+    _, text = flow.run(ops.handle_business_admin, op="ad_trial_view", arg=ref)
+    assert "ready A" in text and "/ad_trial_apply" in text
+    fp = text.rsplit(" ", 1)[1]
+    _, text = flow.run(ops.handle_business_admin, op="ad_trial_apply", arg=f"{ref} deadbeef")
+    assert "evidence changed" in text
+    _, text = flow.run(ops.handle_business_admin, op="ad_trial_apply", arg=f"{ref} {fp}")
+    assert "Победитель A" in text and "ревизия 2" in text
+    _, text = flow.run(ops.handle_business_admin, op="ad_trial_apply", arg=f"{ref} {fp}")
+    assert "Не получилось" in text  # revision moved -> stale fingerprint
+    _, text = flow.run(ops.handle_business_admin, op="ad_trial", arg="bad")
+    assert "формат" in text
+    assert {"/ad_trial", "/ad_trials", "/ad_trial_view", "/ad_trial_apply"} <= set(BUSINESS_FLOW_COMMANDS)
