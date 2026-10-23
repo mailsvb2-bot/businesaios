@@ -388,6 +388,12 @@ def handle_business_admin(payload, effects, env, *, event_store):
     return done(ad.render_summary(st))
 
 
+def _markup(rows):
+    from application.business_flows import cockpit as cp
+
+    return cp.markup(rows)
+
+
 def handle_event_series(payload, effects, env, *, event_store, now_ms: int | None = None):
     """Warm-ups before booked events and opt-in sales follow-ups after them (event_series@v1)."""
     from application.business_flows import admin as ad
@@ -442,6 +448,57 @@ def handle_event_series(payload, effects, env, *, event_store, now_ms: int | Non
             n, _, status = arg.partition(" ")
             slot = past[int(n) - 1] if n.isdigit() and 0 < int(n) <= len(past) else None
             return done("🧾 Отмечено: " + status.strip(), es.mark_attendance(slot, status.strip(), now_ms=now))
+        if op == "wizard_start":
+            from application.business_flows import event_wizard as wz
+
+            ch = wz.draft(user_id, arg)
+            text, rows, _ = wz.step(ch["title"], "", now_ms=now)
+            return send_tracked(
+                body,
+                effects,
+                env,
+                text=text,
+                event_type="event_series@v1",
+                event_payload=ch,
+                reply_markup=_markup(rows),
+            )
+        if op == "wizard":
+            from application.business_flows import event_wizard as wz
+
+            title = wz.draft_title(facts("event_series@v1"), user_id)
+            text, rows, result = wz.step(title, arg, now_ms=now)
+            if result is None:
+                return send_tracked(
+                    body, effects, env, text=text, event_type=None, event_payload=None, reply_markup=_markup(rows)
+                )
+            slot = result["slot"]
+            if result["warmup"]:
+                send_tracked(
+                    body,
+                    effects,
+                    env,
+                    text="🔥 Прогрев: за " + ", ".join(map(str, result["warmup"]["days"])) + " дн.",
+                    event_type="event_series@v1",
+                    event_payload=result["warmup"],
+                )
+            send_tracked(
+                body,
+                effects,
+                env,
+                text="🧭 Мастер завершён",
+                event_type="event_series@v1",
+                event_payload={"step": "wizard_done", "user_id": user_id},
+            )
+            return send_tracked(
+                body,
+                effects,
+                env,
+                text="✅ Слот открыт: "
+                + bk.fmt(bk.Slot(slot["slot_id"], slot["title"], slot["starts_at_ms"], slot["duration_min"]))
+                + f", {slot['duration_min']} мин",
+                event_type="bookings@v1",
+                event_payload=slot,
+            )
         if op == "dispatch":
             offer = ad.replay(facts("business_admin@v1")).settings.get("offer_url", "")
             due = es.due_messages(st, slots, now_ms=now, offer_url=offer)

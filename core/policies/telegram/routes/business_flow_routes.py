@@ -51,6 +51,7 @@ BUSINESS_FLOW_COMMANDS: dict[str, tuple[str, str, bool]] = {
     "/send_series": ("event_series@v1", "dispatch", True),
     "/offers_on": ("event_series@v1", "offers_on", False),
     "/offers_off": ("event_series@v1", "offers_off", False),
+    "/new_event": ("event_series@v1", "wizard_start", True),
 }
 
 
@@ -58,6 +59,8 @@ def handle_business_flow_routes(ctx: TelegramCtx, *, user_id: str) -> ProposedAc
     data = str(getattr(ctx, "callback_data", "") or "")
     if data.startswith("cpm:") and ctx.is_admin:
         return propose("business_ops_summary@v1", {"user_id": user_id, "op": "cockpit", "arg": data[:120]})
+    if data.startswith("cpe:") and ctx.is_admin:
+        return propose("event_series@v1", {"user_id": user_id, "op": "wizard", "arg": data[:64]})
     route = BUSINESS_FLOW_COMMANDS.get(str(ctx.cmd or ""))
     if route is None:
         return None
