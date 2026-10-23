@@ -15,6 +15,7 @@ from runtime.handler_impl.domains.admin_ops import (
 from runtime.handler_impl.domains.business_flow_ops import (
     handle_bookings,
     handle_bot_provisioning,
+    handle_business_ops_summary,
     handle_offer_ladder,
     handle_partners,
 )
@@ -48,6 +49,7 @@ __all__ = [
     "handle_admin_set_role",
     "handle_admin_user_card",
     "handle_privacy_export",
+    "handle_business_ops_summary",
     "handle_privacy_delete",
     "handle_offer_ladder",
     "handle_partners",

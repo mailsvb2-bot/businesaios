@@ -44,6 +44,7 @@ ADMIN_NOTIFICATION_FAILED = "admin_notification_failed"
 ADMIN_USER_CARD = "admin_user_card@v1"
 ADMIN_USER_CARD_FAILED = "admin_user_card_failed@v1"
 PRIVACY_EXPORT = "privacy_export@v1"
+BUSINESS_OPS_SUMMARY = "business_ops_summary@v1"
 PRIVACY_DELETE = "privacy_delete@v1"
 OFFER_LADDER = "offer_ladder@v1"
 PARTNERS = "partners@v1"
@@ -222,6 +223,7 @@ KNOWN_EVENT_TYPES: set[str] = {
     ADMIN_USER_CARD,
     ADMIN_USER_CARD_FAILED,
     PRIVACY_EXPORT,
+    BUSINESS_OPS_SUMMARY,
     PRIVACY_DELETE,
     OFFER_LADDER,
     PARTNERS,

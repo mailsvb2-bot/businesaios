@@ -201,4 +201,41 @@ def handle_offer_ladder(payload, effects, env, *, event_store):
     return send_tracked(body, effects, env, text=text, event_type=None, event_payload=None)
 
 
-__all__ = ["handle_bookings", "handle_bot_provisioning", "handle_offer_ladder", "handle_partners", "send_tracked"]
+def handle_business_ops_summary(payload, effects, env, *, event_store, now_ms: int | None = None):
+    """Owner operations summary over the business-flow projections (read-only)."""
+    from application.business_flows import bookings as bk
+    from application.business_flows import ladder as ld
+    from application.business_flows import partners as pt
+
+    body = require_mapping(payload or {})
+    tenant_id, now = required_str(body, "tenant_id"), now_ms or _now_ms()
+
+    def facts(event_type: str) -> list[dict]:
+        return flow_payloads(event_store, tenant_id=tenant_id, event_type=event_type)
+
+    slots = bk.replay(facts("bookings@v1"))
+    future = bk.upcoming(slots, now_ms=now)
+    booked = [s for s in future if s.status == "booked"]
+    steps, _ = ld.replay(facts("offer_ladder@v1"))
+    deletions = len(facts("privacy_deleted@v1"))
+    bots = {p.get("username") for p in facts("bot_provisioning@v1") if p.get("username")}
+    text = (
+        "📊 Операционная сводка\n\n"
+        f"Слоты впереди: {len(future)} (занято {len(booked)}, свободно {len(future) - len(booked)})\n"
+        + (f"Ближайшая встреча: {bk.fmt(booked[0])}\n" if booked else "")
+        + f"Партнёров в базе: {len(pt.replay(facts('partners@v1')))}\n"
+        f"Ступеней лестницы предложений: {len(steps)}\n"
+        f"Подключаемых ботов: {len(bots)}\n"
+        f"Удалений ПДн по запросу: {deletions}"
+    )
+    return send_tracked(body, effects, env, text=text, event_type=None, event_payload=None)
+
+
+__all__ = [
+    "handle_bookings",
+    "handle_business_ops_summary",
+    "handle_bot_provisioning",
+    "handle_offer_ladder",
+    "handle_partners",
+    "send_tracked",
+]

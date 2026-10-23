@@ -100,7 +100,9 @@ def handle_privacy_export(payload, effects, env, *, event_store):
     tenant_id, user_id = required_str(body, "tenant_id"), required_str(body, "user_id")
     try:
         service = DataRightsService(sources={"events": EventStoreUserDataSource(event_store)})
-        items = service.export_user(DataExportRequest(tenant_id=tenant_id, user_id=user_id))["sources"]["events"]["items"]
+        items = service.export_user(DataExportRequest(tenant_id=tenant_id, user_id=user_id))["sources"]["events"][
+            "items"
+        ]
         types = Counter(str((i if isinstance(i, dict) else vars(i)).get("event_type") or "?") for i in items)
         lines = [f"• {name}: {count}" for name, count in types.most_common(15)]
         text = "🔐 Ваши данные\n\n" + f"Записей: {len(items)}\n" + ("\n".join(lines) or "Записей нет.")
@@ -109,8 +111,13 @@ def handle_privacy_export(payload, effects, env, *, event_store):
         text, track, ok = "🔐 Не удалось собрать выгрузку данных. Попробуйте позже.", "privacy_export_failed@v1", False
         types, items = {"error": exc.__class__.__name__}, []
     delivery = effects.send_message(
-        decision_id=env.decision.decision_id, correlation_id=env.decision.correlation_id,
-        tenant_id=tenant_id, user_id=user_id, text=text, reply_markup=None, track_event_type=track,
+        decision_id=env.decision.decision_id,
+        correlation_id=env.decision.correlation_id,
+        tenant_id=tenant_id,
+        user_id=user_id,
+        text=text,
+        reply_markup=None,
+        track_event_type=track,
         track_payload={"tenant_id": tenant_id, "user_id": user_id, "records": len(items), "types": dict(types)},
         **delivery_kwargs(body),
     )
@@ -140,8 +147,10 @@ def handle_privacy_delete(payload, effects, env, *, event_store):
     confirmed = str(body.get("arg") or "").strip().upper() == PRIVACY_DELETE_CONFIRMATION
     track, ok, receipt = None, True, {"tenant_id": tenant_id, "subject": stable_id("subject", tenant_id, user_id)}
     if not confirmed:
-        text = ("🗑 Удаление персональных данных\n\nБудут удалены все ваши записи: сообщения, настроения, записи на слоты.\n"
-                f"Действие необратимо. Для подтверждения отправьте:\n/delete_my_data {PRIVACY_DELETE_CONFIRMATION}")
+        text = (
+            "🗑 Удаление персональных данных\n\nБудут удалены все ваши записи: сообщения, настроения, записи на слоты.\n"
+            f"Действие необратимо. Для подтверждения отправьте:\n/delete_my_data {PRIVACY_DELETE_CONFIRMATION}"
+        )
     else:
         try:
             service = DataRightsService(sources={"events": EventStoreUserDataSource(event_store)})
@@ -153,8 +162,14 @@ def handle_privacy_delete(payload, effects, env, *, event_store):
             text, track, ok = "🗑 Не удалось удалить данные. Попробуйте позже.", "privacy_delete_failed@v1", False
             receipt["error"] = exc.__class__.__name__
     delivery = effects.send_message(
-        decision_id=env.decision.decision_id, correlation_id=env.decision.correlation_id,
-        tenant_id=tenant_id, user_id=user_id, text=text, reply_markup=None, track_event_type=track,
-        track_payload=receipt if track else None, **delivery_kwargs(body),
+        decision_id=env.decision.decision_id,
+        correlation_id=env.decision.correlation_id,
+        tenant_id=tenant_id,
+        user_id=user_id,
+        text=text,
+        reply_markup=None,
+        track_event_type=track,
+        track_payload=receipt if track else None,
+        **delivery_kwargs(body),
     )
     return _card_outcome(delivery=delivery, ok=ok, reason="" if ok else "delete_failed")

@@ -64,3 +64,15 @@ def test_participant_home_and_pd_deletion_reopens_slot(flow) -> None:
     receipt = flow.store.events[-1]
     assert receipt["event_type"] == "privacy_deleted@v1" and "u1" not in str(receipt["payload"])
     assert "1. " in run(op="list")[1]  # booking gone with the user's events -> slot open again
+
+
+def test_owner_ops_summary_counts_projections(flow) -> None:
+    from runtime.handler_impl.domains.business_flow_ops import handle_business_ops_summary
+
+    run = partial(flow.run, partial(handle_bookings, now_ms=NOW))
+    run(op="add_slot", arg="2027-01-20 15:00 Сессия")
+    run(op="add_slot", arg="2027-01-21 15:00 Сессия")
+    run(op="book", arg="1")
+    flow.run(handle_partners, op="add", arg="A | a | 10 | existing | @a")
+    out, text = flow.run(partial(handle_business_ops_summary, now_ms=NOW), op="show")
+    assert out["ok"] and "Слоты впереди: 2 (занято 1, свободно 1)" in text and "Партнёров в базе: 1" in text

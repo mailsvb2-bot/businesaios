@@ -829,6 +829,22 @@
         "evidence score from customer activity (owner-entered today)",
         "link steps to offerings/orders"
       ]
+    },
+    {
+      "id": "admin.business_ops_summary",
+      "status": "implemented",
+      "canonical_owner": "runtime.handler_impl.domains.business_flow_ops",
+      "source_of_truth": "event_store:bookings@v1,partners@v1,offer_ladder@v1",
+      "evidence": [
+        "business_ops_summary@v1"
+      ],
+      "runtime_dependency_removed": false,
+      "pr472_claimed_status": null,
+      "pr472_claimed_runtime_dependency_removed": null,
+      "integration_missing_evidence": [
+        "revenue/orders section",
+        "per-period trends"
+      ]
     }
   ],
   "integration_provenance": {
