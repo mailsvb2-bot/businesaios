@@ -72,3 +72,12 @@ def scene_from_text(text: str) -> dict[str, str]:
 
 def scene_key_elements(scene: dict[str, str]) -> list[str]:
     return [v for v in dict.fromkeys((scene.get("action") or scene.get("subject", ""), scene.get("after", ""))) if v]
+
+
+def render_pack_idempotency_key(base_key: str, composition: dict[str, object], formats: list[str] | tuple[str, ...]) -> str:
+    """Render idempotency bound to exact composition and formats (donor creative_studio.render_idempotency_key)."""
+    import hashlib
+
+    payload = json.dumps({"composition": dict(composition), "formats": list(formats)},
+                         ensure_ascii=False, sort_keys=True, separators=(",", ":"))
+    return f"{base_key}:render:{hashlib.sha256(payload.encode()).hexdigest()[:32]}"

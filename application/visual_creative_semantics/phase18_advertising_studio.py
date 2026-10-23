@@ -10,7 +10,7 @@ import json
 from collections.abc import Mapping
 from dataclasses import dataclass
 
-from core.growth.ads.creative.prompting import parse_scene_json, scene_from_text
+from core.growth.ads.creative.prompting import parse_scene_json, render_pack_idempotency_key, scene_from_text
 
 CANON_PHASE18_AD_STUDIO_ADVISORY_ONLY = True
 ANGLES = (
@@ -197,7 +197,5 @@ def overlay_for(brief: AdvertisingCreativeBrief) -> dict[str, object]:
 
 
 def render_idempotency_key(brief: AdvertisingCreativeBrief) -> str:
-    """Bind render idempotency to the exact formats and deterministic composition."""
-    payload = json.dumps({"composition": overlay_for(brief), "formats": list(brief.formats)},
-                         ensure_ascii=False, sort_keys=True, separators=(",", ":"))
-    return f"{brief.creative_id}:render:{hashlib.sha256(payload.encode()).hexdigest()[:32]}"
+    """Same key shape the executor uses for the render pack (shared core helper)."""
+    return render_pack_idempotency_key(brief.creative_id, overlay_for(brief), brief.formats)

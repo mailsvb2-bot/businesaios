@@ -291,7 +291,7 @@ def check_binding(bindings: dict[str, VariantBinding], job_id: str, brief: Any, 
 def progress(*, bindings: dict[str, VariantBinding], assets: dict[str, Asset], job_id: str, brief: Any,
              visual_job: dict[str, Any], placement: str = "yandex_direct",
              fetch_render: Callable[[dict[str, Any], str], Path] | None = None,
-             uploader: Uploader | None = None) -> tuple[str, list[dict[str, Any]]]:
+             uploader: Uploader | None = None, normalize: bool = True) -> tuple[str, list[dict[str, Any]]]:
     """Donor _progress_result/_attach_render over an executor visual job dict (with ``render_pack``)."""
     fmt = render_format_for_placement(placement)
     vid = str(visual_job.get("id") or "")
@@ -316,6 +316,9 @@ def progress(*, bindings: dict[str, VariantBinding], assets: dict[str, Asset], j
             raise PublicationError("creative_asset_attachment_failed")
         try:
             path = fetch_render(render, fmt)
+            if normalize:
+                from application.business_flows.visual_creatives import normalize_image
+                normalize_image(path)
             kw: dict[str, Any] = {} if uploader is None else {"uploader": uploader}
             _asset, facts = attach_image_file(assets, job_id, path, **kw)
         except (AssetError, OSError, ValueError) as exc:

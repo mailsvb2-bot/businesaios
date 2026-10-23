@@ -82,7 +82,8 @@ def _pub_setup(tmp_path):
                                            description="Встреча", brand_context="Нейтрально", campaign_goal="Записи",
                                            kind="image", formats=("square",))
     png = tmp_path / "sq.png"
-    png.write_bytes(b"\x89PNG\r\n\x1a\n" + b"0" * 64)
+    from PIL import Image
+    Image.new("RGB", (640, 640), (40, 90, 160)).save(png)
     return briefs, png
 
 
@@ -127,3 +128,17 @@ def test_pub_failed_render_reports_failed(tmp_path):
     st, _ = m.progress(bindings=m.replay_bindings(facts), assets={}, job_id="j", brief=briefs[0],
                        visual_job={"id": "v", "status": "succeeded", "render_pack": {"status": "failed"}})
     assert st == "failed"
+
+
+def test_pub_attach_normalizes_render(tmp_path):
+    from PIL import Image
+
+    from application.business_flows import ad_media as m
+    briefs, png = _pub_setup(tmp_path)
+    Image.new("RGBA", (800, 800), (0, 0, 0, 0)).save(png)  # fully transparent: rejected by normalize_image
+    facts = [m.select_variant("j", briefs[0], business_id="b1")]
+    ok = {"id": "v", "status": "succeeded", "render_pack": {"id": "r", "status": "succeeded"}}
+    import pytest
+    with pytest.raises(m.PublicationError, match="attachment_failed"):
+        m.progress(bindings=m.replay_bindings(facts), assets={}, job_id="j", brief=briefs[0], visual_job=ok,
+                   fetch_render=lambda r, f: png)

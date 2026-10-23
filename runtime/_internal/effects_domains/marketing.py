@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from core.growth.ads.creative.prompting import scene_from_text, scene_key_elements
+from core.growth.ads.creative.prompting import render_pack_idempotency_key, scene_from_text, scene_key_elements
 
 from runtime._internal.effects_clients.visual_gateway_client import visual_gateway_json
 from runtime._internal.effects_domains.visual_creative_gateway import (
@@ -97,7 +97,8 @@ class MarketingEffectsMixin:
             if visual_direction is not None and env_bool("VISUAL_SEMANTIC_RETRY", True):
                 job = self._visual_quality_retry(job, payload, key, dict(visual_direction), owner_context, tenant, wait)
             if overlay and job["status"] == "succeeded":
-                pack = visual_gateway_json("POST", "/v1/creative/render-packs", {"source_job_id": job["id"], "scope_id": tenant, "idempotency_key": key + ":render", "formats": list(overlay.get("formats") or ["feed"]), "composition": {k: v for k, v in overlay.items() if k != "formats"}}, timeout_s=300, transport=self.http_transport)
+                formats, composition = list(overlay.get("formats") or ["feed"]), {k: v for k, v in overlay.items() if k != "formats"}
+                pack = visual_gateway_json("POST", "/v1/creative/render-packs", {"source_job_id": job["id"], "scope_id": tenant, "idempotency_key": render_pack_idempotency_key(key, composition, formats), "formats": formats, "composition": composition}, timeout_s=300, transport=self.http_transport)
                 job["render_pack"] = {k: pack.get(k) for k in ("id", "status", "error_code")}
             jobs.append(job)
         event_type = "visual_creative_generated" if jobs[0]["status"] == "succeeded" else "visual_creative_submitted"
