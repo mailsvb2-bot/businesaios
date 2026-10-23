@@ -266,7 +266,9 @@ def _events(done, push, bk, op, arg, now, slots, *, tenant_id, event_store):
     tz = cg.replay(flow_payloads(event_store, tenant_id=tenant_id, event_type="business_admin@v1")).timezone
     live = [s for s in bk.upcoming(slots, now_ms=now) if s.status != "closed"]
     if op == "schedule":
-        rows = [f"{i}. {bk.fmt(s, tz)} · {'занят' if s.status == 'booked' else 'свободен'}" for i, s in enumerate(live, 1)]
+        rows = [
+            f"{i}. {bk.fmt(s, tz)} · {'занят' if s.status == 'booked' else 'свободен'}" for i, s in enumerate(live, 1)
+        ]
         tail = "\n\n/edit_slot N [мин] [название] · /reschedule_slot N ГГГГ-ММ-ДД ЧЧ:ММ"
         return done("🗓 Расписание\n\n" + ("\n".join(rows) or "Пока пусто.") + tail, None)
     if op == "add_sessions":
@@ -281,7 +283,9 @@ def _events(done, push, bk, op, arg, now, slots, *, tenant_id, event_store):
         return done(f"✏️ Обновлено: {bk.fmt(new, tz)}", ch)
     ch = bk.reschedule(slot, rest, now_ms=now, tz=tz)
     moved = bk.replay([{"step": "slot_opened", **slot.__dict__}, ch])[slot.slot_id]
-    moved = bk.Slot(**{**moved.__dict__, "revision": ch["revision"], "status": slot.status, "customer_id": slot.customer_id})
+    moved = bk.Slot(
+        **{**moved.__dict__, "revision": ch["revision"], "status": slot.status, "customer_id": slot.customer_id}
+    )
     if slot.status == "booked" and slot.customer_id:
         push(en.rescheduled_text(moved, slot.starts_at_ms, tz), slot.customer_id)
     return done(f"🔁 Перенесено: {bk.fmt(moved, tz)}\nНапоминания пересчитаны (ревизия {ch['revision']}).", ch)
@@ -300,10 +304,72 @@ def _event_channels(done, bk, op, arg, now, slots, facts, *, user_id, platform="
         )
         slot = slots[ch["slot_id"]]
         extra = "\nСогласие на рекламные сообщения записано." if ch["marketing_consent"] else ""
-        return done(f"✅ {platform}: аккаунт подтверждён для записи {bk.fmt(slot)}.\nНапоминания придут сюда.{extra}", ch)
+        return done(
+            f"✅ {platform}: аккаунт подтверждён для записи {bk.fmt(slot)}.\nНапоминания придут сюда.{extra}", ch
+        )
     n, _, rest = arg.partition(" ")
     mine = bk.upcoming(slots, now_ms=now, customer_id=user_id)
     slot = mine[int(n) - 1] if n.isdigit() and 0 < int(n) <= len(mine) else None
     tokens, ch = ec.issue(slot, customer_id=user_id, marketing=rest.replace(",", " ").split(), now_ms=now)
     rows = "\n".join(f"{p}: /start {ec.PREFIX}{t}" for p, t in tokens.items())
     return done(f"🔗 Ссылки подтверждения (действуют 1 час, одноразовые):\n{rows}", ch)
+
+
+PANEL_OPS = frozenset({"announce", "event_promo", "attention", "ad_channels", "ad_channel", "setup_channel", "journey"})
+
+
+def _owner_journey(bk, slots, *, tenant_id, event_store):
+    from application.business_flows import admin as ad
+    from application.business_flows import event_series as es
+    from application.business_flows import owner_panels as op_
+    from application.business_flows import promotions as pr
+    from application.business_flows import sales as sl
+
+    def facts(t):
+        return flow_payloads(event_store, tenant_id=tenant_id, event_type=t)
+
+    leads = sl.replay(facts("sales_pipeline@v1")).leads.values()
+    booked = {s.customer_id for s in slots.values() if s.customer_id}
+    return op_.journey_text(
+        leads=len(leads),
+        slots=slots,
+        attendance=es.replay(facts("event_series@v1")).attendance,
+        payments=list(ad.replay(facts("business_admin@v1")).payments.values()),
+        camps=pr.replay(facts("bookings@v1")),
+        reactivated=sum(1 for x in leads if x.source.startswith("reactivation:") and x.customer_id in booked),
+    )
+
+
+def _panels(done, *a, **kw):
+    """Owner read-only panels (owner_panels.py); never sends to customers, never spends."""
+    try:
+        return _panel(done, *a, **kw)
+    except ValueError as exc:
+        return done(f"📊 Не получилось: {exc}", None)
+
+
+def _panel(done, bk, op, arg, now, slots, facts, *, tenant_id, event_store):
+    from application.business_flows import owner_panels as op_
+    from application.business_flows import promotions as pr
+    from runtime.ads.connector_wiring import ad_connections_enabled, yandex_direct_configured
+
+    ready = ad_connections_enabled() and yandex_direct_configured()
+    if op == "ad_channels":
+        return done(op_.ad_channels_text(yandex_ready=ready), None)
+    if op == "ad_channel":
+        return done(op_.ad_channel_text(op_.ad_channel(arg, yandex_ready=ready)), None)
+    if op == "setup_channel":
+        return done(op_.setup_text(arg), None)
+    if op == "attention":
+        due = bk.due_reminders(slots, now_ms=now, sent=bk.sent_reminders(facts))
+        return done(op_.attention_text(*op_.attention(due, now_ms=now)), None)
+    if op == "journey":
+        return done(_owner_journey(bk, slots, tenant_id=tenant_id, event_store=event_store).lstrip(), None)
+    live = [s for s in bk.upcoming(slots, now_ms=now) if s.status != "closed"]
+    n, _, rest = arg.partition(" ")
+    if not (n.isdigit() and 0 < int(n) <= len(live)):
+        raise ValueError("укажите номер из /schedule")
+    slot, camps = live[int(n) - 1], pr.replay(facts)
+    if op == "announce":
+        return done(op_.announcement(slot, slots, camps, description=rest), None)
+    return done(op_.promotion_text(op_.promotion_snapshot(slot, slots, camps)), None)

@@ -34,6 +34,13 @@ BUSINESS_FLOW_COMMANDS: dict[str, tuple[str, str, bool]] = {
     "/reschedule_slot": ("bookings@v1", "reschedule_slot", True),
     "/schedule": ("bookings@v1", "schedule", True),
     "/link_channels": ("bookings@v1", "link_channels", False),
+    "/announce": ("bookings@v1", "announce", True),
+    "/event_promo": ("bookings@v1", "event_promo", True),
+    "/attention": ("bookings@v1", "attention", True),
+    "/ad_channels": ("bookings@v1", "ad_channels", True),
+    "/ad_channel": ("bookings@v1", "ad_channel", True),
+    "/setup_channel": ("bookings@v1", "setup_channel", True),
+    "/journey": ("bookings@v1", "journey", True),
     "/promotions": ("bookings@v1", "promotions", True),
     "/promo_book": ("bookings@v1", "promo_book", False),
     "/bot_secret": ("bot_provisioning@v1", "attach", True),
@@ -136,6 +143,8 @@ def handle_business_flow_routes(ctx: TelegramCtx, *, user_id: str) -> ProposedAc
     if route is None:
         return None
     action, op, owner_only = route
+    if op == "home" and ctx.is_admin:
+        op = "home_owner"  # owner /me also shows the client journey
     if owner_only and not ctx.is_admin:
         return None
     return propose(action, {"user_id": user_id, "op": op, "arg": str(ctx.args or "").strip()[:200]})

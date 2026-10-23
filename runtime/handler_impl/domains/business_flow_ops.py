@@ -8,6 +8,7 @@ transition exists iff the user-visible receipt exists.
 from __future__ import annotations
 
 from dataclasses import replace
+from functools import partial
 from typing import Any
 
 from application.business_flows import bot_provisioning as botprov
@@ -19,12 +20,15 @@ from runtime.handler_impl.domains.business_catalog_ops import (
     CHANNEL_OPS,
     EVENT_OPS,
     FOLLOWUP_OPS,
+    PANEL_OPS,
     PROMO_OPS,
     _ads,
     _catalog,
     _event_channels,
     _events,
     _followups,
+    _owner_journey,
+    _panels,
     _promotions,
     _retention,
     _sales_inbound,
@@ -198,6 +202,11 @@ def handle_bookings(payload, effects, env, *, event_store, now_ms: int | None = 
             return send_tracked(
                 body, effects, env, text=f"🔗 Не получилось: {exc}", event_type=None, event_payload=None
             )
+    if op in PANEL_OPS:  # read-only owner panels
+        say = partial(send_tracked, body, effects, env, event_type=None, event_payload=None)
+        return _panels(
+            lambda t, _ch: say(text=t), bk, op, arg, now, slots, facts, tenant_id=tenant_id, event_store=event_store
+        )
     if op in EVENT_OPS:
         try:
             return _events(
@@ -231,7 +240,7 @@ def handle_bookings(payload, effects, env, *, event_store, now_ms: int | None = 
         elif op == "cancel":
             change = bk.cancel(chosen, customer_id=user_id, now_ms=now)
             text = f"❎ Запись отменена: {bk.fmt(chosen)}"
-        elif op == "home":
+        elif op in ("home", "home_owner"):
             change = None
             nxt = f"Ближайшая запись: {bk.fmt(mine[0])}" if mine else "Записей пока нет."
             text = (
@@ -239,6 +248,8 @@ def handle_bookings(payload, effects, env, *, event_store, now_ms: int | None = 
                 "/slots — расписание · /book N — записаться\n/my_bookings — мои записи · /cancel_booking N — отменить\n"
                 "/export_data — мои данные · /delete_my_data — удалить данные"
             )
+            if op == "home_owner":
+                text += _owner_journey(bk, slots, tenant_id=tenant_id, event_store=event_store)
         else:
             change = None
             rows = mine if op == "mine" else open_slots
