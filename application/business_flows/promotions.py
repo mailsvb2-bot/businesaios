@@ -13,7 +13,7 @@ import hashlib
 import re
 from dataclasses import dataclass, field
 from typing import Any
-from urllib.parse import urlencode, urlsplit, urlunsplit
+from urllib.parse import urlsplit, urlunsplit
 
 CANON_PROMOTIONS = True
 PREFIX = "cpa_"
@@ -56,7 +56,7 @@ def public_url(base_url: str, token: str) -> str:
         raise ValueError("адрес лендинга должен быть HTTPS")
     if p.query or p.fragment:
         raise ValueError("адрес лендинга без query и fragment")
-    q = urlencode({"source": normalize_token(token)})
+    q = "source=" + normalize_token(token)  # token charset [A-Za-z0-9_-] needs no escaping
     return urlunsplit(("https", p.netloc, p.path.rstrip("/") + PUBLIC_PATH, q, ""))
 
 
@@ -225,7 +225,7 @@ def _score(c: Creative) -> float:
     return s + (0.02 if "!" not in low else 0)
 
 
-def select(cands: list[Creative]) -> Creative:
+def best_creative(cands: list[Creative]) -> Creative:
     valid = [c for c in cands if validate(c)[0]]
     if not valid:
         raise ValueError("нет безопасного варианта текста")
@@ -278,7 +278,7 @@ def save(camps: dict[str, Campaign], *, slot_id: str, channel: str, brief: Brief
     existing = next((c for c in camps.values() if c.slot_id == slot_id and c.channel == ch), None)
     token = existing.token if existing else normalize_token(new_token)
     cid = existing.campaign_id if existing else "pr_" + hashlib.sha256(f"{slot_id}:{ch}".encode()).hexdigest()[:12]
-    cr = select(candidates(brief))
+    cr = best_creative(candidates(brief))
     return {
         "step": "promotion_saved",
         "promotion_id": cid,

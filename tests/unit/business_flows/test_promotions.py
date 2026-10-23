@@ -25,7 +25,7 @@ def _brief(**kw) -> pm.Brief:
 def test_candidates_are_domain_aware_and_guardrailed() -> None:
     cs = pm.candidates(_brief())
     assert [c.style for c in cs] == ["trust", "expert", "concise"]
-    assert pm.select(cs).creative_id.startswith("cr_")
+    assert pm.best_creative(cs).creative_id.startswith("cr_")
     assert [c.style for c in pm.candidates(_brief(activity="сантехник", offering_title="Ремонт крана"))][
         0
     ] == "availability"
