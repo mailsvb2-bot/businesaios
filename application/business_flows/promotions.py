@@ -318,3 +318,29 @@ def stats_text(camps: dict[str, Campaign], slot_line) -> str:
             f"{i}. [{c.channel}] {c.creative.headline} · {slot_line(c.slot_id)}\n   открыли {o} · записались {b} · конверсия {conv}\n   ссылка: /start {PREFIX}{c.token}"
         )
     return "\n".join(lines)
+
+
+def open_channel(
+    camps: dict[str, Campaign], token: str, *, customer_id: str, active_customers: set[str]
+) -> tuple[Campaign, dict[str, Any] | None]:
+    """Verified touch for an existing channel customer (donor ``open_channel_promotion``)."""
+    camp = by_token(camps, token)  # campaigns are replayed per tenant, so a foreign token never resolves
+    if customer_id not in active_customers:
+        raise ValueError("атрибуция промо требует активного клиента этого бизнеса")
+    return camp, opened_fact(camp, customer_id)
+
+
+def open_channel_for_identity(
+    camps: dict[str, Campaign],
+    token: str,
+    *,
+    platform: str,
+    external_subject: str,
+    identities: dict[tuple[str, str], str],
+) -> tuple[Campaign, dict[str, Any] | None]:
+    """Resolve an active channel identity first (donor ``open_channel_promotion_for_identity``)."""
+    key = (str(platform or "").strip().lower(), str(external_subject or "").strip())
+    customer_id = identities.get(key)
+    if not key[1] or customer_id is None:
+        raise ValueError("атрибуция промо требует активной идентичности клиента в канале")
+    return open_channel(camps, token, customer_id=customer_id, active_customers={customer_id})
