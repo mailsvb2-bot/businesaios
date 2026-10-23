@@ -19,6 +19,12 @@ BUSINESS_FLOW_COMMANDS: dict[str, tuple[str, str, bool]] = {
     "/book": ("bookings@v1", "book", False),
     "/my_bookings": ("bookings@v1", "mine", False),
     "/cancel_booking": ("bookings@v1", "cancel", False),
+    "/me": ("bookings@v1", "home", False),
+    "/delete_my_data": ("privacy_delete@v1", "request", False),
+    "/partner_add": ("partners@v1", "add", True),
+    "/partners": ("partners@v1", "rank", True),
+    "/ladder_add": ("offer_ladder@v1", "add", True),
+    "/ladder": ("offer_ladder@v1", "show", True),
 }
 
 

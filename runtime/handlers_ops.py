@@ -12,7 +12,12 @@ from runtime.handler_impl.domains.admin_ops import (
     handle_admin_user_card,
     handle_set_marketing_copy,
 )
-from runtime.handler_impl.domains.business_flow_ops import handle_bookings, handle_bot_provisioning
+from runtime.handler_impl.domains.business_flow_ops import (
+    handle_bookings,
+    handle_bot_provisioning,
+    handle_offer_ladder,
+    handle_partners,
+)
 from runtime.handler_impl.domains.payment_ops import (
     handle_capture_payment,
     handle_create_payment_and_send_link,
@@ -31,6 +36,7 @@ from runtime.handler_impl.domains.pricing_ops import (
 from runtime.handler_impl.domains.user_ops import (
     handle_answer_callback,
     handle_log_mood,
+    handle_privacy_delete,
     handle_privacy_export,
     handle_send_audio,
     handle_send_weather,
@@ -42,6 +48,9 @@ __all__ = [
     "handle_admin_set_role",
     "handle_admin_user_card",
     "handle_privacy_export",
+    "handle_privacy_delete",
+    "handle_offer_ladder",
+    "handle_partners",
     "handle_bookings",
     "handle_bot_provisioning",
     "handle_answer_callback",

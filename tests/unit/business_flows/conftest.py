@@ -12,9 +12,18 @@ class FlowStore:
         self.events: list[dict] = []
 
     def iter_events(self, *, tenant_id, start_ms=0, end_ms=None, user_id=None, event_type=None, **_):
-        return [e for e in self.events if e["tenant_id"] == tenant_id
-                and (user_id is None or e["user_id"] == user_id)
-                and (event_type is None or e["event_type"] == event_type)]
+        return [
+            e
+            for e in self.events
+            if e["tenant_id"] == tenant_id
+            and (user_id is None or e["user_id"] == user_id)
+            and (event_type is None or e["event_type"] == event_type)
+        ]
+
+    def delete_user_events(self, *, tenant_id, user_id):
+        before = len(self.events)
+        self.events = [e for e in self.events if not (e["tenant_id"] == tenant_id and e["user_id"] == user_id)]
+        return before - len(self.events)
 
 
 class FlowEffects:
@@ -24,9 +33,15 @@ class FlowEffects:
     def send_message(self, **kw):
         self.sent.append(kw)
         if kw.get("track_event_type"):
-            self.store.events.append({"tenant_id": kw["tenant_id"], "user_id": kw["user_id"],
-                                      "event_type": kw["track_event_type"], "timestamp_ms": len(self.store.events),
-                                      "payload": dict(kw["track_payload"])})
+            self.store.events.append(
+                {
+                    "tenant_id": kw["tenant_id"],
+                    "user_id": kw["user_id"],
+                    "event_type": kw["track_event_type"],
+                    "timestamp_ms": len(self.store.events),
+                    "payload": dict(kw["track_payload"]),
+                }
+            )
         return {"ok": True, "router_evidence": {"source": "telegram", "message_id": len(self.sent)}}
 
 

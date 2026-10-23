@@ -64,6 +64,9 @@ RUNTIME_ACTIONS = {
     # --- Admin (runtime operator actions) ---
     "admin_user_card@v1",
     "privacy_export@v1",
+    "privacy_delete@v1",
+    "offer_ladder@v1",
+    "partners@v1",
     "bookings@v1",
     "bot_provisioning@v1",
     "admin_set_role@v1",

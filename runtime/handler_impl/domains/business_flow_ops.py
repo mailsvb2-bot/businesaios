@@ -117,6 +117,14 @@ def handle_bookings(payload, effects, env, *, event_store, now_ms: int | None = 
         elif op == "cancel":
             change = bk.cancel(chosen, customer_id=user_id, now_ms=now)
             text = f"❎ Запись отменена: {bk.fmt(chosen)}"
+        elif op == "home":
+            change = None
+            nxt = f"Ближайшая запись: {bk.fmt(mine[0])}" if mine else "Записей пока нет."
+            text = (
+                f"🏠 Личный кабинет\n\n{nxt}\nСвободных слотов: {len(open_slots)}\n\n"
+                "/slots — расписание · /book N — записаться\n/my_bookings — мои записи · /cancel_booking N — отменить\n"
+                "/export_data — мои данные · /delete_my_data — удалить данные"
+            )
         else:
             change = None
             rows = mine if op == "mine" else open_slots
@@ -134,4 +142,63 @@ def handle_bookings(payload, effects, env, *, event_store, now_ms: int | None = 
     )
 
 
-__all__ = ["handle_bookings", "handle_bot_provisioning", "send_tracked"]
+def handle_partners(payload, effects, env, *, event_store):
+    """Owner partner search: add candidates, rank against goal terms (advisory, never contacts anyone)."""
+    from application.business_flows import partners as pt
+
+    body = require_mapping(payload or {})
+    tenant_id = required_str(body, "tenant_id")
+    op, arg = str(body.get("op") or "rank"), str(body.get("arg") or "").strip()
+    known = pt.replay(flow_payloads(event_store, tenant_id=tenant_id, event_type="partners@v1"))
+    try:
+        if op == "add":
+            change = pt.parse_partner(arg)
+            text = f"🤝 Партнёр добавлен: {change['name']} (всего {len(known | {change['partner_id']: None})})"
+            return send_tracked(body, effects, env, text=text, event_type="partners@v1", event_payload=change)
+    except ValueError as exc:
+        return send_tracked(body, effects, env, text=f"🤝 Не получилось: {exc}", event_type=None, event_payload=None)
+    terms = [t for t in arg.replace(",", " ").split() if t]
+    fits = pt.rank(known, terms)
+    lines = [
+        f"{i}. {f.partner.name} — {f.total:.0f}/100" + (f" ({'; '.join(f.reasons)})" if f.reasons else "")
+        for i, f in enumerate(fits, 1)
+    ]
+    head = f"🤝 Партнёры под цель «{' '.join(terms) or 'любая'}» (рекомендации, ничего не отправляется):"
+    return send_tracked(
+        body,
+        effects,
+        env,
+        text=head + "\n\n" + ("\n".join(lines) or "Список пуст: /partner_add"),
+        event_type=None,
+        event_payload=None,
+    )
+
+
+def handle_offer_ladder(payload, effects, env, *, event_store):
+    """Owner offer ladder: add steps, show next eligible offers for an evidence score (no auto-selling)."""
+    from application.business_flows import ladder as ld
+
+    body = require_mapping(payload or {})
+    tenant_id = required_str(body, "tenant_id")
+    op, arg = str(body.get("op") or "show"), str(body.get("arg") or "").strip()
+    steps, _ = ld.replay(flow_payloads(event_store, tenant_id=tenant_id, event_type="offer_ladder@v1"))
+    try:
+        if op == "add":
+            change = ld.parse_step(arg, position=len(steps) + 1)
+            text = f"🪜 Ступень {change['position']}: {ld.KINDS[change['kind']]} — {change['title']} (порог {change['min_score']:.2f})"
+            return send_tracked(body, effects, env, text=text, event_type="offer_ladder@v1", event_payload=change)
+        score = float(arg.replace(",", ".")) if arg else 1.0
+        eligible = ld.candidates(steps, evidence_score=score)
+    except ValueError as exc:
+        return send_tracked(body, effects, env, text=f"🪜 Не получилось: {exc}", event_type=None, event_payload=None)
+    lines = [
+        f"{s.position}. {ld.KINDS[s.kind]} — {s.title}" + (" · нужно ваше подтверждение" if s.requires_approval else "")
+        for s in eligible
+    ]
+    text = f"🪜 Доступные предложения при оценке {max(0.0, min(score, 1.0)):.2f}:\n\n" + (
+        "\n".join(lines) or "Нет доступных ступеней."
+    )
+    return send_tracked(body, effects, env, text=text, event_type=None, event_payload=None)
+
+
+__all__ = ["handle_bookings", "handle_bot_provisioning", "handle_offer_ladder", "handle_partners", "send_tracked"]

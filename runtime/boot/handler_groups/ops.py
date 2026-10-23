@@ -19,6 +19,9 @@ from runtime.handlers_ops import (
     handle_deploy_policy,
     handle_grant_access,
     handle_log_mood,
+    handle_offer_ladder,
+    handle_partners,
+    handle_privacy_delete,
     handle_privacy_export,
     handle_reconcile_payment,
     handle_reconcile_payments,
@@ -60,6 +63,18 @@ def register_ops_handlers(*, handlers: ActionHandlerRegistry, event_store) -> No
     handlers.register(
         "bookings@v1",
         lambda payload, effects, env: handle_bookings(payload, effects, env, event_store=event_store),
+    )
+    handlers.register(
+        "partners@v1",
+        lambda payload, effects, env: handle_partners(payload, effects, env, event_store=event_store),
+    )
+    handlers.register(
+        "offer_ladder@v1",
+        lambda payload, effects, env: handle_offer_ladder(payload, effects, env, event_store=event_store),
+    )
+    handlers.register(
+        "privacy_delete@v1",
+        lambda payload, effects, env: handle_privacy_delete(payload, effects, env, event_store=event_store),
     )
     handlers.register(
         "privacy_export@v1",

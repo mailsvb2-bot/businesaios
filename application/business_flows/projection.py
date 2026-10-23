@@ -11,12 +11,21 @@ CANON_BUSINESS_FLOW_PROJECTION = True
 
 
 def flow_payloads(
-    event_store: Any, *, tenant_id: str, event_type: str, user_id: str | None = None,
+    event_store: Any,
+    *,
+    tenant_id: str,
+    event_type: str,
+    user_id: str | None = None,
 ) -> list[dict[str, Any]]:
     """Return tracked flow payloads oldest-first (tenant-wide when user_id is None)."""
     events = best_effort_iter_events(
-        event_store=event_store, where=f"business_flows.{event_type}", tenant_id=str(tenant_id),
-        event_types=(str(event_type),), start_ms=0, end_ms=None, user_id=user_id,
+        event_store=event_store,
+        where=f"business_flows.{event_type}",
+        tenant_id=str(tenant_id),
+        event_types=(str(event_type),),
+        start_ms=0,
+        end_ms=None,
+        user_id=user_id,
     )
     rows = [ev for ev in events if str(ev.get("event_type") or ev.get("type")) == event_type]
     rows.sort(key=lambda ev: int(ev.get("timestamp_ms") or 0))

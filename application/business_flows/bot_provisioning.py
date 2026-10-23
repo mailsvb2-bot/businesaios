@@ -63,8 +63,13 @@ def replay(payloads: list[dict[str, Any]]) -> dict[str, Provisioning]:
             state[rid] = Provisioning(rid, str(p.get("username") or ""), _S.AWAITING_SECRET)
         elif rid in state and p.get("status"):
             cur = state[rid]
-            state[rid] = Provisioning(rid, cur.username, _S(str(p["status"])),
-                                      str(p.get("credential_ref") or cur.credential_ref), str(p.get("error_code") or ""))
+            state[rid] = Provisioning(
+                rid,
+                cur.username,
+                _S(str(p["status"])),
+                str(p.get("credential_ref") or cur.credential_ref),
+                str(p.get("error_code") or ""),
+            )
     return state
 
 

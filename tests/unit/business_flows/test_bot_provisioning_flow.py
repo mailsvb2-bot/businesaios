@@ -45,7 +45,9 @@ def test_invalid_usernames_rejected(name) -> None:
 def test_route_is_owner_only_and_action_needs_no_human_approval() -> None:
     ctx = SimpleNamespace(cmd="/connect_bot", args=" shop_bot ", is_admin=False)
     assert handle_business_flow_routes(ctx, user_id="u1") is None
-    proposed = handle_business_flow_routes(SimpleNamespace(cmd="/connect_bot", args="shop_bot", is_admin=True), user_id="u1")
+    proposed = handle_business_flow_routes(
+        SimpleNamespace(cmd="/connect_bot", args="shop_bot", is_admin=True), user_id="u1"
+    )
     assert proposed is not None
     spec = build_default_operational_action_registry().get("bot_provisioning@v1")
     assert spec is not None and not spec.requires_human_approval
