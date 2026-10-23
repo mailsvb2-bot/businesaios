@@ -10,12 +10,14 @@ import re
 from dataclasses import dataclass, field
 from typing import Any
 
+from application.business_flows import cockpit_booking as _cb
 from application.business_flows import cockpit_sales as _cs
 
 PREFIX = "cpm:"
 PAGE_SIZE = 6
 _ACTION = re.compile(r"[a-z][a-z0-9-]{0,40}")
 HOME = ("🏠 Главное меню", "cpm:menu")
+_ADD_TIME = ("🕒 Добавить свободное время", "cpm:bk-open")
 
 # screen -> parent screen (donor _NATIVE_PARENT_COMMANDS, limited to screens this port renders)
 PARENTS: dict[str, str] = {
@@ -38,6 +40,7 @@ PARENTS: dict[str, str] = {
     "settings": "cpm:manage",
 }
 PARENTS.update(_cs.PARENTS)
+PARENTS.update(_cb.PARENTS)
 
 
 @dataclass(frozen=True)
@@ -146,9 +149,9 @@ def _screen(parsed: Parsed, s: Snapshot) -> tuple[str, list[list[tuple[str, str]
         ), _rows(("📅 Запись", "cpm:bookings:0"))
     if a == "bookings":
         if not s.slots:
-            return "📅 Запись\n\nОткрытого времени нет. Добавьте слот: /add_slot", []
+            return "📅 Запись\n\nОткрытого времени нет. Добавьте слот: /add_slot", _rows(_ADD_TIME)
         lines, nav, foot = _paged(s.slots, page_number(parsed.args), "bookings", s.fmt_slot)
-        return "📅 Запись\n\n" + "\n".join(lines) + foot, nav
+        return "📅 Запись\n\n" + "\n".join(lines) + foot, [*_rows(_ADD_TIME), *nav]
     if a == "growth":
         return "📈 Рост\n\nПартнёры и лестница предложений.", _rows(
             ("🤝 Партнёры", "cpm:partners:0"), ("🪜 Лестница предложений", "cpm:ladder")
@@ -170,6 +173,8 @@ def _screen(parsed: Parsed, s: Snapshot) -> tuple[str, list[list[tuple[str, str]
         )
     if a in _cs.PARENTS:
         return _cs.screen(a, parsed.args, s.sales, now_ms=s.now_ms)
+    if a in _cb.PARENTS:
+        return _cb.screen(a, parsed.args, s.admin, now_ms=s.now_ms)
     extra = _extra_screen(a, parsed, s)
     if extra is not None:
         return extra

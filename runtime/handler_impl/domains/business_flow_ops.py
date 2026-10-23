@@ -288,6 +288,7 @@ def _cockpit(body, effects, env, future, steps, facts, now):
     from application.business_flows import admin as ad
     from application.business_flows import bookings as bk
     from application.business_flows import cockpit as cp
+    from application.business_flows import cockpit_booking as cb
     from application.business_flows import cockpit_sales as cs
     from application.business_flows import event_series as es
     from application.business_flows import partners as pt
@@ -321,6 +322,23 @@ def _cockpit(body, effects, env, future, steps, facts, now):
             env,
             text=cs.result_text(change, after.sales) + "\n\n" + text,
             event_type="sales_pipeline@v1",
+            event_payload=change,
+            reply_markup=cp.markup(rows),
+        )
+    if parsed.action in cb.MUTATIONS:
+        try:
+            change = cb.mutation(parsed.args, snap.admin, now_ms=now)
+        except ValueError as exc:
+            return send_tracked(body, effects, env, text=f"⚠️ Не получилось: {exc}", event_type=None, event_payload=None)
+        if change["slot_id"] in bk.replay(facts("bookings@v1")):
+            return send_tracked(body, effects, env, text="Это время уже добавлено.", event_type=None, event_payload=None)
+        text, rows = cp.render(cp.Parsed("bookings", ("0",)), snap, is_owner=True)
+        return send_tracked(
+            body,
+            effects,
+            env,
+            text=cb.result_text(change) + "\n\nДобавить ещё: кнопка ниже.",
+            event_type="bookings@v1",
             event_payload=change,
             reply_markup=cp.markup(rows),
         )
