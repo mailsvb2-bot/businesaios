@@ -147,7 +147,7 @@ def provider_rows(tracked: list, *, connections: Mapping[str, Mapping[str, objec
         expected = {j.ad_id: j.external_campaign_id for j in items}
         login = str(connections[cid].get("external_login") or "")
         for batch in ad_id_batches(tuple(sorted(expected, key=int))):
-            report = sess.call(lambda t, b=batch: sess.provider.performance_report(t, b, date_from, date_to, login))
+            report = sess.call(lambda t, b=batch, s=sess, lg=login: s.provider.performance_report(t, b, date_from, date_to, lg))
             for row in report:
                 if expected.get(row.ad_id) is None or row.campaign_id != expected[row.ad_id]:
                     raise DirectError("analytics_report_campaign_mismatch")
