@@ -224,3 +224,107 @@ def sweep(
         out.facts.append({"step": "ad_spend_stop_queued", "authorization_id": a.authorization_id,
                           "business_id": a.business_id, "reason": reason, "dry_run": True, "at": t.isoformat()})
     return out
+
+
+# --- owner consent lifecycle + operation queue (port of ad_spend_consent / ad_spend_control /
+# ad_spend_operations). Fact replay, no DB, no provider mutation: launch is gated behind
+# MUTATIONS_ENV (default off) and every stop is a dry-run fact recorded by the executor.
+MUTATIONS_ENV = "BAI_AD_SPEND_MUTATIONS_ENABLED"
+_CONSENT_STEPS = {"ad_spend_consent_requested": "pending_consent", "ad_spend_consent_granted": "authorized",
+                  "ad_spend_consent_revoked": "revoked"}
+
+
+def _sha(obj: object) -> str:
+    import hashlib
+    import json
+    return hashlib.sha256(json.dumps(obj, sort_keys=True, default=str).encode()).hexdigest()
+
+
+def snapshot_hash(snap: Snapshot) -> str:
+    return _sha([snap.connection_id, snap.external_account_id, snap.external_campaign_id, snap.currency,
+                 snap.spent_today_minor, snap.strategy, ts(snap.captured_at).isoformat()])
+
+
+def terms_hash(auth: Authorization) -> str:
+    return _sha([auth.business_id, auth.connection_id, auth.external_campaign_id, auth.currency,
+                 auth.hard_cap_minor, auth.daily_cap_minor, ts(auth.expires_at).isoformat()])
+
+
+def consent_status(payloads: Iterable[dict[str, Any]], auth: Authorization) -> str:
+    status = auth.status
+    for p in payloads:
+        if p.get("authorization_id") == auth.authorization_id and p.get("step") in _CONSENT_STEPS:
+            status = _CONSENT_STEPS[p["step"]]
+    return status
+
+
+def request_consent(payloads: list[dict[str, Any]], auth: Authorization, now: datetime | str | None = None) -> dict[str, Any]:
+    if consent_status(payloads, auth) != "prepared":
+        raise SpendInvariantViolation("consent can only be requested for a prepared authorization")
+    return {"step": "ad_spend_consent_requested", "authorization_id": auth.authorization_id,
+            "terms_hash": terms_hash(auth), "snapshot_hash": snapshot_hash(auth.consent), "at": ts(now).isoformat()}
+
+
+def grant_consent(payloads: list[dict[str, Any]], auth: Authorization, *, expected_terms_hash: str,
+                  expected_snapshot_hash: str, receipt_id: str, now: datetime | str | None = None) -> dict[str, Any]:
+    """Consent binds to the exact terms + provider snapshot that were shown to the owner."""
+    t = ts(now)
+    if consent_status(payloads, auth) != "pending_consent":
+        raise SpendInvariantViolation("consent was not requested")
+    if terms_hash(auth) != str(expected_terms_hash or "").strip():
+        raise SpendInvariantViolation("consent terms changed before confirmation")
+    if snapshot_hash(auth.consent) != str(expected_snapshot_hash or "").strip():
+        raise SpendInvariantViolation("provider snapshot changed before confirmation")
+    if t >= ts(auth.expires_at):
+        raise SpendInvariantViolation("authorization expired")
+    if not str(receipt_id or "").strip():
+        raise ValueError("receipt_id is required")
+    return {"step": "ad_spend_consent_granted", "authorization_id": auth.authorization_id,
+            "receipt_id": receipt_id, "terms_hash": expected_terms_hash, "at": t.isoformat()}
+
+
+def revoke_consent(payloads: list[dict[str, Any]], auth: Authorization, *, actor_member_id: str,
+                   now: datetime | str | None = None) -> list[dict[str, Any]]:
+    t = ts(now).isoformat()
+    status = consent_status(payloads, auth)
+    if status == "revoked":
+        return []
+    facts = [{"step": "ad_spend_consent_revoked", "authorization_id": auth.authorization_id, "at": t}]
+    if status in {"launching", "active", "stopping"}:
+        facts.append({"step": "ad_spend_stop_queued", "authorization_id": auth.authorization_id,
+                      "business_id": auth.business_id, "reason": "revoked", "actor_member_id": actor_member_id,
+                      "dry_run": True, "at": t})
+    return facts
+
+
+def consent_view(payloads: list[dict[str, Any]], auths: Iterable[Authorization], *, limit: int = 50) -> list[dict[str, Any]]:
+    rows = [{"authorization_id": a.authorization_id, "status": consent_status(payloads, a),
+             "hard_cap_minor": a.hard_cap_minor, "daily_cap_minor": a.daily_cap_minor, "currency": a.currency,
+             "terms_hash": terms_hash(a), "snapshot_hash": snapshot_hash(a.consent)} for a in auths]
+    return rows[: max(1, min(int(limit), 500))]
+
+
+def mutations_enabled(env: dict[str, str] | None = None) -> bool:
+    return str((env if env is not None else os.environ).get(MUTATIONS_ENV) or "").strip().lower() in {"1", "true", "yes", "on"}
+
+
+def queue_operation(payloads: list[dict[str, Any]], auth: Authorization, kind: str, *,
+                    env: dict[str, str] | None = None, now: datetime | str | None = None) -> dict[str, Any]:
+    """Durable intent only; the executor processes it (dry-run). Launch needs consent AND the env gate."""
+    if kind not in {"launch", "stop"}:
+        raise ValueError("kind must be launch or stop")
+    if kind == "launch":
+        if not mutations_enabled(env):
+            raise SpendInvariantViolation("advertising spend mutations are disabled")
+        if consent_status(payloads, auth) != "authorized":
+            raise SpendInvariantViolation("launch requires granted consent")
+    return {"step": f"ad_spend_{kind}_queued", "authorization_id": auth.authorization_id,
+            "business_id": auth.business_id, "dry_run": True, "at": ts(now).isoformat()}
+
+
+def superseded_evidence(evidence: dict[str, Any] | None, error: BaseException) -> dict[str, Any]:
+    if evidence is not None:
+        return evidence
+    code = error.code if isinstance(error, ProviderReadError) else type(error).__name__.lower()
+    return {"operation": "launch", "provider_error_code": code,
+            "provider_outcome_unknown": isinstance(error, ProviderReadError)}

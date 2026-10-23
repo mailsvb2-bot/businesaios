@@ -296,3 +296,100 @@ def cancel_registration_by_token(b: Board, token: str) -> list[dict[str, Any]]:
         },
         {"step": "event_commercial_consent_revoked", "registration_id": r.registration_id},
     ]
+
+
+# --- managed (UCR) conference join planning (port of event_conference_join). Pure: returns the
+# ordered idempotent UCR UniversalConference RPC intents; only the executor may run them through
+# interfaces.ucr.gateway (disabled unless BUSINESAIOS_UCR_GATEWAY_ENABLED). Join URLs are never stored.
+UCR_PROVIDER_KEY = "ucr"
+UCR_INTEGRATION_ENV = "BUSINESAIOS_UCR_CONFERENCE_INTEGRATION_ID"
+JOIN_TTL_SECONDS = 15 * 60
+
+
+def ucr_conference_integration_id(env: dict[str, str] | None = None) -> str:
+    import os
+
+    from interfaces.ucr.gateway import UcrGatewayConfigurationError
+    value = str((os.environ if env is None else env).get(UCR_INTEGRATION_ENV) or "").strip()
+    if not value or len(value) > 128 or any(ord(c) < 32 or ord(c) == 127 for c in value):
+        raise UcrGatewayConfigurationError("UCR conference integration id is required")
+    return value
+
+
+def ucr_provider_available(env: dict[str, str] | None = None) -> bool:
+    from interfaces.ucr.gateway import UcrGatewayConfigurationError, ucr_gateway_config
+    try:
+        if not ucr_gateway_config(env).enabled:
+            return False
+        ucr_conference_integration_id(env)
+    except UcrGatewayConfigurationError:
+        return False
+    return True
+
+
+def is_managed(ev: PubEvent) -> bool:
+    return ev.provider_key == UCR_PROVIDER_KEY
+
+
+def attempt_id(value: str | None) -> str:
+    import uuid
+    if value is None:
+        return str(uuid.uuid4())
+    try:
+        return str(uuid.UUID(str(value)))
+    except (TypeError, ValueError, AttributeError) as exc:
+        raise ValueError("conference join attempt id is invalid") from exc
+
+
+def _conf_steps(ev: PubEvent, position: int, owner_member_id: str, who: str, *, tenant_id: str) -> list[dict[str, Any]]:
+    if not is_managed(ev):
+        raise ValueError("event session is not managed by UCR")
+    if ev.status != "published":
+        raise ValueError("event is not active")
+    eid, pos = ev.event_id, int(position)
+    rk = "runtime:" + hashlib.sha256(f"{eid}:{pos}:{who}".encode()).hexdigest()
+    s = [("CreateConference", f"conference:{eid}:{pos}", {"external_conference_id": f"bai:event:{eid}:session:{pos}",
+                                                         "mode": "webinar"}),
+         ("EnsureParticipant", f"owner:{eid}:{pos}", {"external_user_id": f"bai:event-owner:{owner_member_id}",
+                                                     "role": "owner"})]
+    return [{"method": m, "idempotency_key": k, "tenant_id": tenant_id, "request": r} for m, k, r in s] + [
+        {"method": "PrepareConferenceRuntime", "idempotency_key": rk, "tenant_id": tenant_id, "request": {}},
+        {"method": "TransitionConference", "idempotency_key": f"waiting:{eid}:{pos}", "tenant_id": tenant_id,
+         "request": {"lifecycle": "waiting", "only_if": ["scheduled", None]}},
+        {"method": "SetEntryOpen", "idempotency_key": f"entry-open:{eid}:{pos}", "tenant_id": tenant_id,
+         "request": {"open": True}}]
+
+
+def attendee_join_plan(b: Board, ev: PubEvent, registration_id: str, *, position: int, owner_member_id: str,
+                       tenant_id: str, join_attempt_id: str | None = None, ttl_seconds: int = JOIN_TTL_SECONDS) -> list[dict[str, Any]]:
+    reg = b.registrations.get(registration_id)
+    if reg is None or reg.event_id != ev.event_id:
+        raise ValueError("event registration does not belong to the selected session")
+    if reg.status != "registered":
+        raise ValueError("event registration is not active")
+    who = f"bai:event-registration:{registration_id}"
+    steps = _conf_steps(ev, position, owner_member_id, who, tenant_id=tenant_id)
+    steps.insert(2, {"method": "EnsureParticipant", "tenant_id": tenant_id,
+                     "idempotency_key": f"participant:{ev.event_id}:{position}:{registration_id}",
+                     "request": {"external_user_id": who, "role": "attendee"}})
+    att = attempt_id(join_attempt_id)
+    return [*steps, {"method": "IssueJoinGrant", "tenant_id": tenant_id, "store_url": False,
+                     "idempotency_key": f"join:{ev.event_id}:{position}:{registration_id}:{att}",
+                     "request": {"external_user_id": who, "ttl_seconds": int(ttl_seconds)}}]
+
+
+def owner_join_plan(ev: PubEvent, *, position: int, owner_member_id: str, actor_member_id: str, can_manage: bool,
+                    tenant_id: str, join_attempt_id: str | None = None, ttl_seconds: int = JOIN_TTL_SECONDS) -> list[dict[str, Any]]:
+    if not can_manage:
+        raise PermissionError("actor cannot manage this business")
+    owner = actor_member_id == owner_member_id
+    who = f"bai:event-owner:{owner_member_id}" if owner else f"bai:event-host:{actor_member_id}"
+    steps = _conf_steps(ev, position, owner_member_id, who, tenant_id=tenant_id)
+    if not owner:
+        steps.insert(2, {"method": "EnsureParticipant", "tenant_id": tenant_id,
+                         "idempotency_key": f"host:{ev.event_id}:{position}:{actor_member_id}",
+                         "request": {"external_user_id": who, "role": "host"}})
+    att = attempt_id(join_attempt_id)
+    return [*steps, {"method": "IssueJoinGrant", "tenant_id": tenant_id, "store_url": False,
+                     "idempotency_key": f"host-join:{ev.event_id}:{position}:{actor_member_id}:{att}",
+                     "request": {"external_user_id": who, "ttl_seconds": int(ttl_seconds)}}]

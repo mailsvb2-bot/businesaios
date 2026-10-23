@@ -72,3 +72,39 @@ def test_sweep_fails_closed_into_dry_run_stop_facts():
     assert (r.scanned, r.allowed, r.stops_queued, r.failed_closed) == (3, 1, 2, 1)
     assert {f["reason"] for f in r.facts} == {"provider_guard_provider_http_500", "expired"}
     assert all(f["dry_run"] for f in r.facts)
+
+
+def test_consent_lifecycle_binds_terms_and_snapshot():
+    a = auth(status="prepared")
+    log = [g.request_consent([], a, NOW)]
+    with pytest.raises(g.SpendInvariantViolation):
+        g.request_consent(log, a, NOW)
+    with pytest.raises(g.SpendInvariantViolation, match="terms"):
+        g.grant_consent(log, a, expected_terms_hash="x", expected_snapshot_hash=log[0]["snapshot_hash"],
+                        receipt_id="r", now=NOW)
+    with pytest.raises(g.SpendInvariantViolation, match="snapshot"):
+        g.grant_consent(log, a, expected_terms_hash=log[0]["terms_hash"], expected_snapshot_hash="x",
+                        receipt_id="r", now=NOW)
+    log.append(g.grant_consent(log, a, expected_terms_hash=log[0]["terms_hash"],
+                               expected_snapshot_hash=log[0]["snapshot_hash"], receipt_id="r", now=NOW))
+    assert g.consent_status(log, a) == "authorized"
+    assert g.consent_view(log, [a])[0]["status"] == "authorized"
+    with pytest.raises(g.SpendInvariantViolation, match="disabled"):
+        g.queue_operation(log, a, "launch", env={})
+    op = g.queue_operation(log, a, "launch", env={g.MUTATIONS_ENV: "1"}, now=NOW)
+    assert op["step"] == "ad_spend_launch_queued" and op["dry_run"] is True
+    rv = g.revoke_consent(log, a, actor_member_id="m", now=NOW)
+    assert [f["step"] for f in rv] == ["ad_spend_consent_revoked"]
+    assert g.revoke_consent(log + rv, a, actor_member_id="m") == []
+    with pytest.raises(g.SpendInvariantViolation):
+        g.queue_operation(log + rv, a, "launch", env={g.MUTATIONS_ENV: "1"})
+
+
+def test_revoke_live_queues_dry_run_stop_and_evidence():
+    a = auth(status="active")
+    rv = g.revoke_consent([], a, actor_member_id="m", now=NOW)
+    assert rv[1]["step"] == "ad_spend_stop_queued" and rv[1]["dry_run"] is True
+    assert g.queue_operation([], a, "stop", env={})["step"] == "ad_spend_stop_queued"
+    ev = g.superseded_evidence(None, g.ProviderReadError("provider_53"))
+    assert ev["provider_error_code"] == "provider_53" and ev["provider_outcome_unknown"] is True
+    assert g.superseded_evidence({"k": 1}, ValueError()) == {"k": 1}
