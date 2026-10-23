@@ -28,7 +28,7 @@ class _Effects:
 
     def send_message(self, **kwargs):
         self.calls.append(kwargs)
-        return {"ok": self.ok}
+        return {"ok": self.ok, "router_evidence": {"source": "telegram", "message_id": 1}}
 
 
 ENV = SimpleNamespace(decision=SimpleNamespace(decision_id="d1", correlation_id="c1"))

@@ -114,5 +114,8 @@ def handle_privacy_export(payload, effects, env, *, event_store):
         track_payload={"tenant_id": tenant_id, "user_id": user_id, "records": len(items), "types": dict(types)},
         **delivery_kwargs(body),
     )
-    delivered = bool(delivery.get("ok")) if isinstance(delivery, dict) else bool(delivery)
-    return {"ok": bool(ok and delivered), "status": "verified" if ok and delivered else "failed", "delivery": delivery}
+    from runtime.handler_impl.domains.admin_ops import _card_outcome
+
+    # Same evidence contract as admin_user_card: the verifier needs the delivery
+    # receipt as router_evidence, otherwise the update is retried and re-sent.
+    return _card_outcome(delivery=delivery, ok=ok, reason="" if ok else "export_failed")
