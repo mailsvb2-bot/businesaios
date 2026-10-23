@@ -27,6 +27,7 @@ PARENTS: dict[str, str] = {
     "today": "cpm:work",
     "bookings": "cpm:work",
     "growth": "cpm:menu",
+    "growth-now": "cpm:growth",
     "partners": "cpm:growth",
     "ladder": "cpm:growth",
     "manage": "cpm:menu",
@@ -159,6 +160,7 @@ def _screen(parsed: Parsed, s: Snapshot) -> tuple[str, list[list[tuple[str, str]
         return "📅 Запись\n\n" + "\n".join(lines) + foot, [*_rows(_ADD_TIME), *nav]
     if a == "growth":
         return "📈 Рост\n\nПартнёры и лестница предложений.", _rows(
+            ("🧭 Что делать сейчас", "cpm:growth-now"),
             ("🤝 Партнёры", "cpm:partners:0"),
             ("🪜 Лестница предложений", "cpm:ladder"),
             ("📈 Отчёт о росте", "cpm:growth-report"),
@@ -182,6 +184,10 @@ def _screen(parsed: Parsed, s: Snapshot) -> tuple[str, list[list[tuple[str, str]
         return _cs.screen(a, parsed.args, s.sales, now_ms=s.now_ms)
     if a in _cb.PARENTS:
         return _cb.screen(a, parsed.args, s.admin, now_ms=s.now_ms)
+    if a == "growth-now":
+        from application.business_flows import growth_cockpit as gc
+
+        return gc.screen(s)
     if a in _ce.PARENTS:
         return _ce.screen(a, parsed.args, s)
     if a in _cm.PARENTS:
