@@ -30,7 +30,8 @@ def propose(
 ) -> ProposedAction:
     return ProposedAction(
         action=str(action),
-        payload=dict(payload or {}),
+        # Preserve explicit None constraints; only an unset callback ID is omitted.
+        payload={k: v for k, v in dict(payload or {}).items() if not (k == "callback_query_id" and v is None)},
         ranking={str(k): float(v) for k, v in dict(ranking or {}).items()},
     )
 

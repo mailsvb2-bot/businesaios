@@ -157,6 +157,7 @@ class EffectRouter:
             critical=bool(payload.get("critical", True)),
             timeout_s=int(payload.get("timeout_s") or 30),
             transport_guard=payload.get("_transport_guard") if callable(payload.get("_transport_guard")) else None,
+            delivery_scope=_optional_text(payload.get("delivery_scope")),
         )
         return {"ok": bool(ok), **dict(meta or {})}
 
