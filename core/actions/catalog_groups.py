@@ -93,6 +93,13 @@ def ads_catalog() -> dict[str, CatalogEntry]:
             optional={"country_code", "preferred_provider", "aspect_ratio", "duration_seconds", "negative_prompt", "reference_url", "brand_context", "wait_seconds", "visual_direction", "seed", "variants", "overlay"},
             field_types={"tenant_id": str, "user_id": str, "kind": str, "prompt": str, "country_code": str, "preferred_provider": str, "aspect_ratio": str, "duration_seconds": int, "negative_prompt": str, "reference_url": str, "brand_context": str, "wait_seconds": int, "visual_direction": dict, "seed": int, "variants": int, "overlay": dict},
         ),
+        "conference_join_run@v1": _entry(
+            "conference_join_run@v1",
+            1,
+            required={"tenant_id", "user_id", "plan", "integration_id"},
+            optional=set(),
+            field_types={"tenant_id": str, "user_id": str, "plan": list, "integration_id": str},
+        ),
         "visual_creative_poll@v1": _entry(
             "visual_creative_poll@v1",
             1,

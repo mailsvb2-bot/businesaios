@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from runtime.handlers import ActionHandlerRegistry
+from runtime.handlers.conference_join import handle_run_conference_join_plan
 from runtime.handlers.platform_effects import (
     handle_apply_offer_patch,
     handle_enqueue_evolution_job,
@@ -114,3 +115,4 @@ def register_ops_handlers(*, handlers: ActionHandlerRegistry, event_store) -> No
     handlers.register("enqueue_evolution_job@v1", handle_enqueue_evolution_job)
     handlers.register("suggest_offer_patch@v1", handle_suggest_offer_patch)
     handlers.register("apply_offer_patch@v1", handle_apply_offer_patch)
+    handlers.register("conference_join_run@v1", handle_run_conference_join_plan)
