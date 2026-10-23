@@ -4,7 +4,7 @@ Ported from clientplatform ``admin_ops`` onto the event-sourced flow pattern: ev
 mutation is one ``business_admin@v1`` fact (the delivered receipt), replay is the audit
 trail. Money is integer minor units; a payment's external reference is idempotent, a
 refund never exceeds what remains. Nothing here moves money: payments are owner-recorded
-evidence, provider capture stays with the payment mixin.
+evidence (cash/transfer), not the provider Payment lifecycle owned by core.payments.
 """
 
 from __future__ import annotations
@@ -27,7 +27,7 @@ APPROVAL_NEXT = {
 
 
 @dataclass
-class Payment:
+class ManualPaymentRecord:
     payment_id: str
     offering: str
     amount_minor: int
@@ -54,7 +54,7 @@ class Approval:
 class State:
     settings: dict[str, str] = field(default_factory=dict)
     prices: dict[str, tuple[int, str]] = field(default_factory=dict)
-    payments: dict[str, Payment] = field(default_factory=dict)
+    payments: dict[str, ManualPaymentRecord] = field(default_factory=dict)
     approvals: dict[str, Approval] = field(default_factory=dict)
 
     @property
@@ -99,7 +99,7 @@ def replay(payloads: list[dict[str, Any]]) -> State:
         elif step == "price_set":
             st.prices[str(p["offering"])] = (int(p["amount_minor"]), str(p["currency"]))
         elif step == "payment_recorded" and p["payment_id"] not in st.payments:
-            st.payments[p["payment_id"]] = Payment(
+            st.payments[p["payment_id"]] = ManualPaymentRecord(
                 p["payment_id"], p["offering"], int(p["amount_minor"]), p["currency"], p["reference"]
             )
         elif step == "payment_refunded" and p["payment_id"] in st.payments:
@@ -141,7 +141,7 @@ def set_price(st: State, arg: str) -> dict[str, Any]:
     return {"step": "price_set", "offering": offering[:120], "amount_minor": minor, "currency": cur}
 
 
-def record_payment(st: State, arg: str) -> tuple[dict[str, Any] | None, Payment | None]:
+def record_payment(st: State, arg: str) -> tuple[dict[str, Any] | None, ManualPaymentRecord | None]:
     """``Предложение | сумма [валюта] | внешняя ссылка``; same reference replays, never doubles."""
     p = _fields(arg, 3, "payment_format: /pay Предложение | 1500 RUB | номер платежа")
     payment_id = stable_id("pay", p[2].casefold())
