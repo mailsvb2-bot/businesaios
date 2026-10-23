@@ -11,7 +11,6 @@ import re
 from collections.abc import Iterable, Mapping
 from dataclasses import dataclass
 from typing import Any
-from urllib.parse import urlencode
 
 CANON_MESSENGER_SWITCHING = True
 PLATFORMS = ("telegram", "vk", "max")
@@ -69,9 +68,9 @@ def public_destination(platform: str, start_payload: str, **src: Any) -> PublicD
     if target is None:
         return None
     if platform == "vk":
-        return PublicDestination(platform, f"https://vk.com/write-{target}?" + urlencode({"ref": payload}))
+        return PublicDestination(platform, f"https://vk.com/write-{target}?ref={payload}")
     host = "t.me" if platform == "telegram" else "max.ru"
-    return PublicDestination(platform, f"https://{host}/{target}?" + urlencode({"start": payload}))
+    return PublicDestination(platform, f"https://{host}/{target}?start={payload}")  # payload is URL-safe
 
 
 def public_destinations(start_payload: str, **src: Any) -> tuple[PublicDestination, ...]:
