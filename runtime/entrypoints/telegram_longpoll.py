@@ -262,6 +262,8 @@ def _run_longpoll(
     )
     idle_sleep_s = max(0, env_int("TELEGRAM_IDLE_SLEEP_MS", 250)) / 1000.0
     offset: int | None = None
+    failures: dict[int, int] = {}
+    max_attempts = max(1, env_int("TELEGRAM_MAX_UPDATE_ATTEMPTS", 3))
 
     _append_event(
         event_log,
@@ -299,20 +301,33 @@ def _run_longpoll(
                 if not isinstance(update, dict):
                     continue
                 raw_update_id = update.get("update_id")
-                # Advance acknowledgement only after successful execution. Failed
-                # decisions must remain eligible for replay on the next poll.
-                result = _execute_update(
-                    core=core,
-                    executor=executor,
-                    event_log=event_log,
-                    update=update,
-                    transport="longpoll",
-                )
-                if not bool(getattr(result, "ok", False)):
-                    _LOG.warning("telegram canonical execution did not confirm outcome; retrying update_id=%s", raw_update_id)
-                    raise RuntimeError("telegram_update_outcome_unconfirmed")
+                # A rejected or unconfirmed outcome cannot monopolize the
+                # entire bot. Limit replays and record the terminal failure.
+                try:
+                    result = _execute_update(
+                        core=core, executor=executor, event_log=event_log,
+                        update=update, transport="longpoll",
+                    )
+                    if not bool(getattr(result, "ok", False)):
+                        raise RuntimeError("telegram_update_outcome_unconfirmed")
+                except Exception as exc:
+                    if raw_update_id is None:
+                        _LOG.exception("telegram update missing update_id")
+                        continue
+                    update_id = int(raw_update_id)
+                    failures[update_id] = failures.get(update_id, 0) + 1
+                    if failures[update_id] < max_attempts:
+                        raise
+                    _append_event(event_log, event_type="telegram_update_failed_terminal",
+                                  payload={"update_id": update_id,
+                                           "attempts": failures[update_id],
+                                           "error": type(exc).__name__})
+                    _LOG.error("telegram update_id=%s failed %s times; acknowledging to unblock polling",
+                               update_id, failures[update_id], exc_info=True)
+                    failures.pop(update_id, None)
                 if raw_update_id is not None:
                     offset = int(raw_update_id) + 1
+                    failures.pop(int(raw_update_id), None)
             if not updates and idle_sleep_s > 0:
                 time.sleep(idle_sleep_s)
         except KeyboardInterrupt:
