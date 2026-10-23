@@ -127,9 +127,9 @@ def _kind(b: Brief) -> str:
 
 def candidates(b: Brief) -> list[Creative]:
     """Three domain-aware variants (donor ``generate_promotion_candidates``); unsafe ones dropped."""
-    details = _compact(b.offering_description or b.activity, 190)
+    details = _compact(b.offering_description or b.activity, 190) or "Онлайн-запись на удобное время"
     biz, off, when, mins = (
-        _compact(b.business_name, 80),
+        _compact(b.business_name, 80) or "нашей команды",
         _compact(b.offering_title, 100),
         _compact(b.local_start, 40),
         b.duration_min,

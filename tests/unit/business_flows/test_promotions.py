@@ -78,3 +78,16 @@ def test_start_deep_link_routes_to_promo_open() -> None:
     ctx = SimpleNamespace(callback_data="", callback_query_id="", cmd="/start", args="cpa_abcdefghijkl", is_admin=False)
     act = handle_business_flow_routes(ctx, user_id="u")
     assert act is not None
+
+
+def test_candidates_fallback_when_profile_empty():
+    from application.business_flows import promotions as pm
+    import dataclasses
+    fields = [f.name for f in dataclasses.fields(pm.Brief)]
+    vals = {f: "" for f in fields}
+    vals.update(offering_title="Промо", local_start="21.11 16:00", duration_min=60)
+    cs = pm.candidates(pm.Brief(**vals))
+    assert cs
+    for c in cs:
+        txt = " ".join(str(v) for v in dataclasses.asdict(c).values())
+        assert "от\n" not in txt and ". ." not in txt and not txt.rstrip().endswith("от")
