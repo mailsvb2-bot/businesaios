@@ -24,12 +24,13 @@ MAX_TEXT = 2000
 MAX_REPLY = 600
 _HANDLE = re.compile(r"(?<!\w)@[A-Za-z0-9_]{5,32}\b")
 _URL = re.compile(r"(?i)https?://\S+")
+OFFER_KINDS = ("none", "diagnostic", "audit", "implementation", "recurring")
 INTENTS = ("service_interest", "pricing", "booking", "question", "objection", "other")
 SYSTEM = (
     "Вы помощник владельца малого бизнеса в переписке с клиентом. Ответьте строго JSON без пояснений: "
     '{"intent": один из ' + "|".join(INTENTS) + ', "need_is_specific": bool, "purchase_intent_explicit": bool, '
     '"purchase_readiness": 0..1, "confidence": 0..1, "explicit_human_request": bool, "sensitive_context": bool, '
-    '"negative_sentiment": bool, "reply": "черновик ответа на русском, вежливо на Вы, без цен и ссылок"}'
+    '"negative_sentiment": bool, "recommended_offer_kind": "none|diagnostic|audit|implementation|recurring", "reply": "черновик ответа на русском, вежливо на Вы, без цен и ссылок"}'
 )
 
 
@@ -101,6 +102,8 @@ def parse_analysis(raw: str) -> dict[str, Any]:
     }
     out |= {k: _unit(d, k) for k in ("purchase_readiness", "confidence")}
     out["intent"] = d["intent"]
+    kind = str(d.get("recommended_offer_kind") or "none").strip().casefold()
+    out["recommended_offer_kind"] = kind if kind in OFFER_KINDS else "none"
     out["reply"] = _URL.sub("", reply)[:MAX_REPLY].strip()
     return out
 
@@ -134,6 +137,18 @@ def suggestion(lead: sl.Lead, a: dict[str, Any]) -> tuple[dict[str, Any], str | 
     return note, legal
 
 
+def verified_offer(steps: list[Any], a: dict[str, Any]) -> dict[str, Any] | None:
+    """Donor _resolve_verified_offer: the first owner ladder step of the model's suggested kind whose
+    evidence threshold the readiness meets. The model never invents an offer or a price."""
+    kind = a.get("recommended_offer_kind", "none")
+    if kind == "none":
+        return None
+    for s in sorted(steps, key=lambda x: (x.position, x.step_id)):
+        if s.kind == kind and s.min_score <= float(a.get("purchase_readiness", 0)):
+            return {"title": s.title, "step_id": s.step_id, "kind": s.kind}
+    return None
+
+
 __all__ = [
     "CANON_SALES_AI",
     "RUSSIAN_PROVIDERS",
@@ -143,4 +158,5 @@ __all__ = [
     "prepare_text",
     "prompt",
     "suggestion",
+    "verified_offer",
 ]

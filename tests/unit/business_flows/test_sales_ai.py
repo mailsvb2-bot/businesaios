@@ -76,3 +76,17 @@ def test_malformed_or_low_confidence_answers_fail_closed() -> None:
     assert sa.milestones(low) == ()
     human = sa.parse_analysis(json.dumps({**GOOD, "explicit_human_request": True}))
     assert sa.milestones(human) == ("handoff",)
+
+
+def test_verified_offer_only_from_owner_ladder_by_kind_and_readiness() -> None:
+    from application.business_flows import ladder as ld
+
+    steps, _ = ld.replay(
+        [ld.parse_step("audit | Аудит сайта | 0.95", position=1), ld.parse_step("audit | Экспресс-аудит | 0.5", position=2)]
+    )
+    a = sa.parse_analysis(json.dumps({**GOOD, "recommended_offer_kind": "audit"}))
+    assert sa.verified_offer(steps, a)["title"] == "Экспресс-аудит"
+    assert sa.verified_offer(steps, sa.parse_analysis(json.dumps(GOOD))) is None
+    bogus = sa.parse_analysis(json.dumps({**GOOD, "recommended_offer_kind": "free_iphone"}))
+    assert bogus["recommended_offer_kind"] == "none"
+    assert sa.verified_offer(steps, {**a, "recommended_offer_kind": "recurring"}) is None

@@ -966,7 +966,13 @@ def _sales_ai(body, effects, env, st, arg, *, tenant_id, event_store):
     note, event = sa.suggestion(lead, analysis)
     rows = [[(cs.EVENT_LABELS[event], f"cpm:sales-ev:{lead.lead_id}:{event}")]] if event else []
     rows.append([("💬 Карточка лида", f"cpm:sales-lead:{lead.lead_id}")])
-    flag = "\n(контакты скрыты перед отправкой в ИИ)" if redacted else ""
+    from application.business_flows import ladder as ld
+
+    steps, _ = ld.replay(flow_payloads(event_store, tenant_id=tenant_id, event_type="offer_ladder@v1"))
+    offer = sa.verified_offer(steps, analysis)
+    flag = (f"\n\n🪜 Подходящий шаг лестницы: {offer['title']}" if offer else "") + (
+        "\n(контакты скрыты перед отправкой в ИИ)" if redacted else ""
+    )
     return send_tracked(
         body,
         effects,
