@@ -190,3 +190,51 @@ __all__ = [
     "set_status",
     "statuses",
 ]
+
+
+def fallback_terms(activity: str, offerings: list[str] | tuple[str, ...]) -> tuple[str, ...]:
+    """Audience terms from the profile when the goal names none (partner_growth._fallback_terms)."""
+    words: list[str] = []
+    for src in (activity, *offerings):
+        for tok in str(src or "").replace("/", " ").replace(",", " ").split():
+            w = tok.strip(".():;!?\"'").casefold()
+            if len(w) >= 5 and w not in words:
+                words.append(w)
+            if len(words) >= 8:
+                return tuple(words)
+    return tuple(words or ("бизнес",))
+
+
+def prepare_run(
+    discover: Any,
+    *,
+    goal_terms: list[str],
+    activity: str,
+    offerings: list[str],
+    business: str,
+    url: str = "",
+    min_fit: float = 55.0,
+    limit: int = 50,
+) -> list[dict[str, Any]]:
+    """Read-only discovery + local preparation (partner_growth.PartnerGrowthService.run).
+
+    ``discover(terms, limit)`` is the injected provider returning ``parse_partner``-style args;
+    ``None`` means not configured. Emits ``partner_added`` + ``partner_pack_prepared`` facts for
+    candidates at or above ``min_fit``. Never contacts anyone: sends stay with the executor.
+    """
+    if not 0 <= float(min_fit) <= 100 or not 1 <= int(limit) <= 500:
+        raise ValueError("partner_growth_policy_invalid")
+    if discover is None:
+        raise ValueError("partner_discovery_not_configured")
+    terms = list(goal_terms) or list(fallback_terms(activity, offerings))
+    facts: list[dict[str, Any]] = []
+    for arg in list(discover(terms, int(limit)))[: int(limit)]:
+        added = parse_partner(arg)
+        p = replay([added])[added["partner_id"]]
+        fit = score(p, terms)
+        if fit.total < min_fit:
+            continue
+        offer = offerings[0] if offerings else ""
+        facts += [added, {"step": "partner_pack_prepared", "partner_id": p.partner_id, "fit": round(fit.total, 1),
+                          "pack": pitch(p, business=business, offer=offer, url=url)}]
+    return facts
