@@ -399,7 +399,25 @@ class Effects(
         )
 
 
+def poll_customer_bot_updates(*, token: str, offset: int | None, timeout_s: int = 0, limit: int = 100) -> Any:
+    """getUpdates for one customer bot through the canonical polling effect (no second poller)."""
+    from .effects_actions.telegram_actions_polling import poll_telegram_updates_effect
+
+    # Donor parity: customer bots poll with the Bot API default update set.
+    return poll_telegram_updates_effect(
+        object(), offset=offset, timeout_s=int(timeout_s), limit=int(limit), token=token, allowed_updates=[]
+    )
+
+
+def customer_bot_token_scope(token: str) -> Any:
+    from .effects_clients.bot_token_scope import customer_bot_token_scope as scope
+
+    return scope(token)
+
+
 __all__ = [
+    "customer_bot_token_scope",
+    "poll_customer_bot_updates",
     "CANON_RUNTIME_OBSERVABILITY_OWNER",
     "CANON_EFFECTS_PUBLIC_FACADE_BACKED_BY_INTERNAL_IMPL",
     "Effects",

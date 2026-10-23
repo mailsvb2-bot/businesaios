@@ -28,6 +28,7 @@ from ._telegram_delivery_state import (
 from ._telegram_delivery_support import delivery_key as build_delivery_key
 from ._telegram_delivery_support import payload_digest as build_payload_digest
 from ._telegram_delivery_support import stable_json
+from .bot_token_scope import scope_tag, scoped_bot_token
 from .http_client import http_json, http_multipart_file
 
 
@@ -380,7 +381,10 @@ class TelegramClient:
         transport_guard: Callable[[], str] | None = None,
         delivery_scope: str | None = None,
     ) -> tuple[bool, dict[str, Any]]:
-        token = _token()
+        customer_tag = scope_tag()  # customer-bot reply: that bot's token, synchronous, own delivery key
+        token = scoped_bot_token() or _token()
+        if customer_tag:
+            delivery_scope = f"{delivery_scope or ''}|{customer_tag}"
         payload: dict[str, Any] = {
             "chat_id": str(chat_id),
             "text": str(text),
@@ -443,7 +447,7 @@ class TelegramClient:
                 return False, {"error": "TELEGRAM_BOT_TOKEN_MISSING", "delivery_key": delivery_key, "payload_digest": payload_digest}
             return True, {"mode": "noop", "reason": "TELEGRAM_BOT_TOKEN_MISSING", "delivery_key": delivery_key, "payload_digest": payload_digest}
 
-        if self.outbound_queue is not None and transport_guard is None:
+        if self.outbound_queue is not None and transport_guard is None and not customer_tag:
             try:
                 accepted_metadata = delivery_metadata(
                     method="sendMessage",

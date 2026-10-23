@@ -178,3 +178,12 @@ __all__ = [
     "EffectRouter",
     "EffectActionType",
 ]
+
+
+
+def poll_customer_bot_updates(*, token: str, offset: int | None, timeout_s: int = 0, limit: int = 100) -> Any:
+    return _effects_impl().poll_customer_bot_updates(token=token, offset=offset, timeout_s=timeout_s, limit=limit)
+
+
+def customer_bot_token_scope(token: str) -> Any:
+    return _effects_impl().customer_bot_token_scope(token)
