@@ -286,7 +286,7 @@ def handle_offer_ladder(payload, effects, env, *, event_store):
     return send_tracked(body, effects, env, text=text, event_type=None, event_payload=None)
 
 
-def _cockpit(body, effects, env, future, steps, facts, now):
+def _cockpit(body, effects, env, future, steps, facts, now, team=None):
     """Owner cockpit screens (cpm:*) over the same projections; buttons re-enter this action."""
     from application.business_flows import admin as ad
     from application.business_flows import bookings as bk
@@ -311,6 +311,7 @@ def _cockpit(body, effects, env, future, steps, facts, now):
         now_ms=now,
         money_text=ad.render_summary,
         sales=sl.replay(facts("sales_pipeline@v1")),
+        team=team or {},
     )
     parsed = cp.parse(str(body.get("arg") or "cpm:menu"))
     if parsed.action == "sales-ev":
@@ -404,7 +405,13 @@ def handle_business_ops_summary(payload, effects, env, *, event_store, now_ms: i
     booked = [s for s in future if s.status == "booked"]
     steps, _ = ld.replay(facts("offer_ladder@v1"))
     if str(body.get("op") or "") == "cockpit":
-        return _cockpit(body, effects, env, future, steps, facts, now)
+        from core.admin import roles_read_model as rr
+
+        team = {
+            "roles": rr.team_roles_snapshot(event_store, tenant_id=tenant_id),
+            "perms": rr.team_perms_snapshot(event_store, tenant_id=tenant_id),
+        }
+        return _cockpit(body, effects, env, future, steps, facts, now, team)
     deletions = len(facts("privacy_deleted@v1"))
     bots = {p.get("username") for p in facts("bot_provisioning@v1") if p.get("username")}
     text = (

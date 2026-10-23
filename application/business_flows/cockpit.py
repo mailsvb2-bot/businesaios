@@ -42,6 +42,8 @@ PARENTS: dict[str, str] = {
     "events": "cpm:work",
     "automation": "cpm:manage",
     "settings": "cpm:manage",
+    "team": "cpm:manage",
+    "member": "cpm:team:0",
 }
 PARENTS.update(_cs.PARENTS)
 PARENTS.update(_cb.PARENTS)
@@ -69,6 +71,9 @@ class Snapshot:
     now_ms: int = 0
     money_text: Any = None  # admin.render_summary
     sales: Any = None  # sales.State
+    team: dict = field(
+        default_factory=dict
+    )  # {"roles": {uid: [..]}, "perms": {uid: [..]}} (core.admin.roles_read_model)
 
 
 def recognizes(data: object) -> bool:
@@ -179,6 +184,7 @@ def _screen(parsed: Parsed, s: Snapshot) -> tuple[str, list[list[tuple[str, str]
             ("🧾 Услуги и цены", "cpm:services"),
             ("🤖 Автоматизация", "cpm:automation"),
             ("🔧 Настройки", "cpm:settings"),
+            ("👥 Команда", "cpm:team:0"),
         )
     if a in _cs.PARENTS:
         return _cs.screen(a, parsed.args, s.sales, now_ms=s.now_ms)
@@ -212,8 +218,40 @@ def customers(slots: list[Any]) -> list[tuple[str, int]]:
     return sorted(counts.items(), key=lambda kv: (-kv[1], kv[0]))
 
 
+_ROLE_RU = {"admin": "администратор", "marketing": "маркетинг"}
+
+
+def team_screen(a: str, args: tuple[str, ...], team: dict) -> tuple[str, list[list[tuple[str, str]]]]:
+    """Read-only team view over admin_role_set/admin_perm_set (donor _team/_members/_member/_permissions)."""
+    roles, perms = dict(team.get("roles") or {}), dict(team.get("perms") or {})
+    members = sorted(set(roles) | set(perms))
+    if a == "member":
+        if not args or args[0] not in members:
+            raise ValueError("unknown member")
+        uid = args[0]
+        r = ", ".join(_ROLE_RU.get(x, x) for x in roles.get(uid, [])) or "нет"
+        pm = ", ".join(perms.get(uid, [])) or "нет"
+        return (
+            f"👤 Участник {uid}\n\nРоли: {r}\nПрава: {pm}\n\nИзменить: /role_add {uid} admin|marketing · /role_del {uid} роль · /perm_add · /perm_del",
+            [],
+        )
+    if not members:
+        return "👥 Команда\n\nКроме Вас, в команде никого нет. Добавить: /role_add <id> admin|marketing", []
+    lines, nav, foot = _paged(
+        members,
+        page_number(args),
+        "team",
+        lambda u: f"{u} — " + (", ".join(_ROLE_RU.get(x, x) for x in roles.get(u, [])) or "без ролей"),
+    )
+    page = page_number(args)
+    buttons = [[(f"👤 {u}"[:40], f"cpm:member:{u}")] for u in members[page * PAGE_SIZE : (page + 1) * PAGE_SIZE]]
+    return "👥 Команда\n\n" + "\n".join(lines) + foot, [*buttons, *nav]
+
+
 def _extra_screen(a: str, parsed: Parsed, s: Snapshot) -> tuple[str, list[list[tuple[str, str]]]] | None:
     adm, ser = s.admin, s.series
+    if a in ("team", "member"):
+        return team_screen(a, parsed.args, s.team)
     if a == "money":
         body = s.money_text(adm) if adm is not None and s.money_text else "Платежей нет."
         return body + "\n\nЗаписать: /pay Услуга | 1500 RUB | номер · Возврат: /refund", _rows(
