@@ -281,7 +281,7 @@ def _promotions(done, bk, op, arg, now, slots, facts, *, user_id, tenant_id, eve
     return done(f"✅ Вы записаны: {line(slot.slot_id)}", ch)
 
 
-EVENT_OPS = frozenset({"add_sessions", "edit_slot", "reschedule_slot", "schedule"})
+EVENT_OPS = frozenset({"add_sessions", "edit_slot", "event_schedule", "reschedule_slot", "schedule"})
 
 
 def _events(done, push, bk, op, arg, now, slots, *, tenant_id, event_store):
@@ -295,14 +295,30 @@ def _events(done, push, bk, op, arg, now, slots, *, tenant_id, event_store):
         rows = [
             f"{i}. {bk.fmt(s, tz)} · {'занят' if s.status == 'booked' else 'свободен'}" for i, s in enumerate(live, 1)
         ]
-        tail = "\n\n/edit_slot N [мин] [название] · /reschedule_slot N ГГГГ-ММ-ДД ЧЧ:ММ"
+        tail = "\n\n/edit_slot N [мин] [название] · /reschedule_slot N ГГГГ-ММ-ДД ЧЧ:ММ · /event_schedule N — вся серия"
         return done("🗓 Расписание\n\n" + ("\n".join(rows) or "Пока пусто.") + tail, None)
     if op == "add_sessions":
         sessions = bk.parse_sessions(arg, now_ms=now, tz=tz)
         rows = "\n".join(bk.fmt(s, tz) for s in bk.replay(sessions).values())
         return done(f"📅 Сессии открыты ({len(sessions)}):\n{rows}", {"step": "sessions_opened", "sessions": sessions})
     n, _, rest = arg.partition(" ")
+    if op == "event_schedule":  # "N\nline..." or "N line\nline..."
+        n, rest = ([*arg.split(None, 1), ""])[:2]
     slot = live[int(n) - 1] if n.isdigit() and 0 < int(n) <= len(live) else None
+    if op == "event_schedule":
+        from application.business_flows import event_schedule_edit as ese
+        from application.business_flows.owner_panels import series_of
+
+        if slot is None:
+            raise ValueError("slot_not_found: /event_schedule N")
+        series = series_of(slot, slots)
+        if not rest.strip():
+            return done(ese.edit_message(series, tz=tz) + f"\n\nОтвет: /event_schedule {n} и строки ниже", None)
+        text, ch, moved = ese.edit_result(series, rest, now_ms=now, tz=tz)
+        for old, new in moved:
+            if old.status == "booked" and old.customer_id:
+                push(en.rescheduled_text(new, old.starts_at_ms, tz), old.customer_id)
+        return done(text, ch)
     if op == "edit_slot":
         ch = bk.edit(slot, rest)
         new = bk.replay([{"step": "slot_opened", **slot.__dict__}, ch])[slot.slot_id]

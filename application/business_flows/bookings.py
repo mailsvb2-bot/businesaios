@@ -43,6 +43,8 @@ def _expand(payloads: list[dict[str, Any]]):
     for p in payloads:
         if p.get("step") == "sessions_opened":
             yield from (dict(x, step="slot_opened") for x in p.get("sessions") or [])
+        elif p.get("step") == "series_rescheduled":  # owner series schedule edit (event_schedule_edit)
+            yield from (dict(x) for x in p.get("changes") or [])
         else:
             yield p
 

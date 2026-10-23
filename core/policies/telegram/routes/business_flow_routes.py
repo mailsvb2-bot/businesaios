@@ -32,6 +32,7 @@ BUSINESS_FLOW_COMMANDS: dict[str, tuple[str, str, bool]] = {
     "/add_sessions": ("bookings@v1", "add_sessions", True),
     "/edit_slot": ("bookings@v1", "edit_slot", True),
     "/reschedule_slot": ("bookings@v1", "reschedule_slot", True),
+    "/event_schedule": ("bookings@v1", "event_schedule", True),
     "/schedule": ("bookings@v1", "schedule", True),
     "/link_channels": ("bookings@v1", "link_channels", False),
     "/announce": ("bookings@v1", "announce", True),
@@ -173,7 +174,8 @@ def handle_business_flow_routes(ctx: TelegramCtx, *, user_id: str) -> ProposedAc
         op = "home_owner"  # owner /me also shows the client journey
     if owner_only and not ctx.is_admin:
         return None
-    return propose(action, {"user_id": user_id, "op": op, "arg": str(ctx.args or "").strip()[:200]})
+    cap = 1200 if op == "event_schedule" else 200  # one line per session (up to 31)
+    return propose(action, {"user_id": user_id, "op": op, "arg": str(ctx.args or "").strip()[:cap]})
 
 
 __all__ = ["BUSINESS_FLOW_COMMANDS", "handle_business_flow_routes"]
