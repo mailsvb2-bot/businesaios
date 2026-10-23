@@ -207,3 +207,123 @@ def remove(assets: dict[str, Asset], job_id: str) -> dict[str, Any] | None:
 
 def provider_ids(job_id: str, **ids: str | None) -> dict[str, Any]:
     return {"step": "ad_media_provider_ids", "job_id": job_id, **{k: v for k, v in ids.items() if v}}
+
+
+# --- goal studio publication (port of donor creative_studio_publication) ---
+# A selected studio variant is bound to an ad publication job via facts; the executor's
+# generate_visual_creative/poll_visual_creative jobs (with render pack) drive progress, and the
+# rendered square is attached through attach_image_file (dry-run uploader by default).
+
+GOAL_FORMATS = ("square", "feed", "story", "landscape")
+GOAL_LABELS = ("🤝 Доверие и живой человек", "🧭 Понятный процесс", "✨ Спокойная ценность")
+PLACEMENT_RENDER_FORMATS = {"yandex_direct": "square"}  # canonical Yandex bridge normalises to square
+
+
+class PublicationError(RuntimeError):
+    pass
+
+
+@dataclass(frozen=True)
+class VariantBinding:
+    job_id: str
+    creative_id: str
+    business_id: str
+    angle: str
+    source_job_id: str = ""
+    render_pack_id: str = ""
+    status: str = "selected"  # selected | generating | rendering | failed | attached
+
+
+def render_format_for_placement(placement: str) -> str:
+    try:
+        return PLACEMENT_RENDER_FORMATS[str(placement or "").strip().lower()]
+    except KeyError as exc:
+        raise ValueError("unsupported_creative_publication_placement") from exc
+
+
+def goal_variant_labels(variants: tuple[Any, ...]) -> tuple[str, ...]:
+    if len(variants) != len(GOAL_LABELS):
+        raise ValueError("unexpected_goal_studio_variant_count")
+    return GOAL_LABELS
+
+
+def selected_goal_variant(variants: tuple[Any, ...], index: int) -> Any:
+    i = int(index)
+    if not 0 <= i < len(variants):
+        raise ValueError("creative_variant_index_out_of_range")
+    return variants[i]
+
+
+def replay_bindings(facts: list[dict[str, Any]]) -> dict[str, VariantBinding]:
+    out: dict[str, VariantBinding] = {}
+    for f in facts:
+        step, job = f.get("step"), str(f.get("job_id") or "")
+        if step == "creative_variant_selected":
+            out[job] = VariantBinding(job, str(f["creative_id"]), str(f["business_id"]), str(f.get("angle") or ""))
+        elif step == "creative_variant_progress" and job in out and out[job].creative_id == f.get("creative_id"):
+            out[job] = replace(out[job], source_job_id=str(f.get("source_job_id") or ""),
+                               render_pack_id=str(f.get("render_pack_id") or ""), status=str(f["status"]))
+    return out
+
+
+def select_variant(job_id: str, brief: Any, *, business_id: str) -> dict[str, Any]:
+    """Donor _select_binding: (re)select which studio variant this publication job uses."""
+    if brief.business_id != business_id:
+        raise ValueError("creative_variant_business_mismatch")
+    return {"step": "creative_variant_selected", "job_id": job_id, "creative_id": brief.creative_id,
+            "business_id": business_id, "angle": brief.angle, "campaign_id": brief.campaign_id}
+
+
+def _progress_fact(job_id: str, brief: Any, source_job_id: str, render_pack_id: str, status: str) -> dict[str, Any]:
+    return {"step": "creative_variant_progress", "job_id": job_id, "creative_id": brief.creative_id,
+            "source_job_id": source_job_id, "render_pack_id": render_pack_id, "status": status}
+
+
+def check_binding(bindings: dict[str, VariantBinding], job_id: str, brief: Any, source_job_id: str) -> VariantBinding:
+    current = bindings.get(job_id)
+    if current is None or current.creative_id != brief.creative_id:
+        raise ValueError("creative_variant_binding_changed")
+    if current.source_job_id and current.source_job_id != str(source_job_id or "").strip():
+        raise ValueError("creative_source_job_binding_changed")
+    return current
+
+
+def progress(*, bindings: dict[str, VariantBinding], assets: dict[str, Asset], job_id: str, brief: Any,
+             visual_job: dict[str, Any], placement: str = "yandex_direct",
+             fetch_render: Callable[[dict[str, Any], str], Path] | None = None,
+             uploader: Uploader | None = None) -> tuple[str, list[dict[str, Any]]]:
+    """Donor _progress_result/_attach_render over an executor visual job dict (with ``render_pack``)."""
+    fmt = render_format_for_placement(placement)
+    vid = str(visual_job.get("id") or "")
+    check_binding(bindings, job_id, brief, vid)
+    render = visual_job.get("render_pack") if isinstance(visual_job.get("render_pack"), dict) else None
+    state = str(visual_job.get("status") or "")
+    if state == "failed" or (render is not None and render.get("status") == "failed"):
+        status = "failed"
+    elif state in {"queued", "running"}:
+        status = "generating"
+    elif render is None or render.get("status") in {None, "", "running", "queued"}:
+        status = "rendering"
+    else:
+        if render.get("status") != "succeeded":
+            raise PublicationError("creative_render_not_ready")
+        if str(render.get("scope_id") or brief.tenant_id) != brief.tenant_id or str(
+                render.get("source_job_id") or vid) != vid:
+            raise PublicationError("creative_render_binding_mismatch")
+        if fmt not in brief.formats:
+            raise PublicationError("creative_render_format_not_requested")
+        if fetch_render is None:
+            raise PublicationError("creative_asset_attachment_failed")
+        try:
+            path = fetch_render(render, fmt)
+            kw: dict[str, Any] = {} if uploader is None else {"uploader": uploader}
+            _asset, facts = attach_image_file(assets, job_id, path, **kw)
+        except (AssetError, OSError, ValueError) as exc:
+            raise PublicationError("creative_asset_attachment_failed") from exc
+        return "attached", [*facts, _progress_fact(job_id, brief, vid, str(render.get("id") or ""), "attached")]
+    return status, [_progress_fact(job_id, brief, vid, "" if render is None else str(render.get("id") or ""), status)]
+
+
+def observable_variants(bindings: dict[str, VariantBinding]) -> list[VariantBinding]:
+    """Attached bindings that ad statistics can attribute to a studio angle."""
+    return [b for b in bindings.values() if b.status == "attached"]

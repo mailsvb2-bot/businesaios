@@ -4,7 +4,9 @@ from __future__ import annotations
 import pytest
 
 from application.visual_creative_semantics.phase18_advertising_studio import (
-    build_approved_generation_action, prepare_advertising_creatives, require_approved_visual_result,
+    build_approved_generation_action,
+    prepare_advertising_creatives,
+    require_approved_visual_result,
 )
 
 
@@ -134,3 +136,33 @@ def test_reviewed_image_action_generates_owner_selectable_candidates_and_overlay
     schema = ads_catalog()["visual_creative_generate@v1"]
     assert schema is not None
     assert action["approval_binding"]["approval_fingerprint"] == brief.approval_fingerprint
+
+
+def _cs_briefs(**kw):
+    base = dict(tenant_id="t1", business_id="b1", campaign_id="c1", headline="Консультация",
+                description="Запишитесь на встречу", brand_context="Синий", campaign_goal="Записи",
+                kind="image", formats=("square", "story"))
+    return prepare_advertising_creatives(**{**base, **kw})
+
+
+def test_cs_preflight_and_render_key():
+    from application.visual_creative_semantics.phase18_advertising_studio import (
+        overlay_for,
+        preflight,
+        render_idempotency_key,
+    )
+    assert preflight("Ок", "Ок") == (100, ())
+    score, issues = preflight("Гарантированно лучший в мире", "x" * 301)
+    assert "risky_claim" in issues and "body_long_for_layout" in issues and score == 55
+    a, b, c = _cs_briefs()
+    assert [overlay_for(x)["layout"] for x in (a, b, c)] == ["lower_card", "top_card", "lower_card"]
+    assert render_idempotency_key(a) == render_idempotency_key(_cs_briefs()[0])
+    assert render_idempotency_key(a) != render_idempotency_key(_cs_briefs(formats=("square",))[0])
+    assert render_idempotency_key(a).startswith(a.creative_id + ":render:")
+
+
+def test_cs_risky_claim_blocks_generation_action():
+    brief = _cs_briefs(headline="100% гарантия результата")[0]
+    with pytest.raises(ValueError, match="unsafe_advertising_creative_variant"):
+        build_approved_generation_action(brief=brief, approval_reference="r",
+                                         verify_approval=lambda **k: True, user_id="owner-1")

@@ -45,3 +45,23 @@ def test_ssrf_and_redirects():
         bd.fetch_html("https://a.ru", fetch=lambda u: (200, {"content-type": "image/png"}, b""), resolve=pub)
     with pytest.raises(bd.BrandDiscoveryError, match="redirects"):
         bd.fetch_html("https://a.ru", fetch=lambda u: (301, {"location": u}, b""), resolve=pub)
+
+
+def test_bd_save_load_brand_roundtrip():
+    import pytest
+
+    from application.business_flows.brand_discovery import (
+        Brand,
+        BrandDiscoveryError,
+        load_brand,
+        prompt_context,
+        save_brand,
+    )
+    b = Brand(business_id="b1", display_name="Студия", visual_keywords=("свет",), primary_color="#112233")
+    facts = [save_brand(Brand(business_id="b1", display_name="old")), save_brand(b), save_brand(Brand(business_id="b2"))]
+    assert load_brand(facts, "b1") == b
+    assert load_brand([], "b9") == Brand(business_id="b9")
+    assert "Студия" in prompt_context(b) and "#112233" in prompt_context(b)
+    assert prompt_context(Brand(business_id="x")) == "Brand: neutral."
+    with pytest.raises(BrandDiscoveryError):
+        save_brand(Brand(business_id="b1", primary_color="red; x"))

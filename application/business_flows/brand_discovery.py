@@ -252,3 +252,39 @@ def discover(*, business_id: str, website_url: str, fetch: Callable[[str], tuple
              resolve: Callable[[str], Iterable[str]], current: Brand | None = None) -> dict[str, Any]:
     final, html = fetch_html(website_url, fetch=fetch, resolve=resolve)
     return suggest(business_id=business_id, source_url=final, html=html, current=current)
+
+
+# --- confirmed brand persistence (donor creative_studio_publication load/save_goal_visual_brand) ---
+
+
+def save_brand(brand: Brand) -> dict[str, Any]:
+    """``brand_saved`` fact written only after owner confirmation of a suggestion."""
+    if not str(brand.business_id or "").strip():
+        raise BrandDiscoveryError("brand_business_required")
+    for name in ("primary_color", "accent_color", "text_color"):
+        value = getattr(brand, name)
+        if value is not None and _color(value) is None:
+            raise BrandDiscoveryError(f"brand_{name}_invalid")
+    return {"step": "brand_saved", "business_id": brand.business_id,
+            "brand": {f: (list(getattr(brand, f)) if f == "visual_keywords" else getattr(brand, f)) for f in FIELDS}}
+
+
+def load_brand(facts: Iterable[dict[str, Any]], business_id: str) -> Brand:
+    """Latest confirmed brand for the business (empty brand when none saved)."""
+    out = Brand(business_id=business_id)
+    for f in facts:
+        if f.get("step") == "brand_saved" and f.get("business_id") == business_id and isinstance(f.get("brand"), dict):
+            b = f["brand"]
+            out = Brand(business_id=business_id, display_name=str(b.get("display_name") or ""),
+                        visual_keywords=tuple(str(k) for k in b.get("visual_keywords") or ()),
+                        primary_color=b.get("primary_color"), accent_color=b.get("accent_color"),
+                        text_color=b.get("text_color"))
+    return out
+
+
+def prompt_context(brand: Brand) -> str:
+    parts = [f"Brand: {brand.display_name}." if brand.display_name else "",
+             ("Visual keywords: " + ", ".join(brand.visual_keywords) + ".") if brand.visual_keywords else "",
+             ("Palette: " + ", ".join(c for c in (brand.primary_color, brand.accent_color) if c) + ".")
+             if brand.primary_color or brand.accent_color else ""]
+    return " ".join(p for p in parts if p) or "Brand: neutral."

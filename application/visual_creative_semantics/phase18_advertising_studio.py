@@ -131,6 +131,9 @@ def build_approved_generation_action(
     Caller must submit through the canonical DecisionCore/Execution path.
     This function cannot invoke providers, make approvals, or start spending.
     """
+    score, issues = preflight(brief.headline, brief.description)
+    if score < 70 or "risky_claim" in issues:
+        raise ValueError("unsafe_advertising_creative_variant")
     if not callable(verify_approval) or not isinstance(approval_reference, str) or not approval_reference.strip():
         raise PermissionError("advertising_approval_authority_required")
     if verify_approval(
@@ -149,9 +152,7 @@ def build_approved_generation_action(
             "visual_direction": dict(brief.visual_direction),
             "country_code": country_code, "aspect_ratio": "9:16" if "story" in brief.formats else "1:1",
             "variants": 3 if brief.kind == "image" else 1,
-            "overlay": {"headline": brief.headline, "body": brief.description,
-                        "cta": "Записаться", "layout": "lower_card",
-                        "formats": list(brief.formats)} if brief.kind == "image" else {},
+            "overlay": {**overlay_for(brief), "formats": list(brief.formats)} if brief.kind == "image" else {},
         },
         "approval_binding": {
             "approval_reference": approval_reference,
@@ -162,3 +163,41 @@ def build_approved_generation_action(
         "requires_human_approval": True,
         "spend_authorized": False,
     }
+
+
+# --- donor creative_studio: copy preflight and render idempotency ---
+RISKY_CLAIMS = ("100% гаран", "гарантированно", "гарантия результата", "лучший в мире", "до/после", "исцел",
+                "100% guarantee", "guaranteed cure", "guaranteed result", "best in the world", "before/after")
+
+
+def preflight(headline: str, description: str) -> tuple[int, tuple[str, ...]]:
+    """Donor creative_studio._preflight: risky claims block generation; long copy is penalised for layout.
+
+    The donor typography check (prompt mentions the compositor) is structural here: AD_NEGATIVE_PROMPT
+    always forbids inscriptions and copy is applied by the render-pack overlay.
+    """
+    issues: list[str] = []
+    score = 100
+    combined = f"{headline} {description}".casefold()
+    if any(token in combined for token in RISKY_CLAIMS):
+        issues.append("risky_claim")
+        score -= 35
+    if len(headline) > 90:
+        issues.append("headline_long_for_layout")
+        score -= 10
+    if len(description) > 300:
+        issues.append("body_long_for_layout")
+        score -= 10
+    return max(0, score), tuple(issues)
+
+
+def overlay_for(brief: AdvertisingCreativeBrief) -> dict[str, object]:
+    layout = "top_card" if brief.angle == "clear_process" else "lower_card"
+    return {"headline": brief.headline, "body": brief.description, "cta": "Записаться", "layout": layout}
+
+
+def render_idempotency_key(brief: AdvertisingCreativeBrief) -> str:
+    """Bind render idempotency to the exact formats and deterministic composition."""
+    payload = json.dumps({"composition": overlay_for(brief), "formats": list(brief.formats)},
+                         ensure_ascii=False, sort_keys=True, separators=(",", ":"))
+    return f"{brief.creative_id}:render:{hashlib.sha256(payload.encode()).hexdigest()[:32]}"

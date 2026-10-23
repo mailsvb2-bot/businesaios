@@ -74,3 +74,56 @@ def test_normalize_image_with_optional_pillow():
         assert img.size == (1080, 1080) and img.format == "JPEG"
     with pytest.raises(m.AssetError):
         m.normalize_image(b"\x89PNGbroken")
+
+
+def _pub_setup(tmp_path):
+    from application.visual_creative_semantics.phase18_advertising_studio import prepare_advertising_creatives
+    briefs = prepare_advertising_creatives(tenant_id="t1", business_id="b1", campaign_id="c1", headline="Консультация",
+                                           description="Встреча", brand_context="Нейтрально", campaign_goal="Записи",
+                                           kind="image", formats=("square",))
+    png = tmp_path / "sq.png"
+    png.write_bytes(b"\x89PNG\r\n\x1a\n" + b"0" * 64)
+    return briefs, png
+
+
+def test_pub_select_progress_attach(tmp_path):
+    import pytest
+
+    from application.business_flows import ad_media as m
+    briefs, png = _pub_setup(tmp_path)
+    assert m.goal_variant_labels(briefs)[1] == "🧭 Понятный процесс"
+    brief = m.selected_goal_variant(briefs, 1)
+    with pytest.raises(ValueError):
+        m.selected_goal_variant(briefs, 3)
+    with pytest.raises(ValueError):
+        m.render_format_for_placement("vk")
+    facts = [m.select_variant("job1", brief, business_id="b1")]
+    kw = dict(assets={}, job_id="job1", brief=brief, fetch_render=lambda r, f: png)
+    st, new = m.progress(bindings=m.replay_bindings(facts), visual_job={"id": "v1", "status": "running"}, **kw)
+    assert st == "generating"
+    facts += new
+    st, new = m.progress(bindings=m.replay_bindings(facts), visual_job={"id": "v1", "status": "succeeded"}, **kw)
+    assert st == "rendering"
+    with pytest.raises(ValueError, match="source_job"):
+        m.progress(bindings=m.replay_bindings(facts), visual_job={"id": "other", "status": "succeeded"}, **kw)
+    bad = {"id": "v1", "status": "succeeded", "render_pack": {"id": "r1", "status": "succeeded", "scope_id": "b2"}}
+    with pytest.raises(m.PublicationError):
+        m.progress(bindings=m.replay_bindings(facts), visual_job=bad, **kw)
+    ok = {"id": "v1", "status": "succeeded", "render_pack": {"id": "r1", "status": "succeeded", "scope_id": "t1", "source_job_id": "v1"}}
+    st, new = m.progress(bindings=m.replay_bindings(facts), visual_job=ok, **kw)
+    assert st == "attached" and any(f["step"] == "ad_media_ready" for f in new)
+    b = m.replay_bindings(facts + new)
+    assert [x.render_pack_id for x in m.observable_variants(b)] == ["r1"]
+    # reselecting another variant invalidates the old binding
+    facts2 = facts + [m.select_variant("job1", briefs[0], business_id="b1")]
+    with pytest.raises(ValueError, match="binding_changed"):
+        m.progress(bindings=m.replay_bindings(facts2), visual_job=ok, **kw)
+
+
+def test_pub_failed_render_reports_failed(tmp_path):
+    from application.business_flows import ad_media as m
+    briefs, png = _pub_setup(tmp_path)
+    facts = [m.select_variant("j", briefs[0], business_id="b1")]
+    st, _ = m.progress(bindings=m.replay_bindings(facts), assets={}, job_id="j", brief=briefs[0],
+                       visual_job={"id": "v", "status": "succeeded", "render_pack": {"status": "failed"}})
+    assert st == "failed"
