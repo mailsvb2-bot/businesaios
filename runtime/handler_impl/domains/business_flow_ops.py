@@ -466,6 +466,12 @@ def handle_business_admin(payload, effects, env, *, event_store, now_ms: int | N
         if op in ad.APPROVAL_NEXT:
             ch = ad.decide_approval(st, op, arg)
             return done(f"✅ Решение записано: {ch['status']}", ch)
+        if op == "audit":
+            facts_ = flow_payloads(event_store, tenant_id=tenant_id, event_type="business_admin@v1")
+            return done(
+                "🧾 Журнал действий владельца\n"
+                + "\n".join(ad.audit_lines(facts_, limit=int(arg) if arg.isdigit() else 20))
+            )
         if op.startswith("post"):
             from application.business_flows import publications as pb
 

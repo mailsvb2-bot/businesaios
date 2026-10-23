@@ -47,3 +47,11 @@ def test_cockpit_callback_carries_ack_once(flow) -> None:
 
     ctx = SimpleNamespace(callback_data="cpm:menu", callback_query_id="q1", is_admin=True, cmd="", args="")
     assert handle_business_flow_routes(ctx, user_id="u").payload["callback_query_id"] == "q1"
+
+
+def test_audit_newest_first(flow) -> None:
+    run = partial(flow.run, partial(handle_business_admin, now_ms=NOW))
+    run(op="setting", arg="a = 1")
+    run(op="price", arg="Йога | 1500 RUB")
+    text = run(op="audit", arg="")[1]
+    assert text.index("price_set") < text.index("setting_set")

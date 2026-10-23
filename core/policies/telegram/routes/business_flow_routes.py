@@ -41,6 +41,7 @@ BUSINESS_FLOW_COMMANDS: dict[str, tuple[str, str, bool]] = {
     "/payments": ("business_admin@v1", "summary", True),
     "/approvals": ("business_admin@v1", "approvals", True),
     "/posts": ("business_admin@v1", "posts", True),
+    "/audit": ("business_admin@v1", "audit", True),
     "/post_add": ("business_admin@v1", "post_add", True),
     "/post_schedule": ("business_admin@v1", "post_schedule", True),
     "/post_unschedule": ("business_admin@v1", "post_unschedule", True),

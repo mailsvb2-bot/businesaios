@@ -240,8 +240,19 @@ def render_summary(st: State) -> str:
     return "\n".join(lines)
 
 
+def audit_lines(payloads: list[dict[str, Any]], *, limit: int = 20) -> list[str]:
+    """Donor recent_audit_events: newest owner-admin facts first (replay is the audit trail)."""
+    n = max(1, min(int(limit), 100))
+    rows = []
+    for p in list(payloads)[::-1][:n]:
+        subject = p.get("key") or p.get("offering") or p.get("reference") or p.get("title") or p.get("status") or ""
+        rows.append(f"• {p.get('step', '?')} {str(subject)[:60]}".rstrip())
+    return rows or ["• Записей пока нет."]
+
+
 __all__ = [
     "CANON_BUSINESS_ADMIN_FLOW",
+    "audit_lines",
     "State",
     "decide_approval",
     "format_approval",
