@@ -41,3 +41,35 @@ def test_pipeline_flow(flow) -> None:
     assert "отказ" in run(op="list")[1]
     assert "снова в работе" in run(op="reopen", arg="1")[1]
     assert "Воронка: на связи: 1" in run(op="list")[1]
+
+
+def test_assignment_claim_and_clear_next(flow) -> None:
+    run = partial(flow.run, partial(handle_sales_pipeline, now_ms=NOW))
+    run(op="add", arg="Борис | VK")
+    assert "assignee_not_member" in run(op="assign", arg="1 999")[1]
+    assert "handoff_not_open" in run(op="claim", arg="1")[1]
+    run(op="event", arg="1 handoff")
+    assert "Ждут человека: 1" in run(op="handoffs")[1]
+    assert "разговор у Вас" in run(op="claim", arg="1")[1]
+    assert "ведёт" in run(op="list")[1]
+    assert "(уже)" in run(op="claim", arg="1")[1]
+    assert "ответственный снят" in run(op="assign", arg="1 -")[1]
+    assert "Без изменений" in run(op="assign", arg="1 -")[1]
+    run(op="next", arg="1 | 2027-01-15 12:00 | позвонить")
+    assert "снят" in run(op="next", arg="1 -")[1]
+    assert "не было" in run(op="next", arg="1 -")[1]
+    assert "дальше" not in run(op="list")[1]
+
+
+def test_claim_rejects_other_owner() -> None:
+    st = sl.replay(
+        [
+            {"step": "lead_added", "lead_id": "l1", "name": "A"},
+            {"step": "lead_event", "lead_id": "l1", "event": "handoff", "stage": "discovered"},
+            {"step": "lead_assigned", "lead_id": "l1", "assignee": "7"},
+        ]
+    )
+    with pytest.raises(ValueError, match="already_claimed"):
+        sl.claim_handoff(st, "1", user_id="8")
+    assert sl.claim_handoff(st, "1", user_id="7") is None
+    assert [x.lead_id for x in sl.handoff_work(st)] == ["l1"]

@@ -926,8 +926,29 @@ def handle_sales_pipeline(payload, effects, env, *, event_store, now_ms: int | N
             ch = sl.reopen(st, arg)
             return done("🔄 Лид снова в работе", ch)
         if op == "next":
+            ref, _, rest = arg.partition(" ")
+            if rest.strip() == "-":  # donor clear_sales_next_action
+                ch = sl.clear_next(st, ref)
+                return done("⏰ Следующий шаг снят" if ch else "ℹ️ Следующего шага не было", ch)
             ch = sl.set_next(st, arg, now_ms=now)
             return done("⏰ Следующий шаг записан", ch)
+        if op == "assign":
+            from core.admin import roles_read_model as rr
+
+            members = set(rr.team_roles_snapshot(event_store, tenant_id=tenant_id)) | {str(body.get("user_id") or "")}
+            ch = sl.assign(st, arg, members=members - {""})
+            if ch is None:
+                return done("ℹ️ Без изменений")
+            who = ch["assignee"]
+            return done(f"👤 {st.leads[ch['lead_id']].name}: " + (f"ведёт {who}" if who else "ответственный снят"), ch)
+        if op == "claim":
+            ch = sl.claim_handoff(st, arg, user_id=str(body.get("user_id") or ""))
+            name = sl.pick(st, arg.strip()).name
+            return done(f"🙋 {name}: разговор у Вас" + ("" if ch else " (уже)"), ch)
+        if op == "handoffs":
+            work = sl.handoff_work(st)
+            rows = [f"• {x.name}" + (f" — ведёт {x.assignee}" if x.assignee else " — свободен") for x in work]
+            return done(f"🙋 Ждут человека: {len(work)}\n\n" + ("\n".join(rows) or "Никого.") + "\n\nВзять: /lead_claim N")
         if op == "note":
             ch = sl.add_note(st, arg)
             return done("📝 Заметка сохранена", ch)

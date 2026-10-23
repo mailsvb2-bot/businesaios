@@ -67,6 +67,7 @@ class Lead:
     followup_due_ms: int = 0
     followup_text: str = ""
     followup_suppressed: bool = False
+    assignee: str = ""
 
 
 @dataclass
@@ -137,6 +138,10 @@ def replay(payloads: list[dict[str, Any]]) -> State:
             st.leads[lid] = replace(lead, stage=Stage.ENGAGED)
         elif step == "lead_next":
             st.leads[lid] = replace(lead, next_action=p["text"], due_ms=int(p["due_ms"]))
+        elif step == "lead_assigned":
+            st.leads[lid] = replace(lead, assignee=str(p.get("assignee") or ""))
+        elif step == "lead_next_cleared":
+            st.leads[lid] = replace(lead, next_action="", due_ms=0)
         elif step == "lead_note":
             st.leads[lid] = replace(lead, notes=(*lead.notes, p["text"])[-20:])
     return st
@@ -201,6 +206,44 @@ def add_note(st: State, arg: str) -> dict[str, Any]:
     return {"step": "lead_note", "lead_id": pick(st, ref).lead_id, "text": text[:300]}
 
 
+def _open(lead: Lead) -> None:
+    if lead.stage in (Stage.WON, Stage.LOST):
+        raise ValueError("lead_closed: откройте заново /lead_reopen N")
+
+
+def assign(st: State, arg: str, *, members: set[str]) -> dict[str, Any] | None:
+    """Donor assign/unassign_sales_lead: ``N user_id`` (a team member) or ``N -``; None when unchanged."""
+    ref, _, who = (x.strip() for x in str(arg or "").partition(" "))
+    lead = pick(st, ref)
+    _open(lead)
+    who = "" if who == "-" else who
+    if who and who not in members:
+        raise ValueError("assignee_not_member: /lead_assign N user_id|- (участник из /team)")
+    return None if lead.assignee == who else {"step": "lead_assigned", "lead_id": lead.lead_id, "assignee": who}
+
+
+def claim_handoff(st: State, ref: str, *, user_id: str) -> dict[str, Any] | None:
+    """Donor claim_sales_handoff: the requesting staff member takes an open human handoff."""
+    lead = pick(st, str(ref or "").strip())
+    _open(lead)
+    if not lead.handoff_open:
+        raise ValueError("handoff_not_open")
+    if lead.assignee and lead.assignee != user_id:
+        raise ValueError("handoff_already_claimed")
+    return None if lead.assignee == user_id else {"step": "lead_assigned", "lead_id": lead.lead_id, "assignee": user_id}
+
+
+def clear_next(st: State, ref: str) -> dict[str, Any] | None:
+    """Donor clear_sales_next_action; None when there is nothing to clear."""
+    lead = pick(st, str(ref or "").strip())
+    return {"step": "lead_next_cleared", "lead_id": lead.lead_id} if lead.next_action else None
+
+
+def handoff_work(st: State) -> list[Lead]:
+    """Donor list/count_sales_handoff_work: open leads waiting for a human."""
+    return [x for x in ordered(st) if x.handoff_open and x.stage not in (Stage.WON, Stage.LOST)]
+
+
 def funnel(st: State) -> dict[str, int]:
     out = {LABELS[s]: 0 for s in LABELS}
     for lead in st.leads.values():
@@ -216,6 +259,7 @@ def render(st: State, *, now_ms: int) -> str:
     rows = []
     for i, x in enumerate(ordered(st), 1):
         flag = " 🙋 нужен человек" if x.handoff_open else ""
+        flag += f" · ведёт {x.assignee}" if x.assignee else ""
         due = " ⏰" if x in due_actions(st, now_ms=now_ms) else ""
         nxt = f" · дальше: {x.next_action}{due}" if x.next_action else ""
         rows.append(f"{i}. {x.name} — {LABELS[x.stage]}{flag}{nxt}")
@@ -231,6 +275,10 @@ __all__ = [
     "add_lead",
     "add_note",
     "apply_event",
+    "assign",
+    "claim_handoff",
+    "clear_next",
+    "handoff_work",
     "due_actions",
     "funnel",
     "ordered",
