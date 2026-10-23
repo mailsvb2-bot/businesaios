@@ -863,6 +863,23 @@
         "publication calendar",
         "interaction metrics/alerts"
       ]
+    },
+    {
+      "id": "events.event_series",
+      "status": "implemented",
+      "canonical_owner": "runtime.handler_impl.domains.business_flow_ops",
+      "source_of_truth": "event_store:event_series@v1",
+      "evidence": [
+        "event_series@v1"
+      ],
+      "runtime_dependency_removed": false,
+      "pr472_claimed_status": null,
+      "pr472_claimed_runtime_dependency_removed": null,
+      "integration_missing_evidence": [
+        "paid-customer exclusion (manual payments are not linked to participants)",
+        "multi-channel routing (Telegram only)",
+        "media in series messages"
+      ]
     }
   ],
   "integration_provenance": {

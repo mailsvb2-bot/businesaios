@@ -17,6 +17,7 @@ from runtime.handler_impl.domains.business_flow_ops import (
     handle_bot_provisioning,
     handle_business_admin,
     handle_business_ops_summary,
+    handle_event_series,
     handle_offer_ladder,
     handle_partners,
 )
@@ -55,6 +56,7 @@ __all__ = [
     "handle_offer_ladder",
     "handle_partners",
     "handle_bookings",
+    "handle_event_series",
     "handle_business_admin",
     "handle_bot_provisioning",
     "handle_answer_callback",

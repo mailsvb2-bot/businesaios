@@ -43,6 +43,14 @@ BUSINESS_FLOW_COMMANDS: dict[str, tuple[str, str, bool]] = {
     "/approve": ("business_admin@v1", "approve", True),
     "/reject": ("business_admin@v1", "reject", True),
     "/revoke": ("business_admin@v1", "revoke", True),
+    "/series": ("event_series@v1", "preview", True),
+    "/series_text": ("event_series@v1", "text", True),
+    "/series_reset": ("event_series@v1", "reset", True),
+    "/warmup_days": ("event_series@v1", "warmup_days", True),
+    "/attendance": ("event_series@v1", "attendance", True),
+    "/send_series": ("event_series@v1", "dispatch", True),
+    "/offers_on": ("event_series@v1", "offers_on", False),
+    "/offers_off": ("event_series@v1", "offers_off", False),
 }
 
 

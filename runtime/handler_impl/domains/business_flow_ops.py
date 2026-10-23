@@ -388,8 +388,85 @@ def handle_business_admin(payload, effects, env, *, event_store):
     return done(ad.render_summary(st))
 
 
+def handle_event_series(payload, effects, env, *, event_store, now_ms: int | None = None):
+    """Warm-ups before booked events and opt-in sales follow-ups after them (event_series@v1)."""
+    from application.business_flows import admin as ad
+    from application.business_flows import bookings as bk
+    from application.business_flows import event_series as es
+
+    body = require_mapping(payload or {})
+    tenant_id, user_id = required_str(body, "tenant_id"), required_str(body, "user_id")
+    op, arg, now = str(body.get("op") or "preview"), str(body.get("arg") or "").strip(), now_ms or _now_ms()
+
+    def facts(event_type: str) -> list[dict]:
+        return flow_payloads(event_store, tenant_id=tenant_id, event_type=event_type)
+
+    st, slots = es.replay(facts("event_series@v1")), bk.replay(facts("bookings@v1"))
+
+    def done(text, change=None):
+        return send_tracked(
+            body, effects, env, text=text, event_type="event_series@v1" if change else None, event_payload=change
+        )
+
+    try:
+        if op in ("offers_on", "offers_off"):
+            on = op == "offers_on"
+            msg = (
+                "🔔 Буду присылать предложения после встреч."
+                if on
+                else "🔕 Предложения больше не придут. Вернуть: /offers_on"
+            )
+            return done(msg, es.consent(user_id, on))
+        if op == "warmup_days":
+            ch = es.parse_warmup_days(arg)
+            return done("🔥 Прогрев: за " + ", ".join(str(d) for d in ch["days"]) + " дн. до встречи", ch)
+        if op == "text":
+            ch = es.set_text(arg)
+            return done(f"✏️ Текст {ch['kind']} {ch['segment']} {ch['stage']} сохранён", ch)
+        if op == "reset":
+            ch = es.reset_text(arg)
+            return done(f"↩️ Текст {ch['kind']} {ch['segment']} {ch['stage']} — снова шаблон", ch)
+        if op == "attendance":
+            past = sorted(
+                (s for s in slots.values() if s.status == "booked" and s.starts_at_ms <= now),
+                key=lambda s: -s.starts_at_ms,
+            )
+            if not arg:
+                rows = [
+                    f"{i}. {bk.fmt(s)} — {st.attendance.get((s.slot_id, s.customer_id), 'не отмечено')}"
+                    for i, s in enumerate(past[:10], 1)
+                ]
+                return done(
+                    "🧾 Прошедшие встречи (/attendance N attended|no_show)\n" + ("\n".join(rows) or "Пока нет.")
+                )
+            n, _, status = arg.partition(" ")
+            slot = past[int(n) - 1] if n.isdigit() and 0 < int(n) <= len(past) else None
+            return done("🧾 Отмечено: " + status.strip(), es.mark_attendance(slot, status.strip(), now_ms=now))
+        if op == "dispatch":
+            offer = ad.replay(facts("business_admin@v1")).settings.get("offer_url", "")
+            due = es.due_messages(st, slots, now_ms=now, offer_url=offer)
+            sent = 0
+            for m in due:
+                out = send_tracked(
+                    body,
+                    effects,
+                    env,
+                    text=m["text"],
+                    event_type="event_series@v1",
+                    event_payload={"step": "series_sent", "key": m["key"], "kind": m["kind"]},
+                    to_user_id=m["to"],
+                )
+                sent += bool((out or {}).get("ok", True))
+            note = "" if offer else "\n(Продажные письма выключены: задайте /setting offer_url = https://…)"
+            return done(f"📨 Серия: отправлено {sent} из {len(due)}." + note)
+    except ValueError as exc:
+        return done(f"⚠️ Не получилось: {exc}")
+    return done("🗂 Сообщения серии\n\n" + "\n".join(es.previews(st)))
+
+
 __all__ = [
     "handle_bookings",
+    "handle_event_series",
     "handle_business_admin",
     "handle_business_ops_summary",
     "handle_bot_provisioning",

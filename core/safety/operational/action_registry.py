@@ -102,6 +102,7 @@ TELEGRAM_INTERACTIVE_ACTION_DESCRIPTORS: dict[str, ActionCategory] = {
     'partners@v1': ActionCategory.OUTBOUND,
     'bookings@v1': ActionCategory.OUTBOUND,
     'bot_provisioning@v1': ActionCategory.OUTBOUND,
+    'event_series@v1': ActionCategory.OUTBOUND,
     'business_admin@v1': ActionCategory.OUTBOUND,
     'log_mood@v1': ActionCategory.INTERNAL_WRITE,
     'set_user_setting@v1': ActionCategory.INTERNAL_WRITE,
