@@ -600,6 +600,8 @@ def handle_sales_pipeline(payload, effects, env, *, event_store, now_ms: int | N
         if op == "note":
             ch = sl.add_note(st, arg)
             return done("📝 Заметка сохранена", ch)
+        if op == "ai":
+            return _sales_ai(body, effects, env, st, arg, tenant_id=tenant_id, event_store=event_store)
         if op == "card":
             lead = sl.pick(st, arg)
             notes = "\n".join(f"• {n}" for n in lead.notes) or "Заметок нет."
@@ -615,6 +617,47 @@ def handle_sales_pipeline(payload, effects, env, *, event_store, now_ms: int | N
     except ValueError as exc:
         return done(f"⚠️ Не получилось: {exc}")
     return done(sl.render(st, now_ms=now))
+
+
+def _sales_ai(body, effects, env, st, arg, *, tenant_id, event_store):
+    """/lead_ai N | текст клиента -> draft reply note + optional stage button (never sent to the customer)."""
+    from application.business_flows import admin as ad
+    from application.business_flows import cockpit as cp
+    from application.business_flows import cockpit_sales as cs
+    from application.business_flows import sales as sl
+    from application.business_flows import sales_ai as sa
+    from runtime.platform.config.env_flags import env_str
+
+    ref, _, text = (x.strip() for x in arg.partition("|"))
+    lead = sl.pick(st, ref)
+    settings = ad.replay(flow_payloads(event_store, tenant_id=tenant_id, event_type="business_admin@v1")).settings
+    provider = env_str("MARKETING_LLM_PROVIDER", env_str("LLM_PROVIDER", "")).strip().casefold()
+    try:
+        mode = sa.egress_permit(settings, provider)
+    except PermissionError as exc:
+        return send_tracked(body, effects, env, text=f"🔒 {exc}", event_type=None, event_payload=None)
+    clean, redacted = sa.prepare_text(text, mode=mode)
+    system, user = sa.prompt(lead, clean)
+    dec = env.decision
+    out = effects.marketing_llm_complete(
+        decision_id=str(dec.decision_id), correlation_id=str(dec.correlation_id), admin_id=str(body.get("user_id") or "owner"), system=system, user=user
+    )
+    if not (isinstance(out, dict) and out.get("ok")):
+        return send_tracked(body, effects, env, text="⚠️ ИИ сейчас недоступен, попробуйте позже.", event_type=None, event_payload=None)
+    analysis = sa.parse_analysis(str(out.get("text") or ""))
+    note, event = sa.suggestion(lead, analysis)
+    rows = [[(cs.EVENT_LABELS[event], f"cpm:sales-ev:{lead.lead_id}:{event}")]] if event else []
+    rows.append([("💬 Карточка лида", f"cpm:sales-lead:{lead.lead_id}")])
+    flag = "\n(контакты скрыты перед отправкой в ИИ)" if redacted else ""
+    return send_tracked(
+        body,
+        effects,
+        env,
+        text=f"🤖 {lead.name}: черновик ответа (не отправлен клиенту)\n\n{analysis['reply']}{flag}",
+        event_type="sales_pipeline@v1",
+        event_payload=note,
+        reply_markup=cp.markup(rows),
+    )
 
 
 __all__ = [
