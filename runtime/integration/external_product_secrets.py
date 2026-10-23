@@ -14,7 +14,8 @@ from security.secret_contract import SecretRef
 
 
 def resolve_secret_ref(
-    ref: str, *, tenant_id: str, connector_id: str, vault: Any | None = None, env: Mapping[str, str] | None = None
+    ref: str, *, tenant_id: str, connector_id: str, vault: Any | None = None, env: Mapping[str, str] | None = None,
+    namespace: str = "external_product",
 ) -> str | None:
     kind, _, name = str(ref or "").partition(":")
     try:
@@ -22,7 +23,7 @@ def resolve_secret_ref(
             value = (env if env is not None else os.environ).get(name)
             return None if value is None else str(value)
         if kind == "vault" and vault is not None:
-            ref_ = SecretRef(tenant_id=tenant_id, secret_name=name, connector_id="external_product", scope=connector_id)
+            ref_ = SecretRef(tenant_id=tenant_id, secret_name=name, connector_id=namespace, scope=connector_id)
             return vault.get(ref_).decode("utf-8").strip()
     except Exception:  # noqa: BLE001 - never surface secret-adjacent errors
         return None

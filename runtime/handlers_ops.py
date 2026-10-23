@@ -12,9 +12,9 @@ from runtime.handler_impl.domains.admin_ops import (
     handle_admin_user_card,
     handle_set_marketing_copy,
 )
+from runtime.handler_impl.domains.bot_provisioning_ops import handle_bot_provisioning
 from runtime.handler_impl.domains.business_flow_ops import (
     handle_bookings,
-    handle_bot_provisioning,
     handle_business_admin,
     handle_business_ops_summary,
     handle_event_series,

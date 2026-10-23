@@ -4,6 +4,7 @@ from functools import partial
 
 from application.business_flows import partners as pt
 from core.policies.telegram.routes.business_flow_routes import BUSINESS_FLOW_COMMANDS
+from runtime.handler_impl.domains import bot_provisioning_ops as bops
 from runtime.handler_impl.domains import business_flow_ops as ops
 from runtime.platform.event_store.sqlite_event_store import SqliteEventStore
 
@@ -25,16 +26,16 @@ def test_reminder_dispatch_pushes_to_each_participant_once(flow) -> None:
 
 def test_bot_attach_and_getme_verify(flow, monkeypatch) -> None:
     monkeypatch.setenv("SHOP_BOT_TOKEN", "1:x")
-    flow.run(ops.handle_bot_provisioning, op="request", arg="@shop_bot")
-    flow.run(ops.handle_bot_provisioning, op="attach", arg="env:SHOP_BOT_TOKEN")
+    flow.run(bops.handle_bot_provisioning, op="request", arg="@shop_bot")
+    flow.run(bops.handle_bot_provisioning, op="attach", arg="env:SHOP_BOT_TOKEN")
     seen = {}
 
-    def check(token):
+    def check(token, **_):
         seen["t"] = token
         return {"ok": True, "bot": {"id": 5, "is_bot": True, "username": "Shop_Bot"}}
 
     flow.effects.telegram_self_check = check
-    _, text = flow.run(ops.handle_bot_provisioning, op="verify")
+    _, text = flow.run(bops.handle_bot_provisioning, op="verify")
     assert seen["t"] == "1:x" and "подключён" in text
     assert flow.store.events[-1]["payload"]["bot_id"] == 5
     assert "1:x" not in str(flow.store.events)
@@ -42,10 +43,10 @@ def test_bot_attach_and_getme_verify(flow, monkeypatch) -> None:
 
 def test_bot_verify_mismatch_fails(flow, monkeypatch) -> None:
     monkeypatch.setenv("SHOP_BOT_TOKEN", "1:x")
-    flow.run(ops.handle_bot_provisioning, op="request", arg="@shop_bot")
-    flow.run(ops.handle_bot_provisioning, op="attach", arg="env:SHOP_BOT_TOKEN")
-    flow.effects.telegram_self_check = lambda token: {"bot": {"id": 1, "is_bot": True, "username": "other_bot"}}
-    _, text = flow.run(ops.handle_bot_provisioning, op="verify")
+    flow.run(bops.handle_bot_provisioning, op="request", arg="@shop_bot")
+    flow.run(bops.handle_bot_provisioning, op="attach", arg="env:SHOP_BOT_TOKEN")
+    flow.effects.telegram_self_check = lambda token, **_: {"bot": {"id": 1, "is_bot": True, "username": "other_bot"}}
+    _, text = flow.run(bops.handle_bot_provisioning, op="verify")
     assert "getme_username_mismatch" in text
 
 

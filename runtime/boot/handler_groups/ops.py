@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from functools import lru_cache
+
 from runtime.handlers import ActionHandlerRegistry
 from runtime.handlers.conference_join import handle_run_conference_join_plan
 from runtime.handlers.platform_effects import (
@@ -63,7 +65,9 @@ def register_ops_handlers(*, handlers: ActionHandlerRegistry, event_store) -> No
     )
     handlers.register(
         "bot_provisioning@v1",
-        lambda payload, effects, env: handle_bot_provisioning(payload, effects, env, event_store=event_store),
+        lambda payload, effects, env: handle_bot_provisioning(
+            payload, effects, env, event_store=event_store, vault=_tenant_vault()
+        ),
     )
     handlers.register(
         "business_admin@v1",
@@ -116,3 +120,14 @@ def register_ops_handlers(*, handlers: ActionHandlerRegistry, event_store) -> No
     handlers.register("suggest_offer_patch@v1", handle_suggest_offer_patch)
     handlers.register("apply_offer_patch@v1", handle_apply_offer_patch)
     handlers.register("conference_join_run@v1", handle_run_conference_join_plan)
+
+
+@lru_cache(maxsize=1)
+def _tenant_vault():
+    """Lazily built tenant SecretVault for vault: refs; None when unavailable (refs then fail closed)."""
+    try:
+        from security.secret_vault import build_default_secret_vault
+
+        return build_default_secret_vault()
+    except Exception:  # noqa: BLE001 - vault misconfig must not break the handler
+        return None

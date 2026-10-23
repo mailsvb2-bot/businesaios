@@ -25,15 +25,18 @@ from runtime.observability.telemetry import CANON_RUNTIME_TELEMETRY_OWNER as _CA
 CANON_RUNTIME_OBSERVABILITY_OWNER = _CANON_RUNTIME_TELEMETRY_OWNER
 
 
-def telegram_self_check_effect(effects: Any, *, token: str | None = None) -> dict:
+def telegram_self_check_effect(effects: Any, *, token: str | None = None, clear_webhook: bool = False) -> dict:
     from runtime._internal.router_support import execute_effect_action_sync
 
-    return execute_effect_action_sync(effects, EffectActionType.TELEGRAM_SELF_CHECK, {"token": token})
+    payload: dict[str, Any] = {"token": token}
+    if clear_webhook:
+        payload["clear_webhook"] = True
+    return execute_effect_action_sync(effects, EffectActionType.TELEGRAM_SELF_CHECK, payload)
 
 
 class TelegramEffectsMixin:
-    def telegram_self_check(self, *, token: str | None = None) -> dict:
-        return telegram_self_check_effect(self, token=token)
+    def telegram_self_check(self, *, token: str | None = None, clear_webhook: bool = False) -> dict:
+        return telegram_self_check_effect(self, token=token, clear_webhook=clear_webhook)
 
     def send_message(
         self,

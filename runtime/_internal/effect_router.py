@@ -227,7 +227,12 @@ class EffectRouter:
                 self._telegram_me = None
 
         runtime_view = _RuntimeView(self)
-        return await asyncio.to_thread(telegram_self_check_effect, runtime_view, token=_optional_text(payload.get("token")))
+        return await asyncio.to_thread(
+            telegram_self_check_effect,
+            runtime_view,
+            token=_optional_text(payload.get("token")),
+            clear_webhook=payload.get("clear_webhook") is True,
+        )
 
     async def _handle_telegram_poll_updates(self, payload: dict[str, Any]) -> dict[str, Any]:
         class _RuntimeView:

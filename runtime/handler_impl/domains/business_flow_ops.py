@@ -76,78 +76,6 @@ def send_tracked(
     return _card_outcome(delivery=delivery, ok=ok, reason=reason)
 
 
-_BOT_STATUS_RU = {
-    "awaiting_secret": "ожидает токен (передайте его через защищённую форму владельца)",
-    "ready": "токен получен, ожидает проверки",
-    "verifying": "идёт проверка бота",
-    "completed": "подключён",
-    "failed": "ошибка проверки — можно повторить",
-    "cancelled": "отменён",
-}
-
-
-def handle_bot_provisioning(payload, effects, env, *, event_store):
-    body = require_mapping(payload or {})
-    tenant_id, user_id = required_str(body, "tenant_id"), required_str(body, "user_id")
-    op, arg = str(body.get("op") or "status"), str(body.get("arg") or "")
-    state = botprov.replay(flow_payloads(event_store, tenant_id=tenant_id, event_type="bot_provisioning@v1"))
-    current = botprov.active(state)
-    try:
-        if op == "request":
-            change = botprov.request(state, tenant_id=tenant_id, user_id=user_id, username=arg)
-            text = (
-                f"🤖 Заявка на подключение @{change['username']} создана.\nСтатус: {_BOT_STATUS_RU['awaiting_secret']}"
-            )
-        elif op == "cancel":
-            if current is None:
-                raise ValueError("bot_provisioning_not_found")
-            change = botprov.transition(current, "cancel")
-            text = f"🤖 Подключение @{current.username} отменено."
-        elif op in {"attach", "verify"}:
-            if current is None:
-                raise ValueError("bot_provisioning_not_found")
-            if op == "attach":
-                change = botprov.transition(current, "secret_attached", credential_ref=arg.strip())
-                text = f"🤖 Ссылка на токен для @{current.username} сохранена. Проверить: /verify_bot"
-            else:
-                change = _verify_bot(current, effects)
-                ok_bot = change["status"] == "completed"
-                text = (
-                    f"🤖 @{current.username} подключён (getMe подтвердил бота)."
-                    if ok_bot
-                    else f"🤖 Проверка @{current.username} не прошла: {change.get('error_code')}. Повтор: /connect_bot"
-                )
-        else:
-            change = None
-            text = (
-                "🤖 Активных подключений нет.\nСоздать: /connect_bot имя_бота"
-                if current is None
-                else f"🤖 @{current.username}: {_BOT_STATUS_RU[current.status.value]}"
-            )
-    except ValueError as exc:
-        return send_tracked(
-            body, effects, env, text=f"🤖 Не получилось: {exc}", event_type=None, event_payload=None, ok=True, reason=""
-        )
-    return send_tracked(
-        body, effects, env, text=text, event_type="bot_provisioning@v1" if change else None, event_payload=change
-    )
-
-
-def _verify_bot(current, effects) -> dict[str, Any]:
-    """getMe through the sealed Telegram effect; the token is resolved from its reference and never stored."""
-    from runtime.platform.config.env_flags import env_str
-
-    kind, _, name = current.credential_ref.partition(":")
-    token = env_str(name, "").strip() if kind == "env" else ""
-    if not token:
-        return botprov.transition(current, "failed", error_code=f"credential_unresolved:{kind or 'none'}")
-    try:
-        report = effects.telegram_self_check(token=token)
-    except Exception as exc:
-        return botprov.transition(current, "failed", error_code=str(exc).split(":")[0][:60] or "getme_failed")
-    return botprov.verify_identity(current, report)
-
-
 def _now_ms() -> int:
     import time
 
@@ -511,7 +439,14 @@ def handle_business_ops_summary(payload, effects, env, *, event_store, now_ms: i
             "perms": rr.team_perms_snapshot(event_store, tenant_id=tenant_id),
         }
         return _cockpit(
-            body, effects, env, future, steps, facts, now, team,
+            body,
+            effects,
+            env,
+            future,
+            steps,
+            facts,
+            now,
+            team,
             timed=lambda et: flow_rows(event_store, tenant_id=tenant_id, event_type=et),
         )
     deletions = len(facts("privacy_deleted@v1"))
@@ -1027,7 +962,6 @@ __all__ = [
     "handle_event_series",
     "handle_business_admin",
     "handle_business_ops_summary",
-    "handle_bot_provisioning",
     "handle_offer_ladder",
     "handle_partners",
     "send_tracked",

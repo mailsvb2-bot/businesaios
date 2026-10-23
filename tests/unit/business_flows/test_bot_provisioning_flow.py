@@ -7,7 +7,7 @@ import pytest
 from application.business_flows import bot_provisioning as bp
 from core.policies.telegram.routes.business_flow_routes import handle_business_flow_routes
 from core.safety.operational.action_registry import build_default_operational_action_registry
-from runtime.handler_impl.domains.business_flow_ops import handle_bot_provisioning
+from runtime.handler_impl.domains.bot_provisioning_ops import handle_bot_provisioning
 
 
 def test_request_status_cancel_roundtrip_through_event_store(flow) -> None:
