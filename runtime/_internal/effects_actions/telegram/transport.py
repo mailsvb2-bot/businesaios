@@ -26,6 +26,7 @@ def telegram_send_message_transport(
     priority: Any = "normal",
     critical: bool = True,
     transport_guard: Any = None,
+    delivery_scope: str | None = None,
 ) -> tuple[bool, dict[str, Any]]:
     payload = {
         "chat_id": str(chat_id),
@@ -33,6 +34,7 @@ def telegram_send_message_transport(
         "reply_markup": reply_markup if isinstance(reply_markup, dict) else None,
         "priority": priority,
         "critical": bool(critical),
+        "delivery_scope": str(delivery_scope or "") or None,
     }
     if transport_guard is not None:
         payload["_transport_guard"] = transport_guard

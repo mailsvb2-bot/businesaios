@@ -258,6 +258,8 @@ def _run_longpoll(
     )
     idle_sleep_s = max(0, env_int("TELEGRAM_IDLE_SLEEP_MS", 250)) / 1000.0
     offset: int | None = None
+    failures: dict[Any, int] = {}
+    max_attempts = max(1, env_int("TELEGRAM_MAX_UPDATE_ATTEMPTS", 3))
 
     _append_event(
         event_log,
@@ -297,13 +299,15 @@ def _run_longpoll(
                 raw_update_id = update.get("update_id")
                 # Advance acknowledgement only after successful execution. Failed
                 # decisions must remain eligible for replay on the next poll.
-                _execute_update(
-                    core=core,
-                    executor=executor,
-                    event_log=event_log,
-                    update=update,
-                    transport="longpoll",
-                )
+                try:
+                    _execute_update(core=core, executor=executor, event_log=event_log, update=update, transport="longpoll")
+                except Exception:
+                    # A poison update must not block every later user forever.
+                    failures[raw_update_id] = failures.get(raw_update_id, 0) + 1
+                    if failures[raw_update_id] < max_attempts:
+                        raise
+                    _append_event(event_log, event_type="telegram_update_dropped", payload={"update_id": raw_update_id, "attempts": failures.pop(raw_update_id)})
+                    _LOG.exception("telegram update %s dropped after %s attempts", raw_update_id, max_attempts)
                 if raw_update_id is not None:
                     offset = int(raw_update_id) + 1
             if not updates and idle_sleep_s > 0:

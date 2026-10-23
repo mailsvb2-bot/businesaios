@@ -74,11 +74,7 @@ def telegram_pre_send(self, *, msg) -> None:
             self._telegram_answer_callback(msg.callback_query_id.strip(), user_id=msg.user_id, decision_id=msg.decision_id, correlation_id=msg.correlation_id)
         except Exception as exc:
             emit_warning(self.event_log, user_id=msg.user_id, decision_id=msg.decision_id, correlation_id=msg.correlation_id, reason="answer_callback_failed", error=exc)
-    if isinstance(msg.callback_query_id, str) and msg.callback_query_id.strip():
-        try:
-            self._telegram_send_chat_action(chat_id=str(msg.user_id), action="typing")
-        except Exception as exc:
-            emit_warning(self.event_log, user_id=msg.user_id, decision_id=msg.decision_id, correlation_id=msg.correlation_id, reason="chat_action_failed", error=exc)
+    # No sendChatAction here: the reply is already rendered, so "typing" only added one serial Telegram RTT.
 
 
 def telegram_throttle(self, *, user_id: str, decision_id: str, correlation_id: str, force_direct: bool = False) -> None:
@@ -106,7 +102,7 @@ def telegram_delivery(self, *, msg) -> tuple[bool, dict]:
             return False, {"mode": "blocked"}
         return True, {"channel": msg.channel, "dedup": True, "delivery_key": delivery_key, "receipt": existing, "payload_digest": getattr(msg, "payload_digest", None), "delivery_phase": phase, "delivery_finalized": phase == "finalized"}
     with telegram_api_span(event_log=self.event_log, user_id=str(msg.user_id), decision_id=str(msg.decision_id), correlation_id=str(msg.correlation_id)):
-        ok, meta = self._telegram_send_message(chat_id=msg.user_id, text=msg.text, reply_markup=msg.reply_markup, priority=msg.priority, critical=msg.critical, transport_guard=guard)
+        ok, meta = self._telegram_send_message(chat_id=msg.user_id, text=msg.text, reply_markup=msg.reply_markup, priority=msg.priority, critical=msg.critical, transport_guard=guard, delivery_scope=delivery_key)
     out = dict(meta or {})
     mode = str(out.get("mode") or "").strip().casefold()
     if mode in {"blocked", "guarded_inflight"}:
