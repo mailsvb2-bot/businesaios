@@ -61,9 +61,6 @@ def register_ops_handlers(*, handlers: ActionHandlerRegistry, event_store) -> No
         ),
     )
     handlers.register(
-        "business_admin@v1",
-        "event_series@v1",
-        "sales_pipeline@v1",
         "bot_provisioning@v1",
         lambda payload, effects, env: handle_bot_provisioning(payload, effects, env, event_store=event_store),
     )
