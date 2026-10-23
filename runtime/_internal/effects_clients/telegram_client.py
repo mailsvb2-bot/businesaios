@@ -378,6 +378,7 @@ class TelegramClient:
         critical: bool = True,
         timeout_s: int = 30,
         transport_guard: Callable[[], str] | None = None,
+        delivery_scope: str | None = None,
     ) -> tuple[bool, dict[str, Any]]:
         token = _token()
         payload: dict[str, Any] = {
@@ -389,7 +390,7 @@ class TelegramClient:
         if isinstance(reply_markup, dict):
             payload["reply_markup"] = reply_markup
         payload_digest = _payload_digest(payload)
-        delivery_key = _delivery_key(method="sendMessage", chat_id=str(chat_id), payload=payload)
+        delivery_key = _delivery_key(method="sendMessage", chat_id=str(chat_id), payload={**payload, "_scope": delivery_scope} if delivery_scope else payload)
         existing = existing_receipt(self.delivery_state, delivery_key=delivery_key)
         url = f"{telegram_api_base()}/bot{token}/sendMessage" if token else ""
         if existing is not None:
