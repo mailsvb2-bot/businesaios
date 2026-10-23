@@ -149,14 +149,12 @@ class TelegramEffectsMixin:
         offset: int | None = None,
         timeout_s: int = 20,
         limit: int = 50,
-        token: str | None = None,
     ) -> dict:
         return poll_telegram_updates_effect(
             self,
             offset=offset,
             timeout_s=int(timeout_s),
             limit=int(limit),
-            token=token,
         )
 
     def telegram_managed_bot_token(self, *, managed_bot_id: str) -> dict:
