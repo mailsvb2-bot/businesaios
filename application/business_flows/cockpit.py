@@ -11,6 +11,7 @@ from dataclasses import dataclass, field
 from typing import Any
 
 from application.business_flows import cockpit_booking as _cb
+from application.business_flows import cockpit_money as _cm
 from application.business_flows import cockpit_sales as _cs
 
 PREFIX = "cpm:"
@@ -41,6 +42,7 @@ PARENTS: dict[str, str] = {
 }
 PARENTS.update(_cs.PARENTS)
 PARENTS.update(_cb.PARENTS)
+PARENTS.update(_cm.PARENTS)
 
 
 @dataclass(frozen=True)
@@ -154,7 +156,9 @@ def _screen(parsed: Parsed, s: Snapshot) -> tuple[str, list[list[tuple[str, str]
         return "📅 Запись\n\n" + "\n".join(lines) + foot, [*_rows(_ADD_TIME), *nav]
     if a == "growth":
         return "📈 Рост\n\nПартнёры и лестница предложений.", _rows(
-            ("🤝 Партнёры", "cpm:partners:0"), ("🪜 Лестница предложений", "cpm:ladder")
+            ("🤝 Партнёры", "cpm:partners:0"),
+            ("🪜 Лестница предложений", "cpm:ladder"),
+            ("📈 Отчёт о росте", "cpm:growth-report"),
         )
     if a == "partners":
         if not s.partners:
@@ -175,6 +179,8 @@ def _screen(parsed: Parsed, s: Snapshot) -> tuple[str, list[list[tuple[str, str]
         return _cs.screen(a, parsed.args, s.sales, now_ms=s.now_ms)
     if a in _cb.PARENTS:
         return _cb.screen(a, parsed.args, s.admin, now_ms=s.now_ms)
+    if a in _cm.PARENTS:
+        return _cm.screen(a, parsed.args, s)
     extra = _extra_screen(a, parsed, s)
     if extra is not None:
         return extra
@@ -199,14 +205,16 @@ def _extra_screen(a: str, parsed: Parsed, s: Snapshot) -> tuple[str, list[list[t
     adm, ser = s.admin, s.series
     if a == "money":
         body = s.money_text(adm) if adm is not None and s.money_text else "Платежей нет."
-        return body + "\n\nЗаписать: /pay Услуга | 1500 RUB | номер · Возврат: /refund", []
+        return body + "\n\nЗаписать: /pay Услуга | 1500 RUB | номер · Возврат: /refund", _rows(
+            ("💳 Все платежи", "cpm:payments:0")
+        )
     if a == "services":
         prices = getattr(adm, "prices", {}) or {}
         body = (
             "\n".join(f"• {k} — {v}" for k, v in sorted(prices.items()))
             or "Цен нет. Добавить: /price Услуга | 1500 RUB"
         )
-        return "🧾 Услуги и цены\n\n" + body, []
+        return "🧾 Услуги и цены\n\n" + body, _rows(("🧾 Цены", "cpm:prices"))
     if a == "settings":
         settings = getattr(adm, "settings", {}) or {}
         body = "\n".join(f"• {k} = {v}" for k, v in sorted(settings.items())) or "Настроек нет."
