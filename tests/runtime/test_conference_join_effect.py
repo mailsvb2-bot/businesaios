@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import base64
 import json
 
 import pytest
@@ -21,9 +22,10 @@ class FakeGateway:
     async def invoke_universal_conference(self, *, method, request, idempotency_key):
         self.calls.append((method.value, dict(request), idempotency_key))
         if method.value == "CreateConference":
-            return {"result": {"conference_ref": "c-1", "lifecycle": self.lifecycle}}
+            return {"result": {"conference": {"conferenceId": {"value": base64.b64encode(b"c-1").decode()},
+                                              "lifecycle": "UNIVERSAL_CONFERENCE_LIFECYCLE_" + self.lifecycle.upper()}}}
         if method.value == "IssueJoinGrant":
-            return {"result": {"join_url": "https://ucr.example/j/secret", "expires_in": 60}}
+            return {"result": {"grant": {"joinUrl": "https://ucr.example/j/secret", "expiresAtUnixMs": "60"}}}
         return {"result": {}}
 
 
@@ -33,9 +35,9 @@ class Fx(mod.ConferenceEffectsMixin):
 
 
 def _plan():
-    steps = [{"method": "CreateConference", "idempotency_key": "k1", "tenant_id": "t", "request": {}},
-             {"method": "EnsureParticipant", "idempotency_key": "k2", "tenant_id": "t", "request": {"role": "attendee"}},
-             {"method": "IssueJoinGrant", "idempotency_key": "k3", "tenant_id": "t", "request": {}, "store_url": False}]
+    steps = [{"method": "CreateConference", "idempotency_key": "k1", "tenant_id": "t", "request": {"external_conference_id": "x", "mode": "webinar"}},
+             {"method": "EnsureParticipant", "idempotency_key": "k2", "tenant_id": "t", "request": {"role": "attendee", "external_user_id": "u"}},
+             {"method": "IssueJoinGrant", "idempotency_key": "k3", "tenant_id": "t", "request": {"external_user_id": "u", "ttl_seconds": 60}, "store_url": False}]
     return steps
 
 
@@ -50,7 +52,11 @@ def test_runs_plan_and_never_logs_url():
     out = fx.run_conference_join_plan(decision_id="d", correlation_id="c", tenant_id="t", user_id="u", plan=_plan(), integration_id="i")
     assert out["join_url"].startswith("https://") and out["conference_ref"] == "c-1"
     assert [c[0] for c in gw.calls] == ["CreateConference", "EnsureParticipant", "IssueJoinGrant"]
-    assert gw.calls[1][1]["conference_ref"] == "c-1" and gw.calls[1][1]["integration_id"] == "i"
+    b = lambda v: base64.b64encode(v.encode()).decode()
+    assert gw.calls[0][1] == {"scope": {"tenantId": {"value": b("t")}}, "integrationId": {"value": b("i")}, "idempotencyKey": "k1",
+                              "externalConferenceId": b("x"), "mode": "UNIVERSAL_CONFERENCE_MODE_WEBINAR"}
+    assert gw.calls[1][1]["conferenceId"] == {"value": b("c-1")} and gw.calls[1][1]["role"] == "CONFERENCE_PARTICIPANT_ROLE_ATTENDEE"
+    assert gw.calls[2][1]["ttlSeconds"] == 60 and gw.calls[2][1]["usePolicy"] == "JOIN_GRANT_USE_POLICY_SINGLE_USE"
     assert "secret" not in json.dumps(fx.event_log.events) and fx.event_log.events[0]["payload"]["url_stored"] is False
 
 
@@ -84,3 +90,19 @@ def test_real_public_events_plans_run_end_to_end():
         fx = Fx(gw)
         assert fx.run_conference_join_plan(decision_id="d", correlation_id="c", tenant_id="t", user_id="u", plan=plan, integration_id="i")["ok"]
         assert len(gw.calls) == len(plan) and "secret" not in json.dumps(fx.event_log.events)
+
+
+def test_proto_fields_match_pinned_ucr_proto():
+    # field names from proto/ucr/v1/universal_conference.proto @4e8668b3 (proto3 JSON camelCase)
+    want = {"CreateConference": {"scope", "integrationId", "externalConferenceId", "idempotencyKey", "mode"},
+            "EnsureParticipant": {"scope", "conferenceId", "integrationId", "externalUserId", "role", "idempotencyKey"},
+            "PrepareConferenceRuntime": {"scope", "conferenceId", "integrationId", "idempotencyKey"},
+            "TransitionConference": {"scope", "conferenceId", "target", "idempotencyKey", "integrationId"},
+            "SetEntryOpen": {"scope", "conferenceId", "entryOpen", "idempotencyKey", "integrationId"},
+            "IssueJoinGrant": {"scope", "conferenceId", "integrationId", "externalUserId", "ttlSeconds", "usePolicy", "idempotencyKey"}}
+    req = {"external_conference_id": "x", "mode": "webinar", "external_user_id": "u", "role": "host",
+           "lifecycle": "waiting", "open": True, "ttl_seconds": 900}
+    for m, fields in want.items():
+        assert set(mod.proto_request(m, req, tenant_id="t", integration_id="i", idempotency_key="k", conference_id="c")) == fields
+    with pytest.raises(ValueError):
+        mod.proto_request("EnsureParticipant", {"role": "boss", "external_user_id": "u"}, tenant_id="t", integration_id="i", idempotency_key="k", conference_id="c")
