@@ -85,3 +85,25 @@ def test_attendance_only_for_past_bookings(flow) -> None:
     _book(flow)
     _, text = _series(flow, NOW, op="attendance", arg="1 attended")
     assert "Не получилось" in text
+
+
+def test_channel_priority_and_pick():
+    from application.business_flows import event_series as es
+    assert es.channel_priority({}) == es.DEFAULT_CHANNEL_PRIORITY
+    assert es.channel_priority({es.CHANNEL_PRIORITY_ENV: "Telegram, x, telegram,vk"}) == ("telegram", "vk")
+    assert es.channel_priority({es.CHANNEL_PRIORITY_ENV: "bad"}) == es.DEFAULT_CHANNEL_PRIORITY
+    assert es.pick_channel({"vk", "telegram"}, {"telegram"}, {}) == "telegram"
+    assert es.pick_channel({"vk"}, {"telegram"}, {}) is None
+
+
+def test_event_content_plan_and_visual_key():
+    from application.business_flows import event_series as es
+    f = [es.set_content_mode("e1", "warmup", "text_with_image")]
+    plan = es.content_plan(es.replay(f), "e1")
+    assert plan == {"warmup": "text_with_image", "event_day_announcement": "text", "post_event_followup": "text"}
+    import pytest
+    with pytest.raises(ValueError):
+        es.set_content_mode("e1", "warmup", "gif")
+    assert es.event_visual_idempotency_key(event_id="e1", stage="warmup", message_key="w:1") == "event:e1:warmup:w:1:image:v1"
+    with pytest.raises(ValueError):
+        es.event_visual_idempotency_key(event_id="e1", stage="warmup", message_key="bad key")

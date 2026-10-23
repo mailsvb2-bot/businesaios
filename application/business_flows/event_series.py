@@ -47,6 +47,7 @@ class State:
     warmup_days: tuple[int, ...] = DEFAULT_WARMUP_DAYS
     followups_on: bool = True
     segments_off: set[str] = field(default_factory=set)
+    content_modes: dict[tuple[str, str], str] = field(default_factory=dict)
 
 
 def replay(payloads: list[dict[str, Any]]) -> State:
@@ -67,6 +68,8 @@ def replay(payloads: list[dict[str, Any]]) -> State:
             st.attendance[(p["slot_id"], p["customer_id"])] = str(p["status"])
         elif step == "series_sent":
             st.sent.add(str(p["key"]))
+        elif step == "event_content_mode":
+            st.content_modes[(str(p["event_id"]), str(p["stage"]))] = str(p["mode"])
         elif step == "warmup_days":
             st.warmup_days = tuple(int(d) for d in p["days"])
     return st
@@ -224,6 +227,54 @@ def due_messages(st: State, slots: dict[str, Any], *, now_ms: int, offer_url: st
                 )
                 break  # one follow-up per participant per run
     return out
+
+
+CHANNEL_PRIORITY_ENV = "BAI_EVENT_FOLLOWUP_CHANNEL_PRIORITY"
+DEFAULT_CHANNEL_PRIORITY = ("max", "vk", "telegram", "email")
+
+
+def channel_priority(env: dict[str, str] | None = None) -> tuple[str, ...]:
+    """Port of event_warmups/event_followups._channel_priority (unknown/duplicate entries dropped)."""
+    import os
+    raw = str((os.environ if env is None else env).get(CHANNEL_PRIORITY_ENV) or "").strip()
+    out: list[str] = []
+    for part in raw.split(","):
+        v = part.strip().lower()
+        if v in DEFAULT_CHANNEL_PRIORITY and v not in out:
+            out.append(v)
+    return tuple(out) or DEFAULT_CHANNEL_PRIORITY
+
+
+def pick_channel(allowed: Any, linked: Any, env: dict[str, str] | None = None) -> str | None:
+    """First priority channel that is both consented (allowed) and linked for the recipient."""
+    a, ln = set(allowed), set(linked)
+    return next((c for c in channel_priority(env) if c in a and c in ln), None)
+
+
+# --- per-stage content mode (port of event_content_plans). Preference only: a visual mode never
+# triggers generation here; image/video creation stays behind the executor visual gateway.
+CONTENT_STAGES = ("warmup", "event_day_announcement", "post_event_followup")
+CONTENT_MODES = ("text", "text_with_image", "text_in_image", "text_with_video")
+_MESSAGE_KEY_RE = re.compile(r"[A-Za-z0-9_.:@/-]{1,72}")
+
+
+def set_content_mode(event_id: str, stage: str, mode: str) -> dict[str, Any]:
+    if stage not in CONTENT_STAGES or mode not in CONTENT_MODES or not str(event_id or "").strip():
+        raise ValueError("invalid event content mode")
+    return {"step": "event_content_mode", "event_id": str(event_id).strip(), "stage": stage, "mode": mode}
+
+
+def content_plan(st: State, event_id: str) -> dict[str, str]:
+    return {stage: st.content_modes.get((event_id, stage), "text") for stage in CONTENT_STAGES}
+
+
+def event_visual_idempotency_key(*, event_id: str, stage: str, message_key: str) -> str:
+    key = str(message_key or "").strip()
+    if not _MESSAGE_KEY_RE.fullmatch(key):
+        raise ValueError("event visual message key is invalid")
+    if stage not in CONTENT_STAGES or not str(event_id or "").strip():
+        raise ValueError("invalid event visual scope")
+    return f"event:{str(event_id).strip()}:{stage}:{key}:image:v1"
 
 
 __all__ = [
