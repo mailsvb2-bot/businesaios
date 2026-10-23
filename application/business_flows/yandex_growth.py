@@ -192,3 +192,65 @@ def growth_snapshot(led: Ledger, *, connections: Mapping[str, Mapping[str, objec
                           sum(r.impressions for r in vals), sum(r.clicks for r in vals), cost,
                           len(all_l), len(all_b), len(all_w),
                           tuple(sorted(camps, key=lambda c: (c.cost_micros or 0, c.clicks, c.impressions), reverse=True)))
+
+
+# --- creative trial allocation (donor creative_growth_optimizer) -------------------------------
+# Advisory only: proposes one bounded 10,000-bps reallocation step; never touches provider budget.
+CREATIVE_METRICS = ("bookings", "won")
+
+
+def creative_allocation(
+    arms: list[dict[str, object]], *, running: bool, metric: str = "bookings", min_leads_per_arm: int = 30,
+    exploration_floor_bps: int = 1_000, max_shift_bps: int = 1_000,
+) -> dict[str, object]:
+    """arms: {variant_id, publication_job_id, allocation_bps, leads, bookings, won, scope='variant'}.
+
+    status: ready | not_running | attribution_not_ready | insufficient_data | no_clear_winner |
+    exploration_floor_reached. Winner must be separated by non-overlapping 95% Wilson intervals.
+    """
+    from core.experiments.evaluators.live_canary_statistics import wilson_interval
+
+    if metric not in CREATIVE_METRICS:
+        raise ValueError("unsupported creative optimization metric")
+    if min_leads_per_arm < 1 or not 1 <= exploration_floor_bps < 5_000 or not 1 <= max_shift_bps <= 5_000:
+        raise ValueError("creative optimization bounds invalid")
+    out: dict[str, object] = {"metric": metric, "winner_variant_id": "", "evidence": []}
+    if not running:
+        return {**out, "status": "not_running"}
+    if len(arms) < 2 or any(a.get("scope", "variant") != "variant" or not a.get("publication_job_id") for a in arms) \
+            or len({a["variant_id"] for a in arms}) != len(arms):
+        return {**out, "status": "attribution_not_ready"}
+    if any(int(a["leads"]) < min_leads_per_arm for a in arms):  # type: ignore[call-overload]
+        return {**out, "status": "insufficient_data"}
+    scored = []
+    for a in arms:
+        n, k = int(a["leads"]), int(a[metric])  # type: ignore[call-overload]
+        if not 0 <= k <= n:
+            raise ValueError("creative optimization successes must be between zero and leads")
+        lo, hi = wilson_interval(k, n)
+        scored.append((k / n, max(0.0, lo), min(1.0, hi), str(a["variant_id"]), a))
+    scored.sort(key=lambda r: (-r[0], r[3]))
+    winner = scored[0]
+    if winner[1] <= max(r[2] for r in scored[1:]):
+        return {**out, "status": "no_clear_winner"}
+    alloc = {str(a["variant_id"]): int(a["allocation_bps"]) for a in arms}  # type: ignore[call-overload]
+    if sum(alloc.values()) != 10_000:
+        raise ValueError("creative allocation must sum to 10000 bps")
+    losers = sorted(scored[1:], key=lambda r: (r[0], r[3]))
+    shift = min(max_shift_bps, sum(max(0, alloc[r[3]] - exploration_floor_bps) for r in losers))
+    if shift <= 0:
+        return {**out, "status": "exploration_floor_reached", "winner_variant_id": winner[3]}
+    left = shift
+    for r in losers:
+        take = min(max(0, alloc[r[3]] - exploration_floor_bps), left)
+        alloc[r[3]] -= take
+        left -= take
+    alloc[winner[3]] += shift - left
+    by = {r[3]: r for r in scored}
+    ev = [{"variant_id": v, "publication_job_id": by[v][4]["publication_job_id"], "leads": int(by[v][4]["leads"]),  # type: ignore[call-overload]
+           "rate": by[v][0], "confidence_low": by[v][1], "confidence_high": by[v][2],
+           "current_allocation_bps": int(by[v][4]["allocation_bps"]), "proposed_allocation_bps": alloc[v]}  # type: ignore[call-overload]
+          for v in (str(a["variant_id"]) for a in arms)]
+    assert sum(e["proposed_allocation_bps"] for e in ev) == 10_000  # type: ignore[misc]
+    return {**out, "status": "ready", "winner_variant_id": winner[3], "evidence": ev,
+            "allocations": [(e["publication_job_id"], e["proposed_allocation_bps"]) for e in ev]}
