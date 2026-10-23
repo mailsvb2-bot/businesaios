@@ -10,7 +10,6 @@ import re
 from collections.abc import Mapping
 from typing import Any
 
-from application.business_flows import sales as sl
 from application.business_flows.projection import stable_id
 
 CANON_SALES_INBOUND = True
@@ -57,8 +56,12 @@ def record_message(
     event_id: str,
     text: object,
     ai_allowed: bool,
-) -> list[dict[str, Any]]:
-    """create-or-refresh lead + inbound transition; replayed provider events yield []."""
+) -> dict[str, Any] | None:
+    """One ``lead_inbound`` fact: create-or-refresh lead + inbound transition; replays yield None.
+
+    ``sales.replay`` applies it (new lead, DISCOVERED->ENGAGED, stop pending follow-up,
+    text note only when ``ai_allowed``).
+    """
     if channel not in CHANNELS:
         raise ValueError("sales ingress supports only Telegram, VK or MAX")
     subj = printable(subject, field_name="external_subject", maximum=512)
@@ -69,21 +72,18 @@ def record_message(
         raise ValueError("message_text must contain non-command customer text")
     key = f"customer-message:{channel}:{src}:{eid}"
     if key in seen_keys(payloads):
-        return []
-    st = sl.replay(payloads)
-    lid = stable_id("lead", f"channel:{channel}:{src}:{subj}")
-    out: list[dict[str, Any]] = []
-    if lid not in st.leads:
-        out.append({"step": "lead_added", "lead_id": lid, "name": (name or subj)[:80], "source": channel})
-        stage = sl.Stage.DISCOVERED
-    else:
-        stage = st.leads[lid].stage
-    out.append({"step": "lead_inbound", "lead_id": lid, "dedupe_key": key, "channel": channel})
-    if stage == sl.Stage.DISCOVERED:
-        out.append({"step": "lead_event", "lead_id": lid, "event": "contact", "stage": sl.Stage.ENGAGED.value})
+        return None
+    fact = {
+        "step": "lead_inbound",
+        "lead_id": stable_id("lead", f"channel:{channel}:{src}:{subj}"),
+        "name": (str(name or "").strip() or f"Клиент {subj[-6:]}")[:80],
+        "source": channel,
+        "customer_id": subj,
+        "dedupe_key": key,
+    }
     if ai_allowed:
-        out.append({"step": "lead_note", "lead_id": lid, "text": ("💬 " + body)[:300]})
-    return out
+        fact["note"] = ("💬 " + body)[:300]
+    return fact
 
 
 __all__ = ["CANON_SALES_INBOUND", "extract_text", "normalize_text", "printable", "record_message", "seen_keys"]

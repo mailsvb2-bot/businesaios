@@ -74,6 +74,10 @@ def by_ref(drafts: dict[str, AdDraft], ref: str) -> AdDraft:
     raise ValueError("черновик не найден, см. /ads")
 
 
+def approval_title(title: str, amount_minor: int, currency: str) -> str:
+    return f"Реклама «{title}», кап {ad.money(amount_minor, currency)}/нед"[:200]
+
+
 def consent(drafts: dict[str, AdDraft], arg: str, *, min_weekly_minor: int) -> dict[str, Any]:
     """``N | 5000 RUB`` -> one existing ``approval_requested`` fact bound to the draft and exact cap."""
     ref, _, cap = (x.strip() for x in str(arg or "").partition("|"))
@@ -83,9 +87,7 @@ def consent(drafts: dict[str, AdDraft], arg: str, *, min_weekly_minor: int) -> d
     amount, cur = ad.parse_money(cap)
     if amount < min_weekly_minor:
         raise ValueError(f"недельный кап ниже минимума {ad.money(min_weekly_minor, cur)}")
-    appr = ad.request_approval(
-        f"Реклама «{d.title}», кап {ad.money(amount, cur)}/нед", amount, cur, source_ref=d.draft_id
-    )
+    appr = ad.request_approval(approval_title(d.title, amount, cur), amount, cur, source_ref=d.draft_id)
     return {**appr, "draft_id": d.draft_id, "weekly_cap_minor": amount}
 
 
@@ -98,6 +100,17 @@ def publish_decision(
         return "Сначала запросите согласие: /ad_consent N | кап", None
     if ap.status != "approved":
         return f"Согласие не одобрено (статус: {ap.status}). /approvals", None
+    from application.business_flows.automation_policy import authorize
+
+    try:  # executor-side binding: the approval must name exactly this draft title and cap
+        authorize(
+            approvals,
+            d.approval_id,
+            title=approval_title(d.title, d.weekly_cap_minor, d.currency),
+            amount_minor=d.weekly_cap_minor,
+        )
+    except PermissionError as exc:
+        return f"🔒 Публикация отклонена: {exc}", None
     if not production_ready:
         return (
             "🔒 Одобрено, но публикация заблокирована: коннектор Яндекс Директа не готов к продакшену "

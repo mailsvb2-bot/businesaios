@@ -125,3 +125,66 @@ def _slot_with_offering(bk, arg, now, *, tenant_id, event_store):
         change = {**change, "title": title, "offering_id": offering_id}
         change["slot_id"] = bk.stable_id("slot", change["starts_at_ms"], title)
     return change
+
+
+def _sales_inbound(done, body, env, *, tenant_id, event_store):
+    """Customer free text -> one lead_inbound fact (sales_intelligence); reply is the policy's text."""
+    from application.business_flows import admin as ad
+    from application.business_flows import sales_inbound as si
+
+    reply = str(body.get("reply") or "Спасибо, сообщение получено.")[:1000]
+    settings = ad.replay(flow_payloads(event_store, tenant_id=tenant_id, event_type="business_admin@v1")).settings
+    ai = settings.get("sales_ai", "off").strip().casefold() in ("on", "1", "true")
+    try:
+        fact = si.record_message(
+            flow_payloads(event_store, tenant_id=tenant_id, event_type="sales_pipeline@v1"),
+            channel="telegram",
+            subject=str(body.get("user_id") or ""),
+            name=str(body.get("name") or ""),
+            source_ref="managed_bot",
+            event_id=str(getattr(env.decision, "correlation_id", "") or getattr(env.decision, "decision_id", "")),
+            text=body.get("arg"),
+            ai_allowed=ai,
+        )
+    except ValueError:
+        fact = None
+    return done(reply, fact)
+
+
+FOLLOWUP_OPS = frozenset({"followup", "followup_plan", "followup_cancel", "optout", "followup_dispatch"})
+
+
+def _followups(done, push, st, op, arg, now, *, tenant_id, event_store):
+    """Per-lead follow-ups (sales_followups.py); delivery only via ``push`` to the lead's Telegram id."""
+    from application.business_flows import automation_policy as ap
+    from application.business_flows import catalog as cg
+    from application.business_flows import sales as sl
+    from application.business_flows import sales_followups as sf
+
+    tz = cg.replay(flow_payloads(event_store, tenant_id=tenant_id, event_type="business_admin@v1")).timezone
+    try:
+        if op == "followup":
+            lead = sl.pick(st, arg)
+            return done(f"✉️ Напоминание клиенту {lead.name}\n\n{sf.status(lead)}")
+        if op == "followup_plan":
+            return done("✉️ Напоминание запланировано", sf.plan(st, arg, now_ms=now, tz=tz))
+        if op == "followup_cancel":
+            return done("✖️ Напоминание отменено", sf.cancel(st, arg))
+        if op == "optout":
+            return done("🚫 Клиенту больше не пишем по этому каналу", sf.optout(st, arg))
+    except ValueError as exc:
+        return done(f"⚠️ Не получилось: {exc}")
+    if ap.in_quiet_hours(now, tz):
+        return done("🌙 Сейчас тихие часы (22:00–08:00), отправка отложена.")
+    due = sf.due(st, now_ms=now)
+    sent = sum(
+        bool(
+            push(
+                text=x.followup_text,
+                to_user_id=x.customer_id,
+                change={"step": "followup_sent", "lead_id": x.lead_id, "followup_id": x.followup_id},
+            )
+        )
+        for x in due
+    )
+    return done(f"✉️ Напоминаний отправлено: {sent} из {len(due)}.")

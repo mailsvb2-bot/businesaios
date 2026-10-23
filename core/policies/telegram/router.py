@@ -89,4 +89,9 @@ def handle(ctx: TelegramCtx, *, default_price_rub: int, bot_username: str = "", 
         msg = "Я здесь. Напиши, что сейчас происходит в твоём дне — и мы настроим ритм."
     else:
         msg = "Я здесь. Напиши, что сейчас происходит. Если нужен полный доступ — /pay или кнопка «Полный доступ»."
+    if not ctx.is_admin and not ctx.cmd and str(ctx.text or "").strip():
+        from core.policies.telegram.helpers import propose
+
+        # customer free text is sales evidence (sales_intelligence); handler replies with msg
+        return propose("sales_pipeline@v1", {"user_id": user_id, "op": "inbound", "arg": str(ctx.text)[:4000], "reply": msg})
     return pm(text=msg, reply_markup=kb_main(is_admin=ctx.is_admin, role=user_role))

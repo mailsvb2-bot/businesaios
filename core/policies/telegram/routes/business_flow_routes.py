@@ -103,6 +103,11 @@ BUSINESS_FLOW_COMMANDS: dict[str, tuple[str, str, bool]] = {
     "/lead_ai": ("sales_pipeline@v1", "ai", True),
     "/lead_card": ("sales_pipeline@v1", "card", True),
     "/leads_due": ("sales_pipeline@v1", "due", True),
+    "/lead_followups": ("sales_pipeline@v1", "followup", True),
+    "/lead_followup": ("sales_pipeline@v1", "followup_plan", True),
+    "/lead_followup_cancel": ("sales_pipeline@v1", "followup_cancel", True),
+    "/lead_optout": ("sales_pipeline@v1", "optout", True),
+    "/send_followups": ("sales_pipeline@v1", "followup_dispatch", True),
 }
 
 

@@ -16,9 +16,12 @@ from runtime.handler_impl.core.payloads import require_mapping, required_str
 from runtime.handler_impl.domains.admin_ops import _card_outcome
 from runtime.handler_impl.domains.business_catalog_ops import (
     CATALOG_OPS,
+    FOLLOWUP_OPS,
     _ads,
     _catalog,
+    _followups,
     _retention,
+    _sales_inbound,
     _slot_with_offering,
 )
 from runtime.handlers.delivery_contract import delivery_kwargs
@@ -867,6 +870,23 @@ def handle_sales_pipeline(payload, effects, env, *, event_store, now_ms: int | N
             body, effects, env, text=text, event_type="sales_pipeline@v1" if change else None, event_payload=change
         )
 
+    if op == "inbound":
+        return _sales_inbound(done, body, env, tenant_id=tenant_id, event_store=event_store)
+    if op in FOLLOWUP_OPS:
+
+        def push(*, text, to_user_id, change):
+            out = send_tracked(
+                body,
+                effects,
+                env,
+                text=text,
+                event_type="sales_pipeline@v1",
+                event_payload=change,
+                to_user_id=to_user_id,
+            )
+            return (out or {}).get("ok", True)
+
+        return _followups(done, push, st, op, arg, now, tenant_id=tenant_id, event_store=event_store)
     try:
         if op == "add":
             ch = sl.add_lead(arg)

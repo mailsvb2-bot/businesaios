@@ -62,7 +62,8 @@ def test_publish_never_goes_live_when_ready_flag_lies() -> None:
     from application.business_flows.admin import Approval
 
     with pytest.raises(PermissionError):
-        ap.publish_decision(d, {"a": Approval("a", "t", 1, "RUB", "approved")}, production_ready=True)
+        bound = Approval("a", ap.approval_title("t", 0, "RUB"), 0, "RUB", "approved")
+        ap.publish_decision(d, {"a": bound}, production_ready=True)
 
 
 @pytest.mark.parametrize("arg", ["a | b", "a | b | http://x", "x" * 60 + " | b | https://x"])
@@ -88,3 +89,18 @@ def test_ad_unit_economics_with_local_attribution(flow) -> None:
     _, text = run(op="ad_report")
     assert "CTR 5.00%" in text and "CPC 40,00" in text.replace(".", ",")
     assert "лиды 2" in text and "клиенты 1" in text and "CAC 2" in text
+
+
+def test_publish_decision_requires_approval_bound_to_exact_draft_and_cap() -> None:
+    from application.business_flows import ad_proposals as apz
+    from application.business_flows import admin as adm
+
+    d = apz.AdDraft("d1", "Йога", "t", "https://x", "awaiting_approval", "a1", 500_000, "RUB")
+    good = adm.Approval("a1", apz.approval_title("Йога", 500_000, "RUB"), 500_000, "RUB")
+    good.status = "approved"
+    text, fact = apz.publish_decision(d, {"a1": good}, production_ready=False)
+    assert fact and fact["step"] == "ad_publish_blocked"
+    wrong = adm.Approval("a1", good.title, 100_000, "RUB")
+    wrong.status = "approved"
+    text, fact = apz.publish_decision(d, {"a1": wrong}, production_ready=False)
+    assert fact is None and "другое действие" in text

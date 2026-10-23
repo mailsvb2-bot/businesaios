@@ -62,6 +62,11 @@ class Lead:
     due_ms: int = 0
     notes: tuple[str, ...] = ()
     handoff_open: bool = False
+    customer_id: str = ""
+    followup_id: str = ""
+    followup_due_ms: int = 0
+    followup_text: str = ""
+    followup_suppressed: bool = False
 
 
 @dataclass
@@ -98,8 +103,30 @@ def replay(payloads: list[dict[str, Any]]) -> State:
         lead = st.leads.get(lid)
         if step == "lead_added":
             st.leads[lid] = Lead(lid, p["name"], p.get("source", ""))
+        elif step == "lead_inbound":  # sales_inbound.record_message
+            lead = lead or Lead(lid, p["name"], p.get("source", ""))
+            stage = Stage.ENGAGED if lead.stage == Stage.DISCOVERED else lead.stage
+            notes = (*lead.notes, p["note"])[-20:] if p.get("note") else lead.notes
+            # donor SalesFollowupRepository.stop_for_inbound: a reply cancels the pending follow-up
+            st.leads[lid] = replace(
+                lead,
+                stage=stage,
+                notes=notes,
+                customer_id=str(p.get("customer_id") or lead.customer_id),
+                followup_id="",
+                followup_due_ms=0,
+                followup_text="",
+            )
         elif lead is None:
             continue
+        elif step == "followup_planned":
+            st.leads[lid] = replace(
+                lead, followup_id=p["followup_id"], followup_due_ms=int(p["due_ms"]), followup_text=p["text"]
+            )
+        elif step in ("followup_cancelled", "followup_sent") and lead.followup_id == p.get("followup_id"):
+            st.leads[lid] = replace(lead, followup_id="", followup_due_ms=0, followup_text="")
+        elif step == "followup_optout":
+            st.leads[lid] = replace(lead, followup_suppressed=True, followup_id="", followup_due_ms=0, followup_text="")
         elif step == "lead_event":
             st.leads[lid] = replace(
                 lead,
