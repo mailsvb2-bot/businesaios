@@ -37,6 +37,7 @@ PARENTS: dict[str, str] = {
     "calendar": "cpm:work",
     "customers": "cpm:work",
     "customer": "cpm:customers:0",
+    "cust-time": "cpm:customers:0",
     "events": "cpm:work",
     "automation": "cpm:manage",
     "settings": "cpm:manage",
@@ -264,7 +265,17 @@ def _extra_screen(a: str, parsed: Parsed, s: Snapshot) -> tuple[str, list[list[t
             for x in mine
         ]
         flag = {True: "согласен", False: "отписался"}.get(consent, "не давал")
-        return f"👤 Клиент {cid[-6:]}\n\nСогласие на предложения: {flag}\n" + "\n".join(rows), []
+        return f"👤 Клиент {cid[-6:]}\n\nСогласие на предложения: {flag}\n" + "\n".join(rows), _rows(
+            ("🕓 История", f"cpm:cust-time:{cid[:40]}")
+        )
+    if a == "cust-time":
+        from application.business_flows import customer_timeline as ct
+
+        cid = parsed.args[0] if parsed.args else ""
+        entries = ct.build(cid, s.all_slots, ser, now_ms=s.now_ms)
+        if not entries:
+            raise ValueError("unknown customer")
+        return f"🕓 История клиента {cid[-6:]}\n\n" + "\n".join(ct.format_lines(entries)), []
     if a == "events":
         days = ", ".join(map(str, getattr(ser, "warmup_days", ()))) or "выключен"
         opted = sum(1 for v in getattr(ser, "consent", {}).values() if v)
