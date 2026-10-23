@@ -117,3 +117,70 @@ def registration_url(public_base_url: str, slug: str) -> str:
     if not base:
         raise ValueError("public_base_url required")
     return f"{base.rstrip('/')}/e/{slug}"
+
+
+# --- sessions (port of donor event_sessions) ---
+
+
+def configure_sessions(payloads: list[dict[str, Any]], event_id: str, sessions: list[SessionSpec], *, now: datetime,
+                       reschedule_notifications: bool = False) -> dict[str, Any]:
+    if event_id not in pe.replay(payloads).events:
+        raise ValueError("event_not_found")
+    if any(pe._dt(s.starts_at) <= pe._dt(now) for s in sessions):
+        raise ValueError("event session must start in the future")
+    fact = _sessions_fact(event_id, [_session(s) for s in sessions])
+    return {**fact, "reschedule_notifications": bool(reschedule_notifications)}
+
+
+def warmup_window(sessions: list[dict[str, Any]], *, timezone_name: str, now: datetime) -> int:
+    """Max warmup days = calendar days (event tz) until the first session."""
+    if not sessions:
+        raise ValueError("event sessions are required")
+    from zoneinfo import ZoneInfo
+
+    z = ZoneInfo(timezone_name)
+    first = pe._dt(sessions[0]["starts_at"]).astimezone(z).date()
+    return max((first - pe._dt(now).astimezone(z).date()).days, 0)
+
+
+def validate_warmup_days(requested: object, *, max_days: int) -> int:
+    if isinstance(requested, bool) or not isinstance(requested, int):
+        raise ValueError("warmup days must be an integer")
+    if requested < 0:
+        raise ValueError("warmup days must not be negative")
+    if requested > max_days:
+        raise ValueError("warmup days exceed the time remaining before the event")
+    return requested
+
+
+def select_for_join(sessions: list[dict[str, Any]], *, position: int | None = None, now: datetime,
+                    default_hours: int = 2) -> dict[str, Any]:
+    """Exact position (1-based) for reminder links; otherwise current/next session, else the last."""
+    if not sessions:
+        raise ValueError("event sessions are required")
+    if position is not None:
+        if isinstance(position, bool) or not isinstance(position, int) or position < 1:
+            raise ValueError("position must be a positive integer")
+        if position > len(sessions):
+            raise LookupError("event session was not found")
+        return sessions[position - 1]
+    from datetime import timedelta
+
+    cur = pe._dt(now)
+    for s in sessions:
+        end = pe._dt(s["ends_at"]) if s.get("ends_at") else pe._dt(s["starts_at"]) + timedelta(hours=default_hours)
+        if cur < end:
+            return s
+    return sessions[-1]
+
+
+def set_session_join(payloads: list[dict[str, Any]], event_id: str, position: int, join_url: str,
+                     provider: str | None = None) -> dict[str, Any]:
+    ss = sessions_of(payloads, event_id)
+    if not 1 <= position <= len(ss):
+        raise LookupError("event session was not found")
+    join = normalize_session_join_url(join_url)
+    if not join:
+        raise ValueError("join_url required")
+    ss[position - 1] = {**ss[position - 1], "join_url": join, "provider_key": pe.provider_key(provider, join_url=join)}
+    return _sessions_fact(event_id, ss)
