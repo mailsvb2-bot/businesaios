@@ -18,3 +18,4 @@ httpx==0.28.1
 uvicorn[standard]==0.34.2
 ruff==0.8.4
 cryptography==49.0.0
+Pillow==11.1.0
