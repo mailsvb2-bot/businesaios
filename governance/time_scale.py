@@ -70,6 +70,7 @@ RUNTIME_ACTIONS = {
     "partners@v1",
     "bookings@v1",
     "bot_provisioning@v1",
+    "sales_pipeline@v1",
     "event_series@v1",
     "business_admin@v1",
     "admin_set_role@v1",

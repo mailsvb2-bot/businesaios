@@ -31,6 +31,7 @@ from runtime.handlers_ops import (
     handle_reject_pricing_change,
     handle_request_pricing_change,
     handle_rollback_policy,
+    handle_sales_pipeline,
     handle_select_tariff,
     handle_send_audio,
     handle_send_weather,
@@ -62,6 +63,7 @@ def register_ops_handlers(*, handlers: ActionHandlerRegistry, event_store) -> No
     handlers.register(
         "business_admin@v1",
         "event_series@v1",
+        "sales_pipeline@v1",
         "bot_provisioning@v1",
         lambda payload, effects, env: handle_bot_provisioning(payload, effects, env, event_store=event_store),
     )
@@ -72,6 +74,10 @@ def register_ops_handlers(*, handlers: ActionHandlerRegistry, event_store) -> No
     handlers.register(
         "event_series@v1",
         lambda payload, effects, env: handle_event_series(payload, effects, env, event_store=event_store),
+    )
+    handlers.register(
+        "sales_pipeline@v1",
+        lambda payload, effects, env: handle_sales_pipeline(payload, effects, env, event_store=event_store),
     )
     handlers.register(
         "bookings@v1",

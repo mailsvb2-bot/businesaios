@@ -20,6 +20,7 @@ from runtime.handler_impl.domains.business_flow_ops import (
     handle_event_series,
     handle_offer_ladder,
     handle_partners,
+    handle_sales_pipeline,
 )
 from runtime.handler_impl.domains.payment_ops import (
     handle_capture_payment,
@@ -56,6 +57,7 @@ __all__ = [
     "handle_offer_ladder",
     "handle_partners",
     "handle_bookings",
+    "handle_sales_pipeline",
     "handle_event_series",
     "handle_business_admin",
     "handle_bot_provisioning",

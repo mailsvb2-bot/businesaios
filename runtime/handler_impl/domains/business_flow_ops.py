@@ -528,8 +528,58 @@ def handle_event_series(payload, effects, env, *, event_store, now_ms: int | Non
     return done("🗂 Сообщения серии\n\n" + "\n".join(es.previews(st)))
 
 
+def handle_sales_pipeline(payload, effects, env, *, event_store, now_ms: int | None = None):
+    """Owner sales pipeline (sales_pipeline@v1): leads, stages, next actions, notes, handoff."""
+    from application.business_flows import sales as sl
+
+    body = require_mapping(payload or {})
+    tenant_id = required_str(body, "tenant_id")
+    op, arg, now = str(body.get("op") or "list"), str(body.get("arg") or "").strip(), now_ms or _now_ms()
+    st = sl.replay(flow_payloads(event_store, tenant_id=tenant_id, event_type="sales_pipeline@v1"))
+
+    def done(text, change=None):
+        return send_tracked(
+            body, effects, env, text=text, event_type="sales_pipeline@v1" if change else None, event_payload=change
+        )
+
+    try:
+        if op == "add":
+            ch = sl.add_lead(arg)
+            if ch["lead_id"] in st.leads:
+                return done("ℹ️ Такой лид уже есть: /leads")
+            return done(f"🎯 Лид добавлен: {ch['name']}", ch)
+        if op == "event":
+            ch = sl.apply_event(st, arg)
+            return done(f"🎯 {st.leads[ch['lead_id']].name}: {sl.LABELS[sl.Stage(ch['stage'])]}", ch)
+        if op == "reopen":
+            ch = sl.reopen(st, arg)
+            return done("🔄 Лид снова в работе", ch)
+        if op == "next":
+            ch = sl.set_next(st, arg, now_ms=now)
+            return done("⏰ Следующий шаг записан", ch)
+        if op == "note":
+            ch = sl.add_note(st, arg)
+            return done("📝 Заметка сохранена", ch)
+        if op == "card":
+            lead = sl.pick(st, arg)
+            notes = "\n".join(f"• {n}" for n in lead.notes) or "Заметок нет."
+            return done(
+                f"👤 {lead.name} ({lead.source or 'источник не указан'})\nСтадия: {sl.LABELS[lead.stage]}\n{notes}"
+            )
+        if op == "due":
+            due = sl.due_actions(st, now_ms=now)
+            return done(
+                "⏰ Пора сделать\n\n"
+                + ("\n".join(f"• {x.name}: {x.next_action}" for x in due) or "Ничего не просрочено.")
+            )
+    except ValueError as exc:
+        return done(f"⚠️ Не получилось: {exc}")
+    return done(sl.render(st, now_ms=now))
+
+
 __all__ = [
     "handle_bookings",
+    "handle_sales_pipeline",
     "handle_event_series",
     "handle_business_admin",
     "handle_business_ops_summary",

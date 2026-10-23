@@ -880,6 +880,23 @@
         "multi-channel routing (Telegram only)",
         "media in series messages"
       ]
+    },
+    {
+      "id": "sales.sales_pipeline",
+      "status": "implemented",
+      "canonical_owner": "runtime.handler_impl.domains.business_flow_ops",
+      "source_of_truth": "event_store:sales_pipeline@v1",
+      "evidence": [
+        "sales_pipeline@v1"
+      ],
+      "runtime_dependency_removed": false,
+      "pr472_claimed_status": null,
+      "pr472_claimed_runtime_dependency_removed": null,
+      "integration_missing_evidence": [
+        "multi-seat assignment (single-owner tenants)",
+        "AI sales drafts/orchestration",
+        "automatic stage events from conversations (owner records them)"
+      ]
     }
   ],
   "integration_provenance": {
