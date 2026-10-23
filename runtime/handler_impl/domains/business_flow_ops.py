@@ -27,6 +27,7 @@ def send_tracked(
     ok: bool = True,
     reason: str = "",
     to_user_id: str | None = None,
+    reply_markup: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     tenant_id = required_str(body, "tenant_id")
     user_id = to_user_id or required_str(body, "user_id")
@@ -39,7 +40,7 @@ def send_tracked(
         tenant_id=tenant_id,
         user_id=user_id,
         text=text,
-        reply_markup=None,
+        reply_markup=reply_markup,
         track_event_type=event_type,
         track_payload=tracked,
         **delivery_kwargs(body),
@@ -281,6 +282,23 @@ def handle_offer_ladder(payload, effects, env, *, event_store):
     return send_tracked(body, effects, env, text=text, event_type=None, event_payload=None)
 
 
+def _cockpit(body, effects, env, future, steps, facts):
+    """Owner cockpit screens (cpm:*) over the same projections; buttons re-enter this action."""
+    from application.business_flows import bookings as bk
+    from application.business_flows import cockpit as cp
+    from application.business_flows import partners as pt
+
+    snap = cp.Snapshot(
+        slots=future,
+        partners=list(pt.replay(facts("partners@v1")).values()),
+        steps=steps,
+        bots=list(botprov.replay(facts("bot_provisioning@v1")).values()),
+        fmt_slot=bk.fmt,
+    )
+    text, rows = cp.render(cp.parse(str(body.get("arg") or "cpm:menu")), snap, is_owner=True)
+    return send_tracked(body, effects, env, text=text, event_type=None, event_payload=None, reply_markup=cp.markup(rows))
+
+
 def handle_business_ops_summary(payload, effects, env, *, event_store, now_ms: int | None = None):
     """Owner operations summary over the business-flow projections (read-only)."""
     from application.business_flows import bookings as bk
@@ -297,6 +315,8 @@ def handle_business_ops_summary(payload, effects, env, *, event_store, now_ms: i
     future = bk.upcoming(slots, now_ms=now)
     booked = [s for s in future if s.status == "booked"]
     steps, _ = ld.replay(facts("offer_ladder@v1"))
+    if str(body.get("op") or "") == "cockpit":
+        return _cockpit(body, effects, env, future, steps, facts)
     deletions = len(facts("privacy_deleted@v1"))
     bots = {p.get("username") for p in facts("bot_provisioning@v1") if p.get("username")}
     text = (

@@ -26,6 +26,7 @@ BUSINESS_FLOW_COMMANDS: dict[str, tuple[str, str, bool]] = {
     "/ladder_add": ("offer_ladder@v1", "add", True),
     "/ladder": ("offer_ladder@v1", "show", True),
     "/ops": ("business_ops_summary@v1", "show", True),
+    "/cockpit": ("business_ops_summary@v1", "cockpit", True),
     "/send_reminders": ("bookings@v1", "dispatch", True),
     "/bot_secret": ("bot_provisioning@v1", "attach", True),
     "/verify_bot": ("bot_provisioning@v1", "verify", True),
@@ -36,6 +37,9 @@ BUSINESS_FLOW_COMMANDS: dict[str, tuple[str, str, bool]] = {
 
 
 def handle_business_flow_routes(ctx: TelegramCtx, *, user_id: str) -> ProposedAction | None:
+    data = str(getattr(ctx, "callback_data", "") or "")
+    if data.startswith("cpm:") and ctx.is_admin:
+        return propose("business_ops_summary@v1", {"user_id": user_id, "op": "cockpit", "arg": data[:120]})
     route = BUSINESS_FLOW_COMMANDS.get(str(ctx.cmd or ""))
     if route is None:
         return None
