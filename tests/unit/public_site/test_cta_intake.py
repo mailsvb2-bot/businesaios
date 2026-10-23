@@ -64,3 +64,40 @@ def test_one_owner_account_can_have_multiple_isolated_businesses_without_email_i
     assert [item["name"] for item in businesses] == ["Beta", "Alpha"]
     assert {item["business_id"] for item in businesses} == {first.business_id, second.business_id}
     assert unrelated.business_id not in {item["business_id"] for item in businesses}
+
+
+def test_tenancy_and_owner_onboarding_over_cta_ledger(tmp_path) -> None:
+    import pytest
+
+    from application.public_site.cta_intake import CTALandingIntakeService as Svc
+
+    svc = Svc(storage_path=str(tmp_path / "ledger.jsonl"))
+    assert svc.get_owner_onboarding_session(owner_account_id="acc-1", platform="telegram") is None
+    with pytest.raises(ValueError, match="not active"):
+        svc.create_business_from_onboarding(owner_account_id="acc-1", platform="telegram", name="X")
+    svc.begin_business_name_onboarding(owner_account_id="acc-1", platform="telegram")
+    access = svc.create_business_from_onboarding(owner_account_id="acc-1", platform="telegram", name="Студия")
+    bid = access["business_id"]
+    assert svc.get_owner_onboarding_session(owner_account_id="acc-1", platform="telegram")["step"] == "activity_description"
+    assert svc.get_owner_control_workspace(owner_account_id="acc-1", platform="telegram") == bid
+    with pytest.raises(ValueError, match="timezone"):
+        svc.complete_activity_onboarding(owner_account_id="acc-1", platform="telegram",
+                                         activity_description="йога", timezone_name="Mars/Base")
+    prof = svc.complete_activity_onboarding(owner_account_id="acc-1", platform="telegram",
+                                            activity_description="йога", timezone_name="Europe/Moscow")
+    assert prof["activity_description"] == "йога" and prof["business_name"] == "Студия"
+    assert svc.get_owner_onboarding_session(owner_account_id="acc-1", platform="telegram") is None
+    other = svc.create_business(owner_account_id="acc-2", name="Чужой")
+    assert [b["business_id"] for b in svc.list_owner_businesses(owner_account_id="acc-1")] == [bid]
+    with pytest.raises(PermissionError):
+        svc.set_owner_control_workspace(owner_account_id="acc-1", platform="telegram", business_id=other["business_id"])
+    with pytest.raises(PermissionError):
+        svc.rename_business(tenant_id=other["tenant_id"], business_id=other["business_id"], owner_account_id="acc-1",
+                            name="Z", idempotency_key="k")
+    out = svc.rename_business(tenant_id=access["tenant_id"], business_id=bid, owner_account_id="acc-1",
+                              name="Студия 2", idempotency_key="r1")
+    assert out["business_name"] == "Студия 2" and out["activity_description"] == "йога"
+    svc.begin_business_name_onboarding(owner_account_id="acc-1", platform="telegram")
+    svc.cancel_owner_onboarding(owner_account_id="acc-1", platform="telegram")
+    assert svc.get_owner_onboarding_session(owner_account_id="acc-1", platform="telegram") is None
+    assert len(svc.list_recent()) == 2

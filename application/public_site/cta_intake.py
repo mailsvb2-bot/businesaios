@@ -349,6 +349,104 @@ class CTALandingIntakeService:
             _append_intake_row(self._storage_path, next_row)
             return _settings_payload(next_row)
 
+    # --- donor tenancy / owner_onboarding over the same ledger (kind rows carry no intake_id) ---
+    def _owned(self, account_id: str, business_id: str) -> dict[str, object]:
+        hit = next((b for b in self.list_owner_businesses(owner_account_id=account_id, limit=200)
+                    if b["business_id"] == business_id), None)
+        if hit is None:
+            raise PermissionError("business_not_accessible")
+        return hit
+
+    def _latest_kind(self, kind: str, account_id: str, platform: str) -> dict[str, object] | None:
+        if not self._storage_path.exists():
+            return None
+        for line in reversed(self._storage_path.read_text(encoding="utf-8").splitlines()):
+            try:
+                row = json.loads(line) if line.strip() else None
+            except (ValueError, TypeError):
+                continue
+            if (isinstance(row, dict) and row.get("kind") == kind
+                    and row.get("owner_account_id") == account_id and row.get("platform") == platform):
+                return row
+        return None
+
+    def _put_kind(self, kind: str, account_id: str, platform: str, **fields: object) -> dict[str, object]:
+        account, plat = str(account_id or "").strip(), str(platform or "").strip()
+        if not account or not plat:
+            raise ValueError("owner_account_and_platform_required")
+        row = {"kind": kind, "owner_account_id": account, "platform": plat, **fields,
+               "at": datetime.now(UTC).isoformat()}
+        with _intake_lock(self._storage_path):
+            _append_intake_row(self._storage_path, row)
+        return row
+
+    def create_business(self, *, owner_account_id: str, name: str) -> dict[str, object]:
+        """Donor tenancy.create_business: owner-bound business row (the same CTA ledger)."""
+        title = str(name or "").strip()
+        if not 1 <= len(title) <= 200:
+            raise ValueError("business_name_invalid")
+        res = self.submit(payload={"business_name": title}, owner_account_id=owner_account_id)
+        return {"tenant_id": res.tenant_id, "business_id": res.business_id, "name": title, "role": "owner"}
+
+    def rename_business(self, *, tenant_id: str, business_id: str, owner_account_id: str, name: str,
+                        idempotency_key: str) -> dict[str, object]:
+        """Donor tenancy.rename_business: owner-only; keeps activity/timezone, optimistic revision."""
+        self._owned(str(owner_account_id or "").strip(), str(business_id or "").strip())
+        cur = self.read_business_settings(tenant_id=tenant_id, business_id=business_id)
+        return self.update_business_settings(
+            tenant_id=tenant_id, business_id=business_id, business_name=name,
+            activity_description=str(cur["activity_description"]), timezone_name=str(cur["timezone_name"]),
+            expected_revision=int(cur["revision"]), idempotency_key=idempotency_key, actor_id=owner_account_id)
+
+    def set_owner_control_workspace(self, *, owner_account_id: str, platform: str, business_id: str) -> str:
+        """Donor tenancy.set_owner_control_workspace: only a business the owner can access."""
+        self._owned(str(owner_account_id or "").strip(), str(business_id or "").strip())
+        self._put_kind("owner_control_workspace", owner_account_id, platform, business_id=business_id)
+        return business_id
+
+    def get_owner_control_workspace(self, *, owner_account_id: str, platform: str) -> str | None:
+        row = self._latest_kind("owner_control_workspace", str(owner_account_id or "").strip(), str(platform or "").strip())
+        return str(row["business_id"]) if row else None
+
+    def get_owner_onboarding_session(self, *, owner_account_id: str, platform: str) -> dict[str, object] | None:
+        row = self._latest_kind("owner_onboarding", str(owner_account_id or "").strip(), str(platform or "").strip())
+        return {"step": row["step"], "business_id": row.get("business_id")} if row and row.get("step") else None
+
+    def begin_business_name_onboarding(self, *, owner_account_id: str, platform: str) -> dict[str, object]:
+        self._put_kind("owner_onboarding", owner_account_id, platform, step="business_name", business_id=None)
+        return {"step": "business_name", "business_id": None}
+
+    def cancel_owner_onboarding(self, *, owner_account_id: str, platform: str) -> None:
+        self._put_kind("owner_onboarding", owner_account_id, platform, step=None, business_id=None)
+
+    def create_business_from_onboarding(self, *, owner_account_id: str, platform: str, name: str) -> dict[str, object]:
+        """Donor: business_name step -> business + control workspace -> activity_description step."""
+        session = self.get_owner_onboarding_session(owner_account_id=owner_account_id, platform=platform)
+        if session is None or session["step"] != "business_name":
+            raise ValueError("business-name onboarding is not active")
+        access = self.create_business(owner_account_id=owner_account_id, name=name)
+        self.set_owner_control_workspace(owner_account_id=owner_account_id, platform=platform,
+                                         business_id=str(access["business_id"]))
+        self._put_kind("owner_onboarding", owner_account_id, platform, step="activity_description",
+                       business_id=access["business_id"], tenant_id=access["tenant_id"])
+        return access
+
+    def complete_activity_onboarding(self, *, owner_account_id: str, platform: str, activity_description: str,
+                                     timezone_name: str) -> dict[str, object]:
+        """Donor: activity step -> profile saved (validated tz) -> workspace kept -> session cleared."""
+        row = self._latest_kind("owner_onboarding", str(owner_account_id or "").strip(), str(platform or "").strip())
+        if not row or row.get("step") != "activity_description" or not row.get("business_id"):
+            raise ValueError("activity onboarding is not active")
+        tenant, business = str(row["tenant_id"]), str(row["business_id"])
+        cur = self.read_business_settings(tenant_id=tenant, business_id=business)
+        profile = self.update_business_settings(
+            tenant_id=tenant, business_id=business, business_name=str(cur["business_name"]),
+            activity_description=activity_description, timezone_name=timezone_name,
+            expected_revision=int(cur["revision"]), idempotency_key=f"onboarding:{business}", actor_id=owner_account_id)
+        self.set_owner_control_workspace(owner_account_id=owner_account_id, platform=platform, business_id=business)
+        self.cancel_owner_onboarding(owner_account_id=owner_account_id, platform=platform)
+        return profile
+
 
 def _row_owner_account_id(row: dict[str, object]) -> str:
     explicit = str(row.get("owner_account_id") or "").strip()
