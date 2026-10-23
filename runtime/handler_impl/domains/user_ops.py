@@ -87,3 +87,32 @@ def handle_log_mood(payload, effects, env):
         channel=str(payload.get("channel") or "telegram"),
         channel_policy=optional_dict(payload, "channel_policy"),
     )
+
+
+def handle_privacy_export(payload, effects, env, *, event_store):
+    """Self-service personal-data export: the requester sees only their own scoped events."""
+    from collections import Counter
+
+    from core.privacy.data_rights import DataExportRequest, DataRightsService
+    from runtime.platform.privacy.event_store_data_source import EventStoreUserDataSource
+
+    body = require_mapping(payload or {})
+    tenant_id, user_id = required_str(body, "tenant_id"), required_str(body, "user_id")
+    try:
+        service = DataRightsService(sources={"events": EventStoreUserDataSource(event_store)})
+        items = service.export_user(DataExportRequest(tenant_id=tenant_id, user_id=user_id))["sources"]["events"]["items"]
+        types = Counter(str((i if isinstance(i, dict) else vars(i)).get("event_type") or "?") for i in items)
+        lines = [f"• {name}: {count}" for name, count in types.most_common(15)]
+        text = "🔐 Ваши данные\n\n" + f"Записей: {len(items)}\n" + ("\n".join(lines) or "Записей нет.")
+        track, ok = "privacy_export@v1", True
+    except Exception as exc:
+        text, track, ok = "🔐 Не удалось собрать выгрузку данных. Попробуйте позже.", "privacy_export_failed@v1", False
+        types, items = {"error": exc.__class__.__name__}, []
+    delivery = effects.send_message(
+        decision_id=env.decision.decision_id, correlation_id=env.decision.correlation_id,
+        tenant_id=tenant_id, user_id=user_id, text=text, reply_markup=None, track_event_type=track,
+        track_payload={"tenant_id": tenant_id, "user_id": user_id, "records": len(items), "types": dict(types)},
+        **delivery_kwargs(body),
+    )
+    delivered = bool(delivery.get("ok")) if isinstance(delivery, dict) else bool(delivery)
+    return {"ok": bool(ok and delivered), "status": "verified" if ok and delivered else "failed", "delivery": delivery}

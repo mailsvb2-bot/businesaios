@@ -30,6 +30,7 @@ from runtime.handler_impl.domains.pricing_ops import (
 from runtime.handler_impl.domains.user_ops import (
     handle_answer_callback,
     handle_log_mood,
+    handle_privacy_export,
     handle_send_audio,
     handle_send_weather,
     handle_set_user_setting,
@@ -39,6 +40,7 @@ __all__ = [
     "handle_admin_set_perm",
     "handle_admin_set_role",
     "handle_admin_user_card",
+    "handle_privacy_export",
     "handle_answer_callback",
     "handle_apply_pricing_change",
     "handle_capture_payment",

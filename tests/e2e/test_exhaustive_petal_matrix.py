@@ -79,7 +79,8 @@ def test_every_declared_action_schema_accepts_only_its_contract() -> None:
     # Phase 18 visual_creative_generate adds four optional, typed fields:
     # visual_direction, seed, variants, overlay. Each adds one invalid-type
     # case; the existing checks still execute for every field in the catalog.
-    assert cases == 927 + 4
+    # Port wave PD export: privacy_export@v1 adds 11 schema cases.
+    assert cases == 927 + 4 + 11
 
 
 def test_every_runtime_handler_and_compatibility_import_door_resolves() -> None:
@@ -102,7 +103,7 @@ def test_every_runtime_handler_and_compatibility_import_door_resolves() -> None:
         for export_name in exports:
             assert hasattr(module, export_name), (module_name, export_name)
             cases += 1
-    assert len(SPECS) == 60
+    assert len(SPECS) == 61
     assert cases == 1016
 
 

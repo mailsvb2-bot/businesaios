@@ -19,6 +19,10 @@ def handle_command_routes(ctx: TelegramCtx, *, user_id: str, pm) -> ProposedActi
             ),
             reply_markup=kb_back_main(),
         )
+    if ctx.cmd == "/privacy":
+        return pm(text="🔐 Персональные данные\n\n• /export_data — показать, какие данные о вас хранятся", reply_markup=kb_back_main())
+    if ctx.cmd == "/export_data":
+        return propose("privacy_export@v1", {"user_id": user_id})
     if ctx.cmd == "/report":
         today = ctx.autopilot_dashboard.get("today") if isinstance(ctx.autopilot_dashboard, dict) else None
         today = today or {"leads": 0, "purchases": 0, "revenue_minor": 0}

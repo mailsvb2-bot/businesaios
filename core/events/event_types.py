@@ -43,6 +43,8 @@ ADMIN_NOTIFICATION_SENT = "admin_notification_sent"
 ADMIN_NOTIFICATION_FAILED = "admin_notification_failed"
 ADMIN_USER_CARD = "admin_user_card@v1"
 ADMIN_USER_CARD_FAILED = "admin_user_card_failed@v1"
+PRIVACY_EXPORT = "privacy_export@v1"
+PRIVACY_EXPORT_FAILED = "privacy_export_failed@v1"
 ADMIN_PRICING_CHANGE_REQUESTED = "admin_pricing_change_requested"
 ADMIN_PRICING_CHANGE_REJECTED = "admin_pricing_change_rejected"
 ADMIN_PRICING_CHANGE_APPLIED = "admin_pricing_change_applied"
@@ -212,6 +214,8 @@ KNOWN_EVENT_TYPES: set[str] = {
     ADMIN_NOTIFICATION_FAILED,
     ADMIN_USER_CARD,
     ADMIN_USER_CARD_FAILED,
+    PRIVACY_EXPORT,
+    PRIVACY_EXPORT_FAILED,
     ADMIN_PRICING_CHANGE_REQUESTED,
     ADMIN_PRICING_CHANGE_REJECTED,
     ADMIN_PRICING_CHANGE_APPLIED,

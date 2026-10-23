@@ -17,6 +17,7 @@ from runtime.handlers_ops import (
     handle_deploy_policy,
     handle_grant_access,
     handle_log_mood,
+    handle_privacy_export,
     handle_reconcile_payment,
     handle_reconcile_payments,
     handle_reject_pricing_change,
@@ -49,6 +50,10 @@ def register_ops_handlers(*, handlers: ActionHandlerRegistry, event_store) -> No
             env,
             event_store=event_store,
         ),
+    )
+    handlers.register(
+        "privacy_export@v1",
+        lambda payload, effects, env: handle_privacy_export(payload, effects, env, event_store=event_store),
     )
     handlers.register("apply_pricing_change@v1", handle_apply_pricing_change)
     handlers.register("request_pricing_change@v1", handle_request_pricing_change)
