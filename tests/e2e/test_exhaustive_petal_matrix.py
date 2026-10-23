@@ -81,7 +81,7 @@ def test_every_declared_action_schema_accepts_only_its_contract() -> None:
     # case; the existing checks still execute for every field in the catalog.
     # Port wave PD export: privacy_export@v1 adds 11 schema cases.
     # Port: business_admin@v1, event_series@v1, sales_pipeline@v1 (+13 each, measured).
-    assert cases == 927 + 4 + 11 + 13 + 13 + 13 + 13 + 13 + 13 + 13 + 13 + 13 + 2 + 3  # +2: optional callback_query_id (event_series, ops_summary); +3: business_admin xp webhook connector_id/raw_body/headers
+    assert cases == 927 + 4 + 11 + 13 + 13 + 13 + 13 + 13 + 13 + 13 + 13 + 13 + 2 + 3 + 13  # +13 conference_join_run; +2: optional callback_query_id (event_series, ops_summary); +3: business_admin xp webhook connector_id/raw_body/headers
 
 
 def test_every_runtime_handler_and_compatibility_import_door_resolves() -> None:
@@ -104,7 +104,7 @@ def test_every_runtime_handler_and_compatibility_import_door_resolves() -> None:
         for export_name in exports:
             assert hasattr(module, export_name), (module_name, export_name)
             cases += 1
-    assert len(SPECS) == 70  # +business_admin, event_series, sales_pipeline
+    assert len(SPECS) == 71  # +business_admin, event_series, sales_pipeline, conference_join_run
     assert cases == 1016
 
 
@@ -137,7 +137,7 @@ def test_every_action_across_every_declared_capability_posture() -> None:
             if state_name == "stale":
                 assert record.runtime.staleness_state == "stale"
             cases += 1
-    assert cases == 270
+    assert cases == 276
 
 
 def test_every_action_across_all_governance_gate_combinations() -> None:
@@ -161,7 +161,7 @@ def test_every_action_across_all_governance_gate_combinations() -> None:
             )
             assert chain.evaluate(envelope) is (kill_ok and reward_ok and simulation_ok and budget_ok and risk_ok)
             cases += 1
-    assert cases == 1440
+    assert cases == 1472
 
 
 def test_every_runtime_service_is_present_in_sovereign_boot(tmp_path: Path) -> None:
@@ -205,7 +205,7 @@ def test_every_action_through_headless_success_failure_and_capability_fallbacks(
         report = harness.run(make_request(goal=f"Exercise unhealthy {action_type}", approval_policy={"allow_action_types": [action_type]}, meta={"runtime_capabilities": unhealthy}))
         assert report.steps
         cases += 1
-    assert cases == 225
+    assert cases == 230
 
 
 def test_every_finite_user_flow_state_and_transition() -> None:
