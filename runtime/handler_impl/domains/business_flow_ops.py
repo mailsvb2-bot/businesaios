@@ -444,6 +444,35 @@ def _cockpit(body, effects, env, future, steps, facts, now, team=None, timed=Non
     )
 
 
+def _revenue_text(op, arg, now, event_store, tenant_id):
+    """Owner read-only attribution/outcome screens (promotions attribution spine; no spend input)."""
+    from application.business_flows import promotions as pm
+
+    adm = flow_rows(event_store, tenant_id=tenant_id, event_type="business_admin@v1")
+    bkg = flow_rows(event_store, tenant_id=tenant_id, event_type="bookings@v1")
+    win = {"occurred_from": now - 30 * 86_400_000, "occurred_to": now + 1}
+    if op == "outcomes":
+        rows = pm.outcomes(adm, bkg, outcome_type=arg if arg in ("payment", "refund", "booking") else "", limit=15)
+        lines = [f"• {r['type']} {pm.money_minor(r['amount_minor'], r['currency']) if r['currency'] else ''}"
+                 f" клиент {r['customer_id'] or '—'}" for r in rows]
+        return "📒 Итоги (последние)\n\n" + ("\n".join(lines) or "Пока нет.")
+    if op == "trace":
+        if not arg:
+            return "Формат: /attribution id_клиента"
+        t = pm.customer_trace(bkg, arg)
+        return (f"🧭 Первый контакт клиента {arg}: кампания {t['campaign_id']} [{t['channel']}] ({t['kind']})"
+                if t else f"🧭 У клиента {arg} нет атрибутированного контакта.")
+    if op == "economics":
+        e = pm.unit_economics(adm, bkg, **win)
+        ch = "\n".join(f"  {k}: {pm.money_minor(v, e['currency'])}" for k, v in e["revenue_by_channel_minor"].items())
+        return (f"📈 Экономика за 30 дней\nЧистая выручка: {pm.money_minor(e['net_minor'], e['currency'])}\n"
+                f"Платящих клиентов: {e['paying_customers']}\nПо каналам:\n{ch or '  —'}\n"
+                "ROAS/CAC не считаются: расход не подтверждён рекламным кабинетом.")
+    j = pm.revenue_journey(adm, bkg, **win)
+    return (f"🛤 Путь клиента за 30 дней\nКонтакт: {j['touched']} → запись: {j['booked']} → оплата: {j['paid']}\n"
+            f"Из контакта в оплату: {j['touched_then_paid']}")
+
+
 def handle_business_ops_summary(payload, effects, env, *, event_store, now_ms: int | None = None):
     """Owner operations summary over the business-flow projections (read-only)."""
     from application.business_flows import bookings as bk
@@ -478,6 +507,9 @@ def handle_business_ops_summary(payload, effects, env, *, event_store, now_ms: i
             team,
             timed=lambda et: flow_rows(event_store, tenant_id=tenant_id, event_type=et),
         )
+    if str(body.get("op") or "") in ("outcomes", "trace", "economics", "journey"):
+        text = _revenue_text(str(body.get("op")), str(body.get("arg") or "").strip(), now, event_store, tenant_id)
+        return send_tracked(body, effects, env, text=text, event_type=None, event_payload=None)
     deletions = len(facts("privacy_deleted@v1"))
     bots = {p.get("username") for p in facts("bot_provisioning@v1") if p.get("username")}
     text = (

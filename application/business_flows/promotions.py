@@ -393,3 +393,124 @@ def destination_lines(d: Destination) -> list[str]:
     out = [f"🌐 {d.public_url}"] if d.public_url else []
     out += [f"💬 {_LABEL.get(m.platform, m.platform)}: {m.url}" for m in d.messengers]
     return out
+
+
+# --- attribution spine & revenue attribution (donor attribution / revenue_attribution / outcomes) ---
+Row = tuple[int, dict[str, Any]]  # (timestamp_ms, payload) as flow_rows yields
+
+
+def _touches(booking_rows: Iterable[Row]) -> list[dict[str, Any]]:
+    camps: dict[str, dict[str, Any]] = {}
+    out = []
+    for ts, p in booking_rows:
+        step, cid = p.get("step"), str(p.get("promotion_id") or "")
+        if step == "promotion_saved":
+            camps.setdefault(cid, {"channel": p.get("channel"), "slot_id": p.get("slot_id")})
+        elif cid in camps and step in ("promotion_opened", "booked") and p.get("customer_id"):
+            out.append({"customer_id": str(p["customer_id"]), "campaign_id": cid, "channel": camps[cid]["channel"],
+                        "slot_id": p.get("slot_id"), "kind": "opened" if step == "promotion_opened" else "booked",
+                        "at_ms": int(ts)})
+    return out
+
+
+def customer_trace(booking_rows: Iterable[Row], customer_id: str) -> dict[str, Any] | None:
+    """Donor get_customer_acquisition_trace: the customer's immutable first campaign touch, or None."""
+    hits = [t for t in _touches(booking_rows) if t["customer_id"] == str(customer_id)]
+    return min(hits, key=lambda t: t["at_ms"]) if hits else None
+
+
+def booking_trace(booking_rows: Iterable[Row], slot_id: str) -> dict[str, Any] | None:
+    """Donor get_booking_acquisition_trace: the campaign attribution carried by the slot's booked fact."""
+    hits = [t for t in _touches(booking_rows) if t["kind"] == "booked" and t["slot_id"] == slot_id]
+    return hits[-1] if hits else None
+
+
+def outcomes(admin_rows: Iterable[Row], booking_rows: Iterable[Row], *, outcome_type: str = "", customer_id: str = "",
+             occurred_from: int | None = None, occurred_to: int | None = None, limit: int = 100) -> list[dict[str, Any]]:
+    """Donor list_business_outcomes: raw outcome facts (payment / refund / booking), filtered, newest first."""
+    if not 1 <= int(limit) <= 500:
+        raise ValueError("limit 1..500")
+    rows: list[dict[str, Any]] = []
+    payer: dict[str, str] = {}
+    pcur: dict[str, str] = {}
+    for ts, p in admin_rows:
+        step = p.get("step")
+        if step == "payment_recorded":
+            payer[p["payment_id"]] = str(p.get("customer_id") or "")
+            pcur[p["payment_id"]] = str(p["currency"])
+            rows.append({"type": "payment", "id": p["payment_id"], "customer_id": payer[p["payment_id"]],
+                         "amount_minor": int(p["amount_minor"]), "currency": p["currency"], "at_ms": int(ts)})
+        elif step == "payment_refunded":
+            rows.append({"type": "refund", "id": p["refund_id"], "customer_id": payer.get(p["payment_id"], ""),
+                         "amount_minor": -int(p["amount_minor"]), "currency": pcur.get(p["payment_id"], ""), "at_ms": int(ts),
+                         "payment_id": p["payment_id"]})
+    for ts, p in booking_rows:
+        if p.get("step") == "booked":
+            rows.append({"type": "booking", "id": str(p.get("slot_id")), "customer_id": str(p.get("customer_id") or ""),
+                         "amount_minor": 0, "currency": "", "at_ms": int(ts)})
+    keep = [r for r in rows if (not outcome_type or r["type"] == outcome_type)
+            and (not customer_id or r["customer_id"] == customer_id)
+            and (occurred_from is None or r["at_ms"] >= occurred_from)
+            and (occurred_to is None or r["at_ms"] < occurred_to)]
+    return sorted(keep, key=lambda r: (-r["at_ms"], r["id"]))[: int(limit)]
+
+
+def attribute_outcome(admin_rows: list[Row], booking_rows: list[Row], outcome_id: str) -> dict[str, Any] | None:
+    """Donor attribute_monetary_outcome: explainable first-touch decision for one monetary outcome.
+
+    Deterministic over immutable facts, so re-deriving it is the same as the donor's persisted record."""
+    hit = next((o for o in outcomes(admin_rows, booking_rows, limit=500) if o["id"] == outcome_id
+                and o["type"] in ("payment", "refund")), None)
+    if hit is None:
+        return None
+    touch = customer_trace(booking_rows, hit["customer_id"]) if hit["customer_id"] else None
+    if touch is not None and touch["at_ms"] > hit["at_ms"]:
+        touch = None  # a touch after the money cannot have caused it
+    reason = ("first_touch" if touch else "no_customer" if not hit["customer_id"] else "no_touch_before_outcome")
+    return {"outcome_id": outcome_id, "amount_minor": hit["amount_minor"], "currency": hit["currency"],
+            "customer_id": hit["customer_id"], "model": "first_touch", "reason": reason,
+            "campaign_id": touch["campaign_id"] if touch else None, "channel": touch["channel"] if touch else "unattributed"}
+
+
+def unit_economics(admin_rows: list[Row], booking_rows: list[Row], *, occurred_from: int, occurred_to: int,
+                   verified_spend: tuple[int, str] | None = None) -> dict[str, Any]:
+    """Donor get_business_unit_economics: ROAS/CAC only from verified spend in the same currency."""
+    money = [o for o in outcomes(admin_rows, booking_rows, occurred_from=occurred_from, occurred_to=occurred_to,
+                                 limit=500) if o["type"] in ("payment", "refund")]
+    currencies = {o["currency"] for o in money if o["currency"]}
+    if len(currencies) > 1:
+        raise ValueError("mixed_currency_outcomes")
+    cur = next(iter(currencies), verified_spend[1] if verified_spend else "RUB")
+    net = sum(o["amount_minor"] for o in money)
+    by_channel: dict[str, int] = {}
+    for o in money:
+        a = attribute_outcome(admin_rows, booking_rows, o["id"]) or {"channel": "unattributed"}
+        by_channel[a["channel"]] = by_channel.get(a["channel"], 0) + o["amount_minor"]
+    payers = {o["customer_id"] for o in money if o["type"] == "payment" and o["customer_id"]}
+    out: dict[str, Any] = {"currency": cur, "net_minor": net, "paying_customers": len(payers),
+                           "revenue_by_channel_minor": dict(sorted(by_channel.items())), "roas": None, "cac_minor": None,
+                           "limitations": []}
+    if verified_spend is None:
+        out["limitations"].append("spend_not_verified")
+    elif verified_spend[1] != cur:
+        out["limitations"].append("spend_currency_mismatch")
+    elif verified_spend[0] > 0:
+        out["roas"] = round(net / verified_spend[0], 4)
+        out["cac_minor"] = verified_spend[0] // len(payers) if payers else None
+    return out
+
+
+def revenue_journey(admin_rows: list[Row], booking_rows: list[Row], *, occurred_from: int, occurred_to: int) -> dict[str, Any]:
+    """Donor get_business_revenue_journey: touched -> booked -> paid funnel (read-only)."""
+    win = [t for t in _touches(booking_rows) if occurred_from <= t["at_ms"] < occurred_to]
+    outs = outcomes(admin_rows, booking_rows, occurred_from=occurred_from, occurred_to=occurred_to, limit=500)
+    touched = {t["customer_id"] for t in win}
+    booked = {o["customer_id"] for o in outs if o["type"] == "booking" and o["customer_id"]}
+    paid = {o["customer_id"] for o in outs if o["type"] == "payment" and o["customer_id"]}
+    return {"touched": len(touched), "booked": len(booked), "paid": len(paid),
+            "touched_then_paid": len(touched & paid),
+            "net_minor": sum(o["amount_minor"] for o in outs if o["type"] in ("payment", "refund"))}
+
+
+def money_minor(v: int, cur: str) -> str:
+    return f"{v / 100:.2f} {cur}".replace(".00 ", " ")
