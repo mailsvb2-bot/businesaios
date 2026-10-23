@@ -20,7 +20,7 @@ def test_owner_opens_slot_participant_books_conflict_and_cancel(flow) -> None:
     out, text = run(op="book", arg="1")
     assert out["ok"] and "Вы записаны" in text
     booked = flow.store.events[-1]["payload"]
-    assert booked["customer_id"] == "u1" and len(booked["reminders_at_ms"]) == 2
+    assert booked["customer_id"] == "u1" and len(booked["reminders_at_ms"]) == 3
     _, text = run(op="book", arg="1")
     assert "Пока пусто" not in text and "Не получилось" in text
     _, text = run(op="mine")
@@ -51,7 +51,9 @@ def test_pull_reminder_delivered_once_when_due(flow) -> None:
     later = partial(flow.run, partial(handle_bookings, now_ms=start - 23 * H))
     assert "Напоминание (за 24 часа)" in later(op="mine")[1]
     assert "Напоминание" not in later(op="mine")[1]
-    assert "Напоминание (за 1 час)" in partial(flow.run, partial(handle_bookings, now_ms=start - H // 2))(op="mine")[1]
+    assert "Напоминание (за 3 часа)" in partial(flow.run, partial(handle_bookings, now_ms=start - 2 * H))(op="mine")[1]
+    assert "Напоминание (за 15 минут)" in partial(flow.run, partial(handle_bookings, now_ms=start - H // 6))(op="mine")[1]
+    assert "Напоминание" not in partial(flow.run, partial(handle_bookings, now_ms=start - H // 12))(op="mine")[1]
 
 
 @pytest.mark.parametrize("arg", ["", "2027-13-01 10:00 X", "2020-01-01 10:00 Прошлое", "2027-01-20 10:00 1000 Долго"])

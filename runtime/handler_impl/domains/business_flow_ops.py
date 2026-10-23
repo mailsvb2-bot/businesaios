@@ -16,10 +16,12 @@ from runtime.handler_impl.core.payloads import require_mapping, required_str
 from runtime.handler_impl.domains.admin_ops import _card_outcome
 from runtime.handler_impl.domains.business_catalog_ops import (
     CATALOG_OPS,
+    EVENT_OPS,
     FOLLOWUP_OPS,
     PROMO_OPS,
     _ads,
     _catalog,
+    _events,
     _followups,
     _promotions,
     _retention,
@@ -175,6 +177,27 @@ def handle_bookings(payload, effects, env, *, event_store, now_ms: int | None = 
             return send_tracked(
                 body, effects, env, text=f"📣 Не получилось: {exc}", event_type=None, event_payload=None
             )
+    if op in EVENT_OPS:
+        try:
+            return _events(
+                lambda t, ch: send_tracked(
+                    body, effects, env, text=t, event_type="bookings@v1" if ch else None, event_payload=ch
+                ),
+                lambda t, uid: send_tracked(
+                    body, effects, env, text=t, event_type=None, event_payload=None, to_user_id=uid
+                ),
+                bk,
+                op,
+                arg,
+                now,
+                slots,
+                tenant_id=tenant_id,
+                event_store=event_store,
+            )
+        except ValueError as exc:
+            return send_tracked(
+                body, effects, env, text=f"📅 Не получилось: {exc}", event_type=None, event_payload=None
+            )
     pick = {"book": open_slots, "cancel": mine}.get(op, [])
     chosen = pick[int(arg) - 1] if arg.isdigit() and 0 < int(arg) <= len(pick) else None
     try:
@@ -206,14 +229,16 @@ def handle_bookings(payload, effects, env, *, event_store, now_ms: int | None = 
     if due and change is None:
         slot, minutes, label = due[0]
         text = f"⏰ Напоминание ({label}): {bk.fmt(slot)}\n\n" + text
-        change = {"step": "reminder_sent", "slot_id": slot.slot_id, "minutes": minutes}
+        change = {"step": "reminder_sent", "slot_id": slot.slot_id, "minutes": minutes, "revision": slot.revision}
     return send_tracked(
         body, effects, env, text=text, event_type="bookings@v1" if change else None, event_payload=change
     )
 
 
 def _dispatch_reminders(body, effects, env, bk, slots, facts, now):
-    """Push every due 24h/1h reminder to its participant; each delivery records its own idempotent fact."""
+    """Push every due 24h/3h/15m reminder to its participant; each delivery records its own idempotent fact."""
+    from application.business_flows import event_notifications as en
+
     due = bk.due_reminders(slots, now_ms=now, sent=bk.sent_reminders(facts))
     delivered = 0
     for slot, minutes, label in due:
@@ -221,9 +246,15 @@ def _dispatch_reminders(body, effects, env, bk, slots, facts, now):
             body,
             effects,
             env,
-            text=f"⏰ Напоминание ({label}): {bk.fmt(slot)}\nОтменить: /my_bookings",
+            text=f"⏰ Напоминание ({label}): {bk.fmt(slot)}\n" + en.reminder_text(slot, minutes),
             event_type="bookings@v1",
-            event_payload={"step": "reminder_sent", "slot_id": slot.slot_id, "minutes": minutes, "push": True},
+            event_payload={
+                "step": "reminder_sent",
+                "slot_id": slot.slot_id,
+                "minutes": minutes,
+                "revision": slot.revision,
+                "push": True,
+            },
             to_user_id=slot.customer_id,
         )
         delivered += bool((out or {}).get("ok", True))

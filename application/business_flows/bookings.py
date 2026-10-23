@@ -14,7 +14,10 @@ from zoneinfo import ZoneInfo
 
 from application.business_flows.projection import stable_id
 
-REMINDER_OFFSETS_MIN: tuple[tuple[int, str], ...] = ((24 * 60, "за 24 часа"), (60, "за 1 час"))
+# Donor event_notifications offsets: 24h / 3h / 15m before each session.
+REMINDER_OFFSETS_MIN: tuple[tuple[int, str], ...] = ((24 * 60, "за 24 часа"), (3 * 60, "за 3 часа"), (15, "за 15 минут"))
+REMINDER_KIND = {24 * 60: "24h", 3 * 60: "3h", 15: "15m"}
+MAX_SESSIONS = 14
 MAX_DURATION_MIN = 8 * 60
 
 
@@ -26,21 +29,50 @@ class Slot:
     duration_min: int
     status: str = "open"  # open | booked | closed
     customer_id: str = ""
+    revision: int = 0  # bumps on reschedule: unsent reminders of older revisions are void
+    series_id: str = ""
+    position: int = 1
+    session_count: int = 1
+
+
+def _expand(payloads: list[dict[str, Any]]):
+    for p in payloads:
+        if p.get("step") == "sessions_opened":
+            yield from (dict(x, step="slot_opened") for x in p.get("sessions") or [])
+        else:
+            yield p
 
 
 def replay(payloads: list[dict[str, Any]]) -> dict[str, Slot]:
     slots: dict[str, Slot] = {}
-    for p in payloads:
+    for p in _expand(payloads):
         sid, step = str(p.get("slot_id") or ""), str(p.get("step") or "")
         if step == "slot_opened" and sid not in slots:
             slots[sid] = Slot(
-                sid, str(p.get("title") or ""), int(p.get("starts_at_ms") or 0), int(p.get("duration_min") or 0)
+                sid,
+                str(p.get("title") or ""),
+                int(p.get("starts_at_ms") or 0),
+                int(p.get("duration_min") or 0),
+                series_id=str(p.get("series_id") or ""),
+                position=int(p.get("position") or 1),
+                session_count=int(p.get("session_count") or 1),
             )
         elif sid in slots:
             if step == "booked":
                 slots[sid] = replace(slots[sid], status="booked", customer_id=str(p.get("customer_id") or ""))
             elif step == "booking_cancelled":
                 slots[sid] = replace(slots[sid], status="open", customer_id="")
+            elif step == "slot_rescheduled":
+                slots[sid] = replace(
+                    slots[sid], starts_at_ms=int(p.get("starts_at_ms") or 0), revision=int(p.get("revision") or 0)
+                )
+            elif step == "slot_edited":
+                cur = slots[sid]
+                slots[sid] = replace(
+                    cur,
+                    title=str(p.get("title") or cur.title),
+                    duration_min=int(p.get("duration_min") or cur.duration_min),
+                )
             elif step == "slot_closed":
                 slots[sid] = replace(slots[sid], status="closed")
     return slots
@@ -84,6 +116,72 @@ def parse_slot(arg: str, *, now_ms: int, tz: str = "Europe/Moscow") -> dict[str,
     }
 
 
+def parse_sessions(arg: str, *, now_ms: int, tz: str = "Europe/Moscow") -> list[dict[str, Any]]:
+    """``YYYY-MM-DD HH:MM minutes N title``: N daily sessions of one event (donor EventSession model)."""
+    parts = str(arg or "").split()
+    if len(parts) < 5 or not parts[2].isdigit() or not parts[3].isdigit():
+        raise ValueError("sessions_format: /add_sessions 2026-10-30 19:00 60 3 Марафон")
+    count = int(parts[3])
+    if not 2 <= count <= MAX_SESSIONS:
+        raise ValueError("sessions_count_invalid")
+    first = parse_slot(" ".join(parts[:3] + parts[4:]), now_ms=now_ms, tz=tz)
+    series = stable_id("series", first["starts_at_ms"], first["title"], count)
+    out = []
+    for i in range(count):
+        at = first["starts_at_ms"] + i * 86_400_000
+        out.append(
+            dict(
+                first,
+                slot_id=stable_id("slot", at, first["title"], series),
+                starts_at_ms=at,
+                series_id=series,
+                position=i + 1,
+                session_count=count,
+            )
+        )
+    return out
+
+
+def edit(slot: Slot | None, arg: str) -> dict[str, Any]:
+    """Owner edits title and/or duration: ``[minutes] [new title]``."""
+    if slot is None or slot.status == "closed":
+        raise ValueError("slot_not_found")
+    parts = str(arg or "").split()
+    duration = int(parts.pop(0)) if parts and parts[0].isdigit() else 0
+    title = " ".join(parts).strip()[:120]
+    if not title and not duration:
+        raise ValueError("edit_format: /edit_slot N [минуты] [название]")
+    if duration and not 5 <= duration <= MAX_DURATION_MIN:
+        raise ValueError("slot_title_or_duration_invalid")
+    return {"step": "slot_edited", "slot_id": slot.slot_id, "title": title, "duration_min": duration}
+
+
+def reschedule(slot: Slot | None, arg: str, *, now_ms: int, tz: str = "Europe/Moscow") -> dict[str, Any]:
+    """Owner moves a session (donor ``reschedule_event_notifications``): new revision voids unsent reminders."""
+    if slot is None or slot.status == "closed":
+        raise ValueError("slot_not_found")
+    parts = str(arg or "").split()
+    if len(parts) != 2:
+        raise ValueError("reschedule_format: /reschedule_slot N 2026-10-30 15:00")
+    try:
+        start = datetime.strptime(f"{parts[0]} {parts[1]}", "%Y-%m-%d %H:%M").replace(tzinfo=ZoneInfo(tz))
+    except ValueError as exc:
+        raise ValueError("slot_datetime_invalid") from exc
+    at = int(start.timestamp() * 1000)
+    if at <= now_ms:
+        raise ValueError("slot_in_past")
+    if at == slot.starts_at_ms:
+        raise ValueError("slot_time_unchanged")
+    return {
+        "step": "slot_rescheduled",
+        "slot_id": slot.slot_id,
+        "starts_at_ms": at,
+        "previous_starts_at_ms": slot.starts_at_ms,
+        "revision": slot.revision + 1,
+        "reminders_at_ms": [ms for ms, _ in reminder_plan(replace(slot, starts_at_ms=at), now_ms=now_ms)],
+    }
+
+
 def book(slots: dict[str, Slot], slot: Slot | None, *, customer_id: str, now_ms: int) -> dict[str, Any]:
     if slot is None or slot.status != "open" or slot.starts_at_ms <= now_ms:
         raise ValueError("slot_unavailable")
@@ -110,26 +208,40 @@ def reminder_plan(slot: Slot, *, now_ms: int) -> list[tuple[int, str]]:
     return [(ms, label) for ms, label in plan if ms > now_ms]
 
 
-def due_reminders(slots: dict[str, Slot], *, now_ms: int, sent: set[tuple[str, int]]) -> list[tuple[Slot, int, str]]:
-    """Reminders whose time has come and which were not yet delivered (idempotent key: slot, offset)."""
+def due_reminders(
+    slots: dict[str, Slot], *, now_ms: int, sent: set[tuple[str, int, int]]
+) -> list[tuple[Slot, int, str]]:
+    """Due, undelivered reminders. Idempotency key (slot, offset, revision); only the closest offset is sent
+    when several came due at once (late booking), the skipped earlier ones are implied."""
     out = []
     for slot in slots.values():
         if slot.status != "booked" or slot.starts_at_ms <= now_ms:
             continue
-        for minutes, label in REMINDER_OFFSETS_MIN:
-            at = slot.starts_at_ms - minutes * 60_000
-            if at <= now_ms and (slot.slot_id, minutes) not in sent:
-                out.append((slot, minutes, label))
+        ready = [
+            (minutes, label)
+            for minutes, label in REMINDER_OFFSETS_MIN
+            if slot.starts_at_ms - minutes * 60_000 <= now_ms
+        ]
+        if not ready:
+            continue
+        minutes, label = min(ready)
+        if not any((slot.slot_id, m, slot.revision) in sent for m, _ in ready if m <= minutes):
+            out.append((slot, minutes, label))
     return out
 
 
 def sent_reminders(payloads: list[dict[str, Any]]) -> set[tuple[str, int]]:
-    return {(str(p.get("slot_id")), int(p.get("minutes") or 0)) for p in payloads if p.get("step") == "reminder_sent"}
+    return {
+        (str(p.get("slot_id")), int(p.get("minutes") or 0), int(p.get("revision") or 0))
+        for p in payloads
+        if p.get("step") == "reminder_sent"
+    }
 
 
 def fmt(slot: Slot, tz: str = "Europe/Moscow") -> str:
     when = datetime.fromtimestamp(slot.starts_at_ms / 1000, ZoneInfo(tz)).strftime("%d.%m %H:%M")
-    return f"{when} МСК · {slot.title} ({slot.duration_min} мин)"
+    day = f" · день {slot.position}/{slot.session_count}" if slot.session_count > 1 else ""
+    return f"{when} МСК · {slot.title} ({slot.duration_min} мин){day}"
 
 
 __all__ = [
@@ -138,10 +250,13 @@ __all__ = [
     "book",
     "cancel",
     "due_reminders",
+    "edit",
     "fmt",
+    "parse_sessions",
     "parse_slot",
     "reminder_plan",
     "replay",
+    "reschedule",
     "sent_reminders",
     "upcoming",
 ]

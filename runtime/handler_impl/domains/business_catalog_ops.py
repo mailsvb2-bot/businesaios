@@ -253,3 +253,35 @@ def _promotions(done, bk, op, arg, now, slots, facts, *, user_id, tenant_id, eve
         "source_token": camp.token,
     }
     return done(f"✅ Вы записаны: {line(slot.slot_id)}", ch)
+
+
+EVENT_OPS = frozenset({"add_sessions", "edit_slot", "reschedule_slot", "schedule"})
+
+
+def _events(done, push, bk, op, arg, now, slots, *, tenant_id, event_store):
+    """Owner event editing over sessions (donor events + event_notifications reschedule)."""
+    from application.business_flows import catalog as cg
+    from application.business_flows import event_notifications as en
+
+    tz = cg.replay(flow_payloads(event_store, tenant_id=tenant_id, event_type="business_admin@v1")).timezone
+    live = [s for s in bk.upcoming(slots, now_ms=now) if s.status != "closed"]
+    if op == "schedule":
+        rows = [f"{i}. {bk.fmt(s, tz)} · {'занят' if s.status == 'booked' else 'свободен'}" for i, s in enumerate(live, 1)]
+        tail = "\n\n/edit_slot N [мин] [название] · /reschedule_slot N ГГГГ-ММ-ДД ЧЧ:ММ"
+        return done("🗓 Расписание\n\n" + ("\n".join(rows) or "Пока пусто.") + tail, None)
+    if op == "add_sessions":
+        sessions = bk.parse_sessions(arg, now_ms=now, tz=tz)
+        rows = "\n".join(bk.fmt(s, tz) for s in bk.replay(sessions).values())
+        return done(f"📅 Сессии открыты ({len(sessions)}):\n{rows}", {"step": "sessions_opened", "sessions": sessions})
+    n, _, rest = arg.partition(" ")
+    slot = live[int(n) - 1] if n.isdigit() and 0 < int(n) <= len(live) else None
+    if op == "edit_slot":
+        ch = bk.edit(slot, rest)
+        new = bk.replay([{"step": "slot_opened", **slot.__dict__}, ch])[slot.slot_id]
+        return done(f"✏️ Обновлено: {bk.fmt(new, tz)}", ch)
+    ch = bk.reschedule(slot, rest, now_ms=now, tz=tz)
+    moved = bk.replay([{"step": "slot_opened", **slot.__dict__}, ch])[slot.slot_id]
+    moved = bk.Slot(**{**moved.__dict__, "revision": ch["revision"], "status": slot.status, "customer_id": slot.customer_id})
+    if slot.status == "booked" and slot.customer_id:
+        push(en.rescheduled_text(moved, slot.starts_at_ms, tz), slot.customer_id)
+    return done(f"🔁 Перенесено: {bk.fmt(moved, tz)}\nНапоминания пересчитаны (ревизия {ch['revision']}).", ch)
