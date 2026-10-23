@@ -10,6 +10,8 @@ import re
 from dataclasses import dataclass, field
 from typing import Any
 
+from application.business_flows import cockpit_sales as _cs
+
 PREFIX = "cpm:"
 PAGE_SIZE = 6
 _ACTION = re.compile(r"[a-z][a-z0-9-]{0,40}")
@@ -35,6 +37,7 @@ PARENTS: dict[str, str] = {
     "automation": "cpm:manage",
     "settings": "cpm:manage",
 }
+PARENTS.update(_cs.PARENTS)
 
 
 @dataclass(frozen=True)
@@ -56,6 +59,7 @@ class Snapshot:
     all_slots: list[Any] = field(default_factory=list)  # every bookings.Slot, past included
     now_ms: int = 0
     money_text: Any = None  # admin.render_summary
+    sales: Any = None  # sales.State
 
 
 def recognizes(data: object) -> bool:
@@ -130,6 +134,7 @@ def _screen(parsed: Parsed, s: Snapshot) -> tuple[str, list[list[tuple[str, str]
             ("👥 Клиенты", "cpm:customers:0"),
             ("🎤 Встречи и серии", "cpm:events"),
             ("💳 Деньги", "cpm:money"),
+            ("💬 Продажи", "cpm:sales"),
         )
     if a == "today":
         booked = [x for x in s.slots if x.status == "booked"]
@@ -163,6 +168,8 @@ def _screen(parsed: Parsed, s: Snapshot) -> tuple[str, list[list[tuple[str, str]
             ("🤖 Автоматизация", "cpm:automation"),
             ("🔧 Настройки", "cpm:settings"),
         )
+    if a in _cs.PARENTS:
+        return _cs.screen(a, parsed.args, s.sales, now_ms=s.now_ms)
     extra = _extra_screen(a, parsed, s)
     if extra is not None:
         return extra

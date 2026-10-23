@@ -7,6 +7,7 @@ transition exists iff the user-visible receipt exists.
 
 from __future__ import annotations
 
+from dataclasses import replace
 from typing import Any
 
 from application.business_flows import bot_provisioning as botprov
@@ -287,8 +288,10 @@ def _cockpit(body, effects, env, future, steps, facts, now):
     from application.business_flows import admin as ad
     from application.business_flows import bookings as bk
     from application.business_flows import cockpit as cp
+    from application.business_flows import cockpit_sales as cs
     from application.business_flows import event_series as es
     from application.business_flows import partners as pt
+    from application.business_flows import sales as sl
 
     snap = cp.Snapshot(
         slots=future,
@@ -301,8 +304,27 @@ def _cockpit(body, effects, env, future, steps, facts, now):
         all_slots=sorted(bk.replay(facts("bookings@v1")).values(), key=lambda x: x.starts_at_ms),
         now_ms=now,
         money_text=ad.render_summary,
+        sales=sl.replay(facts("sales_pipeline@v1")),
     )
-    text, rows = cp.render(cp.parse(str(body.get("arg") or "cpm:menu")), snap, is_owner=True)
+    parsed = cp.parse(str(body.get("arg") or "cpm:menu"))
+    if parsed.action == "sales-ev":
+        try:
+            change = cs.mutation(parsed.args, snap.sales)
+        except ValueError as exc:
+            return send_tracked(body, effects, env, text=f"⚠️ Не получилось: {exc}", event_type=None, event_payload=None)
+        lead_screen = cp.Parsed("sales-lead", (change["lead_id"],))
+        after = replace(snap, sales=sl.replay([*facts("sales_pipeline@v1"), change]))
+        text, rows = cp.render(lead_screen, after, is_owner=True)
+        return send_tracked(
+            body,
+            effects,
+            env,
+            text=cs.result_text(change, after.sales) + "\n\n" + text,
+            event_type="sales_pipeline@v1",
+            event_payload=change,
+            reply_markup=cp.markup(rows),
+        )
+    text, rows = cp.render(parsed, snap, is_owner=True)
     return send_tracked(
         body, effects, env, text=text, event_type=None, event_payload=None, reply_markup=cp.markup(rows)
     )
