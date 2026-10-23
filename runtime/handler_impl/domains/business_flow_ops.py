@@ -26,8 +26,10 @@ def send_tracked(
     event_payload: dict[str, Any] | None,
     ok: bool = True,
     reason: str = "",
+    to_user_id: str | None = None,
 ) -> dict[str, Any]:
-    tenant_id, user_id = required_str(body, "tenant_id"), required_str(body, "user_id")
+    tenant_id = required_str(body, "tenant_id")
+    user_id = to_user_id or required_str(body, "user_id")
     tracked = dict(event_payload or {}) if event_type else None
     if tracked is not None:
         tracked.update(tenant_id=tenant_id, user_id=user_id)
@@ -72,6 +74,20 @@ def handle_bot_provisioning(payload, effects, env, *, event_store):
                 raise ValueError("bot_provisioning_not_found")
             change = botprov.transition(current, "cancel")
             text = f"🤖 Подключение @{current.username} отменено."
+        elif op in {"attach", "verify"}:
+            if current is None:
+                raise ValueError("bot_provisioning_not_found")
+            if op == "attach":
+                change = botprov.transition(current, "secret_attached", credential_ref=arg.strip())
+                text = f"🤖 Ссылка на токен для @{current.username} сохранена. Проверить: /verify_bot"
+            else:
+                change = _verify_bot(current, effects)
+                ok_bot = change["status"] == "completed"
+                text = (
+                    f"🤖 @{current.username} подключён (getMe подтвердил бота)."
+                    if ok_bot
+                    else f"🤖 Проверка @{current.username} не прошла: {change.get('error_code')}. Повтор: /connect_bot"
+                )
         else:
             change = None
             text = (
@@ -86,6 +102,21 @@ def handle_bot_provisioning(payload, effects, env, *, event_store):
     return send_tracked(
         body, effects, env, text=text, event_type="bot_provisioning@v1" if change else None, event_payload=change
     )
+
+
+def _verify_bot(current, effects) -> dict[str, Any]:
+    """getMe through the sealed Telegram effect; the token is resolved from its reference and never stored."""
+    from runtime.platform.config.env_flags import env_str
+
+    kind, _, name = current.credential_ref.partition(":")
+    token = env_str(name, "").strip() if kind == "env" else ""
+    if not token:
+        return botprov.transition(current, "failed", error_code=f"credential_unresolved:{kind or 'none'}")
+    try:
+        report = effects.telegram_self_check(token=token)
+    except Exception as exc:
+        return botprov.transition(current, "failed", error_code=str(exc).split(":")[0][:60] or "getme_failed")
+    return botprov.verify_identity(current, report)
 
 
 def _now_ms() -> int:
@@ -105,6 +136,8 @@ def handle_bookings(payload, effects, env, *, event_store, now_ms: int | None = 
     slots = bk.replay(facts)
     open_slots = bk.upcoming(slots, now_ms=now, status="open")
     mine = bk.upcoming(slots, now_ms=now, customer_id=user_id)
+    if op == "dispatch":
+        return _dispatch_reminders(body, effects, env, bk, slots, facts, now)
     pick = {"book": open_slots, "cancel": mine}.get(op, [])
     chosen = pick[int(arg) - 1] if arg.isdigit() and 0 < int(arg) <= len(pick) else None
     try:
@@ -142,6 +175,25 @@ def handle_bookings(payload, effects, env, *, event_store, now_ms: int | None = 
     )
 
 
+def _dispatch_reminders(body, effects, env, bk, slots, facts, now):
+    """Push every due 24h/1h reminder to its participant; each delivery records its own idempotent fact."""
+    due = bk.due_reminders(slots, now_ms=now, sent=bk.sent_reminders(facts))
+    delivered = 0
+    for slot, minutes, label in due:
+        out = send_tracked(
+            body,
+            effects,
+            env,
+            text=f"⏰ Напоминание ({label}): {bk.fmt(slot)}\nОтменить: /my_bookings",
+            event_type="bookings@v1",
+            event_payload={"step": "reminder_sent", "slot_id": slot.slot_id, "minutes": minutes, "push": True},
+            to_user_id=slot.customer_id,
+        )
+        delivered += bool((out or {}).get("ok", True))
+    text = f"⏰ Напоминаний отправлено: {delivered} из {len(due)}."
+    return send_tracked(body, effects, env, text=text, event_type=None, event_payload=None)
+
+
 def handle_partners(payload, effects, env, *, event_store):
     """Owner partner search: add candidates, rank against goal terms (advisory, never contacts anyone)."""
     from application.business_flows import partners as pt
@@ -157,6 +209,8 @@ def handle_partners(payload, effects, env, *, event_store):
             return send_tracked(body, effects, env, text=text, event_type="partners@v1", event_payload=change)
     except ValueError as exc:
         return send_tracked(body, effects, env, text=f"🤝 Не получилось: {exc}", event_type=None, event_payload=None)
+    if op in {"status", "pitch", "ref"}:
+        return _partner_card(body, effects, env, pt, known, op, arg, event_store)
     terms = [t for t in arg.replace(",", " ").split() if t]
     fits = pt.rank(known, terms)
     lines = [
@@ -171,6 +225,32 @@ def handle_partners(payload, effects, env, *, event_store):
         text=head + "\n\n" + ("\n".join(lines) or "Список пуст: /partner_add"),
         event_type=None,
         event_payload=None,
+    )
+
+
+def _partner_card(body, effects, env, pt, known, op, arg, event_store):
+    tenant_id = required_str(body, "tenant_id")
+    facts = flow_payloads(event_store, tenant_id=tenant_id, event_type="partners@v1")
+    ordered = sorted(known.values(), key=lambda p: p.name)
+    head, _, rest = arg.partition(" ")
+    partner = ordered[int(head) - 1] if head.isdigit() and 0 < int(head) <= len(ordered) else None
+    change = None
+    try:
+        if partner is None:
+            raise ValueError("partner_not_found: номер партнёра по алфавиту")
+        if op == "status":
+            change = pt.set_status(partner, pt.statuses(facts).get(partner.partner_id, "new"), rest.strip())
+            text = f"🤝 {partner.name}: {pt.STATUSES[change['status']]}"
+        elif op == "pitch":
+            business, _, offer = rest.partition("|")
+            pack = pt.pitch(partner, business=business.strip() or "наш проект", offer=offer.strip())
+            text = f"✉️ {pack['subject']}\n\n{pack['outreach']}\n\n{pack['cta']}\n\nНапоминание: {pack['followup']}\n(Отправляете вы сами.)"
+        else:
+            text = f"🔗 Реферальный код партнёра {partner.name}: ref_{pt.referral_token(tenant_id, partner.partner_id)}"
+    except ValueError as exc:
+        return send_tracked(body, effects, env, text=f"🤝 Не получилось: {exc}", event_type=None, event_payload=None)
+    return send_tracked(
+        body, effects, env, text=text, event_type="partners@v1" if change else None, event_payload=change
     )
 
 

@@ -74,6 +74,69 @@ def replay(payloads: list[dict[str, Any]]) -> dict[str, Partner]:
     return out
 
 
+STATUSES = {
+    "new": "новый",
+    "prepared": "предложение готово",
+    "contacted": "связались",
+    "replied": "ответил",
+    "agreed": "договорились",
+    "declined": "отказ",
+}
+_NEXT = {
+    "new": {"prepared", "declined"},
+    "prepared": {"contacted", "declined"},
+    "contacted": {"replied", "declined"},
+    "replied": {"agreed", "declined"},
+    "agreed": set(),
+    "declined": {"new"},
+}
+_DENY = ("100% гарантия", "гарантированный результат", "избавим навсегда", "вылечим", "исцеляет")
+
+
+def statuses(payloads: list[dict[str, Any]]) -> dict[str, str]:
+    out: dict[str, str] = {}
+    for p in payloads:
+        if p.get("step") == "partner_status":
+            out[str(p["partner_id"])] = str(p["status"])
+    return out
+
+
+def set_status(partner: Partner | None, current: str, status: str) -> dict[str, Any]:
+    """Candidate pipeline (ported from partner_runtime.set_partner_candidate_status); contact stays manual."""
+    if partner is None:
+        raise ValueError("partner_not_found")
+    if status not in STATUSES or status not in _NEXT.get(current or "new", set()):
+        raise ValueError(f"partner_status_invalid:{current or 'new'}->{status}")
+    return {"step": "partner_status", "partner_id": partner.partner_id, "status": status}
+
+
+def pitch(partner: Partner, *, business: str, offer: str, url: str = "") -> dict[str, str]:
+    """Deterministic, factual partner copy (ported from partner_copy.DeterministicPartnerCopyGenerator)."""
+    angle = f"полезный материал вокруг «{offer[:180]}»" if offer else "полезный гостевой материал для аудитории"
+    pack = {
+        "subject": f"Материал для аудитории {partner.name}"[:200],
+        "outreach": (
+            f"Здравствуйте! Я представляю {business[:120]}. Предлагаю не рекламную вставку, а {angle}: "
+            "мы подготовим текст и возьмём содержательную часть на себя. С вашей стороны — только решение, "
+            "подходит ли это аудитории. Если интересно, пришлю готовый вариант поста без обязательств."
+        ),
+        "followup": "Здравствуйте! Один раз напомню о предложении выше. Если тема не подходит — повторно писать не будем.",
+        "cta": f"Подробнее: {url}" if url else "Ответьте «интересно» — пришлю готовый материал.",
+    }
+    if any(d in " ".join(pack.values()).casefold() for d in _DENY):
+        raise ValueError("partner_copy_forbidden_claim")
+    return pack
+
+
+def referral_token(tenant_id: str, partner_id: str) -> str:
+    return stable_id("ref", tenant_id, partner_id)[4:16]
+
+
+def resolve_referral(partners: dict[str, Partner], tenant_id: str, token: str) -> Partner | None:
+    """Referral landing (ported from partner_attribution.resolve_partner_referral)."""
+    return next((p for p in partners.values() if referral_token(tenant_id, p.partner_id) == token), None)
+
+
 def score(partner: Partner, goal_terms: list[str]) -> Fit:
     goal = {_norm(t) for t in goal_terms if _norm(t)}
     cand = {_norm(t) for t in (*partner.tags, partner.name) if _norm(t)}
@@ -113,4 +176,17 @@ def _norm(value: object) -> str:
     return " ".join(str(value or "").casefold().replace("ё", "е").split())
 
 
-__all__ = ["Fit", "Partner", "parse_partner", "rank", "replay", "score"]
+__all__ = [
+    "STATUSES",
+    "Fit",
+    "Partner",
+    "parse_partner",
+    "pitch",
+    "rank",
+    "referral_token",
+    "replay",
+    "resolve_referral",
+    "score",
+    "set_status",
+    "statuses",
+]

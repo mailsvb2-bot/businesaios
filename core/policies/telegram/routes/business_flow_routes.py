@@ -26,6 +26,12 @@ BUSINESS_FLOW_COMMANDS: dict[str, tuple[str, str, bool]] = {
     "/ladder_add": ("offer_ladder@v1", "add", True),
     "/ladder": ("offer_ladder@v1", "show", True),
     "/ops": ("business_ops_summary@v1", "show", True),
+    "/send_reminders": ("bookings@v1", "dispatch", True),
+    "/bot_secret": ("bot_provisioning@v1", "attach", True),
+    "/verify_bot": ("bot_provisioning@v1", "verify", True),
+    "/partner_status": ("partners@v1", "status", True),
+    "/partner_pitch": ("partners@v1", "pitch", True),
+    "/partner_ref": ("partners@v1", "ref", True),
 }
 
 

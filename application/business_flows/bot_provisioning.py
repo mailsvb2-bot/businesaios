@@ -31,7 +31,7 @@ _S = ProvisioningStatus
 _TRANSITIONS: dict[str, tuple[set[ProvisioningStatus], ProvisioningStatus]] = {
     "secret_attached": ({_S.AWAITING_SECRET}, _S.READY),
     "verify_started": ({_S.READY}, _S.VERIFYING),
-    "verified": ({_S.VERIFYING}, _S.COMPLETED),
+    "verified": ({_S.VERIFYING, _S.READY}, _S.COMPLETED),
     "failed": ({_S.VERIFYING, _S.READY}, _S.FAILED),
     "retry": ({_S.FAILED}, _S.AWAITING_SECRET),
     "cancel": ({_S.AWAITING_SECRET, _S.READY, _S.VERIFYING, _S.FAILED}, _S.CANCELLED),
@@ -103,4 +103,24 @@ def transition(item: Provisioning, step: str, *, credential_ref: str = "", error
     return out
 
 
-__all__ = ["Provisioning", "ProvisioningStatus", "active", "normalize_username", "replay", "request", "transition"]
+def verify_identity(item: Provisioning, getme: dict[str, Any] | None) -> dict[str, Any]:
+    """Map a Telegram getMe result onto ``verified``/``failed`` (username must match the request)."""
+    bot = (getme or {}).get("bot") if isinstance(getme, dict) else None
+    name = str((bot or {}).get("username") or "").lower()
+    if not isinstance(bot, dict) or bot.get("is_bot") is not True:
+        return transition(item, "failed", error_code="getme_not_a_bot")
+    if name != item.username:
+        return transition(item, "failed", error_code="getme_username_mismatch")
+    return {**transition(item, "verified"), "bot_id": int(bot.get("id") or 0)}
+
+
+__all__ = [
+    "Provisioning",
+    "ProvisioningStatus",
+    "active",
+    "normalize_username",
+    "replay",
+    "request",
+    "transition",
+    "verify_identity",
+]

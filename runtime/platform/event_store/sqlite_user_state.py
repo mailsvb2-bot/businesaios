@@ -117,6 +117,9 @@ def delete_user_events(
     row = db.execute("SELECT COUNT(1) FROM events WHERE tenant_id=? AND user_id=?", (tid, uid)).fetchone()
     before = int(row[0] or 0) if row else 0
     db.execute("DELETE FROM events WHERE tenant_id=? AND user_id=?", (tid, uid))
+    # Derived per-user projections are personal data too: erase them in the same transaction.
+    for table in ("user_state", "user_features_daily"):
+        db.execute(f"DELETE FROM {table} WHERE tenant_id=? AND user_id=?", (tid, uid))
     try:
         db.commit()
     except Exception as exc:
