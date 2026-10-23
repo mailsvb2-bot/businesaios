@@ -15,7 +15,11 @@ from zoneinfo import ZoneInfo
 from application.business_flows.projection import stable_id
 
 # Donor event_notifications offsets: 24h / 3h / 15m before each session.
-REMINDER_OFFSETS_MIN: tuple[tuple[int, str], ...] = ((24 * 60, "за 24 часа"), (3 * 60, "за 3 часа"), (15, "за 15 минут"))
+REMINDER_OFFSETS_MIN: tuple[tuple[int, str], ...] = (
+    (24 * 60, "за 24 часа"),
+    (3 * 60, "за 3 часа"),
+    (15, "за 15 минут"),
+)
 REMINDER_KIND = {24 * 60: "24h", 3 * 60: "3h", 15: "15m"}
 MAX_SESSIONS = 14
 MAX_DURATION_MIN = 8 * 60
@@ -201,6 +205,34 @@ def cancel(slot: Slot | None, *, customer_id: str, now_ms: int) -> dict[str, Any
     if slot.starts_at_ms <= now_ms:
         raise ValueError("booking_already_started")
     return {"step": "booking_cancelled", "slot_id": slot.slot_id, "customer_id": customer_id}
+
+
+def customer_booking(
+    slots: dict[str, Slot], slot_id: str, *, customer_id: str, now_ms: int, is_member: bool = False
+) -> Slot:
+    """Donor bookings.get_customer_booking: own booked slot, only while its start is still future.
+
+    Staff (active members) are not customers of their own business (customer_role_guard).
+    """
+    if is_member:
+        raise ValueError("customer_role_required")
+    slot = slots.get(slot_id)
+    if slot is None or slot.status != "booked" or slot.customer_id != customer_id:
+        raise ValueError("booking_not_found")
+    if slot.starts_at_ms <= now_ms:
+        raise ValueError("booking_already_started")
+    return slot
+
+
+def customer_businesses(
+    slots_by_business: dict[str, dict[str, Slot]], *, customer_id: str, member_business_ids: set[str]
+) -> list[str]:
+    """Donor bookings.list_customer_businesses: businesses with this customer's bookings, minus staff ones."""
+    return sorted(
+        b
+        for b, slots in slots_by_business.items()
+        if b not in member_business_ids and any(s.customer_id == customer_id for s in slots.values())
+    )
 
 
 def reminder_plan(slot: Slot, *, now_ms: int) -> list[tuple[int, str]]:
