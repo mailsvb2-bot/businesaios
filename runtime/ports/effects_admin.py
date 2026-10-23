@@ -100,6 +100,16 @@ class EffectsAdminPort(Protocol):
         model: str | None = None,
     ) -> Any: ...
 
+    def marketing_image_generate(
+        self,
+        *,
+        decision_id: str,
+        correlation_id: str,
+        admin_id: str,
+        brief: dict,
+        payload_key: str,
+    ) -> Any: ...
+
     def apply_pricing_change(
         self,
         *,

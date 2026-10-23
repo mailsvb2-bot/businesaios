@@ -134,6 +134,7 @@ def payload_contract_fields() -> dict[EffectActionType, tuple[str, ...]]:
         EffectActionType.WEBSITE_PUBLISH_PAGE: ("endpoint", "headers", "data", "timeout_s"),
         EffectActionType.WEATHER_OPEN_METEO_CURRENT: ("city",),
         EffectActionType.LLM_MARKETING_COMPLETE: ("provider", "system", "user", "model"),
+        EffectActionType.IMAGE_YANDEX_ART_GENERATE: ("prompt", "negative", "seed", "width_ratio", "height_ratio", "payload_key"),
     }
 
 
@@ -208,5 +209,14 @@ def normalize_effect_payload(action_type: str | EffectActionType, payload: Any) 
             "system": _require_text(key, data, "system"),
             "user": _require_text(key, data, "user"),
             "model": _require_text(key, data, "model"),
+        }
+    if key is EffectActionType.IMAGE_YANDEX_ART_GENERATE:
+        return {
+            "prompt": _require_text(key, data, "prompt"),
+            "negative": str(data.get("negative") or ""),
+            "seed": _int(data, "seed", default=0, minimum=0, maximum=2_000_000_000),
+            "width_ratio": _int(data, "width_ratio", default=1, minimum=1, maximum=16),
+            "height_ratio": _int(data, "height_ratio", default=1, minimum=1, maximum=16),
+            "payload_key": _require_text(key, data, "payload_key"),
         }
     return data

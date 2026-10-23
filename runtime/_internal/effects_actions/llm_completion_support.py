@@ -123,3 +123,39 @@ def emit_marketing_llm_error(*, event_log: Any, admin_id: str, provider: str, mo
         source="marketing.llm",
         user_id=str(admin_id or "system"),
     )
+
+
+def call_yandex_art(*, payload: dict[str, Any], generate: Any = None) -> dict[str, Any]:
+    """YandexART image effect: one generation per payload_key, stored under DATA_DIR/media/visuals."""
+    import os
+    import re
+    from pathlib import Path
+
+    key = str(payload.get("payload_key") or "")
+    if not re.fullmatch(r"[0-9a-f]{8,64}", key):
+        return {"ok": False, "error": "payload_key_invalid"}
+    base = Path(env_str("DATA_DIR", "") or ".runtime_data") / "media" / "visuals"
+    target = base / f"{key}.jpeg"
+    if target.exists() and target.stat().st_size > 0:
+        return {"ok": True, "path": str(target), "size": target.stat().st_size, "replayed": True}
+    api_key = env_str("YANDEX_ART_API_KEY", env_str("YANDEXGPT_API_KEY", "")).strip()
+    folder = env_str("YANDEX_ART_FOLDER_ID", env_str("YANDEXGPT_FOLDER_ID", env_str("YANDEX_FOLDER_ID", ""))).strip()
+    if not api_key or not folder:
+        return {"ok": False, "error": "disabled"}
+    if generate is None:
+        from runtime._internal.llm_transport import yandex_art_generate as generate
+    try:
+        data = generate(
+            api_key=api_key, folder_id=folder, prompt=str(payload.get("prompt") or ""),
+            negative=str(payload.get("negative") or ""), seed=int(payload.get("seed") or 0),
+            width_ratio=int(payload.get("width_ratio") or 1), height_ratio=int(payload.get("height_ratio") or 1),
+        )
+    except (RuntimeError, ValueError, OSError) as exc:
+        return {"ok": False, "error": type(exc).__name__}
+    if not data:
+        return {"ok": False, "error": "empty"}
+    base.mkdir(parents=True, exist_ok=True)
+    tmp = target.with_suffix(".part")
+    tmp.write_bytes(data)
+    os.replace(tmp, target)
+    return {"ok": True, "path": str(target), "size": len(data), "replayed": False}

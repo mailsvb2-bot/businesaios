@@ -18,6 +18,7 @@ class EffectActionType(StrEnum):
     WEBSITE_PUBLISH_PAGE = "website.publish_page"
     WEATHER_OPEN_METEO_CURRENT = "weather.open_meteo.current"
     LLM_MARKETING_COMPLETE = "llm.marketing_complete"
+    IMAGE_YANDEX_ART_GENERATE = "image.yandex_art.generate"
 
 
 EFFECT_ACTION_ALIASES: dict[str, EffectActionType] = {
@@ -35,6 +36,7 @@ EFFECT_ACTION_ALIASES: dict[str, EffectActionType] = {
     "weather.current": EffectActionType.WEATHER_OPEN_METEO_CURRENT,
     "weather_open_meteo_current": EffectActionType.WEATHER_OPEN_METEO_CURRENT,
     "marketing_llm_complete": EffectActionType.LLM_MARKETING_COMPLETE,
+    "marketing_image_generate": EffectActionType.IMAGE_YANDEX_ART_GENERATE,
     "telegram_self_check": EffectActionType.TELEGRAM_SELF_CHECK,
     "telegram_poll_updates": EffectActionType.TELEGRAM_POLL_UPDATES,
 }

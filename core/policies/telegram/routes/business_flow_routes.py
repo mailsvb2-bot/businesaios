@@ -53,6 +53,7 @@ BUSINESS_FLOW_COMMANDS: dict[str, tuple[str, str, bool]] = {
     "/offers_off": ("event_series@v1", "offers_off", False),
     "/new_event": ("event_series@v1", "wizard_start", True),
     "/landing": ("event_series@v1", "landing", True),
+    "/visual": ("event_series@v1", "visual", True),
     "/leads": ("sales_pipeline@v1", "list", True),
     "/lead_add": ("sales_pipeline@v1", "add", True),
     "/lead": ("sales_pipeline@v1", "event", True),

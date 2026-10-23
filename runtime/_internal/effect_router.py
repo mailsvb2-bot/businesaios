@@ -125,6 +125,7 @@ class EffectRouter:
         self.register(EffectActionType.WEBSITE_PUBLISH_PAGE, self._handle_generic_post_json)
         self.register(EffectActionType.WEATHER_OPEN_METEO_CURRENT, self._handle_weather_current)
         self.register(EffectActionType.LLM_MARKETING_COMPLETE, self._handle_marketing_llm_complete)
+        self.register(EffectActionType.IMAGE_YANDEX_ART_GENERATE, self._handle_image_yandex_art_generate)
         self.register(EffectActionType.TELEGRAM_SELF_CHECK, self._handle_telegram_self_check)
         self.register(EffectActionType.TELEGRAM_POLL_UPDATES, self._handle_telegram_poll_updates)
 
@@ -212,6 +213,11 @@ class EffectRouter:
     async def _handle_marketing_llm_complete(self, payload: dict[str, Any]) -> dict[str, Any]:
         result = await asyncio.to_thread(call_marketing_llm, provider=str(payload.get("provider") or ""), system=str(payload.get("system") or "You write concise marketing copy."), user=str(payload.get("user") or ""), model=_optional_text(payload.get("model")))
         return dict(result or {})
+
+    async def _handle_image_yandex_art_generate(self, payload: dict[str, Any]) -> dict[str, Any]:
+        from runtime._internal.effects_actions.llm_completion_support import call_yandex_art
+
+        return dict(await asyncio.to_thread(call_yandex_art, payload=dict(payload)) or {})
 
     async def _handle_telegram_self_check(self, payload: dict[str, Any]) -> dict[str, Any]:
         class _RuntimeView:
