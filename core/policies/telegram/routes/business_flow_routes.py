@@ -59,6 +59,8 @@ BUSINESS_FLOW_COMMANDS: dict[str, tuple[str, str, bool]] = {
     "/partner_status": ("partners@v1", "status", True),
     "/partner_pitch": ("partners@v1", "pitch", True),
     "/partner_ref": ("partners@v1", "ref", True),
+    "/partner_result": ("partners@v1", "ref_result", True),
+    "/partner_campaign": ("partners@v1", "campaign", True),
     "/setting": ("business_admin@v1", "setting", True),
     "/customer_archive": ("business_admin@v1", "customer_archive", True),
     "/autopilot": ("business_admin@v1", "autopilot", True),

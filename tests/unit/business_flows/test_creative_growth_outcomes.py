@@ -36,3 +36,30 @@ def test_variant_shared_unavailable_never_duplicated():
     assert r["shared_campaigns"][0]["leads"] == 1 and r["shared_campaigns"][0]["variant_ids"] == ("b", "c")
     assert r["variant_level_ready"] is False
     assert cg.variant_level_ready([{"attribution_scope": "variant"}]) and not cg.variant_level_ready([])
+
+
+def test_recommendation_and_confirmed_cas_apply():
+    from application.business_flows.creative_winner import CreativeWinnerApplyError
+
+    trial = {"trial_id": "t2", "revision": 3, "status": "running", "arms": [
+        {"variant_id": "a", "publication_job_id": "ja", "promotion_campaign_id": "pa", "allocation_bps": 5000},
+        {"variant_id": "b", "publication_job_id": "jb", "promotion_campaign_id": "pb", "allocation_bps": 5000}]}
+    pay = []
+    for i in range(100):
+        for pid in ("pa", "pb"):
+            pay.append({"step": "promotion_opened", "promotion_id": pid, "customer_id": f"{pid}{i}", "at_ms": AT})
+        if i < 40:
+            pay.append({"step": "booked", "promotion_id": "pa", "customer_id": f"pa{i}", "at_ms": AT})
+        if i < 5:
+            pay.append({"step": "booked", "promotion_id": "pb", "customer_id": f"pb{i}", "at_ms": AT})
+    kw = {"days": 30, "now": date(2026, 10, 24), "env": ENV}
+    rec = cg.get_creative_growth_recommendation(trial, pay, **kw)
+    assert rec["recommendation"]["status"] == "ready" and rec["recommendation"]["winner_variant_id"] == "a"
+    with pytest.raises(CreativeWinnerApplyError):
+        cg.apply_creative_growth_recommendation(trial, pay, rec, confirmed=False, **kw)
+    fact = cg.apply_creative_growth_recommendation(trial, pay, rec, confirmed=True, **kw)
+    assert fact["revision"] == 4 and fact["winner_variant_id"] == "a"
+    with pytest.raises(CreativeWinnerApplyError):  # evidence changed after review
+        cg.apply_creative_growth_recommendation(trial, pay[:-3], rec, confirmed=True, **kw)
+    idle = cg.get_creative_growth_recommendation({**trial, "status": "paused"}, pay, **kw)
+    assert idle["recommendation"]["status"] == "not_running"

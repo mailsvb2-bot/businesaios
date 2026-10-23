@@ -172,6 +172,46 @@ def resolve_referral(partners: dict[str, Partner], tenant_id: str, token: str) -
     return next((p for p in partners.values() if referral_token(tenant_id, p.partner_id) == token), None)
 
 
+REFERRAL_EVENTS = ("visit", "lead", "result")
+
+
+def referral_event(partners: dict[str, Partner], payloads: list[dict[str, Any]], tenant_id: str, token: str,
+                   event_type: str, event_key: str | None = None) -> dict[str, Any] | None:
+    """Idempotent referral counter fact (donor partner_attribution._record_partner_referral_event).
+
+    Unknown token -> LookupError; an already-recorded (token, type, key) -> None. Stores no personal data.
+    """
+    if event_type not in REFERRAL_EVENTS:
+        raise ValueError("unknown partner referral event")
+    tok = str(token or "").strip().removeprefix("ref_")
+    partner = resolve_referral(partners, tenant_id, tok)
+    if partner is None:
+        raise LookupError("partner referral not found")
+    key = str(event_key or "")
+    if any(p.get("step") == "partner_referral_event" and p.get("partner_id") == partner.partner_id
+           and p.get("event_type") == event_type and p.get("event_key", "") == key for p in payloads):
+        return None
+    return {"step": "partner_referral_event", "partner_id": partner.partner_id, "event_type": event_type,
+            "event_key": key}
+
+
+def record_referral_result(partners: dict[str, Partner], payloads: list[dict[str, Any]], tenant_id: str,
+                           token: str, result_key: str) -> dict[str, Any] | None:
+    """One confirmed downstream result under a stable non-personal key (donor record_partner_referral_result)."""
+    key = str(result_key or "").strip()
+    if not key or len(key) > 160:
+        raise ValueError("partner result key must be a bounded non-empty value")
+    return referral_event(partners, payloads, tenant_id, token, "result", key)
+
+
+def referral_counts(payloads: list[dict[str, Any]], partner_id: str) -> dict[str, int]:
+    out = dict.fromkeys(REFERRAL_EVENTS, 0)
+    for p in payloads:
+        if p.get("step") == "partner_referral_event" and p.get("partner_id") == partner_id:
+            out[p["event_type"]] += 1
+    return out
+
+
 def score(partner: Partner, goal_terms: list[str]) -> Fit:
     goal = {_norm(t) for t in goal_terms if _norm(t)}
     cand = {_norm(t) for t in (*partner.tags, partner.name) if _norm(t)}
@@ -280,3 +320,26 @@ def prepare_run(
             },
         ]
     return facts
+
+
+def start_campaign(name: str, target_count: int, *, today: str) -> dict[str, Any]:
+    """Named CAUTIOUS partner campaign, new_customers goal (donor partner_runtime.start_connected_partner_campaign)."""
+    title = (" ".join(str(name or "").split()).strip() or f"Партнёрства {today}")[:200]
+    target = max(1, min(int(target_count), 500))
+    return {"step": "partner_campaign_started", "campaign_id": stable_id("pcamp", title, today), "name": title,
+            "target_count": target, "objective": "new_customers", "automation_mode": "cautious"}
+
+
+def campaigns(payloads: list[dict[str, Any]]) -> dict[str, dict[str, Any]]:
+    return {p["campaign_id"]: p for p in payloads if p.get("step") == "partner_campaign_started"}
+
+
+def run_campaign(payloads: list[dict[str, Any]], campaign_id: str, discover: Any, **kw: Any) -> list[dict[str, Any]]:
+    """(Re)run preparation for an existing campaign (donor rerun_connected_partner_campaign); never contacts."""
+    camp = campaigns(payloads).get(campaign_id)
+    if camp is None:
+        raise ValueError("partner_campaign_not_found")
+    known = replay(payloads)
+    facts = [f for f in prepare_run(discover, limit=int(camp["target_count"]), **kw)
+             if f["step"] != "partner_added" or f["partner_id"] not in known]
+    return [{**f, "campaign_id": campaign_id} for f in facts]

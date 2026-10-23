@@ -90,3 +90,41 @@ def _erase(es) -> None:
     es.delete_user_events(tenant_id="t1", user_id="u1")
     assert db.execute("SELECT user_id FROM user_state").fetchall() == [("u2",)]
     assert db.execute("SELECT COUNT(1) FROM user_features_daily").fetchone()[0] == 0
+
+
+def test_partner_referral_result_idempotent_and_bounded(flow) -> None:
+    flow.run(ops.handle_partners, op="add", arg="Кофейня Зерно | кофе | 9000 | existing | @zerno")
+    _, text = flow.run(ops.handle_partners, op="ref", arg="1")
+    token = "ref_" + text.rsplit("ref_", 1)[1]
+    _, text = flow.run(ops.handle_partners, op="ref_result", arg=f"{token} order-1")
+    assert "учтён" in text and "уже" not in text
+    _, text = flow.run(ops.handle_partners, op="ref_result", arg=f"{token} order-1")
+    assert "уже учтён" in text
+    _, text = flow.run(ops.handle_partners, op="ref_result", arg="ref_nope order-2")
+    assert "not found" in text
+    _, text = flow.run(ops.handle_partners, op="ref_result", arg=f"{token} " + "x" * 161)
+    assert "bounded" in text
+    facts = [e["payload"] for e in flow.store.events]
+    pid = next(p["partner_id"] for p in facts if p.get("step") == "partner_added")
+    assert pt.referral_counts(facts, pid) == {"visit": 0, "lead": 0, "result": 1}
+    assert "/partner_result" in BUSINESS_FLOW_COMMANDS
+
+
+def test_partner_campaign_start_and_rerun_without_contact(flow) -> None:
+    _, text = flow.run(ops.handle_partners, op="campaign", arg=" Весна  | 9999")
+    assert "«Весна» (цель 500)" in text and "не подключён" in text
+    facts = [e["payload"] for e in flow.store.events]
+    cid = next(iter(pt.campaigns(facts)))
+    assert pt.start_campaign("", 0, today="2026-10-24")["name"] == "Партнёрства 2026-10-24"
+    kw = {"goal_terms": ["кофе"], "activity": "кофе", "offerings": ["Дегустация"], "business": "Школа", "min_fit": 0}
+    found = ["Кофейня Зерно | кофе | 9000 | existing | @zerno"]
+    out = pt.run_campaign(facts, cid, lambda terms, limit: found, **kw)
+    assert [f["step"] for f in out] == ["partner_added", "partner_pack_prepared"] and out[0]["campaign_id"] == cid
+    again = pt.run_campaign([*facts, *out], cid, lambda terms, limit: found, **kw)
+    assert [f["step"] for f in again] == ["partner_pack_prepared"]
+    import pytest
+
+    with pytest.raises(ValueError, match="not_configured"):
+        pt.run_campaign(facts, cid, None, **kw)
+    with pytest.raises(ValueError, match="not_found"):
+        pt.run_campaign(facts, "x", None, **kw)

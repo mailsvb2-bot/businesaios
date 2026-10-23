@@ -31,6 +31,7 @@ from runtime.handler_impl.domains.business_catalog_ops import (
     _followups,
     _owner_journey,
     _panels,
+    _partner_growth,
     _promotions,
     _retention,
     _sales_inbound,
@@ -240,6 +241,9 @@ def handle_partners(payload, effects, env, *, event_store):
             return send_tracked(body, effects, env, text=text, event_type="partners@v1", event_payload=change)
     except ValueError as exc:
         return send_tracked(body, effects, env, text=f"🤝 Не получилось: {exc}", event_type=None, event_payload=None)
+    if op in {"campaign", "ref_result"}:
+        text, ch = _partner_growth(pt, op, arg, tenant_id, known, flow_payloads(event_store, tenant_id=tenant_id, event_type="partners@v1"))
+        return send_tracked(body, effects, env, text=text, event_type="partners@v1" if ch else None, event_payload=ch)
     if op in {"status", "pitch", "ref"}:
         return _partner_card(body, effects, env, pt, known, op, arg, event_store)
     terms = [t for t in arg.replace(",", " ").split() if t]

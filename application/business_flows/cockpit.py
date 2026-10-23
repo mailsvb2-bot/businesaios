@@ -140,6 +140,40 @@ def with_navigation(rows: list[list[tuple[str, str]]], parsed: Parsed) -> list[l
     return [r for r in rows if r] + [nav]
 
 
+MAX_METRICS = 10
+
+
+def business_window(timezone_name: str, now_ms: int) -> tuple[str, int, int]:
+    """Business-local calendar day as UTC ms bounds (donor cockpit_home._business_window)."""
+    from datetime import UTC, datetime, time, timedelta
+    from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
+
+    try:
+        zone = ZoneInfo(timezone_name)
+    except (ZoneInfoNotFoundError, ValueError) as exc:
+        raise ValueError("business timezone is invalid") from exc
+    day = datetime.fromtimestamp(now_ms / 1000, tz=UTC).astimezone(zone).date()
+    start, end = (datetime.combine(d, time.min, tzinfo=zone) for d in (day, day + timedelta(days=1)))
+    return zone.key, int(start.timestamp() * 1000), int(end.timestamp() * 1000)
+
+
+def metric(metrics: list[tuple[str, str, int]], key: str, title: str, value: int) -> None:
+    """Append a non-negative metric unless the cap is reached (donor cockpit_home._metric)."""
+    if len(metrics) < MAX_METRICS:
+        metrics.append((key, title, max(0, int(value))))
+
+
+def today_metrics(s: Snapshot) -> list[tuple[str, str, int]]:
+    tz = getattr(s.catalog, "timezone", None) or "Europe/Moscow"
+    _, lo, hi = business_window(tz, s.now_ms)
+    today = [x for x in (s.all_slots or s.slots) if lo <= getattr(x, "starts_at_ms", -1) < hi]
+    out: list[tuple[str, str, int]] = []
+    metric(out, "open_slots_today", "Свободных окон сегодня", sum(x.status == "open" for x in today))
+    metric(out, "booked_slots_today", "Предстоящих записей сегодня",
+           sum(x.status == "booked" and x.starts_at_ms >= s.now_ms for x in today))
+    return out
+
+
 def _screen(parsed: Parsed, s: Snapshot) -> tuple[str, list[list[tuple[str, str]]]]:
     a = parsed.action
     if a == "menu":
@@ -159,8 +193,9 @@ def _screen(parsed: Parsed, s: Snapshot) -> tuple[str, list[list[tuple[str, str]
     if a == "today":
         booked = [x for x in s.slots if x.status == "booked"]
         nearest = f"\nБлижайшая встреча: {s.fmt_slot(booked[0])}" if booked else ""
+        metrics = "".join(f"{t}: {v}\n" for _, t, v in today_metrics(s))
         return (
-            "📊 Что сегодня происходит\n\n"
+            "📊 Что сегодня происходит\n\n" + metrics +
             f"Слоты впереди: {len(s.slots)} (занято {len(booked)}){nearest}\n"
             f"Партнёров: {len(s.partners)}\nСтупеней лестницы: {len(s.steps)}"
         ), _rows(("📅 Запись", "cpm:bookings:0"))

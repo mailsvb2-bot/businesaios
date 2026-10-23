@@ -153,3 +153,28 @@ def test_revenue_screens_route(flow) -> None:
     assert "payment" in texts[0] and "ROAS/CAC не считаются" in texts[1] and "Путь клиента" in texts[2]
     flow.run(partial(handle_business_ops_summary, now_ms=NOW), op="trace", arg="cust-000042")
     assert "нет атрибутированного" in flow.effects.sent[-1]["text"]
+
+
+def test_today_business_window_and_capped_metrics() -> None:
+    from types import SimpleNamespace as S
+
+    import pytest
+
+    from application.business_flows import cockpit as cp
+
+    now = 1_800_000_000_000  # 2027-01-15 08:00 UTC = 11:00 MSK
+    key, lo, hi = cp.business_window("Europe/Moscow", now)
+    assert key == "Europe/Moscow" and hi - lo == 86_400_000 and lo == now - 11 * 3_600_000
+    with pytest.raises(ValueError):
+        cp.business_window("Nope/Zone", now)
+    sl = [S(status="open", starts_at_ms=now + 1), S(status="booked", starts_at_ms=now + 2),
+          S(status="booked", starts_at_ms=now - 1), S(status="open", starts_at_ms=hi + 1)]
+    snap = cp.Snapshot(all_slots=sl, now_ms=now, catalog=S(timezone="Europe/Moscow"))
+    assert cp.today_metrics(snap) == [("open_slots_today", "Свободных окон сегодня", 1),
+                                      ("booked_slots_today", "Предстоящих записей сегодня", 1)]
+    m: list = []
+    for i in range(12):
+        cp.metric(m, f"k{i}", "t", -5)
+    assert len(m) == cp.MAX_METRICS and m[0][2] == 0
+    text, _ = cp._screen(cp.Parsed("today"), snap)
+    assert "Свободных окон сегодня: 1" in text

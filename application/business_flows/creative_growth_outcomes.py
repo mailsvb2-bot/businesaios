@@ -101,3 +101,35 @@ def get_creative_growth_outcomes(trial: Mapping[str, Any], payloads: Iterable[Ma
     z = analytics_zone(env)
     f, t = period(days, now, zone=z)
     return outcomes(trial, attribution(payloads, date_from=f, date_to=t, zone=z), date_from=f, date_to=t)
+
+
+def _winner_trial(trial: Mapping[str, Any], snap: Mapping[str, Any]) -> dict[str, Any]:
+    bps = {a.get("variant_id"): int(a.get("allocation_bps") or 0) for a in trial.get("arms") or ()}
+    arms = [{"variant_id": v["variant_id"], "publication_job_id": v["publication_job_id"],
+             "allocation_bps": bps.get(v["variant_id"], 0), "leads": v["leads"], "bookings": v["bookings"],
+             "won": v["won"], "scope": v["attribution_scope"]} for v in snap["variants"]]
+    return {"trial_id": snap["trial_id"], "revision": int(trial.get("revision") or 0),
+            "running": trial.get("status", "running") == "running", "date_from": snap["date_from"],
+            "date_to": snap["date_to"], "arms": arms}
+
+
+def get_creative_growth_recommendation(trial: Mapping[str, Any], payloads: Iterable[Mapping[str, Any]], *,
+                                       days: int = 30, now: datetime | date | None = None,
+                                       env: Mapping[str, str] | None = None, **policy: Any) -> dict[str, Any]:
+    """Outcomes snapshot -> reviewed allocation preview (donor creative_growth_optimization)."""
+    from application.business_flows import creative_winner as cw
+
+    snap = get_creative_growth_outcomes(trial, payloads, days=days, now=now, env=env)
+    return cw.preview(_winner_trial(trial, snap), **policy)
+
+
+def apply_creative_growth_recommendation(trial: Mapping[str, Any], payloads: Iterable[Mapping[str, Any]],
+                                         reviewed: Mapping[str, Any], *, confirmed: bool, days: int = 30,
+                                         now: datetime | date | None = None, env: Mapping[str, str] | None = None,
+                                         **policy: Any) -> dict[str, Any]:
+    """Explicit confirmation + CAS on revision and evidence fingerprint; returns the plan fact (no spend)."""
+    from application.business_flows import creative_winner as cw
+
+    snap = get_creative_growth_outcomes(trial, payloads, days=days, now=now, env=env)
+    return cw.apply(_winner_trial(trial, snap), expected_revision=int(reviewed["revision"]),
+                    expected_fingerprint=str(reviewed["fingerprint"]), confirmed=confirmed, **policy)

@@ -541,3 +541,20 @@ def channel_reminder_copies(effects, env, body, facts, bk, slot, minutes, label)
             track_payload={"_provider_native": native},
         )  # fmt: skip
     return text
+
+
+def _partner_growth(pt, op, arg, tenant_id, known, facts):
+    """Partner campaigns (discovery provider not connected: preparation only) and confirmed referral results."""
+    from datetime import UTC, datetime
+
+    try:
+        if op == "campaign":  # Название | N
+            name, _, n = arg.partition("|")
+            ch = pt.start_campaign(name, int(n.strip() or 50), today=datetime.now(UTC).date().isoformat())
+            return (f"🤝 Кампания «{ch['name']}» (цель {ch['target_count']}) сохранена. Поиск партнёров "
+                    "не подключён: добавляйте кандидатов /partner_add — никому ничего не отправляется."), ch
+        tok, _, key = arg.partition(" ")  # ref_TOKEN ключ_результата
+        ch = pt.record_referral_result(known, facts, tenant_id, tok, key)
+        return ("✅ Результат партнёра учтён." if ch else "ℹ️ Этот результат уже учтён."), ch
+    except (ValueError, LookupError) as exc:
+        return f"🤝 Не получилось: {exc}", None
