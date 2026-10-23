@@ -4,9 +4,9 @@ import json
 
 import pytest
 
+from application.business_autonomy.provider_catalog import provider_map
 from application.business_flows import native_channels as nc
 from application.business_flows import promotions as pm
-from application.business_autonomy.provider_catalog import provider_map
 from runtime.business_autonomy.provider_webhook_runtime import ProviderWebhookRuntime
 from runtime.integration.native_messenger_inbound import persist_route_secrets, promotion_touch
 from security.secret_vault import InMemorySecretVault
@@ -135,3 +135,15 @@ def test_open_channel_promotion() -> None:
     with pytest.raises(ValueError, match="активного"):
         pm.open_channel(camps, "tok12345abcd", customer_id="x", active_customers=set())
     assert promotion_touch(camps=camps, text="hello", platform="vk", subject="5", identities=ids) is None
+
+
+def test_promotion_touch_hook_vk_max_only() -> None:
+    from runtime.business_autonomy.provider_inbound_webhook_service import ProviderInboundWebhookService
+    from runtime.integration.native_messenger_inbound import promotion_touch_hook
+
+    camps = pm.replay([{"step": "promotion_saved", "promotion_id": "pr1", "slot_id": "s1", "channel": "vk", "source_token": "tok12345abcd",
+                        "creative": {"creative_id": "c", "headline": "h", "primary_text": "p", "description": "d"}}])  # fmt: skip
+    hook = promotion_touch_hook(lambda t, b: (camps, {("vk", "5"): "cust-5"}))
+    assert hook("t", "b", "vk_messaging", "5", f"/start {pm.PREFIX}tok12345abcd")["customer_id"] == "cust-5"
+    assert hook("t", "b", "telegram", "5", f"/start {pm.PREFIX}tok12345abcd") is None
+    assert "promotion_touch_hook" in ProviderInboundWebhookService.__dataclass_fields__

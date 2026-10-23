@@ -37,3 +37,22 @@ def promotion_touch(*, camps: dict[str, pm.Campaign], text: str, platform: str, 
     return pm.open_channel_for_identity(
         camps, token, platform=platform, external_subject=subject, identities=identities
     )[1]
+
+
+_PLATFORMS = {"vk_messaging": "vk", "vk": "vk", "max_messaging": "max", "max": "max"}
+
+
+def promotion_touch_hook(load):
+    """Adapter for ProviderInboundWebhookService.promotion_touch_hook.
+
+    ``load(tenant_id, business_id) -> (camps, identities)``; only VK/MAX providers attribute.
+    """
+
+    def hook(tenant_id: str, business_id: str, provider_key: str, subject: str, text: str):
+        platform = _PLATFORMS.get(str(provider_key))
+        if platform is None or not subject:
+            return None
+        camps, identities = load(tenant_id, business_id)
+        return promotion_touch(camps=camps, text=text, platform=platform, subject=subject, identities=identities)
+
+    return hook
