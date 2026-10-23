@@ -8,7 +8,7 @@ from application.business_flows import publications as pb
 from application.business_flows import sales as sl
 from application.business_flows.projection import flow_payloads
 from core.admin import roles_read_model as rr
-from scripts.migration import legacy_import as tool
+from scripts.migration import donor_import as tool
 
 SCHEMA = {
     "business_offerings": "id, business_id, title, status",
@@ -132,4 +132,10 @@ def test_donor_is_opened_read_only(tmp_path):
     before = (tmp_path / "cp.db").read_bytes()
     tool.run(_args(tmp_path / "cp.db", False))
     assert (tmp_path / "cp.db").read_bytes() == before
-    assert all(r["business_id"] == "B" for t in tool.read_donor(str(tmp_path / "cp.db"), "B").values() for r in t)
+    assert all(
+        r["business_id"] == "B"
+        for t in __import__("runtime.platform.donor_db_reader", fromlist=["x"])
+        .read_donor(str(tmp_path / "cp.db"), "B")
+        .values()
+        for r in t
+    )

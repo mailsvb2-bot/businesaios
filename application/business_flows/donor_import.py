@@ -3,7 +3,7 @@
 Each donor row becomes the same fact the live command would have recorded
 (``/add_slot``, ``/price``, ``/pay``, ``/lead_add``, ``/partner_add``, ``/post_add``,
 ``/role_add``), tagged with ``import_ref`` so re-running the import is a no-op.
-Nothing here touches a database or the network; ``scripts/migration/legacy_import.py``
+Nothing here touches a database or the network; ``scripts/migration/donor_import.py``
 reads the donor SQLite read-only and appends through the Event Store.
 """
 
@@ -18,7 +18,7 @@ from typing import Any
 from application.business_flows import sales as sl
 from application.business_flows.projection import stable_id
 
-SOURCE = "legacy_import"
+SOURCE = "donor_import"
 # donor business_members.role -> core.admin.roles_read_model role ("owner" is the tenant itself)
 ROLE_MAP = {"administrator": "admin", "manager": "admin", "marketer": "marketing", "content_manager": "marketing"}
 LEAD_STAGE = {"new": [], "contacted": ["contact"], "qualified": ["contact", "need", "qualified"]}

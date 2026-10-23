@@ -44,6 +44,6 @@ def test_capital_policy_is_compat_advisory_wrapper() -> None:
     assert decision.approved is True
 
 
-def test_knowledge_composite_ports_exist_for_legacy_imports() -> None:
+def test_knowledge_composite_ports_exist_for_donor_imports() -> None:
     assert KnowledgeReadPort is not None
     assert KnowledgeWritePort is not None

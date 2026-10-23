@@ -6,7 +6,7 @@ from runtime.platform.support.schemas.validators.checkpoint_validator import val
 from runtime.platform.support.schemas.validators.rollout_validator import valid_rollout
 
 
-def test_schema_catalog_preserves_legacy_import_paths() -> None:
+def test_schema_catalog_preserves_donor_import_paths() -> None:
     assert checkpoint_schema()["required"] == ["uri"]
     assert transition_schema()["required"] == ["observation", "action", "reward", "done"]
     assert valid_checkpoint({"uri": "x"}) is True

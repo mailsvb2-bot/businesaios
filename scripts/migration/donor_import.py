@@ -1,6 +1,6 @@
 """Import a ClientPlatform SQLite database into BusinessAIOS flow facts.
 
-    python -m scripts.migration.legacy_import --donor clientplatform.db --business-id B --tenant T --owner-user-id U
+    python -m scripts.migration.donor_import --donor clientplatform.db --business-id B --tenant T --owner-user-id U
         (dry-run: prints what would be imported, writes nothing)
     ... --apply --events-db runtime/data/<tenant>/events.db
         (appends missing facts; re-running is a no-op)
@@ -12,38 +12,13 @@ from __future__ import annotations
 
 import argparse
 import json
-import sqlite3
 import sys
 from collections import Counter
 from typing import Any
 
-from application.business_flows import legacy_import as ci
-
-TABLES = (
-    "business_offerings",
-    "customers",
-    "business_offering_prices",
-    "booking_slots",
-    "business_payments",
-    "clientplatform_sales_leads",
-    "partner_candidates",
-    "business_publications",
-    "business_members",
-)
-
-
-def read_donor(path: str, business_id: str) -> dict[str, list[dict[str, Any]]]:
-    conn = sqlite3.connect(f"file:{path}?mode=ro", uri=True)
-    conn.row_factory = sqlite3.Row
-    try:
-        have = {r[0] for r in conn.execute("SELECT name FROM sqlite_master WHERE type='table'")}
-        return {
-            t: [dict(r) for r in conn.execute(f"SELECT * FROM {t} WHERE business_id=?", (business_id,))]  # noqa: S608
-            for t in TABLES
-            if t in have
-        }
-    finally:
-        conn.close()
+from application.business_flows import donor_import as ci
+from contracts.event_store import append_event_strict
+from runtime.platform.donor_db_reader import read_donor
 
 
 def run(args: argparse.Namespace, *, store: Any = None) -> dict[str, Any]:
@@ -60,17 +35,14 @@ def run(args: argparse.Namespace, *, store: Any = None) -> dict[str, Any]:
         "donor_rows": {t: len(v) for t, v in rows.items()},
         "facts_total": len(facts),
         "already_imported": len(facts) - len(todo),
-        "to_import": dict(
-            Counter(f"{f.event_type}:{f.payload.get('step', 'role')}" for f in todo)
-        ),
+        "to_import": dict(Counter(f"{f.event_type}:{f.payload.get('step', 'role')}" for f in todo)),
         "skipped": skipped,
     }
     if args.apply:
         if store is None:
             raise SystemExit("--apply requires --events-db")
         for f in todo:
-            store.append_event(ci.to_event(f, tenant_id=args.tenant), commit=False)
-        store.commit()
+            append_event_strict(store, tenant_id=args.tenant, event=ci.to_event(f, tenant_id=args.tenant))
         report["written"] = len(todo)
     return report
 
