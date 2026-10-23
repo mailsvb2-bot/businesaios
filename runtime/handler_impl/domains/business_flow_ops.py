@@ -517,6 +517,10 @@ def handle_business_admin(payload, effects, env, *, event_store, now_ms: int | N
                     ch = None if ch["approval_id"] in st.approvals else ch
                 return done(f"{label}: " + "; ".join(why) + ("\n/approvals" if verdict == "needs_approval" else ""), ch)
             return done(apol.render(pols, now_ms=now))
+        if op in CATALOG_OPS:
+            return _catalog(
+                done, op, arg, flow_payloads(event_store, tenant_id=tenant_id, event_type="business_admin@v1")
+            )
         if op.startswith("ad_"):
             from application.business_flows import sales as sl
 
@@ -574,6 +578,64 @@ def handle_business_admin(payload, effects, env, *, event_store, now_ms: int | N
     except ValueError as exc:
         return done(f"⚠️ Не получилось: {exc}")
     return done(ad.render_summary(st))
+
+
+CATALOG_OPS = frozenset(
+    {
+        "directions",
+        "direction",
+        "direction_add",
+        "direction_edit",
+        "direction_goal",
+        "direction_archive",
+        "direction_restore",
+        "offerings",
+        "offering_add",
+        "offering_retire",
+        "formats",
+        "format_on",
+        "format_off",
+        "profile",
+        "profile_set",
+    }
+)
+
+
+def _catalog(done, op, arg, facts_):
+    """Directions / offerings / formats; archive keeps history (catalog.py)."""
+    from application.business_flows import catalog as cg
+
+    c = cg.replay(facts_)
+    if op == "directions":
+        return done(cg.directions_text(c, archived=arg.strip().casefold() == "archived"))
+    if op == "direction":
+        return done(cg.direction_text(c, arg))
+    if op == "direction_add":
+        ch = cg.create_direction(c, arg)
+        return done("✅ Направление создано. /directions" if ch else "Такое направление уже есть.", ch)
+    if op == "direction_edit":
+        return done("✏️ Направление обновлено.", cg.edit_direction(c, arg))
+    if op == "direction_goal":
+        return done("🎯 Цель сохранена.", cg.set_goal(c, arg))
+    if op in {"direction_archive", "direction_restore"}:
+        restore = op == "direction_restore"
+        msg = "♻️ Направление восстановлено." if restore else "📦 Направление в архиве, данные сохранены."
+        return done(msg, cg.archive(c, arg, restore=restore))
+    if op == "offering_add":
+        ch = cg.create_offering(c, arg)
+        return done("✅ Предложение добавлено. /offerings" if ch else "Такое предложение уже есть.", ch)
+    if op == "offering_retire":
+        return done("🗄 Убрано из активных; история сохранена.", cg.retire_offering(c, arg))
+    if op in {"format_on", "format_off"}:
+        ch = cg.toggle_format(c, arg, enabled=op == "format_on")
+        return done(("✅ Формат обновлён." if ch else "Уже так.") + "\n" + cg.formats_text(c), ch)
+    if op == "formats":
+        return done(cg.formats_text(c))
+    if op == "profile_set":
+        return done("✅ Профиль обновлён.", cg.save_profile(c, arg))
+    if op == "profile":
+        return done(cg.profile_text(c))
+    return done(cg.offerings_text(c))
 
 
 def _ads(body, done, st, op, arg, facts_, sl_replay=None):
