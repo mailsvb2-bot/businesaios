@@ -473,6 +473,25 @@ def handle_business_admin(payload, effects, env, *, event_store, now_ms: int | N
         if op in ad.APPROVAL_NEXT:
             ch = ad.decide_approval(st, op, arg)
             return done(f"✅ Решение записано: {ch['status']}", ch)
+        if op in {"invites", "invite_new", "join"}:
+            from application.business_flows import invites as iv
+
+            facts_ = flow_payloads(event_store, tenant_id=tenant_id, event_type="business_admin@v1")
+            invs, now = iv.replay(facts_), now_ms or _now_ms()
+            if op == "invite_new":
+                import secrets
+
+                token = secrets.token_urlsafe(12)
+                return done(iv.issued_text(token), iv.issue(token, now_ms=now))
+            if op == "join":
+                ch = iv.claim(invs, arg, customer_user_id=required_str(body, "user_id"), now_ms=now)
+                return done("✅ Вы подключены к бизнесу. /slots — расписание, /me — кабинет", ch)
+            customers = len({i.claimed_by for i in invs.values() if i.claimed_by})
+            return done(iv.invites_text(invs, now_ms=now, customers=customers))
+        if op.startswith("ad_"):
+            return _ads(
+                body, done, st, op, arg, flow_payloads(event_store, tenant_id=tenant_id, event_type="business_admin@v1")
+            )
         if op == "audit":
             facts_ = flow_payloads(event_store, tenant_id=tenant_id, event_type="business_admin@v1")
             return done(
@@ -518,6 +537,30 @@ def handle_business_admin(payload, effects, env, *, event_store, now_ms: int | N
     except ValueError as exc:
         return done(f"⚠️ Не получилось: {exc}")
     return done(ad.render_summary(st))
+
+
+def _ads(body, done, st, op, arg, facts_):
+    """Governed ad proposals: drafts, exact-cap consent via approvals, publish gated by connector truth."""
+    from application.business_flows import ad_proposals as ap
+    from interfaces.ads.registry import CONNECTORS
+    from runtime.platform.config.env_flags import env_str
+
+    drafts = ap.replay(facts_)
+    if op == "ad_draft":
+        ch = ap.draft(arg)
+        return done(
+            "📝 Черновик рекламы сохранён. Дальше: /ad_consent N | 5000 RUB", None if ch["draft_id"] in drafts else ch
+        )
+    if op == "ad_consent":
+        floor = int(env_str("BUSINESAIOS_AD_MIN_WEEKLY_MINOR", "30000") or 30000)
+        ch = ap.consent(drafts, arg, min_weekly_minor=floor)
+        return done("🧾 Запрошено согласие владельца на кап. Решение: /approvals → /approve N", ch)
+    if op == "ad_publish":
+        truth = CONNECTORS["yandex_direct"]
+        ready = bool(truth["production_ready"]) and bool(truth["requires_human_approval"])
+        text, ch = ap.publish_decision(ap.by_ref(drafts, arg), st.approvals, production_ready=ready)
+        return done(text, ch)
+    return done(ap.list_text(drafts, st.approvals))
 
 
 def _markup(rows):
