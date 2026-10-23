@@ -289,6 +289,7 @@ def _cockpit(body, effects, env, future, steps, facts, now):
     from application.business_flows import bookings as bk
     from application.business_flows import cockpit as cp
     from application.business_flows import cockpit_booking as cb
+    from application.business_flows import cockpit_events as ce
     from application.business_flows import cockpit_money as cm
     from application.business_flows import cockpit_sales as cs
     from application.business_flows import event_series as es
@@ -324,6 +325,22 @@ def _cockpit(body, effects, env, future, steps, facts, now):
             text=cs.result_text(change, after.sales) + "\n\n" + text,
             event_type="sales_pipeline@v1",
             event_payload=change,
+            reply_markup=cp.markup(rows),
+        )
+    if parsed.action in ce.MUTATIONS:
+        try:
+            note, change = ce.mutation(parsed.action, parsed.args, snap)
+        except ValueError as exc:
+            return send_tracked(body, effects, env, text=f"⚠️ Не получилось: {exc}", event_type=None, event_payload=None)
+        after = replace(snap, series=es.replay([*facts("event_series@v1"), *([change] if change else [])]))
+        text, rows = cp.render(cp.Parsed("ev-conduct"), after, is_owner=True)
+        return send_tracked(
+            body,
+            effects,
+            env,
+            text=note + "\n\n" + text,
+            event_type="event_series@v1" if change else None,
+            event_payload=change or None,
             reply_markup=cp.markup(rows),
         )
     if parsed.action in cm.MUTATIONS:

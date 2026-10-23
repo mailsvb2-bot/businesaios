@@ -11,6 +11,7 @@ from dataclasses import dataclass, field
 from typing import Any
 
 from application.business_flows import cockpit_booking as _cb
+from application.business_flows import cockpit_events as _ce
 from application.business_flows import cockpit_money as _cm
 from application.business_flows import cockpit_sales as _cs
 
@@ -43,6 +44,7 @@ PARENTS: dict[str, str] = {
 PARENTS.update(_cs.PARENTS)
 PARENTS.update(_cb.PARENTS)
 PARENTS.update(_cm.PARENTS)
+PARENTS.update(_ce.PARENTS)
 
 
 @dataclass(frozen=True)
@@ -179,6 +181,8 @@ def _screen(parsed: Parsed, s: Snapshot) -> tuple[str, list[list[tuple[str, str]
         return _cs.screen(a, parsed.args, s.sales, now_ms=s.now_ms)
     if a in _cb.PARENTS:
         return _cb.screen(a, parsed.args, s.admin, now_ms=s.now_ms)
+    if a in _ce.PARENTS:
+        return _ce.screen(a, parsed.args, s)
     if a in _cm.PARENTS:
         return _cm.screen(a, parsed.args, s)
     extra = _extra_screen(a, parsed, s)
@@ -274,7 +278,7 @@ def _extra_screen(a: str, parsed: Parsed, s: Snapshot) -> tuple[str, list[list[t
             f"🎤 Встречи и серии\n\nПрогрев: за {days} дн.\nСогласны на предложения: {opted}\n"
             f"Прошедшие без отметки посещения: {unmarked} (/attendance)\n"
             "Новая встреча: /new_event Название · Тексты: /series"
-        ), []
+        ), _rows(("🎤 Отметить посещение", "cpm:ev-conduct"), ("✉️ Тексты прогрева", "cpm:ev-texts"))
     return None
 
 
