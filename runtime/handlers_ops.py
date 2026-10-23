@@ -12,7 +12,7 @@ from runtime.handler_impl.domains.admin_ops import (
     handle_admin_user_card,
     handle_set_marketing_copy,
 )
-from runtime.handler_impl.domains.bot_provisioning_ops import handle_bot_provisioning
+from runtime.handler_impl.domains.bot_provisioning_ops import handle_bot_provisioning, managed_bot_token_source
 from runtime.handler_impl.domains.business_flow_ops import (
     handle_bookings,
     handle_business_admin,
@@ -61,6 +61,7 @@ __all__ = [
     "handle_event_series",
     "handle_business_admin",
     "handle_bot_provisioning",
+    "managed_bot_token_source",
     "handle_answer_callback",
     "handle_apply_pricing_change",
     "handle_capture_payment",

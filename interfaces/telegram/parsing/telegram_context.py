@@ -12,6 +12,8 @@ import time
 from dataclasses import dataclass
 from typing import Any
 
+from runtime.integration.managed_bot_updates import parse_managed_bot_update
+
 
 def extract_telegram_user_id(update: dict) -> int | None:
     """Extract Telegram sender user id from update (best-effort).
@@ -50,6 +52,7 @@ class TelegramContext:
     callback_data: str | None
     callback_query_id: str | None
     raw: dict[str, Any]
+    managed_bot: dict[str, str] | None = None
 
 
 def _extract_message(update: dict[str, Any]) -> tuple[dict[str, Any] | None, str, bool, str | None]:
@@ -86,6 +89,13 @@ def build_context(update: dict[str, Any]) -> TelegramContext | None:
     upd_id = update.get("update_id")
     if upd_id is None:
         return None
+
+    managed = parse_managed_bot_update(update)
+    if managed is not None:  # Bot API managed_bot update: creator + created child bot, no chat message
+        return TelegramContext(
+            update_id=int(upd_id), chat_id=managed["user_id"], message_id=None, text="", command=None, args="",
+            is_callback=False, callback_data=None, callback_query_id=None, raw=update, managed_bot=managed,
+        )  # fmt: skip
 
     msg, txt, is_cb, cb_data = _extract_message(update)
     cbq_id = None

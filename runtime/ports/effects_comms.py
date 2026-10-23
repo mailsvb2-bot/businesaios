@@ -82,6 +82,9 @@ class EffectsCommsPort(Protocol):
         offset: int | None = None,
         timeout_s: int = 20,
         limit: int = 50,
+        token: str | None = None,
     ) -> Any: ...
+
+    def telegram_managed_bot_token(self, *, managed_bot_id: str) -> Dict[str, Any]: ...
 
     def telegram_self_check(self, *, token: str | None = None, clear_webhook: bool = False) -> Dict[str, Any]: ...

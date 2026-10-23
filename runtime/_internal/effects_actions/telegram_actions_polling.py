@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from typing import Any
 
 from runtime._internal.effects_actions.telegram.runtime_mode import is_telegram_mode
@@ -10,6 +11,7 @@ from runtime._internal.effects_clients.telegram_endpoint import (
 )
 from runtime._internal.effects_clients.telegram_startup import classify_startup
 from runtime._internal.http_transport import HttpTransport
+from runtime.integration.managed_bot_updates import allowed_updates_param
 from runtime.observability.error_handling import swallow
 from runtime.platform.config.env_flags import env_bool, env_str
 
@@ -39,7 +41,12 @@ def poll_telegram_updates_effect(
     offset: int | None = None,
     timeout_s: int = 30,
     limit: int = 50,
+    token: str | None = None,
+    allowed_updates: list[str] | None = None,
 ) -> Any:
+    """getUpdates for the platform bot, or for a tenant bot when ``token`` is given.
+
+    Tenant bots skip the platform startup checks (their webhook was removed at verification)."""
     if not is_telegram_mode():
         return {
             "ok": True,
@@ -49,7 +56,8 @@ def poll_telegram_updates_effect(
             "meta": {"mode": "stub", "reason": "RUN_MODE!=telegram"},
         }
 
-    token = env_str("TELEGRAM_BOT_TOKEN", "")
+    tenant = bool(str(token or "").strip())
+    token = str(token).strip() if tenant else env_str("TELEGRAM_BOT_TOKEN", "")
     if not token:
         return {
             "ok": False,
@@ -67,7 +75,7 @@ def poll_telegram_updates_effect(
     token = token.strip("\"'")
 
     transport = getattr(effects, "http_transport", None)
-    if not getattr(effects, "_telegram_startup_checked", False):
+    if not tenant and not getattr(effects, "_telegram_startup_checked", False):
         effects._telegram_startup_checked = True
         getme = _get_json(
             telegram_method_url(token, "getMe"),
@@ -135,12 +143,16 @@ def poll_telegram_updates_effect(
                     "meta": {"mode": "error", "reason": report.code},
                 }
 
-    params: dict[str, int] = {
+    params: dict[str, Any] = {
         "timeout": int(timeout_s),
         "limit": int(limit),
     }
     if offset is not None:
         params["offset"] = int(offset)
+    if allowed_updates is not None:
+        params["allowed_updates"] = json.dumps([str(u) for u in allowed_updates])
+    else:
+        params.update(allowed_updates_param(tenant=tenant))
 
     try:
         data = http_json(
@@ -173,3 +185,33 @@ def poll_telegram_updates_effect(
     if not isinstance(updates, list):
         updates = []
     return {"ok": True, "updates": updates, "meta": {"mode": "telegram"}}
+
+
+
+def managed_bot_token_effect(effects: Any, *, managed_bot_id: str) -> dict:
+    """Bot API ``getManagedBotToken`` called with the platform (manager) bot token.
+
+    Returns {"ok", "token"} or {"ok": False, "error"}; the caller seals the token, never logs it."""
+    bid = str(managed_bot_id or "").strip()
+    if not bid.isdigit():
+        return {"ok": False, "error": "managed_bot_id_invalid"}
+    if not is_telegram_mode():
+        return {"ok": False, "error": "telegram_mode_disabled"}
+    manager = env_str("TELEGRAM_BOT_TOKEN", "").strip()
+    if not manager:
+        return {"ok": False, "error": "manager_token_missing"}
+    try:
+        data = http_json(
+            "GET",
+            telegram_method_url(manager, "getManagedBotToken"),
+            {"user_id": bid},
+            headers={"Content-Type": "application/json"},
+            timeout_s=20,
+            transport=getattr(effects, "http_transport", None),
+        )
+    except Exception as exc:
+        return {"ok": False, "error": f"managed_bot_token_failed:{exc.__class__.__name__}"}
+    result = data.get("result") if isinstance(data, dict) and data.get("ok") else None
+    if not isinstance(result, str) or not result.strip():
+        return {"ok": False, "error": "managed_bot_token_unavailable"}
+    return {"ok": True, "token": result.strip()}

@@ -87,6 +87,18 @@ def handle_bot_provisioning(payload, effects, env, *, event_store, vault=None, t
     )
 
 
+def managed_bot_token_source(effects):
+    """Production token source: Bot API getManagedBotToken through the sealed Telegram effect."""
+
+    def fetch(external_bot_id: str) -> str:
+        res = effects.telegram_managed_bot_token(managed_bot_id=str(external_bot_id))
+        if not isinstance(res, dict) or res.get("ok") is not True or not str(res.get("token") or "").strip():
+            raise ValueError(str((res or {}).get("error") or "managed_bot_token_unavailable")[:60])
+        return str(res["token"]).strip()
+
+    return fetch
+
+
 def _verify_text(item, change) -> str:
     if change["status"] == "completed":
         return f"🤖 @{item.username} подключён (getMe подтвердил бота, вебхук снят — работает через polling)."
@@ -197,7 +209,24 @@ def _managed_complete(body, state, effects, tenant_id, user_id, vault, token_sou
     return {**final, "credential_ref": final.get("credential_ref", ref)}, _verify_text(ready, final)
 
 
+def _managed_event(body, state, effects, tenant_id, user_id, vault, token_source):
+    """Telegram ``managed_bot`` update (arg ``"<bot_id> <username>"``): record the identity, then complete.
+
+    One fact is stored: the completion carries the identity, so a failed verification still keeps it."""
+    bot_id, _, username = str(body.get("arg") or "").strip().partition(" ")
+    created = _managed_created({"external_bot_id": bot_id, "username": username.strip()}, state, effects,
+                               tenant_id, user_id, vault, token_source)[0]  # fmt: skip
+    if created is None:  # duplicate update for an already recorded identity
+        return _managed_complete(body, state, effects, tenant_id, user_id, vault, token_source)
+    item = state[created["request_id"]]
+    state = {**state, item.request_id: replace(item, status=botprov.ProvisioningStatus.AWAITING_SECRET,
+                                               username=created["username"], external_bot_id=created["external_bot_id"])}  # fmt: skip
+    change, text = _managed_complete(body, state, effects, tenant_id, user_id, vault, token_source)
+    return {**change, "username": created["username"], "external_bot_id": created["external_bot_id"]}, text
+
+
 _MANAGED_OPS = {
+    "managed_event": _managed_event,
     "managed_begin": _managed_begin,
     "managed_created": _managed_created,
     "managed_complete": _managed_complete,

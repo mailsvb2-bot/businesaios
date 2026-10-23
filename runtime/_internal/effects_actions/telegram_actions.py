@@ -14,7 +14,10 @@ from runtime._internal.effects_actions.telegram_actions_callbacks import (
     answer_callback_internal_effect,
     answer_callback_public_effect,
 )
-from runtime._internal.effects_actions.telegram_actions_polling import poll_telegram_updates_effect
+from runtime._internal.effects_actions.telegram_actions_polling import (
+    managed_bot_token_effect,
+    poll_telegram_updates_effect,
+)
 from runtime._internal.effects_actions.telegram_actions_transport import (
     send_audio_transport_effect,
     send_chat_action_effect,
@@ -146,13 +149,18 @@ class TelegramEffectsMixin:
         offset: int | None = None,
         timeout_s: int = 20,
         limit: int = 50,
+        token: str | None = None,
     ) -> dict:
         return poll_telegram_updates_effect(
             self,
             offset=offset,
             timeout_s=int(timeout_s),
             limit=int(limit),
+            token=token,
         )
+
+    def telegram_managed_bot_token(self, *, managed_bot_id: str) -> dict:
+        return managed_bot_token_effect(self, managed_bot_id=managed_bot_id)
 
     def send_audio(self, *args, **kwargs) -> Any:
         return send_audio_effect(self, *args, **kwargs)

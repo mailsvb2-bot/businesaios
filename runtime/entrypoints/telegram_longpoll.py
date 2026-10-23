@@ -17,7 +17,6 @@ from dataclasses import replace
 from typing import Any
 
 from core.ai.world_state import WorldStateV1
-from runtime.effects import telegram_method_url
 from runtime.boot.env import (
     env_bool,
     env_int,
@@ -27,6 +26,9 @@ from runtime.boot.env import (
 )
 from runtime.bootstrap import bootstrap as _bootstrap
 from runtime.decision_gateway import execute_runtime_decision
+from runtime.effects import telegram_method_url
+from runtime.integration.managed_bot_updates import SESSION_SOURCE as MANAGED_SOURCE
+from runtime.integration.managed_bot_updates import allowed_updates_param, parse_managed_bot_update
 from runtime.messaging_ingress import (
     messaging_event_to_world_state,
     telegram_update_to_messaging_event,
@@ -144,6 +146,12 @@ def _world_state_from_update(
         **dict(state.meta or {}),
         "transport": str(transport or "telegram"),
     }
+    managed = parse_managed_bot_update(update)
+    if managed is not None:  # Bot API managed_bot update: the creator is the acting user, no chat text
+        uid = managed["user_id"]
+        user = {**user, "id": uid, "messaging_user_id": uid, "telegram_user_id": uid, "telegram_chat_id": uid}
+        session = {**session, "telegram_chat_id": uid, "source": MANAGED_SOURCE, "managed_bot": dict(managed)}
+        state = replace(state, user_id=uid)
     return _copy_world_state(
         state,
         user=user,
@@ -273,6 +281,7 @@ def _run_longpoll(
             payload: dict[str, Any] = {"timeout": poll_timeout_s}
             if offset is not None:
                 payload["offset"] = offset
+            payload.update(allowed_updates_param())  # opt-in managed_bot delivery
             response = _response_payload(
                 _http_json(
                     "GET",

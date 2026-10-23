@@ -125,7 +125,7 @@ def payload_contract_fields() -> dict[EffectActionType, tuple[str, ...]]:
         EffectActionType.TELEGRAM_SEND_AUDIO: ("chat_id", "audio_url", "caption", "priority", "critical", "timeout_s"),
         EffectActionType.TELEGRAM_ANSWER_CALLBACK: ("callback_query_id", "text", "show_alert"),
         EffectActionType.TELEGRAM_SEND_CHAT_ACTION: ("chat_id", "action"),
-        EffectActionType.TELEGRAM_SELF_CHECK: ("token",),
+        EffectActionType.TELEGRAM_SELF_CHECK: ("token", "clear_webhook"),
         EffectActionType.TELEGRAM_POLL_UPDATES: ("offset", "timeout_s", "limit", "startup_checked", "webhook_cleared"),
         EffectActionType.PAYMENTS_YOOKASSA_CREATE: ("amount_rub", "description", "customer_id", "idempotence_key", "metadata", "timeout_s"),
         EffectActionType.PAYMENTS_YOOKASSA_GET_STATUS: ("external_payment_id", "timeout_s"),
@@ -172,7 +172,7 @@ def normalize_effect_payload(action_type: str | EffectActionType, payload: Any) 
             "action": _require_text(key, data, "action"),
         }
     if key is EffectActionType.TELEGRAM_SELF_CHECK:
-        return {"token": _require_text(key, data, "token")}
+        return {"token": _require_text(key, data, "token"), "clear_webhook": _bool(data, "clear_webhook", default=False)}
     if key is EffectActionType.TELEGRAM_POLL_UPDATES:
         return {
             "offset": _optional_int(data, "offset"),

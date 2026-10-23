@@ -40,6 +40,7 @@ from runtime.handlers_ops import (
     handle_send_weather,
     handle_set_marketing_copy,
     handle_set_user_setting,
+    managed_bot_token_source,
 )
 
 CANON_BOOT_WIRING_ONLY = True
@@ -66,7 +67,12 @@ def register_ops_handlers(*, handlers: ActionHandlerRegistry, event_store) -> No
     handlers.register(
         "bot_provisioning@v1",
         lambda payload, effects, env: handle_bot_provisioning(
-            payload, effects, env, event_store=event_store, vault=_tenant_vault()
+            payload,
+            effects,
+            env,
+            event_store=event_store,
+            vault=_tenant_vault(),
+            token_source=managed_bot_token_source(effects),
         ),
     )
     handlers.register(
