@@ -22,10 +22,12 @@ from runtime.handler_impl.domains.business_catalog_ops import (
     FOLLOWUP_OPS,
     PANEL_OPS,
     PROMO_OPS,
+    XP_OPS,
     _ads,
     _catalog,
     _event_channels,
     _events,
+    _external_products,
     _followups,
     _owner_journey,
     _panels,
@@ -535,6 +537,12 @@ def handle_business_admin(payload, effects, env, *, event_store, now_ms: int | N
             body, effects, env, text=text, event_type="business_admin@v1" if change else None, event_payload=change
         )
 
+    if op in XP_OPS:
+        try:
+            facts_ = flow_payloads(event_store, tenant_id=tenant_id, event_type="business_admin@v1")
+            return _external_products(done, op, arg, facts_, tenant_id=tenant_id, body=body, now_ms=now_ms or _now_ms())
+        except ValueError as exc:
+            return done(f"🔌 Не получилось: {exc}")
     try:
         if op == "setting":
             if "=" not in arg:

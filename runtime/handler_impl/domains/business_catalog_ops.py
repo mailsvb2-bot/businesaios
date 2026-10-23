@@ -373,3 +373,70 @@ def _panel(done, bk, op, arg, now, slots, facts, *, tenant_id, event_store):
     if op == "announce":
         return done(op_.announcement(slot, slots, camps, description=rest), None)
     return done(op_.promotion_text(op_.promotion_snapshot(slot, slots, camps)), None)
+
+
+XP_OPS = frozenset(
+    {"xp_list", "xp_add", "xp_activate", "xp_bind", "xp_disable", "xp_feedback", "xp_value", "xp_ingest"}
+)
+
+
+def _external_products(done, op, arg, facts_, *, tenant_id, body, now_ms, vault=None):
+    """External product connectors (external_products.py); facts carry secret refs only."""
+    from datetime import UTC, datetime
+
+    from application.business_flows import external_products as xp
+    from runtime.integration.external_product_secrets import resolve_secret_ref
+
+    st = xp.replay(facts_)
+    parts = arg.split()
+
+    def secret(cid):
+        c = st.connectors.get(cid)
+        return c and resolve_secret_ref(c.secret_ref, tenant_id=tenant_id, connector_id=cid, vault=vault)
+
+    def need(n, usage):
+        if len(parts) < n:
+            raise ValueError(usage)
+        return parts
+
+    if op == "xp_list":
+        rows = [f"• {c.connector_id} · {c.product_key} · {c.status} · {c.display_name}" for c in st.connectors.values()]
+        return done(
+            "🔌 Внешние продукты\n\n" + ("\n".join(rows) or "Коннекторов нет. /xp_add key env:SECRET_NAME Название")
+        )
+    if op == "xp_add":
+        p = need(2, "/xp_add key env:NAME|vault:NAME [название]")
+        ch = xp.provision(st, product_key=p[0], display_name=" ".join(p[2:]) or p[0], secret_ref=p[1])
+        return done(
+            f"🔌 Коннектор {ch['connector_id']} создан (ожидает активации: /xp_activate {ch['connector_id']})", ch
+        )
+    if op == "xp_activate":
+        cid = need(1, "/xp_activate ID")[0]
+        return done("✅ Коннектор активирован", xp.activate(st, cid, secret=secret(cid)))
+    if op == "xp_bind":
+        p = need(3, "/xp_bind ID customer_ref customer_id")
+        return done("🔗 Привязано", xp.bind(st, p[0], customer_ref=p[1], customer_id=p[2]))
+    if op == "xp_disable":
+        return done("⛔ Коннектор отключён", xp.disable(st, need(1, "/xp_disable ID")[0]))
+    if op == "xp_feedback":
+        p = need(2, "/xp_feedback RECEIPT useful|incorrect|wrong_customer")
+        return done("📝 Оценка записана", xp.record_feedback(st, p[0], p[1]))
+    if op == "xp_value":
+        snap = xp.value_snapshot(st, parts[0] if parts else None)
+        return done("📈 Ценность сигналов\n" + "\n".join(f"{k}: {v}" for k, v in snap.items()))
+    raw = str(body.get("raw_body") or "").encode("utf-8")
+    h = {str(k).lower(): str(v) for k, v in dict(body.get("headers") or {}).items()}
+    cid = str(body.get("connector_id") or "")
+    try:
+        fact, rid = xp.ingest_webhook(
+            st,
+            cid,
+            secret=secret(cid),
+            timestamp_header=h.get("x-businesaios-timestamp", ""),
+            signature_header=h.get("x-businesaios-signature", ""),
+            body=raw,
+            now=datetime.fromtimestamp(now_ms / 1000, UTC),
+        )
+    except xp.SignatureError as exc:
+        return done(f"rejected:{exc}")
+    return done(f"accepted:{rid}" if fact else f"duplicate:{rid}", fact)
