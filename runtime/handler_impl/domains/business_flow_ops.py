@@ -365,7 +365,9 @@ def _cockpit(body, effects, env, future, steps, facts, now):
         except ValueError as exc:
             return send_tracked(body, effects, env, text=f"⚠️ Не получилось: {exc}", event_type=None, event_payload=None)
         if change["slot_id"] in bk.replay(facts("bookings@v1")):
-            return send_tracked(body, effects, env, text="Это время уже добавлено.", event_type=None, event_payload=None)
+            return send_tracked(
+                body, effects, env, text="Это время уже добавлено.", event_type=None, event_payload=None
+            )
         text, rows = cp.render(cp.Parsed("bookings", ("0",)), snap, is_owner=True)
         return send_tracked(
             body,
@@ -517,9 +519,14 @@ def _landing(body, effects, env, facts, slots, arg, done):
         drafted = el.parse_ai(str(out.get("text") or ""))
         sent = None
         for sec, text in drafted.items():
-            sent = done(f"🤖 Черновик раздела «{el.SECTION_LABELS[sec]}» сохранён (не опубликован).", el.update_section(title, sec, text))
+            sent = done(
+                f"🤖 Черновик раздела «{el.SECTION_LABELS[sec]}» сохранён (не опубликован).",
+                el.update_section(title, sec, text),
+            )
         return sent
-    return done("✏️ Раздел сохранён (не опубликован).", el.update_section(title, cmd, parts[2] if len(parts) > 2 else ""))
+    return done(
+        "✏️ Раздел сохранён (не опубликован).", el.update_section(title, cmd, parts[2] if len(parts) > 2 else "")
+    )
 
 
 def _visual(body, effects, env, facts, arg, done):
@@ -545,8 +552,13 @@ def _visual(body, effects, env, facts, arg, done):
     if not folder or gen is None:
         return done("🔒 Изображения доступны только через YandexART (нужен YANDEX_ART_FOLDER_ID и ключ).")
     dec = env.decision
-    out = gen(decision_id=str(dec.decision_id), correlation_id=str(dec.correlation_id),
-              admin_id=str(body.get("user_id") or "owner"), brief=brief.to_mapping(), payload_key=brief.payload_key)
+    out = gen(
+        decision_id=str(dec.decision_id),
+        correlation_id=str(dec.correlation_id),
+        admin_id=str(body.get("user_id") or "owner"),
+        brief=brief.to_mapping(),
+        payload_key=brief.payload_key,
+    )
     if not (isinstance(out, dict) and out.get("ok")):
         return done("⚠️ YandexART сейчас недоступен, попробуйте позже.")
     fact = vc.generated_fact(brief, path=str(out.get("path") or ""), size=int(out.get("size") or 0))
@@ -653,16 +665,44 @@ def handle_event_series(payload, effects, env, *, event_store, now_ms: int | Non
                 event_type="event_series@v1",
                 event_payload={"step": "wizard_done", "user_id": user_id},
             )
-            return send_tracked(
+            send_tracked(
                 body,
                 effects,
                 env,
-                text="✅ Слот открыт: "
-                + bk.fmt(bk.Slot(slot["slot_id"], slot["title"], slot["starts_at_ms"], slot["duration_min"]))
-                + f", {slot['duration_min']} мин",
-                event_type="bookings@v1",
-                event_payload=slot,
+                text="📌 Формат: " + wz.MODES[result["mode"]["mode"]],
+                event_type="event_series@v1",
+                event_payload=result["mode"],
             )
+            sent = None
+            for slot in result["slots"]:
+                sent = send_tracked(
+                    body,
+                    effects,
+                    env,
+                    text="✅ Слот открыт: "
+                    + bk.fmt(bk.Slot(slot["slot_id"], slot["title"], slot["starts_at_ms"], slot["duration_min"]))
+                    + f", {slot['duration_min']} мин",
+                    event_type="bookings@v1",
+                    event_payload=slot,
+                )
+            hint = "ссылку на комнату (https://…)" if result["mode"]["mode"] == "on" else "адрес площадки"
+            send_tracked(
+                body,
+                effects,
+                env,
+                text=f"Дальше: /event_place {slot['title']} | {hint}",
+                event_type=None,
+                event_payload=None,
+            )
+            return sent
+        if op == "place":
+            from application.business_flows import event_wizard as wz
+
+            title, _, value = arg.partition("|")
+            known = wz.places(facts("event_series@v1")).get(" ".join(title.split()).casefold()[:120], {})
+            mode = known.get("mode") or ("on" if value.strip().startswith("https://") else "off")
+            ch = wz.place_fact(title, value.strip(), mode=mode)
+            return done(("💻 Комната: " if mode == "on" else "📍 Площадка: ") + ch["place"], ch)
         if op == "dispatch":
             offer = ad.replay(facts("business_admin@v1")).settings.get("offer_url", "")
             due = es.due_messages(st, slots, now_ms=now, offer_url=offer)
@@ -757,10 +797,16 @@ def _sales_ai(body, effects, env, st, arg, *, tenant_id, event_store):
     system, user = sa.prompt(lead, clean)
     dec = env.decision
     out = effects.marketing_llm_complete(
-        decision_id=str(dec.decision_id), correlation_id=str(dec.correlation_id), admin_id=str(body.get("user_id") or "owner"), system=system, user=user
+        decision_id=str(dec.decision_id),
+        correlation_id=str(dec.correlation_id),
+        admin_id=str(body.get("user_id") or "owner"),
+        system=system,
+        user=user,
     )
     if not (isinstance(out, dict) and out.get("ok")):
-        return send_tracked(body, effects, env, text="⚠️ ИИ сейчас недоступен, попробуйте позже.", event_type=None, event_payload=None)
+        return send_tracked(
+            body, effects, env, text="⚠️ ИИ сейчас недоступен, попробуйте позже.", event_type=None, event_payload=None
+        )
     analysis = sa.parse_analysis(str(out.get("text") or ""))
     note, event = sa.suggestion(lead, analysis)
     rows = [[(cs.EVENT_LABELS[event], f"cpm:sales-ev:{lead.lead_id}:{event}")]] if event else []
