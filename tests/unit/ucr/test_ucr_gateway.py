@@ -116,7 +116,9 @@ def test_config_guards() -> None:
     with pytest.raises(g.UcrGatewayConfigurationError):
         g.ucr_gateway_config({"BUSINESAIOS_UCR_GATEWAY_ENABLED": "1"})
     disabled = g.UcrGatewayClient(
-        config=g.ucr_gateway_config({}), credential_provider=g.EnvironmentCredentialProvider({})
+        config=g.ucr_gateway_config({}),
+        credential_provider=g.EnvironmentCredentialProvider({}),
+        transport=SyncRequestUcrGatewayTransport(),
     )
     with pytest.raises(g.UcrGatewayConfigurationError):
         asyncio.run(disabled.health())
