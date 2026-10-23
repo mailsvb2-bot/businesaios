@@ -10,7 +10,6 @@ from __future__ import annotations
 import time
 from dataclasses import replace
 from datetime import UTC, datetime
-from typing import Any
 
 from application.business_flows import external_products as xp
 from application.business_flows.projection import flow_payloads
