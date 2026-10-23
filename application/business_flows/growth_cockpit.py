@@ -43,6 +43,25 @@ def customer_work_actions(s: Any) -> list[Action]:
     return out
 
 
+def customer_action(s: Any, customer_id: str) -> Action | None:
+    """Donor build_cockpit_customer_action_route/_customer_action: the one current action for this
+    customer (their lead's handoff/overdue step, else an unmarked past visit). ``cmd`` is the route."""
+    st = s.sales
+    leads = {x.lead_id: x for x in sl.ordered(st)} if st is not None else {}
+    for a in customer_work_actions(s):
+        lead = leads.get(a.cmd.rsplit(":", 1)[-1])
+        if lead is not None and lead.customer_id == customer_id:
+            return a
+    att = getattr(s.series, "attendance", {}) or {}
+    if any(
+        x.customer_id == customer_id and x.status == "booked" and x.starts_at_ms <= s.now_ms
+        and (x.slot_id, customer_id) not in att
+        for x in s.all_slots
+    ):
+        return Action("Отметить посещение", "Прошедшая запись без отметки.", "cpm:ev-conduct")
+    return None
+
+
 def action_queue(s: Any, *, limit: int = 5) -> tuple[Action, ...]:
     if isinstance(limit, bool) or not isinstance(limit, int) or not 1 <= limit <= 10:
         raise ValueError("owner action queue limit must be an integer between 1 and 10")

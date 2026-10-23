@@ -247,6 +247,25 @@ def switch_screen(parsed: Parsed, s: Snapshot) -> tuple[str, list[list[tuple[str
     return f"↪️ {_PLATFORM_LABEL[dest.platform]}: {url.url if url else dest.public_target}", []
 
 
+_CONTACT_LABEL = {"telegram": "Telegram", "vk": "ВКонтакте", "max": "MAX", "email": "Email", "phone": "Телефон",
+                  "web": "Сайт"}
+
+
+def safe_contact(platform: str, *, username: str = "", subject: str = "", display_name: str = "") -> str | None:
+    """Donor _safe_contact: a masked contact line; internal profiles and raw phone/email never shown."""
+    label = _CONTACT_LABEL.get(str(platform or "").casefold())
+    if label is None:
+        return None
+    if username:
+        return f"{label}: " + ("@" + username.lstrip("@") if platform in ("telegram", "vk") else username)
+    if platform == "phone" and subject:
+        return f"{label}: •••• {subject[-4:]}"
+    if platform == "email":
+        _, at, dom = subject.partition("@")
+        return f"{label}: •••@{dom}" if at and dom else "Email подключён"
+    return f"{label}: {display_name}" if display_name else f"{label} подключён"
+
+
 def customers(slots: list[Any]) -> list[tuple[str, int]]:
     """Distinct participants with booking counts, most active first (no contact data shown)."""
     counts: dict[str, int] = {}
@@ -347,9 +366,14 @@ def _extra_screen(a: str, parsed: Parsed, s: Snapshot) -> tuple[str, list[list[t
             for x in mine
         ]
         flag = {True: "согласен", False: "отписался"}.get(consent, "не давал")
-        return f"👤 Клиент {cid[-6:]}\n\nСогласие на предложения: {flag}\n" + "\n".join(rows), _rows(
-            ("🕓 История", f"cpm:cust-time:{cid[:40]}")
-        )
+        from application.business_flows import growth_cockpit as gc
+
+        act = gc.customer_action(s, cid)
+        contact = safe_contact("telegram" if cid.isdigit() else "internal")
+        head = f"👤 Клиент {cid[-6:]}\n\n" + (f"Контакт: {contact}\n" if contact else "")
+        nxt = f"\n\n▶️ Сейчас: {act.title} — {act.reason}" if act else ""
+        buttons = [("🕓 История", f"cpm:cust-time:{cid[:40]}")] + ([(f"▶️ {act.title}"[:60], act.cmd)] if act else [])
+        return head + f"Согласие на предложения: {flag}\n" + "\n".join(rows) + nxt, _rows(*buttons)
     if a == "cust-time":
         from application.business_flows import customer_timeline as ct
 

@@ -54,3 +54,17 @@ def test_customers_detail_calendar_events(flow) -> None:
     assert "занято" in _screen(flow, "cpm:calendar")[0]
     text, _ = _screen(flow, "cpm:events", now=NOW + 7 * 24 * H)
     assert "Согласны на предложения: 1" in text and "без отметки посещения: 1" in text
+
+
+def test_customer_card_routes_current_action_and_masks_contact(flow) -> None:
+    from application.business_flows import cockpit as cpk
+
+    _seed(flow)
+    text, cbs = _screen(flow, "cpm:customer:cust-000042", now=NOW + 7 * 24 * H)
+    assert "Сейчас: Отметить посещение" in text and "cpm:ev-conduct" in cbs
+    text, cbs = _screen(flow, "cpm:customer:cust-000042")
+    assert "Сейчас:" not in text and "cpm:ev-conduct" not in cbs
+    assert cpk.safe_contact("phone", subject="+79991234567") == "Телефон: •••• 4567"
+    assert cpk.safe_contact("email", subject="a@b.ru") == "Email: •••@b.ru"
+    assert cpk.safe_contact("telegram", username="anna") == "Telegram: @anna"
+    assert cpk.safe_contact("internal") is None
