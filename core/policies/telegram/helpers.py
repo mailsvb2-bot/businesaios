@@ -30,9 +30,9 @@ def propose(
 ) -> ProposedAction:
     return ProposedAction(
         action=str(action),
-        # Unset optionals (e.g. no callback_query_id on a typed command) are omitted:
-        # action schemas are strict and reject None for typed fields.
-        payload={k: v for k, v in dict(payload or {}).items() if v is not None},
+        # An unset callback_query_id (typed command, not a button press) is omitted:
+        # strict action schemas reject None for it. Other explicit None values stay.
+        payload={k: v for k, v in dict(payload or {}).items() if not (k == "callback_query_id" and v is None)},
         ranking={str(k): float(v) for k, v in dict(ranking or {}).items()},
     )
 
