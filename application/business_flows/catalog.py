@@ -69,6 +69,10 @@ def replay(payloads: list[dict[str, Any]]) -> Catalog:
             )
         elif s == "offering_archived" and p["offering_id"] in c.offerings:
             c.offerings[p["offering_id"]].archived = True
+        elif s == "offering_restored" and p["offering_id"] in c.offerings:
+            c.offerings[p["offering_id"]].archived = False
+        elif s == "offering_renamed" and p["offering_id"] in c.offerings:
+            c.offerings[p["offering_id"]].title = p["title"]
         elif s == "profile_saved":
             c.activity, c.timezone = p["activity"], p["timezone"]
         elif s == "format_toggled":
@@ -165,6 +169,33 @@ def retire_offering(c: Catalog, ref: str) -> dict[str, Any]:
     if not (str(ref).strip().isdigit() and 0 < int(ref) <= len(items)):
         raise ValueError("предложение не найдено, см. /offerings")
     return {"step": "offering_archived", "offering_id": items[int(ref) - 1].offering_id}
+
+
+def archived_offerings(c: Catalog) -> list[Offering]:
+    return [o for o in c.offerings.values() if o.archived]
+
+
+def rename_offering(c: Catalog, arg: str) -> dict[str, Any] | None:
+    """``N | Новое название`` (donor ``rename_business_offering``); no-op rename emits nothing."""
+    parts = _split(arg, 2, "/offering_rename N | Новое название")
+    items = active_offerings(c)
+    if not (parts[0].isdigit() and 0 < int(parts[0]) <= len(items)):
+        raise ValueError("предложение не найдено, см. /offerings")
+    o, title = items[int(parts[0]) - 1], _title(parts[1])
+    if title == o.title:
+        return None
+    return {"step": "offering_renamed", "offering_id": o.offering_id, "title": title, "detail": f"{o.title} -> {title}"}
+
+
+def restore_offering(c: Catalog, ref: str) -> dict[str, Any]:
+    """Restore N-th archived offering (donor ``restore_business_offering``); its format must be on."""
+    items = archived_offerings(c)
+    if not (str(ref).strip().isdigit() and 0 < int(ref) <= len(items)):
+        raise ValueError("архивное предложение не найдено")
+    o = items[int(ref) - 1]
+    if o.fmt not in c.formats:
+        raise ValueError(f"формат «{FORMATS[o.fmt]}» выключен: /format_on {o.fmt}")
+    return {"step": "offering_restored", "offering_id": o.offering_id}
 
 
 def toggle_format(c: Catalog, key: str, *, enabled: bool) -> dict[str, Any] | None:

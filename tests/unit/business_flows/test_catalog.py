@@ -65,3 +65,22 @@ def test_payment_linked_to_customer() -> None:
     assert admin.replay([change]).payments[change["payment_id"]].customer_id == "cust42"
     plain, _ = admin.record_payment(admin.replay([]), "Разбор | 1500 RUB | P-2")
     assert "customer_id" not in plain
+
+
+def test_rename_and_restore_offering():
+    from application.business_flows import catalog as cg
+
+    fmt = next(iter(cg.DEFAULT_ON))
+    f = [cg.create_offering(cg.Catalog(), f"{fmt} | йога | утро")]
+    c = cg.replay(f)
+    r = cg.rename_offering(c, "1 | пилатес")
+    assert (
+        r["step"] == "offering_renamed"
+        and cg.rename_offering(c, f"1 | {c.offerings[f[0]['offering_id']].title}") is None
+    )
+    f += [r, cg.retire_offering(cg.replay([*f, r]), "1")]
+    c = cg.replay(f)
+    assert not cg.active_offerings(c)
+    f.append(cg.restore_offering(c, "1"))
+    c = cg.replay(f)
+    assert cg.active_offerings(c)[0].title == r["title"]
