@@ -52,7 +52,8 @@ def test_runs_plan_and_never_logs_url():
     out = fx.run_conference_join_plan(decision_id="d", correlation_id="c", tenant_id="t", user_id="u", plan=_plan(), integration_id="i")
     assert out["join_url"].startswith("https://") and out["conference_ref"] == "c-1"
     assert [c[0] for c in gw.calls] == ["CreateConference", "EnsureParticipant", "IssueJoinGrant"]
-    b = lambda v: base64.b64encode(v.encode()).decode()
+    def b(v):
+        return base64.b64encode(v.encode()).decode()
     assert gw.calls[0][1] == {"scope": {"tenantId": {"value": b("t")}}, "integrationId": {"value": b("i")}, "idempotencyKey": "k1",
                               "externalConferenceId": b("x"), "mode": "UNIVERSAL_CONFERENCE_MODE_WEBINAR"}
     assert gw.calls[1][1]["conferenceId"] == {"value": b("c-1")} and gw.calls[1][1]["role"] == "CONFERENCE_PARTICIPANT_ROLE_ATTENDEE"

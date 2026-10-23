@@ -85,12 +85,38 @@ def _ads(body, done, st, op, arg, facts_, sl_replay=None):
             return done("📈 Статистика записана. /ad_report", aa.record(drafts, arg))
         leads = list(sl_replay().leads.values())
         return done(aa.report(drafts, aa.replay(facts_), leads))
+    if op == "ad_creatives":  # advisory only: never changes provider budget/allocation
+        return done(_creatives_text(arg))
     if op == "ad_publish":
         truth = CONNECTORS["yandex_direct"]
         ready = bool(truth["production_ready"]) and bool(truth["requires_human_approval"])
         text, ch = ap.publish_decision(ap.by_ref(drafts, arg), st.approvals, production_ready=ready)
         return done(text, ch)
     return done(ap.list_text(drafts, st.approvals))
+
+
+def _creatives_text(arg):
+    """/ad_creatives [bookings|won] ; variant:job:bps:leads:bookings:won ; ... -> one bounded advisory step."""
+    from application.business_flows import yandex_growth as yg
+
+    parts = [p.strip() for p in arg.split(";") if p.strip()]
+    metric = parts.pop(0) if parts and parts[0] in yg.CREATIVE_METRICS else "bookings"
+    keys = ("variant_id", "publication_job_id", "allocation_bps", "leads", "bookings", "won")
+    arms = []
+    for p in parts:
+        v = [x.strip() for x in p.split(":")]
+        if len(v) != 6:
+            raise ValueError("формат: вариант:job:bps:лиды:записи:продажи")
+        arms.append({k: (x if i < 2 else int(x)) for i, (k, x) in enumerate(zip(keys, v, strict=True))})
+    r = yg.creative_allocation(arms, running=True, metric=metric)
+    rows = [f"🎯 Креативы ({metric}): {r['status']}"]
+    if r.get("winner_variant_id"):
+        rows.append(f"Лидер: {r['winner_variant_id']}")
+    if r.get("evidence"):
+        rows.append("Предложение (рекомендация, бюджет не меняется): " + ", ".join(
+            f"{e['variant_id']} {e['current_allocation_bps'] / 100:.0f}%→{e['proposed_allocation_bps'] / 100:.0f}%"
+            for e in r["evidence"]))
+    return "\n".join(rows)
 
 
 def _retention(done, st, op, arg, now, *, tenant_id, event_store):

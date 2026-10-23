@@ -29,6 +29,7 @@ from .effects_actions.weather_actions import WeatherEffectsMixin
 from .effects_core import initialize_effects_runtime_state, throttled_emit_error
 from .effects_domains.admin_state import AdminStateEffectsMixin
 from .effects_domains.conference import ConferenceEffectsMixin
+from .effects_domains.crm_projection import CrmProjectionEffectsMixin
 from .effects_domains.evolution import EvolutionEffectsMixin
 from .effects_domains.marketing import MarketingEffectsMixin
 from .effects_domains.tracking import TrackingEffectsMixin
@@ -342,6 +343,7 @@ class Effects(
     AdminStateEffectsMixin,
     MarketingEffectsMixin,
     ConferenceEffectsMixin,
+    CrmProjectionEffectsMixin,
     EvolutionEffectsMixin,
     TelegramEffectsMixin,
     WeatherEffectsMixin,

@@ -79,6 +79,9 @@ class GuardedEffectsPort(EffectsPort):
     def poll_visual_creative(self, **kwargs):  # type: ignore[override]
         return self._forward("poll_visual_creative", **kwargs)
 
+    def ensure_customer_identity(self, **kwargs):  # type: ignore[override]
+        return self._forward("ensure_customer_identity", **kwargs)
+
     def run_conference_join_plan(self, **kwargs):  # type: ignore[override]
         return self._forward("run_conference_join_plan", **kwargs)
 

@@ -26,7 +26,6 @@ from runtime.handler_impl.domains.business_catalog_ops import (
     _ads,
     _catalog,
     _event_channels,
-    channel_reminder_copies,
     _events,
     _external_products,
     _followups,
@@ -36,7 +35,9 @@ from runtime.handler_impl.domains.business_catalog_ops import (
     _retention,
     _sales_inbound,
     _slot_with_offering,
+    channel_reminder_copies,
 )
+from runtime.handler_impl.domains.public_event_ops import PUB_OPS, _landing, public_event_op
 from runtime.handlers.delivery_contract import delivery_kwargs
 
 
@@ -694,58 +695,6 @@ def _markup(rows):
     return cp.markup(rows)
 
 
-def _landing(body, effects, env, facts, slots, arg, done):
-    """/landing Название [| раздел | текст | theme x | publish | reset | ai] over event_series@v1 facts."""
-    from application.business_flows import admin as ad
-    from application.business_flows import bookings as bk
-    from application.business_flows import event_landing as el
-    from application.business_flows import sales_ai as sa
-    from runtime.platform.config.env_flags import env_str
-
-    parts = [x.strip() for x in arg.split("|")]
-    title, cmd = parts[0], (parts[1].casefold() if len(parts) > 1 else "")
-    ld = el.replay(facts("event_series@v1")).get(el.key_for(title))
-    prices = ad.replay(facts("business_admin@v1")).prices
-    price = ad.money(*prices[title]) if title in prices else ""
-    ordered = sorted(slots.values(), key=lambda x: x.starts_at_ms)
-    kw = {"price": price, "fmt_slot": bk.fmt}
-    if not cmd:
-        return done(el.preview(title, ld, ordered, **kw) + "\n\nПравить: /landing Название | about | текст")
-    if cmd == "publish":
-        ch = el.publish(title, ld)
-        return done("🌐 Лендинг опубликован." if ch else "Эта версия уже опубликована.", ch)
-    if cmd == "reset":
-        return done("↩️ Лендинг снова по шаблону (публикация не изменена).", el.reset(title))
-    if cmd == "theme":
-        return done("🎨 Тема сохранена.", el.set_theme(title, parts[2] if len(parts) > 2 else ""))
-    if cmd == "ai":
-        provider = env_str("MARKETING_LLM_PROVIDER", env_str("LLM_PROVIDER", "")).strip().casefold()
-        if provider not in sa.RUSSIAN_PROVIDERS:
-            return done("🔒 ИИ-тексты доступны только с YandexGPT или GigaChat (LLM_PROVIDER).")
-        system, user = el.ai_prompt(title, el.effective(title, ld, ordered, **kw))
-        dec = env.decision
-        out = effects.marketing_llm_complete(
-            decision_id=str(dec.decision_id),
-            correlation_id=str(dec.correlation_id),
-            admin_id=str(body.get("user_id") or "owner"),
-            system=system,
-            user=user,
-        )
-        if not (isinstance(out, dict) and out.get("ok")):
-            return done("⚠️ ИИ сейчас недоступен, попробуйте позже.")
-        drafted = el.parse_ai(str(out.get("text") or ""))
-        sent = None
-        for sec, text in drafted.items():
-            sent = done(
-                f"🤖 Черновик раздела «{el.SECTION_LABELS[sec]}» сохранён (не опубликован).",
-                el.update_section(title, sec, text),
-            )
-        return sent
-    return done(
-        "✏️ Раздел сохранён (не опубликован).", el.update_section(title, cmd, parts[2] if len(parts) > 2 else "")
-    )
-
-
 def _visual(body, effects, env, facts, arg, done):
     """/visual Название [| стиль [| формат]] or /visual Название | style x: YandexART via executor."""
     from application.business_flows import event_landing as el
@@ -804,6 +753,8 @@ def handle_event_series(payload, effects, env, *, event_store, now_ms: int | Non
         )
 
     try:
+        if op in PUB_OPS:
+            return public_event_op(op, arg, body=body, effects=effects, env=env, facts=facts, done=done, now_ms=now)
         if op == "landing":
             return _landing(body, effects, env, facts, slots, arg, done)
         if op == "visual":
