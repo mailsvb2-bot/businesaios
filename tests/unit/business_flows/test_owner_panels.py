@@ -61,3 +61,24 @@ def test_owner_panels_via_handler(flow) -> None:
     assert "Деньги и путь клиента" in _run(flow, op="home_owner")[1]
     assert "Деньги и путь" not in _run(flow, op="home")[1]
     assert len(flow.store.events) == n  # read-only panels write no facts
+
+
+class _C:
+    def __init__(self, out):
+        self.out = out
+
+    def chat(self, messages, *, temperature, max_tokens):
+        if isinstance(self.out, Exception):
+            raise self.out
+        return self.out
+
+
+def test_draft_announcement_ai_and_fallbacks():
+    from application.business_flows import owner_panels as op
+
+    sch = ("01.11.2026 19:00",)
+    assert op.draft_announcement(title="Т", description="", schedule=sch)[1] == "template"
+    ok = '{"text": "Вебинар «Т» 01.11.2026 19:00 — ждём вас"}'
+    assert op.draft_announcement(title="Т", description="", schedule=sch, client=_C(ok)) == ("Вебинар «Т» 01.11.2026 19:00 — ждём вас", "ai")
+    for bad in ('{"text": "без даты"}', '{"text": "01.11.2026 19:00 www.x.ru"}', "not json", RuntimeError("x")):
+        assert op.draft_announcement(title="Т", description="", schedule=sch, client=_C(bad))[1] == "template"
