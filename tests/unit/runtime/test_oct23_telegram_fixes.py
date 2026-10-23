@@ -96,3 +96,15 @@ def test_poison_update_is_dropped_after_bounded_attempts(monkeypatch):
         lp._run_longpoll(token="t", core=None, executor=None, event_log=None)
     assert executed.count(1) == 3
     assert 2 in executed
+
+
+def test_proposed_action_keeps_explicit_none_but_omits_empty_callback_id():
+    from core.policies.telegram.helpers import propose
+
+    action = propose(
+        "telegram.send_message@v1",
+        {"chat_id": "1", "callback_query_id": None, "optional_constraint": None},
+    )
+    assert "callback_query_id" not in action.payload
+    assert "optional_constraint" in action.payload
+    assert action.payload["optional_constraint"] is None
