@@ -34,8 +34,11 @@ from runtime.handler_impl.domains.business_catalog_ops import (
     _partner_growth,
     _promotions,
     _retention,
+    _revenue_text,
+    _sales_ai,
     _sales_inbound,
     _slot_with_offering,
+    _visual,
     channel_reminder_copies,
 )
 from runtime.handler_impl.domains.public_event_ops import PUB_OPS, _landing, public_event_op
@@ -75,6 +78,11 @@ def send_tracked(
         **delivery_kwargs(body),
     )
     return _card_outcome(delivery=delivery, ok=ok, reason=reason)
+
+
+def _sales_send(body, effects, env, text, change=None, markup=None):
+    kind = "sales_pipeline@v1" if change else None
+    return send_tracked(body, effects, env, text=text, event_type=kind, event_payload=change, reply_markup=markup)
 
 
 def _now_ms() -> int:
@@ -448,35 +456,6 @@ def _cockpit(body, effects, env, future, steps, facts, now, team=None, timed=Non
     )
 
 
-def _revenue_text(op, arg, now, event_store, tenant_id):
-    """Owner read-only attribution/outcome screens (promotions attribution spine; no spend input)."""
-    from application.business_flows import promotions as pm
-
-    adm = flow_rows(event_store, tenant_id=tenant_id, event_type="business_admin@v1")
-    bkg = flow_rows(event_store, tenant_id=tenant_id, event_type="bookings@v1")
-    win = {"occurred_from": now - 30 * 86_400_000, "occurred_to": now + 1}
-    if op == "outcomes":
-        rows = pm.outcomes(adm, bkg, outcome_type=arg if arg in ("payment", "refund", "booking") else "", limit=15)
-        lines = [f"• {r['type']} {pm.money_minor(r['amount_minor'], r['currency']) if r['currency'] else ''}"
-                 f" клиент {r['customer_id'] or '—'}" for r in rows]
-        return "📒 Итоги (последние)\n\n" + ("\n".join(lines) or "Пока нет.")
-    if op == "trace":
-        if not arg:
-            return "Формат: /attribution id_клиента"
-        t = pm.customer_trace(bkg, arg)
-        return (f"🧭 Первый контакт клиента {arg}: кампания {t['campaign_id']} [{t['channel']}] ({t['kind']})"
-                if t else f"🧭 У клиента {arg} нет атрибутированного контакта.")
-    if op == "economics":
-        e = pm.unit_economics(adm, bkg, **win)
-        ch = "\n".join(f"  {k}: {pm.money_minor(v, e['currency'])}" for k, v in e["revenue_by_channel_minor"].items())
-        return (f"📈 Экономика за 30 дней\nЧистая выручка: {pm.money_minor(e['net_minor'], e['currency'])}\n"
-                f"Платящих клиентов: {e['paying_customers']}\nПо каналам:\n{ch or '  —'}\n"
-                "ROAS/CAC не считаются: расход не подтверждён рекламным кабинетом.")
-    j = pm.revenue_journey(adm, bkg, **win)
-    return (f"🛤 Путь клиента за 30 дней\nКонтакт: {j['touched']} → запись: {j['booked']} → оплата: {j['paid']}\n"
-            f"Из контакта в оплату: {j['touched_then_paid']}")
-
-
 def handle_business_ops_summary(payload, effects, env, *, event_store, now_ms: int | None = None):
     """Owner operations summary over the business-flow projections (read-only)."""
     from application.business_flows import bookings as bk
@@ -716,43 +695,6 @@ def _markup(rows):
     from application.business_flows import cockpit as cp
 
     return cp.markup(rows)
-
-
-def _visual(body, effects, env, facts, arg, done):
-    """/visual Название [| стиль [| формат]] or /visual Название | style x: YandexART via executor."""
-    from application.business_flows import event_landing as el
-    from application.business_flows import visual_creatives as vc
-    from runtime.platform.config.env_flags import env_str
-
-    title, cmd, val = vc.parse_command(arg)
-    st = vc.replay(facts("event_series@v1"))
-    key = vc.key_for(title)
-    if cmd == "style":
-        return done(f"🎨 Стиль «{vc.STYLE_LABELS.get(val, val)}» запомнен.", vc.save_style(title, val))
-    style = cmd if cmd in vc.STYLES else st.styles.get(key, "photo")
-    fmt = cmd if cmd in vc.FORMATS else (val or "post")
-    ld = el.replay(facts("event_series@v1")).get(el.key_for(title))
-    brief = vc.build_brief(title, context=(ld.sections.get("about", "") if ld else ""), style=style, fmt=fmt)
-    if brief.payload_key in st.generated:
-        g = st.generated[brief.payload_key]
-        return done(f"🖼 Такое изображение уже создано: {g['path']} ({g['size']} байт). Повтор не тратит бюджет.")
-    folder = env_str("YANDEX_ART_FOLDER_ID", env_str("YANDEXGPT_FOLDER_ID", env_str("YANDEX_FOLDER_ID", ""))).strip()
-    gen = getattr(effects, "marketing_image_generate", None)
-    if not folder or gen is None:
-        return done("🔒 Изображения доступны только через YandexART (нужен YANDEX_ART_FOLDER_ID и ключ).")
-    dec = env.decision
-    out = gen(
-        decision_id=str(dec.decision_id),
-        correlation_id=str(dec.correlation_id),
-        admin_id=str(body.get("user_id") or "owner"),
-        brief=brief.to_mapping(),
-        payload_key=brief.payload_key,
-    )
-    if not (isinstance(out, dict) and out.get("ok")):
-        return done("⚠️ YandexART сейчас недоступен, попробуйте позже.")
-    fact = vc.generated_fact(brief, path=str(out.get("path") or ""), size=int(out.get("size") or 0))
-    label = f"{vc.STYLE_LABELS[brief.style]}, {brief.width_ratio}:{brief.height_ratio}"
-    return done(f"🖼 Изображение готово ({label}): {fact['path']}", fact)
 
 
 def handle_event_series(payload, effects, env, *, event_store, now_ms: int | None = None):
@@ -999,7 +941,8 @@ def handle_sales_pipeline(payload, effects, env, *, event_store, now_ms: int | N
             ch = sl.add_note(st, arg)
             return done("📝 Заметка сохранена", ch)
         if op == "ai":
-            return _sales_ai(body, effects, env, st, arg, tenant_id=tenant_id, event_store=event_store)
+            send = partial(_sales_send, body, effects, env)
+            return _sales_ai(send, body, effects, st, arg, decision=env.decision, tenant_id=tenant_id, event_store=event_store)
         if op == "card":
             lead = sl.pick(st, arg)
             notes = "\n".join(f"• {n}" for n in lead.notes) or "Заметок нет."
@@ -1015,59 +958,6 @@ def handle_sales_pipeline(payload, effects, env, *, event_store, now_ms: int | N
     except ValueError as exc:
         return done(f"⚠️ Не получилось: {exc}")
     return done(sl.render(st, now_ms=now))
-
-
-def _sales_ai(body, effects, env, st, arg, *, tenant_id, event_store):
-    """/lead_ai N | текст клиента -> draft reply note + optional stage button (never sent to the customer)."""
-    from application.business_flows import admin as ad
-    from application.business_flows import cockpit as cp
-    from application.business_flows import cockpit_sales as cs
-    from application.business_flows import sales as sl
-    from application.business_flows import sales_ai as sa
-    from runtime.platform.config.env_flags import env_str
-
-    ref, _, text = (x.strip() for x in arg.partition("|"))
-    lead = sl.pick(st, ref)
-    settings = ad.replay(flow_payloads(event_store, tenant_id=tenant_id, event_type="business_admin@v1")).settings
-    provider = env_str("MARKETING_LLM_PROVIDER", env_str("LLM_PROVIDER", "")).strip().casefold()
-    try:
-        mode = sa.egress_permit(settings, provider)
-    except PermissionError as exc:
-        return send_tracked(body, effects, env, text=f"🔒 {exc}", event_type=None, event_payload=None)
-    clean, redacted = sa.prepare_text(text, mode=mode)
-    system, user = sa.prompt(lead, clean)
-    dec = env.decision
-    out = effects.marketing_llm_complete(
-        decision_id=str(dec.decision_id),
-        correlation_id=str(dec.correlation_id),
-        admin_id=str(body.get("user_id") or "owner"),
-        system=system,
-        user=user,
-    )
-    if not (isinstance(out, dict) and out.get("ok")):
-        return send_tracked(
-            body, effects, env, text="⚠️ ИИ сейчас недоступен, попробуйте позже.", event_type=None, event_payload=None
-        )
-    analysis = sa.parse_analysis(str(out.get("text") or ""))
-    note, event = sa.suggestion(lead, analysis)
-    rows = [[(cs.EVENT_LABELS[event], f"cpm:sales-ev:{lead.lead_id}:{event}")]] if event else []
-    rows.append([("💬 Карточка лида", f"cpm:sales-lead:{lead.lead_id}")])
-    from application.business_flows import ladder as ld
-
-    steps, _ = ld.replay(flow_payloads(event_store, tenant_id=tenant_id, event_type="offer_ladder@v1"))
-    offer = sa.verified_offer(steps, analysis)
-    flag = (f"\n\n🪜 Подходящий шаг лестницы: {offer['title']}" if offer else "") + (
-        "\n(контакты скрыты перед отправкой в ИИ)" if redacted else ""
-    )
-    return send_tracked(
-        body,
-        effects,
-        env,
-        text=f"🤖 {lead.name}: черновик ответа (не отправлен клиенту)\n\n{analysis['reply']}{flag}",
-        event_type="sales_pipeline@v1",
-        event_payload=note,
-        reply_markup=cp.markup(rows),
-    )
 
 
 __all__ = [

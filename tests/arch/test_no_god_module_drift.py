@@ -31,3 +31,19 @@ def test_no_god_module_drift_for_new_single_path_files() -> None:
             if method_count > MAX_CLASS_METHODS_FOR_INFRA_PRIMITIVE:
                 violations.append(f"{path_str}:{class_name}: too many public methods ({method_count})")
     assert not violations, "god-module drift detected:\n" + "\n".join(violations)
+
+
+# The single-path list above never covered the business-flow handler layer, which is how
+# business_flow_ops.py drifted to 1082 lines unnoticed. Hard cap for every module there.
+MAX_BUSINESS_FLOW_MODULE_LINES = 1000
+BUSINESS_FLOW_DIRS = ("runtime/handler_impl/domains", "application/business_flows", "core/policies/telegram/routes")
+
+
+def test_business_flow_modules_stay_under_hard_line_cap() -> None:
+    oversized = [
+        f"{p}: {line_count(read_text(p))} lines"
+        for d in BUSINESS_FLOW_DIRS
+        for p in sorted(Path(d).rglob("*.py"))
+        if line_count(read_text(p)) >= MAX_BUSINESS_FLOW_MODULE_LINES
+    ]
+    assert not oversized, "business-flow god module(s):\n" + "\n".join(oversized)
