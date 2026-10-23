@@ -1,8 +1,8 @@
 """Wave 6: wire Yandex Direct into AdsConnectorRegistry (port of ClientPlatform ad_connections).
 
 Reuses existing owners only: oauth_state/authorize_builder/YandexOAuthExchanger for the
-connection, the async TokenStore port for tokens, GovernedYandexDirectConnector for
-governed publication (create + independent readback). Opt-in: BUSINESAIOS_AD_CONNECTIONS=1.
+connection and the async TokenStore port for tokens. Governed publication stays with
+bootstrap.ads_write_gateway + GovernedYandexDirectConnector. Opt-in: BUSINESAIOS_AD_CONNECTIONS=1.
 Client secret comes from a SecretVault reference, never from config text.
 """
 
@@ -17,8 +17,7 @@ from interfaces.ads.base import AdsPlatform
 from interfaces.ads.oauth.authorize_builder import OAuthAuthorizeParams, build_authorize_url
 from interfaces.ads.oauth_exchange import OAuthClientConfig, YandexOAuthExchanger
 from interfaces.ads.oauth_state import build_state, parse_state
-from interfaces.ads.registry import AdsConnectorRegistry
-from interfaces.ads.yandex_direct_governed_execution import DirectPublicationBinding, GovernedYandexDirectConnector
+from interfaces.ads.registry import CONNECTORS
 
 CANON_ADS_CONNECTOR_WIRING = True
 YANDEX_AUTHORIZE_URL = "https://oauth.yandex.ru/authorize"
@@ -87,19 +86,23 @@ async def disconnect_ad_connection(*, tenant_id: str, account_id: str, token_sto
     await token_store.delete(tenant_id=tenant_id, platform=AdsPlatform.YANDEX_DIRECT, account_id=account_id)
 
 
-def build_ads_connector_registry(
-    *,
-    binding: DirectPublicationBinding | None,
-    send: Any = None,
-    read: Any = None,
-    env: Mapping[str, str] | None = None,
-) -> AdsConnectorRegistry:
-    """Registry for one governed publication; empty when disabled or unbound (fail-closed)."""
-    registry: AdsConnectorRegistry = AdsConnectorRegistry()
-    if ad_connections_enabled(env) and binding is not None:
-        registry.register(GovernedYandexDirectConnector(binding=binding, send=send, read=read))
-    return registry
+async def list_ad_connections(*, tenant_id: str, account_ids: list[str], token_store: Any) -> list[dict[str, object]]:
+    """Connection status from registry truth + token presence; never returns token material.
 
-
-def list_ad_connections(registry: AdsConnectorRegistry) -> list[dict[str, object]]:
-    return [dict(row) for row in registry.snapshot()]
+    Registry ownership stays in bootstrap/ads_wiring.py; a governed Yandex Direct
+    connector is bound per reviewed publication (DirectPublicationBinding).
+    """
+    truth = CONNECTORS["yandex_direct"]
+    rows: list[dict[str, object]] = []
+    for account_id in account_ids:
+        token = await token_store.get(tenant_id=tenant_id, platform=AdsPlatform.YANDEX_DIRECT, account_id=account_id)
+        rows.append(
+            {
+                "platform": "yandex_direct",
+                "account_id": account_id,
+                "connected": bool(token),
+                "production_ready": bool(truth["production_ready"]),
+                "requires_human_approval": bool(truth["requires_human_approval"]),
+            }
+        )
+    return rows

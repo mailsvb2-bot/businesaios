@@ -4,6 +4,7 @@ import time
 import pytest
 
 from interfaces.ads.registry import CONNECTORS
+from interfaces.ads.yandex_direct_governed_execution import GovernedYandexDirectConnector
 from runtime.ads import connector_wiring as w
 from tests.integration.ads.test_phase18_governed_yandex_execution_journey import bound
 
@@ -65,13 +66,25 @@ def test_oauth_roundtrip_stores_token_and_returns_no_secret():
     assert store.items == {}
 
 
-def test_registry_wiring_fail_closed_and_not_production_ready():
+def test_list_connections_and_registry_registration():
+    from interfaces.ads.registry import AdsConnectorRegistry
+
+    store = Store()
+    store.items[("t1", "yandex_direct", "a1")] = {"access_token": "AT"}
+
+    async def get(*, tenant_id, platform, account_id):
+        return store.items.get((tenant_id, platform.value, account_id))
+
+    store.get = get
+    rows = asyncio.run(w.list_ad_connections(tenant_id="t1", account_ids=["a1", "a2"], token_store=store))
+    assert [r["connected"] for r in rows] == [True, False]
+    assert "AT" not in repr(rows) and rows[0]["production_ready"] is False
+
     async def t(**_):
         return {}
 
-    assert w.list_ad_connections(w.build_ads_connector_registry(binding=bound(), send=t, read=t, env={})) == []
-    reg = w.build_ads_connector_registry(binding=bound(), send=t, read=t, env=ENV)
-    rows = w.list_ad_connections(reg)
-    assert rows[0]["platform"] == "yandex_direct" and reg.has("yandex_direct")
+    reg = AdsConnectorRegistry()
+    reg.register(GovernedYandexDirectConnector(binding=bound(), send=t, read=t))
+    assert reg.has("yandex_direct")
     # Real writes stay blocked by the canonical gateway until production readiness is proven.
     assert CONNECTORS["yandex_direct"]["production_ready"] is False
