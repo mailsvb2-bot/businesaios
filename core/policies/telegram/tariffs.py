@@ -3,7 +3,10 @@ from __future__ import annotations
 from typing import Any
 
 from core.policies.telegram.helpers import ProposedAction, choose_marketing_variant, propose, propose_message
-from core.policies.telegram.tariffs_text import build_plan_confirmation_text, scope_hint
+from core.policies.telegram.tariffs_text import build_plan_confirmation_text
+
+# Public compatibility export used by other Telegram policy modules.
+from core.policies.telegram.tariffs_text import scope_hint as scope_hint
 from core.ux.telegram_keyboards import kb_back_main, kb_pay_selected, kb_tariffs
 
 
