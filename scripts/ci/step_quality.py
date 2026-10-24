@@ -186,6 +186,8 @@ def _ruff_check() -> tuple[bool, str, dict[str, object]]:
     payload["targeted_strict_debt_clean"] = targeted_clean
     if not targeted_clean:
         payload.update(status="blocked", violations=["targeted_strict_debt_lock_failed"])
+        samples = payload.get("targeted_strict_debt_samples") or []
+        print("[ci] targeted strict ruff findings: " + json.dumps(samples[:20], ensure_ascii=False))
         return False, "targeted strict ruff debt lock failed", payload
     for package, select in _RATCHETED_STRICT_DEBT:
         ratchet = run_command([*_ruff_base_args(targets=(root / package,), config=config), "--select", select], env={"PYTHONNOUSERSITE": "1"}, timeout=180)
