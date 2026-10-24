@@ -17,7 +17,7 @@ _LEGACY_COMMANDS = {"/time_work", "/time_home"}
 
 def handle_settings_routes(ctx: TelegramCtx, *, user_id: str, bot_username: str, pm) -> ProposedAction | None:
     if ctx.callback_data == CB_SETTINGS_MENU:
-        return pm(text="⚙️ Настройки BusinessAIOS\\n\\nВыберите раздел:", reply_markup=kb_settings_menu())
+        return pm(text="⚙️ Настройки ClientPlatform\\n\\nВыберите раздел:", reply_markup=kb_settings_menu())
     if ctx.callback_data in _BUSINESS_SETTINGS:
         return pm(text=_BUSINESS_SETTINGS[ctx.callback_data], reply_markup=kb_settings_menu())
     if (ctx.callback_data in {CB_SETTINGS_STATE, "settings:state"}
