@@ -56,7 +56,7 @@ def handle_marketing_routes(
         try:
             from core.plans import plan_by_id
 
-            plan = plan_by_id(int(plan_id))
+            plan = plan_by_id(int(plan_id), tenant_id=str(ctx.state.tenant_id), product_id=str(getattr(ctx.state, 'product_id', '') or (getattr(ctx.state, 'product_metadata', {}) or {}).get('product_id') or ''))
         except Exception:
             plan = None
         if not plan:
@@ -70,6 +70,8 @@ def handle_marketing_routes(
             "select_tariff@v1",
             {
                 "user_id": user_id,
+                "tenant_id": str(ctx.state.tenant_id),
+                "product_id": str(plan.get("product_id") or ""),
                 "tariff": str(plan.get("plan_code") or plan.get("code") or ""),
                 "days": int(plan.get("days") or 0),
                 "period": str(plan.get("scope") or ""),
@@ -98,6 +100,8 @@ def handle_marketing_routes(
             user_id=user_id,
             full_access=ctx.full_access,
             selected=ctx.selected_tariff,
+            tenant_id=str(ctx.state.tenant_id),
+            product_id=str(getattr(ctx.state, "product_id", "") or (getattr(ctx.state, "product_metadata", {}) or {}).get("product_id") or ""),
             default_price_rub=int(default_price_rub),
             legacy_prices=legacy_prices,
         )
