@@ -44,6 +44,16 @@ class _ExecutorCrm:
             raise CustomerIdentityConflict(str(r.get("reason")))
 
 
+def _subject(platform: str, user_id: str) -> str:
+    return f"{platform}:{user_id}"
+
+
+def _registered_by(payloads: list[dict[str, Any]], registration_id: str) -> str:
+    """Messenger subject that sent /event_register for this registration ('' for web/legacy registrations)."""
+    return next((str(p.get("registered_by") or "") for p in payloads
+                 if p.get("step") == "pub_registration" and p.get("registration_id") == registration_id), "")
+
+
 def _parts(arg: str, n: int) -> list[str]:
     p = [x.strip() for x in arg.split("|")]
     if len(p) < n or not all(p[:n]):
@@ -75,6 +85,7 @@ def public_event_op(op: str, arg: str, *, body: dict[str, Any], effects: Any, en
         fact, _token = pe.register(b, slug=slug, name=name, email=email, consent=True, now=now)
         if fact is None:
             return done("ℹ️ Вы уже зарегистрированы.")
+        fact = {**fact, "registered_by": _subject(platform, user_id)}  # owner of /event_links for this registration
         done("✅ Регистрация сохранена.", fact)
         b = pe.replay([*payloads, fact])
         created = next((p for p in payloads if p.get("step") == "pub_event_created"
@@ -94,11 +105,13 @@ def public_event_op(op: str, arg: str, *, body: dict[str, Any], effects: Any, en
         return done("👤 Клиент привязан к регистрации. Напоминания в мессенджер: /event_links " + slug, cf[0])
     if op == "pub_links":  # slug
         ev = pe.by_slug(b, arg.strip())
+        mine = _subject(platform, user_id)  # only the registrant's own registration, never another user's
         regs = [r for r in b.registrations.values() if r.event_id == ev.event_id and r.status == "registered"
-                and r.customer_id and any(p.get("step") == "pub_registration_customer"
-                                          and p.get("registration_id") == r.registration_id for p in payloads)]
+                and r.customer_id and _registered_by(payloads, r.registration_id) == mine
+                and any(p.get("step") == "pub_registration_customer"
+                        and p.get("registration_id") == r.registration_id for p in payloads)]
         if not regs:
-            raise ValueError("нет привязанной регистрации")
+            raise ValueError("нет вашей привязанной регистрации на это событие: сначала /event_register " + arg.strip())
         tokens, ch = ec.issue_for_registration(b, regs[-1].registration_id, now_ms=now_ms)
         if ch is None:
             raise ValueError("ссылки недоступны")
