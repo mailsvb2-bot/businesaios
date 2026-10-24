@@ -710,3 +710,34 @@ class TelegramClient:
                 "payload_digest": payload_digest,
                 "delivery_finalized": False,
             }
+
+    def send_photo(self, *, chat_id: str, photo_url: str, caption: str | None = None, timeout_s: int = 60) -> tuple[bool, dict[str, Any]]:
+        """Direct sendPhoto (URL, file_id or local file). Dedup by receipt; never raises."""
+        token = _token()
+        payload: dict[str, Any] = {"chat_id": str(chat_id), "photo": str(photo_url)}
+        if isinstance(caption, str) and caption.strip():
+            payload.update(caption=caption.strip(), parse_mode="HTML")
+        digest = _payload_digest(payload)
+        key = _delivery_key(method="sendPhoto", chat_id=str(chat_id), payload=payload)
+        existing = existing_receipt(self.delivery_state, delivery_key=key)
+        if existing is not None:
+            phase = receipt_phase(existing)
+            return True, {"mode": "dedup", "delivery_key": key, "payload_digest": digest, "external_id": existing.get("external_id"), "receipt": existing, "delivery_phase": phase, "delivery_finalized": phase == FINALIZED_PHASE}
+        if not token:
+            return False, {"error": "TELEGRAM_BOT_TOKEN_MISSING", "delivery_key": key, "payload_digest": digest, "delivery_finalized": False}
+        url = f"{telegram_api_base()}/bot{token}/sendPhoto"
+        try:
+            source = Path(str(photo_url))
+            if source.is_file():
+                fields = {k: str(v) for k, v in payload.items() if k in {"chat_id", "caption", "parse_mode"}}
+                out = http_multipart_file(url, path=str(source), field_name="photo", fields=fields, timeout_s=int(timeout_s or 60), transport=self.transport)
+            else:
+                out = self._http_post(url=url, payload=payload, timeout_s=int(timeout_s or 60))
+            result = dict(out or {}) if isinstance(out, dict) else {}
+            ok = bool(result.get("ok")) if isinstance(out, dict) else True
+            external_id = result.get("result", {}).get("message_id") if isinstance(result.get("result"), Mapping) else None
+            if ok:
+                mark_transport_delivered(self.delivery_state, delivery_key=key, external_id=external_id, payload_digest=digest, metadata={"method": "sendPhoto", "chat_id": str(chat_id), "mode": "direct"})
+            return ok, {"mode": "direct", "delivery_key": key, "payload_digest": digest, "result": result, "external_id": None if external_id is None else str(external_id), "delivery_finalized": ok}
+        except Exception as exc:
+            return False, {"mode": "direct", "error": str(exc)[:200], "delivery_key": key, "payload_digest": digest, "delivery_finalized": False}

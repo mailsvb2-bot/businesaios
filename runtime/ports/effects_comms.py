@@ -42,6 +42,19 @@ class EffectsCommsPort(Protocol):
         channel: str = "telegram",
     ) -> Any: ...
 
+    def send_photo(
+        self,
+        *,
+        decision_id: str,
+        correlation_id: str,
+        tenant_id: str,
+        business_id: str = "",
+        user_id: str,
+        path: str,
+        caption: str | None = None,
+        channel: str = "telegram",
+    ) -> Any: ...
+
     def send_weather(
         self,
         *,

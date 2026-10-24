@@ -37,6 +37,9 @@ class GuardedEffectsPort(EffectsPort):
     def send_audio(self, **kwargs):  # type: ignore[override]
         return self._forward("send_audio", **kwargs)
 
+    def send_photo(self, **kwargs):  # type: ignore[override]
+        return self._forward("send_photo", **kwargs)
+
     def send_weather(self, **kwargs):  # type: ignore[override]
         return self._forward("send_weather", **kwargs)
 

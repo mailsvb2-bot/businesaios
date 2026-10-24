@@ -123,6 +123,7 @@ def payload_contract_fields() -> dict[EffectActionType, tuple[str, ...]]:
     return {
         EffectActionType.TELEGRAM_SEND_MESSAGE: ("chat_id", "text", "reply_markup", "priority", "critical", "timeout_s", "delivery_scope"),
         EffectActionType.TELEGRAM_SEND_AUDIO: ("chat_id", "audio_url", "caption", "priority", "critical", "timeout_s"),
+        EffectActionType.TELEGRAM_SEND_PHOTO: ("chat_id", "photo_url", "caption", "priority", "critical", "timeout_s"),
         EffectActionType.TELEGRAM_ANSWER_CALLBACK: ("callback_query_id", "text", "show_alert"),
         EffectActionType.TELEGRAM_SEND_CHAT_ACTION: ("chat_id", "action"),
         EffectActionType.TELEGRAM_SELF_CHECK: ("token", "clear_webhook"),
@@ -155,6 +156,15 @@ def normalize_effect_payload(action_type: str | EffectActionType, payload: Any) 
         return {
             "chat_id": _require_text(key, data, "chat_id"),
             "audio_url": _require_text(key, data, "audio_url"),
+            "caption": _optional_text(data, "caption"),
+            "priority": data.get("priority", "normal"),
+            "critical": _bool(data, "critical", default=True),
+            "timeout_s": _int(data, "timeout_s", default=60, minimum=1, maximum=300),
+        }
+    if key is EffectActionType.TELEGRAM_SEND_PHOTO:
+        return {
+            "chat_id": _require_text(key, data, "chat_id"),
+            "photo_url": _require_text(key, data, "photo_url"),
             "caption": _optional_text(data, "caption"),
             "priority": data.get("priority", "normal"),
             "critical": _bool(data, "critical", default=True),

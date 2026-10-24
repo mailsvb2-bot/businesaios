@@ -116,6 +116,7 @@ class EffectRouter:
     def _register_default_handlers(self) -> None:
         self.register(EffectActionType.TELEGRAM_SEND_MESSAGE, self._handle_telegram_send_message)
         self.register(EffectActionType.TELEGRAM_SEND_AUDIO, self._handle_telegram_send_audio)
+        self.register(EffectActionType.TELEGRAM_SEND_PHOTO, self._handle_telegram_send_photo)
         self.register(EffectActionType.TELEGRAM_ANSWER_CALLBACK, self._handle_telegram_answer_callback)
         self.register(EffectActionType.TELEGRAM_SEND_CHAT_ACTION, self._handle_telegram_send_chat_action)
         self.register(EffectActionType.PAYMENTS_YOOKASSA_CREATE, self._handle_yookassa_create_payment)
@@ -170,6 +171,16 @@ class EffectRouter:
             caption=_optional_text(payload.get("caption")),
             priority=payload.get("priority", "normal"),
             critical=bool(payload.get("critical", True)),
+            timeout_s=int(payload.get("timeout_s") or 60),
+        )
+        return {"ok": bool(ok), **dict(meta or {})}
+
+    async def _handle_telegram_send_photo(self, payload: dict[str, Any]) -> dict[str, Any]:
+        client = self._telegram_client()
+        ok, meta = client.send_photo(
+            chat_id=str(payload.get("chat_id") or ""),
+            photo_url=str(payload.get("photo_url") or ""),
+            caption=_optional_text(payload.get("caption")),
             timeout_s=int(payload.get("timeout_s") or 60),
         )
         return {"ok": bool(ok), **dict(meta or {})}

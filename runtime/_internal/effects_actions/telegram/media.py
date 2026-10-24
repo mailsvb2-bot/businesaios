@@ -15,11 +15,13 @@ from runtime._internal.effects_actions.telegram.messaging_parts import (
 )
 from runtime._internal.effects_actions.telegram.transport import (
     telegram_send_audio_transport,
+    telegram_send_photo_transport,
 )
 from runtime._internal.effects_tenant import assert_event_log_tenant
 from runtime.execution.context import current_execution_business_id
 from runtime.messaging.channel_normalizer import normalize_channel
 from runtime.observability.error_handling import swallow
+from runtime.platform.config.env_flags import env_bool
 from runtime.security.runtime_asserts import assert_called_from_executor
 
 
@@ -293,3 +295,48 @@ def send_audio_effect(
         },
     )
     return _result(ok=bool(ok), meta=dict(meta or {}), action_type=str(EffectActionType.TELEGRAM_SEND_AUDIO) if selected_channel == "telegram" else "messaging.send_audio")
+
+
+PHOTO_DELIVERY_ENV = "BAI_PHOTO_DELIVERY_ENABLED"
+
+
+def photo_delivery_enabled() -> bool:
+    """Real photo sends are OFF unless the operator sets BAI_PHOTO_DELIVERY_ENABLED=1."""
+    return bool(env_bool(PHOTO_DELIVERY_ENV, False))
+
+
+def send_photo_effect(
+    effects: Any,
+    *,
+    decision_id: str,
+    correlation_id: str,
+    tenant_id: str,
+    business_id: str = "",
+    user_id: str,
+    path: str,
+    caption: str | None = None,
+    channel: str = "telegram",
+) -> dict[str, Any]:
+    """Executor-only photo delivery; dry-run (no network) while the env flag is off."""
+    assert_called_from_executor()
+    tenant = assert_event_log_tenant(effects.event_log, tenant_id=str(tenant_id), operation="send_photo")
+    try:
+        selected = normalize_channel(str(channel or "telegram"))
+    except ValueError:
+        selected = str(channel or "").strip().casefold()
+    base = {"channel": selected, "path": str(path), "user_id": str(user_id)}
+    if selected not in {"telegram", "vk", "max"}:
+        return _result(ok=False, meta={**base, "error": "UNSUPPORTED_PHOTO_CHANNEL", "delivery_finalized": False}, action_type="messaging.send_photo")
+    if not photo_delivery_enabled():
+        effects.event_log.emit(event_type="photo_dry_run", source="runtime_effects", user_id=str(user_id), decision_id=str(decision_id), correlation_id=str(correlation_id), payload={"tenant_id": tenant, **base, "flag": PHOTO_DELIVERY_ENV})
+        return {"ok": True, "status": "dry_run", "meta": {**base, "mode": "dry_run", "flag": PHOTO_DELIVERY_ENV, "delivery_finalized": False}}
+    resolved = _resolve_business_scope(business_id)
+    if selected != "telegram" and not resolved:
+        return _result(ok=False, meta={**base, "error": "NATIVE_BUSINESS_ID_REQUIRED", "delivery_finalized": False}, action_type="messaging.send_photo")
+    if selected == "telegram":
+        ok, meta = telegram_send_photo_transport(effects, chat_id=str(user_id), photo_url=str(path), caption=caption, priority="normal")
+    else:
+        msg = build_outbound_message(decision_id=decision_id, correlation_id=correlation_id, user_id=user_id, text=str(caption or ""), tenant_id=tenant, business_id=resolved, attachments=({"kind": "photo", "source": str(path)},), reply_markup=None, callback_query_id=None, track_event_type=None, track_payload=None, channel=selected, priority="normal", critical=True)
+        ok, meta = execute_delivery_path(effects, msg=msg, channel_policy=None, send_once=build_single_sender(effects))
+    effects.event_log.emit(event_type="photo_sent", source="runtime_effects", user_id=str(user_id), decision_id=str(decision_id), correlation_id=str(correlation_id), payload={"tenant_id": tenant, "ok": bool(ok), **base, "meta": dict(meta or {})})
+    return _result(ok=bool(ok), meta=dict(meta or {}), action_type=str(EffectActionType.TELEGRAM_SEND_PHOTO) if selected == "telegram" else "messaging.send_photo")
