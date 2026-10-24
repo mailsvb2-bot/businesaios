@@ -847,3 +847,25 @@ def process_one_operation(payloads: list[dict[str, Any]], provider: AdProviderPo
                               extra={"outcome_unknown": op.kind == "launch"})
     except (SpendInvariantViolation, ValueError, KeyError) as exc:
         return facts + _fail(op, type(exc).__name__.lower() + ":" + str(exc)[:120], retryable=False, now=t)
+
+
+# -- owner messages (donor _ad_spend_launch_message / _event_promotion_yandex_message)
+def launch_message(outcome: str, operation_id: str = "") -> str:
+    """outcome: queued | dry_run | denied | unavailable. Never claims money was spent unless the provider confirmed it."""
+    if outcome == "queued":
+        return ("🚀 Запуск поставлен в защищённую идемпотентную очередь.\n\nПеред обращением к рекламному провайдеру "
+                "сервер ещё раз проверит кабинет, срок, расход и точные подтверждённые лимиты. При расхождении запуск "
+                f"будет заблокирован.\n\nОперация: …{operation_id[-12:]}")
+    if outcome == "dry_run":
+        return f"🔒 Запуск рекламы выключен ({MUTATIONS_ENV}): записано как пробный запуск, ничего не потрачено."
+    if outcome == "unavailable":
+        return "Безопасный запуск сейчас недоступен. Ничего не потрачено."
+    return "Запуск запрещён, устарел или состояние разрешения изменилось. Ничего не потрачено."
+
+
+def event_promotion_message(title: str, url: str, *, env: Mapping[str, str] | None = None) -> str:
+    cabinet = ("✅ чтение рекламного кабинета включено" if provider_enabled(env)
+               else f"⚪ кабинет не подключён ({PROVIDER_ENV} выключен)")
+    return (f"📡 Яндекс Директ · вебинар\n\n{title}\n\nКабинет: {cabinet}\n\nПосадочная страница объявления:\n{url}\n\n"
+            "Для вебинара используйте именно эту event-ссылку. Она сохраняет source=ads и campaign_ref конкретного "
+            "мероприятия; регистрация остаётся в event CRM и не смешивается с записью на услуги.")

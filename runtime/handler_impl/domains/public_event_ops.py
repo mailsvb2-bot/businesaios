@@ -7,13 +7,17 @@ effect ``ensure_customer_identity``; reminder links are issued only for CRM-proj
 
 from __future__ import annotations
 
-from datetime import UTC, datetime
+import os
+from datetime import UTC, datetime, timedelta
 from types import SimpleNamespace
 from typing import Any
 
 PUB_OPS = frozenset({"pub_create", "pub_register", "pub_links", "pub_live", "pub_verify"})
+# Real ad spend, business retirement and video: every op is owner-only (route flag) and OFF by default (dry run + event).
+SPEND_OPS = frozenset({"spend_prepare", "spend_consent", "spend_launch", "spend_stop", "spend_status", "spend_process",
+                       "goal_preview", "retire", "retire_confirm", "retire_cancel", "restore", "video", "event_ads"})
 MEDIA_OPS = frozenset({"asset_set", "asset_show", "asset_send", "stage_visual", "gen", "email_connect", "email_verify",
-                       "email_test", "adproject", "content_mode"})
+                       "email_test", "adproject", "content_mode"}) | SPEND_OPS
 EMAIL_ENV = "BAI_EMAIL_EFFECTS_ENABLED"  # real e-mail sends: off by default, like BAI_PHOTO_DELIVERY_ENABLED
 
 
@@ -119,7 +123,8 @@ def _asset_send(body, effects, env, done, asset, caption, ids):
     if asset is None:
         raise ValueError("визуал не найден: /event_asset ev | stage | slot | image | ref")
     if asset["kind"] != "image":
-        return done("ℹ️ Видео не отправляется: российского видеопровайдера нет, отправка видео не портирована.")
+        return done("ℹ️ Видео хранится как ссылка; отправка видеофайла в чат не подключена (нет исполнителя send_video). "
+                    "Создать ролик: /event_video событие | описание.")
     send = getattr(effects, "send_photo", None)
     if send is None:
         return done("🔒 Отправка фото недоступна в этом исполнителе.")
@@ -141,7 +146,7 @@ def _gen_submit(gens, member, rid, now_ms, put, send):
     r = vc.gen_get(gens, member, rid)
     payload = json.loads(r.provider_payload_json)
     if payload.get("kind") != "image":
-        raise ValueError("видео недоступно: российского видеопровайдера нет")
+        raise ValueError("видео создаётся отдельно: /event_video событие | описание")
     r, begin = vc.gen_begin_submission(gens, member, rid, now_ms=now_ms)
     if not begin:
         return put(f"ℹ️ Заявка {r.id} уже в состоянии «{r.status}»: повторная отправка не делается.", [])
@@ -311,6 +316,8 @@ def media_op(op: str, arg: str, *, body: dict[str, Any], effects: Any, env: Any,
         return done(text, *([] if not fs else [fs[0] if len(fs) == 1 else {"step": "batch", "facts": fs}]))
 
     try:
+        if op in SPEND_OPS:
+            return spend_op(op, arg, body=body, effects=effects, env=env, payloads=payloads, put=put, now_ms=now_ms)
         if op in {"asset_set", "asset_show", "asset_send"}:  # ev | stage | slot [| kind | media_reference]
             p = _parts(arg, 3)
             ev, stage, slot = p[:3]
@@ -326,8 +333,8 @@ def media_op(op: str, arg: str, *, body: dict[str, Any], effects: Any, env: Any,
             return _asset_send(body, effects, env, done, a, None, _ids(body, env))
         if op == "content_mode":  # ev | stage | text|text_with_image|text_in_image
             ev, stage, mode = _parts(arg, 3)[:3]
-            if mode == "text_with_video":
-                raise ValueError("видео недоступно: российского видеопровайдера нет")
+            if mode == "text_with_video" and vc.video_generation_mode() != "motion":
+                raise ValueError(f"видео выключено: включите {vc.VIDEO_ENV} (только российский провайдер yandexart_motion)")
             ch = es.set_content_mode(ev, stage, mode)
             return put(f"🧩 Формат сообщения этапа «{stage}»: {mode}", [ch])
         if op == "stage_visual":  # ev | stage | message_key | title | text
@@ -350,6 +357,218 @@ def media_op(op: str, arg: str, *, body: dict[str, Any], effects: Any, env: Any,
         return _email_op(op, arg, body=body, effects=effects, env=env, facts=facts, done=done, now_ms=now_ms, put=put)
     except (ValueError, LookupError, es.AssetBindError, RuntimeError) as exc:
         return done(f"⚠️ Не получилось: {exc}")
+
+
+class _ExecutorAdProvider:
+    """AdProviderPort-shaped adapter over the executor effect. Credentials live in the executor transport (env:/vault:
+    refs resolved there); nothing here ever sees a token. A dry run maps to ProviderReadError/{"dry_run": True}."""
+
+    def __init__(self, effects: Any, body: dict[str, Any], env: Any) -> None:
+        self._fx, self._body, self._env = effects, body, env
+
+    def _act(self, action: str, params: dict[str, Any], key: str = "") -> dict[str, Any]:
+        return self._fx.ad_provider_action(**_ids(self._body, self._env), user_id=str(self._body["user_id"]), action=action,
+                                           params=params, idempotency_key=key)
+
+    def _checked(self, out: dict[str, Any]) -> dict[str, Any]:
+        from application.business_flows import ad_spend_guard as sg
+
+        if out.get("status") == "dry_run":
+            raise sg.ProviderReadError("provider_dry_run")
+        if not out.get("ok"):
+            if out.get("status") in {"unconfigured", "refused"}:  # never retried: nothing was sent
+                raise sg.SpendInvariantViolation(str(out.get("error") or out.get("status")))
+            raise sg.ProviderReadError(str(out.get("error") or "provider_error")[:60])
+        return dict(out.get("result") or {})
+
+    def refresh(self, bundle: Any) -> dict[str, str]:
+        return dict(bundle)
+
+    def read_budget(self, access_token: str, *, campaign_id: str, report_date: str, now: Any) -> Any:
+        from application.business_flows import ad_spend_guard as sg
+
+        r = self._checked(self._act("read_budget", {"campaign_id": campaign_id, "report_date": report_date}))
+        names = ("external_account_id", "external_campaign_id", "currency", "strategy", "report_date")
+        try:
+            return sg.BudgetReadout(**{k: str(r[k]) for k in names},
+                                    **{k: int(r.get(k) or 0) for k in ("available_budget_minor", "spent_today_minor",
+                                                                      "minimum_weekly_micros")},
+                                    launch_eligible=bool(r.get("launch_eligible", True)))
+        except (KeyError, TypeError, ValueError) as exc:
+            raise sg.ProviderReadError("provider_readout_invalid") from exc
+
+    def _mutate(self, action: str, params: dict[str, Any], key: str) -> dict[str, Any]:
+        out = self._act(action, params, key)
+        return {"dry_run": True, "action": action} if out.get("status") == "dry_run" else self._checked(out)
+
+    def configure_budget(self, access_token: str, *, campaign_id: str, hard_cap_minor: int, daily_cap_minor: int,
+                         idempotency_key: str) -> dict[str, Any]:
+        return self._mutate("configure_budget", {"campaign_id": campaign_id, "hard_cap_minor": hard_cap_minor,
+                                                 "daily_cap_minor": daily_cap_minor}, idempotency_key)
+
+    def moderate_ad(self, access_token: str, *, campaign_id: str, idempotency_key: str) -> dict[str, Any]:
+        return self._mutate("moderate_ad", {"campaign_id": campaign_id}, idempotency_key)
+
+    def suspend_ad(self, access_token: str, *, campaign_id: str, idempotency_key: str) -> dict[str, Any]:
+        return self._mutate("suspend_ad", {"campaign_id": campaign_id}, idempotency_key)
+
+
+def _spend_process(payloads, provider, tz, now, put, text, pre=()):
+    """Run due queue operations (at most 4 per call); every provider mutation is gated by executor flags."""
+    from application.business_flows import ad_spend_guard as sg
+
+    recorded: list[dict[str, Any]] = list(pre)
+    for _ in range(4):
+        fs = sg.process_one_operation([*payloads, *recorded], provider, {"access_token": "executor"}, tz=tz, now=now)
+        if not fs:
+            break
+        recorded += fs
+    done_ops = [f for f in recorded if f["step"] == "ad_spend_op_completed"]
+    failed = [f for f in recorded if f["step"] == "ad_spend_op_failed"]
+    note = ("⏳ Очередь пуста." if not (recorded[len(pre):]) else
+            ("🔒 Провайдер в пробном режиме (флаги выключены): ничего не отправлено и не потрачено."
+             if any((f.get("evidence") or {}).get("dry_run") for f in done_ops) else
+             f"✅ Выполнено операций: {len(done_ops)}." if done_ops and not failed else
+             "⚠️ Операция не выполнена: " + ", ".join(sorted({str(f.get("code")) for f in failed})) + ". Ничего не потрачено сверх проверенных лимитов."))
+    return put((text + "\n" if text else "") + note, recorded)
+
+
+def spend_op(op: str, arg: str, *, body: dict[str, Any], effects: Any, env: Any, payloads: list[dict[str, Any]], put: Any,
+             now_ms: int) -> Any:
+    """Owner-only spend / retire / video ops. All OFF by default; DecisionCore decides, only the executor acts."""
+    import uuid
+
+    from application.business_flows import ad_spend_guard as sg
+    from application.business_flows import admin as ad
+    from application.business_flows import event_consent as ecn
+    from application.business_flows import public_events as pe
+    from application.business_flows import visual_creatives as vc
+
+    now = datetime.fromtimestamp(now_ms / 1000, tz=UTC)
+    business_id = str(body.get("business_id") or body["tenant_id"])
+    provider = _ExecutorAdProvider(effects, body, env)
+    archived = ad.is_archived(payloads)
+    auths = sg.authorizations_replay(payloads)
+
+    def auth_of(token: str) -> Any:
+        base = auths.get(token.strip())
+        if base is None:
+            raise ValueError("разрешение не найдено: /ad_spend_status")
+        return sg.with_status(payloads, base)
+
+    def refuse_if_archived() -> None:
+        if archived:
+            raise ValueError("бизнес в архиве: расходы на рекламу запрещены (вернуть: /business_restore)")
+
+    def stops(reason: str) -> list[dict[str, Any]]:
+        out: list[dict[str, Any]] = []
+        for a in auths.values():
+            out += sg.revoke_consent(payloads, a, actor_member_id=str(body["user_id"]), now=now) if \
+                sg.consent_status(payloads, a) in {"launching", "active", "stopping"} else []
+        return [{**f, "reason": reason} if f["step"] == "ad_spend_stop_queued" else f for f in out]
+
+    if op == "spend_status":
+        rows = sg.consent_view(payloads, auths.values())
+        return put("💳 Разрешения на рекламу:\n" + ("\n".join(
+            f"• {r['authorization_id']}: {r['status']}, лимит {r['hard_cap_minor']}/день {r['daily_cap_minor']} {r['currency']}"
+            for r in rows) or "Пока нет. Подготовить: /ad_spend_prepare") + ("\n📦 Бизнес в архиве." if archived else ""), [])
+    if op == "goal_preview":  # connection | campaign
+        conn, camp = _parts(arg, 2)[:2]
+        pv = sg.preview_goal_spend(provider, {"access_token": "executor"}, connection_id=conn, campaign_id=camp, now=now,
+                                   tz=sg.report_timezone())
+        return put(f"🎯 Предпросмотр (ничего не запущено): жёсткий лимит {pv.recommended_hard_cap_minor}, в день "
+                   f"{pv.recommended_daily_cap_minor} {pv.currency} (доступно {pv.available_budget_minor}).", [])
+    if op == "spend_prepare":  # connection | account | campaign | hard | daily | minutes
+        refuse_if_archived()
+        conn, acct, camp, hard, daily, mins = _parts(arg, 6)[:6]
+        tz = sg.report_timezone()
+        auth, fact = sg.prepare_authorization(
+            provider, {"access_token": "executor"}, business_id=business_id, connection_id=conn, external_account_id=acct,
+            external_campaign_id=camp, hard_cap_minor=int(hard), daily_cap_minor=int(daily),
+            expires_at=now + timedelta(minutes=max(1, min(int(mins), 5))), report_date=sg.provider_report_date(now, tz),
+            tz=tz, now=now)
+        ask = sg.request_consent(payloads, auth, now=now)
+        return put(f"💳 Разрешение {auth.authorization_id} подготовлено: до {auth.hard_cap_minor} (в день {auth.daily_cap_minor}) "
+                   f"{auth.currency}, действует до {auth.expires_at:%H:%M} UTC. Деньги НЕ потрачены.\n"
+                   f"Подтвердить именно эти условия: /ad_spend_consent {auth.authorization_id} | {ask['terms_hash'][:16]}", [fact, ask])
+    if op == "spend_consent":  # authorization | terms_hash_prefix
+        refuse_if_archived()
+        token, prefix = _parts(arg, 2)[:2]
+        auth, shown = auth_of(token), next((f for f in payloads if f.get("step") == "ad_spend_consent_requested"
+                                            and f.get("authorization_id") == token.strip()), None)
+        if shown is None or len(prefix) < 12 or not str(shown["terms_hash"]).startswith(prefix):
+            raise ValueError("хэш условий не совпал: подтверждайте ровно показанные условия")
+        fact = sg.grant_consent(payloads, auth, expected_terms_hash=shown["terms_hash"],
+                                expected_snapshot_hash=shown["snapshot_hash"], receipt_id=str(env.decision.decision_id), now=now)
+        return put(f"✅ Согласие записано. Запуск — отдельным шагом: /ad_spend_launch {auth.authorization_id}", [fact])
+    if op == "spend_launch":
+        refuse_if_archived()
+        auth = auth_of(arg)
+        fact = sg.launch_or_dry_run(payloads, auth, now=now)
+        if fact["step"] == "ad_spend_launch_dry_run":
+            return put(sg.launch_message("dry_run"), [fact])
+        return _spend_process([*payloads, fact], provider, sg.report_timezone(), now, put,
+                              sg.launch_message("queued", sg.op_id(auth.authorization_id, "launch")))
+    if op == "spend_stop":  # always allowed, also when archived
+        auth = auth_of(arg)
+        fs = [] if auth.status in {"stopped", "failed"} else sg.revoke_consent(
+            payloads, auth, actor_member_id=str(body["user_id"]), now=now)
+        if not fs:
+            return put("ℹ️ Разрешение уже отозвано.", [])
+        return _spend_process([*payloads, *fs], provider, sg.report_timezone(), now, put, "🛑 Разрешение отозвано.") \
+            if any(f["step"] == "ad_spend_stop_queued" for f in fs) else put("🛑 Разрешение отозвано.", fs)
+    if op == "spend_process":
+        return _spend_process(payloads, provider, sg.report_timezone(), now, put, "")
+    if op in {"retire", "retire_confirm", "retire_cancel", "restore"}:
+        if op == "retire":
+            name = arg.strip() or ad.replay(payloads).settings.get("business_name", "") or business_id
+            fact, code = ad.retire_request(payloads, name=name, nonce=uuid.uuid4().hex[:8], now=now)
+            return put(ad.retire_confirm_text(name, code), [fact])
+        if op == "retire_confirm":
+            fact = ad.retire_confirm(payloads, code=arg.strip(), now=now)
+            if fact is None:
+                return put("ℹ️ Бизнес уже в архиве.", [])
+            if fact["step"] == "business_retire_dry_run":
+                return put(ad.retire_result_text(ad.retire_status(payloads, now)["name"], dry_run=True), [fact])
+            text = ad.retire_result_text(ad.retire_status(payloads, now)["name"], dry_run=False)
+            stp = stops("business_archived")
+            if not stp:
+                return put(text, [fact])
+            return _spend_process(payloads, provider, sg.report_timezone(), now, put,
+                                  text + "\n🛑 Рекламные разрешения отозваны.", pre=[fact, *stp])
+        fact = (ad.retire_cancel if op == "retire_cancel" else ad.business_restore)(payloads, now)
+        if fact is None:
+            return put("ℹ️ Нечего менять.", [])
+        return put("↩️ Закрытие отменено." if op == "retire_cancel" else "📦➡️ Бизнес возвращён из архива, данные целы.", [fact])
+    if op == "event_ads":  # slug
+        b = pe.replay(payloads)
+        ev = pe.by_slug(b, arg.strip())
+        url = ecn.registration_url(public_base_url=os.environ.get("PUBLIC_BASE_URL", ""), public_slug=ev.slug, source="ads",
+                                   campaign_ref=ev.slug[:40])
+        return put(sg.event_promotion_message(ev.title, url), [])
+    if op == "video":  # event | description
+        refuse_if_archived()
+        ev, prompt = _parts(arg, 2)[:2]
+        frozen = vc.freeze_video_payload(request=prompt, brand_context=f"событие {ev}", preferred_provider="yandexart_motion")
+        key = vc.video_idempotency_key(business_id, frozen)
+        if (prior := vc.video_already_requested(payloads, key)) is not None:
+            return put(f"ℹ️ Ролик уже заказан (задание {prior['job_id'] or '—'}): повторно не отправляю.", [])
+
+        class _Video(vc.VideoProviderPort):
+            def submit(self, *, prompt, aspect_ratio, duration_seconds, preferred_provider, idempotency_key):  # noqa: ANN001
+                out = effects.generate_visual_creative(**_ids(body, env), user_id=str(body["user_id"]), kind="video",
+                                                       prompt=prompt, aspect_ratio=aspect_ratio, duration_seconds=duration_seconds,
+                                                       preferred_provider=preferred_provider, wait_seconds=0)
+                job = out.get("job") or {}
+                return {"ok": bool(out.get("ok")), "status": str(out.get("status") or job.get("status") or ""),
+                        "job_id": str(job.get("id") or ""), "reason": str(out.get("reason") or "")}
+
+        out = vc.create_video_from_frozen_payload(provider_payload_json=frozen, scope_id=business_id, idempotency_key=key,
+                                                  provider=_Video())
+        fact = vc.video_requested_fact(business_id, frozen, out, now_ms=now_ms)
+        return put(f"🔒 Видео выключено ({vc.VIDEO_ENV}): записано как пробный запуск, провайдер не вызывался." if fact["dry_run"]
+                   else f"🎬 Ролик заказан (российский провайдер), задание {out.get('job_id') or '—'}.", [fact])
+    raise ValueError("unknown op")
 
 
 def _landing(body, effects, env, facts, slots, arg, done):
@@ -404,4 +623,4 @@ def _landing(body, effects, env, facts, slots, arg, done):
     )
 
 
-__all__ = ["MEDIA_OPS", "PUB_OPS", "media_op", "public_event_op"]
+__all__ = ["MEDIA_OPS", "PUB_OPS", "SPEND_OPS", "media_op", "public_event_op", "spend_op"]

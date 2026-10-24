@@ -141,7 +141,7 @@ def test_asset_send_is_dry_run_without_flag_and_executor_call_with_flag(flow, mo
     assert "не отправлено" in _run(flow, "asset_send", "e1 | warmup | k1")
     assert "Не получилось" in _run(flow, "asset_send", "e1 | warmup | nokey")
     _run(flow, "asset_set", "e1 | warmup | kv | video | /m/v.mp4")
-    assert "Видео не отправляется" in _run(flow, "asset_send", "e1 | warmup | kv")
+    assert "Видео хранится как ссылка" in _run(flow, "asset_send", "e1 | warmup | kv")
 
 
 def test_asset_send_without_photo_effect_is_closed(flow) -> None:
@@ -151,7 +151,7 @@ def test_asset_send_without_photo_effect_is_closed(flow) -> None:
 
 def test_stage_visual_prepares_one_receipt_and_gen_lifecycle(flow) -> None:
     assert "только текст" in _run(flow, "stage_visual", "e1 | warmup | m1 | Вебинар | Приходите на вебинар")
-    assert "видео недоступно" in _run(flow, "content_mode", "e1 | warmup | text_with_video")
+    assert "видео выключено" in _run(flow, "content_mode", "e1 | warmup | text_with_video")
     assert "Не получилось" in _run(flow, "content_mode", "e1 | bad | text_with_image")
     assert "text_with_image" in _run(flow, "content_mode", "e1 | warmup | text_with_image")
     out = _run(flow, "stage_visual", "e1 | warmup | m1 | Вебинар | Приходите на вебинар")
@@ -252,3 +252,128 @@ def test_visual_style_clear_via_command(flow) -> None:
     _run(flow, "visual", "Вебинар | style | minimal")
     assert "сброшен" in _run(flow, "visual", "Вебинар | style | clear")
     assert "не был задан" in _run(flow, "visual", "Вебинар | style | clear")
+
+
+# --- real ad spend / business retirement / video: all OFF by default, fakes only, never a real call ---
+class _AdFx:
+    """Fake of the executor effect ad_provider_action: dry run until `live`, records every call."""
+
+    def __init__(self):
+        self.live, self.calls = False, []
+
+    def __call__(self, **kw):
+        self.calls.append(kw)
+        if not self.live:
+            return {"ok": True, "status": "dry_run", "action": kw["action"]}
+        if kw["action"] == "read_budget":
+            return {"ok": True, "status": "done", "result": {
+                "external_account_id": "acc1", "external_campaign_id": "camp1", "currency": "RUB",
+                "available_budget_minor": 1_000_000, "spent_today_minor": 0, "strategy": "", "report_date": "2027-01-15",
+                "minimum_weekly_micros": 1_000_000, "launch_eligible": True}}
+        return {"ok": True, "status": "done", "result": {"applied": kw["action"]}}
+
+
+def _spend_env(monkeypatch, *flags):
+    monkeypatch.setenv("YANDEX_DIRECT_REPORT_TIMEZONE", "Europe/Moscow")
+    monkeypatch.setenv("BAI_AD_SPEND_CEILING_MINOR", "500000")
+    for f in flags:
+        monkeypatch.setenv(f, "1")
+
+
+def test_ad_spend_is_dry_run_and_never_mutates_when_flags_are_off(flow, monkeypatch) -> None:
+    _spend_env(monkeypatch)
+    fx = flow.effects.ad_provider_action = _AdFx()
+    assert "Не получилось" in _run(flow, "spend_prepare", "c1 | acc1 | camp1 | 100000 | 20000 | 5")
+    assert [c["action"] for c in fx.calls] == ["read_budget"]  # a read only, answered as a dry run
+    assert not any(e["payload"].get("step", "").startswith("ad_spend") for e in flow.store.events)
+    assert "Пока нет" in _run(flow, "spend_status", "")
+
+
+def test_ad_spend_full_lifecycle_needs_consent_flags_and_is_idempotent(flow, monkeypatch) -> None:
+    _spend_env(monkeypatch, "BAI_AD_SPEND_PROVIDER_ENABLED")
+    fx = flow.effects.ad_provider_action = _AdFx()
+    fx.live = True
+    out = _run(flow, "spend_prepare", "c1 | acc1 | camp1 | 100000 | 20000 | 5")
+    aid, prefix = out.split("/ad_spend_consent ")[1].split(" | ")
+    assert "Деньги НЕ потрачены" in out and not [c for c in fx.calls if c["action"] != "read_budget"]
+    assert "Не получилось" in _run(flow, "spend_launch", aid)  # no consent yet
+    assert "не совпал" in _run(flow, "spend_consent", f"{aid} | {'0' * 16}")
+    assert "Согласие записано" in _run(flow, "spend_consent", f"{aid} | {prefix.strip()}")
+    assert "выключен" in _run(flow, "spend_launch", aid)  # mutations flag still off: dry-run fact only
+    assert not [c for c in fx.calls if c["action"] != "read_budget"]
+    monkeypatch.setenv("BAI_AD_SPEND_MUTATIONS_ENABLED", "1")
+    out = _run(flow, "spend_launch", aid)
+    assert "очередь" in out
+    mut = [c for c in fx.calls if c["action"] != "read_budget"]
+    assert [c["action"] for c in mut] == ["configure_budget", "moderate_ad"]
+    assert len({c["idempotency_key"] for c in mut}) == 2 and all(c["idempotency_key"] for c in mut)
+    assert mut[0]["params"]["hard_cap_minor"] == 100000 and mut[0]["params"]["daily_cap_minor"] == 20000
+    assert "Не получилось" in _run(flow, "spend_launch", aid)  # a second launch never double-spends
+    assert len([c for c in fx.calls if c["action"] == "configure_budget"]) == 1
+    assert "active" in _run(flow, "spend_status", "")
+    assert "отозвано" in _run(flow, "spend_stop", aid)
+    assert "suspend_ad" in [c["action"] for c in fx.calls]
+    assert "уже отозвано" in _run(flow, "spend_stop", aid)
+
+
+def test_ad_spend_ceiling_refuses_oversized_caps_before_any_provider_call(flow, monkeypatch) -> None:
+    _spend_env(monkeypatch, "BAI_AD_SPEND_PROVIDER_ENABLED")
+    fx = flow.effects.ad_provider_action = _AdFx()
+    assert "Не получилось" in _run(flow, "spend_prepare", "c1 | acc1 | camp1 | 900000 | 20000 | 5")
+    monkeypatch.delenv("BAI_AD_SPEND_CEILING_MINOR")
+    assert "Не получилось" in _run(flow, "spend_prepare", "c1 | acc1 | camp1 | 100000 | 20000 | 5")
+    assert fx.calls == []
+
+
+def test_business_retire_is_two_step_flagged_and_archives_without_data_loss(flow, monkeypatch) -> None:
+    _spend_env(monkeypatch, "BAI_AD_SPEND_PROVIDER_ENABLED")
+    fx = flow.effects.ad_provider_action = _AdFx()
+    fx.live = True
+    out = _run(flow, "spend_prepare", "c1 | acc1 | camp1 | 100000 | 20000 | 5")
+    aid, prefix = out.split("/ad_spend_consent ")[1].split(" | ")
+    _run(flow, "spend_consent", f"{aid} | {prefix.strip()}")
+    monkeypatch.setenv("BAI_AD_SPEND_MUTATIONS_ENABLED", "1")
+    _run(flow, "spend_launch", aid)
+    out = _run(flow, "retire", "Студия йоги")
+    code = out.split("/business_retire_confirm ")[1].split()[0]
+    assert "Не получилось" in _run(flow, "retire_confirm", "WRONG000")
+    assert "BAI_BUSINESS_RETIRE_ENABLED" in _run(flow, "retire_confirm", code)  # flag off: dry run only
+    assert "Нечего" in _run(flow, "restore", "")  # flag off: still active
+    monkeypatch.setenv("BAI_BUSINESS_RETIRE_ENABLED", "1")
+    out = _run(flow, "retire_confirm", code)
+    assert "удалён из активных" in out and "Рекламные разрешения отозваны" in out
+    assert "suspend_ad" in [c["action"] for c in fx.calls]  # live spend was stopped through the executor
+    assert "в архиве" in _run(flow, "spend_prepare", "c1 | acc1 | camp1 | 100000 | 20000 | 5")
+    assert "уже в архиве" in _run(flow, "retire_confirm", code)
+    from application.business_flows import event_series as es
+    facts = es.expand([e["payload"] for e in flow.store.events])
+    assert any(f.get("step") == "business_archived" and f.get("data_preserved") for f in facts)  # nothing deleted
+    assert "возвращён" in _run(flow, "restore", "")
+    assert "Не получилось" not in _run(flow, "spend_status", "")
+
+
+def test_video_is_flagged_idempotent_and_russian_provider_only(flow, monkeypatch) -> None:
+    calls = []
+
+    def video(**kw):
+        calls.append(kw)
+        if "BAI_VIDEO_GENERATION_ENABLED" not in __import__("os").environ:
+            return {"ok": True, "status": "dry_run", "kind": "video"}
+        return {"ok": True, "job": {"id": "job1", "status": "queued", "kind": "video"}}
+
+    flow.effects.generate_visual_creative = video
+    assert "выключено" in _run(flow, "video", "e1 | Ролик про вебинар по йоге")
+    assert calls[0]["kind"] == "video" and calls[0]["preferred_provider"] == "yandexart_motion"
+    assert "выключено" in _run(flow, "video", "e1 | Ролик про вебинар по йоге")  # a dry run never blocks the real order
+    monkeypatch.setenv("BAI_VIDEO_GENERATION_ENABLED", "1")
+    assert "job1" in _run(flow, "video", "e1 | Ролик про вебинар по йоге")
+    n = len(calls)
+    assert "уже заказан" in _run(flow, "video", "e1 | Ролик про вебинар по йоге") and len(calls) == n
+    assert "text_with_video" in _run(flow, "content_mode", "e1 | warmup | text_with_video")
+
+
+def test_event_ads_link_carries_ads_source(flow, monkeypatch) -> None:
+    monkeypatch.setenv("PUBLIC_BASE_URL", "https://bot.example.ru")
+    _run(flow, "pub_create", "Вебинар | 2027-02-01 19:00 | Europe/Moscow")
+    out = _run(flow, "event_ads", _slug(flow))
+    assert "source=ads" in out and "campaign_ref=" in out and "BAI_AD_SPEND_PROVIDER_ENABLED" in out
