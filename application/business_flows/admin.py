@@ -9,8 +9,13 @@ evidence (cash/transfer), not the provider Payment lifecycle owned by core.payme
 
 from __future__ import annotations
 
+import hashlib
+import hmac
+import os
 import re
+from collections.abc import Mapping
 from dataclasses import dataclass, field
+from datetime import datetime, timedelta
 from typing import Any
 
 from application.business_flows.projection import stable_id
@@ -376,7 +381,109 @@ def requested_cases(payloads: list[dict[str, Any]]) -> set[str]:
     return {str(p["idempotency_key"]) for p in payloads if p.get("step") == "support_case_requested"}
 
 
+# --- business retirement: two-step owner confirmation, archive without data loss (donor archive_business) ---
+# A retired business is only marked archived: payments, results, audit and every other fact stay intact and the
+# business can be restored. Off by default (BAI_BUSINESS_RETIRE_ENABLED): with the flag off a confirmed request is
+# recorded as a dry run and nothing is archived.
+RETIRE_ENV = "BAI_BUSINESS_RETIRE_ENABLED"
+RETIRE_TTL_SECONDS = 300
+
+
+def retire_enabled(env: Mapping[str, str] | None = None) -> bool:
+    return str((env if env is not None else os.environ).get(RETIRE_ENV) or "").strip().lower() in {"1", "true", "yes", "on"}
+
+
+def _code_hash(code: str) -> str:
+    return hashlib.sha256(str(code).strip().upper().encode()).hexdigest()
+
+
+def retire_status(payloads: list[dict[str, Any]], now: datetime | None = None) -> dict[str, Any]:
+    """active | pending (code issued, not expired) | archived. Replay of ``business_retire_*``/``business_archived``."""
+    out: dict[str, Any] = {"status": "active", "name": "", "code_hash": "", "expires_at": ""}
+    for p in payloads:
+        step = p.get("step")
+        if step == "business_retire_requested" and out["status"] == "active":
+            out.update(status="pending", name=str(p.get("business_name") or ""), code_hash=str(p["code_hash"]),
+                       expires_at=str(p["expires_at"]))
+        elif step == "business_retire_cancelled" and out["status"] == "pending":
+            out.update(status="active", code_hash="", expires_at="")
+        elif step == "business_archived":
+            out.update(status="archived", name=str(p.get("business_name") or out["name"]), code_hash="", expires_at="")
+        elif step == "business_restored" and out["status"] == "archived":
+            out.update(status="active", code_hash="", expires_at="")
+    if out["status"] == "pending" and now is not None and now >= datetime.fromisoformat(out["expires_at"]):
+        out.update(status="active", code_hash="", expires_at="")
+    return out
+
+
+def is_archived(payloads: list[dict[str, Any]]) -> bool:
+    return retire_status(payloads)["status"] == "archived"
+
+
+def retire_request(payloads: list[dict[str, Any]], *, name: str, nonce: str, now: datetime) -> tuple[dict[str, Any], str]:
+    """Step 1: issue a short-lived confirmation code (only its hash is stored). Nothing is archived yet."""
+    if retire_status(payloads, now)["status"] == "archived":
+        raise ValueError("бизнес уже в архиве")
+    code = str(nonce).strip().upper()
+    if not re.fullmatch(r"[0-9A-F]{8}", code):
+        raise ValueError("invalid retire nonce")
+    fact = {"step": "business_retire_requested", "business_name": str(name).strip()[:120], "code_hash": _code_hash(code),
+            "expires_at": (now + timedelta(seconds=RETIRE_TTL_SECONDS)).isoformat(), "at": now.isoformat()}
+    return fact, code
+
+
+def retire_confirm(payloads: list[dict[str, Any]], *, code: str, now: datetime, env: Mapping[str, str] | None = None) -> dict[str, Any] | None:
+    """Step 2: the exact code from step 1 inside its TTL. Flag off -> dry-run fact. Already archived -> None (idempotent)."""
+    cur = retire_status(payloads, now)
+    if cur["status"] == "archived":
+        return None
+    if cur["status"] != "pending":
+        raise ValueError("нет активного запроса на удаление или код истёк: начните заново /business_retire")
+    if not hmac.compare_digest(cur["code_hash"], _code_hash(code)):
+        raise ValueError("неверный код подтверждения")
+    if not retire_enabled(env):
+        return {"step": "business_retire_dry_run", "business_name": cur["name"], "flag": RETIRE_ENV, "at": now.isoformat()}
+    return {"step": "business_archived", "business_name": cur["name"], "data_preserved": True,
+            "idempotency_key": "business_archived:" + cur["code_hash"][:16], "at": now.isoformat()}
+
+
+def retire_cancel(payloads: list[dict[str, Any]], now: datetime) -> dict[str, Any] | None:
+    if retire_status(payloads, now)["status"] != "pending":
+        return None
+    return {"step": "business_retire_cancelled", "at": now.isoformat()}
+
+
+def business_restore(payloads: list[dict[str, Any]], now: datetime) -> dict[str, Any] | None:
+    if retire_status(payloads)["status"] != "archived":
+        return None
+    return {"step": "business_restored", "at": now.isoformat()}
+
+
+def retire_confirm_text(name: str, code: str) -> str:
+    return (f"🗑 Удалить бизнес «{name}» из активных?\nОплаты, результаты и аудит не удаляются: бизнес уходит в архив "
+            f"и его можно вернуть (/business_restore).\nЭто необратимое для работы бота действие, поэтому нужно "
+            f"подтверждение (действует {RETIRE_TTL_SECONDS // 60} мин): /business_retire_confirm {code}\n"
+            "Отмена: /business_retire_cancel")
+
+
+def retire_result_text(name: str, *, dry_run: bool) -> str:
+    if dry_run:
+        return (f"🔒 Удаление бизнеса «{name}» выключено ({RETIRE_ENV}): подтверждение записано, но бизнес остался "
+                "активным, ничего не изменено.")
+    return f"✅ Бизнес «{name}» удалён из активных. История сохранена: оплаты, результаты и аудит на месте. Вернуть: /business_restore"
+
+
 __all__ = [
+    "RETIRE_ENV",
+    "business_restore",
+    "is_archived",
+    "retire_cancel",
+    "retire_confirm",
+    "retire_confirm_text",
+    "retire_enabled",
+    "retire_request",
+    "retire_result_text",
+    "retire_status",
     "commerce_usage",
     "ACTIVE_CUSTOMER_SKU",
     "STAFF_SEAT_SKU",

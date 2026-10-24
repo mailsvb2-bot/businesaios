@@ -75,3 +75,41 @@ def test_admin_routes_owner_only() -> None:
     assert handle_business_flow_routes(Ctx(), user_id="u1").action == "business_admin@v1"
     Ctx.is_admin = False
     assert handle_business_flow_routes(Ctx(), user_id="u1") is None
+
+
+# --- business retirement: two-step, flag off by default, archive without data loss ---
+def test_business_retire_two_step_flag_off_dry_run_then_archive_and_restore():
+    from datetime import UTC, datetime, timedelta
+
+    t0 = datetime(2026, 10, 24, 10, 0, tzinfo=UTC)
+    on, off = {ad.RETIRE_ENV: "1"}, {}
+    log: list[dict] = [{"step": "payment_recorded", "amount_minor": 500}]  # existing business data
+    assert ad.retire_status(log)["status"] == "active" and not ad.is_archived(log)
+    req, code = ad.retire_request(log, name="Студия", nonce="a1b2c3d4", now=t0)
+    assert code == "A1B2C3D4" and "A1B2C3D4" not in str(req)  # only the hash is stored
+    log.append(req)
+    assert ad.retire_status(log, t0)["status"] == "pending"
+    text = ad.retire_confirm_text("Студия", code)
+    assert "/business_retire_confirm A1B2C3D4" in text and "не удаляются" in text and "/business_restore" in text
+    for bad in ("WRONG", ""):
+        with pytest.raises(ValueError):
+            ad.retire_confirm(log, code=bad, now=t0, env=on)
+    with pytest.raises(ValueError):  # expired code
+        ad.retire_confirm(log, code=code, now=t0 + timedelta(seconds=301), env=on)
+    dry = ad.retire_confirm(log, code=code.lower(), now=t0, env=off)  # flag off: recorded, nothing archived
+    assert dry["step"] == "business_retire_dry_run"
+    log.append(dry)
+    assert not ad.is_archived(log) and "выключено" in ad.retire_result_text("Студия", dry_run=True)
+    fact = ad.retire_confirm(log, code=code, now=t0, env=on)
+    assert fact["step"] == "business_archived" and fact["data_preserved"] is True
+    log.append(fact)
+    assert ad.is_archived(log) and any(p["step"] == "payment_recorded" for p in log)  # data intact
+    assert ad.retire_confirm(log, code=code, now=t0, env=on) is None  # idempotent
+    with pytest.raises(ValueError):
+        ad.retire_request(log, name="Студия", nonce="a1b2c3d4", now=t0)
+    log.append(ad.business_restore(log, t0))
+    assert ad.retire_status(log)["status"] == "active" and ad.business_restore(log, t0) is None
+    r2, _ = ad.retire_request(log, name="Студия", nonce="00000001", now=t0)
+    log.append(r2)
+    log.append(ad.retire_cancel(log, t0))
+    assert ad.retire_status(log, t0)["status"] == "active" and ad.retire_cancel(log, t0) is None
