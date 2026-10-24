@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
 import re
 import uuid
 from collections.abc import Mapping
@@ -205,6 +206,95 @@ def freeze_payload(
     if binding is not None:
         value["binding"] = dict(binding)
     return json.dumps(value, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
+
+
+# --- video through a pluggable provider port (Russian providers only; off by default) -----------------------
+VIDEO_ENV = "BAI_VIDEO_GENERATION_ENABLED"
+VIDEO_PROVIDER_ALLOW = frozenset({"", "yandexart_motion"})  # no foreign video providers
+
+
+def video_generation_mode(env: Mapping[str, str] | None = None, *, country_code: str = "") -> str:
+    """Owner-facing video UX mode (donor visual_video_generation_mode): 'motion' (animated banner) or 'unavailable'.
+
+    There is no native text-to-video from a Russian provider, so the only live mode is the existing motion provider
+    behind ``BAI_VIDEO_GENERATION_ENABLED``; with the flag off video requests are recorded as dry runs.
+    """
+    e = env if env is not None else os.environ
+    if str(country_code or e.get("VISUAL_DEPLOYMENT_COUNTRY") or "RU").strip().upper() != "RU":
+        return "unavailable"
+    return "motion" if str(e.get(VIDEO_ENV) or "").strip().lower() in {"1", "true", "yes", "on"} else "unavailable"
+
+
+def freeze_video_payload(*, request: str, brand_context: str = "", country_code: str = "RU", preferred_provider: str = "",
+                         aspect_ratio: str = "16:9", duration_seconds: int = 5, binding: dict[str, str] | None = None) -> str:
+    """Donor freeze_business_video_payload: the exact brief + provider choice, frozen before the owner confirms."""
+    provider = str(preferred_provider or "").strip().lower()
+    if provider not in VIDEO_PROVIDER_ALLOW:
+        raise ValueError("video_provider_not_allowed: только российские провайдеры")
+    value = _payload(freeze_payload(request=request, kind="video", brand_context=brand_context, country_code=country_code,
+                                    binding=binding))
+    value["video"] = {"preferred_provider": provider, "aspect_ratio": str(aspect_ratio or "16:9"),
+                      "duration_seconds": max(2, min(int(duration_seconds or 5), 15))}
+    return json.dumps(value, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
+
+
+def video_idempotency_key(scope_id: str, payload_json: str) -> str:
+    return "vid_" + hashlib.sha256(f"{scope_id}\n{payload_json}".encode()).hexdigest()[:24]
+
+
+class VideoProviderPort:
+    """Interface of a video provider. Production: executor effect generate_visual_creative(kind='video')."""
+
+    def submit(self, *, prompt: str, aspect_ratio: str, duration_seconds: int, preferred_provider: str,
+               idempotency_key: str) -> dict:
+        raise NotImplementedError
+
+
+class FakeVideoProvider(VideoProviderPort):
+    """Deterministic fake: idempotent per key, no network. Used by tests and local dry runs."""
+
+    def __init__(self) -> None:
+        self.calls: list[dict] = []
+        self.jobs: dict[str, dict] = {}
+
+    def submit(self, **kw) -> dict:  # noqa: ANN003
+        key = str(kw["idempotency_key"])
+        if key not in self.jobs:
+            self.calls.append(dict(kw))
+            self.jobs[key] = {"ok": True, "status": "queued", "kind": "video", "job_id": "fake-video-" + key[-8:]}
+        return dict(self.jobs[key])
+
+
+def create_video_from_frozen_payload(*, provider_payload_json: str, scope_id: str, idempotency_key: str,
+                                     provider: VideoProviderPort) -> dict:
+    """Donor create_business_video_from_frozen_payload: validate the frozen brief, submit once through the port."""
+    raw = _payload(provider_payload_json)
+    video = raw.get("video")
+    if raw.get("kind") != "video" or not isinstance(video, dict):
+        raise ValueError("frozen business video brief is invalid")
+    if str(video.get("preferred_provider") or "") not in VIDEO_PROVIDER_ALLOW:
+        raise ValueError("video_provider_not_allowed: только российские провайдеры")
+    frozen_binding(provider_payload_json)  # validates the event binding when present
+    if not str(scope_id or "").strip() or not str(idempotency_key or "").strip():
+        raise ValueError("video scope and idempotency key are required")
+    brief = raw.get("brief") or {}
+    out = provider.submit(prompt=str(brief.get("prompt") or ""), aspect_ratio=str(video.get("aspect_ratio") or "16:9"),
+                          duration_seconds=int(video.get("duration_seconds") or 5),
+                          preferred_provider=str(video.get("preferred_provider") or ""), idempotency_key=idempotency_key)
+    if not isinstance(out, dict) or not out.get("ok"):
+        raise RuntimeError("video_generation_failed: " + str((out or {}).get("reason") or "provider error"))
+    return out
+
+
+def video_requested_fact(scope_id: str, payload_json: str, result: dict, *, now_ms: int) -> dict:
+    return {"step": "video_generation_requested", "idempotency_key": video_idempotency_key(scope_id, payload_json),
+            "status": str(result.get("status") or ""), "job_id": str(result.get("job_id") or ""),
+            "dry_run": result.get("status") == "dry_run", "at_ms": now_ms}
+
+
+def video_already_requested(facts: list[dict], key: str) -> dict | None:
+    return next((f for f in facts if f.get("step") == "video_generation_requested" and f.get("idempotency_key") == key
+                 and not f.get("dry_run")), None)
 
 
 def frozen_scene(value: str):  # noqa: ANN201 - returns visual_scene types

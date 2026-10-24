@@ -321,3 +321,55 @@ def test_aesthetic_director_is_off_by_default_and_sanitizes() -> None:
     )  # unknown keys
     assert v.direct_aesthetics(_Chat('{"subject":""}'), owner_request="кофе", kind="image", env=on) is None
     assert v.direct_aesthetics(None, owner_request="кофе", kind="image", env=on) is None
+
+
+# --- video through the provider port: Russian providers only, idempotent, off by default ---
+def test_video_mode_is_off_by_default_and_provider_allowlist_matches_executor() -> None:
+    from runtime._internal.effects_domains import marketing
+
+    assert vc.video_generation_mode({}) == "unavailable"
+    assert vc.video_generation_mode({vc.VIDEO_ENV: "1"}) == "motion"
+    assert vc.video_generation_mode({vc.VIDEO_ENV: "1"}, country_code="US") == "unavailable"
+    assert vc.VIDEO_PROVIDER_ALLOW == marketing.VIDEO_PROVIDER_ALLOW
+    for foreign in ("veo", "runway", "sora", "kling"):
+        with pytest.raises(ValueError, match="video_provider_not_allowed"):
+            vc.freeze_video_payload(request="Ролик про йогу", preferred_provider=foreign)
+
+
+def test_video_freeze_and_create_once_through_fake_port() -> None:
+    payload = vc.freeze_video_payload(request="Ролик про вебинар по йоге", preferred_provider="yandexart_motion",
+                                      duration_seconds=99, binding={"type": "event_content", "event_id": "e1",
+                                                                    "stage": "s", "slot_key": "k", "kind": "video"})
+    assert vc.freeze_video_payload(request="Ролик про вебинар по йоге", preferred_provider="yandexart_motion",
+                                   duration_seconds=99, binding={"type": "event_content", "event_id": "e1",
+                                                                 "stage": "s", "slot_key": "k", "kind": "video"}) == payload
+    assert '"duration_seconds":15' in payload and vc.frozen_binding(payload)["kind"] == "video"
+    port, key = vc.FakeVideoProvider(), vc.video_idempotency_key("t1", payload)
+    a = vc.create_video_from_frozen_payload(provider_payload_json=payload, scope_id="t1", idempotency_key=key, provider=port)
+    b = vc.create_video_from_frozen_payload(provider_payload_json=payload, scope_id="t1", idempotency_key=key, provider=port)
+    assert a == b and len(port.calls) == 1 and port.calls[0]["preferred_provider"] == "yandexart_motion"
+    fact = vc.video_requested_fact("t1", payload, a, now_ms=1)
+    assert vc.video_already_requested([fact], key)["job_id"] == a["job_id"]
+    dry = vc.video_requested_fact("t1", payload, {"status": "dry_run"}, now_ms=1)
+    assert vc.video_already_requested([dry], key) is None  # a dry run never blocks the real request later
+
+
+def test_video_rejects_image_payload_foreign_provider_and_missing_key() -> None:
+    port = vc.FakeVideoProvider()
+    image = vc.freeze_payload(request="Фото йоги", kind="image")
+    with pytest.raises(ValueError, match="invalid"):
+        vc.create_video_from_frozen_payload(provider_payload_json=image, scope_id="t", idempotency_key="k", provider=port)
+    ok = vc.freeze_video_payload(request="Ролик про йогу")
+    tampered = ok.replace('"preferred_provider":""', '"preferred_provider":"veo"')
+    with pytest.raises(ValueError, match="video_provider_not_allowed"):
+        vc.create_video_from_frozen_payload(provider_payload_json=tampered, scope_id="t", idempotency_key="k", provider=port)
+    with pytest.raises(ValueError):
+        vc.create_video_from_frozen_payload(provider_payload_json=ok, scope_id="t", idempotency_key="", provider=port)
+    assert port.calls == []
+
+    class Failing(vc.VideoProviderPort):
+        def submit(self, **kw):
+            return {"ok": False, "reason": "provider_down"}
+
+    with pytest.raises(RuntimeError, match="provider_down"):
+        vc.create_video_from_frozen_payload(provider_payload_json=ok, scope_id="t", idempotency_key="k", provider=Failing())
