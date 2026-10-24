@@ -25,7 +25,7 @@ jobs:
           gh api "repos/$REPO/actions/runs/40118953682" --jq '.head_sha + " " + .conclusion' | grep -Fx "$EXPECTED success"
           gh api -X POST "repos/$REPO/actions/workflows/trusted-production-certification.yml/dispatches" \
             -f ref=main \
-            -F inputs[target_sha]="$EXPECTED" \
-            -F inputs[deep_release_run_id]="40118953682" \
-            -F inputs[require_physical_windows]="false"
+            -f inputs[target_sha]="$EXPECTED" \
+            -f inputs[deep_release_run_id]="40118953682" \
+            -f inputs[require_physical_windows]="false"
           echo "Canonical certification dispatched for $EXPECTED"
