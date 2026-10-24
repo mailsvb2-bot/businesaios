@@ -155,22 +155,10 @@ def propose_pay_selected(*, user_id: str, full_access: bool, selected: dict[str,
     else:
         return propose_message(user_id=user_id, text="Сначала выберите доступный тариф.", reply_markup=kb_back_main())
 
-    return propose(
-        "create_payment_and_send_link@v1",
-        {
-            "user_id": str(user_id),
-            "amount": int(amount_rub) * 100,
-            "currency": "RUB",
-            "metadata": meta_note,
-        },
+    # Legacy checkout has no durable order or business binding. Never charge
+    # a user until the canonical order checkout supplies all four identities.
+    return propose_message(
+        user_id=user_id,
+        text="Оплата через этот устаревший маршрут отключена. Оформите заказ в рабочем пространстве организации.",
+        reply_markup=kb_back_main(),
     )
-
-
-__all__ = [
-    "build_plan_confirmation_text",
-    "parse_sub_buy",
-    "propose_pay_selected",
-    "propose_select_tariff",
-    "propose_show_tariffs",
-    "scope_hint",
-]
