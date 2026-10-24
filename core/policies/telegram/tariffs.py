@@ -111,7 +111,7 @@ def propose_select_tariff(*, user_id: str, plan_id: int, expected_price: int | N
     )
 
 
-def propose_pay_selected(*, user_id: str, full_access: bool, selected: dict[str, Any] | None, default_price_rub: int, legacy_prices: dict[str, int]) -> ProposedAction:
+def propose_pay_selected(*, user_id: str, full_access: bool, selected: dict[str, Any] | None, default_price_rub: int, legacy_prices: dict[str, int], tenant_id: str | None = None, product_id: str | None = None) -> ProposedAction:
     if full_access:
         return propose_message(user_id=user_id, text="Полный доступ уже активен ✅", reply_markup=kb_back_main())
 
