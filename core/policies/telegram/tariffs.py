@@ -125,11 +125,13 @@ def propose_pay_selected(*, user_id: str, full_access: bool, selected: dict[str,
         try:
             from core.plans import plan_by_id
 
-            plan = plan_by_id(int(plan_id))
+            plan = plan_by_id(int(plan_id), tenant_id=tenant_id, product_id=product_id)
         except Exception:
             plan = None
         if not plan:
             return propose_message(user_id=user_id, text="Сначала выберите тариф.", reply_markup=kb_back_main())
+        if (not tenant_id or not product_id or str(selected.get("tenant_id") or "") != tenant_id or str(selected.get("product_id") or "") != product_id):
+            return propose_message(user_id=user_id, text="Тариф другого продукта или организации недоступен.", reply_markup=kb_back_main())
         current_price = int(plan.get("price") or 0)
         if current_price <= 0:
             return propose_message(user_id=user_id, text="Тариф недоступен. Выберите другой.", reply_markup=kb_back_main())
@@ -141,6 +143,8 @@ def propose_pay_selected(*, user_id: str, full_access: bool, selected: dict[str,
             )
         amount_rub = int(current_price)
         meta_note["selected"] = {
+            "tenant_id": tenant_id,
+            "product_id": product_id,
             "plan_id": int(plan_id),
             "tariff": plan.get("plan_code"),
             "title": plan.get("title"),
