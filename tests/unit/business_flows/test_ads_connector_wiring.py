@@ -88,3 +88,57 @@ def test_list_connections_and_registry_registration():
     assert reg.has("yandex_direct")
     # Real writes stay blocked by the canonical gateway until production readiness is proven.
     assert CONNECTORS["yandex_direct"]["production_ready"] is False
+
+
+def _state():
+    url = w.start_yandex_direct_oauth(tenant_id="t1", redirect_uri="https://x/cb", env=ENV)
+    return url.split("state=")[1].split("&")[0].replace("%3A", ":")
+
+
+def _complete(state, http, store, oauth_store, tenant="t1"):
+    return asyncio.run(
+        w.complete_yandex_direct_oauth(
+            tenant_id=tenant, state=state, code="c", redirect_uri="https://x/cb", account_id="acc",
+            http=http, vault=Vault(), token_store=store, env=ENV, oauth_store=oauth_store,
+        )
+    )
+
+
+def test_cancelled_state_is_single_use_and_never_reaches_provider():
+    state, ost, http, store = _state(), w.InMemoryOAuthStateStore(), Http(), Store()
+    assert w.cancel_yandex_direct_oauth(tenant_id="t1", state=state, oauth_store=ost) is True
+    assert w.cancel_yandex_direct_oauth(tenant_id="t1", state=state, oauth_store=ost) is False
+    with pytest.raises(PermissionError, match="oauth_state_consumed"):
+        _complete(state, http, store, ost)
+    assert http.posts == [] and store.items == {}
+    with pytest.raises(PermissionError, match="oauth_state_invalid"):  # foreign tenant cannot cancel
+        w.cancel_yandex_direct_oauth(tenant_id="t2", state=state, oauth_store=ost)
+    assert state not in str(ost.consumed)  # only digests are kept
+
+
+def test_completion_consumes_state_and_failed_exchange_settles_it():
+    ost, http, store = w.InMemoryOAuthStateStore(), Http(), Store()
+    s1 = _state()
+    assert _complete(s1, http, store, ost)["connected"] is True
+    with pytest.raises(PermissionError, match="oauth_state_consumed"):  # replay of a used callback
+        _complete(s1, http, store, ost)
+
+    class Boom(Http):
+        def __init__(self, code):
+            super().__init__()
+            self.code = code
+
+        async def post(self, url, *, headers, data=None):
+            err = RuntimeError("x")
+            err.code = self.code
+            raise err
+
+    s2, s3 = _state(), _state()
+    time.sleep(0)  # states carry their own issue time; distinct tenants/time are not required for digests
+    ost2 = w.InMemoryOAuthStateStore()
+    with pytest.raises(RuntimeError):
+        _complete(s2, Boom("provider_invalid_grant"), store, ost2)
+    assert ost2.reserved == set() and ost2.consumed == {}  # reusable: released, can be retried
+    with pytest.raises(RuntimeError):
+        _complete(s3, Boom("provider_500"), store, ost2)
+    assert list(ost2.consumed.values()) == ["failed"]  # anything else burns the state

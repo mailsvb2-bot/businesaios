@@ -8,6 +8,7 @@ Client secret comes from a SecretVault reference, never from config text.
 
 from __future__ import annotations
 
+import hashlib
 import os
 import time
 from collections.abc import Mapping
@@ -23,6 +24,60 @@ CANON_ADS_CONNECTOR_WIRING = True
 YANDEX_AUTHORIZE_URL = "https://oauth.yandex.ru/authorize"
 YANDEX_TOKEN_URL = "https://oauth.yandex.ru/token"
 STATE_MAX_AGE_SEC = 900
+REUSABLE_OAUTH_CODE_ERRORS = frozenset({"provider_invalid_grant", "provider_bad_verification_code"})
+
+
+def oauth_state_digest(state: str) -> str:
+    """Only the digest of an OAuth state is ever persisted, never the state itself."""
+    return hashlib.sha256(str(state).encode()).hexdigest()
+
+
+class InMemoryOAuthStateStore:
+    """Single-use bookkeeping for stateless OAuth states (reserve -> consume | release).
+
+    In-process reference/fake implementation of the store port; production wiring injects a durable one.
+    """
+
+    def __init__(self) -> None:
+        self.consumed: dict[str, str] = {}
+        self.reserved: set[str] = set()
+
+    def reserve(self, digest: str) -> bool:
+        if digest in self.consumed or digest in self.reserved:
+            return False
+        self.reserved.add(digest)
+        return True
+
+    def release(self, digest: str) -> None:
+        self.reserved.discard(digest)
+
+    def consume(self, digest: str, reason: str = "completed") -> bool:
+        self.reserved.discard(digest)
+        if digest in self.consumed:
+            return False
+        self.consumed[digest] = reason
+        return True
+
+
+def _checked_state(tenant_id: str, state: str, now: float | None) -> None:
+    parsed = parse_state(state)
+    age = (now or time.time()) - (parsed.issued_at_ts if parsed else 0)
+    if parsed is None or parsed.tenant_id != tenant_id or not 0 <= age <= STATE_MAX_AGE_SEC:
+        raise PermissionError("oauth_state_invalid")
+
+
+def cancel_yandex_direct_oauth(*, tenant_id: str, state: str, oauth_store: Any, now: float | None = None) -> bool:
+    """Consume an outstanding OAuth state without contacting the provider (donor cancel). True = newly cancelled."""
+    _checked_state(tenant_id, state, now)
+    return bool(oauth_store.consume(oauth_state_digest(state), "cancelled"))
+
+
+def settle_failed_oauth_completion(*, oauth_store: Any, digest: str, reusable: bool) -> None:
+    """After a failed code exchange: a provider-reported reusable error releases the state, anything else burns it."""
+    if reusable:
+        oauth_store.release(digest)
+    else:
+        oauth_store.consume(digest, "failed")
 
 
 def ad_connections_enabled(env: Mapping[str, str] | None = None) -> bool:
@@ -60,25 +115,39 @@ async def complete_yandex_direct_oauth(
     token_store: Any,
     env: Mapping[str, str] | None = None,
     now: float | None = None,
+    oauth_store: Any = None,
 ) -> dict[str, Any]:
-    """Validate state (tenant + age), exchange the code, store the token; returns no token material."""
+    """Validate state (tenant + age), exchange the code, store the token; returns no token material.
+
+    With ``oauth_store`` the state is single-use: a cancelled/used state is rejected and a failed exchange
+    releases (reusable provider error) or burns the state.
+    """
     e = env or os.environ
-    parsed = parse_state(state)
-    age = (now or time.time()) - (parsed.issued_at_ts if parsed else 0)
-    if parsed is None or parsed.tenant_id != tenant_id or not 0 <= age <= STATE_MAX_AGE_SEC:
-        raise PermissionError("oauth_state_invalid")
-    cfg = OAuthClientConfig(
-        token_url=YANDEX_TOKEN_URL,
-        client_id=e["YANDEX_DIRECT_CLIENT_ID"],
-        client_secret=vault.get_secret(e["YANDEX_DIRECT_CLIENT_SECRET_REF"]),
-    )
-    result = await YandexOAuthExchanger(http=http, cfg=cfg).exchange(code=code, redirect_uri=redirect_uri)
+    _checked_state(tenant_id, state, now)
+    digest = oauth_state_digest(state)
+    if oauth_store is not None and not oauth_store.reserve(digest):
+        raise PermissionError("oauth_state_consumed")
+    try:
+        cfg = OAuthClientConfig(
+            token_url=YANDEX_TOKEN_URL,
+            client_id=e["YANDEX_DIRECT_CLIENT_ID"],
+            client_secret=vault.get_secret(e["YANDEX_DIRECT_CLIENT_SECRET_REF"]),
+        )
+        result = await YandexOAuthExchanger(http=http, cfg=cfg).exchange(code=code, redirect_uri=redirect_uri)
+    except Exception as exc:
+        if oauth_store is not None:
+            settle_failed_oauth_completion(
+                oauth_store=oauth_store, digest=digest, reusable=getattr(exc, "code", "") in REUSABLE_OAUTH_CODE_ERRORS
+            )
+        raise
     token = {
         "access_token": result.access_token,
         "refresh_token": result.refresh_token,
         "expires_in": result.expires_in,
     }
     await token_store.put(tenant_id=tenant_id, platform=AdsPlatform.YANDEX_DIRECT, account_id=account_id, token=token)
+    if oauth_store is not None:
+        oauth_store.consume(digest, "completed")
     return {"platform": "yandex_direct", "account_id": account_id, "connected": True}
 
 
