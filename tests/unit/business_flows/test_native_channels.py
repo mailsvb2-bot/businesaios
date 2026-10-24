@@ -147,3 +147,48 @@ def test_promotion_touch_hook_vk_max_only() -> None:
     assert hook("t", "b", "vk_messaging", "5", f"/start {pm.PREFIX}tok12345abcd")["customer_id"] == "cust-5"
     assert hook("t", "b", "telegram", "5", f"/start {pm.PREFIX}tok12345abcd") is None
     assert "promotion_touch_hook" in ProviderInboundWebhookService.__dataclass_fields__
+
+
+# ---- e-mail SMTP connections (event-sourced port of email_connections) ----
+def test_email_provision_stores_refs_only_and_is_idempotent() -> None:
+    conn, facts = nc.provision_email_smtp(sender_email=" Owner@Example.RU ", smtp_host="smtp.example.ru", smtp_port=465,
+                                          username_ref="env:SMTP_USER", password_ref="vault:SMTP_PASS", security="ssl",
+                                          sender_name="Студия")
+    assert conn.status == "pending" and conn.sender_email == "owner@example.ru" and conn.id.startswith("ec_")
+    assert "hunter2" not in json.dumps(facts)
+    conns = nc.email_replay(facts)
+    assert nc.provision_email_smtp(sender_email="owner@example.ru", smtp_host="smtp.example.ru", smtp_port=465,
+                                   username_ref="env:SMTP_USER", password_ref="vault:SMTP_PASS")[0].id == conn.id
+    assert nc.email_replay(facts + facts).keys() == conns.keys()
+
+
+@pytest.mark.parametrize("bad", [
+    dict(username_ref="plain-user"), dict(password_ref="hunter2"), dict(smtp_port=0), dict(smtp_port=70000),
+    dict(sender_email="not-an-email"), dict(security="none"), dict(smtp_host=""),
+])
+def test_email_provision_rejects_raw_secrets_and_bad_input(bad) -> None:
+    args = dict(sender_email="o@example.ru", smtp_host="smtp.example.ru", smtp_port=465, username_ref="env:U",
+                password_ref="env:P", security="ssl")
+    with pytest.raises(ValueError):
+        nc.provision_email_smtp(**{**args, **bad})
+
+
+def test_email_activation_needs_a_passing_probe() -> None:
+    conn, facts = nc.provision_email_smtp(sender_email="o@example.ru", smtp_host="smtp.example.ru", smtp_port=587,
+                                          username_ref="env:U", password_ref="env:P", security="starttls")
+    conns = nc.email_replay(facts)
+
+    def refuse(c):
+        raise RuntimeError("535 auth failed")
+
+    with pytest.raises(RuntimeError):
+        nc.verify_and_activate_email_smtp(conns, conn.id, refuse)
+    assert nc.email_replay(facts)[conn.id].status == "pending"
+    seen = []
+    active, fs = nc.verify_and_activate_email_smtp(conns, conn.id, seen.append)
+    assert active.status == "active" and seen[0].id == conn.id
+    assert nc.email_replay(facts + fs)[conn.id].status == "active"
+    again, fs2 = nc.verify_and_activate_email_smtp(nc.email_replay(facts + fs), conn.id, seen.append)
+    assert again.status == "active" and len(seen) == 2  # re-verification probes again (credentials may have rotated)
+    with pytest.raises((LookupError, ValueError)):
+        nc.verify_and_activate_email_smtp(conns, "ec_missing", seen.append)

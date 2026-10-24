@@ -11,6 +11,7 @@ from __future__ import annotations
 import hashlib
 import hmac
 import re
+from collections.abc import Callable
 from dataclasses import dataclass, replace
 from typing import Any, Protocol
 from urllib.parse import urlsplit
@@ -170,5 +171,103 @@ def disable(routes: dict[str, Route], rid: str) -> dict[str, Any]:
     return _disabled(rid, "owner")
 
 
-__all__ = ["PLATFORMS", "PROVIDER_KEYS", "Provider", "Route", "acquire_lease", "disable", "provision_max", "provision_vk",
+# --- email SMTP connections (donor email_connections): pending until the provider accepts the credentials ---
+# Donor stored the SMTP password encrypted in its own vault; here SMTP material is only ``env:``/``vault:``
+# references (never a literal) and the SMTP probe is an injected, executor-owned callable.
+
+_HOST = re.compile(r"[a-z0-9]([a-z0-9.-]{0,251}[a-z0-9])?")
+_EMAIL = re.compile(r"[^@\s<>]{1,64}@[a-z0-9.-]{1,253}\.[a-z]{2,24}")
+SMTP_SECURITY = ("ssl", "starttls")
+
+
+@dataclass(frozen=True, slots=True)
+class EmailConn:
+    id: str
+    sender_email: str
+    host: str
+    port: int
+    username_ref: str
+    password_ref: str
+    security: str
+    sender_name: str = ""
+    status: str = "pending"  # pending | active
+
+
+def email_connection_id(sender_email: str) -> str:
+    return "ec_" + hashlib.sha256(f"email_smtp:{sender_email}".encode()).hexdigest()[:16]
+
+
+def normalize_email(value: object) -> str:
+    email = str(value or "").strip().lower()
+    if not _EMAIL.fullmatch(email) or ".." in email:
+        raise ValueError("email address is invalid")
+    return email
+
+
+def email_replay(facts: list[dict[str, Any]]) -> dict[str, EmailConn]:
+    out: dict[str, EmailConn] = {}
+    for f in facts:
+        cid = str(f.get("id") or "")
+        if f.get("step") == "email_conn_pending":
+            out[cid] = EmailConn(**{k: f[k] for k in EmailConn.__dataclass_fields__ if k in f and k != "status"})
+        elif f.get("step") == "email_conn_active" and cid in out:
+            out[cid] = replace(out[cid], status="active")
+    return out
+
+
+def provision_email_smtp(
+    *,
+    sender_email: str,
+    smtp_host: str,
+    smtp_port: int,
+    username_ref: str,
+    password_ref: str,
+    security: str = "ssl",
+    sender_name: str = "",
+) -> tuple[EmailConn, list[dict[str, Any]]]:
+    """Donor provision_email_smtp_connection: validated, pending, re-verification required."""
+    sender = normalize_email(sender_email)
+    host = str(smtp_host or "").strip().lower()
+    if not _HOST.fullmatch(host) or "." not in host:
+        raise ValueError("SMTP host is invalid")
+    port = int(smtp_port)
+    if not 1 <= port <= 65535:
+        raise ValueError("SMTP port is invalid")
+    for ref in (username_ref, password_ref):
+        if not _REF.match(str(ref or "")):
+            raise ValueError("SMTP логин и пароль передаются только ссылкой env:NAME или vault:NAME")
+    name = " ".join(str(sender_name or "").split())
+    if len(name) > 160:
+        raise ValueError("SMTP sender name is too long")
+    sec = str(security or "").strip().lower()
+    if sec not in SMTP_SECURITY:
+        raise ValueError("SMTP security must be ssl or starttls")
+    fact = {
+        "step": "email_conn_pending",
+        "id": email_connection_id(sender),
+        "sender_email": sender,
+        "host": host,
+        "port": port,
+        "username_ref": username_ref,
+        "password_ref": password_ref,
+        "security": sec,
+        "sender_name": name,
+    }
+    return email_replay([fact])[fact["id"]], [fact]
+
+
+def verify_and_activate_email_smtp(
+    conns: dict[str, EmailConn], connection_id: str, probe: Callable[[EmailConn], None]
+) -> tuple[EmailConn, list[dict[str, Any]]]:
+    """Probe SMTP auth first (injected, executor-owned), then activate exactly that connection."""
+    conn = conns.get(str(connection_id))
+    if conn is None:
+        raise ValueError("email connection was not found in the active business")
+    if normalize_email(conn.sender_email) != conn.sender_email:
+        raise ValueError("SMTP credential sender does not match the connection account")
+    probe(conn)  # raises on rejected credentials: the connection then stays pending
+    return replace(conn, status="active"), [{"step": "email_conn_active", "id": conn.id}]
+
+
+__all__ = ["EmailConn", "email_connection_id", "email_replay", "normalize_email", "provision_email_smtp", "verify_and_activate_email_smtp", "PLATFORMS", "PROVIDER_KEYS", "Provider", "Route", "acquire_lease", "disable", "provision_max", "provision_vk",
            "public_base_url", "replay", "route_id", "webhook_secret", "webhook_url"]  # fmt: skip

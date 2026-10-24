@@ -10,6 +10,9 @@ provider-side references are stored, never media bytes.
 from __future__ import annotations
 
 import hashlib
+import json
+import re
+import uuid
 from collections.abc import Callable
 from dataclasses import dataclass, replace
 from pathlib import Path
@@ -330,3 +333,316 @@ def progress(*, bindings: dict[str, VariantBinding], assets: dict[str, Asset], j
 def observable_variants(bindings: dict[str, VariantBinding]) -> list[VariantBinding]:
     """Attached bindings that ad statistics can attribute to a studio angle."""
     return [b for b in bindings.values() if b.status == "attached"]
+
+
+# --- editable advertising project (donor editable_advertising + EditableAdProjectRepository) ---
+# Composition metadata only (never media bytes). Event-sourced from ``eap_*`` facts; the provider
+# poll/render is an executor effect, the pure rules below decide what its result means.
+
+_COLOR = re.compile(r"#[0-9A-Fa-f]{6}")
+FONT_PRESETS = ("auto", "modern", "strict", "friendly", "premium", "editorial", "elegant", "bold_ad")
+LAYOUTS = ("lower_card", "top_card")
+EDITABLE_PUBLICATION_STATES = frozenset({"draft", "failed", "submitted"})
+DEFAULT_BRAND = {"primary_color": "#172033", "accent_color": "#E9C46A", "text_color": "#FFFFFF"}
+DEFAULT_FORMATS = ("square",)
+
+
+class EditableAdError(RuntimeError):
+    """Sanitized editable-ad orchestration failure."""
+
+
+class EditableAdSourceExpired(EditableAdError):
+    """The exact AI source completed earlier but its transient bytes are gone."""
+
+
+@dataclass(frozen=True, slots=True)
+class EditableAdProject:
+    id: str
+    member_id: str
+    publication_job_id: str
+    kind: str
+    headline: str
+    body: str
+    cta: str
+    layout: str
+    font_preset: str
+    brand_json: str
+    source_job_id: str = ""
+    status: str = "draft"  # draft | source_ready | source_expired | finished
+    revision: int = 1
+    created_at: str = ""
+    updated_at: str = ""
+
+    def brand(self) -> dict[str, str]:
+        try:
+            value = json.loads(self.brand_json)
+        except json.JSONDecodeError as exc:
+            raise ValueError("editable_ad_brand_invalid") from exc
+        if not isinstance(value, dict) or set(value) != set(DEFAULT_BRAND):
+            raise ValueError("editable_ad_brand_invalid")
+        out = {k: str(value.get(k) or "").strip().upper() for k in DEFAULT_BRAND}
+        if any(_COLOR.fullmatch(v) is None for v in out.values()):
+            raise ValueError("editable_ad_brand_invalid")
+        return out
+
+    def composition(self) -> dict[str, object]:
+        if self.kind not in {"image", "video"}:
+            raise ValueError("editable_ad_kind_invalid")
+        if self.layout not in LAYOUTS:
+            raise ValueError("editable_ad_layout_invalid")
+        if self.revision < 1:
+            raise ValueError("editable_ad_revision_invalid")
+        return {
+            "headline": self.headline,
+            "body": self.body,
+            "cta": self.cta,
+            "layout": self.layout,
+            "typography": {"preset": font_preset(self.font_preset)},
+            "brand": self.brand(),
+        }
+
+
+def font_preset(value: object) -> str:
+    token = str(value or "auto").strip().lower()
+    if token not in FONT_PRESETS:
+        raise ValueError("editable_ad_font_preset_invalid")
+    return token
+
+
+def _text(value: object, limit: int, *, required: bool = False) -> str:
+    token = " ".join(str(value or "").replace("\x00", " ").split()).strip()
+    if required and not token:
+        raise ValueError("editable_ad_value_required")
+    if len(token) > limit or any(ord(c) < 32 for c in token):
+        raise ValueError("editable_ad_value_invalid")
+    return token
+
+
+def _brand_json(brand: dict[str, str]) -> str:
+    out = {k: str(brand.get(k) or d).strip().upper() for k, d in DEFAULT_BRAND.items()}
+    if any(_COLOR.fullmatch(v) is None for v in out.values()):
+        raise ValueError("editable_ad_brand_invalid")
+    return json.dumps(out, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
+
+
+def eap_replay(facts: list[dict[str, Any]]) -> dict[str, EditableAdProject]:
+    out: dict[str, EditableAdProject] = {}
+    for f in facts:
+        pid = str(f.get("id") or "")
+        if f.get("step") == "eap_created":
+            out.setdefault(
+                pid, EditableAdProject(**{k: f[k] for k in EditableAdProject.__dataclass_fields__ if k in f})
+            )
+        elif f.get("step") == "eap_set" and pid in out:
+            out[pid] = replace(out[pid], **dict(f["set"]), updated_at=f["at"])
+    return out
+
+
+def _iso(now_ms: int) -> str:
+    from datetime import UTC, datetime
+
+    return datetime.fromtimestamp(int(now_ms) / 1000, UTC).isoformat(timespec="seconds")
+
+
+def _set(pid: str, now_ms: int, **changes: Any) -> dict[str, Any]:
+    return {"step": "eap_set", "id": pid, "at": _iso(now_ms), "set": changes}
+
+
+def _editable(publication_status: str | None) -> None:
+    if publication_status is None:
+        raise ValueError("advertising publication draft was not found")
+    if publication_status not in EDITABLE_PUBLICATION_STATES:
+        raise ValueError("advertising publication can no longer be edited")
+
+
+def get_project(projects: dict[str, EditableAdProject], member: str, project_id: str) -> EditableAdProject:
+    """Donor get_editable_ad_project: another member's project is indistinguishable from a missing one."""
+    value = projects.get(str(project_id or "").strip().lower())
+    if value is None or value.member_id != member:
+        raise LookupError("editable advertising project was not found")
+    return value
+
+
+def create_project(
+    projects: dict[str, EditableAdProject],
+    member: str,
+    *,
+    publication_job_id: str,
+    publication_status: str | None,
+    kind: str,
+    headline: str,
+    body: str,
+    brand: dict[str, str],
+    cta: str = "Записаться",
+    layout: str = "lower_card",
+    preset: str = "auto",
+    now_ms: int,
+) -> tuple[EditableAdProject, list[dict[str, Any]]]:
+    _editable(publication_status)
+    visual_kind = str(kind or "").strip().lower()
+    if visual_kind not in {"image", "video"}:
+        raise ValueError("editable_ad_kind_invalid")
+    for p in projects.values():
+        if (p.member_id, p.publication_job_id, p.kind) == (member, publication_job_id, visual_kind):
+            return p, []
+    lay = str(layout or "lower_card").strip().lower()
+    if lay not in LAYOUTS:
+        raise ValueError("editable_ad_layout_invalid")
+    at = _iso(now_ms)
+    seed = f"eap|{member}|{publication_job_id}|{visual_kind}"
+    fact = {
+        "step": "eap_created",
+        "id": str(uuid.UUID(hashlib.sha256(seed.encode()).hexdigest()[:32])),
+        "member_id": member,
+        "publication_job_id": publication_job_id,
+        "kind": visual_kind,
+        "headline": _text(headline, 160, required=True),
+        "body": _text(body, 500, required=True),
+        "cta": _text(cta, 80),
+        "layout": lay,
+        "font_preset": font_preset(preset),
+        "brand_json": _brand_json(brand),
+        "created_at": at,
+        "updated_at": at,
+    }
+    return eap_replay([fact])[fact["id"]], [fact]
+
+
+def prepare_source(
+    projects: dict[str, EditableAdProject], member: str, project_id: str, *, publication_status: str | None, now_ms: int
+) -> tuple[EditableAdProject, list[dict[str, Any]]]:
+    value = get_project(projects, member, project_id)
+    _editable(publication_status)
+    if value.status == "draft" and not value.source_job_id:
+        return value, []
+    if value.status != "source_expired":
+        raise ValueError("editable_ad_source_rotation_not_allowed")
+    ch = {"source_job_id": "", "status": "draft", "revision": value.revision + 1}
+    return replace(value, **ch), [_set(value.id, now_ms, **ch)]
+
+
+def advance_failed_source(
+    projects: dict[str, EditableAdProject], member: str, project_id: str, *, now_ms: int
+) -> tuple[EditableAdProject, list[dict[str, Any]]]:
+    """Rotate only after a definitive failed provider job; ambiguous failures keep the same revision."""
+    value = get_project(projects, member, project_id)
+    if value.status != "draft" or value.source_job_id:
+        return value, []
+    ch = {"revision": value.revision + 1}
+    return replace(value, **ch), [_set(value.id, now_ms, **ch)]
+
+
+def bind_source(
+    projects: dict[str, EditableAdProject],
+    member: str,
+    project_id: str,
+    source_job_id: str,
+    *,
+    publication_status: str | None,
+    now_ms: int,
+) -> tuple[EditableAdProject, list[dict[str, Any]]]:
+    value = get_project(projects, member, project_id)
+    _editable(publication_status)
+    job = _text(source_job_id, 128, required=True)
+    if value.source_job_id:
+        if value.source_job_id == job and value.status in {"source_ready", "finished"}:
+            return value, []
+        raise ValueError("editable_ad_source_rebind_forbidden")
+    if value.status != "draft":
+        raise ValueError("editable_ad_source_state_invalid")
+    ch = {"source_job_id": job, "status": "source_ready"}
+    return replace(value, **ch), [_set(value.id, now_ms, **ch)]
+
+
+def update_composition(
+    projects: dict[str, EditableAdProject],
+    member: str,
+    project_id: str,
+    *,
+    publication_status: str | None,
+    now_ms: int,
+    headline: str | None = None,
+    body: str | None = None,
+    cta: str | None = None,
+    layout: str | None = None,
+    preset: str | None = None,
+) -> tuple[EditableAdProject, list[dict[str, Any]]]:
+    value = get_project(projects, member, project_id)
+    _editable(publication_status)
+    lay = value.layout if layout is None else str(layout).strip().lower()
+    if lay not in LAYOUTS:
+        raise ValueError("editable_ad_layout_invalid")
+    ch = {
+        "headline": value.headline if headline is None else _text(headline, 160, required=True),
+        "body": value.body if body is None else _text(body, 500, required=True),
+        "cta": value.cta if cta is None else _text(cta, 80),
+        "layout": lay,
+        "font_preset": value.font_preset if preset is None else font_preset(preset),
+        "status": "source_ready"
+        if value.status in {"source_ready", "finished"} and value.source_job_id
+        else value.status,
+        "revision": value.revision + 1,
+    }
+    return replace(value, **ch), [_set(value.id, now_ms, **ch)]
+
+
+def mark_expired(
+    projects: dict[str, EditableAdProject], member: str, project_id: str, *, expected_source_job_id: str, now_ms: int
+) -> tuple[EditableAdProject, list[dict[str, Any]]]:
+    value = get_project(projects, member, project_id)
+    expected = _text(expected_source_job_id, 128, required=True)
+    if (
+        value.source_job_id != expected
+        or value.status == "source_expired"
+        or value.status not in {"source_ready", "finished"}
+    ):
+        return value, []
+    return replace(value, status="source_expired"), [_set(value.id, now_ms, status="source_expired")]
+
+
+def finish_project(
+    projects: dict[str, EditableAdProject], member: str, project_id: str, *, publication_status: str | None, now_ms: int
+) -> tuple[EditableAdProject, list[dict[str, Any]]]:
+    value = get_project(projects, member, project_id)
+    _editable(publication_status)
+    if value.status == "finished" and value.source_job_id:
+        return value, []
+    if value.status != "source_ready" or not value.source_job_id:
+        raise ValueError("editable_ad_project_not_ready")
+    return replace(value, status="finished"), [_set(value.id, now_ms, status="finished")]
+
+
+def render_key(project: EditableAdProject, formats: tuple[str, ...]) -> str:
+    payload = json.dumps(
+        {
+            "project_id": project.id,
+            "revision": project.revision,
+            "source_job_id": project.source_job_id,
+            "composition": project.composition(),
+            "formats": list(formats),
+        },
+        ensure_ascii=False,
+        sort_keys=True,
+        separators=(",", ":"),
+    )
+    return "clientplatform:editable:" + hashlib.sha256(payload.encode()).hexdigest()[:32]
+
+
+def render_formats(formats: tuple[str, ...] = DEFAULT_FORMATS) -> tuple[str, ...]:
+    chosen = tuple(dict.fromkeys(str(item or "").strip().lower() for item in formats))
+    if not chosen or len(chosen) > 4:
+        raise ValueError("editable_ad_formats_invalid")
+    return chosen
+
+
+def render_check(project: EditableAdProject, *, job_status: str, asset_ready: bool, job_kind: str) -> str:
+    """Donor render_editable_ad_project decision on the gateway poll result: "ok" or raises."""
+    if not project.source_job_id:
+        raise EditableAdSourceExpired("editable_ad_source_missing")
+    if job_status == "succeeded" and not asset_ready:
+        raise EditableAdSourceExpired("editable_ad_source_expired")
+    if job_status != "succeeded" or not asset_ready:
+        raise EditableAdError("editable_ad_source_not_ready")
+    if job_kind != project.kind:
+        raise EditableAdError("editable_ad_source_kind_mismatch")
+    return "ok"

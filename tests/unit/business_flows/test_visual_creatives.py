@@ -144,3 +144,180 @@ def test_normalize_trims_blank_band(tmp_path) -> None:
     pil.new("RGB", (10, 10)).save(tiny)
     with _pytest.raises(ValueError, match="dimensions"):
         _vc.normalize_image(tiny)
+
+
+# ---- creative-generation receipts, scene-plan receipts, style clear, aesthetic director ----
+def _prep(led=None, member="m1", request="Фото кофейни", now=1_800_000_000_000, **kw):
+    from application.business_flows import visual_creatives as v
+
+    led = led if led is not None else v.gen_replay([])
+    payload = v.freeze_payload(request=request, kind="image", brand_context="тёплый стиль", country_code="RU")
+    r, facts = v.gen_prepare(
+        led,
+        member,
+        request_text=request,
+        brand_context="тёплый стиль",
+        country_code="RU",
+        provider_payload_json=payload,
+        now_ms=now,
+        **kw,
+    )
+    return v.gen_replay(facts, into=led), r, facts
+
+
+def test_gen_prepare_is_idempotent_and_replaces_a_different_prepared_receipt() -> None:
+    from application.business_flows import visual_creatives as v
+
+    led, r, facts = _prep()
+    assert [f["step"] for f in facts] == ["gen_prepared"] and r.status == "prepared"
+    assert r.idempotency_key.startswith("clientplatform:owner-image:")
+    led2, r2, facts2 = _prep(led)
+    assert r2.id == r.id and facts2 == []  # identical request: no new receipt
+    led3, r3, facts3 = _prep(led2, request="Фото булочной")
+    assert [f["step"] for f in facts3] == ["gen_deleted", "gen_prepared"] and r3.id != r.id
+    assert v.gen_active(led3, "m1").id == r3.id
+    with pytest.raises(LookupError):
+        v.gen_get(led3, "other-member", r3.id)
+
+
+def test_gen_lifecycle_submit_deliver_redeliver_abandon() -> None:
+    from application.business_flows import visual_creatives as v
+
+    led, r, _ = _prep()
+    now = 1_800_000_000_000
+    cur, fs = v.gen_begin_submission(led, "m1", r.id, now_ms=now)
+    led = v.gen_replay(fs, into=led)
+    assert cur.status == "prepared" and v.gen_get(led, "m1", r.id).status == "submitting"
+    assert v.gen_begin_submission(led, "m1", r.id, now_ms=now)[1] == []  # never submit twice
+    _, fs = v.gen_remember_job(led, "m1", r.id, source_job_id="job1", provider_status="succeeded", now_ms=now)
+    led = v.gen_replay(fs, into=led)
+    assert v.gen_get(led, "m1", r.id).status == "succeeded"
+    assert v.gen_authorize_redelivery(led, "m1", r.id, now_ms=now) == (False, [])  # nothing claimed yet
+    ok, fs = v.gen_claim_delivery(led, "m1", r.id, now_ms=now)
+    led = v.gen_replay(fs, into=led)
+    assert ok and v.gen_claim_delivery(led, "m1", r.id, now_ms=now) == (False, [])
+    ok, fs = v.gen_authorize_redelivery(led, "m1", r.id, now_ms=now + 1)
+    led = v.gen_replay(fs, into=led)
+    ok, fs = v.gen_claim_delivery(led, "m1", r.id, now_ms=now + 2)
+    led = v.gen_replay(fs, into=led)
+    assert ok
+    fresh, fresh_r, _ = _prep()
+    with pytest.raises(ValueError):  # delivery must be claimed before it can be marked delivered
+        v.gen_mark_delivered(fresh, "m1", fresh_r.id, now_ms=1)
+    _, fs = v.gen_mark_delivered(led, "m1", r.id, now_ms=now + 3)
+    led = v.gen_replay(fs, into=led)
+    assert v.gen_active(led, "m1") is None
+
+
+def test_gen_failure_handling_definitive_deletes_ambiguous_stays_active() -> None:
+    from application.business_flows import visual_creatives as v
+
+    for code, active in (("", False), (sorted(v.GEN_AMBIGUOUS_ERRORS)[0], True)):
+        led, r, _ = _prep()
+        _, fs = v.gen_remember_job(
+            led, "m1", r.id, source_job_id="j", provider_status="failed", provider_error_code=code, now_ms=1
+        )
+        led = v.gen_replay(fs, into=led)
+        assert (v.gen_active(led, "m1") is not None) is active
+        if active:
+            assert v.gen_get(led, "m1", r.id).status == "running"
+            assert v.gen_abandon_ambiguous(led, "m1", r.id, job_status="running", job_error_code=code) == (False, [])
+            ok, fs = v.gen_abandon_ambiguous(led, "m1", r.id, job_status="failed", job_error_code=code)
+            assert ok and fs[0]["step"] == "gen_deleted"
+    led, r, _ = _prep()
+    with pytest.raises(ValueError):
+        v.gen_remember_job(led, "m1", r.id, source_job_id="", provider_status="queued", now_ms=1)
+    with pytest.raises(ValueError):
+        v.gen_remember_job(led, "m1", r.id, source_job_id="j", provider_status="weird", now_ms=1)
+
+
+def test_gen_abandon_only_discards_finished_result_and_payload_is_validated() -> None:
+    from application.business_flows import visual_creatives as v
+
+    led, r, _ = _prep()
+    assert v.gen_abandon(led, "m1", r.id) == (False, [])
+    with pytest.raises(ValueError):
+        v.gen_prepare(
+            led, "m1", request_text="", brand_context="", country_code="", provider_payload_json="{}", now_ms=1
+        )
+    with pytest.raises(ValueError):
+        v.gen_prepare(
+            led, "m1", request_text="x", brand_context="", country_code="RUS", provider_payload_json="{}", now_ms=1
+        )
+
+
+def test_freeze_payload_is_deterministic_and_bound() -> None:
+    from application.business_flows import visual_creatives as v
+
+    b = {"type": "event_content", "event_id": "e", "stage": "warmup", "slot_key": "k", "kind": "image"}
+    a = v.freeze_payload(request="Йога утром", kind="image", brand_context="", country_code="ru", binding=b)
+    assert a == v.freeze_payload(request="Йога утром", kind="image", brand_context="", country_code="ru", binding=b)
+    assert v.frozen_binding(a) == b and v.frozen_scene(a)[1] == "deterministic"
+    with pytest.raises(ValueError):
+        v.freeze_payload(request="", kind="image")
+    with pytest.raises(ValueError):
+        v.freeze_payload(request="x", kind="gif")
+
+
+def test_scene_plan_receipts_claim_once_complete_and_ambiguous() -> None:
+    from application.business_flows import visual_creatives as v
+
+    style = {"look": "warm"}
+    plans: dict = {}
+    r, fresh, fs = v.scene_plan_claim(plans, "m", request="Кофе", style_intent=style)
+    assert fresh and r["status"] == "planning"
+    plans = v.scene_plan_replay(fs)
+    assert v.scene_plan_claim(plans, "m", request="Кофе", style_intent=style)[1:] == (False, [])
+    assert v.scene_plan_get(plans, "m", request="Кофе", style_intent={"look": "cold"}) is None
+    done, fs2 = v.scene_plan_complete(plans, "m", r["id"], result_json='{"a":1}')
+    plans = v.scene_plan_replay(fs + fs2)
+    assert done["status"] == "ready" and plans[next(iter(plans))]["result_json"] == '{"a":1}'
+    with pytest.raises(ValueError):
+        v.scene_plan_complete(plans, "m", r["id"], result_json="{}")  # already finished
+    r2, _, fs3 = v.scene_plan_claim({}, "m", request="Чай", style_intent=style)
+    plans2 = v.scene_plan_replay(fs3)
+    amb, fs4 = v.scene_plan_mark_ambiguous(plans2, "m", r2["id"])
+    assert (
+        amb["status"] == "ambiguous"
+        and v.scene_plan_mark_ambiguous(v.scene_plan_replay(fs3 + fs4), "m", r2["id"])[1] == []
+    )
+    with pytest.raises(LookupError):
+        v.scene_plan_mark_ambiguous(plans2, "m", "nope")
+
+
+def test_clear_style_removes_only_a_stored_preference() -> None:
+    from application.business_flows import visual_creatives as v
+
+    st = v.replay([v.save_style("Йога", "minimal")])
+    ok, fs = v.clear_style("Йога", st)
+    assert ok and v.replay([v.save_style("Йога", "minimal"), *fs]).styles == {}
+    assert v.clear_style("Йога", v.replay([])) == (False, [])
+
+
+class _Chat:
+    def __init__(self, reply):
+        self.reply, self.calls = reply, []
+
+    def chat(self, messages, **kw):
+        self.calls.append(messages)
+        if isinstance(self.reply, Exception):
+            raise self.reply
+        return self.reply
+
+
+def test_aesthetic_director_is_off_by_default_and_sanitizes() -> None:
+    from application.business_flows import visual_creatives as v
+
+    good = '{"subject":"чашка кофе","light":"мягкий утренний свет","style":"тёплая плёнка"}'
+    chat = _Chat(good)
+    assert v.direct_aesthetics(chat, owner_request="кофе", kind="image", env={}) is None and chat.calls == []
+    on = {"VISUAL_AESTHETIC_DIRECTOR_ENABLED": "1"}
+    out = v.direct_aesthetics(chat, owner_request="кофе", kind="image", env=on)
+    assert out["subject"] == "чашка кофе" and len(" ".join(x for x in out.values() if x)) <= 350
+    assert v.direct_aesthetics(_Chat(RuntimeError("down")), owner_request="кофе", kind="image", env=on) is None
+    assert v.direct_aesthetics(_Chat("not json"), owner_request="кофе", kind="image", env=on) is None
+    assert (
+        v.direct_aesthetics(_Chat('{"price":"-50%"}'), owner_request="кофе", kind="image", env=on) is None
+    )  # unknown keys
+    assert v.direct_aesthetics(_Chat('{"subject":""}'), owner_request="кофе", kind="image", env=on) is None
+    assert v.direct_aesthetics(None, owner_request="кофе", kind="image", env=on) is None

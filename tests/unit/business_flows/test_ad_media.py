@@ -142,3 +142,91 @@ def test_pub_attach_normalizes_render(tmp_path):
     with pytest.raises(m.PublicationError, match="attachment_failed"):
         m.progress(bindings=m.replay_bindings(facts), assets={}, job_id="j", brief=briefs[0], visual_job=ok,
                    fetch_render=lambda r, f: png)
+
+
+# ---- editable ad projects (event-sourced port of editable_advertising) ----
+def _proj(**kw):
+    args = dict(publication_job_id="pub1", publication_status="draft", kind="image", headline="Скидка",
+                body="Только сегодня", brand={}, now_ms=1_800_000_000_000)
+    return m.create_project({}, "u1", **{**args, **kw})
+
+
+def _apply(projects, facts):
+    return m.eap_replay([*_log(projects), *facts])
+
+
+def _log(projects):
+    return [] if not projects else [f for p in projects.values() for f in _log_of(p)]
+
+
+def _log_of(p):
+    return [{"step": "eap_created", "id": p.id, "member_id": p.member_id, "publication_job_id": p.publication_job_id,
+             "kind": p.kind, "headline": p.headline, "body": p.body, "cta": p.cta, "layout": p.layout,
+             "font_preset": p.font_preset, "brand_json": p.brand_json, "created_at": p.created_at,
+             "updated_at": p.updated_at}]
+
+
+def test_editable_project_create_is_idempotent_and_publication_status_gated() -> None:
+    p, facts = _proj()
+    assert p.status == "draft" and p.revision == 1 and [f["step"] for f in facts] == ["eap_created"]
+    projects = m.eap_replay(facts)
+    again, facts2 = m.create_project(projects, "u1", publication_job_id="pub1", publication_status="draft", kind="image",
+                                     headline="Другое", body="x", brand={}, now_ms=2)
+    assert again.id == p.id and facts2 == []
+    with pytest.raises(ValueError):
+        _proj(publication_status="published")  # published ads are no longer editable
+    with pytest.raises(ValueError):
+        _proj(kind="gif")
+    with pytest.raises(ValueError):
+        _proj(layout="weird")
+    with pytest.raises(ValueError):
+        _proj(headline="")
+
+
+def test_editable_project_source_lifecycle_and_rebind_rules() -> None:
+    p, facts = _proj()
+    projects = m.eap_replay(facts)
+    kw = dict(publication_status="draft", now_ms=5)
+    p1, fs = m.bind_source(projects, "u1", p.id, "job1", **kw)
+    projects = m.eap_replay(facts + fs)
+    assert p1.status == "source_ready" and projects[p.id].source_job_id == "job1"
+    assert m.bind_source(projects, "u1", p.id, "job1", **kw)[1] == []  # same job: idempotent
+    with pytest.raises(ValueError, match="rebind_forbidden"):
+        m.bind_source(projects, "u1", p.id, "job2", **kw)
+    p2, fs2 = m.update_composition(projects, "u1", p.id, headline="Новое", **kw)
+    assert p2.revision == p.revision + 1 and p2.headline == "Новое"
+    with pytest.raises(LookupError):
+        m.get_project(projects, "someone-else", p.id)  # another member cannot see it
+    done, fs3 = m.finish_project(projects, "u1", p.id, **kw)
+    assert done.status == "finished" and m.finish_project(m.eap_replay(facts + fs + fs3), "u1", p.id, **kw)[1] == []
+    with pytest.raises(ValueError, match="not_ready"):
+        m.finish_project(m.eap_replay(facts), "u1", p.id, **kw)  # no source bound
+
+
+def test_editable_project_expired_source_and_new_source_rotation() -> None:
+    p, facts = _proj()
+    kw = dict(publication_status="draft", now_ms=5)
+    projects = m.eap_replay(facts + m.bind_source(m.eap_replay(facts), "u1", p.id, "job1", **kw)[1])
+    exp, fs = m.mark_expired(projects, "u1", p.id, expected_source_job_id="job1", now_ms=6)
+    assert exp.status == "source_expired" and m.mark_expired(m.eap_replay(facts + fs), "u1", p.id,
+                                                             expected_source_job_id="job1", now_ms=7)[1] == []
+    assert m.advance_failed_source(m.eap_replay(facts), "u1", p.id, now_ms=8)[0].revision == 2  # definitive failure
+    assert m.advance_failed_source(projects, "u1", p.id, now_ms=8)[1] == []  # bound source: no rotation
+
+
+def test_render_check_and_keys() -> None:
+    p, facts = _proj()
+    bound, _ = m.bind_source(m.eap_replay(facts), "u1", p.id, "job1", publication_status="draft", now_ms=1)
+    assert m.render_check(bound, job_status="succeeded", asset_ready=True, job_kind="image") == "ok"
+    with pytest.raises(m.EditableAdSourceExpired):
+        m.render_check(bound, job_status="succeeded", asset_ready=False, job_kind="image")
+    with pytest.raises(m.EditableAdSourceExpired):
+        m.render_check(p, job_status="succeeded", asset_ready=True, job_kind="image")  # nothing bound
+    with pytest.raises(m.EditableAdError):
+        m.render_check(bound, job_status="running", asset_ready=False, job_kind="image")
+    with pytest.raises(m.EditableAdError):
+        m.render_check(bound, job_status="succeeded", asset_ready=True, job_kind="video")
+    assert m.render_key(bound, ("square",)) == m.render_key(bound, ("square",)) and m.render_key(bound, ("square",)).startswith("clientplatform:editable:")
+    assert m.render_formats(("square",)) == ("square",) and m.font_preset("auto") == m.font_preset("auto")
+    with pytest.raises(ValueError):
+        m.render_formats(())
