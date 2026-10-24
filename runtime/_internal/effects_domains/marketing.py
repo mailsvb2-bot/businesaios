@@ -15,7 +15,7 @@ from runtime._internal.effects_domains.visual_creative_gateway import (
 )
 from runtime._internal.effects_tenant import assert_event_log_tenant
 from runtime.observability.error_handling import swallow
-from runtime.platform.config.env_flags import env_bool
+from runtime.platform.config.env_flags import env_bool, env_int
 from runtime.security.runtime_asserts import assert_called_from_executor
 
 
@@ -29,6 +29,15 @@ def _visual_identity(*, decision_id: str, correlation_id: str, user_id: str) -> 
         if not value:
             raise RuntimeError(code)
     return values  # type: ignore[return-value]
+
+
+VIDEO_ENV = "BAI_VIDEO_GENERATION_ENABLED"  # video generation: off by default (dry run, no provider call)
+VIDEO_PROVIDER_ALLOW = frozenset({"", "yandexart_motion"})  # Russian providers only; foreign ones are refused
+AD_PROVIDER_ENV = "BAI_AD_SPEND_PROVIDER_ENABLED"  # provider reads (budget snapshot): off by default
+AD_MUTATIONS_ENV = "BAI_AD_SPEND_MUTATIONS_ENABLED"  # launch / suspend / budget changes: off by default
+AD_CEILING_ENV = "BAI_AD_SPEND_CEILING_MINOR"  # absolute per-authorization ceiling; unset = no spend (fail closed)
+AD_READ_ACTIONS = frozenset({"read_budget", "minimum_weekly"})
+AD_MUTATING_ACTIONS = frozenset({"configure_budget", "moderate_ad", "suspend_ad"})
 
 
 class MarketingEffectsMixin:
@@ -70,6 +79,10 @@ class MarketingEffectsMixin:
         visual_kind, visual_prompt = str(kind or "").strip().lower(), str(prompt or "").strip()
         if visual_kind not in {"image", "video"} or not visual_prompt:
             raise ValueError("valid visual kind and prompt are required")
+        if visual_kind == "video":
+            blocked = self._video_gate(decision, correlation, tenant, user, preferred_provider)
+            if blocked is not None:
+                return blocked
         owner_context = f"{visual_prompt} {brand_context}"
         if visual_direction is None and "before" in (scene := scene_from_text(visual_prompt)):
             visual_direction = scene
@@ -104,6 +117,47 @@ class MarketingEffectsMixin:
         event_type = "visual_creative_generated" if jobs[0]["status"] == "succeeded" else "visual_creative_submitted"
         result = self._visual_result(tenant=tenant, user=user, decision=decision, correlation=correlation, job=jobs[0], event_type=event_type)
         return {**result, "candidates": jobs} if variants > 1 else result
+
+    def _video_gate(self, decision: str, correlation: str, tenant: str, user: str, provider: str) -> dict[str, Any] | None:
+        """Video is OFF unless BAI_VIDEO_GENERATION_ENABLED=1 (dry run + event, no provider call); Russian providers only."""
+        if str(provider or "").strip().lower() not in VIDEO_PROVIDER_ALLOW:
+            raise PermissionError("video_provider_not_allowed")
+        if env_bool(VIDEO_ENV, False):
+            return None
+        self.event_log.emit(event_type="video_dry_run", source="runtime_effects", user_id=user, decision_id=decision, correlation_id=correlation, payload={"tenant_id": tenant, "flag": VIDEO_ENV})
+        return {"ok": True, "status": "dry_run", "kind": "video", "meta": {"mode": "dry_run", "flag": VIDEO_ENV}}
+
+    def ad_provider_action(self, *, decision_id: str, correlation_id: str, tenant_id: str, user_id: str, action: str, params: dict[str, Any], idempotency_key: str = "") -> dict[str, Any]:
+        """Executor-only ad provider access. Reads need BAI_AD_SPEND_PROVIDER_ENABLED, mutations also
+        BAI_AD_SPEND_MUTATIONS_ENABLED; otherwise a dry run (event, no network). Real calls go through the
+        injected ``ad_provider_transport`` only, with a mandatory idempotency key and a hard spend ceiling."""
+        assert_called_from_executor()
+        tenant = self._visual_tenant(tenant_id, "ad_provider_action")
+        decision, correlation, user = _visual_identity(decision_id=decision_id, correlation_id=correlation_id, user_id=user_id)
+        name, data, key = str(action or "").strip(), dict(params or {}), str(idempotency_key or "").strip()
+        mutating = name in AD_MUTATING_ACTIONS
+        if not mutating and name not in AD_READ_ACTIONS:
+            raise ValueError("ad_provider_action_invalid")
+        if mutating and not key:
+            raise ValueError("ad_provider_idempotency_key_required")
+        flags = [AD_PROVIDER_ENV] + ([AD_MUTATIONS_ENV] if mutating else [])
+        base = {"tenant_id": tenant, "action": name, "idempotency_key": key}
+        if not all(env_bool(flag, False) for flag in flags):
+            self.event_log.emit(event_type="ad_provider_dry_run", source="runtime_effects", user_id=user, decision_id=decision, correlation_id=correlation, payload={**base, "flags": flags})
+            return {"ok": True, "status": "dry_run", "action": name, "meta": {"mode": "dry_run", "flags": flags}}
+        if name == "configure_budget":
+            ceiling = env_int(AD_CEILING_ENV, 0)
+            hard, daily = data.get("hard_cap_minor"), data.get("daily_cap_minor")
+            if type(hard) is not int or type(daily) is not int or ceiling <= 0 or not 0 < daily <= hard <= ceiling:
+                self.event_log.emit(event_type="ad_provider_refused", source="runtime_effects", user_id=user, decision_id=decision, correlation_id=correlation, payload={**base, "reason": "spend_ceiling"})
+                return {"ok": False, "status": "refused", "error": "AD_SPEND_CEILING", "action": name}
+        transport = getattr(self, "ad_provider_transport", None)
+        if not callable(transport):
+            self.event_log.emit(event_type="ad_provider_unconfigured", source="runtime_effects", user_id=user, decision_id=decision, correlation_id=correlation, payload=base)
+            return {"ok": False, "status": "unconfigured", "error": "AD_PROVIDER_TRANSPORT_NOT_CONFIGURED", "action": name}
+        out = dict(transport(action=name, params=data, idempotency_key=key, tenant_id=tenant) or {})
+        self.event_log.emit(event_type="ad_provider_action", source="runtime_effects", user_id=user, decision_id=decision, correlation_id=correlation, payload={**base, "ok": bool(out.get("ok"))})
+        return {"ok": bool(out.get("ok")), "status": str(out.get("status") or ("done" if out.get("ok") else "failed")), "action": name, "result": out}
 
     def _visual_quality_retry(self, job: dict[str, Any], payload: dict[str, Any], key: str, direction: dict[str, str], owner_context: str, tenant: str, wait: int) -> dict[str, Any]:
         """One bounded regeneration on provider failure or semantic QA review."""

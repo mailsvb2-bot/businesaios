@@ -79,6 +79,9 @@ class GuardedEffectsPort(EffectsPort):
     def generate_visual_creative(self, **kwargs):  # type: ignore[override]
         return self._forward("generate_visual_creative", **kwargs)
 
+    def ad_provider_action(self, **kwargs):  # type: ignore[override]
+        return self._forward("ad_provider_action", **kwargs)
+
     def poll_visual_creative(self, **kwargs):  # type: ignore[override]
         return self._forward("poll_visual_creative", **kwargs)
 
