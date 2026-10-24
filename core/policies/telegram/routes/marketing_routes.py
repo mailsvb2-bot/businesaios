@@ -83,43 +83,8 @@ def handle_marketing_routes(
             },
         )
     if str(ctx.callback_data or "").startswith("sub:") and str(ctx.callback_data).count(":") == 2:
-        try:
-            _, period, days_s = str(ctx.callback_data).split(":", 2)
-            days = int(days_s)
-        except Exception:
-            return pm(text="Некорректный тариф.", reply_markup=kb_back_main())
-        title_map = {
-            ("morning", 5): "Утро — 5 дней",
-            ("morning", 20): "Утро — 20 дней",
-            ("evening", 5): "Вечер — 5 дней",
-            ("evening", 20): "Вечер — 20 дней",
-            ("both", 5): "Утро+Вечер — 5 дней",
-            ("both", 20): "Утро+Вечер — 20 дней",
-        }
-        title = title_map.get((period, days)) or str(ctx.callback_data)
-        amount = int(legacy_prices.get(str(title), int(default_price_rub)))
-        notify = build_plan_confirmation_text(
-            {
-                "title": str(title),
-                "price": int(amount),
-                "days": int(days),
-                "scope": str(period),
-                "terms_short": "Оплата разовая. Доступ выдаётся автоматически после успешной оплаты.",
-            }
-        )
-        return propose(
-            "select_tariff@v1",
-            {
-                "user_id": user_id,
-                "tariff": str(title),
-                "days": int(days),
-                "period": str(period),
-                "amount": int(amount),
-                "notify_text": notify,
-                "notify_reply_markup": kb_pay_selected(),
-                "notify": True,
-            },
-        )
+        # Historical morning/evening callback cannot authorize a product purchase.
+        return pm(text="Этот тариф недоступен. Выберите актуальный тариф.", reply_markup=kb_back_main())
     if ctx.cmd == "/pay":
         if not ctx.selected_tariff:
             return propose_show_tariffs(
