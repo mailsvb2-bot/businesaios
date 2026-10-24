@@ -30,25 +30,8 @@ def propose_show_tariffs(
         from core.plans import active_plans
 
         plans = list(active_plans())
-        # Optional autopricing: override displayed price for plan_id if suggested.
-        try:
-            sug = dict(pricing_suggestions or {})
-            if sug:
-                out_plans = []
-                for p in plans:
-                    try:
-                        pid = str(int(p.get('plan_id') or 0))
-                        if pid in sug and int(sug[pid]) > 0:
-                            p2 = dict(p)
-                            p2['price'] = int(sug[pid])
-                            out_plans.append(p2)
-                        else:
-                            out_plans.append(p)
-                    except Exception:
-                        out_plans.append(p)
-                plans = out_plans
-        except Exception:
-            swallow(__name__, 'core/policies/telegram/tariffs.py')
+        # Checkout displays only the authoritative scoped catalog price.
+        # AI pricing suggestions are advisory and cannot replace a sale price.
         return propose_message(
             user_id=user_id,
             text=msg,
