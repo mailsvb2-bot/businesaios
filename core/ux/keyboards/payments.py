@@ -39,20 +39,8 @@ def kb_tariffs(plans: list[dict[str, Any]]) -> dict[str, Any]:
 
 
 def kb_sub(prices: dict[str, int]) -> dict[str, Any]:
-    order = [
-        ("Утро — 5 дней", "sub:morning:5"),
-        ("Утро — 20 дней", "sub:morning:20"),
-        ("Вечер — 5 дней", "sub:evening:5"),
-        ("Вечер — 20 дней", "sub:evening:20"),
-        ("Утро+Вечер — 5 дней", "sub:both:5"),
-        ("Утро+Вечер — 20 дней", "sub:both:20"),
-    ]
-    rows: list[list[dict[str, str]]] = []
-    for title, cb in order:
-        price = prices.get(title)
-        rows.append([{"text": f"{title} — {(str(price) + ' ₽') if price is not None else '? ₽'}", "callback_data": cb}])
-    rows.append([{"text": "⬅️ Назад", "callback_data": CB_MENU_MAIN}])
-    return mk(rows)
+    """Deprecated course shortcuts must not create unscoped purchase options."""
+    return kb_tariffs([])
 
 
 def kb_pay_selected() -> dict[str, Any]:
