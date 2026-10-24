@@ -11,6 +11,8 @@ The policy layer reads the catalog; prices are re-checked at pay time.
 from __future__ import annotations
 
 import json
+import os
+import re
 from pathlib import Path
 from typing import Any
 
@@ -22,16 +24,29 @@ def _repo_root() -> Path:
     return Path(__file__).resolve().parents[2]
 
 
-def _catalog_path() -> Path:
-    return _repo_root() / "data" / "plans.json"
+_ID = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_-]{0,79}$")
+
+
+def _catalog_path() -> Path | None:
+    """Require explicit tenant/product ownership; never fall back to legacy data/plans.json."""
+    tenant = str(os.getenv("TENANT_ID") or "").strip()
+    product = str(os.getenv("PRODUCT_ID") or "").strip()
+    if not (_ID.fullmatch(tenant) and _ID.fullmatch(product)):
+        return None
+    return _repo_root() / "data" / "plan_catalogs" / tenant / f"{product}.json"
 
 
 def load_plans() -> list[dict[str, Any]]:
     path = _catalog_path()
+    if path is None:
+        return []
     try:
         raw = json.loads(path.read_text(encoding="utf-8"))
-        if isinstance(raw, list):
-            return [p for p in raw if isinstance(p, dict)]
+        if (isinstance(raw, dict)
+                and raw.get("tenant_id") == os.getenv("TENANT_ID")
+                and raw.get("product_id") == os.getenv("PRODUCT_ID")
+                and isinstance(raw.get("plans"), list)):
+            return [p for p in raw["plans"] if isinstance(p, dict)]
     except Exception:
         swallow(__name__, 'core/plans/catalog.py')
     return []
