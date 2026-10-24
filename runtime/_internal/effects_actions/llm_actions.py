@@ -117,3 +117,37 @@ class LLMEffectsMixin:
             except Exception:
                 swallow(__name__, "runtime/_internal/_effects_impl.py")
             return {"ok": False, "provider": str(provider), "model": str(model or ""), "error": type(exc).__name__}
+
+    def marketing_image_generate(
+        self,
+        *,
+        decision_id: str,
+        correlation_id: str,
+        admin_id: str,
+        brief: dict,
+        payload_key: str,
+    ) -> dict:
+        """YandexART image via the sealed effect router (executor only)."""
+        assert_called_from_executor()
+        try:
+            from runtime._internal.router_support import execute_effect_action_sync
+
+            return dict(
+                execute_effect_action_sync(
+                    self, EffectActionType.IMAGE_YANDEX_ART_GENERATE, {**dict(brief), "payload_key": str(payload_key)}
+                )
+                or {}
+            )
+        except Exception as exc:
+            try:
+                self.event_log.emit(
+                    event_type="marketing_image_failed",
+                    source="marketing.image",
+                    user_id=str(admin_id or "system"),
+                    decision_id=str(decision_id or "-"),
+                    correlation_id=str(correlation_id or decision_id or "-"),
+                    payload={"error": type(exc).__name__},
+                )
+            except Exception:
+                swallow(__name__, "runtime/_internal/effects_actions/llm_actions.py")
+            return {"ok": False, "error": type(exc).__name__}

@@ -4,10 +4,14 @@ from datetime import UTC, datetime, timedelta
 
 from core.policies.telegram.context import TelegramCtx
 from core.policies.telegram.helpers import ProposedAction, propose
+from core.policies.telegram.routes.business_flow_routes import handle_business_flow_routes
 from core.ux.telegram_keyboards import kb_back_main
 
 
 def handle_command_routes(ctx: TelegramCtx, *, user_id: str, pm) -> ProposedAction | None:
+    flow = handle_business_flow_routes(ctx, user_id=user_id)
+    if flow is not None:
+        return flow
     if ctx.cmd == "/help":
         return pm(
             text=(
@@ -19,6 +23,10 @@ def handle_command_routes(ctx: TelegramCtx, *, user_id: str, pm) -> ProposedActi
             ),
             reply_markup=kb_back_main(),
         )
+    if ctx.cmd == "/privacy":
+        return pm(text="🔐 Персональные данные\n\n• /export_data — показать, какие данные о вас хранятся", reply_markup=kb_back_main())
+    if ctx.cmd == "/export_data":
+        return propose("privacy_export@v1", {"user_id": user_id})
     if ctx.cmd == "/report":
         today = ctx.autopilot_dashboard.get("today") if isinstance(ctx.autopilot_dashboard, dict) else None
         today = today or {"leads": 0, "purchases": 0, "revenue_minor": 0}

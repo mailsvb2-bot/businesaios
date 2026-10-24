@@ -26,6 +26,7 @@ def telegram_send_message_transport(
     priority: Any = "normal",
     critical: bool = True,
     transport_guard: Any = None,
+    delivery_scope: str | None = None,
 ) -> tuple[bool, dict[str, Any]]:
     payload = {
         "chat_id": str(chat_id),
@@ -33,6 +34,7 @@ def telegram_send_message_transport(
         "reply_markup": reply_markup if isinstance(reply_markup, dict) else None,
         "priority": priority,
         "critical": bool(critical),
+        "delivery_scope": str(delivery_scope or "") or None,
     }
     if transport_guard is not None:
         payload["_transport_guard"] = transport_guard
@@ -58,6 +60,29 @@ def telegram_send_audio_transport(
         {
             "chat_id": str(chat_id),
             "audio_url": str(audio_url),
+            "caption": caption,
+            "priority": priority,
+            "critical": bool(critical),
+        },
+    )
+    return bool(out.get("ok", False)), dict(out)
+
+
+def telegram_send_photo_transport(
+    effects: Any,
+    *,
+    chat_id: str,
+    photo_url: str,
+    caption: str | None = None,
+    priority: Any = "normal",
+    critical: bool = True,
+) -> tuple[bool, dict[str, Any]]:
+    out = execute_effect_action_sync(
+        effects,
+        EffectActionType.TELEGRAM_SEND_PHOTO,
+        {
+            "chat_id": str(chat_id),
+            "photo_url": str(photo_url),
             "caption": caption,
             "priority": priority,
             "critical": bool(critical),

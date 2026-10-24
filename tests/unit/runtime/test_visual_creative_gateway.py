@@ -180,7 +180,12 @@ def test_visual_generation_routes_candidates_and_render_pack_through_sealed_gate
     assert generation_calls[0]["idempotency_key"] != generation_calls[1]["idempotency_key"]
     assert generation_calls[0]["seed"] == 100
     assert generation_calls[1]["seed"] == 8019
-    assert len([path for path, _ in requests if path.endswith("render-packs")]) == 2
+    packs = [payload for path, payload in requests if path.endswith("render-packs")]
+    assert len(packs) == 2
+    from core.growth.ads.creative.prompting import render_pack_idempotency_key
+    for gen, pack in zip(generation_calls, packs, strict=True):
+        assert pack["idempotency_key"] == render_pack_idempotency_key(gen["idempotency_key"], pack["composition"], pack["formats"])
+    assert packs[0]["idempotency_key"] != render_pack_idempotency_key(generation_calls[0]["idempotency_key"], pack["composition"], ["story"])
 
 
 @pytest.mark.parametrize("variants", [0, -1, 5, True])

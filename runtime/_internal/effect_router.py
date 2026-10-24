@@ -116,6 +116,7 @@ class EffectRouter:
     def _register_default_handlers(self) -> None:
         self.register(EffectActionType.TELEGRAM_SEND_MESSAGE, self._handle_telegram_send_message)
         self.register(EffectActionType.TELEGRAM_SEND_AUDIO, self._handle_telegram_send_audio)
+        self.register(EffectActionType.TELEGRAM_SEND_PHOTO, self._handle_telegram_send_photo)
         self.register(EffectActionType.TELEGRAM_ANSWER_CALLBACK, self._handle_telegram_answer_callback)
         self.register(EffectActionType.TELEGRAM_SEND_CHAT_ACTION, self._handle_telegram_send_chat_action)
         self.register(EffectActionType.PAYMENTS_YOOKASSA_CREATE, self._handle_yookassa_create_payment)
@@ -125,6 +126,7 @@ class EffectRouter:
         self.register(EffectActionType.WEBSITE_PUBLISH_PAGE, self._handle_generic_post_json)
         self.register(EffectActionType.WEATHER_OPEN_METEO_CURRENT, self._handle_weather_current)
         self.register(EffectActionType.LLM_MARKETING_COMPLETE, self._handle_marketing_llm_complete)
+        self.register(EffectActionType.IMAGE_YANDEX_ART_GENERATE, self._handle_image_yandex_art_generate)
         self.register(EffectActionType.TELEGRAM_SELF_CHECK, self._handle_telegram_self_check)
         self.register(EffectActionType.TELEGRAM_POLL_UPDATES, self._handle_telegram_poll_updates)
 
@@ -157,6 +159,7 @@ class EffectRouter:
             critical=bool(payload.get("critical", True)),
             timeout_s=int(payload.get("timeout_s") or 30),
             transport_guard=payload.get("_transport_guard") if callable(payload.get("_transport_guard")) else None,
+            delivery_scope=_optional_text(payload.get("delivery_scope")),
         )
         return {"ok": bool(ok), **dict(meta or {})}
 
@@ -168,6 +171,16 @@ class EffectRouter:
             caption=_optional_text(payload.get("caption")),
             priority=payload.get("priority", "normal"),
             critical=bool(payload.get("critical", True)),
+            timeout_s=int(payload.get("timeout_s") or 60),
+        )
+        return {"ok": bool(ok), **dict(meta or {})}
+
+    async def _handle_telegram_send_photo(self, payload: dict[str, Any]) -> dict[str, Any]:
+        client = self._telegram_client()
+        ok, meta = client.send_photo(
+            chat_id=str(payload.get("chat_id") or ""),
+            photo_url=str(payload.get("photo_url") or ""),
+            caption=_optional_text(payload.get("caption")),
             timeout_s=int(payload.get("timeout_s") or 60),
         )
         return {"ok": bool(ok), **dict(meta or {})}
@@ -212,6 +225,11 @@ class EffectRouter:
         result = await asyncio.to_thread(call_marketing_llm, provider=str(payload.get("provider") or ""), system=str(payload.get("system") or "You write concise marketing copy."), user=str(payload.get("user") or ""), model=_optional_text(payload.get("model")))
         return dict(result or {})
 
+    async def _handle_image_yandex_art_generate(self, payload: dict[str, Any]) -> dict[str, Any]:
+        from runtime._internal.effects_actions.llm_completion_support import call_yandex_art
+
+        return dict(await asyncio.to_thread(call_yandex_art, payload=dict(payload)) or {})
+
     async def _handle_telegram_self_check(self, payload: dict[str, Any]) -> dict[str, Any]:
         class _RuntimeView:
             def __init__(self, router: EffectRouter) -> None:
@@ -220,7 +238,12 @@ class EffectRouter:
                 self._telegram_me = None
 
         runtime_view = _RuntimeView(self)
-        return await asyncio.to_thread(telegram_self_check_effect, runtime_view, token=_optional_text(payload.get("token")))
+        return await asyncio.to_thread(
+            telegram_self_check_effect,
+            runtime_view,
+            token=_optional_text(payload.get("token")),
+            clear_webhook=payload.get("clear_webhook") is True,
+        )
 
     async def _handle_telegram_poll_updates(self, payload: dict[str, Any]) -> dict[str, Any]:
         class _RuntimeView:

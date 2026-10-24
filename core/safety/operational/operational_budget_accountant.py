@@ -36,6 +36,9 @@ class OperationalBudgetAccountant:
         if bool(impact.requires_human_approval) and not bool(ctx.payload.get("human_approved")):
             approval_required_without_human = 1
 
+        # Replies to the requesting user's own update are paced by inbound traffic;
+        # counting them would silently cut every chat off after the hourly budget.
+        user_reply = str((impact.dimensions or {}).get("interaction") or "") == "user_reply"
         normalized_execution_id = None
         if ctx.execution_id is not None:
             text = str(ctx.execution_id).strip()
@@ -46,10 +49,10 @@ class OperationalBudgetAccountant:
             execution_id=normalized_execution_id,
             hour_bucket=now.strftime("%Y-%m-%dT%H"),
             day_bucket=now.strftime("%Y-%m-%d"),
-            actions_count=1,
+            actions_count=0 if user_reply else 1,
             budget_minor=int(impact.cost_minor),
             publications_count=int(impact.publication_count),
-            outbound_count=int(impact.outbound_count),
+            outbound_count=0 if user_reply else int(impact.outbound_count),
             strategic_changes_without_approval=int(strategic_wo_approval),
             approval_required_without_human=int(approval_required_without_human),
             rollback_triggers=int(impact.rollback_event_count),
@@ -86,4 +89,4 @@ class OperationalBudgetAccountant:
 __all__ = [
     "BudgetAccountingEnvelope",
     "OperationalBudgetAccountant",
-]
+]

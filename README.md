@@ -139,3 +139,19 @@ The canonical decision-world-model path is:
 
 Any alternative world-model wiring path is non-canonical.
 <!-- SUPER_CANON_WORLD_MODEL_INTEGRITY:END -->
+
+## Бизнес-команды Telegram (порт ClientPlatform)
+
+Источник истины — `core/policies/telegram/routes/business_flow_routes.py`; каждое изменение — факт в event store,
+эффекты только через executor. Кнопочный кабинет: `/cockpit` (callbacks `cpm:*`), мастер встречи: `/new_event` (callbacks `cpe:*`).
+Паритет по функциям — в `CAPABILITY_MAP.md` (раздел Per-function parity).
+
+- **bookings@v1**: `/add_slot`, `/book` (клиент), `/cancel_booking` (клиент), `/me` (клиент), `/my_bookings` (клиент), `/send_reminders`, `/slots` (клиент)
+- **bot_provisioning@v1**: `/bot_secret`, `/bot_status`, `/cancel_bot`, `/connect_bot`, `/verify_bot`
+- **business_admin@v1**: `/approvals`, `/approve`, `/audit`, `/autopilot`, `/pay`, `/payments`, `/post_add`, `/post_publish`, `/post_retire`, `/post_schedule`, `/post_unschedule`, `/posts`, `/price`, `/refund`, `/reject`, `/revoke`, `/setting`
+- **business_ops_summary@v1**: `/cockpit`, `/ops`
+- **event_series@v1**: `/attendance`, `/event_place`, `/followups`, `/landing`, `/new_event`, `/offers_off` (клиент), `/offers_on` (клиент), `/send_series`, `/series`, `/series_reset`, `/series_text`, `/visual`, `/warmup_days`
+- **offer_ladder@v1**: `/ladder`, `/ladder_add`
+- **partners@v1**: `/partner_add`, `/partner_pitch`, `/partner_ref`, `/partner_status`, `/partners`
+- **privacy_delete@v1**: `/delete_my_data` (клиент)
+- **sales_pipeline@v1**: `/lead`, `/lead_add`, `/lead_ai`, `/lead_card`, `/lead_next`, `/lead_note`, `/lead_reopen`, `/leads`, `/leads_due`

@@ -87,6 +87,45 @@ def _spec_from_action_catalog(action_name: str) -> ActionOperationalSpec:
     return spec
 
 
+# Explicit descriptors for user-initiated Telegram actions. Each one only reads
+# or writes the requesting user's own state (or replies to them), so no human
+# approval is needed. Money, pricing, access, plan and LLM-cost actions are
+# deliberately absent and stay fail-closed (approval required).
+TELEGRAM_INTERACTIVE_ACTION_DESCRIPTORS: dict[str, ActionCategory] = {
+    'admin_user_card@v1': ActionCategory.SAFE_READ,
+    'growth_strategy_backlog@v1': ActionCategory.SAFE_READ,
+    'answer_callback@v1': ActionCategory.OUTBOUND,
+    'privacy_export@v1': ActionCategory.OUTBOUND,
+    'business_ops_summary@v1': ActionCategory.OUTBOUND,
+    'privacy_delete@v1': ActionCategory.OUTBOUND,
+    'offer_ladder@v1': ActionCategory.OUTBOUND,
+    'partners@v1': ActionCategory.OUTBOUND,
+    'bookings@v1': ActionCategory.OUTBOUND,
+    'bot_provisioning@v1': ActionCategory.OUTBOUND,
+    'sales_pipeline@v1': ActionCategory.OUTBOUND,
+    'event_series@v1': ActionCategory.OUTBOUND,
+    'business_admin@v1': ActionCategory.OUTBOUND,
+    'log_mood@v1': ActionCategory.INTERNAL_WRITE,
+    'set_user_setting@v1': ActionCategory.INTERNAL_WRITE,
+    'track_event@v1': ActionCategory.INTERNAL_WRITE,
+    'emit_event@v1': ActionCategory.INTERNAL_WRITE,
+    'poll_telegram_updates@v1': ActionCategory.INTERNAL_WRITE,
+    'select_tariff@v1': ActionCategory.INTERNAL_WRITE,
+    'request_pricing_change@v1': ActionCategory.INTERNAL_WRITE,
+    'suggest_offer_patch@v1': ActionCategory.INTERNAL_WRITE,
+    'growth_strategy_accept@v1': ActionCategory.INTERNAL_WRITE,
+    'growth_strategy_reject@v1': ActionCategory.INTERNAL_WRITE,
+    'profit_sprint_onboarding_start@v1': ActionCategory.INTERNAL_WRITE,
+    'profit_sprint_onboarding_text@v1': ActionCategory.INTERNAL_WRITE,
+    'profit_sprint_onboarding_lead_source@v1': ActionCategory.INTERNAL_WRITE,
+}
+
+
+# A reply to the user's own inbound update is bounded by inbound traffic, not by
+# tenant autonomy, so it must not consume the tenant's autonomous action budget.
+USER_REPLY_INTERACTION = 'user_reply'
+
+
 def build_default_operational_action_registry() -> OperationalActionRegistry:
     specs = {name: _spec_from_action_catalog(name) for name in _action_catalog.known_action_types()}
     # Explicit non-runtime helper entries still allowed when consumed outside the decision loop.
@@ -94,6 +133,14 @@ def build_default_operational_action_registry() -> OperationalActionRegistry:
         action_name='read_metrics@v1',
         category=ActionCategory.SAFE_READ,
     )
+    for name, category in TELEGRAM_INTERACTIVE_ACTION_DESCRIPTORS.items():
+        specs[name] = ActionOperationalSpec(
+            action_name=name,
+            category=category,
+            is_outbound=category is ActionCategory.OUTBOUND,
+            outbound_count=1 if category is ActionCategory.OUTBOUND else 0,
+            dimensions={'interaction': USER_REPLY_INTERACTION},
+        )
     specs['publish_listing@v1'] = ActionOperationalSpec(
         action_name='publish_listing@v1',
         category=ActionCategory.PUBLICATION,
@@ -155,5 +202,6 @@ def build_default_operational_action_registry() -> OperationalActionRegistry:
 
 __all__ = [
     'OperationalActionRegistry',
+    'TELEGRAM_INTERACTIVE_ACTION_DESCRIPTORS',
     'build_default_operational_action_registry',
 ]

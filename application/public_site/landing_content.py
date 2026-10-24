@@ -250,3 +250,106 @@ class EventLandingState:
 
 def new_event_landing_state(*, event_id: str, content: EventLandingContent, source: str = "template") -> EventLandingState:
     return EventLandingState(event_id=event_id, draft=content, draft_source=source)
+
+
+# --- public event landing HTML (port of donor event_public_surface) ---
+SECURITY_HEADERS = {
+    "Cache-Control": "no-store, max-age=0",
+    "Referrer-Policy": "no-referrer",
+    "X-Content-Type-Options": "nosniff",
+    "X-Frame-Options": "DENY",
+    "Content-Security-Policy": ("default-src 'none'; style-src 'unsafe-inline'; form-action 'self'; "
+                                "base-uri 'none'; frame-ancestors 'none'"),
+}
+_CHECK = "<label><input style='width:auto' type=checkbox"
+
+
+def _marketing_block(advertiser_label: object | None) -> str:
+    """Optional, channel-scoped commercial consent (text/hash from business_flows.event_consent)."""
+    if not advertiser_label:
+        return ""
+    from html import escape
+
+    from application.business_flows.event_consent import consent_text, text_sha256
+    channels = (("email", "E-mail", " checked"), ("telegram", "Telegram", ""), ("vk", "ВКонтакте", ""), ("max", "MAX", ""))
+    return ("<fieldset><legend>Полезные материалы и предложения (необязательно)</legend>"
+            f"<input type=hidden name=marketing_consent_hash value='{escape(text_sha256(advertiser_label), quote=True)}'>"
+            f"{_CHECK} name=marketing_consent value=yes> {escape(consent_text(advertiser_label))}</label>"
+            "<p>Выберите каналы. E-mail подтверждается этой формой. Для Telegram, ВКонтакте и MAX после регистрации "
+            "появится одноразовая кнопка: коммерческие сообщения в мессенджере включатся только после подтверждения "
+            "владения аккаунтом.</p>"
+            + " ".join(f"{_CHECK} name=marketing_channel value={v}{c}> {t}</label>" for v, t, c in channels)
+            + "</fieldset>")
+
+
+def _registration_form(slug: str, *, source: object, campaign_ref: object, advertiser_label: object | None,
+                       enabled: bool = True) -> str:
+    from html import escape
+    from urllib.parse import quote
+
+    if not enabled:
+        return ("<section id=registration class='landing-registration'><fieldset disabled>"
+                "<legend>Регистрация на мероприятие</legend><label>Имя</label><input value='Предпросмотр'>"
+                "<label>E-mail</label><input value='preview@example.test'><label>Телефон (необязательно)</label><input>"
+                f"{_CHECK} checked> Согласие на обработку данных</label></fieldset>"
+                "<button type=button disabled>Зарегистрироваться</button>"
+                "<p><small>В предпросмотре форма отключена и ничего не отправляет.</small></p></section>")
+    action = escape(f"/e/{quote(slug, safe='')}/register", quote=True)
+    return ("<section id=registration class='landing-registration'>"
+            f"<form method=post action='{action}'><fieldset><legend>Регистрация на мероприятие</legend>"
+            "<label>Имя</label><input name=name maxlength=120 required autocomplete=name>"
+            "<label>E-mail</label><input name=email maxlength=320 type=email required autocomplete=email>"
+            "<label>Телефон (необязательно)</label><input name=phone maxlength=40 autocomplete=tel>"
+            "<div class=hp aria-hidden=true><input name=company tabindex=-1 autocomplete=off></div>"
+            f"{_CHECK} name=consent value=yes required> Согласен на обработку данных для регистрации и получения "
+            "организационных сообщений об этом мероприятии.</label></fieldset>"
+            f"<input type=hidden name=source value='{escape(str(source or '').strip()[:160], quote=True)}'>"
+            f"<input type=hidden name=campaign_ref value='{escape(str(campaign_ref or '').strip()[:240], quote=True)}'>"
+            + _marketing_block(advertiser_label)
+            + "<button type=submit>Зарегистрироваться</button></form></section>")
+
+
+def _points(title: str, values: tuple[str, ...], *, css_class: str) -> str:
+    from html import escape
+
+    if not values:
+        return ""
+    items = "".join(f"<li>{escape(v)}</li>" for v in values)
+    return (f"<section class='landing-section {escape(css_class, quote=True)}'>"
+            f"<h2>{escape(title)}</h2><ul class=landing-points>{items}</ul></section>")
+
+
+def _sales_landing(start_label: str, landing: EventLandingContent, form: str) -> str:
+    from html import escape
+
+    faq = ("<section class='landing-section landing-faq'>" f"<h2>{escape(landing.faq_title)}</h2>"
+           + "".join(f"<details><summary>{escape(i.question)}</summary><p>{escape(i.answer)}</p></details>" for i in landing.faq)
+           + "</section>") if landing.faq else ""
+    speaker = ("<section class='landing-section landing-speaker'>"
+               f"<h2>{escape(landing.speaker_title)}</h2><p>{escape(landing.speaker_text)}</p></section>"
+               ) if landing.speaker_text else ""
+    return (f"<div class='landing landing--{escape(landing.theme.value, quote=True)}'><section class=landing-hero>"
+            + (f"<p class=landing-eyebrow>{escape(landing.eyebrow)}</p>" if landing.eyebrow else "")
+            + f"<h1>{escape(landing.hero_title)}</h1>"
+            + (f"<p class=landing-lead>{escape(landing.hero_subtitle)}</p>" if landing.hero_subtitle else "")
+            + f"<p class=landing-date><b>{escape(start_label)}</b></p>"
+            "<a class=landing-cta href='#registration'>Зарегистрироваться</a></section>"
+            + _points(landing.audience_title, landing.audience_points, css_class="landing-audience")
+            + _points(landing.outcomes_title, landing.outcome_points, css_class="landing-outcomes")
+            + _points(landing.agenda_title, landing.agenda_points, css_class="landing-agenda")
+            + speaker + faq
+            + "<section class='landing-section landing-final-cta'>" f"<h2>{escape(landing.cta_title)}</h2>"
+            + (f"<p>{escape(landing.cta_text)}</p>" if landing.cta_text else "") + "</section>" + form + "</div>")
+
+
+def render_event_landing_body(*, slug: str, title: str, start_label: str, description: str = "",
+                              source: object = "", campaign_ref: object = "", advertiser_label: object | None = None,
+                              landing: EventLandingContent | None = None, registration_enabled: bool = True) -> str:
+    """Escaped landing HTML; ``public_events.PubEvent.local_start_label()`` gives ``start_label``."""
+    from html import escape
+
+    form = _registration_form(slug, source=source, campaign_ref=campaign_ref, advertiser_label=advertiser_label,
+                              enabled=registration_enabled)
+    if landing is not None:
+        return _sales_landing(start_label, landing, form)
+    return f"<h1>{escape(title)}</h1><p>{escape(description)}</p><p><b>{escape(start_label)}</b></p>" + form

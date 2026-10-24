@@ -338,10 +338,15 @@
     },
     {
       "id": "ads.yandex_direct_owner_flow",
-      "status": "inventory",
-      "canonical_owner": null,
-      "source_of_truth": null,
-      "evidence": [],
+      "status": "mapped",
+      "canonical_owner": "interfaces.ads (AdsWriteGateway + yandex_direct_governed_execution) + application.analytics.yandex_direct_growth_projection",
+      "source_of_truth": "canonical AdsWriteGateway reservation/approval facts and Event Store",
+      "evidence": [
+        "interfaces/ads/yandex_direct_governed_execution.py",
+        "interfaces/ads/yandex_direct_publication_proof.py",
+        "interfaces/ads/oauth_exchange.py",
+        "application/analytics/yandex_direct_growth_projection.py"
+      ],
       "runtime_dependency_removed": false,
       "pr472_claimed_status": "inventory",
       "pr472_claimed_runtime_dependency_removed": false,
@@ -531,10 +536,14 @@
     },
     {
       "id": "commerce.offerings_program_delivery",
-      "status": "inventory",
-      "canonical_owner": null,
-      "source_of_truth": null,
-      "evidence": [],
+      "status": "mapped",
+      "canonical_owner": "application.commerce (phase18 commercial order/checkout/program lesson delivery)",
+      "source_of_truth": "canonical Event Store Order/Invoice/Program facts",
+      "evidence": [
+        "application/commerce/phase18_commercial_order.py",
+        "application/commerce/phase18_commercial_checkout.py",
+        "application/commerce/phase18_program_lesson_delivery.py"
+      ],
       "runtime_dependency_removed": false,
       "pr472_claimed_status": "inventory",
       "pr472_claimed_runtime_dependency_removed": false,
@@ -685,6 +694,209 @@
       "pr472_claimed_status": "implemented",
       "pr472_claimed_runtime_dependency_removed": true,
       "integration_missing_evidence": []
+    },
+    {
+      "id": "privacy.personal_data_export",
+      "status": "implemented",
+      "canonical_owner": "core.privacy.data_rights + runtime privacy_export@v1 action",
+      "source_of_truth": "canonical Event Store (requester and tenant scoped)",
+      "evidence": [
+        "core/privacy/data_rights.py",
+        "runtime/handler_impl/domains/user_ops.py",
+        "tests/unit/runtime/test_privacy_export_action.py"
+      ],
+      "runtime_dependency_removed": false,
+      "pr472_claimed_status": null,
+      "pr472_claimed_runtime_dependency_removed": null,
+      "integration_missing_evidence": [
+        "clientplatform/services/privacy_controls.py erase/anonymize",
+        "clientplatform/services/privacy_export_links.py gzip download link"
+      ]
+    },
+    {
+      "id": "messaging.managed_bot_provisioning",
+      "status": "implemented",
+      "canonical_owner": "application.business_flows.bot_provisioning + bot_provisioning@v1 action",
+      "source_of_truth": "canonical Event Store (bot_provisioning@v1 transitions)",
+      "evidence": [
+        "application/business_flows/bot_provisioning.py",
+        "runtime/handler_impl/domains/business_flow_ops.py",
+        "tests/unit/business_flows/test_bot_provisioning_flow.py"
+      ],
+      "runtime_dependency_removed": false,
+      "pr472_claimed_status": null,
+      "pr472_claimed_runtime_dependency_removed": null,
+      "integration_missing_evidence": [
+        "server-side secret intake + Telegram getMe/webhook verification step (verify_started/verified/failed are modelled, not yet driven by a provider adapter)"
+      ]
+    },
+    {
+      "id": "commerce.orders_postgres_and_fulfilment",
+      "status": "implemented",
+      "canonical_owner": "CommercialProgramPurchaseService.record_fulfilment + OrderStore on PostgresJsonRegistryBackend",
+      "source_of_truth": "client-outcome registry (PostgreSQL when BUSINESAIOS_CLIENT_OUTCOME_BACKEND=postgres) + Event Store order spine",
+      "evidence": [
+        "runtime/platform/client_outcome_postgres_registry.py",
+        "application/commerce/phase18_commercial_order.py",
+        "tests/integration/api/test_order_fulfilment_and_postgres_orders.py"
+      ],
+      "runtime_dependency_removed": false,
+      "pr472_claimed_status": null,
+      "pr472_claimed_runtime_dependency_removed": null,
+      "integration_missing_evidence": [
+        "ledger postings and metrics samples still SQLite (multi-replica stays fail-closed)",
+        "live PostgreSQL run not executed in this box (no server",
+        " contract tested on SQL-compatible port)"
+      ]
+    },
+    {
+      "id": "events.bookings_and_reminders",
+      "status": "implemented",
+      "canonical_owner": "runtime.handler_impl.domains.business_flow_ops",
+      "source_of_truth": "event_store:bookings@v1",
+      "evidence": [
+        "bookings@v1"
+      ],
+      "runtime_dependency_removed": false,
+      "pr472_claimed_status": null,
+      "pr472_claimed_runtime_dependency_removed": null,
+      "integration_missing_evidence": [
+        "push reminder dispatch via provider queue worker (pull reminders on next participant reply today)",
+        "paid slots linked to orders"
+      ]
+    },
+    {
+      "id": "participant.home_cabinet",
+      "status": "implemented",
+      "canonical_owner": "runtime.handler_impl.domains.business_flow_ops",
+      "source_of_truth": "event_store:bookings@v1",
+      "evidence": [
+        "bookings@v1"
+      ],
+      "runtime_dependency_removed": false,
+      "pr472_claimed_status": null,
+      "pr472_claimed_runtime_dependency_removed": null,
+      "integration_missing_evidence": [
+        "orders/courses in cabinet",
+        "inline keyboard menu"
+      ]
+    },
+    {
+      "id": "growth.partner_search",
+      "status": "implemented",
+      "canonical_owner": "runtime.handler_impl.domains.business_flow_ops",
+      "source_of_truth": "event_store:partners@v1",
+      "evidence": [
+        "partners@v1"
+      ],
+      "runtime_dependency_removed": false,
+      "pr472_claimed_status": null,
+      "pr472_claimed_runtime_dependency_removed": null,
+      "integration_missing_evidence": [
+        "automatic discovery connectors (VK/Telegram catalogs)",
+        "outreach drafts via DecisionCore approval"
+      ]
+    },
+    {
+      "id": "privacy.pd_deletion",
+      "status": "implemented",
+      "canonical_owner": "runtime.handler_impl.domains.user_ops",
+      "source_of_truth": "core.privacy.data_rights",
+      "evidence": [
+        "privacy_deleted@v1",
+        "privacy_delete_failed@v1"
+      ],
+      "runtime_dependency_removed": false,
+      "pr472_claimed_status": null,
+      "pr472_claimed_runtime_dependency_removed": null,
+      "integration_missing_evidence": [
+        "non-event stores (orders registry, ledger) deletion sources",
+        "admin-initiated deletion"
+      ]
+    },
+    {
+      "id": "commerce.offer_ladder",
+      "status": "implemented",
+      "canonical_owner": "runtime.handler_impl.domains.business_flow_ops",
+      "source_of_truth": "event_store:offer_ladder@v1",
+      "evidence": [
+        "offer_ladder@v1"
+      ],
+      "runtime_dependency_removed": false,
+      "pr472_claimed_status": null,
+      "pr472_claimed_runtime_dependency_removed": null,
+      "integration_missing_evidence": [
+        "evidence score from customer activity (owner-entered today)",
+        "link steps to offerings/orders"
+      ]
+    },
+    {
+      "id": "admin.business_ops_summary",
+      "status": "implemented",
+      "canonical_owner": "runtime.handler_impl.domains.business_flow_ops",
+      "source_of_truth": "event_store:bookings@v1,partners@v1,offer_ladder@v1",
+      "evidence": [
+        "business_ops_summary@v1"
+      ],
+      "runtime_dependency_removed": false,
+      "pr472_claimed_status": null,
+      "pr472_claimed_runtime_dependency_removed": null,
+      "integration_missing_evidence": [
+        "revenue/orders section",
+        "per-period trends"
+      ]
+    },
+    {
+      "id": "admin.business_admin",
+      "status": "implemented",
+      "canonical_owner": "runtime.handler_impl.domains.business_flow_ops",
+      "source_of_truth": "event_store:business_admin@v1",
+      "evidence": [
+        "business_admin@v1"
+      ],
+      "runtime_dependency_removed": false,
+      "pr472_claimed_status": null,
+      "pr472_claimed_runtime_dependency_removed": null,
+      "integration_missing_evidence": [
+        "approval producers (automation engine) not wired",
+        "subscription state",
+        "publication calendar",
+        "interaction metrics/alerts"
+      ]
+    },
+    {
+      "id": "events.event_series",
+      "status": "implemented",
+      "canonical_owner": "runtime.handler_impl.domains.business_flow_ops",
+      "source_of_truth": "event_store:event_series@v1",
+      "evidence": [
+        "event_series@v1"
+      ],
+      "runtime_dependency_removed": false,
+      "pr472_claimed_status": null,
+      "pr472_claimed_runtime_dependency_removed": null,
+      "integration_missing_evidence": [
+        "paid-customer exclusion (manual payments are not linked to participants)",
+        "multi-channel routing (Telegram only)",
+        "media in series messages"
+      ]
+    },
+    {
+      "id": "sales.sales_pipeline",
+      "status": "implemented",
+      "canonical_owner": "runtime.handler_impl.domains.business_flow_ops",
+      "source_of_truth": "event_store:sales_pipeline@v1",
+      "evidence": [
+        "sales_pipeline@v1"
+      ],
+      "runtime_dependency_removed": false,
+      "pr472_claimed_status": null,
+      "pr472_claimed_runtime_dependency_removed": null,
+      "integration_missing_evidence": [
+        "multi-seat assignment (single-owner tenants)",
+        "AI sales drafts/orchestration",
+        "automatic stage events from conversations (owner records them)"
+      ]
     }
   ],
   "integration_provenance": {

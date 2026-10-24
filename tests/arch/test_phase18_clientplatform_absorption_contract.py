@@ -73,7 +73,7 @@ def test_phase18_absorption_manifest_is_valid_but_not_falsely_complete() -> None
     assert _complete(data) is (not unresolved)
 
 
-def test_businessaios_runtime_has_no_clientplatform_import_dependency() -> None:
+def test_businessaios_runtime_has_no_donor_import_dependency() -> None:
     violations: list[str] = []
     for root_name in RUNTIME_ROOTS:
         root = ROOT / root_name
@@ -153,3 +153,11 @@ def test_phase18_completion_includes_new_user_visible_extension_slices() -> None
 
     ready["slices"].append({**extension})
     assert _complete(ready) is False, "duplicate slice IDs must never count as done"
+
+
+def test_port_waves_record_canonical_owners_for_absorbed_slices() -> None:
+    slices = {item["id"]: item for item in _manifest()["slices"]}
+    for sid in ("ads.yandex_direct_owner_flow", "commerce.offerings_program_delivery", "privacy.personal_data_export"):
+        item = slices[sid]
+        assert item["status"] in {"mapped", "implemented"}
+        assert all((ROOT / path).exists() for path in item["evidence"]), sid

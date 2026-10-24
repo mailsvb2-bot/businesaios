@@ -13,13 +13,10 @@ from runtime.observability.error_handling import swallow
 from runtime.platform.config.env_flags import env_str
 
 
-def telegram_self_check_effect(self, *, token: str | None = None) -> dict:
+def telegram_self_check_effect(self, *, token: str | None = None, clear_webhook: bool = False) -> dict:
     t = (token or env_str("TELEGRAM_BOT_TOKEN", "")).strip()
     if not t:
-        raise RuntimeError(
-            "TELEGRAM_BOT_TOKEN_MISSING: set TELEGRAM_BOT_TOKEN "
-            "in .env or environment"
-        )
+        raise RuntimeError("TELEGRAM_BOT_TOKEN_MISSING: set TELEGRAM_BOT_TOKEN " "in .env or environment")
 
     transport = getattr(self, "http_transport", None)
     getme = _http_json(
@@ -40,18 +37,32 @@ def telegram_self_check_effect(self, *, token: str | None = None) -> dict:
         getme if isinstance(getme, dict) else None,
         webhook if isinstance(webhook, dict) else None,
     )
+    if token and clear_webhook and report.code == "TELEGRAM_WEBHOOK_ENABLED":
+        # Tenant bots are polling-only: remove the webhook, then re-check (donor finalize/_rollback_webhook).
+        _http_json(
+            "GET",
+            telegram_method_url(t, "deleteWebhook"),
+            {"drop_pending_updates": "false"},
+            timeout_s=20,
+            transport=transport,
+        )
+        webhook = _http_json("GET", telegram_method_url(t, "getWebhookInfo"), None, timeout_s=20, transport=transport)
+        report = classify_startup(
+            getme if isinstance(getme, dict) else None,
+            webhook if isinstance(webhook, dict) else None,
+        )
     if not report.ok:
         msg = f"{report.code}: {report.hint}"
         if report.code == "TELEGRAM_WEBHOOK_ENABLED":
             msg += delete_webhook_fix_hint()
         raise RuntimeError(msg)
 
+    if token:
+        # Verifying a tenant's own bot must not rebind the platform bot identity.
+        return {"ok": True, "code": "OK", "bot": (report.getme or {}).get("result"), "webhook": None}
     if not self._telegram_startup_checked:
         source = env_str("TELEGRAM_TOKEN_SOURCE", "unknown").strip() or "unknown"
-        line = (
-            f"[telegram] OK: token valid (source={source}), "
-            "webhook off, polling ready"
-        )
+        line = f"[telegram] OK: token valid (source={source}), " "webhook off, polling ready"
         try:
             sys.stdout.write(line + "\n")
             sys.stdout.flush()
@@ -64,9 +75,5 @@ def telegram_self_check_effect(self, *, token: str | None = None) -> dict:
         "ok": True,
         "code": "OK",
         "bot": (report.getme or {}).get("result"),
-        "webhook": (
-            (report.webhook or {}).get("result")
-            if isinstance(report.webhook, dict)
-            else report.webhook
-        ),
+        "webhook": ((report.webhook or {}).get("result") if isinstance(report.webhook, dict) else report.webhook),
     }

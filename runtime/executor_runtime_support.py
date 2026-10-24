@@ -87,6 +87,7 @@ def build_executor_effects_bundle(*, event_log, policy_registry, infra, message_
         message_registry=message_registry,
         http_transport=infra.http_transport,
         effect_router=infra.effect_router,
+        event_store=getattr(infra, "event_store", None),
     )
 
 

@@ -28,6 +28,7 @@ from ._telegram_delivery_state import (
 from ._telegram_delivery_support import delivery_key as build_delivery_key
 from ._telegram_delivery_support import payload_digest as build_payload_digest
 from ._telegram_delivery_support import stable_json
+from .bot_token_scope import scope_tag, scoped_bot_token
 from .http_client import http_json, http_multipart_file
 
 
@@ -378,8 +379,12 @@ class TelegramClient:
         critical: bool = True,
         timeout_s: int = 30,
         transport_guard: Callable[[], str] | None = None,
+        delivery_scope: str | None = None,
     ) -> tuple[bool, dict[str, Any]]:
-        token = _token()
+        customer_tag = scope_tag()  # customer-bot reply: that bot's token, synchronous, own delivery key
+        token = scoped_bot_token() or _token()
+        if customer_tag:
+            delivery_scope = f"{delivery_scope or ''}|{customer_tag}"
         payload: dict[str, Any] = {
             "chat_id": str(chat_id),
             "text": str(text),
@@ -389,7 +394,8 @@ class TelegramClient:
         if isinstance(reply_markup, dict):
             payload["reply_markup"] = reply_markup
         payload_digest = _payload_digest(payload)
-        delivery_key = _delivery_key(method="sendMessage", chat_id=str(chat_id), payload=payload)
+        # Decision-scoped: identical text (repeat /start, same button) is a new delivery.
+        delivery_key = _delivery_key(method="sendMessage", chat_id=str(chat_id), payload={**payload, "_scope": delivery_scope} if delivery_scope else payload)
         existing = existing_receipt(self.delivery_state, delivery_key=delivery_key)
         url = f"{telegram_api_base()}/bot{token}/sendMessage" if token else ""
         if existing is not None:
@@ -441,7 +447,7 @@ class TelegramClient:
                 return False, {"error": "TELEGRAM_BOT_TOKEN_MISSING", "delivery_key": delivery_key, "payload_digest": payload_digest}
             return True, {"mode": "noop", "reason": "TELEGRAM_BOT_TOKEN_MISSING", "delivery_key": delivery_key, "payload_digest": payload_digest}
 
-        if self.outbound_queue is not None and transport_guard is None:
+        if self.outbound_queue is not None and transport_guard is None and not customer_tag:
             try:
                 accepted_metadata = delivery_metadata(
                     method="sendMessage",
@@ -704,3 +710,34 @@ class TelegramClient:
                 "payload_digest": payload_digest,
                 "delivery_finalized": False,
             }
+
+    def send_photo(self, *, chat_id: str, photo_url: str, caption: str | None = None, timeout_s: int = 60) -> tuple[bool, dict[str, Any]]:
+        """Direct sendPhoto (URL, file_id or local file). Dedup by receipt; never raises."""
+        token = _token()
+        payload: dict[str, Any] = {"chat_id": str(chat_id), "photo": str(photo_url)}
+        if isinstance(caption, str) and caption.strip():
+            payload.update(caption=caption.strip(), parse_mode="HTML")
+        digest = _payload_digest(payload)
+        key = _delivery_key(method="sendPhoto", chat_id=str(chat_id), payload=payload)
+        existing = existing_receipt(self.delivery_state, delivery_key=key)
+        if existing is not None:
+            phase = receipt_phase(existing)
+            return True, {"mode": "dedup", "delivery_key": key, "payload_digest": digest, "external_id": existing.get("external_id"), "receipt": existing, "delivery_phase": phase, "delivery_finalized": phase == FINALIZED_PHASE}
+        if not token:
+            return False, {"error": "TELEGRAM_BOT_TOKEN_MISSING", "delivery_key": key, "payload_digest": digest, "delivery_finalized": False}
+        url = f"{telegram_api_base()}/bot{token}/sendPhoto"
+        try:
+            source = Path(str(photo_url))
+            if source.is_file():
+                fields = {k: str(v) for k, v in payload.items() if k in {"chat_id", "caption", "parse_mode"}}
+                out = http_multipart_file(url, path=str(source), field_name="photo", fields=fields, timeout_s=int(timeout_s or 60), transport=self.transport)
+            else:
+                out = self._http_post(url=url, payload=payload, timeout_s=int(timeout_s or 60))
+            result = dict(out or {}) if isinstance(out, dict) else {}
+            ok = bool(result.get("ok")) if isinstance(out, dict) else True
+            external_id = result.get("result", {}).get("message_id") if isinstance(result.get("result"), Mapping) else None
+            if ok:
+                mark_transport_delivered(self.delivery_state, delivery_key=key, external_id=external_id, payload_digest=digest, metadata={"method": "sendPhoto", "chat_id": str(chat_id), "mode": "direct"})
+            return ok, {"mode": "direct", "delivery_key": key, "payload_digest": digest, "result": result, "external_id": None if external_id is None else str(external_id), "delivery_finalized": ok}
+        except Exception as exc:
+            return False, {"mode": "direct", "error": str(exc)[:200], "delivery_key": key, "payload_digest": digest, "delivery_finalized": False}

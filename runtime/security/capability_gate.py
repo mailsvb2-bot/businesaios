@@ -37,6 +37,9 @@ class GuardedEffectsPort(EffectsPort):
     def send_audio(self, **kwargs):  # type: ignore[override]
         return self._forward("send_audio", **kwargs)
 
+    def send_photo(self, **kwargs):  # type: ignore[override]
+        return self._forward("send_photo", **kwargs)
+
     def send_weather(self, **kwargs):  # type: ignore[override]
         return self._forward("send_weather", **kwargs)
 
@@ -76,8 +79,17 @@ class GuardedEffectsPort(EffectsPort):
     def generate_visual_creative(self, **kwargs):  # type: ignore[override]
         return self._forward("generate_visual_creative", **kwargs)
 
+    def ad_provider_action(self, **kwargs):  # type: ignore[override]
+        return self._forward("ad_provider_action", **kwargs)
+
     def poll_visual_creative(self, **kwargs):  # type: ignore[override]
         return self._forward("poll_visual_creative", **kwargs)
+
+    def ensure_customer_identity(self, **kwargs):  # type: ignore[override]
+        return self._forward("ensure_customer_identity", **kwargs)
+
+    def run_conference_join_plan(self, **kwargs):  # type: ignore[override]
+        return self._forward("run_conference_join_plan", **kwargs)
 
     def enqueue_evolution_job(self, **kwargs):  # type: ignore[override]
         return self._forward("enqueue_evolution_job", **kwargs)

@@ -8,13 +8,16 @@ from __future__ import annotations
 from typing import Any
 
 from runtime._internal.effect_types import EffectActionType
-from runtime._internal.effects_actions.telegram.media import send_audio_effect
+from runtime._internal.effects_actions.telegram.media import send_audio_effect, send_photo_effect
 from runtime._internal.effects_actions.telegram.messaging import send_message_effect
 from runtime._internal.effects_actions.telegram_actions_callbacks import (
     answer_callback_internal_effect,
     answer_callback_public_effect,
 )
-from runtime._internal.effects_actions.telegram_actions_polling import poll_telegram_updates_effect
+from runtime._internal.effects_actions.telegram_actions_polling import (
+    managed_bot_token_effect,
+    poll_telegram_updates_effect,
+)
 from runtime._internal.effects_actions.telegram_actions_transport import (
     send_audio_transport_effect,
     send_chat_action_effect,
@@ -25,15 +28,18 @@ from runtime.observability.telemetry import CANON_RUNTIME_TELEMETRY_OWNER as _CA
 CANON_RUNTIME_OBSERVABILITY_OWNER = _CANON_RUNTIME_TELEMETRY_OWNER
 
 
-def telegram_self_check_effect(effects: Any, *, token: str | None = None) -> dict:
+def telegram_self_check_effect(effects: Any, *, token: str | None = None, clear_webhook: bool = False) -> dict:
     from runtime._internal.router_support import execute_effect_action_sync
 
-    return execute_effect_action_sync(effects, EffectActionType.TELEGRAM_SELF_CHECK, {"token": token})
+    payload: dict[str, Any] = {"token": token}
+    if clear_webhook:
+        payload["clear_webhook"] = True
+    return execute_effect_action_sync(effects, EffectActionType.TELEGRAM_SELF_CHECK, payload)
 
 
 class TelegramEffectsMixin:
-    def telegram_self_check(self, *, token: str | None = None) -> dict:
-        return telegram_self_check_effect(self, token=token)
+    def telegram_self_check(self, *, token: str | None = None, clear_webhook: bool = False) -> dict:
+        return telegram_self_check_effect(self, token=token, clear_webhook=clear_webhook)
 
     def send_message(
         self,
@@ -84,6 +90,7 @@ class TelegramEffectsMixin:
         priority: Any = "normal",
         critical: bool = True,
         transport_guard: Any = None,
+        delivery_scope: str | None = None,
     ) -> tuple[bool, dict[str, Any]]:
         return send_message_transport_effect(
             self,
@@ -93,6 +100,7 @@ class TelegramEffectsMixin:
             priority=priority,
             critical=bool(critical),
             transport_guard=transport_guard,
+            delivery_scope=delivery_scope,
         )
 
     def _telegram_send_chat_action(self, *, chat_id: str, action: str = "typing") -> None:
@@ -149,8 +157,14 @@ class TelegramEffectsMixin:
             limit=int(limit),
         )
 
+    def telegram_managed_bot_token(self, *, managed_bot_id: str) -> dict:
+        return managed_bot_token_effect(self, managed_bot_id=managed_bot_id)
+
     def send_audio(self, *args, **kwargs) -> Any:
         return send_audio_effect(self, *args, **kwargs)
+
+    def send_photo(self, *args, **kwargs) -> Any:
+        return send_photo_effect(self, *args, **kwargs)
 
     def send_audio_transport(self, *args, **kwargs) -> Any:
         return send_audio_transport_effect(self, *args, **kwargs)

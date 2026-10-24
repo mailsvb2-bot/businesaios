@@ -121,11 +121,12 @@ def _generic_endpoint_contract(action_type: EffectActionType, payload: Mapping[s
 
 def payload_contract_fields() -> dict[EffectActionType, tuple[str, ...]]:
     return {
-        EffectActionType.TELEGRAM_SEND_MESSAGE: ("chat_id", "text", "reply_markup", "priority", "critical", "timeout_s"),
+        EffectActionType.TELEGRAM_SEND_MESSAGE: ("chat_id", "text", "reply_markup", "priority", "critical", "timeout_s", "delivery_scope"),
         EffectActionType.TELEGRAM_SEND_AUDIO: ("chat_id", "audio_url", "caption", "priority", "critical", "timeout_s"),
+        EffectActionType.TELEGRAM_SEND_PHOTO: ("chat_id", "photo_url", "caption", "priority", "critical", "timeout_s"),
         EffectActionType.TELEGRAM_ANSWER_CALLBACK: ("callback_query_id", "text", "show_alert"),
         EffectActionType.TELEGRAM_SEND_CHAT_ACTION: ("chat_id", "action"),
-        EffectActionType.TELEGRAM_SELF_CHECK: ("token",),
+        EffectActionType.TELEGRAM_SELF_CHECK: ("token", "clear_webhook"),
         EffectActionType.TELEGRAM_POLL_UPDATES: ("offset", "timeout_s", "limit", "startup_checked", "webhook_cleared"),
         EffectActionType.PAYMENTS_YOOKASSA_CREATE: ("amount_rub", "description", "customer_id", "idempotence_key", "metadata", "timeout_s"),
         EffectActionType.PAYMENTS_YOOKASSA_GET_STATUS: ("external_payment_id", "timeout_s"),
@@ -134,6 +135,7 @@ def payload_contract_fields() -> dict[EffectActionType, tuple[str, ...]]:
         EffectActionType.WEBSITE_PUBLISH_PAGE: ("endpoint", "headers", "data", "timeout_s"),
         EffectActionType.WEATHER_OPEN_METEO_CURRENT: ("city",),
         EffectActionType.LLM_MARKETING_COMPLETE: ("provider", "system", "user", "model"),
+        EffectActionType.IMAGE_YANDEX_ART_GENERATE: ("prompt", "negative", "seed", "width_ratio", "height_ratio", "payload_key"),
     }
 
 
@@ -148,11 +150,21 @@ def normalize_effect_payload(action_type: str | EffectActionType, payload: Any) 
             "priority": data.get("priority", "normal"),
             "critical": _bool(data, "critical", default=True),
             "timeout_s": _int(data, "timeout_s", default=30, minimum=1, maximum=300),
+            "delivery_scope": _optional_text(data, "delivery_scope"),
         }
     if key is EffectActionType.TELEGRAM_SEND_AUDIO:
         return {
             "chat_id": _require_text(key, data, "chat_id"),
             "audio_url": _require_text(key, data, "audio_url"),
+            "caption": _optional_text(data, "caption"),
+            "priority": data.get("priority", "normal"),
+            "critical": _bool(data, "critical", default=True),
+            "timeout_s": _int(data, "timeout_s", default=60, minimum=1, maximum=300),
+        }
+    if key is EffectActionType.TELEGRAM_SEND_PHOTO:
+        return {
+            "chat_id": _require_text(key, data, "chat_id"),
+            "photo_url": _require_text(key, data, "photo_url"),
             "caption": _optional_text(data, "caption"),
             "priority": data.get("priority", "normal"),
             "critical": _bool(data, "critical", default=True),
@@ -170,7 +182,7 @@ def normalize_effect_payload(action_type: str | EffectActionType, payload: Any) 
             "action": _require_text(key, data, "action"),
         }
     if key is EffectActionType.TELEGRAM_SELF_CHECK:
-        return {"token": _require_text(key, data, "token")}
+        return {"token": _require_text(key, data, "token"), "clear_webhook": _bool(data, "clear_webhook", default=False)}
     if key is EffectActionType.TELEGRAM_POLL_UPDATES:
         return {
             "offset": _optional_int(data, "offset"),
@@ -207,5 +219,14 @@ def normalize_effect_payload(action_type: str | EffectActionType, payload: Any) 
             "system": _require_text(key, data, "system"),
             "user": _require_text(key, data, "user"),
             "model": _require_text(key, data, "model"),
+        }
+    if key is EffectActionType.IMAGE_YANDEX_ART_GENERATE:
+        return {
+            "prompt": _require_text(key, data, "prompt"),
+            "negative": str(data.get("negative") or ""),
+            "seed": _int(data, "seed", default=0, minimum=0, maximum=2_000_000_000),
+            "width_ratio": _int(data, "width_ratio", default=1, minimum=1, maximum=16),
+            "height_ratio": _int(data, "height_ratio", default=1, minimum=1, maximum=16),
+            "payload_key": _require_text(key, data, "payload_key"),
         }
     return data

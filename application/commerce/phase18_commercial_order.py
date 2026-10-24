@@ -283,7 +283,8 @@ class CommercialProgramPurchaseService:
         )
         if type(verified) is not bool or type(reverse) is not bool:
             raise RuntimeError("commercial_payment_authority_invalid")
-        if order.lifecycle_status is not OrderLifecycleStatus.ACTIVE:
+        # FULFILLED keeps access (delivery happened); reversal still revokes it.
+        if order.lifecycle_status not in (OrderLifecycleStatus.ACTIVE, OrderLifecycleStatus.FULFILLED):
             reason = "order_not_active"
         elif not paid:
             reason = "invoice_not_paid"
@@ -304,6 +305,24 @@ class CommercialProgramPurchaseService:
             order_id=order_id, invoice_id=invoice.invoice_id,
             eligible=reason == "ready_for_governed_execution", reason=reason,
             invoice_paid=paid, external_payment_verified=verified,
+        )
+
+    def record_fulfilment(self, *, tenant_id: str, business_id: str, order_id: str,
+                          delivery_evidence: Any, payment_evidence_reader: Any,
+                          reversal_reader: Any, occurred_at_ms: int) -> Order:
+        """Mark a paid order FULFILLED only with a delivery receipt and fresh readiness."""
+        evidence = dict(delivery_evidence) if isinstance(delivery_evidence, dict) else {}
+        if not str(evidence.get("source") or "").strip() or not str(evidence.get("receipt_id") or "").strip():
+            raise ValueError("commercial_fulfilment_delivery_evidence_required")
+        ready = self.execution_readiness(
+            tenant_id=tenant_id, business_id=business_id, order_id=order_id,
+            payment_evidence_reader=payment_evidence_reader, reversal_reader=reversal_reader,
+        )
+        if not ready.eligible:
+            raise ValueError(f"commercial_fulfilment_not_ready:{ready.reason}")
+        return self.orders.transition_order(
+            order_id=order_id, tenant_id=tenant_id, business_id=business_id,
+            lifecycle_status=OrderLifecycleStatus.FULFILLED, occurred_at_ms=int(occurred_at_ms),
         )
 
 

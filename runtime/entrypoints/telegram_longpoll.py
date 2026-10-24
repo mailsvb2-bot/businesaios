@@ -16,8 +16,8 @@ import time
 from dataclasses import replace
 from typing import Any
 
+from application.business_flows.bot_gateway import SESSION_SOURCE as CUSTOMER_SOURCE
 from core.ai.world_state import WorldStateV1
-from runtime.effects import telegram_method_url
 from runtime.boot.env import (
     env_bool,
     env_int,
@@ -27,6 +27,9 @@ from runtime.boot.env import (
 )
 from runtime.bootstrap import bootstrap as _bootstrap
 from runtime.decision_gateway import execute_runtime_decision
+from runtime.effects import telegram_method_url
+from runtime.integration.managed_bot_updates import SESSION_SOURCE as MANAGED_SOURCE
+from runtime.integration.managed_bot_updates import allowed_updates_param, parse_managed_bot_update
 from runtime.messaging_ingress import (
     messaging_event_to_world_state,
     telegram_update_to_messaging_event,
@@ -115,10 +118,11 @@ def _world_state_from_update(
     update: dict[str, Any],
     *,
     transport: str = "longpoll",
+    customer_route: Any = None,
 ) -> WorldStateV1:
     event = telegram_update_to_messaging_event(
         update,
-        tenant_id=_configured_telegram_tenant_id(),
+        tenant_id=customer_route.tenant_id if customer_route is not None else _configured_telegram_tenant_id(),
         product_name=env_str("PRODUCT_NAME", "BusinesAIOS"),
         timezone=env_str("SYSTEM_TZ", "Europe/Amsterdam"),
     )
@@ -144,6 +148,17 @@ def _world_state_from_update(
         **dict(state.meta or {}),
         "transport": str(transport or "telegram"),
     }
+    managed = parse_managed_bot_update(update)
+    if managed is not None:  # Bot API managed_bot update: the creator is the acting user, no chat text
+        uid = managed["user_id"]
+        user = {**user, "id": uid, "messaging_user_id": uid, "telegram_user_id": uid, "telegram_chat_id": uid}
+        session = {**session, "telegram_chat_id": uid, "source": MANAGED_SOURCE, "managed_bot": dict(managed)}
+        state = replace(state, user_id=uid)
+    elif customer_route is not None:  # update from a tenant's own bot (customer side)
+        bot = {"bot_id": customer_route.external_bot_id, "username": customer_route.username,
+               "request_id": customer_route.request_id, "tenant_id": customer_route.tenant_id,
+               "business": dict(customer_route.business)}  # fmt: skip
+        session = {**session, "source": CUSTOMER_SOURCE, "customer_bot": bot}
     return _copy_world_state(
         state,
         user=user,
@@ -241,12 +256,24 @@ def _execute_update(
         },
     )
 
+def _customer_dispatch(*, core: Any, executor: Any, event_log: Any):
+    def dispatch(update: dict[str, Any], route: Any) -> None:
+        state = _world_state_from_update(update, transport="customer_bot", customer_route=route)
+        result = execute_runtime_decision(issuer=core, executor=executor, state=state)
+        _append_event(event_log, event_type="customer_bot_update_executed",
+                      payload={"bot_id": route.external_bot_id, "update_id": update.get("update_id"),
+                               "ok": bool(getattr(result, "ok", False))})  # fmt: skip
+
+    return dispatch
+
+
 def _run_longpoll(
     *,
     token: str,
     core: Any,
     executor: Any,
     event_log: Any,
+    customer_gateway: Any = None,
 ) -> None:
     _validate_startup(token)
     _start_health_if_enabled(event_log)
@@ -258,6 +285,8 @@ def _run_longpoll(
     )
     idle_sleep_s = max(0, env_int("TELEGRAM_IDLE_SLEEP_MS", 250)) / 1000.0
     offset: int | None = None
+    failures: dict[Any, int] = {}
+    max_attempts = max(1, env_int("TELEGRAM_MAX_UPDATE_ATTEMPTS", 3))
 
     _append_event(
         event_log,
@@ -271,6 +300,7 @@ def _run_longpoll(
             payload: dict[str, Any] = {"timeout": poll_timeout_s}
             if offset is not None:
                 payload["offset"] = offset
+            payload.update(allowed_updates_param())  # opt-in managed_bot delivery
             response = _response_payload(
                 _http_json(
                     "GET",
@@ -297,15 +327,22 @@ def _run_longpoll(
                 raw_update_id = update.get("update_id")
                 # Advance acknowledgement only after successful execution. Failed
                 # decisions must remain eligible for replay on the next poll.
-                _execute_update(
-                    core=core,
-                    executor=executor,
-                    event_log=event_log,
-                    update=update,
-                    transport="longpoll",
-                )
+                try:
+                    _execute_update(core=core, executor=executor, event_log=event_log, update=update, transport="longpoll")
+                except Exception:
+                    # A poison update must not block every later user forever.
+                    failures[raw_update_id] = failures.get(raw_update_id, 0) + 1
+                    if failures[raw_update_id] < max_attempts:
+                        raise
+                    _append_event(event_log, event_type="telegram_update_dropped", payload={"update_id": raw_update_id, "attempts": failures.pop(raw_update_id)})
+                    _LOG.exception("telegram update %s dropped after %s attempts", raw_update_id, max_attempts)
                 if raw_update_id is not None:
                     offset = int(raw_update_id) + 1
+            if customer_gateway is not None:  # flag-gated customer bots, same loop and decision path
+                try:
+                    customer_gateway.tick()
+                except Exception:
+                    _LOG.exception("customer bot gateway tick failed")
             if not updates and idle_sleep_s > 0:
                 time.sleep(idle_sleep_s)
         except KeyboardInterrupt:
@@ -452,7 +489,7 @@ def run_telegram(
     stack: Any = None,
     learning_job: Any = None,
 ) -> None:
-    del event_store, payment_outbox, stack, learning_job
+    del payment_outbox, stack, learning_job
 
     token = resolve_telegram_bot_token()
     if not token:
@@ -471,11 +508,22 @@ def run_telegram(
             event_log=event_log,
         )
         return
+    import os
+
+    from runtime.integration.customer_bot_gateway import build_customer_bot_gateway
+
+    gateway = build_customer_bot_gateway(
+        event_store=event_store,
+        tenant_id=_configured_telegram_tenant_id(),
+        dispatch=_customer_dispatch(core=core, executor=executor, event_log=event_log),
+        env=dict(os.environ),
+    )
     _run_longpoll(
         token=token,
         core=core,
         executor=executor,
         event_log=event_log,
+        customer_gateway=gateway,
     )
 
 

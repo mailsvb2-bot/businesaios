@@ -7,6 +7,7 @@ from typing import Any
 class EffectActionType(StrEnum):
     TELEGRAM_SEND_MESSAGE = "telegram.send_message"
     TELEGRAM_SEND_AUDIO = "telegram.send_audio"
+    TELEGRAM_SEND_PHOTO = "telegram.send_photo"
     TELEGRAM_ANSWER_CALLBACK = "telegram.answer_callback"
     TELEGRAM_SEND_CHAT_ACTION = "telegram.send_chat_action"
     TELEGRAM_SELF_CHECK = "telegram.self_check"
@@ -18,11 +19,13 @@ class EffectActionType(StrEnum):
     WEBSITE_PUBLISH_PAGE = "website.publish_page"
     WEATHER_OPEN_METEO_CURRENT = "weather.open_meteo.current"
     LLM_MARKETING_COMPLETE = "llm.marketing_complete"
+    IMAGE_YANDEX_ART_GENERATE = "image.yandex_art.generate"
 
 
 EFFECT_ACTION_ALIASES: dict[str, EffectActionType] = {
     "telegram_send_message": EffectActionType.TELEGRAM_SEND_MESSAGE,
     "telegram_send_audio": EffectActionType.TELEGRAM_SEND_AUDIO,
+    "telegram_send_photo": EffectActionType.TELEGRAM_SEND_PHOTO,
     "telegram_answer_callback": EffectActionType.TELEGRAM_ANSWER_CALLBACK,
     "telegram_send_chat_action": EffectActionType.TELEGRAM_SEND_CHAT_ACTION,
     "yookassa_create_payment": EffectActionType.PAYMENTS_YOOKASSA_CREATE,
@@ -35,6 +38,7 @@ EFFECT_ACTION_ALIASES: dict[str, EffectActionType] = {
     "weather.current": EffectActionType.WEATHER_OPEN_METEO_CURRENT,
     "weather_open_meteo_current": EffectActionType.WEATHER_OPEN_METEO_CURRENT,
     "marketing_llm_complete": EffectActionType.LLM_MARKETING_COMPLETE,
+    "marketing_image_generate": EffectActionType.IMAGE_YANDEX_ART_GENERATE,
     "telegram_self_check": EffectActionType.TELEGRAM_SELF_CHECK,
     "telegram_poll_updates": EffectActionType.TELEGRAM_POLL_UPDATES,
 }

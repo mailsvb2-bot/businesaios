@@ -1,0 +1,101 @@
+from __future__ import annotations
+
+from functools import partial
+
+import pytest
+
+from application.business_flows import sales as sl
+from runtime.handler_impl.domains.business_flow_ops import handle_sales_pipeline
+
+NOW = 1_800_000_000_000
+S = sl.Stage
+
+
+def test_reducer_matches_donor_semantics() -> None:
+    assert sl.reduce(S.DISCOVERED, "contact") == S.ENGAGED
+    assert sl.reduce(S.QUALIFIED, "need") == S.QUALIFIED  # repeated milestone is idempotent
+    with pytest.raises(ValueError):
+        sl.reduce(S.ENGAGED, "offer")  # no skipping
+    assert sl.reduce(S.ENGAGED, "paid") == S.WON
+    assert sl.reduce(S.WON, "declined") == S.WON
+    assert sl.reduce(S.OFFER_PRESENTED, "handoff") == S.OFFER_PRESENTED
+    with pytest.raises(ValueError):
+        sl.reduce(S.LOST, "contact")
+
+
+def test_pipeline_flow(flow) -> None:
+    run = partial(flow.run, partial(handle_sales_pipeline, now_ms=NOW))
+    assert "Лид добавлен" in run(op="add", arg="Анна | Instagram")[1]
+    assert "уже есть" in run(op="add", arg="анна | instagram")[1]
+    assert "на связи" in run(op="event", arg="1 contact")[1]
+    assert "Не получилось" in run(op="event", arg="1 checkout")[1]
+    run(op="event", arg="1 handoff")
+    assert "нужен человек" in run(op="list")[1]
+    run(op="event", arg="1 resume")
+    assert "нужен человек" not in run(op="list")[1]
+    run(op="next", arg="1 | 2027-01-15 12:00 | позвонить")
+    run(op="note", arg="1 | хочет групповой формат")
+    assert "групповой" in run(op="card", arg="1")[1]
+    assert "позвонить" in partial(flow.run, partial(handle_sales_pipeline, now_ms=NOW + 10 * 3_600_000))(op="due")[1]
+    run(op="event", arg="1 declined")
+    assert "отказ" in run(op="list")[1]
+    assert "снова в работе" in run(op="reopen", arg="1")[1]
+    assert "Воронка: на связи: 1" in run(op="list")[1]
+
+
+def test_assignment_claim_and_clear_next(flow) -> None:
+    run = partial(flow.run, partial(handle_sales_pipeline, now_ms=NOW))
+    run(op="add", arg="Борис | VK")
+    assert "assignee_not_member" in run(op="assign", arg="1 999")[1]
+    assert "handoff_not_open" in run(op="claim", arg="1")[1]
+    run(op="event", arg="1 handoff")
+    assert "Ждут человека: 1" in run(op="handoffs")[1]
+    assert "разговор у Вас" in run(op="claim", arg="1")[1]
+    assert "ведёт" in run(op="list")[1]
+    assert "(уже)" in run(op="claim", arg="1")[1]
+    assert "ответственный снят" in run(op="assign", arg="1 -")[1]
+    assert "Без изменений" in run(op="assign", arg="1 -")[1]
+    run(op="next", arg="1 | 2027-01-15 12:00 | позвонить")
+    assert "снят" in run(op="next", arg="1 -")[1]
+    assert "не было" in run(op="next", arg="1 -")[1]
+    assert "дальше" not in run(op="list")[1]
+
+
+def test_claim_rejects_other_owner() -> None:
+    st = sl.replay(
+        [
+            {"step": "lead_added", "lead_id": "l1", "name": "A"},
+            {"step": "lead_event", "lead_id": "l1", "event": "handoff", "stage": "discovered"},
+            {"step": "lead_assigned", "lead_id": "l1", "assignee": "7"},
+        ]
+    )
+    with pytest.raises(ValueError, match="already_claimed"):
+        sl.claim_handoff(st, "1", user_id="8")
+    assert sl.claim_handoff(st, "1", user_id="7") is None
+    assert [x.lead_id for x in sl.handoff_work(st)] == ["l1"]
+
+
+def test_local_due_rejects_dst_gaps_and_overlaps() -> None:
+    from datetime import datetime
+    from zoneinfo import ZoneInfo
+
+    berlin = ZoneInfo("Europe/Berlin")
+    with pytest.raises(ValueError, match="missing"):
+        sl.local_to_utc(datetime(2027, 3, 28, 2, 30), berlin)
+    with pytest.raises(ValueError, match="ambiguous"):
+        sl.local_to_utc(datetime(2027, 10, 31, 2, 30), berlin)
+    assert sl.local_to_utc(datetime(2027, 1, 15, 12, 0), ZoneInfo("Europe/Moscow")).hour == 9
+    st = sl.replay([{"step": "lead_added", "lead_id": "l1", "name": "A"}])
+    with pytest.raises(ValueError, match="ambiguous"):
+        sl.set_next(st, "1 | 2027-10-31 02:30 | x", now_ms=NOW, tz="Europe/Berlin")
+
+
+def test_recent_closed_most_recent_first(flow) -> None:
+    run = partial(flow.run, partial(handle_sales_pipeline, now_ms=NOW))
+    assert "Пока нет" in run(op="closed")[1]
+    run(op="add", arg="Анна")
+    run(op="add", arg="Борис")
+    run(op="event", arg="1 declined")  # Анна lost first
+    run(op="event", arg="1 paid")  # ordered: open Борис is now #1
+    text = run(op="closed")[1]
+    assert text.index("Борис") < text.index("Анна") and "купил" in text and "отказ" in text

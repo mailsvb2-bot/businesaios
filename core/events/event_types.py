@@ -43,6 +43,19 @@ ADMIN_NOTIFICATION_SENT = "admin_notification_sent"
 ADMIN_NOTIFICATION_FAILED = "admin_notification_failed"
 ADMIN_USER_CARD = "admin_user_card@v1"
 ADMIN_USER_CARD_FAILED = "admin_user_card_failed@v1"
+PRIVACY_EXPORT = "privacy_export@v1"
+BUSINESS_OPS_SUMMARY = "business_ops_summary@v1"
+PRIVACY_DELETE = "privacy_delete@v1"
+OFFER_LADDER = "offer_ladder@v1"
+PARTNERS = "partners@v1"
+BOOKINGS = "bookings@v1"
+BOT_PROVISIONING = "bot_provisioning@v1"
+SALES_PIPELINE = "sales_pipeline@v1"
+EVENT_SERIES = "event_series@v1"
+BUSINESS_ADMIN = "business_admin@v1"
+PRIVACY_EXPORT_FAILED = "privacy_export_failed@v1"
+PRIVACY_DELETED = "privacy_deleted@v1"
+PRIVACY_DELETE_FAILED = "privacy_delete_failed@v1"
 ADMIN_PRICING_CHANGE_REQUESTED = "admin_pricing_change_requested"
 ADMIN_PRICING_CHANGE_REJECTED = "admin_pricing_change_rejected"
 ADMIN_PRICING_CHANGE_APPLIED = "admin_pricing_change_applied"
@@ -212,6 +225,16 @@ KNOWN_EVENT_TYPES: set[str] = {
     ADMIN_NOTIFICATION_FAILED,
     ADMIN_USER_CARD,
     ADMIN_USER_CARD_FAILED,
+    PRIVACY_EXPORT,
+    BUSINESS_OPS_SUMMARY,
+    PRIVACY_DELETE,
+    OFFER_LADDER,
+    PARTNERS,
+    BOOKINGS,
+    BOT_PROVISIONING,
+    PRIVACY_EXPORT_FAILED,
+    PRIVACY_DELETED,
+    PRIVACY_DELETE_FAILED,
     ADMIN_PRICING_CHANGE_REQUESTED,
     ADMIN_PRICING_CHANGE_REJECTED,
     ADMIN_PRICING_CHANGE_APPLIED,

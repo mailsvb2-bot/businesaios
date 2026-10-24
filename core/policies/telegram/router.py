@@ -17,6 +17,7 @@ from core.policies.telegram.helpers import (
     propose_message,
 )
 from core.policies.telegram.routes.command_routes import handle_command_routes
+from core.policies.telegram.routes.customer_bot_routes import handle_customer_bot, is_customer_session
 from core.policies.telegram.routes.marketing_routes import handle_marketing_routes
 from core.policies.telegram.routes.settings_routes import handle_settings_routes
 from core.users.roles import UserRoleInfo
@@ -35,6 +36,8 @@ def _has_perm(ctx: TelegramCtx, perm: str) -> bool:
 
 def handle(ctx: TelegramCtx, *, default_price_rub: int, bot_username: str = "", gift_ttl_sec: int = 7 * 24 * 3600) -> ProposedAction:
     user_id = ctx.state.user_id or "anonymous"
+    if is_customer_session(getattr(ctx.state, "session", None)):  # tenant's own bot: customer routes only
+        return handle_customer_bot(ctx, user_id=str(user_id))
     user_role = UserRoleInfo.from_settings(ctx.settings if isinstance(ctx.settings, dict) else {})
     legacy_prices = build_legacy_prices(default_price_rub=default_price_rub)
 
@@ -59,6 +62,10 @@ def handle(ctx: TelegramCtx, *, default_price_rub: int, bot_username: str = "", 
     if section is not None:
         return pm(text=section, reply_markup=back_button())
 
+    if ctx.cmd == "/start" and str(ctx.args or "").strip().startswith(("cpa_", "ecv_")):
+        from core.policies.telegram.routes.business_flow_routes import handle_business_flow_routes
+
+        return handle_business_flow_routes(ctx, user_id=str(user_id))
     if ctx.cmd in {"/start", "/menu"} or ctx.callback_data in {CB_MENU_MAIN, "menu_main"}:
         step = "menu_main"
         variant = choose_marketing_variant(user_id=str(user_id), step_key=step, seed=str(ctx.marketing_seed or "1"), bandit=(ctx.marketing_bandit or {}).get(step))
@@ -89,4 +96,9 @@ def handle(ctx: TelegramCtx, *, default_price_rub: int, bot_username: str = "", 
         msg = "Я здесь. Напиши, что сейчас происходит в твоём дне — и мы настроим ритм."
     else:
         msg = "Я здесь. Напиши, что сейчас происходит. Если нужен полный доступ — /pay или кнопка «Полный доступ»."
+    if not ctx.is_admin and not ctx.cmd and str(ctx.text or "").strip():
+        from core.policies.telegram.helpers import propose
+
+        # customer free text is sales evidence (sales_intelligence); handler replies with msg
+        return propose("sales_pipeline@v1", {"user_id": user_id, "op": "inbound", "arg": str(ctx.text)[:4000], "reply": msg})
     return pm(text=msg, reply_markup=kb_main(is_admin=ctx.is_admin, role=user_role))

@@ -133,3 +133,53 @@ def llm_generate_yandexgpt(*, base_url: str, api_key: str, payload: dict[str, An
         payload=payload,
         timeout_s=timeout_s,
     )
+
+
+YANDEX_ART_URL = "https://llm.api.cloud.yandex.net/foundationModels/v1/imageGenerationAsync"
+YANDEX_OPERATION_URL = "https://operation.api.cloud.yandex.net/operations/"
+
+
+def yandex_art_generate(
+    *, api_key: str, folder_id: str, prompt: str, negative: str = "", seed: int = 0,
+    width_ratio: int = 1, height_ratio: int = 1, timeout_s: int = 20, max_wait_s: float = 90.0,
+    poll_s: float = 3.0, sleep=time.sleep,
+) -> bytes:
+    """YandexART async image generation on fixed sovereign Yandex hosts; returns image bytes."""
+    import base64
+    import re as _re
+
+    key, folder = str(api_key or "").strip(), str(folder_id or "").strip()
+    if not key:
+        raise RuntimeError("LLM_API_KEY_MISSING")
+    if not _re.fullmatch(r"[a-z0-9]{8,64}", folder):
+        raise RuntimeError("yandex_art_folder_id_invalid")
+    messages = [{"text": str(prompt)[:500], "weight": 1}]
+    if negative:
+        messages.append({"text": str(negative)[:500], "weight": -1})
+    body = {
+        "modelUri": f"art://{folder}/yandex-art/latest",
+        "messages": messages,
+        "generationOptions": {"seed": int(seed), "aspectRatio": {"widthRatio": int(width_ratio), "heightRatio": int(height_ratio)}},
+    }
+    headers = _headers_for(provider="yandexgpt", api_key=key)
+    resp = sync_post_json(url=YANDEX_ART_URL, headers=headers, data=body, timeout_s=int(timeout_s or 20))
+    _raise_for_transport_failure(provider="yandex_art", url=YANDEX_ART_URL, response=resp)
+    op_id = str(resp.json.get("id") or "") if isinstance(resp.json, dict) else ""
+    if not _re.fullmatch(r"[A-Za-z0-9_-]{4,128}", op_id):
+        raise RuntimeError("yandex_art_operation_missing")
+    waited = 0.0
+    while True:
+        r = sync_request(method="GET", url=YANDEX_OPERATION_URL + op_id, headers=headers, timeout_s=float(timeout_s or 20))
+        _raise_for_transport_failure(provider="yandex_art", url=YANDEX_OPERATION_URL, response=r)
+        data = r.json if isinstance(r.json, dict) else {}
+        if data.get("error"):
+            raise RuntimeError("yandex_art_failed")
+        if data.get("done"):
+            image = str((data.get("response") or {}).get("image") or "")
+            if not image:
+                raise RuntimeError("yandex_art_empty_image")
+            return base64.b64decode(image)
+        if waited >= max_wait_s:
+            raise RuntimeError("yandex_art_timeout")
+        sleep(poll_s)
+        waited += poll_s

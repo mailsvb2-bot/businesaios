@@ -256,6 +256,10 @@ _ACTION_SPECS: dict[str, ActionSpec] = {
 _ACTION_SPECS.update(build_market_intelligence_action_specs())
 _ACTION_SPECS.update(build_revenue_os_action_specs())
 _ACTION_SPECS.update(build_visual_creative_action_specs())
+_ACTION_SPECS['conference_join_run'] = ActionSpec(
+    action_type='conference_join_run@v1', action_class='internal_execution', externally_verified=True, idempotent=True,
+    prod_ready=False, notes=('runs a pure public_events UCR join plan through the gateway; join URL never stored',),
+)
 
 
 _UNKNOWN_SPEC = ActionSpec(

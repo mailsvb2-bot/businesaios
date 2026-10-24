@@ -87,3 +87,89 @@ def handle_log_mood(payload, effects, env):
         channel=str(payload.get("channel") or "telegram"),
         channel_policy=optional_dict(payload, "channel_policy"),
     )
+
+
+def handle_privacy_export(payload, effects, env, *, event_store):
+    """Self-service personal-data export: the requester sees only their own scoped events."""
+    from collections import Counter
+
+    from core.privacy.data_rights import DataExportRequest, DataRightsService
+    from runtime.platform.privacy.event_store_data_source import EventStoreUserDataSource
+
+    body = require_mapping(payload or {})
+    tenant_id, user_id = required_str(body, "tenant_id"), required_str(body, "user_id")
+    try:
+        service = DataRightsService(sources={"events": EventStoreUserDataSource(event_store)})
+        items = service.export_user(DataExportRequest(tenant_id=tenant_id, user_id=user_id))["sources"]["events"][
+            "items"
+        ]
+        types = Counter(str((i if isinstance(i, dict) else vars(i)).get("event_type") or "?") for i in items)
+        lines = [f"• {name}: {count}" for name, count in types.most_common(15)]
+        text = "🔐 Ваши данные\n\n" + f"Записей: {len(items)}\n" + ("\n".join(lines) or "Записей нет.")
+        track, ok = "privacy_export@v1", True
+    except Exception as exc:
+        text, track, ok = "🔐 Не удалось собрать выгрузку данных. Попробуйте позже.", "privacy_export_failed@v1", False
+        types, items = {"error": exc.__class__.__name__}, []
+    delivery = effects.send_message(
+        decision_id=env.decision.decision_id,
+        correlation_id=env.decision.correlation_id,
+        tenant_id=tenant_id,
+        user_id=user_id,
+        text=text,
+        reply_markup=None,
+        track_event_type=track,
+        track_payload={"tenant_id": tenant_id, "user_id": user_id, "records": len(items), "types": dict(types)},
+        **delivery_kwargs(body),
+    )
+    from runtime.handler_impl.domains.admin_ops import _card_outcome
+
+    # Same evidence contract as admin_user_card: the verifier needs the delivery
+    # receipt as router_evidence, otherwise the update is retried and re-sent.
+    return _card_outcome(delivery=delivery, ok=ok, reason="" if ok else "export_failed")
+
+
+PRIVACY_DELETE_CONFIRMATION = "ПОДТВЕРЖДАЮ"
+
+
+def handle_privacy_delete(payload, effects, env, *, event_store):
+    """Self-service PD deletion (two-step): erase the requester's own events via DataRightsService.
+
+    The receipt carries only a pseudonymous subject hash and counts, never the
+    deleted content; bookings made by the user disappear with their events.
+    """
+    from application.business_flows.projection import stable_id
+    from core.privacy.data_rights import DataDeleteRequest, DataRightsService
+    from runtime.handler_impl.domains.admin_ops import _card_outcome
+    from runtime.platform.privacy.event_store_data_source import EventStoreUserDataSource
+
+    body = require_mapping(payload or {})
+    tenant_id, user_id = required_str(body, "tenant_id"), required_str(body, "user_id")
+    confirmed = str(body.get("arg") or "").strip().upper() == PRIVACY_DELETE_CONFIRMATION
+    track, ok, receipt = None, True, {"tenant_id": tenant_id, "subject": stable_id("subject", tenant_id, user_id)}
+    if not confirmed:
+        text = (
+            "🗑 Удаление персональных данных\n\nБудут удалены все ваши записи: сообщения, настроения, записи на слоты.\n"
+            f"Действие необратимо. Для подтверждения отправьте:\n/delete_my_data {PRIVACY_DELETE_CONFIRMATION}"
+        )
+    else:
+        try:
+            service = DataRightsService(sources={"events": EventStoreUserDataSource(event_store)})
+            result = service.delete_user(DataDeleteRequest(tenant_id=tenant_id, user_id=user_id))
+            deleted = int(sum(int(v) for v in (result.get("deleted") or {}).values()))
+            text, track = f"🗑 Готово: удалено записей — {deleted}. Данные удалены безвозвратно.", "privacy_deleted@v1"
+            receipt["deleted"] = deleted
+        except Exception as exc:
+            text, track, ok = "🗑 Не удалось удалить данные. Попробуйте позже.", "privacy_delete_failed@v1", False
+            receipt["error"] = exc.__class__.__name__
+    delivery = effects.send_message(
+        decision_id=env.decision.decision_id,
+        correlation_id=env.decision.correlation_id,
+        tenant_id=tenant_id,
+        user_id=user_id,
+        text=text,
+        reply_markup=None,
+        track_event_type=track,
+        track_payload=receipt if track else None,
+        **delivery_kwargs(body),
+    )
+    return _card_outcome(delivery=delivery, ok=ok, reason="" if ok else "delete_failed")

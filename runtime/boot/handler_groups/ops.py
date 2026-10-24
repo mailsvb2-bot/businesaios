@@ -1,6 +1,9 @@
 from __future__ import annotations
 
+from functools import lru_cache
+
 from runtime.handlers import ActionHandlerRegistry
+from runtime.handlers.conference_join import handle_run_conference_join_plan
 from runtime.handlers.platform_effects import (
     handle_apply_offer_patch,
     handle_enqueue_evolution_job,
@@ -12,21 +15,32 @@ from runtime.handlers_ops import (
     handle_admin_user_card,
     handle_answer_callback,
     handle_apply_pricing_change,
+    handle_bookings,
+    handle_bot_provisioning,
+    handle_business_admin,
+    handle_business_ops_summary,
     handle_capture_payment,
     handle_create_payment_and_send_link,
     handle_deploy_policy,
+    handle_event_series,
     handle_grant_access,
     handle_log_mood,
+    handle_offer_ladder,
+    handle_partners,
+    handle_privacy_delete,
+    handle_privacy_export,
     handle_reconcile_payment,
     handle_reconcile_payments,
     handle_reject_pricing_change,
     handle_request_pricing_change,
     handle_rollback_policy,
+    handle_sales_pipeline,
     handle_select_tariff,
     handle_send_audio,
     handle_send_weather,
     handle_set_marketing_copy,
     handle_set_user_setting,
+    managed_bot_token_source,
 )
 
 CANON_BOOT_WIRING_ONLY = True
@@ -50,6 +64,53 @@ def register_ops_handlers(*, handlers: ActionHandlerRegistry, event_store) -> No
             event_store=event_store,
         ),
     )
+    handlers.register(
+        "bot_provisioning@v1",
+        lambda payload, effects, env: handle_bot_provisioning(
+            payload,
+            effects,
+            env,
+            event_store=event_store,
+            vault=_tenant_vault(),
+            token_source=managed_bot_token_source(effects),
+        ),
+    )
+    handlers.register(
+        "business_admin@v1",
+        lambda payload, effects, env: handle_business_admin(payload, effects, env, event_store=event_store),
+    )
+    handlers.register(
+        "event_series@v1",
+        lambda payload, effects, env: handle_event_series(payload, effects, env, event_store=event_store),
+    )
+    handlers.register(
+        "sales_pipeline@v1",
+        lambda payload, effects, env: handle_sales_pipeline(payload, effects, env, event_store=event_store),
+    )
+    handlers.register(
+        "bookings@v1",
+        lambda payload, effects, env: handle_bookings(payload, effects, env, event_store=event_store),
+    )
+    handlers.register(
+        "partners@v1",
+        lambda payload, effects, env: handle_partners(payload, effects, env, event_store=event_store),
+    )
+    handlers.register(
+        "offer_ladder@v1",
+        lambda payload, effects, env: handle_offer_ladder(payload, effects, env, event_store=event_store),
+    )
+    handlers.register(
+        "privacy_delete@v1",
+        lambda payload, effects, env: handle_privacy_delete(payload, effects, env, event_store=event_store),
+    )
+    handlers.register(
+        "business_ops_summary@v1",
+        lambda payload, effects, env: handle_business_ops_summary(payload, effects, env, event_store=event_store),
+    )
+    handlers.register(
+        "privacy_export@v1",
+        lambda payload, effects, env: handle_privacy_export(payload, effects, env, event_store=event_store),
+    )
     handlers.register("apply_pricing_change@v1", handle_apply_pricing_change)
     handlers.register("request_pricing_change@v1", handle_request_pricing_change)
     handlers.register("reject_pricing_change@v1", handle_reject_pricing_change)
@@ -64,3 +125,15 @@ def register_ops_handlers(*, handlers: ActionHandlerRegistry, event_store) -> No
     handlers.register("enqueue_evolution_job@v1", handle_enqueue_evolution_job)
     handlers.register("suggest_offer_patch@v1", handle_suggest_offer_patch)
     handlers.register("apply_offer_patch@v1", handle_apply_offer_patch)
+    handlers.register("conference_join_run@v1", handle_run_conference_join_plan)
+
+
+@lru_cache(maxsize=1)
+def _tenant_vault():
+    """Lazily built tenant SecretVault for vault: refs; None when unavailable (refs then fail closed)."""
+    try:
+        from security.secret_vault import build_default_secret_vault
+
+        return build_default_secret_vault()
+    except Exception:  # noqa: BLE001 - vault misconfig must not break the handler
+        return None

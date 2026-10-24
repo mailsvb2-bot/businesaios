@@ -8,6 +8,7 @@ from core.policies.telegram.context import TelegramCtx
 from core.policies.telegram.helpers import ProposedAction, normalize_proposed_action
 from core.policies.telegram.retention_integration import apply_retention_constraints_to_state
 from core.policies.telegram.router import handle
+from core.policies.telegram.routes.customer_bot_routes import is_customer_session
 from core.policies.telegram.unified_policy_context import extract_session_fields, extract_user_fields
 from core.retention.decision_adapter import RetentionDecisionAdapter
 from kernel.world_state import WorldStateV1
@@ -73,6 +74,8 @@ class UnifiedTelegramPolicyV3:
         ]
         is_superadmin = bool(state.user_id) and str(state.user_id) in self._admin_user_ids
         is_admin = bool(is_superadmin) or "admin" in set(roles)
+        if is_customer_session(getattr(state, "session", None)):
+            is_admin = False  # a customer bot never grants owner/admin rights
         pricing_suggestions: dict[str, int] = {}
         for key, value in dict(user_fields["pricing_suggestions"]).items():
             try:
@@ -140,7 +143,7 @@ class UnifiedTelegramPolicyV3:
             return [domain]
         context, is_admin = self._context(state)
         telegram_update = getattr(state, "telegram_update", None)
-        if self._retention is None or is_admin or telegram_update is None:
+        if self._retention is None or is_admin or telegram_update is None or is_customer_session(getattr(state, "session", None)):
             return [
                 self._bind_callback(normalize_proposed_action(
                     handle(

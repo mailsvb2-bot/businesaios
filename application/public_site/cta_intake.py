@@ -179,6 +179,45 @@ def _validate_business_settings(*, business_name: str, activity_description: str
     return name, activity, tz
 
 
+DIRECTORY_MAX, DIRECTORY_DEFAULT = 20, 10
+
+
+def _operator(user_id: object, operator_ids: object) -> str:
+    """Donor platform_directory._operator: only configured platform operators (ADMIN_USER_IDS) may search."""
+    uid = str(user_id or "").strip()
+    if not uid or uid not in {str(x).strip() for x in (operator_ids or ())}:
+        raise PermissionError("platform directory access required")
+    return uid
+
+
+def _clock(now_utc: datetime | None) -> datetime:
+    current = now_utc or datetime.now(tz=UTC)
+    if current.tzinfo is None or current.utcoffset() is None:
+        raise ValueError("now_utc must be timezone-aware")
+    return current.astimezone(UTC)
+
+
+def _sha256_json(value: object) -> str:
+    return sha256(json.dumps(value, ensure_ascii=True, sort_keys=True, separators=(",", ":")).encode("utf-8")).hexdigest()
+
+
+def _result_fingerprint(matches: tuple[dict[str, object], ...], *, truncated: bool) -> str:
+    keys = ("business_id", "matched_user_id")
+    return _sha256_json({"matches": [{k: m.get(k) for k in keys} for m in matches], "truncated": truncated})
+
+
+def _directory_query(kind: str, value: object) -> tuple[str, str]:
+    k = str(kind or "").strip()
+    if k not in {"business_id", "user_id", "business_name"}:
+        raise ValueError("unsupported platform directory query kind")
+    text = " ".join(str(value or "").replace("\x00", " ").split())
+    if k == "business_name" and (not 3 <= len(text) <= 80 or text in {"*", "%", "_"}):
+        raise ValueError("business name query must be 3..80 characters")
+    if not text:
+        raise ValueError(f"{k} required")
+    return k, text
+
+
 class CTALandingIntakeService:
     def __init__(self, *, storage_path: str = "runtime_state/pilot_applications.jsonl", app_base_url: str = "https://app.businessaios.ru") -> None:
         self._storage_path, self._app_base_url = Path(storage_path), app_base_url.rstrip("/")
@@ -348,6 +387,132 @@ class CTALandingIntakeService:
             }
             _append_intake_row(self._storage_path, next_row)
             return _settings_payload(next_row)
+
+    def search_platform_directory(self, operator_user_id: object, *, operator_ids: object, query_kind: str,
+                                  query: object, limit: int = DIRECTORY_DEFAULT, now_utc: datetime | None = None,
+                                  ) -> dict[str, object]:
+        """Donor platform_directory.search_platform_directory: operator-only, bounded, audited by fingerprints."""
+        operator = _operator(operator_user_id, operator_ids)
+        kind, needle = _directory_query(query_kind, query)
+        if isinstance(limit, bool) or not isinstance(limit, int) or not 1 <= limit <= DIRECTORY_MAX:
+            raise ValueError(f"directory limit must be 1..{DIRECTORY_MAX}")
+        searched_at = _clock(now_utc).isoformat()
+        found = []
+        for b in self.list_recent(limit=200):
+            name = str(b.get("business_name") or b.get("name") or "")
+            ok = {"business_id": lambda: b.get("business_id") == needle,
+                  "user_id": lambda: needle in {str(b.get("user_id") or ""), str(b.get("owner_account_id") or "")},
+                  "business_name": lambda: needle.casefold() in name.casefold()}[kind]()
+            if ok:
+                found.append({"business_id": str(b.get("business_id") or ""), "business_name": name,
+                              "tenant_id": str(b.get("tenant_id") or ""),
+                              "matched_user_id": needle if kind == "user_id" else None})
+        found.sort(key=lambda m: (m["business_name"].casefold(), m["business_id"]))
+        matches, truncated = tuple(found[:limit]), len(found) > limit
+        audit = self._put_kind("directory_lookup", f"operator:{operator}", "platform",
+                               query_kind=kind, query_fingerprint=_sha256_json({"kind": kind, "query": needle}),
+                               result_count=len(matches), result_fingerprint=_result_fingerprint(matches, truncated=truncated),
+                               created_at=searched_at, audit_id=f"dir-{uuid4().hex[:16]}")
+        return {"query_kind": kind, "matches": matches, "truncated": truncated,
+                "audit_id": audit["audit_id"], "searched_at": searched_at}
+
+    # --- donor tenancy / owner_onboarding over the same ledger (kind rows carry no intake_id) ---
+    def _owned(self, account_id: str, business_id: str) -> dict[str, object]:
+        hit = next((b for b in self.list_owner_businesses(owner_account_id=account_id, limit=200)
+                    if b["business_id"] == business_id), None)
+        if hit is None:
+            raise PermissionError("business_not_accessible")
+        return hit
+
+    def _latest_kind(self, kind: str, account_id: str, platform: str) -> dict[str, object] | None:
+        if not self._storage_path.exists():
+            return None
+        for line in reversed(self._storage_path.read_text(encoding="utf-8").splitlines()):
+            try:
+                row = json.loads(line) if line.strip() else None
+            except (ValueError, TypeError):
+                continue
+            if (isinstance(row, dict) and row.get("kind") == kind
+                    and row.get("owner_account_id") == account_id and row.get("platform") == platform):
+                return row
+        return None
+
+    def _put_kind(self, kind: str, account_id: str, platform: str, **fields: object) -> dict[str, object]:
+        account, plat = str(account_id or "").strip(), str(platform or "").strip()
+        if not account or not plat:
+            raise ValueError("owner_account_and_platform_required")
+        row = {"kind": kind, "owner_account_id": account, "platform": plat, **fields,
+               "at": datetime.now(UTC).isoformat()}
+        with _intake_lock(self._storage_path):
+            _append_intake_row(self._storage_path, row)
+        return row
+
+    def create_business(self, *, owner_account_id: str, name: str) -> dict[str, object]:
+        """Donor tenancy.create_business: owner-bound business row (the same CTA ledger)."""
+        title = str(name or "").strip()
+        if not 1 <= len(title) <= 200:
+            raise ValueError("business_name_invalid")
+        res = self.submit(payload={"business_name": title}, owner_account_id=owner_account_id)
+        return {"tenant_id": res.tenant_id, "business_id": res.business_id, "name": title, "role": "owner"}
+
+    def rename_business(self, *, tenant_id: str, business_id: str, owner_account_id: str, name: str,
+                        idempotency_key: str) -> dict[str, object]:
+        """Donor tenancy.rename_business: owner-only; keeps activity/timezone, optimistic revision."""
+        self._owned(str(owner_account_id or "").strip(), str(business_id or "").strip())
+        cur = self.read_business_settings(tenant_id=tenant_id, business_id=business_id)
+        return self.update_business_settings(
+            tenant_id=tenant_id, business_id=business_id, business_name=name,
+            activity_description=str(cur["activity_description"]), timezone_name=str(cur["timezone_name"]),
+            expected_revision=int(cur["revision"]), idempotency_key=idempotency_key, actor_id=owner_account_id)
+
+    def set_owner_control_workspace(self, *, owner_account_id: str, platform: str, business_id: str) -> str:
+        """Donor tenancy.set_owner_control_workspace: only a business the owner can access."""
+        self._owned(str(owner_account_id or "").strip(), str(business_id or "").strip())
+        self._put_kind("owner_control_workspace", owner_account_id, platform, business_id=business_id)
+        return business_id
+
+    def get_owner_control_workspace(self, *, owner_account_id: str, platform: str) -> str | None:
+        row = self._latest_kind("owner_control_workspace", str(owner_account_id or "").strip(), str(platform or "").strip())
+        return str(row["business_id"]) if row else None
+
+    def get_owner_onboarding_session(self, *, owner_account_id: str, platform: str) -> dict[str, object] | None:
+        row = self._latest_kind("owner_onboarding", str(owner_account_id or "").strip(), str(platform or "").strip())
+        return {"step": row["step"], "business_id": row.get("business_id")} if row and row.get("step") else None
+
+    def begin_business_name_onboarding(self, *, owner_account_id: str, platform: str) -> dict[str, object]:
+        self._put_kind("owner_onboarding", owner_account_id, platform, step="business_name", business_id=None)
+        return {"step": "business_name", "business_id": None}
+
+    def cancel_owner_onboarding(self, *, owner_account_id: str, platform: str) -> None:
+        self._put_kind("owner_onboarding", owner_account_id, platform, step=None, business_id=None)
+
+    def create_business_from_onboarding(self, *, owner_account_id: str, platform: str, name: str) -> dict[str, object]:
+        """Donor: business_name step -> business + control workspace -> activity_description step."""
+        session = self.get_owner_onboarding_session(owner_account_id=owner_account_id, platform=platform)
+        if session is None or session["step"] != "business_name":
+            raise ValueError("business-name onboarding is not active")
+        access = self.create_business(owner_account_id=owner_account_id, name=name)
+        self.set_owner_control_workspace(owner_account_id=owner_account_id, platform=platform,
+                                         business_id=str(access["business_id"]))
+        self._put_kind("owner_onboarding", owner_account_id, platform, step="activity_description",
+                       business_id=access["business_id"], tenant_id=access["tenant_id"])
+        return access
+
+    def complete_activity_onboarding(self, *, owner_account_id: str, platform: str, activity_description: str,
+                                     timezone_name: str) -> dict[str, object]:
+        """Donor: activity step -> profile saved (validated tz) -> workspace kept -> session cleared."""
+        row = self._latest_kind("owner_onboarding", str(owner_account_id or "").strip(), str(platform or "").strip())
+        if not row or row.get("step") != "activity_description" or not row.get("business_id"):
+            raise ValueError("activity onboarding is not active")
+        tenant, business = str(row["tenant_id"]), str(row["business_id"])
+        cur = self.read_business_settings(tenant_id=tenant, business_id=business)
+        profile = self.update_business_settings(
+            tenant_id=tenant, business_id=business, business_name=str(cur["business_name"]),
+            activity_description=activity_description, timezone_name=timezone_name,
+            expected_revision=int(cur["revision"]), idempotency_key=f"onboarding:{business}", actor_id=owner_account_id)
+        self.set_owner_control_workspace(owner_account_id=owner_account_id, platform=platform, business_id=business)
+        self.cancel_owner_onboarding(owner_account_id=owner_account_id, platform=platform)
+        return profile
 
 
 def _row_owner_account_id(row: dict[str, object]) -> str:

@@ -6,6 +6,7 @@ from typing import Any
 
 from interfaces.telegram.parsing.telegram_context import TelegramContext, extract_telegram_user_id
 from kernel.world_state import WorldStateV1
+from runtime.integration.managed_bot_updates import SESSION_SOURCE
 
 
 @dataclass(frozen=True)
@@ -33,6 +34,8 @@ def build_overlays_from_context(*, ctx: TelegramContext, now_ms: int | None = No
         "callback_data": ctx.callback_data,
         "callback_query_id": ctx.callback_query_id,
     }
+    if ctx.managed_bot:  # only the Bot API update parser sets this; chat text can never produce it
+        session.update(source=SESSION_SOURCE, managed_bot=dict(ctx.managed_bot))
     meta = {
         "ingress": "telegram",
         "correlation_key": f"tg:{ctx.chat_id}:{ctx.update_id}",
