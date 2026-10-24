@@ -57,12 +57,13 @@ def propose_show_tariffs(
             track_payload={"marketing_variant": v},
         )
     except Exception:
+        # Fail closed; never resurrect legacy therapy tariffs on catalog failure.
         return propose_message(
             user_id=user_id,
-            text=msg,
-            reply_markup=kb_sub(legacy_prices),
+            text="Тарифы сейчас недоступны.",
+            reply_markup=kb_tariffs([]),
             track_event_type="tariffs_viewed",
-            track_payload={"marketing_variant": v},
+            track_payload={"marketing_variant": v, "catalog_status": "unavailable"},
         )
 
 
@@ -99,27 +100,15 @@ def propose_select_tariff(*, user_id: str, plan_id: int, expected_price: int | N
         plan = None
 
     if not isinstance(plan, dict):
-        # Safe fallback: keep the effect minimal; executor may reject in strict mode.
-        return propose(
-            "select_tariff@v1",
-            {
-                "user_id": str(user_id),
-                "tariff": f"plan:{int(plan_id)}",
-                "days": 0,
-                "period": "days",
-                "amount": int(expected_price) if expected_price is not None else 0,
-                "plan_id": int(plan_id),
-                "expected_price": int(expected_price) if expected_price is not None else None,
-                "notify_text": "⚠️ Тариф не найден. Попробуйте выбрать другой.",
-                "notify_reply_markup": kb_back_main(),
-            },
-        )
+        return propose_message(user_id=str(user_id), text="Тариф недоступен.", reply_markup=kb_back_main())
 
     title = str(plan.get("title") or "Тариф").strip()
     days = int(plan.get("days") or 0)
     tariff = str(plan.get("plan_code") or plan.get("code") or f"plan:{int(plan_id)}").strip()
     base_price = int(plan.get("price") or 0)
-    amount = int(expected_price) if expected_price is not None else int(base_price)
+    if expected_price is not None and int(expected_price) != base_price:
+        return propose_message(user_id=str(user_id), text="Цена изменилась. Выберите тариф заново.", reply_markup=kb_back_main())
+    amount = base_price
 
     txt = build_plan_confirmation_text({**dict(plan), "price": int(amount)})
     return propose(
@@ -177,8 +166,7 @@ def propose_pay_selected(*, user_id: str, full_access: bool, selected: dict[str,
             "price_rub": int(current_price),
         }
     else:
-        amount_rub = int(default_price_rub)
-        meta_note["selected"] = {"default": True, "price_rub": int(amount_rub)}
+        return propose_message(user_id=user_id, text="Сначала выберите доступный тариф.", reply_markup=kb_back_main())
 
     return propose(
         "create_payment_and_send_link@v1",
