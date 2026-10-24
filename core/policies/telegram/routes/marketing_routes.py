@@ -109,26 +109,8 @@ def handle_marketing_routes(
             default_price_rub=int(default_price_rub),
             legacy_prices=legacy_prices,
         )
+    # Payment status alone is not proof of ownership or entitlement. Only the
+    # canonical reconciler may grant access after a scoped provider receipt.
     if ctx.pay_status in {"succeeded", "paid", "success"} and not ctx.full_access:
-        selected = dict(ctx.selected_tariff or {})
-        scope = str(selected.get("period") or "")
-        title = str(selected.get("title") or "")
-        days = int(selected.get("days") or 0)
-        note_lines = ["Оплата получена ✅"]
-        if title:
-            note_lines.append(f"Тариф: {title}")
-        if days > 0:
-            note_lines.append(f"Длительность: {days} дней")
-        note_lines.append(f"Ритм: {scope_hint(scope)}")
-        note_lines.append("")
-        note_lines.append("Если хочешь — укажи город: /city Amsterdam")
-        return propose(
-            "grant_access@v1",
-            {
-                "user_id": user_id,
-                "full_access": True,
-                "notify_text": "\n".join(note_lines),
-                "notify_reply_markup": kb_main(is_admin=ctx.is_admin),
-            },
-        )
+        return pm(text="Статус оплаты получен. Доступ активируется только после подтверждения платежа для вашей организации.", reply_markup=kb_back_main())
     return None
