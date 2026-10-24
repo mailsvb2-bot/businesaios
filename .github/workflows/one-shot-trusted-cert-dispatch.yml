@@ -1,0 +1,31 @@
+name: One-shot dispatch trusted production certification
+on:
+  push:
+    branches:
+      - ops/dispatch-trusted-cert-20261024
+    paths:
+      - .github/workflows/one-shot-trusted-cert-dispatch.yml
+permissions:
+  actions: write
+  contents: read
+jobs:
+  dispatch:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Trigger canonical certification for proven main SHA
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          CURRENT="$(gh api "repos/$REPO/commits/main" --jq .sha)"
+          EXPECTED="04a1152aef25c920ee0de97865d5a7ef06fde4a7"
+          test "$CURRENT" = "$EXPECTED"
+          gh api "repos/$REPO/actions/runs/40118953682" --jq '.head_sha + " " + .conclusion' | grep -Fx "$EXPECTED success"
+          gh api -X POST "repos/$REPO/actions/workflows/trusted-production-certification.yml/dispatches" \
+            -f ref=main \
+            -F inputs[target_sha]="$EXPECTED" \
+            -F inputs[deep_release_run_id]="40118953682" \
+            -F inputs[require_physical_windows]="false"
+          echo "Canonical certification dispatched for $EXPECTED"
