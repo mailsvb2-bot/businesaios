@@ -49,3 +49,22 @@ def test_legacy_therapy_keyboard_never_offers_therapy_checkout():
     rows = markup.get("inline_keyboard", [])
     assert not any("sub:morning:" in item.get("callback_data", "") for row in rows for item in row)
     assert not any("1990" in item.get("text", "") for row in rows for item in row)
+
+
+def test_payment_route_never_proposes_unbound_checkout():
+    from core.policies.telegram.tariffs import propose_pay_selected
+    proposal = propose_pay_selected(
+        user_id="user-1", full_access=False,
+        selected={"tenant_id": "tenant_one", "product_id": "organization_platform",
+                  "plan_id": 9, "expected_price": 2490},
+        tenant_id="tenant_two", product_id="organization_platform",
+        default_price_rub=2490, legacy_prices={},
+    )
+    assert getattr(proposal, "action", "") != "create_payment_and_send_link@v1"
+
+
+def test_unbound_checkout_route_is_not_reachable_from_policy():
+    from pathlib import Path
+    import core.policies.telegram.tariffs as module
+    source = Path(module.__file__).read_text(encoding="utf-8")
+    assert 'return propose(\n        "create_payment_and_send_link@v1"' not in source
