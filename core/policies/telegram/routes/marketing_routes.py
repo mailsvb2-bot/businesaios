@@ -7,10 +7,9 @@ from core.policies.telegram.tariffs import (
     parse_sub_buy,
     propose_pay_selected,
     propose_show_tariffs,
-    scope_hint,
 )
 from core.ux.callbacks import CB_PAY_SELECTED, CB_SHARE_MENU, CB_SUB_MENU
-from core.ux.telegram_keyboards import kb_back_main, kb_main, kb_pay_selected
+from core.ux.telegram_keyboards import kb_back_main, kb_pay_selected
 
 
 def handle_marketing_routes(
