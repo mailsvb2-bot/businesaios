@@ -43,7 +43,7 @@ from runtime.handler_impl.domains.business_catalog_ops import (
     _visual,
     channel_reminder_copies,
 )
-from runtime.handler_impl.domains.public_event_ops import PUB_OPS, _landing, public_event_op
+from runtime.handler_impl.domains.public_event_ops import MEDIA_OPS, PUB_OPS, _landing, media_op, public_event_op
 from runtime.handlers.delivery_contract import delivery_kwargs
 
 
@@ -723,6 +723,8 @@ def handle_event_series(payload, effects, env, *, event_store, now_ms: int | Non
     try:
         if op in PUB_OPS:
             return public_event_op(op, arg, body=body, effects=effects, env=env, facts=facts, done=done, now_ms=now)
+        if op in MEDIA_OPS:
+            return media_op(op, arg, body=body, effects=effects, env=env, facts=facts, done=done, now_ms=now)
         if op == "landing":
             return _landing(body, effects, env, facts, slots, arg, done)
         if op == "visual":

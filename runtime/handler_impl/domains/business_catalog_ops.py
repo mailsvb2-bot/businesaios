@@ -649,6 +649,9 @@ def _visual(body, effects, env, facts, arg, done):
     title, cmd, val = vc.parse_command(arg)
     st = vc.replay(facts("event_series@v1"))
     key = vc.key_for(title)
+    if cmd == "style" and val == "clear":
+        cleared, fs = vc.clear_style(title, st)
+        return done("🎨 Стиль сброшен: снова «фото»." if cleared else "ℹ️ Свой стиль не был задан.", *fs[:1])
     if cmd == "style":
         return done(f"🎨 Стиль «{vc.STYLE_LABELS.get(val, val)}» запомнен.", vc.save_style(title, val))
     style = cmd if cmd in vc.STYLES else st.styles.get(key, "photo")

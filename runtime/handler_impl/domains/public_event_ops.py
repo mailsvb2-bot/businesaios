@@ -12,6 +12,9 @@ from types import SimpleNamespace
 from typing import Any
 
 PUB_OPS = frozenset({"pub_create", "pub_register", "pub_links", "pub_live", "pub_verify"})
+MEDIA_OPS = frozenset({"asset_set", "asset_show", "asset_send", "stage_visual", "gen", "email_connect", "email_verify",
+                       "email_test", "adproject", "content_mode"})
+EMAIL_ENV = "BAI_EMAIL_EFFECTS_ENABLED"  # real e-mail sends: off by default, like BAI_PHOTO_DELIVERY_ENABLED
 
 
 class _ExecutorCrm:
@@ -106,6 +109,249 @@ def public_event_op(op: str, arg: str, *, body: dict[str, Any], effects: Any, en
     raise ValueError("unknown op")
 
 
+def _ids(body: dict[str, Any], env: Any) -> dict[str, str]:
+    return {"decision_id": str(env.decision.decision_id), "correlation_id": str(env.decision.correlation_id),
+            "tenant_id": str(body["tenant_id"])}
+
+
+def _asset_send(body, effects, env, done, asset, caption, ids):
+    """Owner preview of a stored visual. The photo effect is executor-owned and a dry run until the flag is on."""
+    if asset is None:
+        raise ValueError("визуал не найден: /event_asset ev | stage | slot | image | ref")
+    if asset["kind"] != "image":
+        return done("ℹ️ Видео не отправляется: российского видеопровайдера нет, отправка видео не портирована.")
+    send = getattr(effects, "send_photo", None)
+    if send is None:
+        return done("🔒 Отправка фото недоступна в этом исполнителе.")
+    out = send(**ids, business_id=str(body.get("business_id") or body["tenant_id"]), user_id=str(body["user_id"]),
+               path=str(asset["media_reference"]), caption=caption, channel=str(body.get("channel") or "telegram"))
+    if not isinstance(out, dict) or not out.get("ok"):
+        return done("⚠️ Фото не отправлено: " + str((out or {}).get("reason") or "ошибка доставки"))
+    if out.get("status") == "dry_run":
+        return done("🔒 Отправка фото выключена (BAI_PHOTO_DELIVERY_ENABLED): показал бы это изображение, но ничего не ушло.")
+    return done("🖼 Изображение отправлено.")
+
+
+def _gen_submit(gens, member, rid, now_ms, put, send):
+    """Owner-confirmed submission of ONE prepared receipt: begin (fact) -> executor gateway call -> remember job."""
+    import json
+
+    from application.business_flows import visual_creatives as vc
+
+    r = vc.gen_get(gens, member, rid)
+    payload = json.loads(r.provider_payload_json)
+    if payload.get("kind") != "image":
+        raise ValueError("видео недоступно: российского видеопровайдера нет")
+    r, begin = vc.gen_begin_submission(gens, member, rid, now_ms=now_ms)
+    if not begin:
+        return put(f"ℹ️ Заявка {r.id} уже в состоянии «{r.status}»: повторная отправка не делается.", [])
+    put("⏳ Отправляю заявку в визуальный шлюз…", begin)
+    try:
+        out = send(prompt=str(payload["brief"]["prompt"]), country_code=str(payload.get("country_code") or r.country_code),
+                   brand_context=r.brand_context)
+        job = out.get("job") if isinstance(out, dict) else None
+    except Exception:  # noqa: BLE001 - outcome unknown: stay "submitting", never resubmit blindly
+        job = None
+    if not isinstance(job, dict) or not job.get("id"):
+        return put("⚠️ Шлюз не подтвердил приём: заявка остаётся «в отправке», повтор запрещён (возможна оплата).", [])
+    _, fs = vc.gen_remember_job(gens, member, rid, source_job_id=str(job["id"]), provider_status=str(job.get("status")),
+                                provider_error_code=str(job.get("error_code") or ""), now_ms=now_ms)
+    return put(f"🖼 Заявка {rid}: задача {job['id']} — {job.get('status')}.", fs)
+
+
+def _gen_op(arg, gens, member, now_ms, put, send):
+    from application.business_flows import visual_creatives as vc
+
+    verb, _, rid = arg.partition(" ")
+    verb, rid = verb.strip().casefold(), rid.strip().lower()
+    if verb == "submit":
+        return _gen_submit(gens, member, rid, now_ms, put, send)
+    if verb == "show" and not rid:
+        a = vc.gen_active(gens, member)
+        return put("🧾 Активной заявки на изображение нет." if a is None else f"🧾 Активная заявка {a.id}: {a.status}", [])
+    r = vc.gen_get(gens, member, rid)
+    if verb == "show":
+        return put(f"🧾 Заявка {r.id}: {r.status}", [])
+    steps = {"claim": lambda: vc.gen_claim_delivery(gens, member, rid, now_ms=now_ms),
+             "redeliver": lambda: vc.gen_authorize_redelivery(gens, member, rid, now_ms=now_ms),
+             "abandon": lambda: vc.gen_abandon(gens, member, rid)}
+    if verb == "delivered":
+        _, fs = vc.gen_mark_delivered(gens, member, rid, now_ms=now_ms)
+        return put("✅ Доставка отмечена.", fs)
+    if verb not in steps:
+        raise ValueError("формат: /gen show|submit|claim|redeliver|abandon|delivered [id]")
+    ok, fs = steps[verb]()
+    return put("✅ Готово." if ok else "ℹ️ Без изменений: заявка в другом состоянии.", fs)
+
+
+def _email_op(op, arg, *, body, effects, env, facts, done, now_ms, put):
+    from application.business_flows import native_channels as nc
+    from runtime.platform.config.env_flags import env_bool
+
+    conns = nc.email_replay(facts("event_series@v1"))
+    if op == "email_connect":  # sender | host | port | username_ref | password_ref | ssl|starttls | name
+        p = [x.strip() for x in arg.split("|")]
+        if len(p) < 5:
+            raise ValueError("формат: /email_connect from@x.ru | smtp.x.ru | 465 | env:SMTP_USER | env:SMTP_PASS | ssl")
+        conn, fs = nc.provision_email_smtp(sender_email=p[0], smtp_host=p[1], smtp_port=int(p[2]), username_ref=p[3],
+                                           password_ref=p[4], security=p[5] if len(p) > 5 and p[5] else "ssl",
+                                           sender_name=p[6] if len(p) > 6 else "")
+        return put(f"📧 Подключение {conn.id} сохранено как «ожидает проверки» (пароль не хранится, только ссылка). "
+                   f"Проверить: /email_verify {conn.id}", fs)
+    if op == "email_verify":
+        if not env_bool(EMAIL_ENV, False):
+            return put(f"🔒 Проверка SMTP выключена ({EMAIL_ENV}): подключение осталось «ожидает проверки».", [])
+        probe = getattr(effects, "email_smtp_probe", None)
+        if probe is None:
+            return put("🔒 SMTP-проверка недоступна в этом исполнителе: подключение осталось «ожидает проверки».", [])
+        _, fs = nc.verify_and_activate_email_smtp(conns, arg.strip(), lambda c: _probe(probe, c, body, env))
+        return put("✅ SMTP принят, подключение активно.", fs)
+    cid, to, subject, text = (x.strip() for x in (arg.split("|") + ["", "", "", ""])[:4])  # email_test
+    target = None if not (to and subject and text) else es_target(conns, cid, to)
+    if target is None:
+        raise ValueError("формат: /email_test conn_id | кому | тема | текст (подключение должно быть активным)")
+    if not env_bool(EMAIL_ENV, False):
+        return put(f"🔒 Отправка писем выключена ({EMAIL_ENV}): письмо «{subject}» для {to} записано, но не отправлено.",
+                   [{"step": "email_dry_run", "connection_id": cid, "to": to, "subject": subject}])
+    out = effects.send_message(**_ids(body, env), user_id=to, text=text, subject=subject, channel="email",
+                               business_id=str(body.get("business_id") or body["tenant_id"]))
+    sent = not (isinstance(out, dict) and out.get("ok") is False)
+    return put("📨 Письмо передано исполнителю." if sent else "⚠️ Письмо не отправлено.",
+               [{"step": "email_sent", "connection_id": cid, "to": to, "subject": subject}] if sent else [])
+
+
+def _probe(probe: Any, conn: Any, body: dict[str, Any], env: Any) -> None:
+    out = probe(**_ids(body, env), connection_id=conn.id, host=conn.host, port=conn.port, security=conn.security,
+                username_ref=conn.username_ref, password_ref=conn.password_ref, sender_email=conn.sender_email)
+    if not (isinstance(out, dict) and out.get("ok")):
+        raise ValueError("SMTP отклонил учётные данные")
+
+
+def es_target(conns: dict[str, Any], connection_id: str, email: str) -> dict[str, Any] | None:
+    from application.business_flows import event_series as es
+
+    return es.resolve_email_target(conns, email_connection_id=connection_id, email=email)
+
+
+def _adproject_op(arg, *, body, effects, env, facts, done, now_ms, put):
+    from application.business_flows import ad_media as am
+    from application.business_flows import ad_proposals as ap
+
+    member, verb, _, rest = str(body["user_id"]), *arg.partition(" ")
+    projects = am.eap_replay(facts("event_series@v1"))
+    drafts = ap.replay(facts("business_admin@v1"))
+
+    def pub(job_id: str) -> str | None:
+        d = drafts.get(job_id)
+        return None if d is None else {"blocked": "failed"}.get(d.status, "draft")
+
+    p = [x.strip() for x in rest.split("|")]
+    verb = verb.casefold()
+    if verb == "create":  # pub_job | kind | headline | body [| cta | layout | font]
+        if len(p) < 4:
+            raise ValueError("формат: /adproject create draft_id | image | заголовок | текст [| CTA | lower_card | auto]")
+        v, fs = am.create_project(projects, member, publication_job_id=p[0], publication_status=pub(p[0]), kind=p[1],
+                                  headline=p[2], body=p[3], brand={}, cta=p[4] if len(p) > 4 else "Записаться",
+                                  layout=p[5] if len(p) > 5 and p[5] else "lower_card",
+                                  preset=p[6] if len(p) > 6 and p[6] else "auto", now_ms=now_ms)
+        return put(f"🎨 Проект {v.id}: «{v.headline}» ({v.status}, r{v.revision})", fs)
+    pid = p[0]
+    v = am.get_project(projects, member, pid)
+    if verb == "show":
+        return put(f"🎨 Проект {v.id}: {v.status}, r{v.revision}, источник: {v.source_job_id or '—'}", [])
+    kw = {"publication_status": pub(v.publication_job_id), "now_ms": now_ms}
+    if verb == "edit":  # id | headline | body | cta | layout | font   (empty = keep)
+        f = dict(zip(("headline", "body", "cta", "layout", "preset"), (x or None for x in p[1:6]), strict=False))
+        v, fs = am.update_composition(projects, member, pid, **f, **kw)
+    elif verb == "bind":
+        v, fs = am.bind_source(projects, member, pid, p[1] if len(p) > 1 else "", **kw)
+    elif verb == "new_source":
+        v, fs = am.prepare_source(projects, member, pid, **kw)
+    elif verb == "finish":
+        v, fs = am.finish_project(projects, member, pid, **kw)
+    elif verb == "render":
+        return _adproject_render(v, p, projects, member, body, effects, env, done, now_ms, put)
+    else:
+        raise ValueError("формат: /adproject create|show|edit|bind|new_source|finish|render ...")
+    return put(f"🎨 Проект {v.id}: {v.status}, r{v.revision}", fs)
+
+
+def _adproject_render(v, p, projects, member, body, effects, env, done, now_ms, put):
+    from application.business_flows import ad_media as am
+
+    formats = am.render_formats(tuple(x for x in (p[1].split(",") if len(p) > 1 else ()) if x) or ("square",))
+    poll = getattr(effects, "poll_visual_creative", None)
+    if v.status == "source_expired":
+        raise ValueError(f"источник устарел: /adproject new_source {v.id}")
+    if not v.source_job_id or poll is None:
+        raise ValueError("источник изображения не привязан или шлюз недоступен")
+    job = poll(**_ids(body, env), user_id=str(body["user_id"]), job_id=v.source_job_id)
+    try:
+        am.render_check(v, job_status=str(job.get("status")), asset_ready=bool(job.get("asset_ready")),
+                        job_kind=str(job.get("kind")))
+    except am.EditableAdSourceExpired as exc:
+        _, fs = am.mark_expired(projects, member, v.id, expected_source_job_id=v.source_job_id, now_ms=now_ms)
+        return put(f"⚠️ Источник устарел ({exc}). Новый источник: /adproject new_source {v.id}", fs)
+    except am.EditableAdError as exc:
+        return put(f"⚠️ Рендер не готов: {exc}", [])
+    return put(f"🎨 Источник готов, ключ рендера {am.render_key(v, formats)[-12:]}. Наложение текста выполняет "
+               "визуальный шлюз (в этом порте не подключено).", [])
+
+
+def media_op(op: str, arg: str, *, body: dict[str, Any], effects: Any, env: Any, facts: Any, done: Any, now_ms: int) -> Any:
+    """Photo/e-mail/visual-asset ops of event_series@v1. Facts only; every send is an executor effect behind a flag."""
+    from application.business_flows import event_series as es
+    from application.business_flows import visual_creatives as vc
+
+    member, business_id = str(body["user_id"]), str(body.get("business_id") or body["tenant_id"])
+    payloads = es.expand(facts("event_series@v1"))
+    st = es.replay(payloads)
+
+    def put(text: str, fs: list[dict[str, Any]]) -> Any:
+        return done(text, *([] if not fs else [fs[0] if len(fs) == 1 else {"step": "batch", "facts": fs}]))
+
+    try:
+        if op in {"asset_set", "asset_show", "asset_send"}:  # ev | stage | slot [| kind | media_reference]
+            p = _parts(arg, 3)
+            ev, stage, slot = p[:3]
+            if op == "asset_set":
+                if len(p) < 5:
+                    raise ValueError("формат: /event_asset ev | stage | slot | image|video | ссылка_на_файл")
+                a, fs = es.set_asset_reference(st, event_id=ev, stage=stage, slot_key=slot, kind=p[3],
+                                               media_reference=p[4], source="owner")
+                return put(f"🖼 Визуал сохранён (ревизия {a['revision']}).", fs)
+            a = es.get_asset(st, ev, stage, slot)
+            if op == "asset_show":
+                return put("ℹ️ Визуала нет." if a is None else f"🖼 {a['kind']}, ревизия {a['revision']}, источник {a['source']}", [])
+            return _asset_send(body, effects, env, done, a, None, _ids(body, env))
+        if op == "content_mode":  # ev | stage | text|text_with_image|text_in_image
+            ev, stage, mode = _parts(arg, 3)[:3]
+            if mode == "text_with_video":
+                raise ValueError("видео недоступно: российского видеопровайдера нет")
+            ch = es.set_content_mode(ev, stage, mode)
+            return put(f"🧩 Формат сообщения этапа «{stage}»: {mode}", [ch])
+        if op == "stage_visual":  # ev | stage | message_key | title | text
+            ev, stage, key, title, text = _parts(arg, 5)[:5]
+            gens = vc.gen_replay(payloads)
+            brand = [x for x in payloads if str(x.get("step", "")).startswith("brand")]
+            res, fs = es.prepare_stage_visual(st, gens, member, business_id=business_id, brand_facts=brand, event_id=ev,
+                                              stage=stage, message_key=key, event_title=title, message_text=text, now_ms=now_ms)
+            if res is None:
+                return put("ℹ️ Для этого этапа выбран «только текст»: визуал не нужен.", [])
+            return put(f"🧾 Заявка {res['receipt_id']} подготовлена. Генерация НЕ запускалась: нужно отдельное "
+                       "подтверждение владельца и исполнитель.", fs)
+        if op == "gen":
+            def send(**kw):
+                return effects.generate_visual_creative(**_ids(body, env), user_id=member, kind="image", **kw)
+
+            return _gen_op(arg, vc.gen_replay(payloads), member, now_ms, put, send)
+        if op == "adproject":
+            return _adproject_op(arg, body=body, effects=effects, env=env, facts=facts, done=done, now_ms=now_ms, put=put)
+        return _email_op(op, arg, body=body, effects=effects, env=env, facts=facts, done=done, now_ms=now_ms, put=put)
+    except (ValueError, LookupError, es.AssetBindError, RuntimeError) as exc:
+        return done(f"⚠️ Не получилось: {exc}")
+
+
 def _landing(body, effects, env, facts, slots, arg, done):
     """/landing Название [| раздел | текст | theme x | publish | reset | ai] over event_series@v1 facts."""
     from application.business_flows import admin as ad
@@ -158,4 +404,4 @@ def _landing(body, effects, env, facts, slots, arg, done):
     )
 
 
-__all__ = ["PUB_OPS", "public_event_op"]
+__all__ = ["MEDIA_OPS", "PUB_OPS", "media_op", "public_event_op"]
