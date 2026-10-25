@@ -66,61 +66,23 @@ def build_launch_action(
         [f"- {task.get('title', '')}: {task.get('details', '')}" for task in tasks]
     )
 
+    # A composite execute_plan with non-noop steps is intentionally rejected by
+    # the signed execution guard. Persist the canonical session and send the
+    # user acknowledgement through the existing single, authorized effect.
+    # Do not silently execute events or other side effects outside DecisionCore.
     return propose(
-        "execute_plan@v1",
+        "set_user_setting@v1",
         {
             "user_id": str(user_id),
-            "steps": [
-                {
-                    "action": "emit_event@v1",
-                    "payload": {
-                        "user_id": str(user_id),
-                        "event_type": AUTOPILOT_RUN_STARTED_V1,
-                        "payload": {"goal": "profit_7d", "diagnostic": diag},
-                        "source": "autopilot",
-                    },
-                },
-                {
-                    "action": "emit_event@v1",
-                    "payload": {
-                        "user_id": str(user_id),
-                        "event_type": AUTOPILOT_DECISION_V1,
-                        "payload": {
-                            "kind": "price_reco",
-                            "reason": rec.reason,
-                            "changes": changes,
-                            "guardrails": {
-                                "allow": bool(verdict.allow),
-                                "reason": verdict.reason,
-                            },
-                        },
-                        "source": "autopilot",
-                    },
-                },
-                {
-                    "action": "set_user_setting@v1",
-                    "payload": {
-                        "user_id": str(user_id),
-                        "key": "autopilot:session",
-                        "value": dict(sess),
-                    },
-                },
-                {
-                    "action": "send_message@v1",
-                    "payload": {
-                        "user_id": str(user_id),
-                        "text": (
-                            "✅ Запустил автопилот на 7 дней.\n\n"
-                            "Вот что делать сегодня (1–3 задачи):\n"
-                            f"{tasks_text}\n\n"
-                            "Открой дашборд: ‘Сегодня’ → ‘Что сделал автопилот’."
-                        ),
-                        "reply_markup": kb_autopilot_menu(),
-                        "callback_query_id": ctx.callback_query_id,
-                        "track_event_type": AUTOPILOT_STARTED_V1,
-                        "track_payload": {"goal": "profit_7d"},
-                    },
-                },
-            ],
+            "key": "autopilot:session",
+            "value": dict(sess),
+            "notify_text": (
+                "✅ Запустил автопилот на 7 дней.\\n\\n"
+                "Вот что делать сегодня (1–3 задачи):\\n"
+                f"{tasks_text}\\n\\n"
+                "Открой дашборд: ‘Сегодня’ → ‘Что сделал автопилот’."
+            ),
+            "notify_reply_markup": kb_autopilot_menu(),
+            "callback_query_id": ctx.callback_query_id,
         },
     )
