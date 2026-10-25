@@ -32,14 +32,8 @@ def handle_flow(ctx, *, user_id: str, default_price_rub: int, sess: dict, sl, lo
 
     if cb == CB_PROFIT_SPRINT_START:
         return propose(
-            "execute_plan@v1",
-            {
-                "user_id": str(user_id),
-                "steps": [
-                    {"action": "set_user_setting@v1", "payload": {"user_id": str(user_id), "key": "profit_sprint:onboarding", "value": {"active": True}}},
-                    {"action": "profit_sprint_onboarding_start@v1", "payload": {"user_id": str(user_id)}},
-                ],
-            },
+            "profit_sprint_onboarding_start@v1",
+            {"user_id": str(user_id)},
         )
 
     if cb == CB_AUTOPILOT_START_7D:
@@ -53,21 +47,12 @@ def handle_flow(ctx, *, user_id: str, default_price_rub: int, sess: dict, sl, lo
 
     if cb in _LEAD_SOURCE_MAP:
         return propose(
-            "execute_plan@v1",
+            "profit_sprint_onboarding_lead_source@v1",
             {
                 "user_id": str(user_id),
-                "steps": [
-                    {
-                        "action": "profit_sprint_onboarding_lead_source@v1",
-                        "payload": {
-                            "user_id": str(user_id),
-                            "lead_source": _LEAD_SOURCE_MAP.get(cb, ""),
-                            "tenant_id": normalize_tenant_id_or_unknown(getattr(ctx.state, "tenant_id", None)),
-                            "gate_settings": (ctx.settings if isinstance(ctx.settings, dict) else {}),
-                        },
-                    },
-                    {"action": "set_user_setting@v1", "payload": {"user_id": str(user_id), "key": "profit_sprint:onboarding", "value": {"active": False}}},
-                ],
+                "lead_source": _LEAD_SOURCE_MAP[cb],
+                "tenant_id": normalize_tenant_id_or_unknown(getattr(ctx.state, "tenant_id", None)),
+                "gate_settings": (ctx.settings if isinstance(ctx.settings, dict) else {}),
             },
         )
 
