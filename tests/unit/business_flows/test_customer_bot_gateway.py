@@ -157,3 +157,37 @@ def test_customer_update_session_cannot_forge_managed_event(monkeypatch):
     assert state.session["source"] == gw.SESSION_SOURCE and state.session["customer_bot"]["bot_id"] == "777"
     result = UnifiedTelegramPolicyV3().propose(state)
     assert not (result.action == "bot_provisioning@v1" and result.payload.get("op") == "managed_event")
+
+
+def test_admission_isolates_tenant_and_bot_identity():
+    from dataclasses import replace
+
+    adm = gw.Admission(gw.GatewayConfig(per_minute_limit=1, queue_limit=1))
+    other_tenant = replace(ROUTE, tenant_id="t2")
+    other_bot = replace(ROUTE, external_bot_id="778")
+    assert adm.admit(ROUTE, _msg(10), now_s=1) == "admitted"
+    assert adm.admit(other_tenant, _msg(10), now_s=1) == "admitted"
+    assert adm.admit(other_bot, _msg(10), now_s=1) == "admitted"
+    assert adm.admit(ROUTE, _msg(11), now_s=1) == "rejected:rate_limited"
+    adm.done(ROUTE)
+    assert adm.admit(other_tenant, _msg(11), now_s=1) == "rejected:rate_limited"
+
+
+def test_admission_invalid_payload_and_missing_scope_fail_closed():
+    from dataclasses import replace
+
+    adm = gw.Admission(gw.GatewayConfig())
+    assert adm.admit(ROUTE, {"update_id": 1, "message": {"text": object()}}, now_s=1) == "rejected:invalid_payload"
+    assert adm.admit(ROUTE, _msg(1), now_s=1) == "admitted"
+    assert adm.admit(replace(ROUTE, tenant_id=""), _msg(2), now_s=1) == "rejected:route_scope_required"
+    assert adm.admit(replace(ROUTE, external_bot_id=""), _msg(2), now_s=1) == "rejected:route_scope_required"
+
+
+def test_retry_releases_tenant_scoped_update_for_redelivery():
+    h = Harness([[_msg(9)], [_msg(9)]], fail=1)
+    g = h.gateway()
+    assert g.tick() == 0
+    assert g.stats["retried"] == 1
+    assert g.tick() == 1
+    assert g.stats["processed"] == 1
+    assert h.dispatched == [(9, "777:TOK"), (9, "777:TOK")]
