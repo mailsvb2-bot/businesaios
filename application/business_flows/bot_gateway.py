@@ -133,7 +133,7 @@ class Admission:
 
     def done(self, route: Route) -> None:
         scope = (route.tenant_id, route.external_bot_id)
-        self._queued[scope] = max(0, self._queued.get(route.external_bot_id, 0) - 1)
+        self._queued[scope] = max(0, self._queued.get(scope, 0) - 1)
 
 
 def message_text(payload: Mapping[str, Any]) -> str | None:
