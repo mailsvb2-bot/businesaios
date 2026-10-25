@@ -32,8 +32,12 @@ def handle_flow(ctx, *, user_id: str, default_price_rub: int, sess: dict, sl, lo
 
     if cb == CB_PROFIT_SPRINT_START:
         return propose(
-            "profit_sprint_onboarding_start@v1",
-            {"user_id": str(user_id)},
+            "set_user_setting@v1",
+            {"user_id": str(user_id), "key": "profit_sprint:onboarding",
+             "value": {"active": True},
+             "notify_text": "🚀 Profit Sprint: старт.\n\nСледуй шагам в меню автопилота.",
+             "notify_reply_markup": {"inline_keyboard": [[{"text": "⬅️ Назад", "callback_data": "autopilot:menu"}]]},
+             "callback_query_id": ctx.callback_query_id},
         )
 
     if cb == CB_AUTOPILOT_START_7D:
@@ -52,7 +56,6 @@ def handle_flow(ctx, *, user_id: str, default_price_rub: int, sess: dict, sl, lo
                 "user_id": str(user_id),
                 "lead_source": _LEAD_SOURCE_MAP[cb],
                 "tenant_id": normalize_tenant_id_or_unknown(getattr(ctx.state, "tenant_id", None)),
-                "gate_settings": (ctx.settings if isinstance(ctx.settings, dict) else {}),
             },
         )
 
