@@ -77,9 +77,9 @@ def build_launch_action(
             "key": "autopilot:session",
             "value": dict(sess),
             "notify_text": (
-                "✅ Запустил автопилот на 7 дней.\\n\\n"
-                "Вот что делать сегодня (1–3 задачи):\\n"
-                f"{tasks_text}\\n\\n"
+                "✅ Запустил автопилот на 7 дней.\n\n"
+                "Вот что делать сегодня (1–3 задачи):\n"
+                f"{tasks_text}\n\n"
                 "Открой дашборд: ‘Сегодня’ → ‘Что сделал автопилот’."
             ),
             "notify_reply_markup": kb_autopilot_menu(),
