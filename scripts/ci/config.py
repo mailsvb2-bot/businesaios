@@ -59,6 +59,7 @@ def project_shape_config(root: Path) -> ProjectShapeConfig:
                 "tests/lock/test_lock_cicd_contract_files_present.py",
                 "tests/lock/test_github_workflow_supply_chain.py",
                 "tests/lock/test_critical_security_ci_wiring.py",
+                "tests/lock/test_security_mutation_detection.py",
                 "tests/lock/test_deep_release_workflow_contract.py",
                 "tests/lock/test_runtime_release_package_hygiene.py",
                 "tests/lock/test_ai_ceo_no_second_path.py",
