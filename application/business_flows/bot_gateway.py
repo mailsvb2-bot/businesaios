@@ -21,7 +21,7 @@ SESSION_SOURCE = "customer_bot_update"
 def _int(env: Mapping[str, str], name: str, default: int, lo: int, hi: int) -> int:
     try:
         value = int(str(env.get(name, default)).strip())
-    except ValueError:
+    except (TypeError, ValueError):
         return default
     return value if lo <= value <= hi else default
 
@@ -96,36 +96,44 @@ class Admission:
     """In-process admission: per-bot update_id dedupe, sliding-minute rate, bounded queue, payload size."""
 
     config: GatewayConfig
-    _seen: dict[str, set[int]] = field(default_factory=dict)
-    _times: dict[str, deque] = field(default_factory=dict)
-    _queued: dict[str, int] = field(default_factory=dict)
+    _seen: dict[tuple[str, str], set[int]] = field(default_factory=dict)
+    _times: dict[tuple[str, str], deque] = field(default_factory=dict)
+    _queued: dict[tuple[str, str], int] = field(default_factory=dict)
 
     def admit(self, route: Route, payload: Mapping[str, Any], *, now_s: float) -> str:
         uid = payload.get("update_id")
         if isinstance(uid, bool) or not isinstance(uid, int):
             return "rejected:update_id_required"
-        seen = self._seen.setdefault(route.external_bot_id, set())
+        scope = (route.tenant_id, route.external_bot_id)
+        if not all(isinstance(v, str) and v.strip() for v in scope):
+            return "rejected:route_scope_required"
+        seen = self._seen.setdefault(scope, set())
         if uid in seen:
             return "duplicate"
-        if len(json.dumps(payload, ensure_ascii=False).encode()) > self.config.max_payload_bytes:
+        try:
+            payload_size = len(json.dumps(payload, ensure_ascii=False).encode())
+        except (TypeError, ValueError, OverflowError, RecursionError):
+            return "rejected:invalid_payload"
+        if payload_size > self.config.max_payload_bytes:
             return "rejected:payload_too_large"
-        times = self._times.setdefault(route.external_bot_id, deque())
+        times = self._times.setdefault(scope, deque())
         while times and now_s - times[0] >= 60:
             times.popleft()
         if len(times) >= self.config.per_minute_limit:
             return "rejected:rate_limited"
-        if self._queued.get(route.external_bot_id, 0) >= self.config.queue_limit:
+        if self._queued.get(scope, 0) >= self.config.queue_limit:
             return "rejected:queue_full"
         seen.add(uid)
         if len(seen) > 4 * self.config.queue_limit:  # bounded memory: keep the newest ids
             for old in sorted(seen)[: len(seen) // 2]:
                 seen.discard(old)
         times.append(now_s)
-        self._queued[route.external_bot_id] = self._queued.get(route.external_bot_id, 0) + 1
+        self._queued[scope] = self._queued.get(scope, 0) + 1
         return "admitted"
 
     def done(self, route: Route) -> None:
-        self._queued[route.external_bot_id] = max(0, self._queued.get(route.external_bot_id, 0) - 1)
+        scope = (route.tenant_id, route.external_bot_id)
+        self._queued[scope] = max(0, self._queued.get(scope, 0) - 1)
 
 
 def message_text(payload: Mapping[str, Any]) -> str | None:
