@@ -16,11 +16,12 @@ def _state_for_cb(cb: str) -> WorldStateV1:
     )
 
 
-def test_tariff_selection_renders_confirmation_text():
+def test_foreign_tariff_callback_is_rejected():
     pol = UnifiedTelegramPolicyV3()
     out = pol.propose(_state_for_cb("sub:buy:1:1990"))
     assert getattr(out, "action", None) == "send_message@v1"
     p = getattr(out, "payload", {})
-    txt = str(p.get("notify_text") or "")
+    txt = str(p.get("text") or p.get("notify_text") or "")
+    assert "Тариф" in txt or "тариф" in txt
     assert "Утро — 5 дней" not in txt
     assert "1990" not in txt
