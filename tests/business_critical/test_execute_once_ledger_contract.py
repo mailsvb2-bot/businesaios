@@ -63,7 +63,7 @@ def test_sqlite_ledger_claim_survives_reopen(tmp_path) -> None:
     with SqliteLedger(path) as second:
         assert second.is_executed("d-5") is True
         with pytest.raises(RuntimeError, match="DUPLICATE_EXECUTION"):
-        _claim(second, _env("d-5"))
+            _claim(second, _env("d-5"))
 
 
 def test_memory_ledger_chain_stays_valid_and_ignores_refused_replays() -> None:
