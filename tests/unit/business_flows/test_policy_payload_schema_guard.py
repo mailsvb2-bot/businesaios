@@ -42,7 +42,7 @@ def test_customer_free_text_router_to_schema_to_handler(flow) -> None:
         payload = {"tenant_id": "t1", **act.payload}
         build_schema_registry().validate(act.action, payload)  # raised UNKNOWN_PAYLOAD_KEYS before the fix
         _out, text = flow.run(handle_sales_pipeline, **act.payload)
-        assert text == act.payload["reply"] and text.startswith("Я здесь")
+        assert text == act.payload["reply"] and text.startswith("Опишите задачу бизнеса")
     steps = [e["payload"].get("step") for e in flow.store.events if e["event_type"] == "sales_pipeline@v1"]
     assert "lead_inbound" in steps
 
