@@ -26,7 +26,7 @@ def test_critical_security_tests_are_real_and_in_mandatory_fast_workflow() -> No
     assert workflow.count(marker) == 1, "Mandatory security step missing or duplicated"
     section = workflow.split(marker, 1)[1].split("      - name:", 1)[0]
     assert "python -m pytest" in section, "Security step must execute pytest"
-    assert "-m " not in section, "Do not silently deselect security tests with pytest markers"
+    assert " -m " not in section.replace("python -m pytest", ""), "Do not silently deselect security tests with pytest markers"
     for module in SECURITY_MODULES:
         assert section.count(module) == 1, f"Mandatory CI stopped executing {module}"
         source = ROOT / module
