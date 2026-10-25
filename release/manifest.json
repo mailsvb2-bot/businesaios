@@ -2,7 +2,7 @@
   "files": {
     "assets/audio/demo/home.opus": "3ad743ad7fb6120b1fe3042bc5894ccb264f6d9470ea678aadcbf4b62322e6ce",
     "assets/audio/demo/work.opus": "238c0d1ff51975078a9fc8565968d46ce351e0a1113af5083dc6b2f6d4fe06a8",
-    "data/plans.json": "d936437253516c26f25dac8c61b93c6e26c6ffc90e3810d0bc9cf0fc220a07f6"
+    "data/plans.json": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570"
   },
   "release_tag": "v26.5.0-v28",
   "schema_version": 1,
