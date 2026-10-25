@@ -26,7 +26,7 @@ def test_autopilot_launch_never_issues_unsigned_composite_plan():
 def test_profit_sprint_callbacks_never_issue_unsigned_composite_plan():
     actions = _proposed_actions("core/policies/telegram/handlers/autopilot_parts/flow.py")
     assert "execute_plan@v1" not in actions
-    assert "profit_sprint_onboarding_start@v1" in actions
+    assert "set_user_setting@v1" in actions
     assert "profit_sprint_onboarding_lead_source@v1" in actions
 
 
