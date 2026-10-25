@@ -92,7 +92,7 @@ class CustomerBotGateway:
                 self._dispatch(payload, route)
         except Exception as exc:  # noqa: BLE001 - one poison update must not stall the bot forever
             self._admission.done(route)
-            self._admission._seen.get(route.external_bot_id, set()).discard(key[1])
+            self._admission._seen.get((route.tenant_id, route.external_bot_id), set()).discard(key[1])
             attempts = self._failures[key] = self._failures.get(key, 0) + 1
             self.stats["last_error"] = gw.safe_error_code(exc)
             if attempts < self.config.max_attempts:
