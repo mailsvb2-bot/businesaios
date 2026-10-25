@@ -93,9 +93,9 @@ def handle(ctx: TelegramCtx, *, default_price_rub: int, bot_username: str = "", 
         return pm(text="Этот раздел пока недоступен в Telegram. Вернись в главное меню.", reply_markup=kb_back_main())
 
     if ctx.full_access:
-        msg = "Я здесь. Напиши, что сейчас происходит в твоём дне — и мы настроим ритм."
+        msg = "Рабочее пространство подключено. Выберите раздел меню или опишите бизнес-задачу."
     else:
-        msg = "Я здесь. Напиши, что сейчас происходит. Если нужен полный доступ — /pay или кнопка «Полный доступ»."
+        msg = "Опишите задачу бизнеса или выберите раздел в меню. Доступные тарифы — в разделе «Оплаты и тарифы»."
     if not ctx.is_admin and not ctx.cmd and str(ctx.text or "").strip():
         from core.policies.telegram.helpers import propose
 

@@ -2,10 +2,12 @@ from __future__ import annotations
 
 from typing import Any
 
-from core.observability.silent import swallow
 from core.policies.telegram.helpers import ProposedAction, choose_marketing_variant, propose, propose_message
-from core.policies.telegram.tariffs_text import build_plan_confirmation_text, scope_hint
-from core.ux.telegram_keyboards import kb_back_main, kb_pay_selected, kb_sub, kb_tariffs
+from core.policies.telegram.tariffs_text import build_plan_confirmation_text
+
+# Public compatibility export used by other Telegram policy modules.
+from core.policies.telegram.tariffs_text import scope_hint as scope_hint
+from core.ux.telegram_keyboards import kb_back_main, kb_pay_selected, kb_tariffs
 
 
 def propose_show_tariffs(
@@ -30,25 +32,8 @@ def propose_show_tariffs(
         from core.plans import active_plans
 
         plans = list(active_plans())
-        # Optional autopricing: override displayed price for plan_id if suggested.
-        try:
-            sug = dict(pricing_suggestions or {})
-            if sug:
-                out_plans = []
-                for p in plans:
-                    try:
-                        pid = str(int(p.get('plan_id') or 0))
-                        if pid in sug and int(sug[pid]) > 0:
-                            p2 = dict(p)
-                            p2['price'] = int(sug[pid])
-                            out_plans.append(p2)
-                        else:
-                            out_plans.append(p)
-                    except Exception:
-                        out_plans.append(p)
-                plans = out_plans
-        except Exception:
-            swallow(__name__, 'core/policies/telegram/tariffs.py')
+        # Checkout displays only the authoritative scoped catalog price.
+        # AI pricing suggestions are advisory and cannot replace a sale price.
         return propose_message(
             user_id=user_id,
             text=msg,
@@ -57,12 +42,13 @@ def propose_show_tariffs(
             track_payload={"marketing_variant": v},
         )
     except Exception:
+        # Fail closed; never resurrect legacy therapy tariffs on catalog failure.
         return propose_message(
             user_id=user_id,
-            text=msg,
-            reply_markup=kb_sub(legacy_prices),
+            text="Тарифы сейчас недоступны.",
+            reply_markup=kb_tariffs([]),
             track_event_type="tariffs_viewed",
-            track_payload={"marketing_variant": v},
+            track_payload={"marketing_variant": v, "catalog_status": "unavailable"},
         )
 
 
@@ -99,27 +85,15 @@ def propose_select_tariff(*, user_id: str, plan_id: int, expected_price: int | N
         plan = None
 
     if not isinstance(plan, dict):
-        # Safe fallback: keep the effect minimal; executor may reject in strict mode.
-        return propose(
-            "select_tariff@v1",
-            {
-                "user_id": str(user_id),
-                "tariff": f"plan:{int(plan_id)}",
-                "days": 0,
-                "period": "days",
-                "amount": int(expected_price) if expected_price is not None else 0,
-                "plan_id": int(plan_id),
-                "expected_price": int(expected_price) if expected_price is not None else None,
-                "notify_text": "⚠️ Тариф не найден. Попробуйте выбрать другой.",
-                "notify_reply_markup": kb_back_main(),
-            },
-        )
+        return propose_message(user_id=str(user_id), text="Тариф недоступен.", reply_markup=kb_back_main())
 
     title = str(plan.get("title") or "Тариф").strip()
     days = int(plan.get("days") or 0)
     tariff = str(plan.get("plan_code") or plan.get("code") or f"plan:{int(plan_id)}").strip()
     base_price = int(plan.get("price") or 0)
-    amount = int(expected_price) if expected_price is not None else int(base_price)
+    if expected_price is not None and int(expected_price) != base_price:
+        return propose_message(user_id=str(user_id), text="Цена изменилась. Выберите тариф заново.", reply_markup=kb_back_main())
+    amount = base_price
 
     txt = build_plan_confirmation_text({**dict(plan), "price": int(amount)})
     return propose(
@@ -139,7 +113,7 @@ def propose_select_tariff(*, user_id: str, plan_id: int, expected_price: int | N
     )
 
 
-def propose_pay_selected(*, user_id: str, full_access: bool, selected: dict[str, Any] | None, default_price_rub: int, legacy_prices: dict[str, int]) -> ProposedAction:
+def propose_pay_selected(*, user_id: str, full_access: bool, selected: dict[str, Any] | None, default_price_rub: int, legacy_prices: dict[str, int], tenant_id: str | None = None, product_id: str | None = None) -> ProposedAction:
     if full_access:
         return propose_message(user_id=user_id, text="Полный доступ уже активен ✅", reply_markup=kb_back_main())
 
@@ -153,11 +127,13 @@ def propose_pay_selected(*, user_id: str, full_access: bool, selected: dict[str,
         try:
             from core.plans import plan_by_id
 
-            plan = plan_by_id(int(plan_id))
+            plan = plan_by_id(int(plan_id), tenant_id=tenant_id, product_id=product_id)
         except Exception:
             plan = None
         if not plan:
             return propose_message(user_id=user_id, text="Сначала выберите тариф.", reply_markup=kb_back_main())
+        if (not tenant_id or not product_id or str(selected.get("tenant_id") or "") != tenant_id or str(selected.get("product_id") or "") != product_id):
+            return propose_message(user_id=user_id, text="Тариф другого продукта или организации недоступен.", reply_markup=kb_back_main())
         current_price = int(plan.get("price") or 0)
         if current_price <= 0:
             return propose_message(user_id=user_id, text="Тариф недоступен. Выберите другой.", reply_markup=kb_back_main())
@@ -169,6 +145,8 @@ def propose_pay_selected(*, user_id: str, full_access: bool, selected: dict[str,
             )
         amount_rub = int(current_price)
         meta_note["selected"] = {
+            "tenant_id": tenant_id,
+            "product_id": product_id,
             "plan_id": int(plan_id),
             "tariff": plan.get("plan_code"),
             "title": plan.get("title"),
@@ -177,25 +155,12 @@ def propose_pay_selected(*, user_id: str, full_access: bool, selected: dict[str,
             "price_rub": int(current_price),
         }
     else:
-        amount_rub = int(default_price_rub)
-        meta_note["selected"] = {"default": True, "price_rub": int(amount_rub)}
+        return propose_message(user_id=user_id, text="Сначала выберите доступный тариф.", reply_markup=kb_back_main())
 
-    return propose(
-        "create_payment_and_send_link@v1",
-        {
-            "user_id": str(user_id),
-            "amount": int(amount_rub) * 100,
-            "currency": "RUB",
-            "metadata": meta_note,
-        },
+    # Legacy checkout has no durable order or business binding. Never charge
+    # a user until the canonical order checkout supplies all four identities.
+    return propose_message(
+        user_id=user_id,
+        text="Оплата через этот устаревший маршрут отключена. Оформите заказ в рабочем пространстве организации.",
+        reply_markup=kb_back_main(),
     )
-
-
-__all__ = [
-    "build_plan_confirmation_text",
-    "parse_sub_buy",
-    "propose_pay_selected",
-    "propose_select_tariff",
-    "propose_show_tariffs",
-    "scope_hint",
-]

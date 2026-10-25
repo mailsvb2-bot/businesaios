@@ -29,15 +29,13 @@ def kb_weather() -> dict[str, Any]:
 
 
 def kb_settings_menu() -> dict[str, Any]:
-    return mk(
-        [
-            [{"text": "⏰ Время (утро)", "callback_data": "settings:time:work"}],
-            [{"text": "🌙 Время (вечер)", "callback_data": "settings:time:home"}],
-            [{"text": "🔗 Реф. ссылка", "callback_data": "settings:ref"}],
-            [{"text": "📈 Состояния", "callback_data": "settings:state"}],
-            [{"text": "⬅️ Назад", "callback_data": CB_MENU_MAIN}],
-        ]
-    )
+    """Organization-only settings: no therapy schedules or mood tracking."""
+    return mk([
+        [{"text": "🏢 Организация", "callback_data": "cp:settings:organization"}],
+        [{"text": "🔔 Уведомления", "callback_data": "cp:settings:notifications"}],
+        [{"text": "🔐 Доступ и права", "callback_data": "cp:settings:access"}],
+        [{"text": "⬅️ Назад", "callback_data": CB_MENU_MAIN}],
+    ])
 
 
 def kb_state_menu() -> dict[str, Any]:

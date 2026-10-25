@@ -139,6 +139,19 @@ def select_tariff_effect(
     if not user:
         raise RuntimeError("USER_ID_REQUIRED")
 
+    # Verify tenant/product ownership and authoritative price at execution.
+    if plan_id is None:
+        raise RuntimeError("TARIFF_PLAN_ID_REQUIRED")
+    from core.plans.catalog import plan_by_id
+    authoritative = plan_by_id(int(plan_id), tenant_id=tenant, product_id=product)
+    if authoritative is None:
+        raise RuntimeError("TARIFF_CATALOG_SCOPE_MISMATCH")
+    if (str(authoritative.get("plan_code")) != str(tariff)
+            or int(authoritative.get("price") or 0) != int(amount)
+            or int(authoritative.get("days") or 0) != int(days)
+            or str(authoritative.get("scope")) != str(period)):
+        raise RuntimeError("TARIFF_DETAILS_NOT_AUTHORITATIVE")
+
     payload: dict[str, Any] = {
         "tenant_id": tenant,
         "product_id": product,
