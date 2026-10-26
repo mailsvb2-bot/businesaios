@@ -12,7 +12,9 @@ class _Stop(BaseException):
     pass
 
 
-def _setup(monkeypatch, *, outcome):
+def _setup(monkeypatch, tmp_path, *, outcome):
+    import runtime.platform.telegram_inbox as inbox_mod
+    monkeypatch.setattr(inbox_mod, "_get_db_path", lambda: tmp_path / "telegram.db")
     seen = []
     offsets = []
     monkeypatch.setattr(lp, "_validate_startup", lambda token: None)
@@ -35,14 +37,16 @@ def _setup(monkeypatch, *, outcome):
     return seen, offsets
 
 
-def test_unconfirmed_result_is_retried_before_terminal_ack(monkeypatch):
-    seen, offsets = _setup(monkeypatch, outcome=SimpleNamespace(ok=False))
-    assert seen == [17, 17]
-    assert offsets == [None, None, 18]
+def test_unconfirmed_result_is_durable_not_dropped(monkeypatch, tmp_path):
+    from runtime.platform.telegram_inbox import TelegramInbox
+    seen, offsets = _setup(monkeypatch, tmp_path, outcome=SimpleNamespace(ok=False))
+    assert seen == [17]
+    assert offsets == [None, 18]
+    assert TelegramInbox("test").pending_count() == 1
 
 
-def test_confirmed_result_acknowledged_once(monkeypatch):
-    seen, offsets = _setup(monkeypatch, outcome=SimpleNamespace(ok=True))
+def test_confirmed_result_acknowledged_once(monkeypatch, tmp_path):
+    seen, offsets = _setup(monkeypatch, tmp_path, outcome=SimpleNamespace(ok=True))
     assert seen == [17]
     assert offsets == [None, 18]
 
