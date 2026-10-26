@@ -11,7 +11,6 @@ from runtime.entrypoints import telegram_longpoll as lp
 @pytest.fixture
 def db(monkeypatch, tmp_path):
     import runtime.platform.telegram_inbox as inbox_mod
-    from runtime.platform import delivery_state
     path = tmp_path / "delivery.db"
     monkeypatch.setattr(inbox_mod, "_get_db_path", lambda: path)
     return path
