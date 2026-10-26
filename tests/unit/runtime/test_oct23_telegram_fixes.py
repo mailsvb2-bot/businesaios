@@ -66,33 +66,43 @@ class _Stop(BaseException):
     pass
 
 
-def test_poison_update_is_dropped_after_bounded_attempts(monkeypatch):
+def test_poison_update_is_retained_and_other_update_succeeds(monkeypatch, tmp_path):
+    """One poisoned update cannot starve unrelated chats or vanish on restart."""
+    from types import SimpleNamespace
     import runtime.entrypoints.telegram_longpoll as lp
+    import runtime.platform.telegram_inbox as inbox_mod
 
-    polls = {"n": 0}
+    monkeypatch.setattr(inbox_mod, "_get_db_path", lambda: tmp_path / "delivery.db")
     executed = []
+    polls = []
 
     def fake_http(method, url, payload=None, *, timeout_s=None):
-        polls["n"] += 1
-        if polls["n"] > 6:
+        offset = (payload or {}).get("offset")
+        polls.append(offset)
+        if len(polls) > 2:
             raise _Stop()
-        offset = int((payload or {}).get("offset") or 0)
-        updates = [u for u in ({"update_id": 1, "poison": True}, {"update_id": 2}) if u["update_id"] >= offset]
-        return {"ok": True, "result": updates}
+        updates = [{"update_id": 1, "poison": True}, {"update_id": 2}]
+        return SimpleNamespace(json={"ok": True, "result": [
+            update for update in updates if offset is None or update["update_id"] >= offset
+        ]})
 
     def fake_execute(*, update, **_):
         executed.append(update["update_id"])
         if update.get("poison"):
             raise RuntimeError("boom")
+        return SimpleNamespace(ok=True)
 
     monkeypatch.setattr(lp, "_validate_startup", lambda token: None)
     monkeypatch.setattr(lp, "_start_health_if_enabled", lambda log: None)
     monkeypatch.setattr(lp, "_http_json", fake_http)
-    monkeypatch.setattr(lp, "_response_payload", lambda r: r)
     monkeypatch.setattr(lp, "_execute_update", fake_execute)
     monkeypatch.setattr(lp.time, "sleep", lambda s: None)
-    monkeypatch.setenv("TELEGRAM_MAX_UPDATE_ATTEMPTS", "3")
     with pytest.raises(_Stop):
         lp._run_longpoll(token="t", core=None, executor=None, event_log=None)
-    assert executed.count(1) == 3
-    assert 2 in executed
+
+    from runtime.platform.telegram_inbox import TelegramInbox
+    recovered = TelegramInbox("t")
+    assert recovered.cursor() == 3
+    assert recovered.pending_count() == 1
+    assert executed == [1, 2]
+    assert polls[1] == 3
