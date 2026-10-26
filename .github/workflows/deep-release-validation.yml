@@ -142,7 +142,11 @@ jobs:
           SQL
 
           BACKUP_DUMP_PATH="$PWD/artifacts/ci/postgres_backup.dump"
-          pg_dump "$DATABASE_URL" --format=custom --no-owner --no-privileges --file="$BACKUP_DUMP_PATH"
+          # Match client and server major versions to prevent unsupported archive SET commands.
+          PG16_IMAGE="postgres:16@sha256:33f923b05f64ca54ac4401c01126a6b92afe839a0aa0a52bc5aeb5cc958e5f20"
+          docker run --rm --network host --user "$(id -u):$(id -g)" \
+            -v "$PWD/artifacts/ci:/backup" "$PG16_IMAGE" \
+            pg_dump "$DATABASE_URL" --format=custom --no-owner --no-privileges --file=/backup/postgres_backup.dump
           test -s "$BACKUP_DUMP_PATH"
 
           cleanup_source_probe
@@ -152,7 +156,9 @@ jobs:
           ADMIN_DSN="${DATABASE_URL%/*}/postgres"
           psql "$ADMIN_DSN" --set=ON_ERROR_STOP=1 --command="CREATE DATABASE ${RESTORE_DB};"
           RESTORE_DSN="${DATABASE_URL%/*}/${RESTORE_DB}"
-          pg_restore --exit-on-error --no-owner --no-privileges --dbname="$RESTORE_DSN" "$BACKUP_DUMP_PATH"
+          docker run --rm --network host -v "$PWD/artifacts/ci:/backup:ro" "$PG16_IMAGE" \
+            pg_restore --exit-on-error --no-owner --no-privileges \
+            --dbname="$RESTORE_DSN" /backup/postgres_backup.dump
 
           RESTORED_SHA="$(
             psql "$RESTORE_DSN" --no-align --tuples-only --set=ON_ERROR_STOP=1 \
