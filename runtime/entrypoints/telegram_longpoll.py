@@ -89,8 +89,11 @@ def _append_event(
             try:
                 fn(event)
                 return
-            except TypeError:
+            except (TypeError, ValueError):
                 continue
+            except Exception:
+                _LOG.warning("telegram diagnostic event append failed", exc_info=True)
+                return
 
 def _copy_world_state(
     state: WorldStateV1,
@@ -237,7 +240,7 @@ def _execute_update(
     event_log: Any,
     update: dict[str, Any],
     transport: str,
-) -> None:
+) -> Any:
     raw_update_id = update.get("update_id")
     state = _world_state_from_update(update, transport=transport)
     result = execute_runtime_decision(
@@ -255,6 +258,7 @@ def _execute_update(
             "ok": bool(getattr(result, "ok", False)),
         },
     )
+    return result
 
 def _customer_dispatch(*, core: Any, executor: Any, event_log: Any):
     def dispatch(update: dict[str, Any], route: Any) -> None:
@@ -328,7 +332,9 @@ def _run_longpoll(
                 # Advance acknowledgement only after successful execution. Failed
                 # decisions must remain eligible for replay on the next poll.
                 try:
-                    _execute_update(core=core, executor=executor, event_log=event_log, update=update, transport="longpoll")
+                    outcome = _execute_update(core=core, executor=executor, event_log=event_log, update=update, transport="longpoll")
+                    if not bool(getattr(outcome, "ok", False)):
+                        raise RuntimeError("telegram_update_outcome_unconfirmed")
                 except Exception:
                     # A poison update must not block every later user forever.
                     failures[raw_update_id] = failures.get(raw_update_id, 0) + 1
