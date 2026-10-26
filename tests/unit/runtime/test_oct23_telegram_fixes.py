@@ -1,10 +1,12 @@
 """Oct 23: repeat /start and repeat button taps must deliver; poison updates must not block polling."""
 from __future__ import annotations
 
-import pytest
 import ast
 from pathlib import Path
 from types import SimpleNamespace
+
+import pytest
+
 from runtime.entrypoints import telegram_longpoll as lp
 from runtime.platform.telegram_inbox import TelegramInbox
 
@@ -55,8 +57,6 @@ def test_effect_payload_carries_delivery_scope():
 
 
 def test_callback_pre_send_answers_without_extra_chat_action_round_trip():
-    from types import SimpleNamespace
-
     from runtime._internal.effects_actions.telegram.messaging_parts.transport import telegram_pre_send
 
     calls = []
@@ -73,8 +73,6 @@ class _Stop(BaseException):
 
 def test_poison_update_is_retained_and_other_update_succeeds(monkeypatch, tmp_path):
     """One poisoned update cannot starve unrelated chats or vanish on restart."""
-    from types import SimpleNamespace
-    import runtime.entrypoints.telegram_longpoll as lp
     import runtime.platform.telegram_inbox as inbox_mod
 
     monkeypatch.setattr(inbox_mod, "_get_db_path", lambda: tmp_path / "delivery.db")
@@ -105,7 +103,6 @@ def test_poison_update_is_retained_and_other_update_succeeds(monkeypatch, tmp_pa
     with pytest.raises(_Stop):
         lp._run_longpoll(token="t", core=None, executor=None, event_log=None)
 
-    from runtime.platform.telegram_inbox import TelegramInbox
     recovered = TelegramInbox("t")
     assert recovered.cursor() == 3
     assert recovered.pending_count() == 1
@@ -113,11 +110,8 @@ def test_poison_update_is_retained_and_other_update_succeeds(monkeypatch, tmp_pa
     assert polls[1] == 3
 
 
-"""Durable ingress: crash recovery, negative outcomes, per-bot isolation."""
-from __future__ import annotations
 
-
-
+# Durable ingress: crash recovery, negative outcomes, per-bot isolation.
 
 @pytest.fixture
 def db(monkeypatch, tmp_path):
@@ -239,7 +233,6 @@ def test_profit_sprint_callbacks_never_issue_unsigned_composite_plan():
 
 def test_production_guard_still_rejects_non_noop_inline_plan():
     from runtime.enforcement.action_contracts import validate_execute_plan_payload
-    import pytest
 
     with pytest.raises(RuntimeError, match="EXECUTE_PLAN_STEP_REQUIRES_SEPARATE_DECISION_ENVELOPE"):
         validate_execute_plan_payload(
