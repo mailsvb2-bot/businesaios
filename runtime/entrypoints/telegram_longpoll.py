@@ -288,17 +288,33 @@ def _run_longpoll(
         env_int("TELEGRAM_REQUEST_TIMEOUT_S", poll_timeout_s + 5),
     )
     idle_sleep_s = max(0, env_int("TELEGRAM_IDLE_SLEEP_MS", 250)) / 1000.0
-    offset: int | None = None
-    failures: dict[Any, int] = {}
-    max_attempts = max(1, env_int("TELEGRAM_MAX_UPDATE_ATTEMPTS", 3))
+    from runtime.platform.telegram_inbox import TelegramInbox
+    inbox = TelegramInbox(token)
+    offset = inbox.cursor()
+
+    def replay_pending() -> None:
+        for update in inbox.due(limit=100):
+            update_id = update["update_id"]
+            try:
+                outcome = _execute_update(core=core, executor=executor, event_log=event_log,
+                                          update=update, transport="longpoll")
+                if not bool(getattr(outcome, "ok", False)):
+                    raise RuntimeError("telegram_update_outcome_unconfirmed")
+                inbox.complete(update_id)
+            except Exception as exc:
+                inbox.failed(update_id, exc)
+                _LOG.exception("telegram update %s retained for durable retry", update_id)
+
 
     _append_event(
         event_log,
         event_type="telegram_started",
         payload={"mode": "longpoll"},
     )
-    _LOG.info("telegram long polling started")
+    _LOG.info("telegram long polling started (durable ingress)")
 
+    # Recover pending work even when Telegram no longer returns old updates.
+    replay_pending()
     while True:
         try:
             payload: dict[str, Any] = {"timeout": poll_timeout_s}
@@ -325,25 +341,10 @@ def _run_longpoll(
                 event_type="telegram_polled",
                 payload={"updates": len(updates)},
             )
-            for update in updates:
-                if not isinstance(update, dict):
-                    continue
-                raw_update_id = update.get("update_id")
-                # Advance acknowledgement only after successful execution. Failed
-                # decisions must remain eligible for replay on the next poll.
-                try:
-                    outcome = _execute_update(core=core, executor=executor, event_log=event_log, update=update, transport="longpoll")
-                    if not bool(getattr(outcome, "ok", False)):
-                        raise RuntimeError("telegram_update_outcome_unconfirmed")
-                except Exception:
-                    # A poison update must not block every later user forever.
-                    failures[raw_update_id] = failures.get(raw_update_id, 0) + 1
-                    if failures[raw_update_id] < max_attempts:
-                        raise
-                    _append_event(event_log, event_type="telegram_update_dropped", payload={"update_id": raw_update_id, "attempts": failures.pop(raw_update_id)})
-                    _LOG.exception("telegram update %s dropped after %s attempts", raw_update_id, max_attempts)
-                if raw_update_id is not None:
-                    offset = int(raw_update_id) + 1
+            # The remote cursor is never advanced until every returned update
+            # is durably staged, including those whose execution may fail.
+            offset = inbox.stage(updates) if updates else inbox.cursor()
+            replay_pending()
             if customer_gateway is not None:  # flag-gated customer bots, same loop and decision path
                 try:
                     customer_gateway.tick()
