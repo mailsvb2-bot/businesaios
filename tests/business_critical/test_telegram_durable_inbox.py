@@ -88,3 +88,16 @@ def test_unconfirmed_outcome_is_not_dropped_on_poll_and_recovers(db, monkeypatch
         if outcome.ok:
             recovered.complete(update["update_id"])
     assert recovered.pending_count() == 0
+
+def test_canonical_execution_returns_outcome(monkeypatch):
+    outcome = SimpleNamespace(ok=False, decision_id="d-1")
+    monkeypatch.setattr(lp, "_world_state_from_update", lambda *a, **kw: object())
+    monkeypatch.setattr(lp, "execute_runtime_decision", lambda **kw: outcome)
+    monkeypatch.setattr(lp, "_append_event", lambda *a, **kw: None)
+    assert lp._execute_update(core=None, executor=None, event_log=None,
+                              update={"update_id": 17}, transport="longpoll") is outcome
+
+
+def test_diagnostic_failure_does_not_abort_delivery():
+    log = SimpleNamespace(append=lambda event: (_ for _ in ()).throw(OSError("log unavailable")))
+    lp._append_event(log, event_type="telegram_test", payload={"update_id": 17})
