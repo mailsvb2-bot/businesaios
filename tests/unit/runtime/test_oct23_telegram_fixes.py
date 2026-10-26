@@ -209,7 +209,7 @@ def test_diagnostic_failure_does_not_abort_delivery():
 
 
 def _proposed_actions(path: str) -> set[str]:
-    tree = ast.parse((Path(__file__).resolve().parents[2] / path).read_text(encoding="utf-8"))
+    tree = ast.parse((Path(__file__).resolve().parents[3] / path).read_text(encoding="utf-8"))
     actions = set()
     for node in ast.walk(tree):
         if isinstance(node, ast.Call) and isinstance(node.func, ast.Name) and node.func.id == "propose" and node.args:
