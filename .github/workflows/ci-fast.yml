@@ -54,6 +54,15 @@ jobs:
           python -m pytest -q
           tests/server/test_post_deploy_verification.py
           tests/server/test_production_control_plane_bootstrap.py
+      - name: Enforce tenant, authorization and execution security contracts
+        run: >-
+          python -m pytest -q
+          tests/business_critical/test_execute_once_ledger_contract.py
+          tests/business_critical/test_tenant_negative_contracts.py
+          tests/business_critical/test_owner_only_authz_matrix.py
+          tests/business_critical/test_router_schema_contract_all_routes.py
+          tests/business_critical/test_effect_router_telegram_media_contract.py
+          tests/unit/business_flows/test_event_links_registration_status.py
       - name: Run canonical fast CI gate
         env:
           BAIOS_BOOT_SMOKE_ROOT: ${{ runner.temp }}/businesaios-boot-smoke/${{ github.run_id }}-${{ github.run_attempt }}-${{ github.job }}-${{ matrix.python-version }}
