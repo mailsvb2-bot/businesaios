@@ -144,7 +144,7 @@ class WebhookSignatureVerifier:
             "tenant_id": tenant,
             "connector_id": connector,
         }
-        if not hmac.compare_digest(expected, str(signature)):
+        if not hmac.compare_digest(expected.encode('utf-8'), str(signature).encode('utf-8')):
             return WebhookVerificationResult(
                 verified=False,
                 reason="bad_signature",
