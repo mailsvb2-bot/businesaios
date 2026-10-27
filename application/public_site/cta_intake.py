@@ -264,23 +264,30 @@ class CTALandingIntakeService:
         return CTAIntakeStatus(token, False, "not_found", "")
 
     def list_recent(self, *, limit: int = 50) -> tuple[dict[str, object], ...]:
-        if not self._storage_path.exists():
-            return ()
-        rows, seen = [], set()
-        for line in reversed(self._storage_path.read_text(encoding="utf-8").splitlines()):
-            if len(rows) >= max(1, min(int(limit or 50), 200)):
+        cap = max(1, min(int(limit or 50), 200))
+        rows = []
+        for row in self._iter_latest_admin_rows():
+            if len(rows) >= cap:
                 break
+            rows.append(row)
+        return tuple(rows)
+
+    def _iter_latest_admin_rows(self):
+        """Iterate most recent version of every intake, without a display-page cap."""
+        if not self._storage_path.exists():
+            return
+        seen: set[str] = set()
+        for line in reversed(self._storage_path.read_text(encoding='utf-8').splitlines()):
             try:
                 row = json.loads(line) if line.strip() else None
-            except Exception:
+            except (ValueError, TypeError):
                 continue
             if isinstance(row, dict):
-                intake_id = str(row.get("intake_id") or "").strip()
+                intake_id = str(row.get('intake_id') or '').strip()
                 if not intake_id or intake_id in seen:
                     continue
                 seen.add(intake_id)
-                rows.append(_admin_row(row))
-        return tuple(rows)
+                yield _admin_row(row)
 
     def list_owner_businesses(self, *, owner_account_id: str, limit: int = 100) -> tuple[dict[str, object], ...]:
         account_id = str(owner_account_id or "").strip()
@@ -398,7 +405,7 @@ class CTALandingIntakeService:
             raise ValueError(f"directory limit must be 1..{DIRECTORY_MAX}")
         searched_at = _clock(now_utc).isoformat()
         found = []
-        for b in self.list_recent(limit=200):
+        for b in self._iter_latest_admin_rows():
             name = str(b.get("business_name") or b.get("name") or "")
             ok = {"business_id": lambda: b.get("business_id") == needle,
                   "user_id": lambda: needle in {str(b.get("user_id") or ""), str(b.get("owner_account_id") or "")},
