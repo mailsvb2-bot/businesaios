@@ -28,13 +28,14 @@ def _load_secret() -> bytes:
 
     plain = env_str('DECISIONCORE_SECRET', '')
 
-    env = env_str('ENV', env_str('APP_ENV', 'dev')).lower().strip()
+    configured_envs = {env_str(name, '').strip().lower() for name in ('ENV', 'APP_ENV')}
     non_dev_envs = {'prod', 'production', 'stage', 'staging', 'preprod', 'qa'}
+    env = next((name for name in configured_envs if name in non_dev_envs), 'dev')
     if env in non_dev_envs and not plain.strip():
         raise RuntimeError(f'DECISIONCORE_SECRET must be set in {env} environment')
 
     if not plain:
-        if env_bool('DECISIONCORE_SECRET_ALLOW_DEV_DEFAULT', False):
+        if env not in non_dev_envs and env_bool('DECISIONCORE_SECRET_ALLOW_DEV_DEFAULT', False):
             plain = 'dev-decisioncore-secret'
         else:
             raise RuntimeError(
