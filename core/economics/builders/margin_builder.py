@@ -14,9 +14,14 @@ class MarginBuilder:
 
     def build(self, *, revenue: RevenueSignal, cost: CostSignal, spend: SpendSignal) -> MarginSnapshot:
         zero_ratio = self.policy.zero_ratio
-        gross_margin_ratio = (revenue.net_revenue - cost.cogs) / revenue.net_revenue if revenue.net_revenue > zero_ratio else zero_ratio
         total_cost = cost.cogs + cost.fixed_costs + cost.variable_costs + spend.marketing_spend + spend.sales_spend + spend.operations_spend
-        net_margin_ratio = (revenue.net_revenue - total_cost) / revenue.net_revenue if revenue.net_revenue > zero_ratio else zero_ratio
+        if revenue.net_revenue > zero_ratio:
+            gross_margin_ratio = (revenue.net_revenue - cost.cogs) / revenue.net_revenue
+            net_margin_ratio = (revenue.net_revenue - total_cost) / revenue.net_revenue
+        else:
+            # With no income, positive spend is a loss, not zero margin.
+            gross_margin_ratio = zero_ratio - 1 if cost.cogs > zero_ratio else zero_ratio
+            net_margin_ratio = zero_ratio - 1 if total_cost > zero_ratio else zero_ratio
         if net_margin_ratio < zero_ratio:
             status = MarginHealthStatus.NEGATIVE
         elif net_margin_ratio < self.policy.weak_net_margin_threshold:
