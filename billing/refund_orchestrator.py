@@ -225,7 +225,7 @@ class RefundOrchestrator:
             raise RuntimeError("REFUND_BUSINESS_SCOPE_REQUIRED")
         if business_id and self._refund_events is None:
             raise RuntimeError("REFUND_EVENT_STORE_REQUIRED")
-        if invoice.status not in {invoice.status.ISSUED, invoice.status.PARTIALLY_PAID, invoice.status.PAID, invoice.status.UNCOLLECTIBLE}:
+        if invoice.status not in {invoice.status.ISSUED, invoice.status.PARTIALLY_PAID, invoice.status.PAID, invoice.status.UNCOLLECTIBLE, invoice.status.CREDITED}:
             raise ValueError('invoice is not eligible for refund')
         provider_affinity = self._extract_provider_affinity(invoice=invoice, metadata=metadata)
         requested = RefundRequest(
@@ -243,41 +243,13 @@ class RefundOrchestrator:
         if provider_affinity is not None and str(requested.provider_name).strip().lower() != str(provider_affinity).strip().lower():
             raise ValueError('refund provider must match invoice provider affinity')
         existing = self._refund_store.get_by_idempotency(tenant_id=requested.tenant_id, invoice_id=requested.invoice_id, idempotency_key=requested.idempotency_key or '')
+        if existing is None and invoice.status is invoice.status.CREDITED:
+            raise ValueError('cannot refund a fully credited invoice again')
         if existing is None and requested.amount_minor > int(invoice.paid_minor):
             raise ValueError('refund amount cannot exceed paid_minor')
         if existing is not None:
             self._project_refund_event(invoice=invoice, result=existing)
             stored_posting = self._ledger_store.append(self._build_posting(result=existing))
-            if str(dict(invoice.metadata).get('last_refund_id') or '') == str(existing.refund_id):
-                replay_refund_record = RefundRecord(
-                    refund_id=str(existing.refund_id),
-                    tenant_id=requested.tenant_id,
-                    user_id=requested.user_id,
-                    amount_minor=int(existing.amount_minor),
-                    currency=str(existing.currency).upper(),
-                    reason=str(existing.metadata.get('reason') or requested.reason),
-                    status='processed',
-                    created_at=monetization_utc_now(),
-                )
-                return invoice, existing, replay_refund_record, stored_posting
-            replayed_paid_minor = max(0, int(invoice.paid_minor) - int(existing.amount_minor))
-            replayed_status = invoice.status.ISSUED if replayed_paid_minor == 0 else invoice.status.PARTIALLY_PAID
-            updated_invoice = CommercialInvoiceEnvelope(
-                tenant_id=invoice.tenant_id,
-                invoice_id=invoice.invoice_id,
-                business_id=invoice.business_id,
-                subscription_id=invoice.subscription_id,
-                currency=invoice.currency,
-                subtotal_minor=invoice.subtotal_minor,
-                tax_minor=invoice.tax_minor,
-                total_minor=invoice.total_minor,
-                status=replayed_status,
-                issued_at=invoice.issued_at,
-                due_at=invoice.due_at,
-                paid_minor=replayed_paid_minor,
-                metadata=derive_lineage_metadata(invoice_id=invoice.invoice_id, invoice_metadata=invoice.metadata, event_type='refund', event_id=existing.refund_id, idempotency_key=requested.idempotency_key, provider_name=existing.provider_name),
-            )
-            updated_invoice.validate()
             replay_refund_record = RefundRecord(
                 refund_id=str(existing.refund_id),
                 tenant_id=requested.tenant_id,
@@ -288,7 +260,10 @@ class RefundOrchestrator:
                 status='processed',
                 created_at=monetization_utc_now(),
             )
-            return updated_invoice, existing, replay_refund_record, stored_posting
+            if _refund_already_applied(invoice, existing.refund_id):
+                return invoice, existing, replay_refund_record, stored_posting
+            reconciled_invoice = _apply_refund_to_invoice(invoice, refund_id=str(existing.refund_id), amount_minor=int(existing.amount_minor), idempotency_key=requested.idempotency_key, provider_name=existing.provider_name)
+            return reconciled_invoice, existing, replay_refund_record, stored_posting
         provider_payload = dict(self._provider.refund(
             invoice_id=requested.invoice_id,
             tenant_id=requested.tenant_id,
@@ -337,24 +312,7 @@ class RefundOrchestrator:
             reason=requested.reason,
         )
         posting = self._ledger_store.append(self._build_posting(result=stored_result))
-        new_paid_minor = max(0, int(invoice.paid_minor) - int(requested.amount_minor))
-        new_status = invoice.status.ISSUED if new_paid_minor == 0 else invoice.status.PARTIALLY_PAID
-        updated_invoice = CommercialInvoiceEnvelope(
-            tenant_id=invoice.tenant_id,
-            invoice_id=invoice.invoice_id,
-            business_id=invoice.business_id,
-            subscription_id=invoice.subscription_id,
-            currency=invoice.currency,
-            subtotal_minor=invoice.subtotal_minor,
-            tax_minor=invoice.tax_minor,
-            total_minor=invoice.total_minor,
-            status=new_status,
-            issued_at=invoice.issued_at,
-            due_at=invoice.due_at,
-            paid_minor=new_paid_minor,
-            metadata=derive_lineage_metadata(invoice_id=invoice.invoice_id, invoice_metadata=invoice.metadata, event_type='refund', event_id=stored_result.refund_id, idempotency_key=requested.idempotency_key, provider_name=stored_result.provider_name, extra={'last_refund_id': stored_result.refund_id}),
-        )
-        updated_invoice.validate()
+        updated_invoice = _apply_refund_to_invoice(invoice, refund_id=str(stored_result.refund_id), amount_minor=int(requested.amount_minor), idempotency_key=requested.idempotency_key, provider_name=stored_result.provider_name)
         if self._metrics is not None:
             self._metrics.inc(tenant_id=requested.tenant_id, metric_name='billing_refunds_total', amount=1.0, labels={'provider': requested.provider_name, 'currency': requested.currency.upper()})
         self._project_refund_event(
@@ -424,6 +382,48 @@ class RefundOrchestrator:
             return candidate or None
         return None
 
+
+
+def _applied_refund_ids(invoice: CommercialInvoiceEnvelope) -> tuple[str, ...]:
+    meta = dict(invoice.metadata or {})
+    raw = meta.get('applied_refund_ids') or ()
+    ids = [str(value) for value in raw] if isinstance(raw, (list, tuple)) else []
+    last = str(meta.get('last_refund_id') or '').strip()
+    if last and last not in ids:
+        ids.append(last)
+    return tuple(ids)
+
+
+def _refund_already_applied(invoice: CommercialInvoiceEnvelope, refund_id: object) -> bool:
+    return str(refund_id) in _applied_refund_ids(invoice)
+
+
+def _apply_refund_to_invoice(invoice: CommercialInvoiceEnvelope, *, refund_id: str, amount_minor: int, idempotency_key: str | None, provider_name: str) -> CommercialInvoiceEnvelope:
+    if _refund_already_applied(invoice, refund_id):
+        return invoice
+    new_paid_minor = max(0, int(invoice.paid_minor) - int(amount_minor))
+    refunded_minor = int(dict(invoice.metadata or {}).get('refunded_minor') or 0) + int(amount_minor)
+    updated = CommercialInvoiceEnvelope(
+        tenant_id=invoice.tenant_id, invoice_id=invoice.invoice_id,
+        business_id=invoice.business_id, subscription_id=invoice.subscription_id,
+        currency=invoice.currency, subtotal_minor=invoice.subtotal_minor,
+        tax_minor=invoice.tax_minor, total_minor=invoice.total_minor,
+        status=invoice.status.CREDITED if new_paid_minor == 0 else invoice.status.PARTIALLY_PAID,
+        issued_at=invoice.issued_at, due_at=invoice.due_at,
+        paid_minor=new_paid_minor,
+        metadata=derive_lineage_metadata(
+            invoice_id=invoice.invoice_id, invoice_metadata=invoice.metadata,
+            event_type='refund', event_id=refund_id,
+            idempotency_key=idempotency_key, provider_name=provider_name,
+            extra={
+                'last_refund_id': refund_id,
+                'applied_refund_ids': [*_applied_refund_ids(invoice), refund_id],
+                'refunded_minor': refunded_minor,
+            },
+        ),
+    )
+    updated.validate()
+    return updated
 
 __all__ = [
     'CANON_BILLING_REFUND_EVENT_SPINE_PROJECTION',
