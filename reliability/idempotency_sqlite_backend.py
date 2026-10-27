@@ -293,7 +293,11 @@ class SQLiteIdempotencyBackend(IdempotencyBackend):
         return conn
 
     def _ensure_schema(self) -> None:
+        if self._initialized:
+            return
         with self._init_lock:
+            if self._initialized:
+                return
             conn = self._connection()
             conn.execute(
                 """
