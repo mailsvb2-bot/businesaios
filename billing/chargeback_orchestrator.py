@@ -121,8 +121,7 @@ class ChargebackOrchestrator:
                 reason=str(existing.reason),
                 status='opened',
             )
-            seen_case_id = str(dict(invoice.metadata).get('last_chargeback_case_id') or dict(invoice.metadata).get('chargeback_case_id') or '')
-            if seen_case_id == str(existing.case_id):
+            if str(existing.case_id) in _applied_chargeback_case_ids(invoice):
                 return invoice, existing, replay_record, posting
             replay_paid_minor = max(0, int(invoice.paid_minor) - int(existing.amount_minor))
             replay_status = invoice.status.UNCOLLECTIBLE if int(existing.amount_minor) >= int(invoice.total_minor) else (invoice.status.ISSUED if replay_paid_minor == 0 else invoice.status.PARTIALLY_PAID)
@@ -139,7 +138,7 @@ class ChargebackOrchestrator:
                 issued_at=invoice.issued_at,
                 due_at=invoice.due_at,
                 paid_minor=replay_paid_minor,
-                metadata=derive_lineage_metadata(invoice_id=invoice.invoice_id, invoice_metadata=invoice.metadata, event_type='chargeback', event_id=existing.case_id, idempotency_key=normalized_idem, extra={'last_chargeback_case_id': existing.case_id}),
+                metadata=derive_lineage_metadata(invoice_id=invoice.invoice_id, invoice_metadata=invoice.metadata, event_type='chargeback', event_id=existing.case_id, idempotency_key=normalized_idem, extra={'last_chargeback_case_id': existing.case_id, 'applied_chargeback_case_ids': [*_applied_chargeback_case_ids(invoice), str(existing.case_id)]}),
             )
             updated_invoice.validate()
             return updated_invoice, existing, replay_record, posting
@@ -189,7 +188,7 @@ class ChargebackOrchestrator:
             issued_at=invoice.issued_at,
             due_at=invoice.due_at,
             paid_minor=updated_paid_minor,
-            metadata=derive_lineage_metadata(invoice_id=invoice.invoice_id, invoice_metadata=invoice.metadata, event_type='chargeback', event_id=stored_case.case_id, idempotency_key=normalized_idem, extra={'chargeback_case_id': stored_case.case_id, 'last_chargeback_case_id': stored_case.case_id}),
+            metadata=derive_lineage_metadata(invoice_id=invoice.invoice_id, invoice_metadata=invoice.metadata, event_type='chargeback', event_id=stored_case.case_id, idempotency_key=normalized_idem, extra={'chargeback_case_id': stored_case.case_id, 'last_chargeback_case_id': stored_case.case_id, 'applied_chargeback_case_ids': [*_applied_chargeback_case_ids(invoice), str(stored_case.case_id)]}),
         )
         updated_invoice.validate()
         if self._metrics is not None:
@@ -232,6 +231,17 @@ class ChargebackOrchestrator:
             metadata={'owner': 'billing.chargeback_orchestrator', 'invoice_id': case.invoice_id},
         )
 
+
+
+def _applied_chargeback_case_ids(invoice: CommercialInvoiceEnvelope) -> tuple[str, ...]:
+    metadata = dict(invoice.metadata or {})
+    raw = metadata.get('applied_chargeback_case_ids') or ()
+    applied = [str(item) for item in raw] if isinstance(raw, (list, tuple)) else []
+    for legacy_key in ('last_chargeback_case_id', 'chargeback_case_id'):
+        legacy = str(metadata.get(legacy_key) or '').strip()
+        if legacy and legacy not in applied:
+            applied.append(legacy)
+    return tuple(applied)
 
 __all__ = [
     'CANON_BILLING_CHARGEBACK_ORCHESTRATOR',
