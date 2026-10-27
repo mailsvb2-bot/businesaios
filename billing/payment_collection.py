@@ -59,6 +59,14 @@ class InMemoryCollectionResultStore:
         return self.idempotency_index.get((str(tenant_id), str(invoice_id), str(idempotency_key)))
 
 
+
+
+def _collectable_minor(invoice: CommercialInvoiceEnvelope) -> int:
+    refunded = require_commercial_int(
+        'refunded_minor', dict(invoice.metadata or {}).get('refunded_minor', 0) or 0, minimum=0
+    )
+    return max(0, int(invoice.remaining_minor) - int(refunded))
+
 class PaymentCollectionOrchestrator:
     def __init__(
         self,
@@ -103,7 +111,7 @@ class PaymentCollectionOrchestrator:
             return invoice, existing
         if invoice.status.value in {"draft", "paid", "void", "credited"}:
             raise ValueError("cannot collect invoice from current state")
-        amount_minor = invoice.remaining_minor
+        amount_minor = _collectable_minor(invoice)
         if amount_minor <= 0:
             synthetic = CommercialCollectionResult(
                 invoice_id=invoice.invoice_id,
