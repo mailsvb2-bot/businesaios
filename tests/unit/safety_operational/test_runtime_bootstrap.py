@@ -7,8 +7,8 @@ from core.safety.operational.runtime_bootstrap import resolve_operational_safety
 
 def test_runtime_bootstrap_uses_default_runtime_root(tmp_path: Path) -> None:
     runtime = resolve_operational_safety_runtime(default_root=tmp_path)
-    runtime.service.precheck  # smoke anchor
-    assert (tmp_path / 'operational_budget').exists() or runtime is not None
+    assert callable(runtime.service.precheck)
+    assert (tmp_path / 'operational_budget').exists()
 
 
 def test_runtime_bootstrap_uses_explicit_env_paths(tmp_path: Path, monkeypatch) -> None:
