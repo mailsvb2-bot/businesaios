@@ -78,15 +78,19 @@ class JobWorker:
     def _lease_heartbeat(self, job: JobRecord) -> Iterator[None]:
         current = self._store.get(tenant_id=job.tenant_id, job_id=job.job_id) or job
         window = self._lease_manager.visibility_window_for(job=current)
+        heartbeat_seconds = max(1.0, min(float(window.heartbeat_seconds), self._lease_seconds / 3.0))
+        fencing_token = job.lease.fencing_token if job.lease is not None else None
         stop_event = Event()
         lease_lost = Event()
 
         def _loop() -> None:
-            while not stop_event.wait(float(window.heartbeat_seconds)):
+            while not stop_event.wait(heartbeat_seconds):
                 renewed = self._lease_manager.heartbeat(
                     tenant_id=job.tenant_id,
                     job_id=job.job_id,
                     owner_id=self._worker_id,
+                    lease_seconds=self._lease_seconds,
+                    fencing_token=fencing_token,
                 )
                 if renewed is None:
                     lease_lost.set()
@@ -99,7 +103,7 @@ class JobWorker:
             yield
         finally:
             stop_event.set()
-            thread.join(timeout=max(1.0, float(window.heartbeat_seconds) + 1.0))
+            thread.join(timeout=heartbeat_seconds + 1.0)
             if lease_lost.is_set():
                 raise LeaseLostError(f"lease lost while executing job {job.job_id}")
     def tick(self, *, tenant_id: str, queue_name: str, now: datetime | None = None, job_id: str | None = None) -> WorkerTickReport:
@@ -136,32 +140,46 @@ class JobWorker:
         except LeaseLostError:
             return self._replace(report, skipped=report.skipped + 1)
         except Exception as exc:
+            if not self._still_owns(tenant_id=tenant_id, job=job):
+                return self._replace(report, skipped=report.skipped + 1)
             return self._handle_failure(tenant_id=tenant_id, job=job, report=report, exc=exc, result=None, now=now)
 
         # Never retry a successful runner because the terminal transition raced.
-        active = self._store.get(tenant_id=tenant_id, job_id=job.job_id)
-        if not (active and active.lease and job.lease
-                and active.lease.owner_id == self._worker_id
-                and active.lease.fencing_token == job.lease.fencing_token):
+        if not self._still_owns(tenant_id=tenant_id, job=job):
             return self._replace(report, skipped=report.skipped + 1)
         if result.ok:
             self._store.mark_succeeded(tenant_id=tenant_id, job_id=job.job_id, owner_id=self._worker_id, fencing_token=job.lease.fencing_token, now=normalize_now())
             return self._replace(report, succeeded=report.succeeded + 1)
         return self._handle_failure(tenant_id=tenant_id, job=job, report=report, exc=RuntimeError(result.error or result.status or "runner_reported_failure"), result=result, now=now)
+    def _still_owns(self, *, tenant_id: str, job: JobRecord) -> bool:
+        active = self._store.get(tenant_id=tenant_id, job_id=job.job_id)
+        return bool(active and active.lease and job.lease
+                    and active.lease.owner_id == self._worker_id
+                    and active.lease.fencing_token == job.lease.fencing_token)
+
     def _handle_failure(self, *, tenant_id: str, job: JobRecord, report: WorkerTickReport, exc: Exception, result: JobResult | None, now: datetime) -> WorkerTickReport:
         failure_moment = normalize_now(now)
         error_text = self._format_error(exc)
         decision = self._retry_policy.classify(job=job, error=exc)
         retry_delay = result.retry_delay_seconds if result and result.retry_delay_seconds is not None else decision.delay_seconds
-        if decision.move_to_dead_letter:
-            self._store.mark_dead_letter(tenant_id=tenant_id, job_id=job.job_id, error=error_text, owner_id=self._worker_id, fencing_token=(job.lease.fencing_token if job.lease is not None else None), now=failure_moment)
-            self._record_dead_letter(job=job, error=error_text, reason=decision.reason, now=failure_moment)
-            return self._replace(report, dead_lettered=report.dead_lettered + 1)
-        if decision.should_retry:
-            self._store.reschedule(tenant_id=tenant_id, job_id=job.job_id, delay_seconds=retry_delay, error=error_text, owner_id=self._worker_id, fencing_token=(job.lease.fencing_token if job.lease is not None else None), now=failure_moment)
-            return self._replace(report, retried=report.retried + 1)
-        self._store.mark_failed(tenant_id=tenant_id, job_id=job.job_id, error=error_text, owner_id=self._worker_id, fencing_token=(job.lease.fencing_token if job.lease is not None else None), now=failure_moment)
-        return self._replace(report, failed=report.failed + 1)
+        token = job.lease.fencing_token if job.lease is not None else None
+        if not self._still_owns(tenant_id=tenant_id, job=job):
+            return self._replace(report, skipped=report.skipped + 1)
+        try:
+            if decision.move_to_dead_letter:
+                self._store.mark_dead_letter(tenant_id=tenant_id, job_id=job.job_id, error=error_text, owner_id=self._worker_id, fencing_token=token, now=failure_moment)
+                self._record_dead_letter(job=job, error=error_text, reason=decision.reason, now=failure_moment)
+                return self._replace(report, dead_lettered=report.dead_lettered + 1)
+            if decision.should_retry:
+                self._store.reschedule(tenant_id=tenant_id, job_id=job.job_id, delay_seconds=retry_delay, error=error_text, owner_id=self._worker_id, fencing_token=token, now=failure_moment)
+                return self._replace(report, retried=report.retried + 1)
+            self._store.mark_failed(tenant_id=tenant_id, job_id=job.job_id, error=error_text, owner_id=self._worker_id, fencing_token=token, now=failure_moment)
+            return self._replace(report, failed=report.failed + 1)
+        except (ValueError, PermissionError):
+            # A competing worker took the lease between ownership check and write.
+            if not self._still_owns(tenant_id=tenant_id, job=job):
+                return self._replace(report, skipped=report.skipped + 1)
+            raise
     def _normalize_result(self, *, job: JobRecord, outcome: Any) -> JobResult:
         if isinstance(outcome, JobResult):
             return outcome
