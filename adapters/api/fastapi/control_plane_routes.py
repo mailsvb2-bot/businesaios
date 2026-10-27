@@ -38,7 +38,7 @@ def register_control_plane_routes(*, router: APIRouter, auth_bundle, authz_bundl
         RoutePermissionGuard(permission=Permission.VIEW_AUDIT, action_name=action_name).enforce(principal=principal, request_context=request_context, authz=authz_bundle)
         enforce_control_plane_security(principal=principal, request_context=request_context, action_name=action_name, tenant_id=tenant_id, resource_id=f'audit-actions:{trace_id or "all"}', trace_id=trace_id, limit=limit)
         rate_limit_bundle.require_quota(principal=principal, request_context=request_context, dimension='api_requests_per_hour')
-        return audit_handlers.list_actions(trace_id=trace_id, limit=limit)
+        return audit_handlers.list_actions(tenant_id=tenant_id, trace_id=trace_id, limit=limit)
     @router.get('/control-plane/audit/decisions')
     async def control_plane_list_decision_audit(request: Request, trace_id: str | None = None, limit: int = 100) -> dict[str, Any]:
         request_context, principal = authorize_request(request=request, auth_bundle=auth_bundle)
@@ -47,7 +47,7 @@ def register_control_plane_routes(*, router: APIRouter, auth_bundle, authz_bundl
         RoutePermissionGuard(permission=Permission.VIEW_AUDIT, action_name=action_name).enforce(principal=principal, request_context=request_context, authz=authz_bundle)
         enforce_control_plane_security(principal=principal, request_context=request_context, action_name=action_name, tenant_id=tenant_id, resource_id=f'audit-decisions:{trace_id or "all"}', trace_id=trace_id, limit=limit)
         rate_limit_bundle.require_quota(principal=principal, request_context=request_context, dimension='api_requests_per_hour')
-        return audit_handlers.list_decisions(trace_id=trace_id, limit=limit)
+        return audit_handlers.list_decisions(tenant_id=tenant_id, trace_id=trace_id, limit=limit)
     @router.get('/control-plane/approvals/open')
     async def control_plane_list_open_approvals(request: Request, approval_id: str = '', business_id: str = '') -> dict[str, Any]:
         request_context, principal = authorize_request(request=request, auth_bundle=auth_bundle)
