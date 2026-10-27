@@ -11,7 +11,7 @@ Infrastructure only:
 from __future__ import annotations
 
 import threading
-from contextlib import closing
+from contextlib import contextmanager
 from datetime import datetime, timedelta
 from pathlib import Path
 
@@ -326,7 +326,7 @@ class SqliteJobStore:
             # tick serializes all worker processes even when nothing must change.
             # Probe via a read-only connection; the actual reclaim re-checks all
             # candidates inside a transaction for cross-process correctness.
-            with closing(self._connect()) as db:
+            with self._connect() as db:
                 expired = db.execute(
                     """
                     SELECT 1 FROM runtime_queue_jobs
@@ -347,9 +347,18 @@ class SqliteJobStore:
     def _tx(self):
         return sqlite_job_store_tx(path=self._path, busy_timeout_ms=self._busy_timeout_ms)
 
+    @contextmanager
     def _connect(self):
         self._ensure_open()
-        return connect_sqlite_job_store(path=self._path, busy_timeout_ms=self._busy_timeout_ms)
+        db = connect_sqlite_job_store(path=self._path, busy_timeout_ms=self._busy_timeout_ms)
+        try:
+            yield db
+            db.commit()
+        except Exception:
+            db.rollback()
+            raise
+        finally:
+            db.close()
 
     def _init_schema(self) -> None:
         with self._lock:
