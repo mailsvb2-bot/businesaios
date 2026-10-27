@@ -2,7 +2,9 @@ from __future__ import annotations
 
 from typing import Any
 
-from fastapi import APIRouter
+from adapters.api.fastapi.router_support import authorize_request, require_platform_scope
+
+from fastapi import APIRouter, Request
 
 from runtime.canonical_surface_manifest import (
     ALLOWED_EFFECT_DOMAIN_ENTRYPOINTS,
@@ -36,9 +38,14 @@ def network_side_effects_payload(*, tenant_id: str, business_id: str = "default-
     }
 
 
-def register_network_side_effects_routes(*, router: APIRouter) -> None:
+def register_network_side_effects_routes(*, router: APIRouter, auth_bundle) -> None:
     @router.get(NETWORK_SIDE_EFFECTS_ROUTE, tags=["control-plane", "security"])
-    async def control_plane_network_side_effects(tenant_id: str = "tenant-demo", business_id: str = "default-business") -> dict[str, Any]:
+    async def control_plane_network_side_effects(request: Request, tenant_id: str = "tenant-demo", business_id: str = "default-business") -> dict[str, Any]:
+        _, principal = authorize_request(request=request, auth_bundle=auth_bundle)
+        require_platform_scope(principal)
+        if str(principal.tenant_id) != str(tenant_id) and str(tenant_id) != 'tenant-demo':
+            from fastapi import HTTPException
+            raise HTTPException(status_code=403, detail='tenant_scope_mismatch')
         return network_side_effects_payload(tenant_id=tenant_id, business_id=business_id)
 
 
