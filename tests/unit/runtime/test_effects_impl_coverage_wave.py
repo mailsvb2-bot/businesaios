@@ -184,7 +184,7 @@ def test_yookassa_webhook_delivery_and_persistence_errors(monkeypatch):
         payment_outbox=SimpleNamespace(enqueue_once=lambda **_: None),
     )
     try:
-        assert _request(server, "POST", "/", body={"id": "x"})[0] == 200
+        assert _request(server, "POST", "/", body={"id": "x"}, headers={"X-Webhook-Token": "secret"})[0] == 200
     finally:
         _close(server)
 
