@@ -99,17 +99,8 @@ class PaymentCollectionOrchestrator:
                 != str(invoice.currency).strip().upper()
             ):
                 raise ValueError("replayed collection currency mismatch")
-            replayed_invoice = invoice
-            replay_amount_minor = require_commercial_int(
-                "collected_amount_minor",
-                existing_metadata.get("collected_amount_minor", 0),
-                minimum=0,
-            )
-            if existing.successful and replay_amount_minor > 0 and invoice.remaining_minor > 0:
-                replayed_invoice = self._invoice_lifecycle.record_payment(
-                    invoice, amount_minor=min(invoice.remaining_minor, replay_amount_minor)
-                )
-            return replayed_invoice, existing
+            # An idempotent replay is evidence of the earlier collection, never new money.
+            return invoice, existing
         if invoice.status.value in {"draft", "paid", "void", "credited"}:
             raise ValueError("cannot collect invoice from current state")
         amount_minor = invoice.remaining_minor
