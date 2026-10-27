@@ -19,11 +19,12 @@ from collections.abc import Iterable
 from dataclasses import dataclass
 import logging
 
-_LOG = logging.getLogger(__name__)
 from typing import Any
 
 from core.pricing.rl_picker import RLPricingConfig, choose_price_rub
 from core.pricing.stop_loss import StopLossConfig, should_apply_price
+
+_LOG = logging.getLogger(__name__)
 
 
 @dataclass(frozen=True)
