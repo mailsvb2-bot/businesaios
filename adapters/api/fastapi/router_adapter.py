@@ -368,6 +368,6 @@ def create_api_router(*, application_service: object, dependency_container: Fast
         analytics_ops_handlers=analytics_ops_handlers,
         analytics_signed_export_handlers=analytics_signed_export_handlers,
     )
-    register_provider_truth_matrix_routes(router=router)
-    register_network_side_effects_routes(router=router)
+    register_provider_truth_matrix_routes(router=router, auth_bundle=auth_bundle)
+    register_network_side_effects_routes(router=router, auth_bundle=auth_bundle)
     return router
