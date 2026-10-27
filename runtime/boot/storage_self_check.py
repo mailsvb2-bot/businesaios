@@ -11,10 +11,9 @@ def storage_self_check() -> None:
     paths are resolved.
     """
 
-    # Prefer ENV (legacy) over APP_ENV to match existing constitution tests.
-    env = env_str("ENV", env_str("APP_ENV", "dev")).strip().lower()
-    # Production constitution is always enforced in APP_ENV=prod.
-    if env != "prod":
+    # Neither alias may downgrade a production deployment to dev.
+    environments = {env_str(name, "").strip().lower() for name in ("ENV", "APP_ENV")}
+    if not environments.intersection({"prod", "production"}):
         return
 
     backend = env_str("STORAGE_BACKEND", "").strip().lower()
