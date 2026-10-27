@@ -219,7 +219,7 @@ def create_api_router(*, application_service: object, dependency_container: Fast
     authz_bundle = AuthzDependencyBundle.default()
     tenant_guard = TenantRouteGuard(
         tenant_registry=tenant_registry,
-        require_active_tenant=tenant_registry_has_records(tenant_registry),
+        require_active_tenant=True,
         security_guard=security_bundle.api_surface_guard,
     )
     rate_limit_bundle = RateLimitDependencyBundle(tenant_quota_guard=tenant_quota_guard)
