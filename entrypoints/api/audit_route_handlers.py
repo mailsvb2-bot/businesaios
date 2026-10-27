@@ -20,10 +20,9 @@ class AuditRouteHandlers:
 
     def list_actions(self, *, tenant_id: str, trace_id: str | None = None, limit: int = 100) -> dict[str, Any]:
         cap = max(0, min(int(limit), 1000))
-        if trace_id:
-            records = self.action_audit_log.list_by_trace(trace_id=trace_id, limit=cap)
-        else:
-            records = list(self.action_audit_log.records[-cap:]) if cap else []
+        records = [row for row in reversed(self.action_audit_log.records)
+                   if str(row.get('tenant_id') or '') == str(tenant_id)
+                   and (not trace_id or str(row.get('trace_id') or '') == str(trace_id))][:cap]
         if not str(tenant_id or '').strip():
             raise ValueError('tenant_id required for audit')
         records = [row for row in records if str(row.get('tenant_id') or '') == str(tenant_id)]
@@ -35,10 +34,9 @@ class AuditRouteHandlers:
 
     def list_decisions(self, *, tenant_id: str, trace_id: str | None = None, limit: int = 100) -> dict[str, Any]:
         cap = max(0, min(int(limit), 1000))
-        if trace_id:
-            records = self.decision_audit_log.list_by_trace(trace_id=trace_id, limit=cap)
-        else:
-            records = list(self.decision_audit_log.records[-cap:]) if cap else []
+        records = [row for row in reversed(self.decision_audit_log.records)
+                   if str(row.get('tenant_id') or '') == str(tenant_id)
+                   and (not trace_id or str(row.get('trace_id') or '') == str(trace_id))][:cap]
         if not str(tenant_id or '').strip():
             raise ValueError('tenant_id required for audit')
         records = [row for row in records if str(row.get('tenant_id') or '') == str(tenant_id)]
