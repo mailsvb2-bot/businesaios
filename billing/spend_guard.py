@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from collections.abc import Mapping
 from dataclasses import dataclass, field
+from datetime import UTC, datetime
 
 from billing.commercial_cycle_contract import SpendGuardVerdict, require_commercial_int
 from billing.ledger_store import LedgerStoreContract
@@ -18,6 +19,7 @@ class SpendLimitPolicy:
     cycle_limit_minor: int | None = None
     hard_stop: bool = True
     metadata: Mapping[str, object] = field(default_factory=dict)
+    cycle_started_at: datetime | None = None
 
     def validate(self) -> None:
         require_tenant_id(self.tenant_id)
@@ -33,6 +35,8 @@ class SpendLimitPolicy:
             raise ValueError("currency is required")
         if not isinstance(self.metadata, Mapping):
             raise ValueError("metadata must be a mapping")
+        if self.cycle_started_at is not None and self.cycle_started_at.tzinfo is None:
+            raise ValueError('cycle_started_at must be timezone-aware')
 
 
 class SpendGuard:
@@ -51,8 +55,13 @@ class SpendGuard:
         policy: SpendLimitPolicy,
         pending_minor: int,
         revenue_account: str = "billing.accounts.revenue",
+        now: datetime | None = None,
     ) -> SpendGuardVerdict:
         policy.validate()
+        moment = now or datetime.now(UTC)
+        if moment.tzinfo is None:
+            raise ValueError('now must be timezone-aware')
+        cycle_start = policy.cycle_started_at or moment.astimezone(UTC).replace(day=1, hour=0, minute=0, second=0, microsecond=0)
         delta_minor = require_commercial_int(
             "pending_minor",
             pending_minor,
@@ -81,11 +90,7 @@ class SpendGuard:
             return verdict
         observed_minor = require_commercial_int(
             "observed_minor",
-            self._ledger_store.total_for_account(
-                tenant_id=policy.tenant_id,
-                account_code=revenue_account,
-                side="credit",
-            ),
+            self._cycle_credit_total(tenant_id=policy.tenant_id, account_code=revenue_account, cycle_started_at=cycle_start),
             minimum=0,
         )
         projected_total = observed_minor + delta_minor
@@ -105,6 +110,7 @@ class SpendGuard:
             metadata={
                 "observed_minor": observed_minor,
                 "pending_minor": delta_minor,
+                "cycle_started_at": cycle_start.isoformat(),
                 "currency": policy_currency,
                 **dict(policy.metadata),
             },
@@ -118,6 +124,20 @@ class SpendGuard:
                 labels={"reason": reason},
             )
         return verdict
+
+    def _cycle_credit_total(self, *, tenant_id: str, account_code: str, cycle_started_at: datetime) -> int:
+        total = 0
+        for posting in self._ledger_store.list_postings(tenant_id=tenant_id):
+            for entry in posting.entries:
+                if entry.account_code != account_code or str(entry.side).strip().lower() != 'credit':
+                    continue
+                booked_at = getattr(entry, 'booked_at', None)
+                # Unknown timestamps count conservatively rather than underreporting spending.
+                if isinstance(booked_at, datetime) and booked_at.tzinfo is not None and booked_at < cycle_started_at:
+                    continue
+                amount = require_commercial_int('amount_minor', entry.amount_minor, minimum=0)
+                total += amount
+        return total
 
     def _account_currencies(self, *, tenant_id: str, account_code: str) -> set[str]:
         currencies: set[str] = set()
