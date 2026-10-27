@@ -205,7 +205,14 @@ def refund_payment(st: State, arg: str) -> dict[str, Any] | None:
     pay = st.payments.get(stable_id("pay", p[0].casefold()))
     if pay is None:
         raise ValueError("payment_not_found")
-    refund_id = stable_id("refund", pay.payment_id, (p[2] if len(p) > 2 and p[2] else p[0]).casefold())
+    if len(p) > 2 and p[2]:
+        refund_id = stable_id("refund", pay.payment_id, p[2].casefold())
+    elif len(p) > 1 and p[1]:
+        # Every unreferenced partial refund receives a distinct event identity.
+        refund_id = stable_id("refund", pay.payment_id, f"auto:{len(pay.refunds) + 1}")
+    else:
+        # A repeat request for the full remainder is still idempotent.
+        refund_id = stable_id("refund", pay.payment_id, p[0].casefold())
     if refund_id in pay.refunds:
         return None
     minor = pay.remaining_minor if len(p) < 2 or not p[1] else parse_money(f"{p[1]} {pay.currency}")[0]
