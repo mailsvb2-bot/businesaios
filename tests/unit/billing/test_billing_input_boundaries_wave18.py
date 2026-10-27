@@ -185,7 +185,7 @@ def test_spend_guard_strict_policy_and_amount_boundaries() -> None:
         with pytest.raises(ValueError, match='pending_minor'):
             guard.check(policy=SpendLimitPolicy(tenant_id='tenant-a'), pending_minor=value)
     for value in (True, '1', 1.5, -1):
-        with pytest.raises(ValueError, match='observed_minor'):
+        with pytest.raises(ValueError, match='amount_minor'):
             SpendGuard(ledger_store=_Ledger(entries=(SimpleNamespace(account_code='billing.accounts.revenue', side='credit', amount_minor=value, currency='USD', booked_at=NOW),))).check(policy=SpendLimitPolicy(tenant_id='tenant-a'), pending_minor=1, now=NOW)
     mixed = SpendGuard(ledger_store=_Ledger(entries=(SimpleNamespace(account_code='billing.accounts.revenue', currency='EUR'), SimpleNamespace(account_code='other', currency='GBP')))).check(policy=SpendLimitPolicy(tenant_id='tenant-a', cycle_limit_minor=100), pending_minor=1)
     assert mixed.allowed is False
