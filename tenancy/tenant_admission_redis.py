@@ -77,10 +77,10 @@ class RedisTenantAdmissionBackend(TenantAdmissionBackend):
             local existing_labels = redis.call('HGET', lease_key, 'labels_json')
             local existing_acquired_at = redis.call('HGET', lease_key, 'acquired_at')
             if existing_owner ~= owner_id then
-                return {0, 'lease_owned_by_another_owner', redis.call('ZCARD', active_key), ''}
+                return {0, 'lease_owned_by_another_owner', redis.call('ZCARD', active_key), '', ''}
             end
             if existing_labels ~= labels_json then
-                return {0, 'lease_labels_mismatch', redis.call('ZCARD', active_key), ''}
+                return {0, 'lease_labels_mismatch', redis.call('ZCARD', active_key), '', ''}
             end
             redis.call('HSET', lease_key,
                 'tenant_id', tenant_id,
@@ -285,7 +285,7 @@ class RedisTenantAdmissionBackend(TenantAdmissionBackend):
         end
         return out
         """
-        raw = self._redis.eval(script, 1, active_key, self._lease_key(tid, ''), str(now.timestamp()))
+        raw = self._redis.eval(script, 1, active_key, f"{self._tenant_key(tid)}:lease:", str(now.timestamp()))
         leases: list[TenantAdmissionLease] = []
         for index in range(0, len(raw), 5):
             run_id, owner_id, fencing_token, acquired_at_iso, expires_at_iso = raw[index:index + 5]
