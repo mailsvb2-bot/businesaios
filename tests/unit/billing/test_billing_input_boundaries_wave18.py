@@ -186,7 +186,7 @@ def test_spend_guard_strict_policy_and_amount_boundaries() -> None:
             guard.check(policy=SpendLimitPolicy(tenant_id='tenant-a'), pending_minor=value)
     for value in (True, '1', 1.5, -1):
         with pytest.raises(ValueError, match='observed_minor'):
-            SpendGuard(ledger_store=_Ledger(total=value)).check(policy=SpendLimitPolicy(tenant_id='tenant-a'), pending_minor=1)
+            SpendGuard(ledger_store=_Ledger(entries=(SimpleNamespace(account_code='billing.accounts.revenue', side='credit', amount_minor=value, currency='USD', booked_at=NOW),))).check(policy=SpendLimitPolicy(tenant_id='tenant-a'), pending_minor=1, now=NOW)
     mixed = SpendGuard(ledger_store=_Ledger(entries=(SimpleNamespace(account_code='billing.accounts.revenue', currency='EUR'), SimpleNamespace(account_code='other', currency='GBP')))).check(policy=SpendLimitPolicy(tenant_id='tenant-a', cycle_limit_minor=100), pending_minor=1)
     assert mixed.allowed is False
     assert mixed.reason == 'mixed_currency_ledger'
@@ -197,7 +197,7 @@ def test_spend_guard_strict_policy_and_amount_boundaries() -> None:
     soft = guard.check(policy=SpendLimitPolicy(tenant_id='tenant-a', cycle_limit_minor=40, hard_stop=False), pending_minor=50)
     assert soft.allowed is True and soft.reason == 'spend_limit_soft_exceeded'
     metrics = _Metrics()
-    measured = SpendGuard(ledger_store=_Ledger(entries=(SimpleNamespace(account_code='billing.accounts.revenue', side='credit', amount_minor=10, currency='USD', booked_at=NOW),)), metrics=metrics).check(policy=SpendLimitPolicy(tenant_id='tenant-a', cycle_limit_minor=100), pending_minor=20)
+    measured = SpendGuard(ledger_store=_Ledger(entries=(SimpleNamespace(account_code='billing.accounts.revenue', side='credit', amount_minor=10, currency='USD', booked_at=NOW),)), metrics=metrics).check(policy=SpendLimitPolicy(tenant_id='tenant-a', cycle_limit_minor=100), pending_minor=20, now=NOW)
     assert measured.projected_minor == 30
     assert metrics.calls[0][0] == 'gauge'
 
