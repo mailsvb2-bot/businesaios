@@ -17,6 +17,9 @@ from __future__ import annotations
 
 from collections.abc import Iterable
 from dataclasses import dataclass
+import logging
+
+_LOG = logging.getLogger(__name__)
 from typing import Any
 
 from core.pricing.rl_picker import RLPricingConfig, choose_price_rub
@@ -58,30 +61,31 @@ def suggest_prices_for_plans(
             if pid <= 0 or base <= 0 or not arm:
                 continue
 
-            pick = choose_price_rub(
+            suggested, _choice_evidence = choose_price_rub(
                 event_store,
                 tenant_id=str(tenant_id),
                 offer_arm=str(arm),
                 base_price_rub=int(base),
-                config=config.rl,
+                cfg=config.rl,
                 context_key=str(context_key or "").strip(),
             )
-            suggested = int(pick.price_rub)
+            suggested = int(suggested)
 
             if config.stop_loss.enabled:
-                gate = should_apply_price(
+                allowed, _guard_evidence = should_apply_price(
                     event_store,
                     tenant_id=str(tenant_id),
                     offer_arm=str(arm),
                     candidate_price_rub=int(suggested),
                     base_price_rub=int(base),
                     context_key=str(context_key or "").strip(),
-                    config=config.stop_loss,
+                    cfg=config.stop_loss,
                 )
-                if not gate.allow:
+                if not allowed:
                     suggested = int(base)
 
             out[str(pid)] = int(suggested)
-        except Exception:
+        except (TypeError, ValueError, KeyError, AttributeError) as exc:
+            _LOG.warning('autopricing plan rejected: %s', type(exc).__name__)
             continue
     return out
