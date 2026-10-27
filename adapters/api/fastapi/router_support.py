@@ -178,6 +178,6 @@ def require_platform_scope(principal) -> None:
     roles = tuple(principal.roles or ())
     tenant = str(principal.tenant_id or '').strip()
     operator_tenants = {s.strip() for s in env_str('API_PLATFORM_OPERATOR_TENANT_IDS', '').split(',') if s.strip()}
-    if RoleId.SYSTEM in roles or (tenant in operator_tenants and RoleId.ADMIN in roles):
+    if RoleId.SYSTEM in roles or (tenant in operator_tenants and RoleId.OPERATOR in roles):
         return
     raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail='platform_scope_required')
