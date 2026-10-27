@@ -54,7 +54,7 @@ def test_provider_truth_matrix_payload_contains_required_provider_truth_fields()
 
 def test_provider_truth_matrix_route_is_registered_once() -> None:
     router = APIRouter()
-    register_provider_truth_matrix_routes(router=router)
+    register_provider_truth_matrix_routes(router=router, auth_bundle=object())
     routes = [getattr(route, "path", "") for route in router.routes]
     assert routes.count(PROVIDER_TRUTH_MATRIX_ROUTE) == 1
 
