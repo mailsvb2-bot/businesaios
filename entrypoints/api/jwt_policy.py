@@ -182,7 +182,7 @@ class JwtPolicy:
         if header.get('typ') != 'JWT':
             raise ValueError('invalid_jwt_type')
         expected_sig = self._sign(f'{header_b64}.{payload_b64}'.encode('ascii'))
-        if not hmac.compare_digest(expected_sig, sig_b64):
+        if not hmac.compare_digest(expected_sig.encode('ascii'), sig_b64.encode('utf-8')):
             raise ValueError('bad_jwt_signature')
         moment = now or utc_now()
         if moment.tzinfo is None:
