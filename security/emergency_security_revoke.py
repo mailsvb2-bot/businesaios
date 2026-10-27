@@ -14,6 +14,8 @@ class EmergencyRevokeReport:
     revoked_token_fingerprints: tuple[str, ...]
     incident_id: int
     reason: str
+    failed_key_ids: tuple[str, ...] = ()
+    failed_token_fingerprints: tuple[str, ...] = ()
 
 
 class EmergencySecurityRevoke:
@@ -64,6 +66,8 @@ class EmergencySecurityRevoke:
             revoked_token_fingerprints=tuple(revoked_tokens),
             incident_id=incident_id,
             reason='emergency revoke incomplete' if (failed_keys or failed_tokens) else 'emergency revoke executed',
+            failed_key_ids=tuple(failed_keys),
+            failed_token_fingerprints=tuple(failed_tokens),
         )
 
 
