@@ -24,7 +24,7 @@ def test_clientplatform_settings_use_existing_cockpit_action():
             pm=lambda **kwargs: (_ for _ in ()).throw(AssertionError("must route through canonical action")),
         )
         assert result is not None
-        assert result.action_type == "business_ops_summary@v1"
+        assert result.action == "business_ops_summary@v1"
         assert result.payload["op"] == "cockpit"
         assert result.payload["arg"] == screen
         assert result.payload["callback_query_id"] == "cbq-1"
