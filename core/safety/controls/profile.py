@@ -212,7 +212,10 @@ def build_default_profile(
     if tenant_config_store is None:
         tenant_config_store = PersistentTenantConfigStore() if persistent else InMemoryTenantConfigStore()
     key_registry = SafetyKeyRegistry()
-    key_registry.assert_secure_current()
+    try:
+        key_registry.assert_secure_current()
+    except RuntimeError as exc:
+        raise ValueError('safety boot integrity check failed: ' + str(exc)) from exc
     policy_manifest_signer = PolicyManifestSigner(key_registry=key_registry)
     policy_trust_chain = PolicyTrustChain(path=safety_jsonl_path('policy_trust_chain'), snapshot_path=safety_jsonl_path('policy_trust_chain_snapshot')) if persistent else PolicyTrustChain()
     tenant_policy_resolver = TenantSafetyPolicyResolver(tenant_config_store, manifest_signer=policy_manifest_signer, trust_chain=policy_trust_chain)
