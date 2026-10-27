@@ -76,7 +76,12 @@ def test_sqlite_collection_store_persists_idempotent_results(tmp_path: Path) -> 
     replayed_invoice, replayed_result = orchestrator.collect(invoice=invoice, idempotency_key='idem-1')
     assert first_result == replayed_result
     assert first_invoice.paid_minor == 1200
-    assert replayed_invoice.paid_minor == 1200
+    # The stale caller invoice cannot be credited twice on idempotent replay.
+    assert replayed_invoice is invoice
+    assert replayed_invoice.paid_minor == 0
+    replayed_current, same_result = orchestrator.collect(invoice=first_invoice, idempotency_key='idem-1')
+    assert replayed_current is first_invoice
+    assert same_result == first_result
     reloaded = SqliteCollectionResultStore(sqlite_path=str(tmp_path / 'billing.sqlite3'))
     assert len(reloaded.list_for_invoice('inv-1', tenant_id='tenant-a')) == 1
     assert reloaded.get_by_idempotency(tenant_id='tenant-a', invoice_id='inv-1', idempotency_key='idem-1') == first_result
