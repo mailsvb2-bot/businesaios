@@ -260,6 +260,7 @@ def start_telegram_webhook_server_in_thread(
 def start_yookassa_webhook_server_in_thread(*, host: str, port: int, path: str, event_store: Any, payment_outbox: Any) -> Any:
     import json
     import os
+    import hmac
     import threading
     from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
@@ -309,7 +310,7 @@ def start_yookassa_webhook_server_in_thread(*, host: str, port: int, path: str, 
                 return
             if auth_mode == "token" and expected_token:
                 observed_token = str(self.headers.get("X-Webhook-Token", "")).strip()
-                if not __import__("hmac").compare_digest(observed_token.encode("utf-8"), expected_token.encode("utf-8")):
+                if not hmac.compare_digest(observed_token.encode("utf-8"), expected_token.encode("utf-8")):
                     self._send_json(401, {"ok": False, "code": "unauthorized"})
                     return
             size = int(self.headers.get("content-length") or 0)
