@@ -75,7 +75,7 @@ def test_refund_orchestrator_new_partial_full_and_provider_affinity() -> None:
     assert metrics.calls[0]["metric_name"]=="billing_refunds_total"
     provider2=_Provider(payload={"external_reference":"external-only"})
     updated2,result2,_,_=RefundOrchestrator(provider=provider2,ledger_store=InMemoryLedgerStore(),monetization_service=MonetizationService()).refund(invoice=_invoice(),user_id="u",amount_minor=100,reason="r",idempotency_key="key-2")
-    assert updated2.status is InvoiceLifecycleStatus.ISSUED and updated2.paid_minor==0 and result2.refund_id
+    assert updated2.status is InvoiceLifecycleStatus.CREDITED and updated2.paid_minor==0 and result2.refund_id
     with pytest.raises(ValueError,match="provider must match"):
         RefundOrchestrator(provider=_Provider(name="other"),ledger_store=InMemoryLedgerStore(),monetization_service=MonetizationService()).refund(invoice=_invoice(metadata={"provider_customer_id":"provider-a:customer"}),user_id="u",amount_minor=1,reason="r",idempotency_key="k")
 
@@ -89,7 +89,7 @@ def test_refund_orchestrator_replay_statuses_and_idempotent_invoice() -> None:
     unchanged,*_=orch.refund(invoice=first_invoice,user_id="u",amount_minor=999,reason="different",idempotency_key="key"); assert unchanged==first_invoice
     store2=InMemoryRefundStore(); existing=replace(first,refund_id="zero",amount_minor=100); store2.save(existing,idempotency_key="zero-key")
     zero_invoice,*_=RefundOrchestrator(provider=provider,ledger_store=InMemoryLedgerStore(),monetization_service=money,refund_store=store2).refund(invoice=_invoice(),user_id="u",amount_minor=999,reason="r",idempotency_key="zero-key")
-    assert zero_invoice.status is InvoiceLifecycleStatus.ISSUED and zero_invoice.paid_minor==0
+    assert zero_invoice.status is InvoiceLifecycleStatus.CREDITED and zero_invoice.paid_minor==0
 
 
 def test_refund_orchestrator_fail_closed_matrix() -> None:
