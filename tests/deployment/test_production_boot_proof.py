@@ -275,6 +275,7 @@ def test_production_boot_is_proved_for_prod_profile(monkeypatch, tmp_path) -> No
     monkeypatch.setenv('BUSINESAIOS_DATA_DIR', str(tmp_path / 'runtime_data'))
     monkeypatch.setenv('BUSINESAIOS_KEY_PROVIDER_MASTER_KEY_B64', 'eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHg=')
     monkeypatch.setenv('API_CONTROL_PLANE_API_KEY_PEPPER', 'prod-proof-pepper')
+    monkeypatch.setenv('API_PLATFORM_OPERATOR_TENANT_IDS', 'tenant-proof')
     monkeypatch.setenv('DECISION_SIGNING_KID', 'prod-proof-signing-k1')
     monkeypatch.setenv('DECISION_SIGNING_SECRET', 'prod-proof-decision-signing-secret')
     tenant_registry = PersistentTenantRegistry(path=tmp_path / 'tenant_registry.json')
@@ -284,7 +285,7 @@ def test_production_boot_is_proved_for_prod_profile(monkeypatch, tmp_path) -> No
         tenant_id='tenant-proof',
         subject='prod-proof-control-plane',
         actor_id='prod-proof-control-plane',
-        roles=(RoleId.OWNER,),
+        roles=(RoleId.OWNER, RoleId.OPERATOR),
         scopes=('control_plane:read', 'control_plane:admin', 'api.public.execute_action'),
         display_name='Production proof control-plane principal',
         metadata={'proof': 'production_boot'},
