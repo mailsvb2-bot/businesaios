@@ -42,7 +42,7 @@ def test_network_side_effects_payload_summary_counts_match_manifest() -> None:
 
 def test_network_side_effects_route_is_registered_once() -> None:
     router = APIRouter()
-    register_network_side_effects_routes(router=router)
+    register_network_side_effects_routes(router=router, auth_bundle=object())
     routes = [getattr(route, "path", "") for route in router.routes]
     assert routes.count(NETWORK_SIDE_EFFECTS_ROUTE) == 1
 
