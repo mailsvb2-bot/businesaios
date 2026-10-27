@@ -197,7 +197,7 @@ def test_spend_guard_strict_policy_and_amount_boundaries() -> None:
     soft = guard.check(policy=SpendLimitPolicy(tenant_id='tenant-a', cycle_limit_minor=40, hard_stop=False), pending_minor=50)
     assert soft.allowed is True and soft.reason == 'spend_limit_soft_exceeded'
     metrics = _Metrics()
-    measured = SpendGuard(ledger_store=_Ledger(total=10), metrics=metrics).check(policy=SpendLimitPolicy(tenant_id='tenant-a', cycle_limit_minor=100), pending_minor=20)
+    measured = SpendGuard(ledger_store=_Ledger(entries=(SimpleNamespace(account_code='billing.accounts.revenue', side='credit', amount_minor=10, currency='USD', booked_at=NOW),)), metrics=metrics).check(policy=SpendLimitPolicy(tenant_id='tenant-a', cycle_limit_minor=100), pending_minor=20)
     assert measured.projected_minor == 30
     assert metrics.calls[0][0] == 'gauge'
 
@@ -258,7 +258,7 @@ def test_payment_collection_replay_safety_and_provider_result_binding() -> None:
     orchestrator = PaymentCollectionOrchestrator(provider=provider, result_store=store)
     replayed, same = orchestrator.collect(invoice=issued, idempotency_key='replay')
     assert same is existing
-    assert replayed.paid_minor == 40
+    assert replayed is issued  # idempotent replay MUST NOT credit earlier payment again
     assert provider.attempts == []
     fully_paid = InvoiceLifecycleService().record_payment(issued, amount_minor=100, paid_at=NOW)
     replayed_paid, _ = orchestrator.collect(invoice=fully_paid, idempotency_key='replay')
