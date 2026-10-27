@@ -129,6 +129,25 @@ class QuotaEnforcer:
             dimension=dim,
             amount=legacy_float(requested, name="requested"),
         )
+        if not guard_verdict.allowed:
+            refused = self._make_decision(
+                tenant_id=tid,
+                dimension=dim,
+                requested=requested,
+                allowed=False,
+                used=quantity_decimal(guard_verdict.used, name='used'),
+                limit=None if guard_verdict.limit is None else quantity_decimal(guard_verdict.limit, name='limit'),
+                remaining=None if guard_verdict.remaining is None else quantity_decimal(guard_verdict.remaining, name='remaining'),
+                reason=str(guard_verdict.reason or 'quota exceeded'),
+                hard_stop=policy.hard_stop_for(dim),
+                meter_key=meter_key,
+                metered=False,
+                policy=policy,
+                overage_amount=Decimal('0'),
+                extra_metadata={'guard_limit_materialized': guard_verdict.limit is not None, **dict(metadata or {})},
+            )
+            self._emit_metrics(refused)
+            return refused
         metered = False
         if self._usage_meter is not None and meter_key:
             self._usage_meter.record(
