@@ -122,8 +122,12 @@ def validate_runtime_objects(*, tenant_id: str, event_store: Any, event_log: Any
         raise
     except TypeError as exc:
         _fail(f"event_store append_event contract is unusable: {exc}")
-    except Exception:
-        swallow(__name__, "runtime/boot/tenant_hard_gate.py")
+    except ValueError as exc:
+        # Only an explicit tenant-validation rejection proves the negative probe.
+        if "tenant_id" not in str(exc):
+            _fail("event_store empty-tenant probe rejected for unrelated reason")
+    except Exception as exc:
+        _fail(f"event_store empty-tenant probe failed unexpectedly: {type(exc).__name__}")
 
     emit = getattr(event_log, "emit", None)
     if not callable(emit):
