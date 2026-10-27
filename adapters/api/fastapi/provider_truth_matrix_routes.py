@@ -2,7 +2,9 @@ from __future__ import annotations
 
 from typing import Any
 
-from fastapi import APIRouter
+from adapters.api.fastapi.router_support import authorize_request, require_platform_scope
+
+from fastapi import APIRouter, Request
 
 from application.business_autonomy.provider_truth_matrix import list_provider_truth_payloads, summarize_provider_truth
 
@@ -26,9 +28,14 @@ def provider_truth_matrix_payload(*, tenant_id: str, business_id: str = "default
     }
 
 
-def register_provider_truth_matrix_routes(*, router: APIRouter) -> None:
+def register_provider_truth_matrix_routes(*, router: APIRouter, auth_bundle) -> None:
     @router.get(PROVIDER_TRUTH_MATRIX_ROUTE, tags=["control-plane", "providers"])
-    async def control_plane_provider_truth_matrix(tenant_id: str = "tenant-demo", business_id: str = "default-business") -> dict[str, Any]:
+    async def control_plane_provider_truth_matrix(request: Request, tenant_id: str = "tenant-demo", business_id: str = "default-business") -> dict[str, Any]:
+        _, principal = authorize_request(request=request, auth_bundle=auth_bundle)
+        require_platform_scope(principal)
+        if str(principal.tenant_id) != str(tenant_id) and str(tenant_id) != 'tenant-demo':
+            from fastapi import HTTPException
+            raise HTTPException(status_code=403, detail='tenant_scope_mismatch')
         return provider_truth_matrix_payload(tenant_id=tenant_id, business_id=business_id)
 
 
