@@ -18,35 +18,41 @@ class AuditRouteHandlers:
     decision_audit_log: DecisionAuditLog = field(default_factory=build_default_decision_audit_log)
     audit_redaction_policy: AuditRedactionPolicy = field(default_factory=AuditRedactionPolicy)
 
-    def list_actions(self, *, trace_id: str | None = None, limit: int = 100) -> dict[str, Any]:
+    def list_actions(self, *, tenant_id: str, trace_id: str | None = None, limit: int = 100) -> dict[str, Any]:
         cap = max(0, min(int(limit), 1000))
         if trace_id:
             records = self.action_audit_log.list_by_trace(trace_id=trace_id, limit=cap)
         else:
             records = list(self.action_audit_log.records[-cap:]) if cap else []
+        if not str(tenant_id or '').strip():
+            raise ValueError('tenant_id required for audit')
+        records = [row for row in records if str(row.get('tenant_id') or '') == str(tenant_id)]
         return {
             'kind': 'action_audit',
             'count': len(records),
             'records': [self.audit_redaction_policy.redact_event_dict(item) for item in records],
         }
 
-    def list_decisions(self, *, trace_id: str | None = None, limit: int = 100) -> dict[str, Any]:
+    def list_decisions(self, *, tenant_id: str, trace_id: str | None = None, limit: int = 100) -> dict[str, Any]:
         cap = max(0, min(int(limit), 1000))
         if trace_id:
             records = self.decision_audit_log.list_by_trace(trace_id=trace_id, limit=cap)
         else:
             records = list(self.decision_audit_log.records[-cap:]) if cap else []
+        if not str(tenant_id or '').strip():
+            raise ValueError('tenant_id required for audit')
+        records = [row for row in records if str(row.get('tenant_id') or '') == str(tenant_id)]
         return {
             'kind': 'decision_audit',
             'count': len(records),
             'records': [self.audit_redaction_policy.redact_event_dict(item) for item in records],
         }
 
-    def latest_trace(self, *, trace_id: str) -> dict[str, Any]:
+    def latest_trace(self, *, tenant_id: str, trace_id: str) -> dict[str, Any]:
         return {
             'trace_id': str(trace_id),
-            'actions': self.list_actions(trace_id=trace_id, limit=200)['records'],
-            'decisions': self.list_decisions(trace_id=trace_id, limit=200)['records'],
+            'actions': self.list_actions(tenant_id=tenant_id, trace_id=trace_id, limit=200)['records'],
+            'decisions': self.list_decisions(tenant_id=tenant_id, trace_id=trace_id, limit=200)['records'],
         }
 
 
