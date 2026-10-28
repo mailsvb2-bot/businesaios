@@ -179,96 +179,46 @@ class QuotaEnforcer:
         self._emit_metrics(decision)
         return decision
 
-    def _check_decision(
-        self,
-        *,
-        tenant_id: str,
-        dimension: str,
-        requested: Decimal,
-        meter_key: str | None,
-        policy: EffectiveQuotaPolicy,
-        used: Decimal,
-        extra_metadata: Mapping[str, object] | None = None,
-    ) -> QuotaEnforcementDecision:
-        raw_limit = policy.limit_for(dimension)
-        limit = (
-            None
-            if raw_limit is None
-            else quantity_decimal(raw_limit, name="limit")
-        )
-        hard_stop = policy.hard_stop_for(dimension)
-        remaining = None if limit is None else max(Decimal("0"), limit - used)
-        allowed = True
-        reason = "ok"
-        if limit is not None and requested > remaining:
-            if hard_stop or not policy.allow_overage:
-                allowed = False
-                reason = "quota exceeded"
-            else:
-                reason = "overage allowed"
-        return self._make_decision(
-            tenant_id=tenant_id,
-            dimension=dimension,
-            requested=requested,
-            allowed=allowed,
-            used=used,
-            limit=limit,
-            remaining=remaining,
-            reason=reason,
-            hard_stop=hard_stop,
-            meter_key=meter_key,
-            metered=False,
-            policy=policy,
-            overage_amount=Decimal("0"),
-            extra_metadata=extra_metadata,
-        )
+    def _check_decision(self, *, tenant_id: str, dimension: str, requested: Decimal,
+                        meter_key: str | None, policy: EffectiveQuotaPolicy, used: Decimal,
+                        extra_metadata: Mapping[str, object] | None = None) -> QuotaEnforcementDecision:
+        return self._quota_decision(tenant_id=tenant_id, dimension=dimension,
+                                    requested=requested, meter_key=meter_key, policy=policy,
+                                    used=used, metered=False, consumed=False,
+                                    extra_metadata=extra_metadata)
 
-    def _consumed_decision(
-        self,
-        *,
-        tenant_id: str,
-        dimension: str,
-        requested: Decimal,
-        meter_key: str | None,
-        policy: EffectiveQuotaPolicy,
-        used: Decimal,
-        metered: bool,
-        extra_metadata: Mapping[str, object] | None = None,
-    ) -> QuotaEnforcementDecision:
+    def _consumed_decision(self, *, tenant_id: str, dimension: str, requested: Decimal,
+                           meter_key: str | None, policy: EffectiveQuotaPolicy, used: Decimal,
+                           metered: bool, extra_metadata: Mapping[str, object] | None = None) -> QuotaEnforcementDecision:
+        return self._quota_decision(tenant_id=tenant_id, dimension=dimension,
+                                    requested=requested, meter_key=meter_key, policy=policy,
+                                    used=used, metered=metered, consumed=True,
+                                    extra_metadata=extra_metadata)
+
+    def _quota_decision(self, *, tenant_id: str, dimension: str, requested: Decimal,
+                        meter_key: str | None, policy: EffectiveQuotaPolicy, used: Decimal,
+                        metered: bool, consumed: bool,
+                        extra_metadata: Mapping[str, object] | None) -> QuotaEnforcementDecision:
         raw_limit = policy.limit_for(dimension)
-        limit = (
-            None
-            if raw_limit is None
-            else quantity_decimal(raw_limit, name="limit")
-        )
+        limit = None if raw_limit is None else quantity_decimal(raw_limit, name="limit")
         hard_stop = policy.hard_stop_for(dimension)
         remaining = None if limit is None else max(Decimal("0"), limit - used)
-        overage_amount = (
-            Decimal("0")
-            if limit is None
-            else max(Decimal("0"), used - limit)
-        )
-        reason = "consumed"
-        if overage_amount > 0:
-            reason = (
-                "overage allowed"
-                if policy.allow_overage and not hard_stop
-                else "quota exceeded"
-            )
+        overage = max(Decimal("0"), used - limit) if consumed and limit is not None else Decimal("0")
+        if consumed:
+            allowed = True
+            reason = "consumed"
+            if overage > 0:
+                reason = "overage allowed" if policy.allow_overage and not hard_stop else "quota exceeded"
+        else:
+            allowed = limit is None or requested <= remaining or (not hard_stop and policy.allow_overage)
+            reason = "ok"
+            if limit is not None and requested > remaining:
+                reason = "quota exceeded" if not allowed else "overage allowed"
         return self._make_decision(
-            tenant_id=tenant_id,
-            dimension=dimension,
-            requested=requested,
-            allowed=True,
-            used=used,
-            limit=limit,
-            remaining=remaining,
-            reason=reason,
-            hard_stop=hard_stop,
-            meter_key=meter_key,
-            metered=metered,
-            policy=policy,
-            overage_amount=overage_amount,
+            tenant_id=tenant_id, dimension=dimension, requested=requested,
+            allowed=allowed, used=used, limit=limit, remaining=remaining,
+            reason=reason, hard_stop=hard_stop, meter_key=meter_key,
+            metered=metered, policy=policy, overage_amount=overage,
             extra_metadata=extra_metadata,
         )
 
