@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from collections.abc import Mapping
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from datetime import datetime
 from typing import Any
 from uuid import UUID, uuid4, uuid5
@@ -392,13 +392,9 @@ def _apply_refund_to_invoice(invoice: CommercialInvoiceEnvelope, *, refund_id: s
         return invoice
     new_paid_minor = max(0, int(invoice.paid_minor) - int(amount_minor))
     refunded_minor = int(dict(invoice.metadata or {}).get('refunded_minor') or 0) + int(amount_minor)
-    updated = CommercialInvoiceEnvelope(
-        tenant_id=invoice.tenant_id, invoice_id=invoice.invoice_id,
-        business_id=invoice.business_id, subscription_id=invoice.subscription_id,
-        currency=invoice.currency, subtotal_minor=invoice.subtotal_minor,
-        tax_minor=invoice.tax_minor, total_minor=invoice.total_minor,
+    updated = replace(
+        invoice,
         status=invoice.status.CREDITED if new_paid_minor == 0 else invoice.status.PARTIALLY_PAID,
-        issued_at=invoice.issued_at, due_at=invoice.due_at,
         paid_minor=new_paid_minor,
         metadata=derive_lineage_metadata(
             invoice_id=invoice.invoice_id, invoice_metadata=invoice.metadata,
