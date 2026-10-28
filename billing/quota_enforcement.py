@@ -232,16 +232,8 @@ class QuotaEnforcer:
             requested=legacy_float(requested, name="requested"),
             allowed=allowed,
             used=legacy_float(used, name="used"),
-            limit=(
-                None
-                if limit is None
-                else legacy_float(limit, name="limit")
-            ),
-            remaining=(
-                None
-                if remaining is None
-                else legacy_float(remaining, name="remaining")
-            ),
+            limit=None if limit is None else legacy_float(limit, name="limit"),
+            remaining=None if remaining is None else legacy_float(remaining, name="remaining"),
             reason=str(reason),
             hard_stop=hard_stop,
             meter_key=None if meter_key is None else str(meter_key),
@@ -252,10 +244,7 @@ class QuotaEnforcer:
                 "allow_overage": policy.allow_overage,
                 "invoice_enabled": policy.invoice_enabled,
                 "policy_metadata": dict(policy.metadata),
-                "overage_amount": legacy_float(
-                    overage_amount,
-                    name="overage_amount",
-                ),
+                "overage_amount": legacy_float(overage_amount, name="overage_amount"),
                 **dict(extra_metadata or {}),
             },
         )
