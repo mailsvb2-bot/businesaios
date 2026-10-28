@@ -59,7 +59,7 @@ class ProviderInboundWebhookService:
         route_event_key = str(first_route.get('event_key') or f'{provider.provider_key}:{raw_digest[:24]}')
         effective_event_key = route_event_key if provider.provider_key in {'line_messaging', 'viber_messaging'} else (requested_event_key if requested_event_key and requested_event_key != 'payload-digest-fallback' else route_event_key)
         effective_topic = str(topic or '').strip() or str(first_route.get('topic') or '')
-        if contract.enabled and not self.webhook_runtime.verify(provider=provider, tenant_id=tenant_id, business_id=business_id, headers=headers, body=body):
+        if not contract.enabled or not self.webhook_runtime.verify(provider=provider, tenant_id=tenant_id, business_id=business_id, headers=headers, body=body):
             refs = self.audit_recorder.record_webhook_event(tenant_id=tenant_id, business_id=business_id, provider_key=provider.provider_key, event_key=effective_event_key, status='invalid_signature', accepted=False, metadata={'topic': effective_topic, 'verification_kind': contract.verification_kind})
             export_refs = self.export_bridge.export_runtime_event(tenant_id=str(tenant_id), business_id=str(business_id), provider_key=provider.provider_key, event_kind='webhook', payload={'status': 'invalid_signature', 'accepted': False, 'topic': effective_topic})
             self.observability.record_webhook(tenant_id=str(tenant_id), provider_key=provider.provider_key, status='invalid_signature', accepted=False, topic=effective_topic)

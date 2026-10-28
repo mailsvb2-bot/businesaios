@@ -14,6 +14,8 @@ class EmergencyRevokeReport:
     revoked_token_fingerprints: tuple[str, ...]
     incident_id: int
     reason: str
+    failed_key_ids: tuple[str, ...] = ()
+    failed_token_fingerprints: tuple[str, ...] = ()
 
 
 class EmergencySecurityRevoke:
@@ -40,25 +42,32 @@ class EmergencySecurityRevoke:
             },
         )
 
+        failed_keys: list[str] = []
+        failed_tokens: list[str] = []
         revoked_keys: list[str] = []
         for key_id in key_ids:
             try:
                 self._keys.revoke(str(key_id))
                 revoked_keys.append(str(key_id))
             except Exception:
-                continue
+                failed_keys.append(str(key_id))
 
         revoked_tokens: list[str] = []
         for fingerprint in token_fingerprints:
-            self._tokens.revoke(token_fingerprint=str(fingerprint), reason=str(reason))
-            revoked_tokens.append(str(fingerprint))
+            try:
+                self._tokens.revoke(token_fingerprint=str(fingerprint), reason=str(reason))
+                revoked_tokens.append(str(fingerprint))
+            except Exception:
+                failed_tokens.append(str(fingerprint))
 
         return EmergencyRevokeReport(
-            success=True,
+            success=not (failed_keys or failed_tokens),
             revoked_key_ids=tuple(revoked_keys),
             revoked_token_fingerprints=tuple(revoked_tokens),
             incident_id=incident_id,
-            reason='emergency revoke executed',
+            reason='emergency revoke incomplete' if (failed_keys or failed_tokens) else 'emergency revoke executed',
+            failed_key_ids=tuple(failed_keys),
+            failed_token_fingerprints=tuple(failed_tokens),
         )
 
 

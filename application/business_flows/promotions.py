@@ -430,6 +430,11 @@ def outcomes(admin_rows: Iterable[Row], booking_rows: Iterable[Row], *, outcome_
     """Donor list_business_outcomes: raw outcome facts (payment / refund / booking), filtered, newest first."""
     if not 1 <= int(limit) <= 500:
         raise ValueError("limit 1..500")
+    return _all_outcomes(admin_rows, booking_rows, outcome_type=outcome_type, customer_id=customer_id, occurred_from=occurred_from, occurred_to=occurred_to)[:int(limit)]
+
+
+def _all_outcomes(admin_rows: Iterable[Row], booking_rows: Iterable[Row], *, outcome_type: str = "", customer_id: str = "", occurred_from: int | None = None, occurred_to: int | None = None) -> list[dict[str, Any]]:
+    """Unbounded canonical facts; display pagination is never a revenue calculation ceiling."""
     rows: list[dict[str, Any]] = []
     payer: dict[str, str] = {}
     pcur: dict[str, str] = {}
@@ -452,14 +457,14 @@ def outcomes(admin_rows: Iterable[Row], booking_rows: Iterable[Row], *, outcome_
             and (not customer_id or r["customer_id"] == customer_id)
             and (occurred_from is None or r["at_ms"] >= occurred_from)
             and (occurred_to is None or r["at_ms"] < occurred_to)]
-    return sorted(keep, key=lambda r: (-r["at_ms"], r["id"]))[: int(limit)]
+    return sorted(keep, key=lambda r: (-r["at_ms"], r["id"]))
 
 
 def attribute_outcome(admin_rows: list[Row], booking_rows: list[Row], outcome_id: str) -> dict[str, Any] | None:
     """Donor attribute_monetary_outcome: explainable first-touch decision for one monetary outcome.
 
     Deterministic over immutable facts, so re-deriving it is the same as the donor's persisted record."""
-    hit = next((o for o in outcomes(admin_rows, booking_rows, limit=500) if o["id"] == outcome_id
+    hit = next((o for o in _all_outcomes(admin_rows, booking_rows) if o["id"] == outcome_id
                 and o["type"] in ("payment", "refund")), None)
     if hit is None:
         return None
@@ -475,8 +480,7 @@ def attribute_outcome(admin_rows: list[Row], booking_rows: list[Row], outcome_id
 def unit_economics(admin_rows: list[Row], booking_rows: list[Row], *, occurred_from: int, occurred_to: int,
                    verified_spend: tuple[int, str] | None = None) -> dict[str, Any]:
     """Donor get_business_unit_economics: ROAS/CAC only from verified spend in the same currency."""
-    money = [o for o in outcomes(admin_rows, booking_rows, occurred_from=occurred_from, occurred_to=occurred_to,
-                                 limit=500) if o["type"] in ("payment", "refund")]
+    money = [o for o in _all_outcomes(admin_rows, booking_rows, occurred_from=occurred_from, occurred_to=occurred_to) if o["type"] in ("payment", "refund")]
     currencies = {o["currency"] for o in money if o["currency"]}
     if len(currencies) > 1:
         raise ValueError("mixed_currency_outcomes")

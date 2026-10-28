@@ -87,7 +87,8 @@ def test_payment_collection_is_idempotent() -> None:
     paid_second, result_second = orchestrator.collect(invoice=invoice, idempotency_key='x-1')
     assert result_first is result_second
     assert paid_first.paid_minor == 1200
-    assert paid_second.paid_minor == 1200
+    assert paid_second is invoice
+    assert paid_second.paid_minor == 0  # stale caller state is never credited twice
     assert len(store.list_for_invoice('inv-1')) == 1
 
 
@@ -191,7 +192,8 @@ def test_payment_collection_replay_uses_original_collected_amount() -> None:
     partially_paid = InvoiceLifecycleService().record_payment(invoice, amount_minor=200)
     replayed_invoice, replayed_result = orchestrator.collect(invoice=partially_paid, idempotency_key='x-2')
     assert replayed_result is first_result
-    assert replayed_invoice.paid_minor == 1200
+    assert replayed_invoice is partially_paid
+    assert replayed_invoice.paid_minor == 200  # replay is not a second collection
 
 
 def test_invoice_lifecycle_rejects_draft_payment_and_due_before_issue() -> None:

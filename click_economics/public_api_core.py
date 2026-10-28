@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from typing import Any, Mapping
 
+from core.finance.money import to_minor_units
 from economics.contracts import BillableFact
 from .contracts import ClickBillableFact, ClickCommercialFact
 
@@ -57,9 +58,8 @@ def _safe_minor_from_payload(value: object) -> int | None:
     if value in (None, ''):
         return None
     try:
-        if isinstance(value, str) and value.strip().isdigit():
-            return int(value.strip())
-        return int(round(float(value) * 100))
+        # Any click_price (string/int/decimal) is a MAJOR currency unit.
+        return to_minor_units(value, name='click_price')
     except (TypeError, ValueError):
         return None
 

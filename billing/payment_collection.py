@@ -59,6 +59,14 @@ class InMemoryCollectionResultStore:
         return self.idempotency_index.get((str(tenant_id), str(invoice_id), str(idempotency_key)))
 
 
+
+
+def _collectable_minor(invoice: CommercialInvoiceEnvelope) -> int:
+    refunded = require_commercial_int(
+        'refunded_minor', dict(invoice.metadata or {}).get('refunded_minor', 0) or 0, minimum=0
+    )
+    return max(0, int(invoice.remaining_minor) - int(refunded))
+
 class PaymentCollectionOrchestrator:
     def __init__(
         self,
@@ -99,20 +107,12 @@ class PaymentCollectionOrchestrator:
                 != str(invoice.currency).strip().upper()
             ):
                 raise ValueError("replayed collection currency mismatch")
-            replayed_invoice = invoice
-            replay_amount_minor = require_commercial_int(
-                "collected_amount_minor",
-                existing_metadata.get("collected_amount_minor", 0),
-                minimum=0,
-            )
-            if existing.successful and replay_amount_minor > 0 and invoice.remaining_minor > 0:
-                replayed_invoice = self._invoice_lifecycle.record_payment(
-                    invoice, amount_minor=min(invoice.remaining_minor, replay_amount_minor)
-                )
-            return replayed_invoice, existing
+            require_commercial_int('collected_amount_minor', existing_metadata.get('collected_amount_minor', 0), minimum=0)
+            # An idempotent replay is evidence of the earlier collection, never new money.
+            return invoice, existing
         if invoice.status.value in {"draft", "paid", "void", "credited"}:
             raise ValueError("cannot collect invoice from current state")
-        amount_minor = invoice.remaining_minor
+        amount_minor = _collectable_minor(invoice)
         if amount_minor <= 0:
             synthetic = CommercialCollectionResult(
                 invoice_id=invoice.invoice_id,

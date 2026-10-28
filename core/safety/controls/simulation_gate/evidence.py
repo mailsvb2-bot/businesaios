@@ -59,6 +59,9 @@ class SimulationEvidence:
 class SimulationEvidenceVerifier:
     def __init__(self, *, secret: str | None = None) -> None:
         self._secret_text = str(secret or os.getenv('BUSINESAIOS_SIMULATION_EVIDENCE_SECRET') or _DEFAULT_SECRET)
+        envs = {str(os.getenv(name) or '').strip().lower() for name in ('APP_ENV', 'ENV')}
+        if envs & {'prod', 'production', 'stage', 'staging', 'preprod'} and self._secret_text == _DEFAULT_SECRET:
+            raise RuntimeError('simulation_evidence_signing_secret_required')
         self._secret = self._secret_text.encode('utf-8')
         self._key_id = str(os.getenv('BUSINESAIOS_SIMULATION_EVIDENCE_KEY_ID') or _DEFAULT_KEY_ID).strip() or _DEFAULT_KEY_ID
 

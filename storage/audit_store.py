@@ -22,6 +22,12 @@ def utc_now() -> datetime:
     return datetime.now(UTC)
 
 
+def _utc_sortable_iso(value: datetime) -> str:
+    if value.tzinfo is None:
+        raise ValueError('audit timestamp must be timezone-aware')
+    return value.astimezone(UTC).strftime('%Y-%m-%dT%H:%M:%S.%f+00:00')
+
+
 def _json_dumps(payload: object) -> str:
     return json.dumps(payload, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
 
@@ -92,11 +98,11 @@ class AuditRecord:
             "action": record.action,
             "entity_type": record.entity_type,
             "entity_id": record.entity_id,
-            "created_at": record.created_at.isoformat(),
+            "created_at": _utc_sortable_iso(record.created_at),
             "payload_json": _json_dumps(record.payload),
             "payload_sha256": record.payload_sha256,
             "labels_json": _json_dumps(record.labels),
-            "retention_until": None if record.retention_until is None else record.retention_until.isoformat(),
+            "retention_until": None if record.retention_until is None else _utc_sortable_iso(record.retention_until),
             "legal_hold": 1 if record.legal_hold else 0,
         }
 
@@ -207,7 +213,7 @@ class SqliteAuditStore:
         return tuple(AuditRecord.from_row(dict(row)) for row in rows)
 
     def delete_expired(self, *, now: datetime | None = None) -> int:
-        moment = (now or utc_now()).isoformat()
+        moment = _utc_sortable_iso(now or utc_now())
         with self._session_factory.open() as session:
             cursor = session.execute(
                 "DELETE FROM storage_audit_log WHERE legal_hold = 0 AND retention_until IS NOT NULL AND retention_until <= ?",
@@ -278,7 +284,7 @@ class PostgresAuditStore:
         return tuple(AuditRecord.from_row(row) for row in rows)
 
     def delete_expired(self, *, now: datetime | None = None) -> int:
-        moment = (now or utc_now()).isoformat()
+        moment = _utc_sortable_iso(now or utc_now())
         with self._session_factory.open() as session:
             row = session.fetchone(
                 "SELECT COUNT(*) AS deleted_count FROM storage_audit_log WHERE legal_hold = 0 AND retention_until IS NOT NULL AND retention_until <= %s",

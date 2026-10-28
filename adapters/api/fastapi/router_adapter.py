@@ -219,7 +219,7 @@ def create_api_router(*, application_service: object, dependency_container: Fast
     authz_bundle = AuthzDependencyBundle.default()
     tenant_guard = TenantRouteGuard(
         tenant_registry=tenant_registry,
-        require_active_tenant=tenant_registry_has_records(tenant_registry),
+        require_active_tenant=True,
         security_guard=security_bundle.api_surface_guard,
     )
     rate_limit_bundle = RateLimitDependencyBundle(tenant_quota_guard=tenant_quota_guard)
@@ -368,6 +368,6 @@ def create_api_router(*, application_service: object, dependency_container: Fast
         analytics_ops_handlers=analytics_ops_handlers,
         analytics_signed_export_handlers=analytics_signed_export_handlers,
     )
-    register_provider_truth_matrix_routes(router=router)
-    register_network_side_effects_routes(router=router)
+    register_provider_truth_matrix_routes(router=router, auth_bundle=auth_bundle)
+    register_network_side_effects_routes(router=router, auth_bundle=auth_bundle)
     return router

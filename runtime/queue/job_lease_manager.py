@@ -103,10 +103,11 @@ class JobLeaseManager:
         job_id: str,
         owner_id: str | None = None,
         lease_seconds: int | None = None,
+        fencing_token: int | None = None,
         now: datetime | None = None,
     ) -> LeaseHeartbeatReport | None:
         current = self._store.get(tenant_id=tenant_id, job_id=job_id)
-        if current is None:
+        if current is None or (fencing_token is not None and (current.lease is None or current.lease.fencing_token != fencing_token)):
             return None
         effective_owner = self._resolve_owner(owner_id)
         effective_lease_seconds = (
@@ -120,7 +121,7 @@ class JobLeaseManager:
             job_id=job_id,
             owner_id=effective_owner,
             lease_seconds=effective_lease_seconds,
-            fencing_token=(current.lease.fencing_token if current.lease is not None else None),
+            fencing_token=(fencing_token if fencing_token is not None else (current.lease.fencing_token if current.lease is not None else None)),
             now=moment,
         )
         if renewed is None:
@@ -137,14 +138,17 @@ class JobLeaseManager:
         tenant_id: str,
         job_id: str,
         owner_id: str | None = None,
+        fencing_token: int | None = None,
         now: datetime | None = None,
     ) -> JobRecord | None:
         current = self._store.get(tenant_id=tenant_id, job_id=job_id)
+        if fencing_token is not None and (current is None or current.lease is None or current.lease.fencing_token != fencing_token):
+            return None
         return self._store.release_claim(
             tenant_id=tenant_id,
             job_id=job_id,
             owner_id=self._resolve_owner(owner_id),
-            fencing_token=(current.lease.fencing_token if current is not None and current.lease is not None else None),
+            fencing_token=(fencing_token if fencing_token is not None else (current.lease.fencing_token if current is not None and current.lease is not None else None)),
             now=normalize_now(now),
         )
 

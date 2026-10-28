@@ -36,7 +36,9 @@ class SafetyKeyRegistry:
     @property
     def strict_mode(self) -> bool:
         raw = str(os.getenv('BUSINESAIOS_SAFETY_STRICT_KEYS') or os.getenv('BUSINESAIOS_SAFETY_BOOT_STRICT') or '').strip().lower()
-        return raw in {'1', 'true', 'yes', 'on'}
+        production = {'prod', 'production', 'stage', 'staging', 'preprod'}
+        environments = {str(os.getenv(key) or '').strip().lower() for key in ('APP_ENV', 'ENV')}
+        return bool(environments & production) or raw in {'1', 'true', 'yes', 'on'}
 
     @property
     def next_key(self) -> SafetySigningKey | None:

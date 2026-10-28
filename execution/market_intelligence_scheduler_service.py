@@ -57,7 +57,8 @@ class MarketIntelligenceSchedulerService:
             lease_key = f"{tenant_id}:{run['name']}"
             distributed_lease = self.coordination.acquire_schedule_lease(tenant_id=tenant_id, schedule_name=str(run['name'])) if self.coordination is not None else None
             acquired = distributed_lease is not None
-            if not acquired:
+            # Never fall back to local lease when a distributed coordinator exists.
+            if not acquired and self.coordination is None:
                 acquired = self.lease_store.try_acquire(lease_key=lease_key, owner_id=self.owner_id, ttl_seconds=int(self.lease_ttl_seconds))
             if not acquired:
                 results.append({

@@ -3,7 +3,7 @@ from runtime.bootstrap import build_crm_connector_registry, build_crm_provider_r
 
 
 def test_runtime_crm_registries_match() -> None:
-    assert_crm_registry_consistency(
+    assert assert_crm_registry_consistency(
         build_crm_provider_registry(),
         build_crm_connector_registry(),
     ) is None

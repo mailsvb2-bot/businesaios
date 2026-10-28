@@ -8,7 +8,7 @@ from fastapi import APIRouter, HTTPException, Request, status
 from adapters.api.fastapi.analytics_ops_routes import register_analytics_ops_routes
 from adapters.api.fastapi.analytics_signed_export_routes import register_analytics_signed_export_routes
 from adapters.api.fastapi.provider_webhook_routes import register_provider_webhook_routes
-from adapters.api.fastapi.router_support import authorize_request, first_role, json_body, tenant_if_present
+from adapters.api.fastapi.router_support import authorize_request, first_role, json_body, require_platform_scope, tenant_if_present
 from entrypoints.api.control_plane_security_guard import ControlPlaneSecurityGuard
 from entrypoints.api.rbac_route_guards import RoutePermissionGuard
 from entrypoints.api.request_context import RequestContext
@@ -38,7 +38,7 @@ def register_control_plane_routes(*, router: APIRouter, auth_bundle, authz_bundl
         RoutePermissionGuard(permission=Permission.VIEW_AUDIT, action_name=action_name).enforce(principal=principal, request_context=request_context, authz=authz_bundle)
         enforce_control_plane_security(principal=principal, request_context=request_context, action_name=action_name, tenant_id=tenant_id, resource_id=f'audit-actions:{trace_id or "all"}', trace_id=trace_id, limit=limit)
         rate_limit_bundle.require_quota(principal=principal, request_context=request_context, dimension='api_requests_per_hour')
-        return audit_handlers.list_actions(trace_id=trace_id, limit=limit)
+        return audit_handlers.list_actions(tenant_id=tenant_id, trace_id=trace_id, limit=limit)
     @router.get('/control-plane/audit/decisions')
     async def control_plane_list_decision_audit(request: Request, trace_id: str | None = None, limit: int = 100) -> dict[str, Any]:
         request_context, principal = authorize_request(request=request, auth_bundle=auth_bundle)
@@ -47,7 +47,7 @@ def register_control_plane_routes(*, router: APIRouter, auth_bundle, authz_bundl
         RoutePermissionGuard(permission=Permission.VIEW_AUDIT, action_name=action_name).enforce(principal=principal, request_context=request_context, authz=authz_bundle)
         enforce_control_plane_security(principal=principal, request_context=request_context, action_name=action_name, tenant_id=tenant_id, resource_id=f'audit-decisions:{trace_id or "all"}', trace_id=trace_id, limit=limit)
         rate_limit_bundle.require_quota(principal=principal, request_context=request_context, dimension='api_requests_per_hour')
-        return audit_handlers.list_decisions(trace_id=trace_id, limit=limit)
+        return audit_handlers.list_decisions(tenant_id=tenant_id, trace_id=trace_id, limit=limit)
     @router.get('/control-plane/approvals/open')
     async def control_plane_list_open_approvals(request: Request, approval_id: str = '', business_id: str = '') -> dict[str, Any]:
         request_context, principal = authorize_request(request=request, auth_bundle=auth_bundle)
@@ -98,6 +98,7 @@ def register_control_plane_routes(*, router: APIRouter, auth_bundle, authz_bundl
     @router.get('/control-plane/admin/tenants')
     async def control_plane_list_active_tenants(request: Request) -> dict[str, Any]:
         request_context, principal = authorize_request(request=request, auth_bundle=auth_bundle)
+        require_platform_scope(principal)
         action_name = 'api.control_plane.admin.list_tenants'
         RoutePermissionGuard(permission=Permission.MANAGE_TENANT_POLICY, action_name=action_name).enforce(principal=principal, request_context=request_context, authz=authz_bundle)
         enforce_control_plane_security(principal=principal, request_context=request_context, action_name=action_name, tenant_id=principal.tenant_id, resource_id='tenant-registry')
@@ -196,6 +197,7 @@ def register_control_plane_routes(*, router: APIRouter, auth_bundle, authz_bundl
     @router.get('/control-plane/admin/platform-overview')
     async def control_plane_platform_overview(request: Request, tenant_id: str = 'tenant-demo', business_id: str = 'default-business') -> dict[str, Any]:
         request_context, principal = authorize_request(request=request, auth_bundle=auth_bundle)
+        require_platform_scope(principal)
         tenant_guard.enforce(principal=principal, request_context=request_context, tenant_id=tenant_id)
         action_name = 'api.control_plane.admin.platform_overview'
         RoutePermissionGuard(permission=Permission.MANAGE_TENANT_POLICY, action_name=action_name).enforce(principal=principal, request_context=request_context, authz=authz_bundle)
@@ -204,6 +206,7 @@ def register_control_plane_routes(*, router: APIRouter, auth_bundle, authz_bundl
     @router.get('/control-plane/admin/platform-risks')
     async def control_plane_platform_risks(request: Request) -> dict[str, Any]:
         request_context, principal = authorize_request(request=request, auth_bundle=auth_bundle)
+        require_platform_scope(principal)
         action_name = 'api.control_plane.admin.platform_risks'
         RoutePermissionGuard(permission=Permission.MANAGE_TENANT_POLICY, action_name=action_name).enforce(principal=principal, request_context=request_context, authz=authz_bundle)
         enforce_control_plane_security(principal=principal, request_context=request_context, action_name=action_name, tenant_id=principal.tenant_id, resource_id='platform-risk-registry')
@@ -211,6 +214,7 @@ def register_control_plane_routes(*, router: APIRouter, auth_bundle, authz_bundl
     @router.get('/control-plane/admin/platform-dependencies')
     async def control_plane_platform_dependencies(request: Request) -> dict[str, Any]:
         request_context, principal = authorize_request(request=request, auth_bundle=auth_bundle)
+        require_platform_scope(principal)
         action_name = 'api.control_plane.admin.platform_dependencies'
         RoutePermissionGuard(permission=Permission.MANAGE_TENANT_POLICY, action_name=action_name).enforce(principal=principal, request_context=request_context, authz=authz_bundle)
         enforce_control_plane_security(principal=principal, request_context=request_context, action_name=action_name, tenant_id=principal.tenant_id, resource_id='platform-dependencies')
@@ -218,6 +222,7 @@ def register_control_plane_routes(*, router: APIRouter, auth_bundle, authz_bundl
     @router.get('/control-plane/admin/platform-remediation')
     async def control_plane_platform_remediation(request: Request) -> dict[str, Any]:
         request_context, principal = authorize_request(request=request, auth_bundle=auth_bundle)
+        require_platform_scope(principal)
         action_name = 'api.control_plane.admin.platform_remediation'
         RoutePermissionGuard(permission=Permission.MANAGE_TENANT_POLICY, action_name=action_name).enforce(principal=principal, request_context=request_context, authz=authz_bundle)
         enforce_control_plane_security(principal=principal, request_context=request_context, action_name=action_name, tenant_id=principal.tenant_id, resource_id='platform-remediation')
@@ -225,6 +230,7 @@ def register_control_plane_routes(*, router: APIRouter, auth_bundle, authz_bundl
     @router.get('/control-plane/admin/platform-risk-diff')
     async def control_plane_platform_risk_diff(request: Request, tenant_id: str = 'tenant-demo') -> dict[str, Any]:
         request_context, principal = authorize_request(request=request, auth_bundle=auth_bundle)
+        require_platform_scope(principal)
         tenant_guard.enforce(principal=principal, request_context=request_context, tenant_id=tenant_id)
         action_name = 'api.control_plane.admin.platform_risk_diff'
         RoutePermissionGuard(permission=Permission.MANAGE_TENANT_POLICY, action_name=action_name).enforce(principal=principal, request_context=request_context, authz=authz_bundle)
@@ -233,6 +239,7 @@ def register_control_plane_routes(*, router: APIRouter, auth_bundle, authz_bundl
     @router.get('/control-plane/admin/platform-ownership')
     async def control_plane_platform_ownership(request: Request) -> dict[str, Any]:
         request_context, principal = authorize_request(request=request, auth_bundle=auth_bundle)
+        require_platform_scope(principal)
         action_name = 'api.control_plane.admin.platform_ownership'
         RoutePermissionGuard(permission=Permission.MANAGE_TENANT_POLICY, action_name=action_name).enforce(principal=principal, request_context=request_context, authz=authz_bundle)
         enforce_control_plane_security(principal=principal, request_context=request_context, action_name=action_name, tenant_id=principal.tenant_id, resource_id='platform-ownership')
@@ -240,6 +247,7 @@ def register_control_plane_routes(*, router: APIRouter, auth_bundle, authz_bundl
     @router.get('/control-plane/admin/platform-patch-suggestions')
     async def control_plane_platform_patch_suggestions(request: Request) -> dict[str, Any]:
         request_context, principal = authorize_request(request=request, auth_bundle=auth_bundle)
+        require_platform_scope(principal)
         action_name = 'api.control_plane.admin.platform_patch_suggestions'
         RoutePermissionGuard(permission=Permission.MANAGE_TENANT_POLICY, action_name=action_name).enforce(principal=principal, request_context=request_context, authz=authz_bundle)
         enforce_control_plane_security(principal=principal, request_context=request_context, action_name=action_name, tenant_id=principal.tenant_id, resource_id='platform-patch-suggestions')
@@ -247,6 +255,7 @@ def register_control_plane_routes(*, router: APIRouter, auth_bundle, authz_bundl
     @router.get('/control-plane/admin/platform-snapshot-diff-view')
     async def control_plane_platform_snapshot_diff_view(request: Request, tenant_id: str = 'tenant-demo') -> dict[str, Any]:
         request_context, principal = authorize_request(request=request, auth_bundle=auth_bundle)
+        require_platform_scope(principal)
         tenant_guard.enforce(principal=principal, request_context=request_context, tenant_id=tenant_id)
         action_name = 'api.control_plane.admin.platform_snapshot_diff_view'
         RoutePermissionGuard(permission=Permission.MANAGE_TENANT_POLICY, action_name=action_name).enforce(principal=principal, request_context=request_context, authz=authz_bundle)
@@ -255,6 +264,7 @@ def register_control_plane_routes(*, router: APIRouter, auth_bundle, authz_bundl
     @router.get('/control-plane/admin/platform-file-passport')
     async def control_plane_platform_file_passport(request: Request, file_path: str) -> dict[str, Any]:
         request_context, principal = authorize_request(request=request, auth_bundle=auth_bundle)
+        require_platform_scope(principal)
         action_name = 'api.control_plane.admin.platform_file_passport'
         RoutePermissionGuard(permission=Permission.MANAGE_TENANT_POLICY, action_name=action_name).enforce(principal=principal, request_context=request_context, authz=authz_bundle)
         enforce_control_plane_security(principal=principal, request_context=request_context, action_name=action_name, tenant_id=principal.tenant_id, resource_id=f'platform-file-passport:{file_path}')
@@ -262,6 +272,7 @@ def register_control_plane_routes(*, router: APIRouter, auth_bundle, authz_bundl
     @router.get('/control-plane/admin/platform-ownership-drilldown')
     async def control_plane_platform_ownership_drilldown(request: Request, block: str) -> dict[str, Any]:
         request_context, principal = authorize_request(request=request, auth_bundle=auth_bundle)
+        require_platform_scope(principal)
         action_name = 'api.control_plane.admin.platform_ownership_drilldown'
         RoutePermissionGuard(permission=Permission.MANAGE_TENANT_POLICY, action_name=action_name).enforce(principal=principal, request_context=request_context, authz=authz_bundle)
         enforce_control_plane_security(principal=principal, request_context=request_context, action_name=action_name, tenant_id=principal.tenant_id, resource_id=f'platform-ownership-drilldown:{block}')
@@ -269,6 +280,7 @@ def register_control_plane_routes(*, router: APIRouter, auth_bundle, authz_bundl
     @router.get('/control-plane/admin/platform-risk-trends')
     async def control_plane_platform_risk_trends(request: Request, tenant_id: str = 'tenant-demo') -> dict[str, Any]:
         request_context, principal = authorize_request(request=request, auth_bundle=auth_bundle)
+        require_platform_scope(principal)
         tenant_guard.enforce(principal=principal, request_context=request_context, tenant_id=tenant_id)
         action_name = 'api.control_plane.admin.platform_risk_trends'
         RoutePermissionGuard(permission=Permission.MANAGE_TENANT_POLICY, action_name=action_name).enforce(principal=principal, request_context=request_context, authz=authz_bundle)
@@ -277,6 +289,7 @@ def register_control_plane_routes(*, router: APIRouter, auth_bundle, authz_bundl
     @router.get('/control-plane/admin/platform-maturity-trends')
     async def control_plane_platform_maturity_trends(request: Request, tenant_id: str = 'tenant-demo') -> dict[str, Any]:
         request_context, principal = authorize_request(request=request, auth_bundle=auth_bundle)
+        require_platform_scope(principal)
         tenant_guard.enforce(principal=principal, request_context=request_context, tenant_id=tenant_id)
         action_name = 'api.control_plane.admin.platform_maturity_trends'
         RoutePermissionGuard(permission=Permission.MANAGE_TENANT_POLICY, action_name=action_name).enforce(principal=principal, request_context=request_context, authz=authz_bundle)
@@ -285,6 +298,7 @@ def register_control_plane_routes(*, router: APIRouter, auth_bundle, authz_bundl
     @router.get('/control-plane/admin/platform-stop-conditions')
     async def control_plane_platform_stop_conditions(request: Request) -> dict[str, Any]:
         request_context, principal = authorize_request(request=request, auth_bundle=auth_bundle)
+        require_platform_scope(principal)
         action_name = 'api.control_plane.admin.platform_stop_conditions'
         RoutePermissionGuard(permission=Permission.MANAGE_TENANT_POLICY, action_name=action_name).enforce(principal=principal, request_context=request_context, authz=authz_bundle)
         enforce_control_plane_security(principal=principal, request_context=request_context, action_name=action_name, tenant_id=principal.tenant_id, resource_id='platform-stop-conditions')
@@ -292,6 +306,7 @@ def register_control_plane_routes(*, router: APIRouter, auth_bundle, authz_bundl
     @router.get('/control-plane/admin/platform-widget-runtime')
     async def control_plane_platform_widget_runtime(request: Request, tenant_id: str = 'tenant-demo', business_id: str = 'default-business') -> dict[str, Any]:
         request_context, principal = authorize_request(request=request, auth_bundle=auth_bundle)
+        require_platform_scope(principal)
         tenant_guard.enforce(principal=principal, request_context=request_context, tenant_id=tenant_id)
         action_name = 'api.control_plane.admin.platform_widget_runtime'
         RoutePermissionGuard(permission=Permission.VIEW_POLICY, action_name=action_name).enforce(principal=principal, request_context=request_context, authz=authz_bundle)
@@ -300,6 +315,7 @@ def register_control_plane_routes(*, router: APIRouter, auth_bundle, authz_bundl
     @router.get('/control-plane/admin/platform-live-widgets')
     async def control_plane_platform_live_widgets(request: Request, tenant_id: str = 'tenant-demo', business_id: str = 'default-business') -> dict[str, Any]:
         request_context, principal = authorize_request(request=request, auth_bundle=auth_bundle)
+        require_platform_scope(principal)
         tenant_guard.enforce(principal=principal, request_context=request_context, tenant_id=tenant_id)
         action_name = 'api.control_plane.admin.platform_live_widgets'
         RoutePermissionGuard(permission=Permission.MANAGE_TENANT_POLICY, action_name=action_name).enforce(principal=principal, request_context=request_context, authz=authz_bundle)
@@ -308,6 +324,7 @@ def register_control_plane_routes(*, router: APIRouter, auth_bundle, authz_bundl
     @router.get('/control-plane/admin/platform-visual-conflicts')
     async def control_plane_platform_visual_conflicts(request: Request) -> dict[str, Any]:
         request_context, principal = authorize_request(request=request, auth_bundle=auth_bundle)
+        require_platform_scope(principal)
         action_name = 'api.control_plane.admin.platform_visual_conflicts'
         RoutePermissionGuard(permission=Permission.MANAGE_TENANT_POLICY, action_name=action_name).enforce(principal=principal, request_context=request_context, authz=authz_bundle)
         enforce_control_plane_security(principal=principal, request_context=request_context, action_name=action_name, tenant_id=principal.tenant_id, resource_id='platform-visual-conflicts')
@@ -315,6 +332,7 @@ def register_control_plane_routes(*, router: APIRouter, auth_bundle, authz_bundl
     @router.post('/control-plane/admin/platform-dashboard-layout')
     async def control_plane_platform_dashboard_layout(request: Request) -> dict[str, Any]:
         request_context, principal = authorize_request(request=request, auth_bundle=auth_bundle)
+        require_platform_scope(principal)
         body = await json_body(request)
         tenant_id = tenant_guard.enforce(principal=principal, request_context=request_context, body=body)
         action_name = 'api.control_plane.admin.platform_dashboard_layout'
@@ -325,6 +343,7 @@ def register_control_plane_routes(*, router: APIRouter, auth_bundle, authz_bundl
     @router.get('/control-plane/admin/platform-remediation-workflow')
     async def control_plane_platform_remediation_workflow(request: Request, file_path: str, risk_type: str = '') -> dict[str, Any]:
         request_context, principal = authorize_request(request=request, auth_bundle=auth_bundle)
+        require_platform_scope(principal)
         action_name = 'api.control_plane.admin.platform_remediation_workflow'
         RoutePermissionGuard(permission=Permission.MANAGE_TENANT_POLICY, action_name=action_name).enforce(principal=principal, request_context=request_context, authz=authz_bundle)
         enforce_control_plane_security(principal=principal, request_context=request_context, action_name=action_name, tenant_id=principal.tenant_id, resource_id=f'platform-remediation-workflow:{file_path}')
@@ -332,6 +351,7 @@ def register_control_plane_routes(*, router: APIRouter, auth_bundle, authz_bundl
     @router.post('/control-plane/admin/platform-remediation-run')
     async def control_plane_platform_remediation_run(request: Request) -> dict[str, Any]:
         request_context, principal = authorize_request(request=request, auth_bundle=auth_bundle)
+        require_platform_scope(principal)
         body = await json_body(request)
         file_path = str(body.get('file_path') or '').strip()
         risk_type = str(body.get('risk_type') or '').strip()
@@ -342,6 +362,7 @@ def register_control_plane_routes(*, router: APIRouter, auth_bundle, authz_bundl
     @router.get('/control-plane/metrics/global')
     async def control_plane_metrics_global(request: Request) -> dict[str, Any]:
         request_context, principal = authorize_request(request=request, auth_bundle=auth_bundle)
+        require_platform_scope(principal)
         action_name = 'api.control_plane.metrics.global'
         RoutePermissionGuard(permission=Permission.VIEW_POLICY, action_name=action_name).enforce(principal=principal, request_context=request_context, authz=authz_bundle)
         enforce_control_plane_security(principal=principal, request_context=request_context, action_name=action_name, tenant_id=principal.tenant_id, resource_id='platform-metrics')

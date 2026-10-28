@@ -2,9 +2,27 @@
 
 from __future__ import annotations
 
+import hashlib
+import hmac
+import os
 import pickle
+import secrets
 from dataclasses import dataclass
 from pathlib import Path
+
+_CHECKPOINT_MAGIC = b'BAIOSCK1'
+_CHECKPOINT_SIGNING_KEY_ENV = 'BUSINESAIOS_CHECKPOINT_SIGNING_KEY'
+_PROCESS_KEY = secrets.token_bytes(32)
+
+
+def _checkpoint_key() -> bytes:
+    key = str(os.getenv(_CHECKPOINT_SIGNING_KEY_ENV) or '').strip()
+    if key:
+        return key.encode('utf-8')
+    environments = {str(os.getenv(name) or '').strip().lower() for name in ('APP_ENV','ENV')}
+    if environments & {'prod','production','stage','staging','preprod'}:
+        raise RuntimeError('checkpoint_signing_key_required')
+    return _PROCESS_KEY
 
 
 class CheckpointGC:
@@ -22,8 +40,17 @@ def valid_checkpoint_payload(payload: dict) -> bool:
 
 class CheckpointLoading:
     def load(self, path: str):
-        with open(path, "rb") as file:
-            return pickle.load(file)
+        with open(path, 'rb') as file:
+            raw = file.read()
+        header_length = len(_CHECKPOINT_MAGIC) + hashlib.sha256().digest_size
+        if len(raw) <= header_length or not raw.startswith(_CHECKPOINT_MAGIC):
+            raise ValueError('checkpoint_unsigned_or_corrupt')
+        signature = raw[len(_CHECKPOINT_MAGIC):header_length]
+        data = raw[header_length:]
+        expected = hmac.new(_checkpoint_key(), data, hashlib.sha256).digest()
+        if not hmac.compare_digest(signature, expected):
+            raise ValueError('checkpoint_signature_invalid')
+        return pickle.loads(data)  # noqa: S301 - authenticated with the configured HMAC signing key
 
 @dataclass(frozen=True)
 class CheckpointMetadata:
@@ -44,8 +71,10 @@ class CheckpointPromotion:
 
 class CheckpointSaving:
     def save(self, path: str, payload) -> None:
-        with open(path, "wb") as file:
-            pickle.dump(payload, file)
+        data = pickle.dumps(payload)
+        signature = hmac.new(_checkpoint_key(), data, hashlib.sha256).digest()
+        with open(path, 'wb') as file:
+            file.write(_CHECKPOINT_MAGIC + signature + data)
 
 class Warmstart:
     def apply(self, model, checkpoint_payload):

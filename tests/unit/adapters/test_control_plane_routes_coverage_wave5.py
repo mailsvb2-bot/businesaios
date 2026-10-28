@@ -7,6 +7,7 @@ import pytest
 from fastapi import APIRouter, HTTPException, status
 
 from adapters.api.fastapi import control_plane_routes
+from governance.rbac_contract import RoleId
 
 
 @dataclass
@@ -14,6 +15,7 @@ class FakePrincipal:
     subject: str = "subject"
     actor_id: str = "actor"
     tenant_id: str = "tenant-demo"
+    roles: tuple[RoleId, ...] = (RoleId.SYSTEM,)
 
 
 class FakeRequestContext:

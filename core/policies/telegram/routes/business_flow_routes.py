@@ -32,7 +32,7 @@ BUSINESS_FLOW_COMMANDS: dict[str, tuple[str, str, bool]] = {
     "/outcomes": ("business_ops_summary@v1", "outcomes", True),
     "/attribution": ("business_ops_summary@v1", "trace", True),
     "/economics": ("business_ops_summary@v1", "economics", True),
-    "/journey": ("business_ops_summary@v1", "journey", True),
+    "/revenue_journey": ("business_ops_summary@v1", "journey", True),
     "/send_reminders": ("bookings@v1", "dispatch", True),
     "/promote": ("bookings@v1", "promote", True),
     "/add_sessions": ("bookings@v1", "add_sessions", True),
