@@ -63,7 +63,6 @@ def handle(ctx: TelegramCtx, *, default_price_rub: int, bot_username: str = "", 
             return pm(text="Доступ к данным бизнеса запрещён.", reply_markup=kb_back_main())
         from dataclasses import replace
         from core.policies.telegram.routes.business_flow_routes import handle_business_flow_routes
-
         route_ctx = (replace(ctx, callback_data="cpm:customers") if
                      ctx.callback_data.endswith("customers") else
                      replace(ctx, callback_data="", cmd="/leads", args=""))
@@ -73,7 +72,6 @@ def handle(ctx: TelegramCtx, *, default_price_rub: int, bot_username: str = "", 
         return replace(outcome, payload={**outcome.payload,
                                         **({"callback_query_id": ctx.callback_query_id}
                                            if ctx.callback_query_id else {})})
-
     if ctx.cmd == "/start" and str(ctx.args or "").strip().startswith(("cpa_", "ecv_")):
         from core.policies.telegram.routes.business_flow_routes import handle_business_flow_routes
 
