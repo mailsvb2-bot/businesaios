@@ -209,20 +209,10 @@ class QuotaEnforcer:
         )
 
     def _make_decision(
-        self,
-        *,
-        tenant_id: str,
-        dimension: str,
-        requested: Decimal,
-        allowed: bool,
-        used: Decimal,
-        limit: Decimal | None,
-        remaining: Decimal | None,
-        reason: str,
-        hard_stop: bool,
-        meter_key: str | None,
-        metered: bool,
-        policy: EffectiveQuotaPolicy,
+        self, *, tenant_id: str, dimension: str, requested: Decimal,
+        allowed: bool, used: Decimal, limit: Decimal | None,
+        remaining: Decimal | None, reason: str, hard_stop: bool,
+        meter_key: str | None, metered: bool, policy: EffectiveQuotaPolicy,
         overage_amount: Decimal,
         extra_metadata: Mapping[str, object] | None = None,
     ) -> QuotaEnforcementDecision:
