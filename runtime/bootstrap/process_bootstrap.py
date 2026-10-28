@@ -1,10 +1,4 @@
-"""Canonical internal process-bootstrap owner.
-
-This module owns only runtime process hygiene, singleton lock discipline, and
-related fail-closed guards. It is intentionally separate from sovereign runtime
-assembly so internal bootstrap code does not need to route back through the
-public ``runtime.bootstrap`` compat surface.
-"""
+"""Canonical process hygiene, singleton lock, and production preflight."""
 
 from __future__ import annotations
 
@@ -50,6 +44,12 @@ def _enforce_runtime_process_guards() -> None:
     enforce_production_strict_mode()
     enforce_two_admins_in_prod_or_explain()
     maybe_disable_singleton_lock_in_dev_test()
+    from core.safety.controls.key_registry import SafetyKeyRegistry
+    registry = SafetyKeyRegistry()
+    if registry.strict_mode:
+        registry.assert_secure_current()
+        from core.safety.controls.simulation_gate.evidence import SimulationEvidenceVerifier
+        SimulationEvidenceVerifier()
 
 
 def _acquire_singleton_lock_if_needed(*, acquire_singleton_lock: bool) -> None:
