@@ -180,31 +180,20 @@ class ChargebackOrchestrator:
             tenant_id=case.tenant_id,
             reference_type='chargeback',
             reference_id=case.case_id,
-            entries=(
+            entries=tuple(
                 LedgerEntry(
                     tenant_id=case.tenant_id,
-                    entry_id=f'{case.case_id}:debit',
-                    account_code=self._chargeback_account,
-                    side='debit',
+                    entry_id=f'{case.case_id}:{side}',
+                    account_code=account,
+                    side=side,
                     amount_minor=case.amount_minor,
                     currency=case.currency,
                     reference_type='chargeback',
                     reference_id=case.case_id,
                     booked_at=case.opened_at,
                     metadata={'invoice_id': case.invoice_id},
-                ),
-                LedgerEntry(
-                    tenant_id=case.tenant_id,
-                    entry_id=f'{case.case_id}:credit',
-                    account_code=self._receivable_account,
-                    side='credit',
-                    amount_minor=case.amount_minor,
-                    currency=case.currency,
-                    reference_type='chargeback',
-                    reference_id=case.case_id,
-                    booked_at=case.opened_at,
-                    metadata={'invoice_id': case.invoice_id},
-                ),
+                )
+                for side, account in (('debit', self._chargeback_account), ('credit', self._receivable_account))
             ),
             metadata={'owner': 'billing.chargeback_orchestrator', 'invoice_id': case.invoice_id},
         )
