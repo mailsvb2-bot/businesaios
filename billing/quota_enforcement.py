@@ -71,13 +71,14 @@ class QuotaEnforcer:
             dimension=dim,
             amount=0.0,
         )
-        decision = self._check_decision(
+        decision = self._quota_decision(
             tenant_id=tid,
             dimension=dim,
             requested=requested,
             meter_key=meter_key,
             policy=policy,
             used=quantity_decimal(guard_verdict.used, name="used"),
+            metered=False, consumed=False,
             extra_metadata={
                 "guard_limit_materialized": guard_verdict.limit is not None,
             },
@@ -115,6 +116,7 @@ class QuotaEnforcer:
             meter_key=meter_key,
             policy=policy,
             used=quantity_decimal(guard_used, name="used"),
+            metered=False, consumed=False,
             extra_metadata={
                 "guard_limit_materialized": True,
                 **dict(metadata or {}),
@@ -163,14 +165,14 @@ class QuotaEnforcer:
             )
             metered = True
 
-        decision = self._consumed_decision(
+        decision = self._quota_decision(
             tenant_id=tid,
             dimension=dim,
             requested=requested,
             meter_key=meter_key,
             policy=policy,
             used=quantity_decimal(guard_verdict.used, name="used"),
-            metered=metered,
+            metered=metered, consumed=True,
             extra_metadata={
                 "guard_limit_materialized": guard_verdict.limit is not None,
                 **dict(metadata or {}),
@@ -178,22 +180,6 @@ class QuotaEnforcer:
         )
         self._emit_metrics(decision)
         return decision
-
-    def _check_decision(self, *, tenant_id: str, dimension: str, requested: Decimal,
-                        meter_key: str | None, policy: EffectiveQuotaPolicy, used: Decimal,
-                        extra_metadata: Mapping[str, object] | None = None) -> QuotaEnforcementDecision:
-        return self._quota_decision(tenant_id=tenant_id, dimension=dimension,
-                                    requested=requested, meter_key=meter_key, policy=policy,
-                                    used=used, metered=False, consumed=False,
-                                    extra_metadata=extra_metadata)
-
-    def _consumed_decision(self, *, tenant_id: str, dimension: str, requested: Decimal,
-                           meter_key: str | None, policy: EffectiveQuotaPolicy, used: Decimal,
-                           metered: bool, extra_metadata: Mapping[str, object] | None = None) -> QuotaEnforcementDecision:
-        return self._quota_decision(tenant_id=tenant_id, dimension=dimension,
-                                    requested=requested, meter_key=meter_key, policy=policy,
-                                    used=used, metered=metered, consumed=True,
-                                    extra_metadata=extra_metadata)
 
     def _quota_decision(self, *, tenant_id: str, dimension: str, requested: Decimal,
                         meter_key: str | None, policy: EffectiveQuotaPolicy, used: Decimal,
