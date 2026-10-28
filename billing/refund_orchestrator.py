@@ -341,31 +341,20 @@ class RefundOrchestrator:
             tenant_id=result.tenant_id,
             reference_type='refund',
             reference_id=result.refund_id,
-            entries=(
+            entries=tuple(
                 LedgerEntry(
                     tenant_id=result.tenant_id,
-                    entry_id=f'{result.refund_id}:debit',
-                    account_code=self._contra_revenue_account,
-                    side='debit',
+                    entry_id=f'{result.refund_id}:{side}',
+                    account_code=account,
+                    side=side,
                     amount_minor=result.amount_minor,
                     currency=result.currency,
                     reference_type='refund',
                     reference_id=result.refund_id,
                     booked_at=result.processed_at,
                     metadata={'invoice_id': result.invoice_id, 'provider_name': result.provider_name},
-                ),
-                LedgerEntry(
-                    tenant_id=result.tenant_id,
-                    entry_id=f'{result.refund_id}:credit',
-                    account_code=self._clearing_account,
-                    side='credit',
-                    amount_minor=result.amount_minor,
-                    currency=result.currency,
-                    reference_type='refund',
-                    reference_id=result.refund_id,
-                    booked_at=result.processed_at,
-                    metadata={'invoice_id': result.invoice_id, 'provider_name': result.provider_name},
-                ),
+                )
+                for side, account in (('debit', self._contra_revenue_account), ('credit', self._clearing_account))
             ),
             metadata={'owner': 'billing.refund_orchestrator', 'invoice_id': result.invoice_id, 'external_reference': result.external_reference},
         )
