@@ -268,8 +268,7 @@ class QuotaEnforcer:
             "dimension": decision.dimension,
             "allowed": "true" if decision.allowed else "false",
             "hard_stop": "true" if decision.hard_stop else "false",
-            "meter_key": "" if decision.meter_key is None else decision.meter_key,
-            "metered": "true" if decision.metered else "false",
+            "meter_key": "" if decision.meter_key is None else decision.meter_key, "metered": "true" if decision.metered else "false",
         }
         self._metrics.inc(tenant_id=decision.tenant_id, metric_name="billing.quota.requests", amount=1.0, labels=labels)
         self._metrics.set_gauge(tenant_id=decision.tenant_id,
