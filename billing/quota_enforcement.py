@@ -101,7 +101,7 @@ class QuotaEnforcer:
             dimension=dim,
             amount=0.0,
         ).used
-        preflight = self._check_decision(
+        preflight = self._quota_decision(
             tenant_id=tid,
             dimension=dim,
             requested=requested,
