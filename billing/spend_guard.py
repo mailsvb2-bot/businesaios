@@ -128,7 +128,7 @@ class SpendGuard:
                 if entry.account_code != account_code:
                     continue
                 currencies.add(str(entry.currency).strip().upper())
-                if str(entry.side).strip().lower() != 'credit':
+                if str(getattr(entry, 'side', '')).strip().lower() != 'credit':
                     continue
                 booked_at = getattr(entry, 'booked_at', None)
                 # Unknown timestamps count conservatively.
