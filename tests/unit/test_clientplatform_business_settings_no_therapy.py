@@ -7,7 +7,7 @@ from core.ux.keyboards.settings import kb_settings_menu
 
 
 def _route(callback: str = "", cmd: str | None = None):
-    ctx = SimpleNamespace(callback_data=callback, cmd=cmd)
+    ctx = SimpleNamespace(callback_data=callback, cmd=cmd, is_admin=True, callback_query_id=None)
     return handle_settings_routes(ctx, user_id="u", bot_username="clientplatform_bot",
                                   pm=lambda **kw: kw)
 
@@ -38,5 +38,6 @@ def test_business_settings_pages_render_without_therapy_content():
     for callback in ("cp:settings:organization", "cp:settings:notifications", "cp:settings:access"):
         result = _route(callback)
         assert result is not None
-        assert "Утро" not in result["text"]
-        assert "Состояния" not in result["text"]
+        assert result.action == "business_ops_summary@v1"
+        assert result.payload["op"] == "cockpit"
+        assert result.payload["arg"].startswith("cpm:")
