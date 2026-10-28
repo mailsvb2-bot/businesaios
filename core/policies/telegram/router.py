@@ -22,7 +22,7 @@ from core.policies.telegram.routes.marketing_routes import handle_marketing_rout
 from core.policies.telegram.routes.settings_routes import handle_settings_routes
 from core.users.roles import UserRoleInfo
 from core.ux.callbacks import CB_MENU_MAIN
-from core.ux.unified_messenger_menu import menu_text, section_text, back_button
+from core.ux.unified_messenger_menu import menu_text
 from core.ux.telegram_keyboards import kb_back_main, kb_main
 
 
@@ -73,10 +73,6 @@ def handle(ctx: TelegramCtx, *, default_price_rub: int, bot_username: str = "", 
         return replace(outcome, payload={**outcome.payload,
                                         **({"callback_query_id": ctx.callback_query_id}
                                            if ctx.callback_query_id else {})})
-
-    section = section_text(str(ctx.callback_data or ""))
-    if section is not None:
-        return pm(text=section, reply_markup=back_button())
 
     if ctx.cmd == "/start" and str(ctx.args or "").strip().startswith(("cpa_", "ecv_")):
         from core.policies.telegram.routes.business_flow_routes import handle_business_flow_routes
