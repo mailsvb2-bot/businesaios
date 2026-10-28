@@ -272,19 +272,14 @@ class QuotaEnforcer:
             "metered": "true" if decision.metered else "false",
         }
         self._metrics.inc(tenant_id=decision.tenant_id, metric_name="billing.quota.requests", amount=1.0, labels=labels)
-        self._metrics.set_gauge(
-            tenant_id=decision.tenant_id,
-            metric_name=f"billing.quota.used.{decision.dimension}",
-            value=decision.used,
-            labels=labels,
-        )
+        self._metrics.set_gauge(tenant_id=decision.tenant_id,
+                                metric_name=f"billing.quota.used.{decision.dimension}",
+                                value=decision.used, labels=labels)
         if decision.limit is not None:
-            self._metrics.set_gauge(
-                tenant_id=decision.tenant_id,
-                metric_name=f"billing.quota.remaining.{decision.dimension}",
-                value=0.0 if decision.remaining is None else decision.remaining,
-                labels=labels,
-            )
+            self._metrics.set_gauge(tenant_id=decision.tenant_id,
+                                    metric_name=f"billing.quota.remaining.{decision.dimension}",
+                                    value=0.0 if decision.remaining is None else decision.remaining,
+                                    labels=labels)
 
 
 __all__ = [
