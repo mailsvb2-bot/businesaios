@@ -59,11 +59,7 @@ class QuotaEnforcer:
         amount: float = 1.0,
         meter_key: str | None = None,
     ) -> QuotaEnforcementDecision:
-        tid = require_tenant_id(tenant_id)
-        dim = str(dimension or "").strip()
-        if not dim:
-            raise ValueError("dimension is required")
-        requested = quantity_decimal(amount, name="amount")
+        tid, dim, requested = self._validated_request(tenant_id, dimension, amount)
 
         policy = self._quota_policy.resolve(tenant_id=tid)
         guard_verdict = self._tenant_quota_guard.check(
@@ -97,11 +93,7 @@ class QuotaEnforcer:
         labels: Mapping[str, str] | None = None,
         metadata: Mapping[str, object] | None = None,
     ) -> QuotaEnforcementDecision:
-        tid = require_tenant_id(tenant_id)
-        dim = str(dimension or "").strip()
-        if not dim:
-            raise ValueError("dimension is required")
-        requested = quantity_decimal(amount, name="amount")
+        tid, dim, requested = self._validated_request(tenant_id, dimension, amount)
 
         policy = self._quota_policy.resolve(tenant_id=tid)
         guard_used = self._tenant_quota_guard.check(
@@ -180,6 +172,14 @@ class QuotaEnforcer:
         )
         self._emit_metrics(decision)
         return decision
+
+    @staticmethod
+    def _validated_request(tenant_id: str, dimension: str, amount: float) -> tuple[str, str, Decimal]:
+        tid = require_tenant_id(tenant_id)
+        dim = str(dimension or "").strip()
+        if not dim:
+            raise ValueError("dimension is required")
+        return tid, dim, quantity_decimal(amount, name="amount")
 
     def _quota_decision(self, *, tenant_id: str, dimension: str, requested: Decimal,
                         meter_key: str | None, policy: EffectiveQuotaPolicy, used: Decimal,
