@@ -66,3 +66,24 @@ def test_all_nested_visible_buttons_have_concrete_route(monkeypatch, callback):
     if result.action == "send_message@v1":
         assert result.payload.get("text"), callback
         assert not result.payload["text"].startswith("Я здесь. Напиши"), callback
+
+
+@pytest.mark.parametrize(("callback", "action", "operation"), [
+    ("cp:section:customers", "business_ops_summary@v1", "cockpit"),
+    ("cp:section:sales", "sales_pipeline@v1", "list"),
+])
+def test_owner_section_calls_existing_canonical_operation(monkeypatch, callback, action, operation):
+    monkeypatch.setattr("runtime.entrypoints.telegram_longpoll._configured_telegram_tenant_id", lambda: "tenant-live")
+    result = UnifiedTelegramPolicyV3(admin_user_ids=("4001",)).propose(_callback_state(callback))
+    assert result.action == action
+    assert result.payload["op"] == operation
+    assert result.payload["callback_query_id"] == "callback-12"
+
+
+@pytest.mark.parametrize("callback", ["cp:section:customers", "cp:section:sales"])
+def test_owner_section_rejects_unprivileged_telegram_user(monkeypatch, callback):
+    monkeypatch.setattr("runtime.entrypoints.telegram_longpoll._configured_telegram_tenant_id", lambda: "tenant-live")
+    state = replace(_callback_state(callback), user={"roles": ["operator"]})
+    result = UnifiedTelegramPolicyV3().propose(state)
+    assert result.action == "send_message@v1"
+    assert "запрещён" in result.payload["text"]
