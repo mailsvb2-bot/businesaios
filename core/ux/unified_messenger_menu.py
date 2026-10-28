@@ -75,17 +75,7 @@ def plain_channel_menu(*, channel: str, role: str, is_admin: bool = False) -> di
 
 
 def section_text(callback: str) -> str | None:
-    sections = {
-        SECTION_PREFIX + "customers": (
-            "💬 Клиенты и обращения\n\nОбработка сообщений выполняется через единый "
-            "входящий маршрут BusinessAIOS. Управление клиентами доступно в рабочем пространстве."
-        ),
-        SECTION_PREFIX + "sales": (
-            "💰 Продажи\n\nРабота с предложениями, лидами и заказами находится "
-            "в рабочем пространстве BusinessAIOS."
-        ),
-    }
-    return sections.get(callback)
+    return None  # obsolete information-only route; navigation uses canonical owners
 
 
 def back_button() -> dict:
