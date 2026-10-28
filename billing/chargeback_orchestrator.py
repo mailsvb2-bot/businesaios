@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from collections.abc import Mapping
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from datetime import datetime
 from uuid import uuid4
 
@@ -125,19 +125,8 @@ class ChargebackOrchestrator:
                 return invoice, existing, replay_record, posting
             replay_paid_minor = max(0, int(invoice.paid_minor) - int(existing.amount_minor))
             replay_status = invoice.status.UNCOLLECTIBLE if int(existing.amount_minor) >= int(invoice.total_minor) else (invoice.status.ISSUED if replay_paid_minor == 0 else invoice.status.PARTIALLY_PAID)
-            updated_invoice = CommercialInvoiceEnvelope(
-                tenant_id=invoice.tenant_id,
-                invoice_id=invoice.invoice_id,
-                business_id=invoice.business_id,
-                subscription_id=invoice.subscription_id,
-                currency=invoice.currency,
-                subtotal_minor=invoice.subtotal_minor,
-                tax_minor=invoice.tax_minor,
-                total_minor=invoice.total_minor,
-                status=replay_status,
-                issued_at=invoice.issued_at,
-                due_at=invoice.due_at,
-                paid_minor=replay_paid_minor,
+            updated_invoice = replace(
+                invoice, status=replay_status, paid_minor=replay_paid_minor,
                 metadata=derive_lineage_metadata(invoice_id=invoice.invoice_id, invoice_metadata=invoice.metadata, event_type='chargeback', event_id=existing.case_id, idempotency_key=normalized_idem, extra={'last_chargeback_case_id': existing.case_id, 'applied_chargeback_case_ids': [*_applied_chargeback_case_ids(invoice), str(existing.case_id)]}),
             )
             updated_invoice.validate()
@@ -175,19 +164,8 @@ class ChargebackOrchestrator:
             updated_status = invoice.status.ISSUED
         else:
             updated_status = invoice.status.PARTIALLY_PAID
-        updated_invoice = CommercialInvoiceEnvelope(
-            tenant_id=invoice.tenant_id,
-            invoice_id=invoice.invoice_id,
-            business_id=invoice.business_id,
-            subscription_id=invoice.subscription_id,
-            currency=invoice.currency,
-            subtotal_minor=invoice.subtotal_minor,
-            tax_minor=invoice.tax_minor,
-            total_minor=invoice.total_minor,
-            status=updated_status,
-            issued_at=invoice.issued_at,
-            due_at=invoice.due_at,
-            paid_minor=updated_paid_minor,
+        updated_invoice = replace(
+            invoice, status=updated_status, paid_minor=updated_paid_minor,
             metadata=derive_lineage_metadata(invoice_id=invoice.invoice_id, invoice_metadata=invoice.metadata, event_type='chargeback', event_id=stored_case.case_id, idempotency_key=normalized_idem, extra={'chargeback_case_id': stored_case.case_id, 'last_chargeback_case_id': stored_case.case_id, 'applied_chargeback_case_ids': [*_applied_chargeback_case_ids(invoice), str(stored_case.case_id)]}),
         )
         updated_invoice.validate()
