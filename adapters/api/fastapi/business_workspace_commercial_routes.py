@@ -27,7 +27,6 @@ def register_business_workspace_commercial_routes(*, router: APIRouter, auth_bun
         )
         from core.growth.ads.creative.pipeline import visual_scene_breakdown
         from core.llm.agent import LLMTaskContext
-
         tenant, business = scope(request)
         body = await json_body(request)
         allowed = {"campaign_id", "headline", "description", "brand_context",
@@ -507,6 +506,5 @@ def _order_status(purchases, tenant, business, order_id, *, checkout=None):
         "program_id": link["program_id"],
         "provider_verified": verified,
     }
-
 
 __all__ = ["register_business_workspace_commercial_routes", "CANON_PHASE18_COMMERCIAL_OWNER_API"]
