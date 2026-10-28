@@ -56,8 +56,8 @@ def test_unsupported_provider_fails_closed_without_fake_button_support():
 
 
 def test_placeholder_sections_never_pretend_live_crm_route_is_connected():
-    assert "рабочем пространстве" in section_text("cp:section:customers")
-    assert "рабочем пространстве" in section_text("cp:section:sales")
+    assert section_text("cp:section:customers") is None
+    assert section_text("cp:section:sales") is None
     assert section_text("ads:apply:confirm") is None
     assert back_button()["inline_keyboard"][0][0]["callback_data"] == CB_MENU_MAIN
 
