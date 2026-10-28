@@ -67,9 +67,9 @@ class SpendGuard:
             pending_minor,
             minimum=0,
         )
-        revenue_currencies = self._account_currencies(
-            tenant_id=policy.tenant_id,
-            account_code=revenue_account,
+        revenue_currencies, observed_minor = self._cycle_revenue(
+            tenant_id=policy.tenant_id, account_code=revenue_account,
+            cycle_started_at=cycle_start,
         )
         policy_currency = str(policy.currency).strip().upper()
         if revenue_currencies and revenue_currencies != {policy_currency}:
@@ -88,11 +88,6 @@ class SpendGuard:
             )
             verdict.validate()
             return verdict
-        observed_minor = require_commercial_int(
-            "observed_minor",
-            self._cycle_credit_total(tenant_id=policy.tenant_id, account_code=revenue_account, cycle_started_at=cycle_start),
-            minimum=0,
-        )
         projected_total = observed_minor + delta_minor
         limit_minor = policy.cycle_limit_minor
         remaining_after_pending = None if limit_minor is None else max(0, limit_minor - projected_total)
@@ -125,27 +120,22 @@ class SpendGuard:
             )
         return verdict
 
-    def _cycle_credit_total(self, *, tenant_id: str, account_code: str, cycle_started_at: datetime) -> int:
+    def _cycle_revenue(self, *, tenant_id: str, account_code: str, cycle_started_at: datetime) -> tuple[set[str], int]:
+        currencies: set[str] = set()
         total = 0
         for posting in self._ledger_store.list_postings(tenant_id=tenant_id):
             for entry in posting.entries:
-                if entry.account_code != account_code or str(entry.side).strip().lower() != 'credit':
+                if entry.account_code != account_code:
+                    continue
+                currencies.add(str(entry.currency).strip().upper())
+                if str(entry.side).strip().lower() != 'credit':
                     continue
                 booked_at = getattr(entry, 'booked_at', None)
-                # Unknown timestamps count conservatively rather than underreporting spending.
+                # Unknown timestamps count conservatively.
                 if isinstance(booked_at, datetime) and booked_at.tzinfo is not None and booked_at < cycle_started_at:
                     continue
-                amount = require_commercial_int('amount_minor', entry.amount_minor, minimum=0)
-                total += amount
-        return total
-
-    def _account_currencies(self, *, tenant_id: str, account_code: str) -> set[str]:
-        currencies: set[str] = set()
-        for posting in self._ledger_store.list_postings(tenant_id=tenant_id):
-            for entry in posting.entries:
-                if entry.account_code == account_code:
-                    currencies.add(str(entry.currency).strip().upper())
-        return currencies
+                total += require_commercial_int('amount_minor', entry.amount_minor, minimum=0)
+        return currencies, require_commercial_int('observed_minor', total, minimum=0)
 
 
 __all__ = ["CANON_BILLING_SPEND_GUARD", "SpendGuard", "SpendLimitPolicy"]
