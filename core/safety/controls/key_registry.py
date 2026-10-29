@@ -84,7 +84,13 @@ class SafetyKeyRegistry:
         return any(key.insecure_fallback for key in self._keys.values())
 
     def assert_secure_current(self) -> None:
-        if self.strict_mode and self.current.insecure_fallback:
+        if not self.strict_mode:
+            return
+        if self._configured_current_key_id:
+            selected = self._keys.get(self._configured_current_key_id)
+            if selected is None or not selected.active:
+                raise RuntimeError('safety_active_signing_key_unavailable')
+        if self.current.insecure_fallback or not self.current.active:
             raise RuntimeError('unsafe_policy_signing_key_fallback')
 
     def _candidate_key_ids(self, key_id: str) -> tuple[str, ...]:
