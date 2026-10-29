@@ -1,28 +1,21 @@
 from __future__ import annotations
-
 import json
 import os
 from dataclasses import dataclass
-
 CANON_SAFETY_KEY_REGISTRY = True
 _INSECURE_DEFAULT_KEY_ID = 'dev-insecure-default'
 _INSECURE_DEFAULT_SECRET = 'businesaios-safety-local-dev-key'
-
-
 @dataclass(frozen=True)
 class SafetySigningKey:
     key_id: str
     secret: bytes
     active: bool = True
     insecure_fallback: bool = False
-
-
 class SafetyKeyRegistry:
     def __init__(self) -> None:
         self._keys = self._load_keys()
         self._configured_current_key_id = str(os.getenv('BUSINESAIOS_SAFETY_ACTIVE_KEY_ID') or '').strip()
         self._configured_next_key_id = str(os.getenv('BUSINESAIOS_SAFETY_NEXT_KEY_ID') or '').strip()
-
     @property
     def current(self) -> SafetySigningKey:
         current_id = self._configured_current_key_id
@@ -153,6 +146,5 @@ class SafetyKeyRegistry:
                 insecure_fallback=True,
             )
         return keys
-
 
 __all__ = ['CANON_SAFETY_KEY_REGISTRY', 'SafetyKeyRegistry', 'SafetySigningKey']
