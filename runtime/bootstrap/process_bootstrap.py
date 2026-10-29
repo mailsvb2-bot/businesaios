@@ -1,10 +1,8 @@
 """Canonical process hygiene, singleton lock, and production preflight."""
 
 from __future__ import annotations
-
 import atexit
 from dataclasses import dataclass
-
 from bootstrap.logging_setup import setup_logging
 from runtime.bootstrap_process import apply_process_hygiene, maybe_disable_singleton_lock_in_dev_test
 from runtime.bootstrap_prod_guards import (
@@ -14,16 +12,13 @@ from runtime.bootstrap_prod_guards import (
 )
 from runtime.firewall.import_guard import activate_import_firewall
 from runtime.firewall.singleton_lock import SingletonLock
-
 CANON_RUNTIME_PROCESS_BOOTSTRAP_OWNER = True
 CANON_RUNTIME_PROCESS_BOOTSTRAP_INTERNAL_ONLY = True
 CANON_RUNTIME_PROCESS_BOOTSTRAP_NO_RUNTIME_ASSEMBLY = True
-
 @dataclass
 class _ProcessBootstrapState:
     bootstrap_done: bool = False
     singleton_lock: SingletonLock | None = None
-
 
 _STATE = _ProcessBootstrapState()
 
