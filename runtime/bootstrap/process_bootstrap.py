@@ -44,11 +44,10 @@ def _enforce_runtime_process_guards() -> None:
     enforce_production_strict_mode()
     enforce_two_admins_in_prod_or_explain()
     maybe_disable_singleton_lock_in_dev_test()
-    from core.safety.controls.key_registry import SafetyKeyRegistry
+    from runtime.safety import SafetyKeyRegistry, SimulationEvidenceVerifier
     registry = SafetyKeyRegistry()
     if registry.strict_mode:
         registry.assert_secure_current()
-        from core.safety.controls.simulation_gate.evidence import SimulationEvidenceVerifier
         SimulationEvidenceVerifier()
 
 
