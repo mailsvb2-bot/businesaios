@@ -8,6 +8,8 @@ from __future__ import annotations
 
 from core.runtime.safe_mode import is_safe_mode
 from core.safety.controls.action_context import SafetyActionContext
+from core.safety.controls.key_registry import SafetyKeyRegistry
+from core.safety.controls.simulation_gate.evidence import SimulationEvidenceVerifier
 from core.safety.controls.action_identity import canonical_action_id, canonical_breaker_key
 from core.safety.controls.observability.event_store import SafetyEvent
 from core.safety.controls.control_result import ControlDecision, ControlStatus
@@ -51,6 +53,8 @@ __all__ = [
     "RUNTIME_SAFETY_PUBLIC_API",
     "SAFETY_CONTROLS_CANON",
     "SafetyActionContext",
+    "SafetyKeyRegistry",
+    "SimulationEvidenceVerifier",
     "safety_sqlite_path",
     "canonical_breaker_key",
     "canonical_action_id",
