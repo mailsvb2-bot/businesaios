@@ -40,6 +40,8 @@ def _runtime_env(*, sha: str | None, runtime_dir: str) -> tuple[dict[str, str], 
         "API_CONTROL_PLANE_ALLOW_DEV_FALLBACKS": "0", "API_CONTROL_PLANE_API_KEY_PEPPER": secrets.token_urlsafe(48), "DECISION_SIGNING_SECRET": secrets.token_urlsafe(64),
         "BUSINESAIOS_API_KEY_STORE_BACKEND": "file", "BUSINESAIOS_KEY_PROVIDER_BACKEND": "file",
         "BUSINESAIOS_KEY_PROVIDER_MASTER_KEY_B64": base64.b64encode(secrets.token_bytes(32)).decode("ascii"),
+        "BUSINESAIOS_SAFETY_SIGNING_SECRET": secrets.token_hex(32),
+        "BUSINESAIOS_SIMULATION_EVIDENCE_SECRET": secrets.token_hex(32),
     })
     return env, mode, storage
 
