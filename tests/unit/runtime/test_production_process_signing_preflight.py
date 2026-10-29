@@ -1,10 +1,6 @@
 from __future__ import annotations
-
 import pytest
-
 from runtime.bootstrap import process_bootstrap as boot
-
-
 @pytest.mark.parametrize("missing", ["safety", "simulation"])
 def test_production_boot_refuses_missing_signing_secret(monkeypatch, missing):
     for name in ("verify_release_attestation_if_needed",
@@ -25,8 +21,6 @@ def test_production_boot_refuses_missing_signing_secret(monkeypatch, missing):
         else "simulation_evidence_signing_secret_required"
     )):
         boot._enforce_runtime_process_guards()
-
-
 def test_development_boot_does_not_require_production_signing_secret(monkeypatch):
     for name in ("verify_release_attestation_if_needed",
                  "enforce_production_strict_mode",
@@ -38,7 +32,6 @@ def test_development_boot_does_not_require_production_signing_secret(monkeypatch
     monkeypatch.delenv("BUSINESAIOS_SAFETY_STRICT_KEYS", raising=False)
     monkeypatch.delenv("BUSINESAIOS_SAFETY_BOOT_STRICT", raising=False)
     boot._enforce_runtime_process_guards()
-
 
 @pytest.mark.parametrize("active_id", ["missing", "disabled"])
 def test_production_safety_preflight_rejects_unavailable_selected_key(monkeypatch, active_id):
