@@ -26,7 +26,6 @@ def test_brand_and_owner_navigation_are_stable():
     ]
     assert kb_main() == telegram_menu(role="owner")
 
-
 def test_role_visibility_cannot_expose_admin_or_payments_to_operator():
     operator = menu_items(role="operator")
     assert "administration" not in [x.key for x in operator]
@@ -49,7 +48,6 @@ def test_channels_share_exact_same_navigation_semantics(channel):
     assert tuple(row["callback"] for row in result["actions"]) == tuple(
         row[0]["callback_data"] for row in telegram_menu(role="owner", is_admin=True)["inline_keyboard"]
     )
-
 
 def test_unsupported_provider_fails_closed_without_fake_button_support():
     with pytest.raises(ValueError):
