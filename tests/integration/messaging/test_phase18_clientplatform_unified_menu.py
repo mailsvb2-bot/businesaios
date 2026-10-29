@@ -47,7 +47,7 @@ def test_channels_share_exact_same_navigation_semantics(channel):
     assert result["channel"] == channel
     assert result["text"] == menu_text(role="owner", is_admin=True)
     assert tuple(row["callback"] for row in result["actions"]) == tuple(
-        row[0]["callback_data"] for row in telegram_menu(role="owner")["inline_keyboard"]
+        row[0]["callback_data"] for row in telegram_menu(role="owner", is_admin=True)["inline_keyboard"]
     )
 
 
