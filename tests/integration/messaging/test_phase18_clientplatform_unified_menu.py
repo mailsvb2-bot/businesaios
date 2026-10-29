@@ -45,7 +45,7 @@ def test_role_visibility_cannot_expose_admin_or_payments_to_operator():
 def test_channels_share_exact_same_navigation_semantics(channel):
     result = plain_channel_menu(channel=channel, role="owner", is_admin=True)
     assert result["channel"] == channel
-    assert result["text"] == menu_text(role="owner")
+    assert result["text"] == menu_text(role="owner", is_admin=True)
     assert tuple(row["callback"] for row in result["actions"]) == tuple(
         row[0]["callback_data"] for row in telegram_menu(role="owner")["inline_keyboard"]
     )
