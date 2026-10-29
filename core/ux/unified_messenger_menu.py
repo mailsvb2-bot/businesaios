@@ -45,7 +45,8 @@ def menu_items(*, role: str, is_admin: bool = False) -> tuple[NavigationItem, ..
     roles = {normalized}
     if is_admin:
         roles.add("admin")
-    return tuple(item for item in _ITEMS if item.roles.intersection(roles))
+    return tuple(item for item in _ITEMS if item.roles.intersection(roles)
+                 and (is_admin or item.key not in {"customers", "sales"}))
 
 
 def menu_text(*, role: str, is_admin: bool = False) -> str:
