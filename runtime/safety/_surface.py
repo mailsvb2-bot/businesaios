@@ -1,11 +1,8 @@
 """Canonical runtime safety-controls surface.
-
 Runtime code may build action-control services and construct decision/context
 records through this module without binding itself to core safety internals.
 """
-
 from __future__ import annotations
-
 from core.runtime.safe_mode import is_safe_mode
 from core.safety.controls.action_context import SafetyActionContext
 from core.safety.controls.key_registry import SafetyKeyRegistry
@@ -25,8 +22,6 @@ from core.safety.operational.runtime_bootstrap import (
     resolve_operational_safety_runtime as resolve_operational_safety_runtime,
 )
 from runtime.safety.contract import RUNTIME_SAFETY_PUBLIC_API, SAFETY_CONTROLS_CANON
-
-
 def build_default_profile(
     *args,
     persistent: bool = False,
@@ -35,7 +30,6 @@ def build_default_profile(
 ) -> SafetyControlProfile:
     if persistent and persistent_store_factory is None:
         from runtime.safety.persistence import build_persistent_safety_stores
-
         persistent_store_factory = lambda threshold: build_persistent_safety_stores(
             repetition_threshold=threshold
         )
@@ -45,7 +39,6 @@ def build_default_profile(
         persistent_store_factory=persistent_store_factory,
         **kwargs,
     )
-
 __all__ = [
     'CANON_RUNTIME_SAFETY_NAMESPACE',
     "ControlDecision",
