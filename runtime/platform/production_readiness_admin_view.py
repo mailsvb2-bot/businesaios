@@ -28,7 +28,20 @@ def _read_artifact(root: Path, name: str) -> dict[str, object]:
 def build_production_readiness_admin_view(root: Path | None = None) -> dict[str, object]:
     base = root or Path.cwd()
     artifacts = {name.removesuffix(".json"): _read_artifact(base, name) for name in PRODUCTION_READINESS_ARTIFACTS}
+    from core.safety.controls.key_registry import SafetyKeyRegistry
+    from core.safety.controls.simulation_gate.evidence import SimulationEvidenceVerifier
+    registry = SafetyKeyRegistry()
+    signing = {"status": "not_required"}
+    if registry.strict_mode:
+        try:
+            registry.assert_secure_current()
+            SimulationEvidenceVerifier()
+        except (RuntimeError, ValueError):
+            signing = {"status": "blocked", "reason": "production_signing_preflight_failed"}
+        else:
+            signing = {"status": "configured"}
     return {
+        "signing_preflight": signing,
         "surface": "production_readiness",
         "status": "observable",
         "artifacts": artifacts,
