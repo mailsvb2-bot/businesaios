@@ -164,3 +164,22 @@ def test_provider_admin_live_runtime_reuses_injected_connector_quota_guard(tmp_p
     runtime = service._live_sync_runtime()
     assert runtime.connector_quota_guard is quota_guard
 
+
+
+def test_active_provider_credentials_preflight_uses_real_activation_and_vault(tmp_path, monkeypatch):
+    import pytest
+    service, _ = _service(tmp_path)
+    assert service.assert_active_provider_credentials(tenant_id="tenant-a", business_id="my-site") == {
+        "checked_active_providers": 0, "status": "configured",
+    }
+    service.activate_provider(ProviderCredentialSubmission(
+        tenant_id="tenant-a", business_id="my-site", provider_key="generic_website",
+        ownership_key="owner:my-site", requested_by="owner-user",
+        external_ref="https://example.com",
+        secrets={"webhook_secret": "secret-value", "admin_api_key": "admin-key"},
+        metadata={"verified_owner": True},
+    ))
+    assert service.assert_active_provider_credentials(tenant_id="tenant-a", business_id="my-site")["checked_active_providers"] == 1
+    monkeypatch.setattr(type(service.secret_vault), "get", lambda *args, **kwargs: None)
+    with pytest.raises(RuntimeError, match="active_provider_preflight_failed"):
+        service.assert_active_provider_credentials(tenant_id="tenant-a", business_id="my-site")
