@@ -1,10 +1,8 @@
 from __future__ import annotations  # noqa: I001
-
 from collections.abc import Mapping
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from typing import Any
-
 from application.business_autonomy.business_connector_framework import ConnectorOnboardingService
 from application.business_autonomy.onboarding_contract import BusinessOnboardingRequest
 from application.business_autonomy.provider_admin_contract import ProviderActivationStatus, ProviderCredentialSubmission, ProviderDefinition
@@ -37,7 +35,6 @@ from runtime.business_autonomy.provider_webhook_runtime import ProviderWebhookRu
 from security.connector_secret_scope import ConnectorSecretScope, SecretAccessOperation, SecretScopeBinding
 from security.secret_contract import SecretRecord, SecretRef, SecretSource
 from security.secret_vault import SecretVault
-
 CANON_PROVIDER_ADMIN_SERVICE = True
 class ProviderDefinitionRegistry:
     def __init__(self, providers: Mapping[str, ProviderDefinition] | None = None) -> None:
@@ -87,7 +84,6 @@ class ProviderAdminService:
     @staticmethod
     def _webhook_reconciliation_blocks_connection(metadata: Mapping[str, Any]) -> bool:
         return str(metadata.get('status') or '') == 'failed'
-
     def list_provider_definitions(self) -> tuple[ProviderDefinition, ...]:
         return self.provider_registry.list()
     def get_activation_status(self, *, tenant_id: str, business_id: str, provider_key: str) -> ProviderActivationStatus | None:
