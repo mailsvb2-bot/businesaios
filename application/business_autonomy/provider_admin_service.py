@@ -1,10 +1,8 @@
 from __future__ import annotations  # noqa: I001
-
 from collections.abc import Mapping
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from typing import Any
-
 from application.business_autonomy.business_connector_framework import ConnectorOnboardingService
 from application.business_autonomy.onboarding_contract import BusinessOnboardingRequest
 from application.business_autonomy.provider_admin_contract import ProviderActivationStatus, ProviderCredentialSubmission, ProviderDefinition
@@ -37,7 +35,6 @@ from runtime.business_autonomy.provider_webhook_runtime import ProviderWebhookRu
 from security.connector_secret_scope import ConnectorSecretScope, SecretAccessOperation, SecretScopeBinding
 from security.secret_contract import SecretRecord, SecretRef, SecretSource
 from security.secret_vault import SecretVault
-
 CANON_PROVIDER_ADMIN_SERVICE = True
 class ProviderDefinitionRegistry:
     def __init__(self, providers: Mapping[str, ProviderDefinition] | None = None) -> None:
@@ -87,13 +84,38 @@ class ProviderAdminService:
     @staticmethod
     def _webhook_reconciliation_blocks_connection(metadata: Mapping[str, Any]) -> bool:
         return str(metadata.get('status') or '') == 'failed'
-
     def list_provider_definitions(self) -> tuple[ProviderDefinition, ...]:
         return self.provider_registry.list()
     def get_activation_status(self, *, tenant_id: str, business_id: str, provider_key: str) -> ProviderActivationStatus | None:
         return self.activation_store.get(tenant_id=require_tenant_id(tenant_id), business_id=str(business_id).strip(), provider_key=str(provider_key).strip())
     def list_activation_statuses(self, *, tenant_id: str, business_id: str) -> tuple[ProviderActivationStatus, ...]:
         return self.activation_store.list_for_business(tenant_id=require_tenant_id(tenant_id), business_id=str(business_id).strip())
+    def assert_active_provider_credentials(self, *, tenant_id: str, business_id: str) -> dict[str, object]:
+        """Check active provider credentials via canonical activation store and vault."""
+        statuses = self.list_activation_statuses(tenant_id=tenant_id, business_id=business_id)
+        failures: list[str] = []
+        checked = 0
+        for status in statuses:
+            if not status.connected:
+                continue
+            checked += 1
+            try:
+                definition = self.provider_registry.get(status.provider_key)
+                for field in definition.secret_fields:
+                    if not field.required:
+                        continue
+                    ref = ProviderSecretVersioningService._current_ref(
+                        tenant_id=status.tenant_id, provider=definition,
+                        business_id=status.business_id, secret_name=field.secret_name,
+                    )
+                    value = self.secret_vault.get(ref)
+                    if not value:
+                        failures.append(f"{status.provider_key}:credential_unavailable")
+            except Exception:
+                failures.append(f"{status.provider_key}:credential_unavailable")
+        if failures:
+            raise RuntimeError("active_provider_preflight_failed:" + ",".join(sorted(set(failures))))
+        return {"checked_active_providers": checked, "status": "configured"}
     def list_provider_secret_history(self, *, tenant_id: str, business_id: str, provider_key: str) -> tuple[dict[str, Any], ...]:
         provider = self.provider_registry.get(provider_key)
         return ProviderSecretVersioningService(self.secret_vault).list_versions(provider=provider, tenant_id=require_tenant_id(tenant_id), business_id=str(business_id).strip())

@@ -82,6 +82,10 @@ then
   echo "Could not create or validate the staging key-provider master key." >&2
   exit 2
 fi
+# Ephemeral staging-only signing keys: generated per proof, never reused in production.
+BUSINESAIOS_SAFETY_SIGNING_SECRET="${BUSINESAIOS_SAFETY_SIGNING_SECRET:-$("$PYTHON_BIN" -c 'import secrets; print(secrets.token_hex(32))')}"
+BUSINESAIOS_SIMULATION_EVIDENCE_SECRET="${BUSINESAIOS_SIMULATION_EVIDENCE_SECRET:-$("$PYTHON_BIN" -c 'import secrets; print(secrets.token_hex(32))')}"
+export BUSINESAIOS_SAFETY_SIGNING_SECRET BUSINESAIOS_SIMULATION_EVIDENCE_SECRET
 CONTROL_PLANE_API_KEY_STORE_PATH="${BAIOS_STAGING_API_KEY_STORE_PATH:-/app/data/api/api_keys.json}"
 if [[ "$CONTROL_PLANE_API_KEY_STORE_PATH" != /* ]]; then
   echo "BAIOS_STAGING_API_KEY_STORE_PATH must be an absolute container path." >&2
@@ -164,6 +168,8 @@ docker run -d \
   -e ENV=production \
   -e APP_ENV=production \
   -e DECISION_SIGNING_SECRET="$DECISION_SIGNING_SECRET" \
+  -e BUSINESAIOS_SAFETY_SIGNING_SECRET="$BUSINESAIOS_SAFETY_SIGNING_SECRET" \
+  -e BUSINESAIOS_SIMULATION_EVIDENCE_SECRET="$BUSINESAIOS_SIMULATION_EVIDENCE_SECRET" \
   -e API_CONTROL_PLANE_ALLOW_DEV_FALLBACKS=0 \
   -e API_CONTROL_PLANE_API_KEY_PEPPER="$CONTROL_PLANE_API_KEY_PEPPER" \
   -e BUSINESAIOS_API_KEY_STORE_BACKEND=file \

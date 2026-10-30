@@ -1,28 +1,21 @@
 from __future__ import annotations
-
 import json
 import os
 from dataclasses import dataclass
-
 CANON_SAFETY_KEY_REGISTRY = True
 _INSECURE_DEFAULT_KEY_ID = 'dev-insecure-default'
 _INSECURE_DEFAULT_SECRET = 'businesaios-safety-local-dev-key'
-
-
 @dataclass(frozen=True)
 class SafetySigningKey:
     key_id: str
     secret: bytes
     active: bool = True
     insecure_fallback: bool = False
-
-
 class SafetyKeyRegistry:
     def __init__(self) -> None:
         self._keys = self._load_keys()
         self._configured_current_key_id = str(os.getenv('BUSINESAIOS_SAFETY_ACTIVE_KEY_ID') or '').strip()
         self._configured_next_key_id = str(os.getenv('BUSINESAIOS_SAFETY_NEXT_KEY_ID') or '').strip()
-
     @property
     def current(self) -> SafetySigningKey:
         current_id = self._configured_current_key_id
@@ -32,26 +25,21 @@ class SafetyKeyRegistry:
             if key.active:
                 return key
         return next(iter(self._keys.values()))
-
     @property
     def strict_mode(self) -> bool:
         raw = str(os.getenv('BUSINESAIOS_SAFETY_STRICT_KEYS') or os.getenv('BUSINESAIOS_SAFETY_BOOT_STRICT') or '').strip().lower()
         production = {'prod', 'production', 'stage', 'staging', 'preprod'}
         environments = {str(os.getenv(key) or '').strip().lower() for key in ('APP_ENV', 'ENV')}
         return bool(environments & production) or raw in {'1', 'true', 'yes', 'on'}
-
     @property
     def next_key(self) -> SafetySigningKey | None:
         if self._configured_next_key_id and self._configured_next_key_id in self._keys:
             return self._keys[self._configured_next_key_id]
         return None
-
     def get(self, key_id: str) -> SafetySigningKey | None:
         return self._keys.get(str(key_id).strip())
-
     def key_ids(self) -> tuple[str, ...]:
         return tuple(self._keys.keys())
-
     def accepted_verification_key_ids(self) -> tuple[str, ...]:
         configured = str(os.getenv('BUSINESAIOS_SAFETY_ACCEPTED_KEY_IDS') or '').strip()
         accepted: list[str] = []
@@ -64,10 +52,8 @@ class SafetyKeyRegistry:
             if key_id not in accepted:
                 accepted.append(key_id)
         return tuple(accepted)
-
     def verify_secret(self, key_id: str, signature_material: bytes, expected_hex: str, *, digestmod) -> bool:
         import hmac
-
         for candidate_key_id in self._candidate_key_ids(key_id):
             key = self.get(candidate_key_id)
             if key is None:
@@ -76,17 +62,19 @@ class SafetyKeyRegistry:
             if hmac.compare_digest(str(expected_hex or ''), candidate):
                 return True
         return False
-
     def has_only_insecure_fallback(self) -> bool:
         return len(self._keys) == 1 and next(iter(self._keys.values())).insecure_fallback
-
     def has_insecure_fallback_enabled(self) -> bool:
         return any(key.insecure_fallback for key in self._keys.values())
-
     def assert_secure_current(self) -> None:
-        if self.strict_mode and self.current.insecure_fallback:
+        if not self.strict_mode:
+            return
+        if self._configured_current_key_id:
+            selected = self._keys.get(self._configured_current_key_id)
+            if selected is None or not selected.active:
+                raise RuntimeError('safety_active_signing_key_unavailable')
+        if self.current.insecure_fallback or not self.current.active:
             raise RuntimeError('unsafe_policy_signing_key_fallback')
-
     def _candidate_key_ids(self, key_id: str) -> tuple[str, ...]:
         requested = str(key_id).strip()
         ordered: list[str] = []
@@ -96,7 +84,6 @@ class SafetyKeyRegistry:
             if candidate not in ordered:
                 ordered.append(candidate)
         return tuple(ordered)
-
     def _load_keys(self) -> dict[str, SafetySigningKey]:
         configured_json = str(os.getenv('BUSINESAIOS_SAFETY_SIGNING_KEYS_JSON') or '').strip()
         keys: dict[str, SafetySigningKey] = {}
@@ -114,7 +101,6 @@ class SafetyKeyRegistry:
                     secret = str(item.get('secret') or '').strip()
                     if kid and secret:
                         keys[kid] = SafetySigningKey(key_id=kid, secret=secret.encode('utf-8'), active=bool(item.get('active', True)), insecure_fallback=bool(item.get('insecure_fallback', False)))
-
         configured = str(os.getenv('BUSINESAIOS_SAFETY_SIGNING_KEYS') or '').strip()
         if configured:
             for raw_entry in configured.split(','):
@@ -147,6 +133,4 @@ class SafetyKeyRegistry:
                 insecure_fallback=True,
             )
         return keys
-
-
 __all__ = ['CANON_SAFETY_KEY_REGISTRY', 'SafetyKeyRegistry', 'SafetySigningKey']
