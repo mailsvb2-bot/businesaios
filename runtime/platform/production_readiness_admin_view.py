@@ -1,8 +1,6 @@
 from __future__ import annotations
-
 import json
 from pathlib import Path
-
 PRODUCTION_READINESS_ARTIFACTS = (
     "postgres_contract.json",
     "postgres_migrations.json",
@@ -10,8 +8,6 @@ PRODUCTION_READINESS_ARTIFACTS = (
     "production_boot.json",
     "container_runtime.json",
 )
-
-
 def _read_artifact(root: Path, name: str) -> dict[str, object]:
     path = root / "artifacts" / "ci" / name
     artifact_name = name.removesuffix(".json")
@@ -23,12 +19,22 @@ def _read_artifact(root: Path, name: str) -> dict[str, object]:
         return {"artifact": artifact_name, "status": "invalid", "claims_production_ready": False}
     payload.setdefault("claims_production_ready", False)
     return dict(payload)
-
-
 def build_production_readiness_admin_view(root: Path | None = None) -> dict[str, object]:
     base = root or Path.cwd()
     artifacts = {name.removesuffix(".json"): _read_artifact(base, name) for name in PRODUCTION_READINESS_ARTIFACTS}
+    from runtime.safety import SafetyKeyRegistry, SimulationEvidenceVerifier
+    registry = SafetyKeyRegistry()
+    signing = {"status": "not_required"}
+    if registry.strict_mode:
+        try:
+            registry.assert_secure_current()
+            SimulationEvidenceVerifier()
+        except (RuntimeError, ValueError):
+            signing = {"status": "blocked", "reason": "production_signing_preflight_failed"}
+        else:
+            signing = {"status": "configured"}
     return {
+        "signing_preflight": signing,
         "surface": "production_readiness",
         "status": "observable",
         "artifacts": artifacts,
