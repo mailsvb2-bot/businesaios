@@ -1,5 +1,4 @@
 """Canonical process hygiene, singleton lock, and production preflight."""
-
 from __future__ import annotations
 import atexit
 from dataclasses import dataclass
@@ -19,10 +18,7 @@ CANON_RUNTIME_PROCESS_BOOTSTRAP_NO_RUNTIME_ASSEMBLY = True
 class _ProcessBootstrapState:
     bootstrap_done: bool = False
     singleton_lock: SingletonLock | None = None
-
 _STATE = _ProcessBootstrapState()
-
-
 def _release_singleton_lock() -> None:
     lock = _STATE.singleton_lock
     _STATE.singleton_lock = None
@@ -32,8 +28,6 @@ def _release_singleton_lock() -> None:
         lock.release()
     except Exception:
         return
-
-
 def _enforce_runtime_process_guards() -> None:
     verify_release_attestation_if_needed()
     enforce_production_strict_mode()
@@ -44,8 +38,6 @@ def _enforce_runtime_process_guards() -> None:
     if registry.strict_mode:
         registry.assert_secure_current()
         SimulationEvidenceVerifier()
-
-
 def _acquire_singleton_lock_if_needed(*, acquire_singleton_lock: bool) -> None:
     if not acquire_singleton_lock:
         return
@@ -55,8 +47,6 @@ def _acquire_singleton_lock_if_needed(*, acquire_singleton_lock: bool) -> None:
     lock.acquire()
     _STATE.singleton_lock = lock
     atexit.register(_release_singleton_lock)
-
-
 def run_process_bootstrap(*, acquire_singleton_lock: bool = True) -> None:
     """Run process guards and own the singleton lock when needed.
 
