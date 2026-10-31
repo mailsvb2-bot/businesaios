@@ -98,6 +98,7 @@ def test_clientplatform_owner_button_reads_durable_business_state(
 ):
     """Real Telegram update -> policy -> canonical owner -> reopened event store."""
     from types import SimpleNamespace
+    from time import time_ns
     from uuid import uuid4
 
     from runtime.handler_impl.domains.business_flow_ops import (
@@ -122,7 +123,7 @@ def test_clientplatform_owner_button_reads_durable_business_state(
                         "event_id": str(uuid4()), "tenant_id": kwargs["tenant_id"],
                         "user_id": kwargs["user_id"], "source": "telegram",
                         "event_type": kwargs["track_event_type"],
-                        "timestamp_ms": 1800000000000,
+                        "timestamp_ms": time_ns() // 1_000_000,
                         "decision_id": kwargs["decision_id"],
                         "correlation_id": kwargs["correlation_id"],
                         "payload": kwargs["track_payload"],
