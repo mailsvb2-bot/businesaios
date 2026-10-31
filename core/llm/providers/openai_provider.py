@@ -4,7 +4,6 @@ import asyncio
 from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Any
-from urllib.parse import urlsplit
 
 from ..contracts import LLMClient, LLMRequest, LLMResponse, LLMUsage
 from ..redaction import safe_metadata
@@ -31,8 +30,7 @@ class OpenAICompatClient(LLMClient):
 
     def _payload_for(self, req: LLMRequest) -> dict[str, Any]:
         model = req.model or self._cfg.default_model
-        chat = (urlsplit(self._cfg.base_url).hostname == "foundation-models.api.cloud.ru"
-                or self._cfg.base_url.rstrip("/").endswith("/chat/completions"))
+        chat = self._cfg.base_url.rstrip("/").endswith("/chat/completions") or self._cfg.base_url.startswith("https://foundation-models.api.cloud.ru/")
         payload: dict[str, Any] = {
             "model": model,
             "input": [
@@ -46,9 +44,8 @@ class OpenAICompatClient(LLMClient):
         if req.metadata:
             payload["metadata"] = safe_metadata(req.metadata)
         if chat:
-            payload.pop("input")
-            payload.pop("max_output_tokens")
-            payload.pop("metadata", None)
+            for key in ("input", "max_output_tokens", "metadata"):
+                payload.pop(key, None)
             payload["messages"] = [{"role": m.role, "content": m.content} for m in req.messages]
             payload["max_tokens"] = req.max_tokens
         return payload
