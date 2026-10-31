@@ -9,7 +9,7 @@ from runtime._internal import llm_transport
 def test_cloud_ru_chat_payload_and_existing_responses_payload():
     request = LLMRequest(messages=[LLMMessage(role="user", content="привет")],
                          metadata={"tenant_id": "do-not-send"}, max_tokens=30, model="model")
-    cloud = build_openai_compat(base_url="https://foundation-models.api.cloud.ru/v1", api_key="x", model="m")
+    cloud = build_openai_compat(base_url="https://foundation-models.api.cloud.ru/v1", api_key="x", default_model="m")
     cloud_payload = cloud._payload_for(request)
     assert cloud_payload["messages"] == [{"role": "user", "content": "привет"}]
     assert cloud_payload["max_tokens"] == 30
