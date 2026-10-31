@@ -182,7 +182,6 @@ def test_clientplatform_telegram_entrypoint_gateway_persists_outcome(
     from uuid import uuid4
 
     from core.ai import set_decision_core_singleton
-    from runtime.decision_gateway import execute_runtime_decision
     from runtime.entrypoints.telegram_longpoll import _execute_update
     from runtime.execution.executor_result import ExecutionResult
     from runtime.handler_impl.domains.business_flow_ops import handle_business_ops_summary, handle_sales_pipeline
