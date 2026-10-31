@@ -3,6 +3,7 @@ from __future__ import annotations
 import time
 from typing import Any
 from uuid import uuid4
+from urllib.parse import urlsplit
 
 from runtime._internal.http_transport import form_urlencode as encode_oauth_form, sync_post_json, sync_request
 from runtime.observability.error_handling import swallow
@@ -78,7 +79,9 @@ def llm_generate_openai_compat(*, base_url: str, api_key: str, payload: dict[str
     base = str(base_url or "").strip().rstrip("/")
     return llm_post_json(
         provider="openai_compat",
-        url=base + "/responses",
+        url=(base if base.endswith("/chat/completions") else base + "/chat/completions")
+        if (urlsplit(base).hostname == "foundation-models.api.cloud.ru"
+            or base.endswith("/chat/completions")) else base + "/responses",
         api_key=api_key,
         payload=payload,
         timeout_s=timeout_s,
