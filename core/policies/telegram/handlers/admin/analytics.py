@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from dataclasses import replace
+
 from core.policies.telegram.context import TelegramCtx
 from core.policies.telegram.handlers.admin.analytics_helpers import deny_if_not_admin, staff_reply
 from core.policies.telegram.helpers import ProposedAction, propose
@@ -35,32 +37,10 @@ def handle_analytics(ctx: TelegramCtx, *, user_id: str, pm) -> ProposedAction | 
             )
         return staff_reply(pm=pm, text=txt)
 
-    if ctx.callback_data in {"admin:behavior", "admin:conversion"}:
-        denied = deny_if_not_admin(ctx.is_admin, pm=pm)
-        if denied is not None:
-            return denied
-        metrics = ctx.admin_metrics if isinstance(ctx.admin_metrics, dict) else {}
-        if ctx.callback_data == "admin:behavior":
-            retention = metrics.get("retention")
-            latency = metrics.get("latency")
-            if not isinstance(retention, dict) and not isinstance(latency, dict):
-                return pm(text="🧠 Поведение\n\nНет подтверждённых данных о поведении.", reply_markup=kb_staff_menu())
-            lines = ["🧠 Поведение (существующие метрики)"]
-            if isinstance(retention, dict):
-                lines.append(f"Активные ≥2 дней: {retention.get('active_2d', 'нет данных')}")
-                lines.append(f"Пользователи за 30 дней: {retention.get('users', 'нет данных')}")
-            if isinstance(latency, dict):
-                lines.append(f"Замеров нажатий: {latency.get('samples', 'нет данных')}")
-            return pm(text="\n".join(lines), reply_markup=kb_staff_menu())
-        funnel = metrics.get("funnel")
-        if not isinstance(funnel, dict):
-            return pm(text="💰 Конверсия\n\nНет подтверждённых данных воронки.", reply_markup=kb_staff_menu())
-        viewed = funnel.get("tariffs_viewed")
-        paid = funnel.get("payment_succeeded")
-        if not isinstance(viewed, int) or not isinstance(paid, int) or viewed < 0 or paid < 0:
-            return pm(text="💰 Конверсия\n\nНедостаточно подтверждённых данных для расчёта.", reply_markup=kb_staff_menu())
-        rate = f"{paid / viewed * 100:.1f}%" if viewed else "нет просмотров"
-        return pm(text=f"💰 Конверсия в оплату\n\nПросмотры тарифов: {viewed}\nУспешные оплаты: {paid}\nОтношение: {rate}\n\nПо существующей агрегированной воронке; не когортная конверсия.", reply_markup=kb_staff_menu())
+    if ctx.callback_data == "admin:behavior":
+        return handle_analytics(replace(ctx, callback_data="admin:retention"), user_id=user_id, pm=pm)
+    if ctx.callback_data == "admin:conversion":
+        return handle_analytics(replace(ctx, callback_data="admin:funnel"), user_id=user_id, pm=pm)
 
     if ctx.callback_data == "admin:users:today":
         denied = deny_if_not_admin(ctx.is_admin, pm=pm)
