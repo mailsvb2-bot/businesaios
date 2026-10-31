@@ -87,3 +87,74 @@ def test_owner_section_rejects_unprivileged_telegram_user(monkeypatch, callback)
     result = UnifiedTelegramPolicyV3().propose(state)
     assert result.action == "send_message@v1"
     assert "запрещён" in result.payload["text"]
+
+
+@pytest.mark.parametrize(("callback", "action", "operation"), [
+    ("cp:section:customers", "business_ops_summary@v1", "cockpit"),
+    ("cp:section:sales", "sales_pipeline@v1", "list"),
+])
+def test_clientplatform_owner_button_reads_durable_business_state(
+    monkeypatch, tmp_path, callback, action, operation,
+):
+    """Real Telegram update -> policy -> canonical owner -> reopened event store."""
+    from types import SimpleNamespace
+    from uuid import uuid4
+
+    from runtime.handler_impl.domains.business_flow_ops import (
+        handle_business_ops_summary, handle_sales_pipeline,
+    )
+    from runtime.platform.event_store.sqlite_event_store import SqliteEventStore
+
+    monkeypatch.setattr(
+        "runtime.entrypoints.telegram_longpoll._configured_telegram_tenant_id",
+        lambda: "tenant-live",
+    )
+    event_path = str(tmp_path / "clientplatform.sqlite3")
+    with SqliteEventStore(event_path) as store:
+        class DeliveredEffects:
+            def __init__(self):
+                self.deliveries = []
+
+            def send_message(self, **kwargs):
+                self.deliveries.append(kwargs)
+                if kwargs.get("track_event_type"):
+                    store.append_event({
+                        "event_id": str(uuid4()), "tenant_id": kwargs["tenant_id"],
+                        "user_id": kwargs["user_id"], "source": "telegram",
+                        "event_type": kwargs["track_event_type"],
+                        "timestamp_ms": 1800000000000,
+                        "decision_id": kwargs["decision_id"],
+                        "correlation_id": kwargs["correlation_id"],
+                        "payload": kwargs["track_payload"],
+                    })
+                return {"ok": True, "router_evidence": {
+                    "source": "telegram", "verified": True, "message_id": "sent-1",
+                }}
+
+        effects = DeliveredEffects()
+        env = SimpleNamespace(decision=SimpleNamespace(
+            decision_id="decision-owner", correlation_id="correlation-owner",
+        ))
+        created = handle_sales_pipeline({
+            "tenant_id": "tenant-live", "user_id": "4001",
+            "op": "add", "arg": "Test customer | Telegram",
+        }, effects, env, event_store=store)
+        assert created["ok"] is True
+        assert store.count_events(tenant_id="tenant-live", event_type="sales_pipeline@v1") == 1
+
+    with SqliteEventStore(event_path) as reopened:
+        proposal = UnifiedTelegramPolicyV3(admin_user_ids=("4001",)).propose(
+            _callback_state(callback)
+        )
+        assert (proposal.action, proposal.payload["op"]) == (action, operation)
+        assert proposal.payload["callback_query_id"] == "callback-12"
+        body = {"tenant_id": "tenant-live", **proposal.payload}
+        handler = (handle_sales_pipeline if action == "sales_pipeline@v1"
+                   else handle_business_ops_summary)
+        delivered = handler(body, effects, env, event_store=reopened)
+        assert delivered["ok"] is True
+        assert effects.deliveries[-1]["callback_query_id"] == "callback-12"
+        assert effects.deliveries[-1]["text"]
+        assert list(reopened.iter_events(
+            tenant_id="tenant-live", event_type="sales_pipeline@v1",
+        ))[0]["payload"]["name"] == "Test customer"
