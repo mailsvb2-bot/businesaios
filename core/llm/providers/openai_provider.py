@@ -30,20 +30,15 @@ class OpenAICompatClient(LLMClient):
 
     def _payload_for(self, req: LLMRequest) -> dict[str, Any]:
         model = req.model or self._cfg.default_model
-        chat = (self._cfg.base_url.rstrip("/").endswith("/chat/completions")
-                or self._cfg.base_url.startswith("https://foundation-models.api.cloud.ru/"))
+        chat = self._cfg.base_url.rstrip("/").endswith("/chat/completions") or self._cfg.base_url.startswith("https://foundation-models.api.cloud.ru/")
         payload: dict[str, Any] = {"model": model, "temperature": req.temperature, "top_p": req.top_p}
         if chat:
             payload["messages"] = [{"role": m.role, "content": m.content} for m in req.messages]
             payload["max_tokens"] = req.max_tokens
         else:
-            payload["input"] = [
-                {"role": m.role, "content": [{"type": "input_text", "text": m.content}]}
-                for m in req.messages
-            ]
+            payload["input"] = [{"role": m.role, "content": [{"type": "input_text", "text": m.content}]} for m in req.messages]
             payload["max_output_tokens"] = req.max_tokens
-            if req.metadata:
-                payload["metadata"] = safe_metadata(req.metadata)
+            if req.metadata: payload["metadata"] = safe_metadata(req.metadata)
         return payload
 
     @staticmethod
