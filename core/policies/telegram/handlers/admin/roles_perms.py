@@ -8,13 +8,13 @@ ROLE_PERM_COMMANDS = {"/role_add", "/role_del", "/perm_add", "/perm_del"}
 
 
 def handle_roles_perms(ctx: TelegramCtx, *, user_id: str, pm) -> ProposedAction | None:
-    if ctx.cmd not in ROLE_PERM_COMMANDS and ctx.callback_data != "admin:roles:menu":
+    if ctx.cmd not in ROLE_PERM_COMMANDS and ctx.callback_data not in {"admin:roles:menu", "admin:perms"}:
         return None
 
     if not ctx.is_admin:
         return pm(text="Доступ запрещён.", reply_markup=kb_back_main())
 
-    if ctx.callback_data == "admin:roles:menu":
+    if ctx.callback_data in {"admin:roles:menu", "admin:perms"}:
         txt = (
             "👥 Роли команды\n\n"
             "Роли задаются событиями (канонично, без правки кода в рантайме).\n\n"
