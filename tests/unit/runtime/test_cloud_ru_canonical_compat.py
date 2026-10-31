@@ -2,22 +2,20 @@
 from types import SimpleNamespace
 
 from core.llm.contracts import LLMMessage, LLMRequest
-from core.llm.providers.openai_provider import OpenAICompatClient, OpenAICompatConfig
+from core.llm import build_openai_compat
 from runtime._internal import llm_transport
 
 
 def test_cloud_ru_chat_payload_and_existing_responses_payload():
     request = LLMRequest(messages=[LLMMessage(role="user", content="привет")],
                          metadata={"tenant_id": "do-not-send"}, max_tokens=30, model="model")
-    cloud = OpenAICompatClient(OpenAICompatConfig(
-        base_url="https://foundation-models.api.cloud.ru/v1", api_key="x"))
+    cloud = build_openai_compat(base_url="https://foundation-models.api.cloud.ru/v1", api_key="x", model="m")
     cloud_payload = cloud._payload_for(request)
     assert cloud_payload["messages"] == [{"role": "user", "content": "привет"}]
     assert cloud_payload["max_tokens"] == 30
     assert "input" not in cloud_payload and "metadata" not in cloud_payload
     assert "max_output_tokens" not in cloud_payload
-    legacy = OpenAICompatClient(OpenAICompatConfig(
-        base_url="https://api.openai.com/v1", api_key="x"))._payload_for(request)
+    legacy = build_openai_compat(base_url="https://api.openai.com/v1", api_key="x", model="m")._payload_for(request)
     assert "input" in legacy and "messages" not in legacy
     assert legacy["max_output_tokens"] == 30
 
