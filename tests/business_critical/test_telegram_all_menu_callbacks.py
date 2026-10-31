@@ -101,7 +101,7 @@ def test_clientplatform_owner_button_reads_durable_business_state(
     from uuid import uuid4
 
     from runtime.handler_impl.domains.business_flow_ops import (
-        handle_business_ops_summary, handle_sales_pipeline,
+        handle_business_ops_summary, handle_sales_pipeline, handle_bookings,
     )
     from runtime.platform.event_store.sqlite_event_store import SqliteEventStore
 
@@ -141,6 +141,15 @@ def test_clientplatform_owner_button_reads_durable_business_state(
         }, effects, env, event_store=store)
         assert created["ok"] is True
         assert store.count_events(tenant_id="tenant-live", event_type="sales_pipeline@v1") == 1
+        handle_bookings({
+            "tenant_id": "tenant-live", "user_id": "4001",
+            "op": "add_slot", "arg": "2027-01-20 15:00 90 Business review",
+        }, effects, env, event_store=store, now_ms=1800000000000)
+        handle_bookings({
+            "tenant_id": "tenant-live", "user_id": "6002",
+            "op": "book", "arg": "1",
+        }, effects, env, event_store=store, now_ms=1800000000000)
+        assert store.count_events(tenant_id="tenant-live", event_type="bookings@v1") == 2
 
     with SqliteEventStore(event_path) as reopened:
         proposal = UnifiedTelegramPolicyV3(admin_user_ids=("4001",)).propose(
@@ -155,6 +164,10 @@ def test_clientplatform_owner_button_reads_durable_business_state(
         assert delivered["ok"] is True
         assert effects.deliveries[-1]["callback_query_id"] == "callback-12"
         assert effects.deliveries[-1]["text"]
+        if action == "sales_pipeline@v1":
+            assert "Test customer" in effects.deliveries[-1]["text"]
+        else:
+            assert "6002" in effects.deliveries[-1]["text"]
         assert list(reopened.iter_events(
             tenant_id="tenant-live", event_type="sales_pipeline@v1",
         ))[0]["payload"]["name"] == "Test customer"
