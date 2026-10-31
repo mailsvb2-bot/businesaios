@@ -171,3 +171,79 @@ def test_clientplatform_owner_button_reads_durable_business_state(
         assert list(reopened.iter_events(
             tenant_id="tenant-live", event_type="sales_pipeline@v1",
         ))[0]["payload"]["name"] == "Test customer"
+
+
+@pytest.mark.parametrize("callback", ["cp:section:customers", "cp:section:sales"])
+def test_clientplatform_telegram_entrypoint_gateway_persists_outcome(
+    monkeypatch, tmp_path, callback,
+):
+    """Exercise the canonical ingress/gateway/execute sequence with test adapters."""
+    from types import SimpleNamespace
+    from uuid import uuid4
+
+    from core.ai import set_decision_core_singleton
+    from runtime.decision_gateway import execute_runtime_decision
+    from runtime.entrypoints.telegram_longpoll import _execute_update
+    from runtime.execution.executor_result import ExecutionResult
+    from runtime.handler_impl.domains.business_flow_ops import handle_business_ops_summary, handle_sales_pipeline
+    from runtime.platform.event_store.sqlite_event_store import SqliteEventStore
+
+    monkeypatch.setenv("TENANT_ID", "tenant-live")
+    db = str(tmp_path / "button-outcome.sqlite3")
+    with SqliteEventStore(db) as store:
+        class Effects:
+            def send_message(self, **kwargs):
+                return {"ok": True, "router_evidence": {"source": "telegram", "verified": True, "external_refs": ["test-message-1"]}}
+
+        class Issuer:
+            def issue(self, state):
+                proposal = UnifiedTelegramPolicyV3(admin_user_ids=("4001",)).propose(state)
+                return SimpleNamespace(decision=SimpleNamespace(
+                    decision_id="decision-button", correlation_id="correlation-button",
+                    action=proposal.action, payload=proposal.payload,
+                ))
+
+        class Executor:
+            def execute(self, envelope):
+                action = envelope.decision.action
+                handler = (handle_sales_pipeline if action == "sales_pipeline@v1"
+                           else handle_business_ops_summary)
+                assert action in {"business_ops_summary@v1", "sales_pipeline@v1"}
+                body = {"tenant_id": "tenant-live", **envelope.decision.payload}
+                out = handler(body, Effects(), envelope, event_store=store)
+                return ExecutionResult(
+                    ok=out["ok"], output=out,
+                    decision_id=envelope.decision.decision_id,
+                    correlation_id=envelope.decision.correlation_id,
+                )
+
+        class Audit:
+            def append(self, event):
+                store.append_event({
+                    "event_id": str(uuid4()), "tenant_id": "tenant-live",
+                    "user_id": "4001", "source": "telegram_ingress",
+                    "event_type": event["event_type"], "timestamp_ms": event["timestamp_ms"],
+                    "decision_id": "decision-button", "correlation_id": "correlation-button",
+                    "payload": event["payload"],
+                })
+
+        issuer = Issuer()
+        set_decision_core_singleton(issuer)
+        update = {
+            "update_id": 12,
+            "callback_query": {
+                "id": "callback-12", "from": {"id": 4001},
+                "message": {"message_id": 10, "date": 1700000000, "chat": {"id": 4001}},
+                "data": callback,
+            },
+        }
+        result = _execute_update(core=issuer, executor=Executor(), event_log=Audit(),
+                                 update=update, transport="longpoll")
+        assert result.ok is True
+    with SqliteEventStore(db) as reopened:
+        outcomes = list(reopened.iter_events(
+            tenant_id="tenant-live", event_type="telegram_update_executed",
+        ))
+        assert len(outcomes) == 1
+        assert outcomes[0]["payload"]["ok"] is True
+        assert outcomes[0]["payload"]["update_id"] == 12
