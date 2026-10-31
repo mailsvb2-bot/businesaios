@@ -43,14 +43,14 @@ def handle_analytics(ctx: TelegramCtx, *, user_id: str, pm) -> ProposedAction | 
         if ctx.callback_data == "admin:behavior":
             behavior = metrics.get("behavior") or {}
             if not isinstance(behavior, dict) or not behavior:
-                return pm(text="🧠 Поведение\\n\\nДанные поведенческой аналитики пока не собраны.", reply_markup=kb_staff_menu())
+                return pm(text="🧠 Поведение\n\nДанные поведенческой аналитики пока не собраны.", reply_markup=kb_staff_menu())
             rows = [f"• {str(k)[:60]}: {str(v)[:120]}" for k, v in sorted(behavior.items())][:20]
-            return pm(text="🧠 Поведение\\n\\n" + "\\n".join(rows), reply_markup=kb_staff_menu())
+            return pm(text="🧠 Поведение\n\n" + "\n".join(rows), reply_markup=kb_staff_menu())
         conversion = metrics.get("conversion") or {}
         if not isinstance(conversion, dict) or not conversion:
-            return pm(text="💰 Конверсия\\n\\nДанные о конверсиях пока не собраны.", reply_markup=kb_staff_menu())
+            return pm(text="💰 Конверсия\n\nДанные о конверсиях пока не собраны.", reply_markup=kb_staff_menu())
         rows = [f"• {str(k)[:60]}: {str(v)[:120]}" for k, v in sorted(conversion.items())][:20]
-        return pm(text="💰 Конверсия\\n\\n" + "\\n".join(rows), reply_markup=kb_staff_menu())
+        return pm(text="💰 Конверсия\n\n" + "\n".join(rows), reply_markup=kb_staff_menu())
 
     if ctx.callback_data == "admin:users:today":
         denied = deny_if_not_admin(ctx.is_admin, pm=pm)
