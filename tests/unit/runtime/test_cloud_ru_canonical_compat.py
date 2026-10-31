@@ -15,7 +15,7 @@ def test_cloud_ru_chat_payload_and_existing_responses_payload():
     assert cloud_payload["max_tokens"] == 30
     assert "input" not in cloud_payload and "metadata" not in cloud_payload
     assert "max_output_tokens" not in cloud_payload
-    legacy = build_openai_compat(base_url="https://api.openai.com/v1", api_key="x", model="m")._payload_for(request)
+    legacy = build_openai_compat(base_url="https://api.openai.com/v1", api_key="x", default_model="m")._payload_for(request)
     assert "input" in legacy and "messages" not in legacy
     assert legacy["max_output_tokens"] == 30
 
