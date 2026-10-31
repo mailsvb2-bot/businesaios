@@ -36,6 +36,7 @@ def test_every_visible_main_menu_button_enters_its_own_route(monkeypatch, item):
     if result.action == "send_message@v1":
         assert result.payload.get("text")
         assert "Я здесь. Напиши" not in result.payload["text"], item.key
+        assert "Этот раздел пока недоступен" not in result.payload["text"], item.key
         assert result.payload.get("callback_query_id") == "callback-12"
 
 
@@ -66,6 +67,7 @@ def test_all_nested_visible_buttons_have_concrete_route(monkeypatch, callback):
     if result.action == "send_message@v1":
         assert result.payload.get("text"), callback
         assert not result.payload["text"].startswith("Я здесь. Напиши"), callback
+        assert "Этот раздел пока недоступен" not in result.payload["text"], callback
 
 
 @pytest.mark.parametrize(("callback", "action", "operation"), [

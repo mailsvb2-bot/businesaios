@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from dataclasses import replace
 from core.policies.telegram.context import TelegramCtx
 from core.policies.telegram.handlers.admin.analytics_helpers import deny_if_not_admin, staff_reply
 from core.policies.telegram.helpers import ProposedAction, propose
@@ -35,6 +36,10 @@ def handle_analytics(ctx: TelegramCtx, *, user_id: str, pm) -> ProposedAction | 
             )
         return staff_reply(pm=pm, text=txt)
 
+    if ctx.callback_data == "admin:behavior":
+        return handle_analytics(replace(ctx, callback_data="admin:retention"), user_id=user_id, pm=pm)
+    if ctx.callback_data == "admin:conversion":
+        return handle_analytics(replace(ctx, callback_data="admin:funnel"), user_id=user_id, pm=pm)
     if ctx.callback_data == "admin:users:today":
         denied = deny_if_not_admin(ctx.is_admin, pm=pm)
         if denied is not None:
