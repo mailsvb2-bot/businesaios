@@ -4,7 +4,7 @@ from collections.abc import Mapping
 from dataclasses import dataclass
 from typing import Any
 
-from runtime.messaging.channel_types import ALL_CHANNELS
+from contracts.messaging_channels import ALL_CHANNELS
 
 
 @dataclass(frozen=True)
