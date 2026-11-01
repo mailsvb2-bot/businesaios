@@ -159,3 +159,16 @@ def test_untrusted_sources_and_unknown_channels_cannot_bypass_autonomous_budget(
             product_id=None, domain=None, product_version=None, actor_id="user-1",
         )
         assert not is_routine_reply("send_message@v1", payload)
+
+def test_cross_tenant_reply_claim_does_not_exempt_autonomous_budget():
+    payload = {"tenant_id": "tenant-live", "user_id": "user-1",
+               "meta": {"inbound_user_reply": {
+                   "channel": "vk", "update_id": "event-19", "tenant_id": "another"}}}
+    assert not is_routine_reply("send_message@v1", payload)
+    assert not is_routine_reply("send_message@v1", {**payload, "recipient_count": 2})
+    ledger = InMemoryActionBudgetLedger()
+    ledger.record("tenant-live", estimated_cost=0)
+    guard = ActionBudgetGuard(ledger, ActionBudget(max_cost=5, max_actions=0))
+    assert guard.evaluate(SafetyActionContext(
+        action="send_message@v1", tenant_id="tenant-live",
+        user_id="user-1", payload=payload)).status == ControlStatus.BLOCK
