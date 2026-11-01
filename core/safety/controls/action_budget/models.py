@@ -12,10 +12,7 @@ class ActionBudget:
 
 
 def is_routine_reply(action: str, payload: Mapping[str, Any]) -> bool:
-    """Only a signed DecisionCore reply tied to a canonical Telegram update.
-
-    Other messages, even non-billable marketing sends, retain normal budgets.
-    """
+    """Only a signed inbound Telegram reply; other outbound sends retain budgets."""
     if str(action) != "send_message@v1":
         return False
     marker = payload.get("meta")
