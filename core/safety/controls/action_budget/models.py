@@ -18,11 +18,18 @@ def routine_reply_day() -> str:
 
 
 def is_routine_reply(action: str, payload: Mapping[str, Any]) -> bool:
-    """Only the canonical single-message action, never arbitrary zero-cost actions.
+    """Only a signed DecisionCore reply tied to a canonical Telegram update.
 
-    A priced send is still charged against the original financial/action budget.
+    Other messages, even non-billable marketing sends, retain normal budgets.
     """
     if str(action) != "send_message@v1":
+        return False
+    marker = payload.get("meta")
+    marker = marker.get("inbound_user_reply") if isinstance(marker, Mapping) else None
+    if not isinstance(marker, Mapping) or marker.get("channel") != "telegram":
+        return False
+    update_id = marker.get("update_id")
+    if type(update_id) is not int or update_id < 0 or not str(payload.get("user_id") or "").strip():
         return False
     try:
         cost = float(payload.get("estimated_cost", 0.0) or 0.0)
