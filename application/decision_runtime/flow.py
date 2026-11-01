@@ -1,13 +1,12 @@
 from __future__ import annotations
 
-from contracts.messaging_channels import ALL_CHANNELS
-
 from collections.abc import Mapping
 from math import isfinite
 from typing import Any
 
 from application.decision_runtime.envelope_builder import bind_product_metadata, build_decision_envelope
 from application.decision_state.world_model_metadata import attach_world_model_metadata
+from contracts.messaging_channels import ALL_CHANNELS
 from core.ai.action_ranking import OBJECTIVE_DIMENSIONS
 
 
