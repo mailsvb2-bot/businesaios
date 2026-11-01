@@ -83,3 +83,23 @@ async def test_async_provider_usage_is_charged_even_when_text_rejected():
         tenant_id="t-async-charge", user_id="u-async-charge",
         tokens=composer._cfg.budget.user_tokens_per_day - 6,
     )
+
+
+def test_missing_provider_usage_charges_conservative_estimate():
+    from core.llm.contracts import LLMResponse
+
+    class NoUsageLLM:
+        def generate_sync(self, request):
+            return LLMResponse(content="Я DecisionCore и я решил…", usage=None)
+
+    composer = MarketingLLMComposer(NoUsageLLM(), LLMComposerConfig(model="mock"))
+    inp = MarketingLLMInputs(
+        tenant_id="t-missing-usage", user_id="u-missing-usage",
+        locale="ru", channel="telegram", features={},
+        offer={"id": "missing", "title": "Сеанс"}, last_user_text="",
+    )
+    assert composer.compose_sync(inp) is None
+    assert not composer._runtime.budget.can_spend(
+        tenant_id="t-missing-usage", user_id="u-missing-usage",
+        tokens=composer._cfg.budget.user_tokens_per_day - 1,
+    )
