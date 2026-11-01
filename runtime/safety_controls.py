@@ -4,7 +4,6 @@ import logging
 from typing import Any
 
 from bootstrap.safety_control_boot import build_safety_control_runtime
-from core.safety.controls.action_budget.models import is_routine_reply
 from runtime.safety import (
     ControlDecision,
     ControlStatus,
@@ -12,6 +11,7 @@ from runtime.safety import (
     SafetyEvent,
     canonical_action_id,
     canonical_breaker_key,
+    is_routine_reply,
 )
 
 _LOGGER = logging.getLogger(__name__)
@@ -19,9 +19,6 @@ _LOGGER = logging.getLogger(__name__)
 
 def _payload_dict(payload: Any) -> dict[str, Any]:
     return dict(payload or {})
-
-
-
 
 def _worker_owner(payload: Any) -> str:
     data = _payload_dict(payload)
