@@ -109,7 +109,7 @@ def test_start_proposal_gets_trusted_reply_provenance_and_existing_user_reply_po
 
 
 def test_registered_channels_respect_user_reply_budget_without_exempting_outbound():
-    from runtime.messaging.channel_types import ALL_CHANNELS
+    from contracts.messaging_channels import ALL_CHANNELS
     assert {"telegram", "vk", "max", "whatsapp", "web_chat"}.issubset(set(ALL_CHANNELS))
     ledger = InMemoryActionBudgetLedger()
     ledger.record("tenant-live", estimated_cost=6.0)
