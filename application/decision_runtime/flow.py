@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from runtime.messaging.channel_types import ALL_CHANNELS
+from contracts.messaging_channels import ALL_CHANNELS
 
 from collections.abc import Mapping
 from math import isfinite
