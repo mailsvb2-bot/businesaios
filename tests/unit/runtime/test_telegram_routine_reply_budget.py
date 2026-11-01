@@ -203,3 +203,41 @@ def test_provider_inbound_identity_reaches_canonical_decision_budget():
         product_id=None, domain=None, product_version=None, actor_id="user-1",
     )
     assert not is_routine_reply("send_message@v1", unsigned)
+
+
+def test_inbound_reply_must_match_outbound_channel_and_chat():
+    state = SimpleNamespace(
+        tenant_id="tenant-live", user_id="user-1", meta={}, product={},
+        session={"source": "messaging", "channel": "vk",
+                 "transport_message_id": "verified-event-9", "chat_id": "chat-1"},
+    )
+    for override in ({"channel": "max"}, {"chat_id": "chat-2"},
+                     {"channel": "vk", "chat_id": "chat-2"}):
+        _, payload = build_payload(
+            state=state,
+            out=ProposedAction("send_message@v1", {
+                "user_id": "user-1", "text": "not a reply", **override,
+            }),
+            pinned_world_model_meta={}, tenant_id="tenant-live",
+            product_id=None, domain=None, product_version=None, actor_id="user-1",
+        )
+        assert not is_routine_reply("send_message@v1", payload)
+
+    _, reply = build_payload(
+        state=state, out=ProposedAction("send_message@v1", {
+            "user_id": "user-1", "text": "reply", "channel": "vk", "chat_id": "chat-1",
+        }), pinned_world_model_meta={}, tenant_id="tenant-live",
+        product_id=None, domain=None, product_version=None, actor_id="user-1",
+    )
+    assert is_routine_reply("send_message@v1", reply)
+
+
+def test_inbound_mapping_preserves_chat_coordinate():
+    from runtime.messaging.inbound_message import InboundMessage
+    from runtime.messaging.inbound_to_world_state import map_inbound_to_world_state
+
+    state = map_inbound_to_world_state(InboundMessage(
+        tenant_id="tenant-live", user_id="user-1", channel="max",
+        transport_message_id="event-1", metadata={"chat_id": "room-42"},
+    ))
+    assert state.session["chat_id"] == "room-42"
