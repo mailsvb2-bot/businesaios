@@ -11,6 +11,7 @@ from runtime.safety import (
     SafetyEvent,
     canonical_action_id,
     canonical_breaker_key,
+    is_routine_reply,
 )
 
 _LOGGER = logging.getLogger(__name__)
@@ -18,9 +19,6 @@ _LOGGER = logging.getLogger(__name__)
 
 def _payload_dict(payload: Any) -> dict[str, Any]:
     return dict(payload or {})
-
-
-
 
 def _worker_owner(payload: Any) -> str:
     data = _payload_dict(payload)
@@ -98,6 +96,12 @@ def record_allowed_action(*, action: str, payload: Any) -> None:
     runtime = build_safety_control_runtime()
     data = _payload_dict(payload)
     spec = runtime.profile.action_catalog.resolve(str(action))
+    if is_routine_reply(action, data):
+        _record_safety_event(
+            action=action, payload=payload, stage="allow", status="allow",
+            reason="user_reply_not_charged", details={"estimated_cost": 0.0},
+        )
+        return
     default_cost = float(getattr(spec, "default_estimated_cost", 0.0) or 0.0)
     estimated_cost = float(data.get("estimated_cost", default_cost) or default_cost)
     runtime.profile.action_budget_ledger.record(str(data.get("tenant_id") or "unknown"), estimated_cost=estimated_cost)

@@ -182,6 +182,21 @@ def build_payload(
     payload = attach_world_model_metadata(envelope_payload=tagged.payload, state=state)
     meta_block = dict(payload.get("meta") or {})
     state_meta = _state_meta(state)
+    # A reply is credited only when the canonical inbound state and chosen
+    # one-recipient action agree. Drop any policy-supplied claim first.
+    meta_block.pop("inbound_user_reply", None)
+    if "meta" in payload:
+        payload["meta"] = meta_block
+    session = _mapping(state.get("session") if isinstance(state, Mapping) else getattr(state, "session", {}))
+    event_id = session.get("messaging_update_id")
+    state_user = str(state.get("user_id") if isinstance(state, Mapping) else getattr(state, "user_id", "") or "")
+    if (getattr(out, "action", "") == "send_message@v1"
+            and session.get("source") in {"messaging", "customer_bot"}
+            and session.get("channel") == "telegram"
+            and type(event_id) is int and event_id >= 0
+            and state_user and str(payload.get("user_id") or "") == state_user
+            and (payload.get("recipient_count") is None or payload.get("recipient_count") == 1)):
+        meta_block["inbound_user_reply"] = {"channel": "telegram", "update_id": event_id}
     canonical_goal_id = _canonical_goal_identity(state)
     if canonical_goal_id:
         payload_goal_id = str(payload.get("goal_id") or "").strip()

@@ -4,7 +4,7 @@ from ..action_catalog import ActionSafetyCatalog, build_default_action_catalog
 from ..action_context import SafetyActionContext
 from ..control_result import ControlDecision, ControlStatus
 from .ledger import ActionBudgetLedger
-from .models import ActionBudget
+from .models import ActionBudget, is_routine_reply
 
 
 class ActionBudgetGuard:
@@ -16,8 +16,16 @@ class ActionBudgetGuard:
         self._catalog = catalog or build_default_action_catalog()
 
     def evaluate(self, ctx: SafetyActionContext) -> ControlDecision:
-        current_cost, current_actions = self._ledger.snapshot(ctx.tenant_id)
         payload = dict(ctx.payload)
+        if is_routine_reply(ctx.action, payload):
+            # Verified inbound replies are already accounted for by the
+            # canonical operational user_reply policy, not lifetime spend.
+            return ControlDecision(
+                control=self.control_name, status=ControlStatus.ALLOW,
+                reason="user_reply_budget_not_applicable",
+                details={"budget_class": "user_reply"},
+            )
+        current_cost, current_actions = self._ledger.snapshot(ctx.tenant_id)
         spec = self._catalog.resolve(ctx.action)
         default_cost = float(getattr(spec, "default_estimated_cost", 0.0) or 0.0)
         incremental_cost = float(payload.get("estimated_cost", default_cost) or default_cost)
