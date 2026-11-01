@@ -4,6 +4,8 @@ from collections.abc import Mapping
 from dataclasses import dataclass
 from typing import Any
 
+from runtime.messaging.channel_types import ALL_CHANNELS
+
 
 @dataclass(frozen=True)
 class ActionBudget:
@@ -12,12 +14,12 @@ class ActionBudget:
 
 
 def is_routine_reply(action: str, payload: Mapping[str, Any]) -> bool:
-    """Only a signed inbound Telegram reply; other outbound sends retain budgets."""
+    """Verified single-recipient inbound replies do not spend autonomous budgets."""
     if str(action) != "send_message@v1":
         return False
     marker = payload.get("meta")
     marker = marker.get("inbound_user_reply") if isinstance(marker, Mapping) else None
-    if not isinstance(marker, Mapping) or marker.get("channel") != "telegram":
+    if not isinstance(marker, Mapping) or marker.get("channel") not in ALL_CHANNELS:
         return False
     update_id = marker.get("update_id")
     if type(update_id) is not int or update_id < 0 or not str(payload.get("user_id") or "").strip():
