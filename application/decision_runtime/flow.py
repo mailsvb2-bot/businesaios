@@ -163,6 +163,8 @@ def build_payload(
     payload = attach_world_model_metadata(envelope_payload=tagged.payload, state=state)
     meta_block = dict(payload.get("meta") or {})
     meta_block.pop("inbound_user_reply", None)
+    if "meta" in payload:
+        payload["meta"] = meta_block
     state_meta = _state_meta(state)
     session = _mapping(state.get("session") if isinstance(state, Mapping) else getattr(state, "session", {}))
     channel = str(session.get("channel") or "").strip().lower()
