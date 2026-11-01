@@ -64,8 +64,14 @@ def compose_sync_flow(composer, inp):
         emit_trace_sync(event_store=composer._event_store, model=composer._cfg.model, provider=composer._cfg.provider, inp=inp, request_id=request_id, prompt_version=prompt_version, prompt_hash=prompt_hash, ok=False, cache_hit=False, latency_ms=latency, finish_reason="error", usage=None, error_code=err_code(e))
         return None
 
+    # Provider execution has already occurred: account actual usage even if
+    # the generated content is later rejected by guardrails or deduplication.
+    used = int(resp.usage.total_tokens) if (resp.usage and resp.usage.total_tokens) else est
+    runtime.budget.spend(tenant_id=tenant_id, user_id=user_id, tokens=used)
+    runtime.metrics.add_tokens(used)
     latency = max(0, now_ms() - t0)
     runtime.metrics.observe_latency(latency)
+    emit_trace_sync(event_store=composer._event_store, model=composer._cfg.model, provider=composer._cfg.provider, inp=inp, request_id=request_id, prompt_version=prompt_version, prompt_hash=prompt_hash, ok=True, cache_hit=False, latency_ms=latency, finish_reason=resp.finish_reason or "stop", usage=resp.usage, error_code="")
     ok_text, text, guard_reason = finalize_text(text=resp.content or "", max_chars=int(composer._cfg.max_chars), forbid=composer._cfg.forbid, offer=(inp.offer or {}))
     if not ok_text:
         emit_trace_sync(event_store=composer._event_store, model=composer._cfg.model, provider=composer._cfg.provider, inp=inp, request_id=request_id, prompt_version=prompt_version, prompt_hash=prompt_hash, ok=False, cache_hit=False, latency_ms=latency, finish_reason="guardrail", usage=resp.usage, error_code=f"guardrail:{guard_reason}")
@@ -78,6 +84,5 @@ def compose_sync_flow(composer, inp):
         emit_dedupe_skip_sync(event_store=composer._event_store, inp=inp, provider=composer._cfg.provider, model=composer._cfg.model, request_id=request_id, prompt_version=prompt_version, prompt_hash=prompt_hash, latency_ms=latency, usage=resp.usage)
         return None
 
-    emit_trace_sync(event_store=composer._event_store, model=composer._cfg.model, provider=composer._cfg.provider, inp=inp, request_id=request_id, prompt_version=prompt_version, prompt_hash=prompt_hash, ok=True, cache_hit=False, latency_ms=latency, finish_reason=resp.finish_reason or "stop", usage=resp.usage, error_code="")
     runtime.cache.set(cache_key, text)
     return text
