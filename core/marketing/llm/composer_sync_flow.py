@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from core.marketing.async_runner import run_awaitable_sync
+from core.llm.contracts import LLMUsage
 from core.marketing.llm.cache_keys import build_cache_key
 from core.marketing.llm.compose_context import build_compose_context
 from core.marketing.llm.flow import build_request, finalize_text, start_request
@@ -66,22 +67,26 @@ def compose_sync_flow(composer, inp):
 
     # Provider execution has already occurred: account actual usage even if
     # the generated content is later rejected by guardrails or deduplication.
-    used = int(resp.usage.total_tokens) if (resp.usage and resp.usage.total_tokens) else est
+    usage = resp.usage
+    used = int(usage.total_tokens) if (usage and usage.total_tokens > 0) else est
+    # Event-backed budgets count LLM_COMPLETED; unknown provider usage must
+    # be represented by the same conservative estimate charged in memory.
+    usage_for_accounting = usage if usage and usage.total_tokens > 0 else LLMUsage(total_tokens=used)
     runtime.budget.spend(tenant_id=tenant_id, user_id=user_id, tokens=used)
     runtime.metrics.add_tokens(used)
     latency = max(0, now_ms() - t0)
     runtime.metrics.observe_latency(latency)
-    emit_trace_sync(event_store=composer._event_store, model=composer._cfg.model, provider=composer._cfg.provider, inp=inp, request_id=request_id, prompt_version=prompt_version, prompt_hash=prompt_hash, ok=True, cache_hit=False, latency_ms=latency, finish_reason=resp.finish_reason or "stop", usage=resp.usage, error_code="")
+    emit_trace_sync(event_store=composer._event_store, model=composer._cfg.model, provider=composer._cfg.provider, inp=inp, request_id=request_id, prompt_version=prompt_version, prompt_hash=prompt_hash, ok=True, cache_hit=False, latency_ms=latency, finish_reason=resp.finish_reason or "stop", usage=usage_for_accounting, error_code="")
     ok_text, text, guard_reason = finalize_text(text=resp.content or "", max_chars=int(composer._cfg.max_chars), forbid=composer._cfg.forbid, offer=(inp.offer or {}))
     if not ok_text:
-        emit_trace_sync(event_store=composer._event_store, model=composer._cfg.model, provider=composer._cfg.provider, inp=inp, request_id=request_id, prompt_version=prompt_version, prompt_hash=prompt_hash, ok=False, cache_hit=False, latency_ms=latency, finish_reason="guardrail", usage=resp.usage, error_code=f"guardrail:{guard_reason}")
+        emit_trace_sync(event_store=composer._event_store, model=composer._cfg.model, provider=composer._cfg.provider, inp=inp, request_id=request_id, prompt_version=prompt_version, prompt_hash=prompt_hash, ok=False, cache_hit=False, latency_ms=latency, finish_reason="guardrail", usage=usage_for_accounting, error_code=f"guardrail:{guard_reason}")
         return None
     if not text:
         return None
     if not runtime.dedupe.allow(tenant_id=tenant_id, user_id=user_id, text=text):
         runtime.metrics.inc("deduped")
         append_dedupe_skip_sync(event_store=composer._event_store, ctx=ctx, provider=composer._cfg.provider, model=composer._cfg.model, request_id=request_id, prompt_version=prompt_version, prompt_hash=prompt_hash)
-        emit_dedupe_skip_sync(event_store=composer._event_store, inp=inp, provider=composer._cfg.provider, model=composer._cfg.model, request_id=request_id, prompt_version=prompt_version, prompt_hash=prompt_hash, latency_ms=latency, usage=resp.usage)
+        emit_dedupe_skip_sync(event_store=composer._event_store, inp=inp, provider=composer._cfg.provider, model=composer._cfg.model, request_id=request_id, prompt_version=prompt_version, prompt_hash=prompt_hash, latency_ms=latency, usage=usage_for_accounting)
         return None
 
     runtime.cache.set(cache_key, text)
