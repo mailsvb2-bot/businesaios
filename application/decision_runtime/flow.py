@@ -185,6 +185,8 @@ def build_payload(
     # A reply is credited only when the canonical inbound state and chosen
     # one-recipient action agree. Drop any policy-supplied claim first.
     meta_block.pop("inbound_user_reply", None)
+    if "meta" in payload:
+        payload["meta"] = meta_block
     session = _mapping(state.get("session") if isinstance(state, Mapping) else getattr(state, "session", {}))
     event_id = session.get("messaging_update_id")
     state_user = str(state.get("user_id") if isinstance(state, Mapping) else getattr(state, "user_id", "") or "")
