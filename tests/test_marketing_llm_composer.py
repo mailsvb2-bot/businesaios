@@ -36,3 +36,53 @@ def test_composer_rejects_forbidden_phrase():
     )
     t = c.compose_sync(inp)
     assert t is None
+
+
+def test_sync_provider_usage_is_charged_even_when_text_rejected():
+    from core.llm.contracts import LLMResponse, LLMUsage
+
+    class CountingLLM:
+        def generate_sync(self, request):
+            return LLMResponse(
+                content="Я DecisionCore и я решил…",
+                usage=LLMUsage(prompt_tokens=3, completion_tokens=4, total_tokens=7),
+            )
+
+    composer = MarketingLLMComposer(CountingLLM(), LLMComposerConfig(model="mock"))
+    inp = MarketingLLMInputs(
+        tenant_id="t-charge", user_id="u-charge", locale="ru",
+        channel="telegram", features={}, offer={"id": "charge", "title": "Сеанс"},
+        last_user_text="",
+    )
+    assert composer.compose_sync(inp) is None
+    assert not composer._runtime.budget.can_spend(
+        tenant_id="t-charge", user_id="u-charge",
+        tokens=composer._cfg.budget.user_tokens_per_day - 6,
+    )
+
+
+import pytest
+
+
+@pytest.mark.asyncio
+async def test_async_provider_usage_is_charged_even_when_text_rejected():
+    from core.llm.contracts import LLMResponse, LLMUsage
+
+    class AsyncCountingLLM:
+        async def generate(self, request):
+            return LLMResponse(
+                content="Я DecisionCore и я решил…",
+                usage=LLMUsage(prompt_tokens=3, completion_tokens=4, total_tokens=7),
+            )
+
+    composer = MarketingLLMComposer(AsyncCountingLLM(), LLMComposerConfig(model="mock"))
+    inp = MarketingLLMInputs(
+        tenant_id="t-async-charge", user_id="u-async-charge", locale="ru",
+        channel="telegram", features={}, offer={"id": "charge", "title": "Сеанс"},
+        last_user_text="",
+    )
+    assert await composer.compose(inp) is None
+    assert not composer._runtime.budget.can_spend(
+        tenant_id="t-async-charge", user_id="u-async-charge",
+        tokens=composer._cfg.budget.user_tokens_per_day - 6,
+    )
