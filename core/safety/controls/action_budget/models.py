@@ -2,7 +2,6 @@ from __future__ import annotations
 
 from collections.abc import Mapping
 from dataclasses import dataclass
-from datetime import datetime, timezone
 from typing import Any
 
 
@@ -10,12 +9,6 @@ from typing import Any
 class ActionBudget:
     max_cost: float
     max_actions: int
-
-
-
-def routine_reply_day() -> str:
-    """UTC calendar-day bucket for ordinary non-billable single-message replies."""
-    return datetime.now(timezone.utc).date().isoformat()
 
 
 def is_routine_reply(action: str, payload: Mapping[str, Any]) -> bool:
