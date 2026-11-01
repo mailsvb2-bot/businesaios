@@ -63,9 +63,9 @@ def _decision_contract_v2_seed(
         if isinstance(alternatives_raw, list | tuple)
         else None
     )
-    selection = _mapping(decision_context.get("selection", ranking.get("_decision_selection")))
-    if not selection:
-        selection = {"option_id": str(getattr(out, "action", "") or "")}
+    selection = _mapping(decision_context.get("selection", ranking.get("_decision_selection"))) or {
+        "option_id": str(getattr(out, "action", "") or "")
+    }
 
     world_model_meta = _world_model_meta_from_payload(payload)
     confidence = _finite_number(payload.get("confidence"))
@@ -74,10 +74,7 @@ def _decision_contract_v2_seed(
         dimension: _finite_number(ranking.get(f"objective:{dimension}"))
         for dimension in OBJECTIVE_DIMENSIONS
     }
-    has_complete_objective_projection = all(
-        value is not None for value in objective_projection.values()
-    )
-    if not has_complete_objective_projection:
+    if any(value is None for value in objective_projection.values()):
         objective_projection = None
     risk: Any = payload.get("risk") if "risk" in payload else None
     if risk is None:
@@ -98,22 +95,11 @@ def _decision_contract_v2_seed(
         state.get("product") if isinstance(state, Mapping) else getattr(state, "product", {})
     )
     business_id = str(
-        payload.get("business_id")
-        or product.get("business_id")
-        or state_meta.get("business_id")
-        or "UNKNOWN"
+        payload.get("business_id") or product.get("business_id") or state_meta.get("business_id") or "UNKNOWN"
     ).strip() or "UNKNOWN"
-    goal_id = str(
-        payload.get("goal_id")
-        or _mapping(payload.get("meta")).get("canonical_goal_id")
-        or ""
-    ).strip() or None
+    goal_id = str(payload.get("goal_id") or _mapping(payload.get("meta")).get("canonical_goal_id") or "").strip() or None
     model_profile_raw = state_meta.get("model_profile")
-    model_profile = (
-        str(model_profile_raw).strip()
-        if isinstance(model_profile_raw, str) and str(model_profile_raw).strip()
-        else "UNKNOWN"
-    )
+    model_profile = model_profile_raw.strip() if isinstance(model_profile_raw, str) and model_profile_raw.strip() else "UNKNOWN"
     canonical_goal_context = _mapping(state_meta.get("canonical_goal"))
     canonical_goal = _mapping(canonical_goal_context.get("goal"))
     constraint_view: Any = state_meta.get("constraint_explainability")
