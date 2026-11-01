@@ -126,3 +126,38 @@ def test_provider_split_usage_is_counted_when_total_is_zero():
         tenant_id="t-split", user_id="u-split",
         tokens=composer._cfg.budget.user_tokens_per_day - 25,
     )
+
+
+def test_event_store_budget_counts_one_provider_completion_after_rejected_text():
+    from core.llm.contracts import LLMResponse, LLMUsage
+    from core.telemetry.event_types import LLM_COMPLETED
+    from runtime.platform.event_store.memory_event_store import MemoryEventStore
+
+    class CountingLLM:
+        def generate_sync(self, request):
+            return LLMResponse(
+                content="Я DecisionCore и я решил…",
+                usage=LLMUsage(prompt_tokens=3, completion_tokens=4, total_tokens=7),
+            )
+
+    store = MemoryEventStore()
+    cfg = LLMComposerConfig(model="mock", budget_source="event_store")
+    composer = MarketingLLMComposer(CountingLLM(), cfg, event_store=store)
+    inp = MarketingLLMInputs(
+        tenant_id="t-store", user_id="u-store", locale="ru",
+        channel="telegram", features={}, offer={"id": "charge", "title": "Сеанс"},
+        last_user_text="",
+    )
+    assert composer.compose_sync(inp) is None
+    assert store.sum_event_payload_int(
+        tenant_id="t-store", event_type=LLM_COMPLETED, field="total_tokens",
+        user_id="u-store",
+    ) == 7
+    assert composer._runtime.budget.can_spend(
+        tenant_id="t-store", user_id="u-store",
+        tokens=cfg.budget.user_tokens_per_day - 7,
+    )
+    assert not composer._runtime.budget.can_spend(
+        tenant_id="t-store", user_id="u-store",
+        tokens=cfg.budget.user_tokens_per_day - 6,
+    )
