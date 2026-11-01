@@ -25,5 +25,6 @@ def map_inbound_to_world_state(msg: InboundMessage) -> WorldStateMessageInput:
         correlation_id=str(msg.correlation_id or ""),
         transport_message_id=str(msg.transport_message_id or ""),
         session={"source": "messaging", "channel": msg.canonical_identity.channel,
-                 "transport_message_id": msg.canonical_identity.transport_message_id},
+                 "transport_message_id": msg.canonical_identity.transport_message_id,
+                 "chat_id": str((msg.metadata or {}).get("chat_id") or "")},
     )
