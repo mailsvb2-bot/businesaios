@@ -188,15 +188,27 @@ def build_payload(
     if "meta" in payload:
         payload["meta"] = meta_block
     session = _mapping(state.get("session") if isinstance(state, Mapping) else getattr(state, "session", {}))
+    channel = str(session.get("channel") or "").strip().lower()
     event_id = session.get("messaging_update_id")
+    if event_id is None and channel != "telegram":
+        event_id = session.get("transport_message_id")
+    valid_event = (type(event_id) is int and event_id >= 0) if channel == "telegram" else (
+        isinstance(event_id, str) and bool(event_id.strip()) and len(event_id) <= 256
+    )
     state_user = str(state.get("user_id") if isinstance(state, Mapping) else getattr(state, "user_id", "") or "")
+    state_tenant = str(state.get("tenant_id") if isinstance(state, Mapping) else getattr(state, "tenant_id", "") or "")
+    payload_tenant = str(payload.get("tenant_id") or "")
+    tenant_matches = bool(state_tenant and payload_tenant == state_tenant)
     if (getattr(out, "action", "") == "send_message@v1"
             and session.get("source") in {"messaging", "customer_bot"}
-            and str(session.get("channel") or "") in ALL_CHANNELS
-            and type(event_id) is int and event_id >= 0
+            and channel in ALL_CHANNELS and valid_event
+            and (channel == "telegram" or tenant_matches)
             and state_user and str(payload.get("user_id") or "") == state_user
             and (payload.get("recipient_count") is None or payload.get("recipient_count") == 1)):
-        meta_block["inbound_user_reply"] = {"channel": str(session["channel"]), "update_id": event_id}
+        proof = {"channel": channel, "update_id": event_id}
+        if tenant_matches:
+            proof["tenant_id"] = state_tenant
+        meta_block["inbound_user_reply"] = proof
     canonical_goal_id = _canonical_goal_identity(state)
     if canonical_goal_id:
         payload_goal_id = str(payload.get("goal_id") or "").strip()
