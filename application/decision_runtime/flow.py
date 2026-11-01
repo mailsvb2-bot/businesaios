@@ -170,7 +170,7 @@ def build_payload(
     channel = str(session.get("channel") or "").strip().lower()
     event_id = session.get("messaging_update_id") if channel == "telegram" else session.get("transport_message_id")
     valid_event = (type(event_id) is int and event_id >= 0) if channel == "telegram" else (
-        isinstance(event_id, str) and 0 < len(event_id.strip()) <= 256
+        isinstance(event_id, str) and bool(event_id.strip()) and len(event_id) <= 256
     )
     state_user = str(state.get("user_id") if isinstance(state, Mapping) else getattr(state, "user_id", "") or "")
     state_tenant = str(state.get("tenant_id") if isinstance(state, Mapping) else getattr(state, "tenant_id", "") or "")
