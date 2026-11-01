@@ -3,8 +3,8 @@ from __future__ import annotations
 from dataclasses import dataclass, replace
 
 from contracts.action_impact_contract import ActionCategory, ActionExecutionContext
-from core.safety.operational.action_registry import OperationalActionRegistry, USER_REPLY_INTERACTION
 from core.safety.controls.action_budget.models import is_routine_reply
+from core.safety.operational.action_registry import OperationalActionRegistry, USER_REPLY_INTERACTION
 from core.safety.operational.action_spec import ActionOperationalSpec
 
 CANON_OPERATIONAL_ACTION_CLASSIFIER = True
