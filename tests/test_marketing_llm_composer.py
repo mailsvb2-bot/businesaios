@@ -1,4 +1,4 @@
-
+import pytest
 from core.llm import MockLLMClient
 from core.marketing.llm_composer import LLMComposerConfig, MarketingLLMComposer
 from core.marketing.llm_prompting import MarketingLLMInputs
@@ -59,9 +59,6 @@ def test_sync_provider_usage_is_charged_even_when_text_rejected():
         tenant_id="t-charge", user_id="u-charge",
         tokens=composer._cfg.budget.user_tokens_per_day - 6,
     )
-
-
-import pytest
 
 
 @pytest.mark.asyncio
