@@ -25,7 +25,7 @@ def is_routine_reply(action: str, payload: Mapping[str, Any]) -> bool:
     if channel == "telegram":
         valid = type(event_id) is int and event_id >= 0
     else:
-        valid = (isinstance(event_id, str) and 0 < len(event_id.strip()) <= 256
+        valid = (isinstance(event_id, str) and bool(event_id.strip()) and len(event_id) <= 256
                  and bool(proof.get("tenant_id"))
                  and str(proof["tenant_id"]) == str(payload.get("tenant_id") or ""))
     if not valid or not str(payload.get("user_id") or "").strip():
