@@ -172,3 +172,34 @@ def test_cross_tenant_reply_claim_does_not_exempt_autonomous_budget():
     assert guard.evaluate(SafetyActionContext(
         action="send_message@v1", tenant_id="tenant-live",
         user_id="user-1", payload=payload)).status == ControlStatus.BLOCK
+
+def test_provider_inbound_identity_reaches_canonical_decision_budget():
+    from runtime.messaging.inbound_message import InboundMessage
+    from runtime.messaging.inbound_to_world_state import map_inbound_to_world_state
+
+    for channel in ("vk", "max", "whatsapp"):
+        state = map_inbound_to_world_state(InboundMessage(
+            tenant_id="tenant-live", user_id="user-1", channel=channel,
+            text="hi", transport_message_id="provider-event-42",
+        ))
+        assert state.session["transport_message_id"] == "provider-event-42"
+        _, payload = build_payload(
+            state=state,
+            out=ProposedAction("send_message@v1", {"user_id": "user-1", "text": "reply"}),
+            pinned_world_model_meta={}, tenant_id="tenant-live",
+            product_id=None, domain=None, product_version=None, actor_id="user-1",
+        )
+        assert is_routine_reply("send_message@v1", payload)
+        assert payload["meta"]["inbound_user_reply"]["tenant_id"] == "tenant-live"
+        assert payload["meta"]["inbound_user_reply"]["update_id"] == "provider-event-42"
+
+    missing_id = map_inbound_to_world_state(InboundMessage(
+        tenant_id="tenant-live", user_id="user-1", channel="vk", text="hi",
+    ))
+    _, unsigned = build_payload(
+        state=missing_id,
+        out=ProposedAction("send_message@v1", {"user_id": "user-1", "text": "reply"}),
+        pinned_world_model_meta={}, tenant_id="tenant-live",
+        product_id=None, domain=None, product_version=None, actor_id="user-1",
+    )
+    assert not is_routine_reply("send_message@v1", unsigned)
