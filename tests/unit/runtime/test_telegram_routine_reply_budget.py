@@ -4,6 +4,12 @@ from __future__ import annotations
 import sqlite3
 from types import SimpleNamespace
 
+from application.decision_runtime.flow import build_payload
+from contracts.action_impact_contract import ActionExecutionContext
+from core.policies.telegram.helpers import ProposedAction
+from core.safety.operational.action_classifier import ActionClassifier
+from core.safety.operational.action_registry import build_default_operational_action_registry
+
 from core.safety.controls.action_budget.guard import ActionBudgetGuard
 from core.safety.controls.action_budget.ledger import InMemoryActionBudgetLedger
 from core.safety.controls.action_budget.models import ActionBudget, is_routine_reply
@@ -13,9 +19,12 @@ from runtime.platform.safety_action_budget_ledger import PlatformSqliteActionBud
 from runtime import safety_controls
 
 
+REPLY_PROOF = {"channel": "telegram", "update_id": 462236768}
+
+
 def _ctx(action="send_message@v1", **payload):
     return SafetyActionContext(action=action, tenant_id="tenant-live", user_id="user-1",
-                               payload={"user_id": "user-1", **payload})
+                               payload={"user_id": "user-1", "meta": {"inbound_user_reply": REPLY_PROOF}, **payload})
 
 
 def test_reply_does_not_consume_exhausted_lifetime_business_budget(monkeypatch):
@@ -34,7 +43,7 @@ def test_reply_does_not_consume_exhausted_lifetime_business_budget(monkeypatch):
     assert decision.details["budget_class"] == "routine_reply_utc_day"
     assert ledger.snapshot("tenant-live") == (6.0, 3)
     assert not is_routine_reply("send_marketing_offer", {})
-    assert not is_routine_reply("send_message@v1", {"estimated_cost": 3})
+    assert not is_routine_reply("send_message@v1", {"estimated_cost": 3, "user_id": "user-1", "meta": {"inbound_user_reply": REPLY_PROOF}})
 
 
 def test_persistent_migration_preserves_financial_totals_and_reply_quota(tmp_path, monkeypatch):
@@ -65,9 +74,45 @@ def test_canonical_safety_accountant_records_only_reply_bucket(monkeypatch):
                         lambda: SimpleNamespace(profile=profile))
     monkeypatch.setattr(safety_controls, "_record_safety_event", lambda **kwargs: True)
     safety_controls.record_allowed_action(
-        action="send_message@v1", payload={"tenant_id": "tenant-live", "user_id": "user-1"})
+        action="send_message@v1", payload={"tenant_id": "tenant-live", "user_id": "user-1", "meta": {"inbound_user_reply": REPLY_PROOF}})
     assert ledger.routine_reply_count("tenant-live") == 1
     assert ledger.snapshot("tenant-live") == (0.0, 0)
     safety_controls.record_allowed_action(
         action="send_message@v1", payload={"tenant_id": "tenant-live", "estimated_cost": 1})
     assert ledger.snapshot("tenant-live") == (1.0, 1)
+
+
+def test_decision_stage_binds_inbound_reply_and_prevents_policy_spoofing():
+    state = SimpleNamespace(
+        user_id="user-1",
+        meta={"source": "messaging"},
+        session={"source": "messaging", "channel": "telegram", "messaging_update_id": 462236768},
+        product={"name": "ClientPlatform"},
+    )
+    def decision(message_payload, inbound_state=state):
+        return build_payload(
+            state=inbound_state, out=ProposedAction(action="send_message@v1", payload=message_payload),
+            pinned_world_model_meta={}, tenant_id="tenant-live",
+            product_id=None, domain=None, product_version=None, actor_id="user-1",
+        )[1]
+    signed_payload = decision({"user_id": "user-1", "text": "Главное меню"})
+    assert signed_payload["meta"]["inbound_user_reply"] == REPLY_PROOF
+    assert is_routine_reply("send_message@v1", signed_payload)
+    ctx = ActionExecutionContext(
+        tenant_id="tenant-live", user_id="user-1", action_name="send_message@v1",
+        payload=signed_payload, metadata={}, execution_id="decision-1",
+    )
+    classified = ActionClassifier(build_default_operational_action_registry()).classify(ctx)
+    assert classified.spec.dimensions["interaction"] == "user_reply"
+    # An outbound sender cannot claim inbound provenance by supplying arbitrary metadata.
+    no_ingress = SimpleNamespace(user_id="user-1", meta={},
+                                 session={"source": "headless", "channel": "telegram"}, product={})
+    forged = decision({"user_id": "user-1", "text": "advertisement",
+                       "meta": {"inbound_user_reply": REPLY_PROOF}}, no_ingress)
+    assert not is_routine_reply("send_message@v1", forged)
+    outbound = ActionExecutionContext(
+        tenant_id="tenant-live", user_id="user-1", action_name="send_message@v1",
+        payload=forged, metadata={}, execution_id="decision-2",
+    )
+    normal = ActionClassifier(build_default_operational_action_registry()).classify(outbound)
+    assert normal.spec.dimensions.get("interaction") != "user_reply"
