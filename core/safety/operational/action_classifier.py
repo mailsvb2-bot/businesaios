@@ -1,9 +1,10 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 
 from contracts.action_impact_contract import ActionCategory, ActionExecutionContext
-from core.safety.operational.action_registry import OperationalActionRegistry
+from core.safety.operational.action_registry import OperationalActionRegistry, USER_REPLY_INTERACTION
+from core.safety.controls.action_budget.models import is_routine_reply
 from core.safety.operational.action_spec import ActionOperationalSpec
 
 CANON_OPERATIONAL_ACTION_CLASSIFIER = True
@@ -46,6 +47,8 @@ class ActionClassifier:
                 is_known=False,
             )
         spec.validate()
+        if is_routine_reply(ctx.action_name, ctx.payload):
+            spec = replace(spec, dimensions={**spec.dimensions, "interaction": USER_REPLY_INTERACTION})
         return ClassifiedAction(
             spec=spec,
             action_name=ctx.action_name,
