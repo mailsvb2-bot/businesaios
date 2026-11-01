@@ -103,3 +103,26 @@ def test_missing_provider_usage_charges_conservative_estimate():
         tenant_id="t-missing-usage", user_id="u-missing-usage",
         tokens=composer._cfg.budget.user_tokens_per_day - 1,
     )
+
+
+def test_provider_split_usage_is_counted_when_total_is_zero():
+    from core.llm.contracts import LLMResponse, LLMUsage
+
+    class SplitUsageLLM:
+        def generate_sync(self, request):
+            return LLMResponse(
+                content="Я DecisionCore и я решил…",
+                usage=LLMUsage(prompt_tokens=17, completion_tokens=9, total_tokens=0),
+            )
+
+    composer = MarketingLLMComposer(SplitUsageLLM(), LLMComposerConfig(model="mock"))
+    inp = MarketingLLMInputs(
+        tenant_id="t-split", user_id="u-split", locale="ru",
+        channel="telegram", features={}, offer={"id": "split", "title": "Сеанс"},
+        last_user_text="",
+    )
+    assert composer.compose_sync(inp) is None
+    assert not composer._runtime.budget.can_spend(
+        tenant_id="t-split", user_id="u-split",
+        tokens=composer._cfg.budget.user_tokens_per_day - 25,
+    )
