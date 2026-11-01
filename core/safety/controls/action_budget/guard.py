@@ -18,25 +18,12 @@ class ActionBudgetGuard:
     def evaluate(self, ctx: SafetyActionContext) -> ControlDecision:
         payload = dict(ctx.payload)
         if is_routine_reply(ctx.action, payload):
-            # Service replies cannot exhaust the lifetime budget intended for
-            # effectful business actions, but retain a bounded daily quota.
-            counter = getattr(self._ledger, "routine_reply_count", None)
-            if not callable(counter):
-                return ControlDecision(
-                    control=self.control_name, status=ControlStatus.BLOCK,
-                    reason="routine_reply_budget_unavailable", details={},
-                )
-            next_actions = counter(ctx.tenant_id) + 1
-            if next_actions > self._default_budget.max_actions:
-                return ControlDecision(
-                    control=self.control_name, status=ControlStatus.BLOCK,
-                    reason="action_budget_exceeded",
-                    details={"next_actions": next_actions, "budget_class": "routine_reply_utc_day"},
-                )
+            # Verified inbound replies are already accounted for by the
+            # canonical operational user_reply policy, not lifetime spend.
             return ControlDecision(
                 control=self.control_name, status=ControlStatus.ALLOW,
-                reason="action_budget_ok",
-                details={"next_actions": next_actions, "budget_class": "routine_reply_utc_day"},
+                reason="user_reply_budget_not_applicable",
+                details={"budget_class": "user_reply"},
             )
         current_cost, current_actions = self._ledger.snapshot(ctx.tenant_id)
         spec = self._catalog.resolve(ctx.action)
