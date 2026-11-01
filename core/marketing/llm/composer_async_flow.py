@@ -72,7 +72,13 @@ async def compose_async_flow(composer, inp):
         await composer._maybe_alert(inp, reason="error_spike")
         return None
 
+    # Account provider usage immediately after successful transport, including
+    # content subsequently filtered by guardrails or deduplication.
+    used = int(resp.usage.total_tokens) if (resp.usage and resp.usage.total_tokens) else est
+    runtime.budget.spend(tenant_id=tenant_id, user_id=user_id, tokens=used)
+    runtime.metrics.add_tokens(used)
     latency = max(0, now_ms() - t0)
+    await emit_trace_async(event_store=composer._event_store, debug_sampling=composer._cfg.debug_sampling, inp=inp, model=composer._cfg.model, provider=composer._cfg.provider, request_id=request_id, prompt_version=prompt_version, prompt_hash=prompt_hash, ok=True, cache_hit=False, latency_ms=latency, finish_reason=resp.finish_reason or "stop", usage=resp.usage, error_code="")
     ok_text, text, guard_reason = finalize_text(text=resp.content or "", max_chars=int(composer._cfg.max_chars), forbid=composer._cfg.forbid, offer=(inp.offer or {}))
     if not ok_text:
         await emit_trace_async(event_store=composer._event_store, debug_sampling=composer._cfg.debug_sampling, inp=inp, model=composer._cfg.model, provider=composer._cfg.provider, request_id=request_id, prompt_version=prompt_version, prompt_hash=prompt_hash, ok=False, cache_hit=False, latency_ms=latency, finish_reason="guardrail", usage=resp.usage, error_code=f"guardrail:{guard_reason}")
@@ -86,14 +92,8 @@ async def compose_async_flow(composer, inp):
         await emit_dedupe_skip_async(event_store=composer._event_store, ctx=ctx, provider=composer._cfg.provider, model=composer._cfg.model, request_id=request_id, prompt_version=prompt_version, prompt_hash=prompt_hash)
         return None
 
-    used = int(resp.usage.total_tokens) if (resp.usage and resp.usage.total_tokens) else est
-    if runtime.budget.can_spend(tenant_id=tenant_id, user_id=user_id, tokens=used):
-        runtime.budget.spend(tenant_id=tenant_id, user_id=user_id, tokens=used)
-
     runtime.metrics.inc("ok")
     runtime.metrics.observe_latency(latency)
-    runtime.metrics.add_tokens(used)
-    await emit_trace_async(event_store=composer._event_store, debug_sampling=composer._cfg.debug_sampling, inp=inp, model=composer._cfg.model, provider=composer._cfg.provider, request_id=request_id, prompt_version=prompt_version, prompt_hash=prompt_hash, ok=True, cache_hit=False, latency_ms=latency, finish_reason=resp.finish_reason or "stop", usage=resp.usage, error_code="")
     runtime.cache.set(cache_key, text)
     await composer._maybe_alert(inp, reason="latency_or_cost")
     return text
