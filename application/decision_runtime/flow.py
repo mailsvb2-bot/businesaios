@@ -85,20 +85,14 @@ def _decision_contract_v2_seed(
         if risk_penalty is not None:
             risk = {"risk_penalty": risk_penalty}
 
-    uncertainties: list[str] = []
-    if alternatives is None:
-        uncertainties.append("alternatives:UNKNOWN")
-    if confidence is None:
-        uncertainties.append("confidence:UNKNOWN")
-    if expected_value is None:
-        uncertainties.append("expected_value:UNKNOWN")
-    if objective_projection is None:
-        uncertainties.append("objective_vector:UNKNOWN")
-    if risk is None:
-        uncertainties.append("risk:UNKNOWN")
-    baseline = state_meta.get("do_nothing_baseline") if "do_nothing_baseline" in state_meta else None
-    if baseline is None:
-        uncertainties.append("do_nothing_baseline:UNKNOWN")
+    baseline = state_meta.get("do_nothing_baseline")
+    uncertainties = [
+        f"{name}:UNKNOWN" for name, value in (
+            ("alternatives", alternatives), ("confidence", confidence),
+            ("expected_value", expected_value), ("objective_vector", objective_projection),
+            ("risk", risk), ("do_nothing_baseline", baseline),
+        ) if value is None
+    ]
 
     product = _mapping(
         state.get("product") if isinstance(state, Mapping) else getattr(state, "product", {})
@@ -182,33 +176,29 @@ def build_payload(
     )
     payload = attach_world_model_metadata(envelope_payload=tagged.payload, state=state)
     meta_block = dict(payload.get("meta") or {})
-    state_meta = _state_meta(state)
-    # Never trust policy-supplied reply provenance.
     meta_block.pop("inbound_user_reply", None)
-    if "meta" in payload:
-        payload["meta"] = meta_block
+    state_meta = _state_meta(state)
     session = _mapping(state.get("session") if isinstance(state, Mapping) else getattr(state, "session", {}))
     channel = str(session.get("channel") or "").strip().lower()
-    event_id = session.get("messaging_update_id")
-    if event_id is None and channel != "telegram":
-        event_id = session.get("transport_message_id")
+    event_id = session.get("messaging_update_id") if channel == "telegram" else session.get("transport_message_id")
     valid_event = (type(event_id) is int and event_id >= 0) if channel == "telegram" else (
-        isinstance(event_id, str) and bool(event_id.strip()) and len(event_id) <= 256
+        isinstance(event_id, str) and 0 < len(event_id.strip()) <= 256
     )
     state_user = str(state.get("user_id") if isinstance(state, Mapping) else getattr(state, "user_id", "") or "")
     state_tenant = str(state.get("tenant_id") if isinstance(state, Mapping) else getattr(state, "tenant_id", "") or "")
-    payload_tenant = str(payload.get("tenant_id") or "")
-    tenant_matches = bool(state_tenant and payload_tenant == state_tenant)
+    tenant_matches = bool(state_tenant and str(payload.get("tenant_id") or "") == state_tenant)
     if (getattr(out, "action", "") == "send_message@v1"
             and session.get("source") in {"messaging", "customer_bot"}
             and channel in ALL_CHANNELS and valid_event
             and (channel == "telegram" or tenant_matches)
             and state_user and str(payload.get("user_id") or "") == state_user
-            and (payload.get("recipient_count") is None or payload.get("recipient_count") == 1)):
-        proof = {"channel": channel, "update_id": event_id}
-        if tenant_matches:
-            proof["tenant_id"] = state_tenant
-        meta_block["inbound_user_reply"] = proof
+            and str(payload.get("channel") or channel).strip().lower() == channel
+            and (not payload.get("chat_id") or str(payload["chat_id"]) == str(session.get("chat_id") or ""))
+            and payload.get("recipient_count") in (None, 1)):
+        meta_block["inbound_user_reply"] = {
+            "channel": channel, "update_id": event_id,
+            **({"tenant_id": state_tenant} if tenant_matches else {}),
+        }
     canonical_goal_id = _canonical_goal_identity(state)
     if canonical_goal_id:
         payload_goal_id = str(payload.get("goal_id") or "").strip()
