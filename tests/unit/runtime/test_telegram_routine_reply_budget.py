@@ -106,3 +106,54 @@ def test_start_proposal_gets_trusted_reply_provenance_and_existing_user_reply_po
     assert classifier.classify(outbound).spec.dimensions.get("interaction") != "user_reply"
     normal_envelope = accountant.to_envelope(outbound, builder.build(outbound))
     assert normal_envelope.actions_count == 1 and normal_envelope.outbound_count == 1
+
+
+def test_registered_channels_respect_user_reply_budget_without_exempting_outbound():
+    from runtime.messaging.channel_types import ALL_CHANNELS
+    assert {"telegram", "vk", "max", "whatsapp", "web_chat"}.issubset(set(ALL_CHANNELS))
+    ledger = InMemoryActionBudgetLedger()
+    ledger.record("tenant-live", estimated_cost=6.0)
+    guard = ActionBudgetGuard(ledger, ActionBudget(max_cost=5.0, max_actions=0))
+    for channel in ALL_CHANNELS:
+        state = SimpleNamespace(
+            user_id="user-1", meta={}, product={},
+            session={"source": "messaging", "channel": channel, "messaging_update_id": 19},
+        )
+        _, payload = build_payload(
+            state=state,
+            out=ProposedAction("send_message@v1", {"user_id": "user-1", "text": "reply"}),
+            pinned_world_model_meta={}, tenant_id="tenant-live", product_id=None,
+            domain=None, product_version=None, actor_id="user-1",
+        )
+        assert payload["meta"]["inbound_user_reply"]["channel"] == channel
+        assert is_routine_reply("send_message@v1", payload)
+        assert guard.evaluate(SafetyActionContext(action="send_message@v1",
+            tenant_id="tenant-live", user_id="user-1", payload=payload)).status == ControlStatus.ALLOW
+        for malicious in (
+            {"action": "send_marketing_offer@v1", "payload": payload},
+            {"action": "send_message@v1", "payload": {**payload, "estimated_cost": 1.0}},
+            {"action": "send_message@v1", "payload": {**payload, "meta": {}}},
+        ):
+            assert guard.evaluate(SafetyActionContext(
+                action=malicious["action"], tenant_id="tenant-live",
+                user_id="user-1", payload=malicious["payload"],
+            )).status == ControlStatus.BLOCK
+    assert ledger.snapshot("tenant-live") == (6.0, 1)
+
+
+def test_untrusted_sources_and_unknown_channels_cannot_bypass_autonomous_budget():
+    for source, channel, update_id in (
+        ("headless", "vk", 19),
+        ("messaging", "unknown-marketplace", 19),
+        ("customer_bot", "max", None),
+    ):
+        state = SimpleNamespace(user_id="user-1", meta={}, product={},
+            session={"source": source, "channel": channel, "messaging_update_id": update_id})
+        _, payload = build_payload(
+            state=state, out=ProposedAction("send_message@v1", {
+                "user_id": "user-1", "text": "autonomous",
+                "meta": {"inbound_user_reply": {"channel": "telegram", "update_id": 1}},
+            }), pinned_world_model_meta={}, tenant_id="tenant-live",
+            product_id=None, domain=None, product_version=None, actor_id="user-1",
+        )
+        assert not is_routine_reply("send_message@v1", payload)
