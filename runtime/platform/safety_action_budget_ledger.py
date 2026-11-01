@@ -7,10 +7,9 @@ from pathlib import Path
 from sqlite3 import Connection
 
 from runtime.platform.safety_sqlite_migrations import SafetySqliteMigrator, SchemaMigrationPlan
-from core.safety.controls.action_budget.models import routine_reply_day
 
 CANON_PLATFORM_SAFETY_ACTION_BUDGET_LEDGER = True
-SCHEMA_VERSION = 3
+SCHEMA_VERSION = 2
 
 
 class PlatformSqliteActionBudgetLedger:
@@ -35,7 +34,7 @@ class PlatformSqliteActionBudgetLedger:
         plan = SchemaMigrationPlan(
             component='action_budget_ledger',
             target_version=SCHEMA_VERSION,
-            steps=(self._migrate_v1, self._migrate_v2, self._migrate_v3),
+            steps=(self._migrate_v1, self._migrate_v2),
         )
         with self._connect() as conn:
             SafetySqliteMigrator().apply(conn, plan)
@@ -57,42 +56,6 @@ class PlatformSqliteActionBudgetLedger:
         cols = {str(row[1]) for row in conn.execute('PRAGMA table_info(safety_action_budget_ledger)').fetchall()}
         if 'updated_at' not in cols:
             conn.execute("ALTER TABLE safety_action_budget_ledger ADD COLUMN updated_at TEXT NOT NULL DEFAULT ''")
-
-    @staticmethod
-    def _migrate_v3(conn: Connection) -> None:
-        # Keep lifetime monetary/action totals untouched; reply quota has its own UTC day.
-        conn.execute(
-            """
-            CREATE TABLE IF NOT EXISTS safety_routine_reply_budget (
-                tenant_id TEXT NOT NULL,
-                utc_day TEXT NOT NULL,
-                total_replies INTEGER NOT NULL,
-                PRIMARY KEY (tenant_id, utc_day)
-            )
-            """
-        )
-
-    def routine_reply_count(self, tenant_id: str) -> int:
-        key = str(tenant_id).strip() or "unknown"
-        with self._connect() as conn:
-            row = conn.execute(
-                "SELECT total_replies FROM safety_routine_reply_budget WHERE tenant_id = ? AND utc_day = ?",
-                (key, routine_reply_day()),
-            ).fetchone()
-        return int(row[0]) if row is not None else 0
-
-    def record_routine_reply(self, tenant_id: str) -> None:
-        key = str(tenant_id).strip() or "unknown"
-        with self._connect() as conn:
-            conn.execute(
-                """
-                INSERT INTO safety_routine_reply_budget (tenant_id, utc_day, total_replies)
-                VALUES (?, ?, 1)
-                ON CONFLICT (tenant_id, utc_day)
-                DO UPDATE SET total_replies = total_replies + 1
-                """,
-                (key, routine_reply_day()),
-            )
 
     def snapshot(self, tenant_id: str) -> tuple[float, int]:
         key = str(tenant_id).strip() or 'unknown'
