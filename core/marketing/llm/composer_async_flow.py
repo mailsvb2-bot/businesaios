@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from core.llm.contracts import LLMUsage
 from core.marketing.llm.cache_keys import build_cache_key
 from core.marketing.llm.compose_context import build_compose_context
 from core.marketing.llm.flow import build_request, finalize_text, start_request
@@ -74,14 +75,18 @@ async def compose_async_flow(composer, inp):
 
     # Account provider usage immediately after successful transport, including
     # content subsequently filtered by guardrails or deduplication.
-    used = int(resp.usage.total_tokens) if (resp.usage and resp.usage.total_tokens) else est
+    usage = resp.usage
+    used = int(usage.total_tokens) if (usage and usage.total_tokens > 0) else est
+    # Event-backed budgets count LLM_COMPLETED; unknown provider usage must
+    # be represented by the same conservative estimate charged in memory.
+    usage_for_accounting = usage if usage and usage.total_tokens > 0 else LLMUsage(total_tokens=used)
     runtime.budget.spend(tenant_id=tenant_id, user_id=user_id, tokens=used)
     runtime.metrics.add_tokens(used)
     latency = max(0, now_ms() - t0)
-    await emit_trace_async(event_store=composer._event_store, debug_sampling=composer._cfg.debug_sampling, inp=inp, model=composer._cfg.model, provider=composer._cfg.provider, request_id=request_id, prompt_version=prompt_version, prompt_hash=prompt_hash, ok=True, cache_hit=False, latency_ms=latency, finish_reason=resp.finish_reason or "stop", usage=resp.usage, error_code="")
+    await emit_trace_async(event_store=composer._event_store, debug_sampling=composer._cfg.debug_sampling, inp=inp, model=composer._cfg.model, provider=composer._cfg.provider, request_id=request_id, prompt_version=prompt_version, prompt_hash=prompt_hash, ok=True, cache_hit=False, latency_ms=latency, finish_reason=resp.finish_reason or "stop", usage=usage_for_accounting, error_code="")
     ok_text, text, guard_reason = finalize_text(text=resp.content or "", max_chars=int(composer._cfg.max_chars), forbid=composer._cfg.forbid, offer=(inp.offer or {}))
     if not ok_text:
-        await emit_trace_async(event_store=composer._event_store, debug_sampling=composer._cfg.debug_sampling, inp=inp, model=composer._cfg.model, provider=composer._cfg.provider, request_id=request_id, prompt_version=prompt_version, prompt_hash=prompt_hash, ok=False, cache_hit=False, latency_ms=latency, finish_reason="guardrail", usage=resp.usage, error_code=f"guardrail:{guard_reason}")
+        await emit_trace_async(event_store=composer._event_store, debug_sampling=composer._cfg.debug_sampling, inp=inp, model=composer._cfg.model, provider=composer._cfg.provider, request_id=request_id, prompt_version=prompt_version, prompt_hash=prompt_hash, ok=False, cache_hit=False, latency_ms=latency, finish_reason="guardrail", usage=usage_for_accounting, error_code=f"guardrail:{guard_reason}")
         return None
     if not text:
         await composer._emit_guardrail_fail(inp, request_id, prompt_version, prompt_hash, "empty")
