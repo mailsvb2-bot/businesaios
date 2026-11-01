@@ -13,6 +13,9 @@ from core.safety.controls.action_budget.models import ActionBudget, is_routine_r
 from core.safety.controls.action_context import SafetyActionContext
 from core.safety.controls.control_result import ControlStatus
 from core.safety.operational.action_classifier import ActionClassifier
+from core.safety.operational.action_cost_model import ActionCostModel
+from core.safety.operational.action_impact_builder import ActionImpactBuilder
+from core.safety.operational.operational_budget_accountant import OperationalBudgetAccountant
 from core.safety.operational.action_registry import build_default_operational_action_registry
 from runtime import safety_controls
 
@@ -81,6 +84,10 @@ def test_start_proposal_gets_trusted_reply_provenance_and_existing_user_reply_po
                                        action_name=proposed.action, payload=payload,
                                        metadata={}, execution_id="decision-1")
     assert classifier.classify(execution).spec.dimensions["interaction"] == "user_reply"
+    accountant = OperationalBudgetAccountant()
+    builder = ActionImpactBuilder(classifier, ActionCostModel())
+    reply_envelope = accountant.to_envelope(execution, builder.build(execution))
+    assert reply_envelope.actions_count == 0 and reply_envelope.outbound_count == 0
 
     # A normal autonomous outbound decision cannot spoof inbound provenance.
     untrusted = SimpleNamespace(user_id="user-1", meta={}, product={},
@@ -97,3 +104,5 @@ def test_start_proposal_gets_trusted_reply_provenance_and_existing_user_reply_po
                                       action_name="send_message@v1", payload=forged,
                                       metadata={}, execution_id="decision-2")
     assert classifier.classify(outbound).spec.dimensions.get("interaction") != "user_reply"
+    normal_envelope = accountant.to_envelope(outbound, builder.build(outbound))
+    assert normal_envelope.actions_count == 1 and normal_envelope.outbound_count == 1
