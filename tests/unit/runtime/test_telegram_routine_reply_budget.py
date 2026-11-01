@@ -241,3 +241,23 @@ def test_inbound_mapping_preserves_chat_coordinate():
         transport_message_id="event-1", metadata={"chat_id": "room-42"},
     ))
     assert state.session["chat_id"] == "room-42"
+
+
+def test_long_raw_event_id_cannot_spoof_a_bounded_reply():
+    event_id = " " * 256 + "x"
+    payload = {"tenant_id": "tenant-live", "user_id": "user-1",
+               "meta": {"inbound_user_reply": {
+                   "channel": "vk", "update_id": event_id, "tenant_id": "tenant-live"}}}
+    assert not is_routine_reply("send_message@v1", payload)
+    state = SimpleNamespace(
+        tenant_id="tenant-live", user_id="user-1", meta={}, product={},
+        session={"source": "messaging", "channel": "vk",
+                 "transport_message_id": event_id},
+    )
+    _, outbound = build_payload(
+        state=state, out=ProposedAction("send_message@v1", {
+            "user_id": "user-1", "text": "not a verified reply",
+        }), pinned_world_model_meta={}, tenant_id="tenant-live",
+        product_id=None, domain=None, product_version=None, actor_id="user-1",
+    )
+    assert not is_routine_reply("send_message@v1", outbound)
