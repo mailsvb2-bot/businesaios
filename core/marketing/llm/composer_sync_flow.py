@@ -68,10 +68,11 @@ def compose_sync_flow(composer, inp):
     # Provider execution has already occurred: account actual usage even if
     # the generated content is later rejected by guardrails or deduplication.
     usage = resp.usage
-    used = int(usage.total_tokens) if (usage and usage.total_tokens > 0) else est
+    reported = max(0, int(usage.total_tokens or 0), int(usage.prompt_tokens or 0) + int(usage.completion_tokens or 0)) if usage else 0
+    used = reported or est
     # Event-backed budgets count LLM_COMPLETED; unknown provider usage must
     # be represented by the same conservative estimate charged in memory.
-    usage_for_accounting = usage if usage and usage.total_tokens > 0 else LLMUsage(total_tokens=used)
+    usage_for_accounting = LLMUsage(prompt_tokens=int(usage.prompt_tokens or 0), completion_tokens=int(usage.completion_tokens or 0), total_tokens=used) if usage and reported else LLMUsage(total_tokens=used)
     runtime.budget.spend(tenant_id=tenant_id, user_id=user_id, tokens=used)
     runtime.metrics.add_tokens(used)
     latency = max(0, now_ms() - t0)
