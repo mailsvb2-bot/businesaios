@@ -116,8 +116,10 @@ def test_registered_channels_respect_user_reply_budget_without_exempting_outboun
     guard = ActionBudgetGuard(ledger, ActionBudget(max_cost=5.0, max_actions=0))
     for channel in ALL_CHANNELS:
         state = SimpleNamespace(
-            user_id="user-1", meta={}, product={},
-            session={"source": "messaging", "channel": channel, "messaging_update_id": 19},
+            user_id="user-1", tenant_id="tenant-live", meta={}, product={},
+            session={"source": "messaging", "channel": channel,
+                     "messaging_update_id": 19 if channel == "telegram" else None,
+                     "transport_message_id": "event-19" if channel != "telegram" else ""},
         )
         _, payload = build_payload(
             state=state,
