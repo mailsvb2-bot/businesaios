@@ -4,6 +4,7 @@ import logging
 from typing import Any
 
 from bootstrap.safety_control_boot import build_safety_control_runtime
+from core.safety.controls.action_budget.models import is_routine_reply
 from runtime.safety import (
     ControlDecision,
     ControlStatus,
@@ -98,6 +99,13 @@ def record_allowed_action(*, action: str, payload: Any) -> None:
     runtime = build_safety_control_runtime()
     data = _payload_dict(payload)
     spec = runtime.profile.action_catalog.resolve(str(action))
+    if is_routine_reply(action, data):
+        # The guard approved the reply in the daily quota, not in the
+        # cumulative budget. Record against the same canonical ledger.
+        runtime.profile.action_budget_ledger.record_routine_reply(str(data.get("tenant_id") or "unknown"))
+        _record_safety_event(action=action, payload=payload, stage="allow", status="allow",
+                             reason="routine_reply_budget_recorded", details={"estimated_cost": 0.0})
+        return
     default_cost = float(getattr(spec, "default_estimated_cost", 0.0) or 0.0)
     estimated_cost = float(data.get("estimated_cost", default_cost) or default_cost)
     runtime.profile.action_budget_ledger.record(str(data.get("tenant_id") or "unknown"), estimated_cost=estimated_cost)
