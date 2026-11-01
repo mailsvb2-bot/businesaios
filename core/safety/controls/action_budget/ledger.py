@@ -5,6 +5,7 @@ from threading import RLock
 from typing import Protocol
 
 from compatibility.safety_storage_exports import resolve_safety_storage_export
+from .models import routine_reply_day
 
 CANON_SAFETY_ACTION_BUDGET_LEDGER = True
 
@@ -19,6 +20,7 @@ class ActionBudgetLedger(Protocol):
 class InMemoryActionBudgetLedger:
     cost_by_tenant: dict[str, float] = field(default_factory=dict)
     actions_by_tenant: dict[str, int] = field(default_factory=dict)
+    routine_replies_by_day: dict[tuple[str, str], int] = field(default_factory=dict)
     _lock: RLock = field(default_factory=RLock)
 
     def snapshot(self, tenant_id: str) -> tuple[float, int]:
@@ -30,6 +32,16 @@ class InMemoryActionBudgetLedger:
             key = str(tenant_id)
             self.cost_by_tenant[key] = float(self.cost_by_tenant.get(key, 0.0)) + float(estimated_cost)
             self.actions_by_tenant[key] = int(self.actions_by_tenant.get(key, 0)) + 1
+
+
+    def routine_reply_count(self, tenant_id: str) -> int:
+        with self._lock:
+            return int(self.routine_replies_by_day.get((str(tenant_id), routine_reply_day()), 0))
+
+    def record_routine_reply(self, tenant_id: str) -> None:
+        with self._lock:
+            key = (str(tenant_id), routine_reply_day())
+            self.routine_replies_by_day[key] = self.routine_replies_by_day.get(key, 0) + 1
 
 
 def __getattr__(name: str):
