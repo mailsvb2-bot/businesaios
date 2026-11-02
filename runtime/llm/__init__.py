@@ -289,5 +289,4 @@ __all__ = [
 ]
 
 CANON_RUNTIME_LLM_NAMESPACE = True
-
 install_public_api_alias(__name__)
