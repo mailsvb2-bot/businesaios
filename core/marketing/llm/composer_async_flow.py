@@ -93,10 +93,12 @@ async def compose_async_flow(composer, inp):
 
     # Account provider usage immediately after successful transport, including
     # content subsequently filtered by guardrails or deduplication.
-    usage = resp.usage
-    reported = max(0, int(usage.total_tokens or 0), int(usage.prompt_tokens or 0) + int(usage.completion_tokens or 0)) if usage else 0
-    used = reported or est
-    usage_for_accounting = LLMUsage(prompt_tokens=int(usage.prompt_tokens or 0), completion_tokens=int(usage.completion_tokens or 0), total_tokens=used) if usage and reported else LLMUsage(total_tokens=used)
+    reported = provider_reported_usage(resp.usage)
+    if reported is None:
+        runtime.metrics.inc("accounting_unavailable")
+        return None  # Keep the reservation/claim: the provider may have charged us.
+    prompt, completion, used = reported
+    usage_for_accounting = LLMUsage(prompt_tokens=prompt, completion_tokens=completion, total_tokens=used)
     runtime.budget.spend(tenant_id=tenant_id, user_id=user_id, tokens=used)
     runtime.metrics.add_tokens(used)
     latency = max(0, now_ms() - t0)
