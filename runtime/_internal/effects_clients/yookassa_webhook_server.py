@@ -58,6 +58,10 @@ def start_yookassa_webhook_server_in_thread(
     )
 
     class _Handler(BaseHTTPRequestHandler):
+        def setup(self):
+            super().setup()
+            self.connection.settimeout(5)
+
         def do_POST(self):  # noqa: N802
             try:
                 if self.path != str(path):
@@ -105,7 +109,15 @@ def start_yookassa_webhook_server_in_thread(
                         return
 
                 length = int(self.headers.get("Content-Length") or "0")
-                raw = self.rfile.read(length) if length > 0 else b""
+                if length <= 0 or length > 1_048_576:
+                    self.send_response(413 if length > 1_048_576 else 400)
+                    self.end_headers()
+                    return
+                raw = self.rfile.read(length)
+                if len(raw) != length:
+                    self.send_response(400)
+                    self.end_headers()
+                    return
 
                 # Verify webhook signature / integrity.
                 # For token auth we already validated the header above.
