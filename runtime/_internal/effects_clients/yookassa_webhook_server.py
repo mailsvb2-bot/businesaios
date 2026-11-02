@@ -10,28 +10,9 @@ import hmac
 import ipaddress
 import threading
 from http.server import BaseHTTPRequestHandler, HTTPServer
-from typing import Any
 
 from runtime.observability.error_handling import swallow
 from runtime.platform.config.env_flags import env_str
-from runtime.tenancy import normalize_tenant_id
-
-
-def _extract_webhook_tenant_id(raw: dict[str, Any]) -> str:
-    obj = raw.get("object") if isinstance(raw.get("object"), dict) else {}
-    metadata = obj.get("metadata") if isinstance(obj.get("metadata"), dict) else {}
-    for candidate in (
-        raw.get("tenant_id"),
-        raw.get("metadata", {}).get("tenant_id") if isinstance(raw.get("metadata"), dict) else None,
-        metadata.get("tenant_id"),
-        metadata.get("tenant"),
-    ):
-        tenant_id = normalize_tenant_id(candidate)
-        if tenant_id:
-            return tenant_id
-    return "unknown_tenant"
-
-
 def start_yookassa_webhook_server_in_thread(
     *,
     host: str,
@@ -142,10 +123,11 @@ def start_yookassa_webhook_server_in_thread(
                     return
 
                 notif = parse_notification(body_bytes=raw)
-                tenant_id = _extract_webhook_tenant_id(notif.raw)
 
-                # Acknowledge only after the durable idempotent outbox commits.
-                # Audit events are secondary observations, not settlement proofs.
+                # Ingress metadata is not a trusted tenant binding. Only the
+                # canonical payment reconciliation may attribute tenant events
+                # after resolving the locally created checkout/payment context.
+                # Keep the raw notification in the durable idempotent outbox.
                 payload = {"type": "yookassa_webhook", "payload": notif.raw}
                 try:
                     payment_outbox.enqueue_once(
@@ -155,16 +137,6 @@ def start_yookassa_webhook_server_in_thread(
                     self.send_response(503)
                     self.end_headers()
                     return
-                if event_store is not None:
-                    try:
-                        event_store.emit(
-                            tenant_id=tenant_id,
-                            event_type="yookassa_webhook_received",
-                            payload={"type": "yookassa_webhook", "notification": notif,
-                                     "tenant_id": tenant_id},
-                        )
-                    except Exception:
-                        swallow(__name__, "event_store.emit")
 
                 self.send_response(200)
                 self.end_headers()
