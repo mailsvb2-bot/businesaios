@@ -327,3 +327,169 @@ async def test_deduped_marketing_response_records_one_completion_per_provider_ca
     assert store.sum_event_payload_int(
         tenant_id="t-dedupe", event_type=LLM_COMPLETED, field="total_tokens",
     ) == 14
+
+
+def test_event_store_budget_reservation_blocks_concurrent_overspend():
+    from concurrent.futures import ThreadPoolExecutor
+    from threading import Event, Lock
+
+    from core.llm.budget import BudgetCaps
+    from core.llm.contracts import LLMResponse, LLMUsage
+    from core.telemetry.event_types import LLM_COMPLETED
+    from runtime.platform.event_store.memory_event_store import MemoryEventStore
+
+    class BlockingLLM:
+        def __init__(self):
+            self.entered = Event()
+            self.resume = Event()
+            self.lock = Lock()
+            self.calls = 0
+
+        def generate_sync(self, request):
+            with self.lock:
+                self.calls += 1
+            self.entered.set()
+            assert self.resume.wait(timeout=5)
+            return LLMResponse(
+                content="Хочешь продолжить? Есть «Сеанс» за 990₽. Нажми «Открыть».",
+                usage=LLMUsage(prompt_tokens=3, completion_tokens=4, total_tokens=7),
+            )
+
+    store = MemoryEventStore()
+    llm = BlockingLLM()
+    cfg = LLMComposerConfig(
+        model="mock", budget_source="event_store",
+        budget=BudgetCaps(tenant_tokens_per_day=1027, user_tokens_per_day=1027),
+    )
+    first = MarketingLLMComposer(llm, cfg, event_store=store)
+    second = MarketingLLMComposer(llm, cfg, event_store=store)
+    inp = MarketingLLMInputs(
+        tenant_id="t-concurrent", user_id="u-concurrent", locale="ru",
+        channel="telegram", features={},
+        offer={"id": "concurrent", "title": "Сеанс", "price": 990, "currency": "₽"},
+    )
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        running = pool.submit(first.compose_sync, inp)
+        assert llm.entered.wait(timeout=5)
+        try:
+            assert pool.submit(second.compose_sync, inp).result(timeout=5) is None
+            assert llm.calls == 1
+        finally:
+            llm.resume.set()
+        assert running.result(timeout=5)
+    assert store.sum_event_payload_int(
+        tenant_id="t-concurrent", event_type=LLM_COMPLETED, field="total_tokens",
+    ) == 7
+    # Once the durable completion is visible, headroom is available again.
+    assert second._runtime.budget.can_spend(
+        tenant_id="t-concurrent", user_id="u-concurrent", tokens=1020,
+    )
+
+
+@pytest.mark.parametrize("async_mode", [False, True])
+@pytest.mark.asyncio
+async def test_missing_atomic_reservation_fails_closed_before_provider(async_mode):
+    from core.llm.contracts import LLMResponse
+    from runtime.platform.event_store.memory_event_store import MemoryEventStore
+
+    class NoCASStore(MemoryEventStore):
+        compare_and_set_setting = None
+
+    class CountingLLM:
+        def __init__(self):
+            self.calls = 0
+
+        def generate_sync(self, request):
+            self.calls += 1
+            return LLMResponse(content="some text")
+
+        async def generate(self, request):
+            return self.generate_sync(request)
+
+    llm = CountingLLM()
+    composer = MarketingLLMComposer(
+        llm, LLMComposerConfig(model="mock", budget_source="event_store"),
+        event_store=NoCASStore(),
+    )
+    inp = MarketingLLMInputs(
+        tenant_id="t-cas", user_id="u-cas", locale="ru",
+        channel="telegram", features={}, offer={"id": "cas", "title": "Сеанс"},
+    )
+    result = await composer.compose(inp) if async_mode else composer.compose_sync(inp)
+    assert result is None
+    assert llm.calls == 0
+
+
+def test_sqlite_budget_reservations_are_shared_between_store_connections(tmp_path):
+    from core.events.log import EventLog
+    from core.llm.budget import BudgetCaps, EventStoreDailyTokenBudget
+    from core.telemetry.event_types import LLM_COMPLETED
+    from core.tenancy.scope import TenantScope
+    from runtime.platform.event_store.sqlite_event_store import SqliteEventStore
+
+    caps = BudgetCaps(tenant_tokens_per_day=1027, user_tokens_per_day=1027)
+    path = str(tmp_path / "llm-reservations.sqlite3")
+    with SqliteEventStore(path) as first_store, SqliteEventStore(path) as second_store:
+        first = EventStoreDailyTokenBudget(event_store=first_store, caps=caps)
+        second = EventStoreDailyTokenBudget(event_store=second_store, caps=caps)
+        day = first.reserve(
+            tenant_id="tenant", user_id="user", tokens=1020, request_id="first",
+        )
+        assert day
+        assert second.reserve(
+            tenant_id="tenant", user_id="user", tokens=1020, request_id="second",
+        ) is None
+        EventLog(first_store, tenant=TenantScope("tenant")).emit(
+            event_type=LLM_COMPLETED, source="telemetry", user_id="user",
+            payload={"total_tokens": 7, "request_id": "first"},
+        )
+        assert first.release(tenant_id="tenant", request_id="first", day=day)
+        assert second.reserve(
+            tenant_id="tenant", user_id="user", tokens=1020, request_id="second",
+        ) == day
+
+
+@pytest.mark.parametrize("async_mode", [False, True])
+@pytest.mark.asyncio
+async def test_replayed_message_id_does_not_recharge_or_reinvoke_provider(async_mode):
+    from core.llm.contracts import LLMResponse, LLMUsage
+    from core.telemetry.event_types import LLM_COMPLETED
+    from runtime.platform.event_store.memory_event_store import MemoryEventStore
+
+    class CountingLLM:
+        def __init__(self):
+            self.calls = 0
+
+        def generate_sync(self, request):
+            self.calls += 1
+            return LLMResponse(
+                content="Хочешь продолжить? Есть «Сеанс» за 990₽. Нажми «Открыть».",
+                usage=LLMUsage(prompt_tokens=3, completion_tokens=4, total_tokens=7),
+            )
+
+        async def generate(self, request):
+            return self.generate_sync(request)
+
+    llm = CountingLLM()
+    store = MemoryEventStore()
+    cfg = LLMComposerConfig(model="mock", budget_source="event_store")
+    inp = MarketingLLMInputs(
+        tenant_id="t-replay", user_id="u-replay", locale="ru",
+        channel="telegram", features={},
+        offer={"id": "replay", "title": "Сеанс", "price": 990, "currency": "₽"},
+        message_id="incoming-123",
+    )
+    # Different composer instances have different caches and rate limiters.
+    first = MarketingLLMComposer(llm, cfg, event_store=store)
+    second = MarketingLLMComposer(llm, cfg, event_store=store)
+    if async_mode:
+        assert await first.compose(inp)
+        assert await second.compose(inp) is None
+    else:
+        assert first.compose_sync(inp)
+        assert second.compose_sync(inp) is None
+    assert llm.calls == 1
+    assert store.count_events(tenant_id="t-replay", event_type=LLM_COMPLETED) == 1
+    assert store.sum_event_payload_int(
+        tenant_id="t-replay", event_type=LLM_COMPLETED, field="total_tokens",
+    ) == 7

@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import hashlib
+
 from core.marketing.llm_guardrails import validate_marketing_text
 from core.marketing.llm_postprocess import normalize_generated_text
 from core.marketing.llm_prompt_builder import MarketingLLMInputs, build_marketing_request
@@ -23,3 +25,15 @@ def finalize_text(*, text: str, max_chars: int, forbid: tuple, offer: dict) -> t
         offer=(offer or {}),
     )
     return bool(ok_text), clean_text, str(guard_reason)
+
+
+def idempotent_request_id(*, inp: MarketingLLMInputs, provider: str, model: str, prompt_hash: str, generated: str) -> str:
+    """Use a stable event/decision identity when available; otherwise unique call ID."""
+    source_id = str(inp.message_id or inp.correlation_id or "").strip()
+    if not source_id:
+        return generated
+    parts = (
+        str(inp.tenant_id), str(inp.user_id), str(inp.channel),
+        str(provider), str(model), str(prompt_hash), source_id,
+    )
+    return "llm-" + hashlib.sha256("\0".join(parts).encode("utf-8")).hexdigest()[:32]

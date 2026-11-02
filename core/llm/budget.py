@@ -86,12 +86,12 @@ class EventStoreDailyTokenBudget:
     def _day(self) -> str:
         return day_key_utc()
 
-    def _sum(self, *, tenant_id: str, user_id: str) -> tuple[int, int]:
+    def _sum(self, *, tenant_id: str, user_id: str, fresh: bool = False) -> tuple[int, int]:
         day = self._day()
         key = (day, str(tenant_id), str(user_id))
         now = time.time()
         cached = self._cache.get(key)
-        if cached and (now - cached[0]) <= self._ttl:
+        if not fresh and cached and (now - cached[0]) <= self._ttl:
             return int(cached[1]), int(cached[2])
 
         start_ms, end_ms = _utc_day_bounds_ms()
@@ -143,3 +143,76 @@ class EventStoreDailyTokenBudget:
         cached = self._cache.get(key)
         if cached:
             self._cache[key] = (now, int(cached[1]) + int(tokens), int(cached[2]) + int(tokens))
+
+
+    def reserve(self, *, tenant_id: str, user_id: str, tokens: int, request_id: str) -> str | None:
+        """Atomically claim estimated headroom using the canonical store settings CAS.
+
+        A pending claim remains until a durable completion is written. Crashes
+        therefore consume headroom for the UTC day rather than permit overspend.
+        A missing CAS capability fails closed, never reverting to a local lock.
+        """
+        get = getattr(self._es, "get_setting", None)
+        cas = getattr(self._es, "compare_and_set_setting", None)
+        if not callable(get) or not callable(cas) or not request_id or tokens <= 0:
+            return None
+        day = self._day()
+        key = f"llm:pending:v1:{day}"
+        for _ in range(16):
+            current = get(tenant_id=str(tenant_id), key=key)
+            if current is not None and not isinstance(current, dict):
+                return None
+            pending = (current or {}).get("pending", {})
+            if not isinstance(pending, dict) or request_id in pending:
+                return None
+            spent_tenant, spent_user = self._sum(tenant_id=tenant_id, user_id=user_id, fresh=True)
+            try:
+                reserved_tenant = sum(max(0, int(row["tokens"])) for row in pending.values())
+                reserved_user = sum(
+                    max(0, int(row["tokens"])) for row in pending.values()
+                    if str(row["user_id"]) == str(user_id)
+                )
+            except (KeyError, TypeError, ValueError):
+                return None
+            if spent_tenant + reserved_tenant + tokens > self._caps.tenant_tokens_per_day:
+                return None
+            if spent_user + reserved_user + tokens > self._caps.user_tokens_per_day:
+                return None
+            if self._day() != day:
+                return None
+            next_state = {"pending": {
+                **pending, request_id: {"user_id": str(user_id), "tokens": int(tokens)},
+            }}
+            if cas(tenant_id=str(tenant_id), key=key, expected=current, value=next_state):
+                # Claim only after headroom is secured. A budget-denied request
+                # may be retried later; an already-processed request may not.
+                claimed = cas(
+                    tenant_id=str(tenant_id),
+                    key=f"llm:claim:v1:{day}:{request_id}",
+                    expected=None,
+                    value={"user_id": str(user_id)},
+                )
+                if not claimed:
+                    self.release(tenant_id=tenant_id, request_id=request_id, day=day)
+                    return None
+                return day
+        return None
+
+    def release(self, *, tenant_id: str, request_id: str, day: str) -> bool:
+        """Release only after the corresponding LLM_COMPLETED event is durable."""
+        key = f"llm:pending:v1:{day}"
+        for _ in range(16):
+            current = self._es.get_setting(tenant_id=str(tenant_id), key=key)
+            if not isinstance(current, dict):
+                return False
+            pending = current.get("pending", {})
+            if not isinstance(pending, dict) or request_id not in pending:
+                return False
+            next_pending = dict(pending)
+            del next_pending[request_id]
+            if self._es.compare_and_set_setting(
+                tenant_id=str(tenant_id), key=key,
+                expected=current, value={"pending": next_pending},
+            ):
+                return True
+        return False

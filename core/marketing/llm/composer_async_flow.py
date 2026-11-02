@@ -1,9 +1,10 @@
 from __future__ import annotations
 
+from core.llm.budget import EventStoreDailyTokenBudget
 from core.llm.contracts import LLMUsage
 from core.marketing.llm.cache_keys import build_cache_key
 from core.marketing.llm.compose_context import build_compose_context
-from core.marketing.llm.flow import build_request, finalize_text, start_request
+from core.marketing.llm.flow import build_request, finalize_text, idempotent_request_id, start_request
 from core.marketing.llm.runtime_flow import (
     emit_budget_blocked_async,
     emit_circuit_open_async,
@@ -37,6 +38,10 @@ async def compose_async_flow(composer, inp):
         return None
 
     req, prompt_version, prompt_hash = build_request(model=composer._cfg.model, inp=inp)
+    request_id = idempotent_request_id(
+        inp=inp, provider=composer._cfg.provider, model=composer._cfg.model,
+        prompt_hash=prompt_hash, generated=request_id,
+    )
     cache_key = build_cache_key(
         cache=runtime.cache,
         provider=composer._cfg.provider,
@@ -58,6 +63,15 @@ async def compose_async_flow(composer, inp):
         runtime.metrics.inc("budget_blocked")
         await emit_budget_blocked_async(event_store=composer._event_store, ctx=ctx, provider=composer._cfg.provider, model=composer._cfg.model, est=est, prompt_version=prompt_version, prompt_hash=prompt_hash, experiment=inp.experiment, variant=inp.variant, offer_id=offer_id)
         return None
+
+    reservation_day = None
+    if isinstance(runtime.budget, EventStoreDailyTokenBudget):
+        reservation_day = runtime.budget.reserve(
+            tenant_id=tenant_id, user_id=user_id, tokens=est, request_id=request_id,
+        )
+        if reservation_day is None:
+            runtime.metrics.inc("budget_blocked")
+            return None
 
     try:
         await emit_requested_async(event_store=composer._event_store, ctx=ctx, provider=composer._cfg.provider, model=composer._cfg.model, request_id=request_id, prompt_version=prompt_version, prompt_hash=prompt_hash, experiment=inp.experiment, variant=inp.variant, offer_id=offer_id)
@@ -92,6 +106,11 @@ async def compose_async_flow(composer, inp):
         await emit_trace_async(event_store=composer._event_store, debug_sampling=composer._cfg.debug_sampling, inp=inp, model=composer._cfg.model, provider=composer._cfg.provider, request_id=request_id, prompt_version=prompt_version, prompt_hash=prompt_hash, ok=True, cache_hit=False, latency_ms=latency, finish_reason=resp.finish_reason or "stop", usage=usage_for_accounting, error_code="")
     except Exception:  # noqa: BLE001
         # Fail closed if the canonical event-store accounting write is unavailable.
+        runtime.metrics.inc("accounting_failed")
+        return None
+    if reservation_day is not None and not runtime.budget.release(
+        tenant_id=tenant_id, request_id=request_id, day=reservation_day,
+    ):
         runtime.metrics.inc("accounting_failed")
         return None
     ok_text, text, guard_reason = finalize_text(text=resp.content or "", max_chars=int(composer._cfg.max_chars), forbid=composer._cfg.forbid, offer=(inp.offer or {}))
