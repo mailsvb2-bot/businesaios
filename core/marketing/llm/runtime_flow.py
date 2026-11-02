@@ -102,7 +102,7 @@ async def emit_requested_async(*, event_store: Any, ctx: TelemetryContext, provi
     )
 
 
-def emit_requested_sync(*, event_store: Any, ctx: TelemetryContext, provider: str, model: str, request_id: str, prompt_version: str, prompt_hash: str, experiment: str, variant: str, offer_id: str) -> None:
+def emit_requested_sync(*, event_store: Any, ctx: TelemetryContext, provider: str, model: str, request_id: str, prompt_version: str, prompt_hash: str, experiment: str, variant: str, offer_id: str, required: bool = False) -> None:
     append_event_sync(
         event_store=event_store,
         event_type=LLM_REQUESTED,
@@ -117,6 +117,7 @@ def emit_requested_sync(*, event_store: Any, ctx: TelemetryContext, provider: st
             "variant": variant,
             "offer_id": offer_id,
         },
+        required=required,
     )
 
 

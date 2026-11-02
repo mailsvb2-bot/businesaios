@@ -51,7 +51,11 @@ def compose_sync_flow(composer, inp):
         emit_budget_blocked_sync(event_store=composer._event_store, ctx=ctx, provider=composer._cfg.provider, model=composer._cfg.model, est=est, prompt_version=prompt_version, prompt_hash=prompt_hash, experiment=inp.experiment, variant=inp.variant, offer_id=offer_id)
         return None
 
-    emit_requested_sync(event_store=composer._event_store, ctx=ctx, provider=composer._cfg.provider, model=composer._cfg.model, request_id=request_id, prompt_version=prompt_version, prompt_hash=prompt_hash, experiment=inp.experiment, variant=inp.variant, offer_id=offer_id)
+    try:
+        emit_requested_sync(event_store=composer._event_store, ctx=ctx, provider=composer._cfg.provider, model=composer._cfg.model, request_id=request_id, prompt_version=prompt_version, prompt_hash=prompt_hash, experiment=inp.experiment, variant=inp.variant, offer_id=offer_id, required=isinstance(runtime.budget, EventStoreDailyTokenBudget))
+    except Exception:  # noqa: BLE001
+        runtime.metrics.inc("accounting_unavailable")
+        return None
     gen_sync = getattr(composer._llm, "generate_sync", None)
     if not callable(gen_sync):
         return run_awaitable_sync(composer._compose_async(inp))

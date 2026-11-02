@@ -207,3 +207,45 @@ async def test_event_store_accounting_failure_never_exposes_generated_content(as
         tenant_id="t-fail", event_type=LLM_COMPLETED, field="total_tokens",
         user_id="u-fail",
     ) == 0
+
+
+
+@pytest.mark.parametrize("async_mode", [False, True])
+@pytest.mark.asyncio
+async def test_event_store_request_write_failure_prevents_provider_call(async_mode):
+    from core.llm.contracts import LLMResponse
+    from core.telemetry.event_types import LLM_REQUESTED
+    from runtime.platform.event_store.memory_event_store import MemoryEventStore
+
+    class FailingRequestStore(MemoryEventStore):
+        def append_event(self, event):
+            if event.get("event_type") == LLM_REQUESTED:
+                raise OSError("simulated request journal failure")
+            return super().append_event(event)
+
+    class CountingLLM:
+        calls = 0
+
+        def generate_sync(self, request):
+            self.calls += 1
+            return LLMResponse(content="valid output")
+
+        async def generate(self, request):
+            return self.generate_sync(request)
+
+    llm = CountingLLM()
+    composer = MarketingLLMComposer(
+        llm,
+        LLMComposerConfig(model="mock", budget_source="event_store"),
+        event_store=FailingRequestStore(),
+    )
+    inp = MarketingLLMInputs(
+        tenant_id="t-no-request", user_id="u-no-request", locale="ru",
+        channel="telegram", features={},
+        offer={"id": "offer", "title": "Сеанс"},
+        last_user_text="",
+    )
+    result = await composer.compose(inp) if async_mode else composer.compose_sync(inp)
+    assert result is None
+    assert llm.calls == 0
+    assert composer._runtime.metrics.snapshot().counters.get("accounting_unavailable") == 1

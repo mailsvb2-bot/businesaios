@@ -59,7 +59,11 @@ async def compose_async_flow(composer, inp):
         await emit_budget_blocked_async(event_store=composer._event_store, ctx=ctx, provider=composer._cfg.provider, model=composer._cfg.model, est=est, prompt_version=prompt_version, prompt_hash=prompt_hash, experiment=inp.experiment, variant=inp.variant, offer_id=offer_id)
         return None
 
-    await emit_requested_async(event_store=composer._event_store, ctx=ctx, provider=composer._cfg.provider, model=composer._cfg.model, request_id=request_id, prompt_version=prompt_version, prompt_hash=prompt_hash, experiment=inp.experiment, variant=inp.variant, offer_id=offer_id)
+    try:
+        await emit_requested_async(event_store=composer._event_store, ctx=ctx, provider=composer._cfg.provider, model=composer._cfg.model, request_id=request_id, prompt_version=prompt_version, prompt_hash=prompt_hash, experiment=inp.experiment, variant=inp.variant, offer_id=offer_id)
+    except Exception:  # noqa: BLE001
+        runtime.metrics.inc("accounting_unavailable")
+        return None
 
     try:
         resp = await composer._llm.generate(req)
