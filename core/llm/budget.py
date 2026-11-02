@@ -132,12 +132,13 @@ class EventStoreDailyTokenBudget:
                 return None
             state = {"pending": {**pending, request_id: {"user_id": str(user_id), "tokens": int(tokens)}}}
             if cas(tenant_id=str(tenant_id), key=key, expected=current, value=state):
-                claimed = cas(tenant_id=str(tenant_id), key=f"llm:claim:v2:{request_id}",
-                              expected=None, value={"user_id": str(user_id)})
-                if not claimed:
-                    self.release(tenant_id=tenant_id, request_id=request_id, day=day)
-                    return None
-                return day
+                claimed = False
+                try:
+                    claimed = cas(tenant_id=str(tenant_id), key=f"llm:claim:v2:{request_id}", expected=None, value={"user_id": str(user_id)})
+                    return day if claimed else None
+                finally:
+                    if not claimed:
+                        self.abort_before_provider(tenant_id=tenant_id, request_id=request_id, day=day)
         return None
 
     def abort_before_provider(self, *, tenant_id: str, request_id: str, day: str) -> bool:
@@ -156,8 +157,7 @@ class EventStoreDailyTokenBudget:
             pending = current.get("pending", {})
             if not isinstance(pending, dict) or request_id not in pending:
                 return False
-            next_pending = dict(pending)
-            del next_pending[request_id]
+            next_pending = {rid: row for rid, row in pending.items() if rid != request_id}
             if self._es.compare_and_set_setting(
                 tenant_id=str(tenant_id), key=key, expected=current, value={"pending": next_pending},
             ):

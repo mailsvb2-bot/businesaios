@@ -390,6 +390,35 @@ def test_event_store_idempotency_claim_survives_budget_day_rollover(monkeypatch)
     ) == {"pending": {}}
 
 
+@pytest.mark.parametrize("claim_was_committed", [False, True])
+def test_claim_write_error_releases_pending_headroom_without_replaying(claim_was_committed):
+    from core.llm.budget import BudgetCaps, EventStoreDailyTokenBudget
+
+    class BrokenClaimStore(MemoryEventStore):
+        def compare_and_set_setting(self, *, tenant_id, key, expected, value):
+            if key.startswith("llm:claim:v2:") and not getattr(self, "_failed_once", False):
+                self._failed_once = True
+                if claim_was_committed:
+                    super().compare_and_set_setting(
+                        tenant_id=tenant_id, key=key, expected=expected, value=value,
+                    )
+                raise OSError("claim storage interrupted")
+            return super().compare_and_set_setting(
+                tenant_id=tenant_id, key=key, expected=expected, value=value,
+            )
+
+    store = BrokenClaimStore()
+    budget = EventStoreDailyTokenBudget(
+        event_store=store, caps=BudgetCaps(tenant_tokens_per_day=100, user_tokens_per_day=100),
+    )
+    with pytest.raises(OSError, match="claim storage interrupted"):
+        budget.reserve(tenant_id="t", user_id="u", tokens=50, request_id="event-1")
+    assert store.get_setting(tenant_id="t", key=f"llm:pending:v1:{budget._day()}") == {"pending": {}}
+    assert bool(store.get_setting(tenant_id="t", key="llm:claim:v2:event-1")) is claim_was_committed
+    if claim_was_committed:
+        assert budget.reserve(tenant_id="t", user_id="u", tokens=50, request_id="event-1") is None
+
+
 def test_inbound_idempotency_does_not_depend_on_mutable_offer_or_model():
     from core.marketing.llm.flow import idempotent_request_id
 
