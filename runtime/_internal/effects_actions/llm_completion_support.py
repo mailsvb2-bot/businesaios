@@ -1,7 +1,12 @@
 from __future__ import annotations
 
+import hashlib
 from typing import Any
 
+from core.llm.budget import BudgetCaps, EventStoreDailyTokenBudget
+from core.marketing.llm_telemetry import append_event_sync
+from core.telemetry.event_types import LLM_COMPLETED, LLM_REQUESTED
+from core.telemetry.event_writer import TelemetryContext
 from runtime._internal.llm_transport import (
     llm_generate_anthropic,
     llm_generate_gigachat,
@@ -26,18 +31,12 @@ def _effective_timeout_s() -> int:
     configured = env_int("MARKETING_LLM_TIMEOUT_S", 0)
     if configured > 0:
         return int(configured)
-    configured = env_int("LLM_TIMEOUT_S", 0)
-    if configured > 0:
-        return int(configured)
-    return 20
+    return configured if (configured := env_int("LLM_TIMEOUT_S", 0)) > 0 else 20
 
 
 def read_provider_and_model(*, provider_override: str | None, model_override: str | None = None) -> tuple[str, str]:
-    normalized, _base_url, _api_key, effective_model, _anthropic_version = resolve_runtime_llm_settings(
-        provider=_effective_provider_name(provider_override),
-        model_override=model_override,
-        read_value=lambda name, default: env_str(name, default),
-        openai_legacy_keys=("LLM_BASE_URL", "LLM_API_KEY", "LLM_MODEL"),
+    normalized, _base_url, _api_key, effective_model, _anthropic_version = _provider_config(
+        _effective_provider_name(provider_override), model_override,
     )
     return normalized, effective_model
 
@@ -53,10 +52,8 @@ def _provider_config(provider: str, model_override: str | None) -> tuple[str, st
 
 def _client_for(*, provider: str, model: str | None):
     normalized, base_url, api_key, effective_model, anthropic_version = _provider_config(provider, model)
-    if not api_key:
-        return normalized, effective_model, None, "missing_api_key"
-    if not base_url:
-        return normalized, effective_model, None, "missing_base_url"
+    if not api_key or not base_url:
+        return normalized, effective_model, None, "missing_api_key" if not api_key else "missing_base_url"
     try:
         client = build_runtime_llm_client(
             provider=normalized,
@@ -75,28 +72,47 @@ def _client_for(*, provider: str, model: str | None):
         return normalized, effective_model, None, type(exc).__name__
 
 
-def call_marketing_llm(*, provider: str, system: str, user: str, model: str | None) -> dict[str, Any]:
+def call_marketing_llm(*, provider: str, system: str, user: str, model: str | None, event_store: Any = None, tenant_id: str | None = None, user_id: str | None = None, request_id: str | None = None) -> dict[str, Any]:
+    if event_store is None or not (tenant_id and user_id and request_id):
+        return {"ok": False, "error": "LLM_ACCOUNTING_UNAVAILABLE"}
     normalized, effective_model, client, err = _client_for(provider=provider, model=model)
     if client is None:
         return {"ok": False, "error": str(err or "disabled"), "provider": normalized, "model": effective_model}
 
     req = LLMRequest(
-        messages=[
-            LLMMessage(role="system", content=str(system)[:8000]),
-            LLMMessage(role="user", content=str(user)[:8000]),
-        ],
-        model=effective_model,
-        temperature=0.2,
-        max_tokens=600,
+        messages=[LLMMessage(role="system", content=str(system)[:8000]),
+                  LLMMessage(role="user", content=str(user)[:8000])],
+        model=effective_model, temperature=0.2, max_tokens=600,
         timeout_s=float(_effective_timeout_s()),
         metadata={"surface": "marketing_llm_complete", "provider": normalized},
     )
+    identity = hashlib.sha256("\0".join((str(tenant_id), str(user_id), str(request_id))).encode()).hexdigest()[:32]
+    claim_id = f"llm-effect-{identity}"
+    ctx = TelemetryContext(tenant_id=str(tenant_id), user_id=str(user_id), message_id=str(request_id), correlation_id=str(request_id))
+    budget = EventStoreDailyTokenBudget(event_store=event_store, caps=BudgetCaps())
+    estimated = int(req.max_tokens) + 800
     try:
+        day = budget.reserve(tenant_id=str(tenant_id), user_id=str(user_id), tokens=estimated, request_id=claim_id)
+        if day is None:
+            return {"ok": False, "error": "LLM_BUDGET_BLOCKED"}
+        try:
+            append_event_sync(event_store=event_store, event_type=LLM_REQUESTED, ctx=ctx, required=True, payload={"request_id": claim_id, "provider": normalized, "model": effective_model})
+        except Exception:
+            budget.abort_before_provider(tenant_id=str(tenant_id), request_id=claim_id, day=day)
+            return {"ok": False, "error": "LLM_ACCOUNTING_UNAVAILABLE"}
         response = client.generate_sync(req)
+        usage = getattr(response, "usage", None)
+        prompt_tokens = max(0, int(getattr(usage, "prompt_tokens", 0) or 0))
+        completion_tokens = max(0, int(getattr(usage, "completion_tokens", 0) or 0))
+        used = max(estimated if usage is None else 0, prompt_tokens + completion_tokens,
+                   int(getattr(usage, "total_tokens", 0) or 0)) or estimated
+        spend = {"request_id": claim_id, "provider": normalized, "model": effective_model,
+                 "prompt_tokens": prompt_tokens, "completion_tokens": completion_tokens, "total_tokens": used}
+        append_event_sync(event_store=event_store, event_type=LLM_COMPLETED, ctx=ctx, required=True, payload=spend)
+        if not budget.release(tenant_id=str(tenant_id), request_id=claim_id, day=day):
+            return {"ok": False, "error": "LLM_ACCOUNTING_UNAVAILABLE"}
         return {
-            "ok": True,
-            "provider": normalized,
-            "model": effective_model,
+            "ok": True, "provider": normalized, "model": effective_model,
             "text": str(getattr(response, "content", "") or "").strip(),
             "finish_reason": str(getattr(response, "finish_reason", "stop") or "stop"),
             "usage": getattr(response, "usage", None),
@@ -107,21 +123,16 @@ def call_marketing_llm(*, provider: str, system: str, user: str, model: str | No
 
 def emit_marketing_llm_success(*, event_log: Any, admin_id: str, decision_id: str, correlation_id: str, provider: str, model: str, text: str) -> None:
     event_log.emit(
-        event_type="marketing_llm_completed",
-        source="marketing.llm",
-        user_id=str(admin_id or "system"),
-        decision_id=str(decision_id or "-"),
-        correlation_id=str(correlation_id or (decision_id or "-")),
-        payload={"provider": str(provider), "model": str(model), "len": int(len(text))},
+        event_type="marketing_llm_completed", source="marketing.llm", user_id=str(admin_id or "system"),
+        decision_id=str(decision_id or "-"), correlation_id=str(correlation_id or (decision_id or "-")),
+        payload={"provider": str(provider), "model": str(model), "len": len(text)},
     )
 
 
 def emit_marketing_llm_error(*, event_log: Any, admin_id: str, provider: str, model: str, error_name: str) -> None:
     event_log.emit_error(
-        event_type="marketing_llm_error",
+        event_type="marketing_llm_error", source="marketing.llm", user_id=str(admin_id or "system"),
         details={"provider": str(provider), "model": str(model), "error": str(error_name)},
-        source="marketing.llm",
-        user_id=str(admin_id or "system"),
     )
 
 
