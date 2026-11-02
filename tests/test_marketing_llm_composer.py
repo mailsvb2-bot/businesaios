@@ -58,14 +58,47 @@ async def test_provider_usage_is_charged_even_when_text_rejected(async_mode):
     )
 
 
-def test_missing_provider_usage_charges_conservative_estimate():
-    llm = _UsageLLM(text=_REJECTED)
-    llm.usage = None
-    composer = MarketingLLMComposer(llm, LLMComposerConfig(model="mock"))
-    assert composer.compose_sync(_input()) is None
-    assert not composer._runtime.budget.can_spend(
-        tenant_id="tenant", user_id="user", tokens=composer._cfg.budget.user_tokens_per_day - 1,
+@pytest.mark.parametrize("async_mode", [False, True])
+@pytest.mark.parametrize("usage", [
+    None,
+    LLMUsage(),
+    LLMUsage(prompt_tokens=-1, completion_tokens=1, total_tokens=1),
+    LLMUsage(prompt_tokens=1, completion_tokens=0, total_tokens=-1),
+    LLMUsage(prompt_tokens=1.5, completion_tokens=2, total_tokens=3),
+    LLMUsage(prompt_tokens="1", completion_tokens=2, total_tokens=3),
+    LLMUsage(prompt_tokens=True, completion_tokens=0, total_tokens=1),
+])
+@pytest.mark.asyncio
+async def test_unverified_provider_usage_never_fabricates_durable_spend_or_replays(async_mode, usage):
+    llm, store = _UsageLLM(), MemoryEventStore()
+    llm.usage = usage
+    composer = MarketingLLMComposer(
+        llm, LLMComposerConfig(model="mock", budget_source="event_store"), event_store=store,
     )
+    inp = _input(tenant="t-invalid-usage", user="u-invalid-usage", message_id="event-1")
+    assert (await composer.compose(inp) if async_mode else composer.compose_sync(inp)) is None
+    assert store.count_events(tenant_id="t-invalid-usage", event_type=LLM_COMPLETED) == 0
+    assert composer._runtime.metrics.snapshot().counters.get("accounting_unavailable") == 1
+    assert (await composer.compose(inp) if async_mode else composer.compose_sync(inp)) is None
+    assert llm.calls == 1
+
+
+def test_sync_entrypoint_with_async_only_provider_claims_once():
+    class AsyncOnly:
+        def __init__(self):
+            self.calls = 0
+
+        async def generate(self, request):
+            self.calls += 1
+            return LLMResponse(content=_VALID, usage=LLMUsage(prompt_tokens=3, completion_tokens=4, total_tokens=7))
+
+    llm, store = AsyncOnly(), MemoryEventStore()
+    composer = MarketingLLMComposer(
+        llm, LLMComposerConfig(model="mock", budget_source="event_store"), event_store=store,
+    )
+    assert composer.compose_sync(_input(tenant="t-async-only", user="u-async-only", message_id="event-2"))
+    assert llm.calls == 1
+    assert store.count_events(tenant_id="t-async-only", event_type=LLM_COMPLETED) == 1
 
 
 def test_provider_split_usage_is_counted_when_total_is_zero():
