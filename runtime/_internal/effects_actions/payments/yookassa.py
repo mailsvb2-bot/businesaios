@@ -8,9 +8,11 @@ from runtime._internal.effects_clients.yookassa_webhook_server import (
     start_yookassa_webhook_server_in_thread as _start_yookassa_webhook_server_in_thread,
 )
 from runtime._internal.router_support import execute_effect_action_sync
+from runtime.execution.context import assert_called_from_executor
 
 
 def yookassa_create_payment(*, effects: Any | None = None, decision_id: str, amount: int, currency: str, user_id: str, metadata: dict[str, Any] | None = None) -> tuple[bool, dict[str, Any]]:
+    assert_called_from_executor()
     from core.payments.provider import idempotence_key_for_order
     cur = str(currency or "RUB").upper().strip() or "RUB"
     if cur != "RUB":
