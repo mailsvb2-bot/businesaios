@@ -38,9 +38,16 @@ class AccountedSyncGateway:
             raise RuntimeError("LLM_ACCOUNTING_UNAVAILABLE") from exc
         response = self._client.generate_sync(request)
         usage = getattr(response, "usage", None)
-        prompt = max(0, int(getattr(usage, "prompt_tokens", 0) or 0))
-        completion = max(0, int(getattr(usage, "completion_tokens", 0) or 0))
-        total = max(prompt + completion, int(getattr(usage, "total_tokens", 0) or 0), 0) or estimate_request_tokens(request)
+        try:
+            prompt = int(getattr(usage, "prompt_tokens", 0) or 0)
+            completion = int(getattr(usage, "completion_tokens", 0) or 0)
+            reported = int(getattr(usage, "total_tokens", 0) or 0)
+            if min(prompt, completion, reported) < 0 or max(prompt + completion, reported) == 0:
+                raise ValueError("missing or invalid provider token usage")
+        except (AttributeError, TypeError, ValueError, OverflowError) as exc:
+            # Provider may have billed us: keep the claim, never fabricate actual usage.
+            raise RuntimeError("LLM_ACCOUNTING_UNAVAILABLE") from exc
+        total = max(prompt + completion, reported)
         try:
             append_event_sync(event_store=self._store, event_type=LLM_COMPLETED, ctx=ctx, required=True,
                               payload={"request_id": request_id, "provider": self._provider, "model": request.model,
