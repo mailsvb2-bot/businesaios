@@ -101,13 +101,13 @@ def test_sync_entrypoint_with_async_only_provider_claims_once():
     assert store.count_events(tenant_id="t-async-only", event_type=LLM_COMPLETED) == 1
 
 
-def test_provider_split_usage_is_counted_when_total_is_zero():
-    llm = _UsageLLM(text=_REJECTED, usage=LLMUsage(prompt_tokens=17, completion_tokens=9, total_tokens=0))
-    composer = MarketingLLMComposer(llm, LLMComposerConfig(model="mock"))
-    assert composer.compose_sync(_input()) is None
-    assert not composer._runtime.budget.can_spend(
-        tenant_id="tenant", user_id="user", tokens=composer._cfg.budget.user_tokens_per_day - 25,
-    )
+def test_provider_split_usage_is_rejected_when_total_is_zero():
+    store, llm = MemoryEventStore(), _UsageLLM(text=_REJECTED, usage=LLMUsage(prompt_tokens=17, completion_tokens=9, total_tokens=0))
+    composer = MarketingLLMComposer(llm, LLMComposerConfig(model="mock", budget_source="event_store"), event_store=store)
+    inp = _input(message_id="zero-total")
+    assert composer.compose_sync(inp) is None
+    assert store.count_events(tenant_id="tenant", event_type=LLM_COMPLETED) == 0
+    assert composer.compose_sync(inp) is None and llm.calls == 1
 
 
 def test_event_store_budget_counts_one_provider_completion_after_rejected_text():
