@@ -188,7 +188,10 @@ class EventStoreDailyTokenBudget:
                 # may be retried later; an already-processed request may not.
                 claimed = cas(
                     tenant_id=str(tenant_id),
-                    key=f"llm:claim:v1:{day}:{request_id}",
+                    # Claims are request-scoped across UTC day boundaries.
+                    # Day-scoped claims allowed a replay to invoke a provider again
+                    # after midnight even when the original spend was durable.
+                    key=f"llm:claim:v2:{request_id}",
                     expected=None,
                     value={"user_id": str(user_id)},
                 )
