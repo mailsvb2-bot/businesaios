@@ -3,7 +3,7 @@ from __future__ import annotations
 import hashlib
 from typing import Any
 
-from core.llm.budget import BudgetCaps, EventStoreDailyTokenBudget, estimate_request_tokens, has_durable_budget_store
+from core.llm.budget import BudgetCaps, EventStoreDailyTokenBudget, estimate_request_tokens, has_durable_budget_store, provider_reported_usage
 from core.marketing.llm_telemetry import append_event_sync
 from core.telemetry.event_types import LLM_COMPLETED, LLM_REQUESTED
 from core.telemetry.event_writer import TelemetryContext
