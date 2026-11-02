@@ -21,10 +21,8 @@ from core.telemetry.trace_utils import now_ms
 async def compose_async_flow(composer, inp):
     request_id, t0 = start_request()
     compose_ctx = build_compose_context(inp)
-    tenant_id = compose_ctx.tenant_id
-    user_id = compose_ctx.user_id
-    offer_id = compose_ctx.offer_id
-    ctx = compose_ctx.telemetry
+    tenant_id, user_id = compose_ctx.tenant_id, compose_ctx.user_id
+    offer_id, ctx = compose_ctx.offer_id, compose_ctx.telemetry
     runtime = composer._runtime
 
     if runtime.circuit.is_open():
@@ -39,9 +37,7 @@ async def compose_async_flow(composer, inp):
 
     req, prompt_version, prompt_hash = build_request(model=composer._cfg.model, inp=inp)
     request_id = idempotent_request_id(
-        inp=inp, provider=composer._cfg.provider, model=composer._cfg.model,
-        generated=request_id,
-    )
+        inp=inp, provider=composer._cfg.provider, model=composer._cfg.model, generated=request_id)
     cache_key = build_cache_key(
         cache=runtime.cache,
         provider=composer._cfg.provider,
@@ -76,6 +72,10 @@ async def compose_async_flow(composer, inp):
     try:
         await emit_requested_async(event_store=composer._event_store, ctx=ctx, provider=composer._cfg.provider, model=composer._cfg.model, request_id=request_id, prompt_version=prompt_version, prompt_hash=prompt_hash, experiment=inp.experiment, variant=inp.variant, offer_id=offer_id)
     except Exception:  # noqa: BLE001
+        if reservation_day is not None and not runtime.budget.abort_before_provider(
+            tenant_id=tenant_id, request_id=request_id, day=reservation_day,
+        ):
+            runtime.metrics.inc("reservation_release_failed")
         runtime.metrics.inc("accounting_unavailable")
         return None
 
@@ -96,8 +96,6 @@ async def compose_async_flow(composer, inp):
     usage = resp.usage
     reported = max(0, int(usage.total_tokens or 0), int(usage.prompt_tokens or 0) + int(usage.completion_tokens or 0)) if usage else 0
     used = reported or est
-    # Event-backed budgets count LLM_COMPLETED; unknown provider usage must
-    # be represented by the same conservative estimate charged in memory.
     usage_for_accounting = LLMUsage(prompt_tokens=int(usage.prompt_tokens or 0), completion_tokens=int(usage.completion_tokens or 0), total_tokens=used) if usage and reported else LLMUsage(total_tokens=used)
     runtime.budget.spend(tenant_id=tenant_id, user_id=user_id, tokens=used)
     runtime.metrics.add_tokens(used)

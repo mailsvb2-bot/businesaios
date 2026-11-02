@@ -140,8 +140,14 @@ class EventStoreDailyTokenBudget:
                 return day
         return None
 
+    def abort_before_provider(self, *, tenant_id: str, request_id: str, day: str) -> bool:
+        try:
+            return self.release(tenant_id=tenant_id, request_id=request_id, day=day)
+        except Exception:  # noqa: BLE001
+            return False
+
     def release(self, *, tenant_id: str, request_id: str, day: str) -> bool:
-        """Release only after a durable completion has been written."""
+        """Release after durable completion or a proven pre-provider abort."""
         key = f"llm:pending:v1:{day}"
         for _ in range(16):
             current = self._es.get_setting(tenant_id=str(tenant_id), key=key)

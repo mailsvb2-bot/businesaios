@@ -138,11 +138,17 @@ async def test_event_store_request_write_failure_prevents_provider_call(async_mo
         llm, LLMComposerConfig(model="mock", budget_source="event_store"),
         event_store=FailingRequestStore(),
     )
-    inp = _input(tenant="t-no-request", user="u-no-request")
+    inp = _input(tenant="t-no-request", user="u-no-request", message_id="preflight-1")
     result = await composer.compose(inp) if async_mode else composer.compose_sync(inp)
     assert result is None
     assert llm.calls == 0
     assert composer._runtime.metrics.snapshot().counters.get("accounting_unavailable") == 1
+    assert composer._event_store.get_setting(
+        tenant_id="t-no-request", key=f"llm:pending:v1:{composer._runtime.budget._day()}",
+    ) == {"pending": {}}
+    # Retained claim prevents retrying a failed preflight under the same inbound id.
+    assert (await composer.compose(inp) if async_mode else composer.compose_sync(inp)) is None
+    assert llm.calls == 0
 
 
 @pytest.mark.parametrize("different_scope", ["tenant", "user", "channel"])
@@ -189,9 +195,6 @@ def test_event_store_budget_reservation_blocks_concurrent_overspend():
     from threading import Event, Lock
 
     from core.llm.budget import BudgetCaps
-    from core.llm.contracts import LLMResponse, LLMUsage
-    from core.telemetry.event_types import LLM_COMPLETED
-    from runtime.platform.event_store.memory_event_store import MemoryEventStore
 
     class BlockingLLM:
         def __init__(self):
@@ -261,7 +264,6 @@ async def test_missing_atomic_reservation_fails_closed_before_provider(async_mod
 def test_sqlite_budget_reservations_are_shared_between_store_connections(tmp_path):
     from core.events.log import EventLog
     from core.llm.budget import BudgetCaps, EventStoreDailyTokenBudget
-    from core.telemetry.event_types import LLM_COMPLETED
     from core.tenancy.scope import TenantScope
     from runtime.platform.event_store.sqlite_event_store import SqliteEventStore
 
@@ -314,10 +316,7 @@ async def test_replayed_message_id_does_not_recharge_or_reinvoke_provider(async_
 
 @pytest.mark.asyncio
 async def test_optional_debug_event_failure_does_not_strand_durable_spend():
-    from core.llm.contracts import LLMResponse, LLMUsage
     from core.llm.sampling import DebugSampling
-    from core.telemetry.event_types import LLM_COMPLETED
-    from runtime.platform.event_store.memory_event_store import MemoryEventStore
 
     class FailingDebugStore(MemoryEventStore):
         def append_event(self, event):
@@ -362,9 +361,7 @@ async def test_optional_debug_event_failure_does_not_strand_durable_spend():
 def test_event_store_idempotency_claim_survives_budget_day_rollover(monkeypatch):
     from core.events.log import EventLog
     from core.llm.budget import BudgetCaps, EventStoreDailyTokenBudget
-    from core.telemetry.event_types import LLM_COMPLETED
     from core.tenancy.scope import TenantScope
-    from runtime.platform.event_store.memory_event_store import MemoryEventStore
 
     store = MemoryEventStore()
     budget = EventStoreDailyTokenBudget(
