@@ -72,7 +72,7 @@ async def compose_async_flow(composer, inp):
     try:
         await emit_requested_async(event_store=composer._event_store, ctx=ctx, provider=composer._cfg.provider, model=composer._cfg.model, request_id=request_id, prompt_version=prompt_version, prompt_hash=prompt_hash, experiment=inp.experiment, variant=inp.variant, offer_id=offer_id)
     except Exception:  # noqa: BLE001
-        if reservation_day is not None and not runtime.budget.abort_before_provider(
+        if reservation_day is not None and not runtime.budget.cancel_unstarted_reservation(
             tenant_id=tenant_id, request_id=request_id, day=reservation_day,
         ):
             runtime.metrics.inc("reservation_release_failed")

@@ -140,10 +140,10 @@ class EventStoreDailyTokenBudget:
                     return day if claimed else None
                 finally:
                     if not claimed:
-                        self.abort_before_provider(tenant_id=tenant_id, request_id=request_id, day=day)
+                        self.cancel_unstarted_reservation(tenant_id=tenant_id, request_id=request_id, day=day)
         return None
 
-    def abort_before_provider(self, *, tenant_id: str, request_id: str, day: str) -> bool:
+    def cancel_unstarted_reservation(self, *, tenant_id: str, request_id: str, day: str) -> bool:
         try:
             return self.release(tenant_id=tenant_id, request_id=request_id, day=day)
         except Exception:  # noqa: BLE001

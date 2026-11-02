@@ -98,7 +98,7 @@ def call_marketing_llm(*, provider: str, system: str, user: str, model: str | No
         try:
             append_event_sync(event_store=event_store, event_type=LLM_REQUESTED, ctx=ctx, required=True, payload={"request_id": claim_id, "provider": normalized, "model": effective_model})
         except Exception:
-            budget.abort_before_provider(tenant_id=str(tenant_id), request_id=claim_id, day=day)
+            budget.cancel_unstarted_reservation(tenant_id=str(tenant_id), request_id=claim_id, day=day)
             return {"ok": False, "error": "LLM_ACCOUNTING_UNAVAILABLE"}
         response = client.generate_sync(req)
         usage = getattr(response, "usage", None)
