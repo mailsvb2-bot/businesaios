@@ -33,7 +33,8 @@ def idempotent_request_id(*, inp: MarketingLLMInputs, provider: str, model: str,
     if not source_id:
         return generated
     parts = (
-        str(inp.tenant_id), str(inp.user_id), str(inp.channel),
-        str(provider), str(model), str((inp.offer or {}).get("id") or ""), source_id,
+        # Provider/model/offer can change between retries of the same inbound
+        # event. Identity must follow the event, not mutable composition choices.
+        str(inp.tenant_id), str(inp.user_id), str(inp.channel), source_id,
     )
     return "llm-" + hashlib.sha256("\0".join(parts).encode("utf-8")).hexdigest()[:32]
