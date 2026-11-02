@@ -70,3 +70,25 @@ def test_sealed_effect_journal_failure_is_fail_closed(monkeypatch, failed_event,
     else:
         assert _invoke(store)["ok"] is False
         assert client.calls == 1
+
+
+def test_sealed_effect_reserves_worst_case_prompt_before_provider(monkeypatch):
+    # A short fixed 800-token input allowance permits concurrent long prompts
+    # that can exceed the daily cap even when output is limited to 600 tokens.
+    store, client = MemoryEventStore(), _Provider()
+    monkeypatch.setattr(module, "_client_for", lambda **kw: ("openai_compat", "mock", client, None))
+    result = module.call_marketing_llm(
+        provider="openai_compat", system="x" * 8000, user="y" * 8000,
+        model="mock", event_store=store, tenant_id="tenant", user_id="admin",
+        request_id="long-input",
+    )
+    assert result == {"ok": False, "error": "LLM_BUDGET_BLOCKED"}
+    assert client.calls == 0
+    assert store.count_events(tenant_id="tenant", event_type=LLM_REQUESTED) == 0
+
+
+def test_budget_over_cap_handles_legacy_empty_pending_state():
+    budget_store = MemoryEventStore()
+    budget = module.EventStoreDailyTokenBudget(event_store=budget_store, caps=module.BudgetCaps())
+    budget_store.set_setting(tenant_id="tenant", key=f"llm:pending:v1:{budget._day()}", value={})
+    assert budget.reserve(tenant_id="tenant", user_id="admin", tokens=module.BudgetCaps().user_tokens_per_day + 1, request_id="oversized") is None

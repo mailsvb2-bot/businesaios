@@ -93,7 +93,7 @@ class EventStoreDailyTokenBudget:
     def _reconcile_completed(self, *, tenant_id: str, day: str, current: dict) -> bool:
         """Reclaim only reservations with durable matching provider spend."""
         it = getattr(self._es, "iter_events", None)
-        if not callable(it):
+        if not callable(it) or not isinstance(current, dict) or not isinstance(current.get("pending"), dict):
             return False
         start, end = _utc_day_bounds_ms()
         completed = {(str(e.get("user_id") or ""), str((e.get("payload") or {}).get("request_id") or ""))
