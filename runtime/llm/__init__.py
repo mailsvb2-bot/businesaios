@@ -25,6 +25,7 @@ from core.llm import (
     build_yandexgpt_client,
 )
 from core.llm.agent.agent import LLMAgent, LLMAgentConfig
+from core.llm.budget import has_durable_budget_store
 from core.llm.contracts import LLMMessage, LLMRequest, LLMResponse
 from runtime.public_api_alias import install_public_api_alias
 
@@ -189,7 +190,6 @@ def build_runtime_llm_client(
     raise RuntimeError(f"llm_provider_unsupported:{normalized}")
 
 
-
 class RoutedLLMClient:
     """Runtime adapter: pure core routing plus the actual provider call."""
 
@@ -285,6 +285,7 @@ __all__ = [
     "normalize_provider",
     "resolve_runtime_llm_settings",
     "build_runtime_llm_client",
+    "has_durable_budget_store",
 ]
 
 CANON_RUNTIME_LLM_NAMESPACE = True
