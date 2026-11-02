@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from core.llm.budget import EventStoreDailyTokenBudget, estimate_request_tokens
+from core.llm.budget import EventStoreDailyTokenBudget, estimate_request_tokens, provider_reported_usage
 from core.llm.contracts import LLMUsage
 from core.marketing.llm.cache_keys import build_cache_key
 from core.marketing.llm.compose_context import build_compose_context
