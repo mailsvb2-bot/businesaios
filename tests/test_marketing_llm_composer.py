@@ -229,20 +229,16 @@ def test_event_store_budget_reservation_blocks_concurrent_overspend():
     assert second._runtime.budget.can_spend(tenant_id="t-concurrent", user_id="u-concurrent", tokens=2993)
 
 
-@pytest.mark.parametrize("async_mode", [False, True])
-@pytest.mark.asyncio
-async def test_missing_atomic_reservation_fails_closed_before_provider(async_mode):
+def test_missing_atomic_reservation_fails_closed_before_provider():
     class NoCASStore(MemoryEventStore):
         compare_and_set_setting = None
 
     llm = _UsageLLM()
-    composer = MarketingLLMComposer(
-        llm, LLMComposerConfig(model="mock", budget_source="event_store"),
-        event_store=NoCASStore(),
-    )
-    inp = _input(tenant="t-cas", user="u-cas")
-    result = await composer.compose(inp) if async_mode else composer.compose_sync(inp)
-    assert result is None
+    with pytest.raises(RuntimeError, match="LLM_BUDGET_EVENT_STORE_UNAVAILABLE"):
+        MarketingLLMComposer(
+            llm, LLMComposerConfig(model="mock", budget_source="event_store"),
+            event_store=NoCASStore(),
+        )
     assert llm.calls == 0
 
 
@@ -487,3 +483,33 @@ def test_completed_claim_reconciles_after_crash_but_uncompleted_claim_stays(comp
     assert set(store.get_setting(tenant_id="t", key=f"llm:pending:v1:{day}")["pending"]) == (
         {"new"} if expected_recovery else {"completed"}
     )
+
+def test_explicit_durable_budget_rejects_missing_store():
+    with pytest.raises(RuntimeError, match="LLM_BUDGET_EVENT_STORE_UNAVAILABLE"):
+        MarketingLLMComposer(_UsageLLM(), LLMComposerConfig(model="mock", budget_source="event_store"))
+    with pytest.raises(RuntimeError, match="LLM_BUDGET_EVENT_STORE_UNAVAILABLE"):
+        MarketingLLMComposer(_UsageLLM(), LLMComposerConfig(model="mock", budget_source="event_store"),
+                             event_store=object())
+
+
+def test_boot_llm_cannot_fall_back_to_process_local_budget(monkeypatch):
+    from types import SimpleNamespace
+
+    from core.llm.budget import EventStoreDailyTokenBudget
+    from runtime.boot.builders import marketing_llm as boot
+
+    class Logger:
+        def warning(self, *args, **kwargs):
+            pass
+
+        def info(self, *args, **kwargs):
+            pass
+
+    llm = _UsageLLM()
+    monkeypatch.setattr(boot, "_build_llm_client", lambda **kwargs: ("mock", "mock", llm))
+    settings = SimpleNamespace(LLM_ENABLED=True, LLM_BUDGET_SOURCE="memory")
+    assert boot.build_marketing_llm_composer(settings=settings, event_store=None, logger=Logger()) is None
+    assert boot.build_marketing_llm_composer(settings=settings, event_store=object(), logger=Logger()) is None
+    composer = boot.build_marketing_llm_composer(settings=settings, event_store=MemoryEventStore(), logger=Logger())
+    assert isinstance(composer._runtime.budget, EventStoreDailyTokenBudget)
+    assert composer.compose_sync(_input(tenant="t-boot", user="u-boot", message_id="boot-1"))

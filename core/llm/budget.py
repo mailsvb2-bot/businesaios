@@ -54,6 +54,11 @@ def estimate_request_tokens(request: Any) -> int:
     return int(request.max_tokens) + 800 + sum(len(m.content.encode("utf-8")) for m in request.messages)
 
 
+def has_durable_budget_store(event_store: Any) -> bool:
+    return all(callable(getattr(event_store, name, None)) for name in
+               ("sum_event_payload_int", "iter_events", "get_setting", "compare_and_set_setting", "append_event"))
+
+
 class EventStoreDailyTokenBudget:
     """Durable daily spend plus atomic pending claims on the canonical event store."""
 

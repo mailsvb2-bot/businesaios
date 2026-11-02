@@ -10,6 +10,7 @@ from __future__ import annotations
 
 from typing import Any
 
+from core.llm.budget import has_durable_budget_store
 from runtime.llm import (
     LLMAgent,
     LLMAgentConfig,
@@ -100,6 +101,9 @@ def build_marketing_llm_composer(*, settings: Any, event_store: Any, logger: Any
         enabled = False
     if not enabled:
         return None
+    if not has_durable_budget_store(event_store):
+        logger.warning("LLM disabled: canonical durable EventStore unavailable")
+        return None
 
     try:
         provider, model, llm = _build_llm_client(settings=settings)
@@ -117,15 +121,9 @@ def build_marketing_llm_composer(*, settings: Any, event_store: Any, logger: Any
     except (AttributeError, TypeError, ValueError):
         swallow(__name__, "runtime/boot/builders/marketing_llm.py")
 
-    cfg = LLMComposerConfig(
-        model=model,
-        provider=provider,
-        global_rps=env_float("LLM_GLOBAL_RPS", 15.0),
-        global_burst=env_int("LLM_GLOBAL_BURST", 20),
-        tenant_rps=env_float("LLM_TENANT_RPS", 4.0),
-        tenant_burst=env_int("LLM_TENANT_BURST", 6),
-        budget_source=_setting_or_env(settings, "LLM_BUDGET_SOURCE", "auto") or "auto",
-    )
+    cfg = LLMComposerConfig(model=model, provider=provider, budget_source="event_store",
+        global_rps=env_float("LLM_GLOBAL_RPS", 15.0), global_burst=env_int("LLM_GLOBAL_BURST", 20),
+        tenant_rps=env_float("LLM_TENANT_RPS", 4.0), tenant_burst=env_int("LLM_TENANT_BURST", 6))
     return MarketingLLMComposer(llm, cfg, event_store=event_store)
 
 
