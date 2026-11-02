@@ -68,3 +68,26 @@ def test_pending_replay_does_not_expose_executable_handoff_or_ack(monkeypatch):
     assert replay.metadata["messaging_handoff"] == {}
     assert replay.metadata["messaging_inbound_result"] == {}
     assert not service.transport_ack_safe(replay)
+
+def test_completed_replay_is_ack_safe_without_reissuing_handoff(monkeypatch):
+    monkeypatch.setattr(ProviderWebhookRuntime, "verify", lambda self, **kwargs: True)
+
+    class Processor:
+        def process(self, *, handoff):
+            return {"accepted": True, "decision_envelope": "recorded"}
+
+    service = ProviderInboundWebhookService(
+        webhook_runtime=ProviderWebhookRuntime(None),
+        replay_guard=ProviderWebhookReplayGuard(InMemoryIdempotencyStore()),
+        inbound_processor=Processor(),
+    )
+    request = dict(
+        provider=provider_map()["telegram_bot"], tenant_id="t1", business_id="b1",
+        headers={}, body=b'{"update_id":124,"message":{"message_id":10,"text":"hi","chat":{"id":777},"from":{"id":777}}}',
+        event_key="completed-replay-1",
+    )
+    assert service.ingest(**request).accepted
+    replay = service.ingest(**request)
+    assert replay.metadata["decision"]["resolution"] == "replay_completed"
+    assert not replay.accepted and replay.metadata["messaging_handoff"] == {}
+    assert service.transport_ack_safe(replay)
