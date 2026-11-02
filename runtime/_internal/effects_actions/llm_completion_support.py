@@ -9,7 +9,7 @@ from runtime._internal.llm_transport import (
     llm_generate_yandexgpt,
 )
 from runtime.llm import LLMMessage, LLMRequest
-from runtime.llm import AccountedSyncGateway
+from runtime.llm.accounted_gateway import AccountedSyncGateway
 from runtime.llm_provider_factory import (
     build_runtime_llm_client,
     normalize_provider,
