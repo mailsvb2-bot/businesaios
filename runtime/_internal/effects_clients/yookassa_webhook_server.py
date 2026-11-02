@@ -45,6 +45,8 @@ def start_yookassa_webhook_server_in_thread(
         raise RuntimeError("YOOKASSA_WEBHOOK_IP_ALLOWLIST required in production")
     if auth_mode not in {"none", "basic", "token", "hmac_sha256"}:
         raise RuntimeError("YOOKASSA_WEBHOOK_AUTH_MODE unsupported")
+    if auth_mode == "basic" and (not basic_user or not basic_pass):
+        raise RuntimeError("YOOKASSA_WEBHOOK_BASIC_CREDENTIALS_REQUIRED")
     if payment_outbox is None or not callable(getattr(payment_outbox, "enqueue_once", None)):
         raise RuntimeError("YOOKASSA_WEBHOOK_DURABLE_IDEMPOTENT_OUTBOX_REQUIRED")
 
