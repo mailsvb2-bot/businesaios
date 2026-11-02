@@ -249,3 +249,38 @@ async def test_event_store_request_write_failure_prevents_provider_call(async_mo
     assert result is None
     assert llm.calls == 0
     assert composer._runtime.metrics.snapshot().counters.get("accounting_unavailable") == 1
+
+
+@pytest.mark.parametrize("different_scope", ["tenant", "user", "channel"])
+def test_marketing_cache_is_isolated_by_tenant_user_and_channel(different_scope):
+    from core.llm.contracts import LLMResponse, LLMUsage
+
+    class CountingLLM:
+        def __init__(self):
+            self.calls = 0
+
+        def generate_sync(self, request):
+            self.calls += 1
+            return LLMResponse(
+                content="Хочешь продолжить? Есть «Сеанс» за 990₽. Нажми «Открыть».",
+                usage=LLMUsage(prompt_tokens=3, completion_tokens=4, total_tokens=7),
+            )
+
+    llm = CountingLLM()
+    composer = MarketingLLMComposer(llm, LLMComposerConfig(model="mock"))
+    common = {
+        "tenant_id": "t-cache", "user_id": "u-cache",
+        "locale": "ru", "channel": "telegram", "features": {},
+        "offer": {"id": "cache", "title": "Сеанс", "price": 990, "currency": "₽"},
+        "last_user_text": "",
+    }
+    first = MarketingLLMInputs(**common)
+    assert composer.compose_sync(first)
+    assert composer.compose_sync(first)
+    assert llm.calls == 1
+    changed = dict(common)
+    changed[{"tenant": "tenant_id", "user": "user_id", "channel": "channel"}[different_scope]] += "-other"
+    composer.compose_sync(MarketingLLMInputs(**changed))
+    # Dedupe may reject identical text on the same tenant/user, but the
+    # provider must not be bypassed by a cache hit across scopes.
+    assert llm.calls == 2
