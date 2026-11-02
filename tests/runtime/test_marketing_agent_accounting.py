@@ -73,7 +73,10 @@ def test_agent_gateway_journal_failure_blocks_output_and_replay(failed_event, ex
     assert client.calls == expected_calls
 
 
-@pytest.mark.parametrize("usage", [None, LLMUsage(), LLMUsage(prompt_tokens=-1, completion_tokens=4, total_tokens=3)])
+@pytest.mark.parametrize("usage", [None, LLMUsage(),
+    LLMUsage(prompt_tokens=-1, completion_tokens=4, total_tokens=3),
+    LLMUsage(prompt_tokens=13, completion_tokens=7, total_tokens=0),
+    LLMUsage(prompt_tokens=13, completion_tokens=7, total_tokens=19)])
 def test_gateway_missing_or_invalid_provider_usage_never_fabricates_spend(usage):
     class Unreported(Provider):
         def generate_sync(self, request):
@@ -103,7 +106,6 @@ def test_boot_marketing_agent_uses_same_durable_gateway(monkeypatch):
         agent.run_task(TaskType.ADS_CREATIVE_GENERATE, ctx)
     assert client.calls == 1
     assert store.count_events(tenant_id="tenant", event_type=LLM_COMPLETED) == 1
-
 
 class _Provider:
     calls = 0
