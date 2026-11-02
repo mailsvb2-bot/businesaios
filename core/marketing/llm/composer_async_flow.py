@@ -91,8 +91,7 @@ async def compose_async_flow(composer, inp):
         await composer._maybe_alert(inp, reason="error_spike")
         return None
 
-    # Account provider usage immediately after successful transport, including
-    # content subsequently filtered by guardrails or deduplication.
+    # Account actual provider usage even when content is later rejected.
     reported = provider_reported_usage(resp.usage)
     if reported is None:
         runtime.metrics.inc("accounting_unavailable")
