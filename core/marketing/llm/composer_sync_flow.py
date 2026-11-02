@@ -78,8 +78,7 @@ def compose_sync_flow(composer, inp):
         emit_trace_sync(event_store=composer._event_store, model=composer._cfg.model, provider=composer._cfg.provider, inp=inp, request_id=request_id, prompt_version=prompt_version, prompt_hash=prompt_hash, ok=False, cache_hit=False, latency_ms=latency, finish_reason="error", usage=None, error_code=err_code(e))
         return None
 
-    # Provider execution has already occurred: account actual usage even if
-    # the generated content is later rejected by guardrails or deduplication.
+    # Record actual provider usage even for content rejected by guardrails.
     reported = provider_reported_usage(resp.usage)
     if reported is None:
         runtime.metrics.inc("accounting_unavailable")
