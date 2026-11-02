@@ -59,3 +59,16 @@ def test_payload_redactor_stops_recursive_explosion_fail_closed() -> None:
     redacted = redactor.redact(payload)
 
     assert redacted['a']['b']['c'] == '<max-depth-redacted>'
+
+
+def test_payload_redactor_masks_embedded_secrets_without_wiping_safe_text() -> None:
+    samples = (
+        '123456789:AAH-abcdefghijklmnopqrstuvwxyz0123456',
+        'Authorization: Bearer eyJhbGciOiJIUzI1NiJ9.canarypayload.canarysig',
+        'sk-abcdefghijklmnop1234', 'password=hunter2-canary',
+        'live_AbCdEfGhIjKlMnOpQrStUv',
+    )
+    out = PayloadRedactor().redact({'notes': samples, 'safe': 'public text'})
+    assert all(sample not in repr(out) for sample in samples)
+    assert all('***REDACTED***' in note for note in out['notes'])
+    assert out['safe'] == 'public text'
