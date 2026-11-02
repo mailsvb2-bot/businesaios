@@ -281,3 +281,23 @@ def test_telegram_inbound_tenant_mismatch_cannot_bypass_budget():
                   "channel": "telegram", "update_id": 123, "tenant_id": "tenant-other",
               }}}
     assert not is_routine_reply("send_message@v1", forged)
+
+
+def test_null_mapping_identity_cannot_be_signed_as_literal_none():
+    for missing in ("tenant_id", "user_id"):
+        state = {
+            "tenant_id": "tenant-live", "user_id": "user-1",
+            "session": {"source": "messaging", "channel": "vk",
+                        "transport_message_id": "event-42"},
+        }
+        state[missing] = None
+        _, payload = build_payload(
+            state=state,
+            out=ProposedAction("send_message@v1", {
+                "user_id": "None" if missing == "user_id" else "user-1",
+                "text": "not a verified reply",
+            }),
+            pinned_world_model_meta={}, tenant_id="None" if missing == "tenant_id" else "tenant-live",
+            product_id=None, domain=None, product_version=None, actor_id="user-1",
+        )
+        assert not is_routine_reply("send_message@v1", payload)
