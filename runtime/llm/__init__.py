@@ -32,32 +32,16 @@ from runtime.public_api_alias import install_public_api_alias
 
 Transport = Callable[[str, str, dict[str, object], int], dict[str, object]]
 
-_PROVIDER_DEFAULTS = {
-    "openai_compat": {
-        "base_url": "https://api.openai.com/v1",
-        "model": "gpt-4.1-mini",
-    },
-    "anthropic": {
-        "base_url": "https://api.anthropic.com",
-        "model": "claude-3-5-sonnet-latest",
-    },
-    "gigachat": {
-        "base_url": "https://gigachat.devices.sberbank.ru/api/v1",
-        "model": "GigaChat",
-    },
-    "yandexgpt": {
-        "base_url": "https://llm.api.cloud.yandex.net/foundationModels/v1/completion",
-        "model": "yandexgpt-lite",
-    },
+_PROVIDER_SETTINGS = {
+    "openai_compat": ("OPENAI_BASE_URL", "OPENAI_API_KEY", "OPENAI_MODEL",
+                      "https://api.openai.com/v1", "gpt-4.1-mini"),
+    "anthropic": ("ANTHROPIC_BASE_URL", "ANTHROPIC_API_KEY", "ANTHROPIC_MODEL",
+                  "https://api.anthropic.com", "claude-3-5-sonnet-latest"),
+    "gigachat": ("GIGACHAT_BASE_URL", "GIGACHAT_API_KEY", "GIGACHAT_MODEL",
+                 "https://gigachat.devices.sberbank.ru/api/v1", "GigaChat"),
+    "yandexgpt": ("YANDEXGPT_BASE_URL", "YANDEXGPT_API_KEY", "YANDEXGPT_MODEL",
+                  "https://llm.api.cloud.yandex.net/foundationModels/v1/completion", "yandexgpt-lite"),
 }
-
-_PROVIDER_KEYS = {
-    "openai_compat": ("OPENAI_BASE_URL", "OPENAI_API_KEY", "OPENAI_MODEL"),
-    "anthropic": ("ANTHROPIC_BASE_URL", "ANTHROPIC_API_KEY", "ANTHROPIC_MODEL"),
-    "gigachat": ("GIGACHAT_BASE_URL", "GIGACHAT_API_KEY", "GIGACHAT_MODEL"),
-    "yandexgpt": ("YANDEXGPT_BASE_URL", "YANDEXGPT_API_KEY", "YANDEXGPT_MODEL"),
-}
-
 
 def normalize_provider(provider: str | None) -> str:
     value = str(provider or "yandexgpt").strip().lower()
@@ -89,12 +73,10 @@ def resolve_runtime_llm_settings(
     """
 
     normalized = normalize_provider(provider)
-    base_key, api_key_key, model_key = _PROVIDER_KEYS[normalized]
-    defaults = _PROVIDER_DEFAULTS[normalized]
-
-    base_url = str(read_value(base_key, defaults["base_url"]) or "").strip()
+    base_key, api_key_key, model_key, default_url, default_model = _PROVIDER_SETTINGS[normalized]
+    base_url = str(read_value(base_key, default_url) or "").strip()
     api_key = str(read_value(api_key_key, "") or "").strip()
-    model = str(model_override or read_value(model_key, defaults["model"]) or "").strip()
+    model = str(model_override or read_value(model_key, default_model) or "").strip()
 
     if normalized == "openai_compat" and openai_legacy_keys is not None:
         legacy_base, legacy_key, legacy_model = openai_legacy_keys
@@ -168,26 +150,13 @@ def build_runtime_llm_client(
             anthropic_version=anthropic_version,
             timeout_s=int(timeout_s or 20),
         )
-    if normalized == "gigachat":
-        if gigachat_transport is None:
-            raise RuntimeError("llm_transport_missing:gigachat")
-        return build_gigachat_client(
-            base_url=base,
-            api_key=key,
-            default_model=default_model,
-            transport=gigachat_transport,
-            timeout_s=int(timeout_s or 20),
-        )
-    if normalized == "yandexgpt":
-        if yandexgpt_transport is None:
-            raise RuntimeError("llm_transport_missing:yandexgpt")
-        return build_yandexgpt_client(
-            base_url=base,
-            api_key=key,
-            default_model=default_model,
-            transport=yandexgpt_transport,
-            timeout_s=int(timeout_s or 20),
-        )
+    if normalized in {"gigachat", "yandexgpt"}:
+        transport = gigachat_transport if normalized == "gigachat" else yandexgpt_transport
+        if transport is None:
+            raise RuntimeError(f"llm_transport_missing:{normalized}")
+        factory = build_gigachat_client if normalized == "gigachat" else build_yandexgpt_client
+        return factory(base_url=base, api_key=key, default_model=default_model,
+                       transport=transport, timeout_s=int(timeout_s or 20))
     raise RuntimeError(f"llm_provider_unsupported:{normalized}")
 
 
