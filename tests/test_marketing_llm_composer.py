@@ -482,12 +482,15 @@ async def test_replayed_message_id_does_not_recharge_or_reinvoke_provider(async_
     # Different composer instances have different caches and rate limiters.
     first = MarketingLLMComposer(llm, cfg, event_store=store)
     second = MarketingLLMComposer(llm, cfg, event_store=store)
+    changed_features = MarketingLLMInputs(
+        **{**inp.__dict__, "features": {"segment": "changed-after-retry"}},
+    )
     if async_mode:
         assert await first.compose(inp)
-        assert await second.compose(inp) is None
+        assert await second.compose(changed_features) is None
     else:
         assert first.compose_sync(inp)
-        assert second.compose_sync(inp) is None
+        assert second.compose_sync(changed_features) is None
     assert llm.calls == 1
     assert store.count_events(tenant_id="t-replay", event_type=LLM_COMPLETED) == 1
     assert store.sum_event_payload_int(

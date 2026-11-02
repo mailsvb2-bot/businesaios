@@ -40,7 +40,7 @@ async def compose_async_flow(composer, inp):
     req, prompt_version, prompt_hash = build_request(model=composer._cfg.model, inp=inp)
     request_id = idempotent_request_id(
         inp=inp, provider=composer._cfg.provider, model=composer._cfg.model,
-        prompt_hash=prompt_hash, generated=request_id,
+        generated=request_id,
     )
     cache_key = build_cache_key(
         cache=runtime.cache,
