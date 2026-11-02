@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from core.llm.budget import EventStoreDailyTokenBudget, estimate_request_tokens, provider_reported_usage
+from core.llm.budget import EventStoreDailyTokenBudget, estimate_request_tokens, validated_llm_usage
 from core.llm.contracts import LLMUsage
 from core.marketing.llm.cache_keys import build_cache_key
 from core.marketing.llm.compose_context import build_compose_context
@@ -79,7 +79,7 @@ def compose_sync_flow(composer, inp):
         return None
 
     # Record actual provider usage even for content rejected by guardrails.
-    reported = provider_reported_usage(resp.usage)
+    reported = validated_llm_usage(resp.usage)
     if reported is None:
         runtime.metrics.inc("accounting_unavailable")
         return None  # Keep the reservation/claim: the provider may have charged us.
