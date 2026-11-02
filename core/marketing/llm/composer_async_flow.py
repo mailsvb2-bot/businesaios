@@ -2,9 +2,8 @@ from __future__ import annotations
 
 from core.llm.budget import EventStoreDailyTokenBudget, estimate_request_tokens, validated_llm_usage
 from core.llm.contracts import LLMUsage
-from core.marketing.llm.cache_keys import build_cache_key
 from core.marketing.llm.compose_context import build_compose_context
-from core.marketing.llm.flow import build_request, finalize_text, idempotent_request_id, start_request
+from core.marketing.llm.flow import build_cache_key, build_request, finalize_text, idempotent_request_id, start_request
 from core.marketing.llm.runtime_flow import (
     emit_budget_blocked_async,
     emit_circuit_open_async,
