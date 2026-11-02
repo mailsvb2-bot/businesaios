@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from core.llm.budget import EventStoreDailyTokenBudget
 from core.llm.contracts import LLMUsage
 from core.marketing.async_runner import run_awaitable_sync
 from core.marketing.llm.cache_keys import build_cache_key
@@ -77,7 +78,12 @@ def compose_sync_flow(composer, inp):
     runtime.metrics.add_tokens(used)
     latency = max(0, now_ms() - t0)
     runtime.metrics.observe_latency(latency)
-    emit_trace_sync(event_store=composer._event_store, model=composer._cfg.model, provider=composer._cfg.provider, inp=inp, request_id=request_id, prompt_version=prompt_version, prompt_hash=prompt_hash, ok=True, cache_hit=False, latency_ms=latency, finish_reason=resp.finish_reason or "stop", usage=usage_for_accounting, error_code="")
+    try:
+        emit_trace_sync(event_store=composer._event_store, model=composer._cfg.model, provider=composer._cfg.provider, inp=inp, request_id=request_id, prompt_version=prompt_version, prompt_hash=prompt_hash, ok=True, cache_hit=False, latency_ms=latency, finish_reason=resp.finish_reason or "stop", usage=usage_for_accounting, error_code="", required=isinstance(runtime.budget, EventStoreDailyTokenBudget))
+    except Exception:  # noqa: BLE001
+        # Never expose generated content when the authoritative spend write fails.
+        runtime.metrics.inc("accounting_failed")
+        return None
     ok_text, text, guard_reason = finalize_text(text=resp.content or "", max_chars=int(composer._cfg.max_chars), forbid=composer._cfg.forbid, offer=(inp.offer or {}))
     if not ok_text:
         emit_trace_sync(event_store=composer._event_store, model=composer._cfg.model, provider=composer._cfg.provider, inp=inp, request_id=request_id, prompt_version=prompt_version, prompt_hash=prompt_hash, ok=False, cache_hit=False, latency_ms=latency, finish_reason="guardrail", usage=usage_for_accounting, error_code=f"guardrail:{guard_reason}")

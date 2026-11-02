@@ -162,3 +162,48 @@ def test_event_store_budget_counts_one_provider_completion_after_rejected_text()
         tenant_id="t-store", user_id="u-store",
         tokens=cfg.budget.user_tokens_per_day - 6,
     )
+
+
+
+@pytest.mark.parametrize("async_mode", [False, True])
+@pytest.mark.asyncio
+async def test_event_store_accounting_failure_never_exposes_generated_content(async_mode):
+    from core.llm.contracts import LLMResponse, LLMUsage
+    from core.telemetry.event_types import LLM_COMPLETED
+    from runtime.platform.event_store.memory_event_store import MemoryEventStore
+
+    class FailingAccountingStore(MemoryEventStore):
+        def append_event(self, event):
+            if event.get("event_type") == LLM_COMPLETED:
+                raise OSError("simulated durable accounting failure")
+            return super().append_event(event)
+
+    class ValidLLM:
+        def generate_sync(self, request):
+            return LLMResponse(
+                content="Хочешь продолжить? Есть «Сеанс» за 990₽. Нажми «Открыть».",
+                usage=LLMUsage(prompt_tokens=3, completion_tokens=4, total_tokens=7),
+            )
+
+        async def generate(self, request):
+            return self.generate_sync(request)
+
+    store = FailingAccountingStore()
+    composer = MarketingLLMComposer(
+        ValidLLM(),
+        LLMComposerConfig(model="mock", budget_source="event_store"),
+        event_store=store,
+    )
+    inp = MarketingLLMInputs(
+        tenant_id="t-fail", user_id="u-fail", locale="ru",
+        channel="telegram", features={},
+        offer={"id": "charge", "title": "Сеанс", "price": 990, "currency": "₽"},
+        last_user_text="",
+    )
+    result = await composer.compose(inp) if async_mode else composer.compose_sync(inp)
+    assert result is None
+    assert composer._runtime.metrics.snapshot().counters.get("accounting_failed") == 1
+    assert store.sum_event_payload_int(
+        tenant_id="t-fail", event_type=LLM_COMPLETED, field="total_tokens",
+        user_id="u-fail",
+    ) == 0
