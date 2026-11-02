@@ -1,4 +1,5 @@
 from runtime.effects.message_effects import send_message_effect
+from runtime.execution.context import executor_context
 
 
 class _DummyEventLog:
@@ -37,7 +38,8 @@ def test_non_telegram_send_uses_multichannel_bridge(monkeypatch):
     _ = mod._telegram_messaging_module()
     monkeypatch.setattr("runtime._internal.effects_actions.telegram.messaging_parts.transport.get_multichannel_effects_bridge", lambda: _Bridge())
     dummy = _DummySelf()
-    out = send_message_effect(dummy, decision_id="d1", correlation_id="c1", user_id="wa:100", text="hello", channel="whatsapp", track_payload={"tenant_id": "tenant-x"})
+    with executor_context():
+        out = send_message_effect(dummy, decision_id="d1", correlation_id="c1", user_id="wa:100", text="hello", channel="whatsapp", track_payload={"tenant_id": "tenant-x"})
     assert out["ok"] is True
     assert out["meta"]["provider"] == "whatsapp"
     assert out["meta"]["mode"] == "webhook"
@@ -45,6 +47,7 @@ def test_non_telegram_send_uses_multichannel_bridge(monkeypatch):
 
 def test_telegram_send_stays_in_telegram_transport():
     dummy = _DummySelf()
-    out = send_message_effect(dummy, decision_id="d1", correlation_id="c1", user_id="123456", text="hello", channel="telegram")
+    with executor_context():
+        out = send_message_effect(dummy, decision_id="d1", correlation_id="c1", user_id="123456", text="hello", channel="telegram")
     assert out["ok"] is True
     assert out["meta"]["channel"] == "telegram"
