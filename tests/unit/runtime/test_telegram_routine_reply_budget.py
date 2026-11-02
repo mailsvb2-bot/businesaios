@@ -19,7 +19,7 @@ from core.safety.operational.action_registry import build_default_operational_ac
 from core.safety.operational.operational_budget_accountant import OperationalBudgetAccountant
 from runtime import safety_controls
 
-REPLY_PROOF = {"channel": "telegram", "update_id": 462236768}
+REPLY_PROOF = {"channel": "telegram", "update_id": 462236768, "tenant_id": "tenant-live"}
 
 
 def _payload(**kw):
@@ -64,7 +64,7 @@ def test_safety_accounting_excludes_only_verified_user_reply(monkeypatch):
 
 def test_start_proposal_gets_trusted_reply_provenance_and_existing_user_reply_policy():
     state = SimpleNamespace(
-        user_id="user-1", meta={"source": "messaging"}, economy={},
+        tenant_id="tenant-live", user_id="user-1", meta={"source": "messaging"}, economy={},
         session={"source": "messaging", "channel": "telegram", "command": "/start",
                  "text": "/start", "messaging_update_id": 462236768},
         user={"id": "user-1", "messaging_channel": "telegram"},
@@ -212,7 +212,7 @@ def test_inbound_reply_must_match_outbound_channel_and_chat():
                  "transport_message_id": "verified-event-9", "chat_id": "chat-1"},
     )
     for override in ({"channel": "max"}, {"chat_id": "chat-2"},
-                     {"channel": "vk", "chat_id": "chat-2"}):
+                     {"channel": "vk", "chat_id": "chat-2"}, {}):
         _, payload = build_payload(
             state=state,
             out=ProposedAction("send_message@v1", {
@@ -261,3 +261,23 @@ def test_long_raw_event_id_cannot_spoof_a_bounded_reply():
         product_id=None, domain=None, product_version=None, actor_id="user-1",
     )
     assert not is_routine_reply("send_message@v1", outbound)
+
+
+def test_telegram_inbound_tenant_mismatch_cannot_bypass_budget():
+    state = SimpleNamespace(
+        tenant_id="tenant-other", user_id="user-1", meta={}, product={},
+        session={"source": "messaging", "channel": "telegram", "messaging_update_id": 123},
+    )
+    _, payload = build_payload(
+        state=state, out=ProposedAction("send_message@v1", {
+            "user_id": "user-1", "text": "cross-tenant reply",
+        }), pinned_world_model_meta={}, tenant_id="tenant-live",
+        product_id=None, domain=None, product_version=None, actor_id="user-1",
+    )
+    assert not is_routine_reply("send_message@v1", payload)
+    # A matching channel/update ID is insufficient without tenant binding.
+    forged = {"tenant_id": "tenant-live", "user_id": "user-1",
+              "meta": {"inbound_user_reply": {
+                  "channel": "telegram", "update_id": 123, "tenant_id": "tenant-other",
+              }}}
+    assert not is_routine_reply("send_message@v1", forged)

@@ -178,14 +178,14 @@ def build_payload(
     if (getattr(out, "action", "") == "send_message@v1"
             and session.get("source") in {"messaging", "customer_bot"}
             and channel in ALL_CHANNELS and valid_event
-            and (channel == "telegram" or tenant_matches)
+            and tenant_matches
             and state_user and str(payload.get("user_id") or "") == state_user
             and str(payload.get("channel") or channel).strip().lower() == channel
-            and (not payload.get("chat_id") or str(payload["chat_id"]) == str(session.get("chat_id") or ""))
+            and (not session.get("chat_id") or str(payload.get("chat_id") or "") == str(session["chat_id"]))
             and payload.get("recipient_count") in (None, 1)):
         meta_block["inbound_user_reply"] = {
             "channel": channel, "update_id": event_id,
-            **({"tenant_id": state_tenant} if tenant_matches else {}),
+            "tenant_id": state_tenant,
         }
     canonical_goal_id = _canonical_goal_identity(state)
     if canonical_goal_id:

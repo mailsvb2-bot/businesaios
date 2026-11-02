@@ -22,13 +22,12 @@ def is_routine_reply(action: str, payload: Mapping[str, Any]) -> bool:
     if not isinstance(proof, Mapping) or proof.get("channel") not in ALL_CHANNELS:
         return False
     channel, event_id = proof["channel"], proof.get("update_id")
+    tenant_matches = bool(proof.get("tenant_id")) and str(proof["tenant_id"]) == str(payload.get("tenant_id") or "")
     if channel == "telegram":
         valid = type(event_id) is int and event_id >= 0
     else:
-        valid = (isinstance(event_id, str) and bool(event_id.strip()) and len(event_id) <= 256
-                 and bool(proof.get("tenant_id"))
-                 and str(proof["tenant_id"]) == str(payload.get("tenant_id") or ""))
-    if not valid or not str(payload.get("user_id") or "").strip():
+        valid = isinstance(event_id, str) and bool(event_id.strip()) and len(event_id) <= 256
+    if not tenant_matches or not valid or not str(payload.get("user_id") or "").strip():
         return False
     if payload.get("recipient_count") not in (None, 1):
         return False
