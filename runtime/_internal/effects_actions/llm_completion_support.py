@@ -1,19 +1,14 @@
 from __future__ import annotations
 
-import hashlib
 from typing import Any
 
-from core.llm.budget import BudgetCaps, EventStoreDailyTokenBudget, estimate_request_tokens
-from core.marketing.llm_telemetry import append_event_sync
-from core.telemetry.event_types import LLM_COMPLETED, LLM_REQUESTED
-from core.telemetry.event_writer import TelemetryContext
 from runtime._internal.llm_transport import (
     llm_generate_anthropic,
     llm_generate_gigachat,
     llm_generate_openai_compat,
     llm_generate_yandexgpt,
 )
-from runtime.llm import LLMMessage, LLMRequest
+from runtime.llm import AccountedSyncGateway, LLMMessage, LLMRequest
 from runtime.llm_provider_factory import (
     build_runtime_llm_client,
     normalize_provider,
@@ -86,39 +81,17 @@ def call_marketing_llm(*, provider: str, system: str, user: str, model: str | No
         timeout_s=float(_effective_timeout_s()),
         metadata={"surface": "marketing_llm_complete", "provider": normalized},
     )
-    identity = hashlib.sha256("\0".join((str(tenant_id), str(user_id), str(request_id))).encode()).hexdigest()[:32]
-    claim_id = f"llm-effect-{identity}"
-    ctx = TelemetryContext(tenant_id=str(tenant_id), user_id=str(user_id), message_id=str(request_id), correlation_id=str(request_id))
-    budget = EventStoreDailyTokenBudget(event_store=event_store, caps=BudgetCaps())
-    estimated = estimate_request_tokens(req)
+    req.metadata.update({"tenant_id": str(tenant_id), "user_id": str(user_id),
+                         "correlation_key": str(request_id), "task_type": "marketing_llm_complete"})
     try:
-        day = budget.reserve(tenant_id=str(tenant_id), user_id=str(user_id), tokens=estimated, request_id=claim_id)
-        if day is None:
-            return {"ok": False, "error": "LLM_BUDGET_BLOCKED"}
-        try:
-            append_event_sync(event_store=event_store, event_type=LLM_REQUESTED, ctx=ctx, required=True, payload={"request_id": claim_id, "provider": normalized, "model": effective_model})
-        except Exception:
-            budget.cancel_unstarted_reservation(tenant_id=str(tenant_id), request_id=claim_id, day=day)
-            return {"ok": False, "error": "LLM_ACCOUNTING_UNAVAILABLE"}
-        response = client.generate_sync(req)
-        usage = getattr(response, "usage", None)
-        prompt_tokens = max(0, int(getattr(usage, "prompt_tokens", 0) or 0))
-        completion_tokens = max(0, int(getattr(usage, "completion_tokens", 0) or 0))
-        used = max(estimated if usage is None else 0, prompt_tokens + completion_tokens,
-                   int(getattr(usage, "total_tokens", 0) or 0)) or estimated
-        spend = {"request_id": claim_id, "provider": normalized, "model": effective_model,
-                 "prompt_tokens": prompt_tokens, "completion_tokens": completion_tokens, "total_tokens": used}
-        append_event_sync(event_store=event_store, event_type=LLM_COMPLETED, ctx=ctx, required=True, payload=spend)
-        if not budget.release(tenant_id=str(tenant_id), request_id=claim_id, day=day):
-            return {"ok": False, "error": "LLM_ACCOUNTING_UNAVAILABLE"}
-        return {
-            "ok": True, "provider": normalized, "model": effective_model,
-            "text": str(getattr(response, "content", "") or "").strip(),
-            "finish_reason": str(getattr(response, "finish_reason", "stop") or "stop"),
-            "usage": getattr(response, "usage", None),
-        }
+        response = AccountedSyncGateway(client, event_store=event_store, provider=normalized).generate_sync(req)
+        return {"ok": True, "provider": normalized, "model": effective_model,
+                "text": str(getattr(response, "content", "") or "").strip(),
+                "finish_reason": str(getattr(response, "finish_reason", "stop") or "stop"),
+                "usage": getattr(response, "usage", None)}
     except (AttributeError, TypeError, ValueError, RuntimeError) as exc:
-        return {"ok": False, "provider": normalized, "model": effective_model, "error": type(exc).__name__}
+        reason = str(exc) if str(exc) in {"LLM_BUDGET_BLOCKED", "LLM_ACCOUNTING_UNAVAILABLE"} else type(exc).__name__
+        return {"ok": False, "provider": normalized, "model": effective_model, "error": reason}
 
 
 def emit_marketing_llm_success(*, event_log: Any, admin_id: str, decision_id: str, correlation_id: str, provider: str, model: str, text: str) -> None:

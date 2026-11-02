@@ -11,10 +11,11 @@ from __future__ import annotations
 from typing import Any
 
 from runtime.llm import (
+    AccountedSyncGateway,
     LLMAgent,
     LLMAgentConfig,
-    has_durable_budget_store,
     build_runtime_llm_client,
+    has_durable_budget_store,
     normalize_provider,
     resolve_runtime_llm_settings,
 )
@@ -146,4 +147,4 @@ def build_marketing_llm_agent(*, settings: Any, event_store: Any, logger: Any) -
         max_tokens=env_int("LLM_MAX_TOKENS", 700),
         timeout_s=float(_runtime_timeout_s(settings)),
     )
-    return LLMAgent(llm_client, cfg)
+    return LLMAgent(AccountedSyncGateway(llm_client, event_store=event_store, provider=provider), cfg)
