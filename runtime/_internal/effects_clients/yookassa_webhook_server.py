@@ -82,8 +82,7 @@ def start_yookassa_webhook_server_in_thread(
                     self.wfile.write(b"not_found")
                     return
 
-                # Client IP is the direct TCP peer; never trust an unverified
-                # X-Forwarded-For supplied by the caller.
+                # Use the TCP peer, never a caller-supplied X-Forwarded-For.
                 if allowed_networks and not any(
                     ipaddress.ip_address(self.client_address[0]) in net
                     for net in allowed_networks
@@ -92,7 +91,6 @@ def start_yookassa_webhook_server_in_thread(
                     self.end_headers()
                     return
 
-                # Auth
                 if auth_mode == "basic":
                     hdr = self.headers.get("Authorization")
                     if not hdr or not hdr.startswith("Basic "):
