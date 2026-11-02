@@ -39,7 +39,6 @@ class AccountedSyncGateway:
         response = self._client.generate_sync(request)
         usage = provider_reported_usage(getattr(response, "usage", None))
         if usage is None:
-            # Provider may have billed us: keep the claim, never fabricate actual usage.
             raise RuntimeError("LLM_ACCOUNTING_UNAVAILABLE")
         prompt, completion, total = usage
         try:
