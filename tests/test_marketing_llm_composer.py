@@ -48,18 +48,11 @@ def test_composer_rejects_forbidden_phrase():
     assert composer.compose_sync(_input()) is None
 
 
-def test_sync_provider_usage_is_charged_even_when_text_rejected():
-    composer = MarketingLLMComposer(_UsageLLM(text=_REJECTED), LLMComposerConfig(model="mock"))
-    assert composer.compose_sync(_input()) is None
-    assert not composer._runtime.budget.can_spend(
-        tenant_id="tenant", user_id="user", tokens=composer._cfg.budget.user_tokens_per_day - 6,
-    )
-
-
+@pytest.mark.parametrize("async_mode", [False, True])
 @pytest.mark.asyncio
-async def test_async_provider_usage_is_charged_even_when_text_rejected():
+async def test_provider_usage_is_charged_even_when_text_rejected(async_mode):
     composer = MarketingLLMComposer(_UsageLLM(text=_REJECTED), LLMComposerConfig(model="mock"))
-    assert await composer.compose(_input()) is None
+    assert (await composer.compose(_input()) if async_mode else composer.compose_sync(_input())) is None
     assert not composer._runtime.budget.can_spend(
         tenant_id="tenant", user_id="user", tokens=composer._cfg.budget.user_tokens_per_day - 6,
     )
@@ -177,12 +170,8 @@ async def test_deduped_marketing_response_records_one_completion_per_provider_ca
     )
     first = _input(tenant="t-dedupe", user="u-dedupe", last_user_text="первый запрос")
     second = _input(tenant="t-dedupe", user="u-dedupe", last_user_text="другой запрос")
-    if async_mode:
-        assert await composer.compose(first)
-        assert await composer.compose(second) is None
-    else:
-        assert composer.compose_sync(first)
-        assert composer.compose_sync(second) is None
+    assert await composer.compose(first) if async_mode else composer.compose_sync(first)
+    assert (await composer.compose(second) if async_mode else composer.compose_sync(second)) is None
     assert store.count_events(tenant_id="t-dedupe", event_type=LLM_COMPLETED) == 2
     assert store.count_events(tenant_id="t-dedupe", event_type=LLM_SKIPPED) == 1
     assert store.sum_event_payload_int(
@@ -272,6 +261,7 @@ def test_sqlite_budget_reservations_are_shared_between_store_connections(tmp_pat
     with SqliteEventStore(path) as first_store, SqliteEventStore(path) as second_store:
         first = EventStoreDailyTokenBudget(event_store=first_store, caps=caps)
         second = EventStoreDailyTokenBudget(event_store=second_store, caps=caps)
+        assert second.can_spend(tenant_id="tenant", user_id="user", tokens=1027)
         day = first.reserve(
             tenant_id="tenant", user_id="user", tokens=1020, request_id="first",
         )
@@ -284,6 +274,7 @@ def test_sqlite_budget_reservations_are_shared_between_store_connections(tmp_pat
             payload={"total_tokens": 7, "request_id": "first"},
         )
         assert first.release(tenant_id="tenant", request_id="first", day=day)
+        assert not second.can_spend(tenant_id="tenant", user_id="user", tokens=1027)
         assert second.reserve(
             tenant_id="tenant", user_id="user", tokens=1020, request_id="second",
         ) == day
@@ -323,10 +314,20 @@ def test_postgres_budget_claim_is_atomic_across_independent_connections():
 
     winner = outcomes.index(next(day for day in outcomes if day))
     with PostgresEventStore(dsn, enabled=True) as store:
+        from core.events.log import EventLog
+        from core.tenancy.scope import TenantScope
+
         budget = EventStoreDailyTokenBudget(event_store=store, caps=caps)
         assert budget.reserve(
             tenant_id=tenant, user_id="user", tokens=1020, request_id=f"request-{winner}",
         ) is None
+        EventLog(store, tenant=TenantScope(tenant)).emit(
+            event_type=LLM_COMPLETED, source="telemetry", user_id="user",
+            payload={"request_id": f"request-{winner}", "total_tokens": 7},
+        )
+    with PostgresEventStore(dsn, enabled=True) as store:
+        budget = EventStoreDailyTokenBudget(event_store=store, caps=caps)
+        assert budget.reserve(tenant_id=tenant, user_id="user", tokens=1020, request_id="recovered") is not None
 
 
 @pytest.mark.parametrize("async_mode", [False, True])
@@ -341,12 +342,8 @@ async def test_replayed_message_id_does_not_recharge_or_reinvoke_provider(async_
         tenant="t-replay", user="u-replay", message_id="incoming-123",
         features={"segment": "changed-after-retry"},
     )
-    if async_mode:
-        assert await first.compose(inp)
-        assert await second.compose(changed) is None
-    else:
-        assert first.compose_sync(inp)
-        assert second.compose_sync(changed) is None
+    assert await first.compose(inp) if async_mode else first.compose_sync(inp)
+    assert (await second.compose(changed) if async_mode else second.compose_sync(changed)) is None
     assert llm.calls == 1
     assert store.count_events(tenant_id="t-replay", event_type=LLM_COMPLETED) == 1
     assert store.sum_event_payload_int(
@@ -380,13 +377,8 @@ async def test_optional_debug_event_failure_does_not_strand_durable_spend():
         ),
         event_store=store,
     )
-    inp = MarketingLLMInputs(
-        tenant_id="t-debug", user_id="u-debug", locale="ru",
-        channel="telegram", features={},
-        offer={"id": "debug", "title": "Сеанс", "price": 990, "currency": "₽"},
-        last_user_text="",
-        message_id="debug-event-1",
-    )
+    inp = _input(tenant="t-debug", user="u-debug", message_id="debug-event-1",
+                 offer={"id": "debug", "title": "Сеанс", "price": 990, "currency": "₽"})
     assert await composer.compose(inp)
     assert store.count_events(tenant_id="t-debug", event_type=LLM_COMPLETED) == 1
     assert store.sum_event_payload_int(
@@ -477,4 +469,25 @@ def test_inbound_idempotency_does_not_depend_on_mutable_offer_or_model():
         inp=first, provider="yandex", model="model-a", generated="one",
     ) == idempotent_request_id(
         inp=changed, provider="openai_compat", model="model-b", generated="two",
+    )
+
+@pytest.mark.parametrize("completion_user, expected_recovery", [("u", True), ("other", False)])
+def test_completed_claim_reconciles_after_crash_but_uncompleted_claim_stays(completion_user, expected_recovery):
+    from core.events.log import EventLog
+    from core.llm.budget import BudgetCaps, EventStoreDailyTokenBudget
+    from core.tenancy.scope import TenantScope
+
+    store = MemoryEventStore()
+    budget = EventStoreDailyTokenBudget(event_store=store, caps=BudgetCaps(tenant_tokens_per_day=100, user_tokens_per_day=100))
+    day = budget.reserve(tenant_id="t", user_id="u", tokens=80, request_id="completed")
+    assert day
+    EventLog(store, tenant=TenantScope("t")).emit(
+        event_type=LLM_COMPLETED, source="telemetry", user_id=completion_user,
+        payload={"request_id": "completed", "total_tokens": 20},
+    )
+    recovered = budget.reserve(tenant_id="t", user_id="u", tokens=70, request_id="new")
+    assert (recovered == day) is expected_recovery
+    assert budget.reserve(tenant_id="t", user_id="u", tokens=20, request_id="blocked") is None
+    assert set(store.get_setting(tenant_id="t", key=f"llm:pending:v1:{day}")["pending"]) == (
+        {"new"} if expected_recovery else {"completed"}
     )

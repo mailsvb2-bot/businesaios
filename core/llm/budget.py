@@ -31,8 +31,7 @@ class DailyTokenBudget:
         day = self._day()
         tenant = self._tenant.get((day, str(tenant_id)), 0)
         user = self._user.get((day, str(tenant_id), str(user_id)), 0)
-        return (tenant + tokens <= self._caps.tenant_tokens_per_day
-                and user + tokens <= self._caps.user_tokens_per_day)
+        return tenant + tokens <= self._caps.tenant_tokens_per_day and user + tokens <= self._caps.user_tokens_per_day
 
     def spend(self, *, tenant_id: str, user_id: str, tokens: int) -> None:
         day = self._day()
@@ -55,18 +54,12 @@ class EventStoreDailyTokenBudget:
     """Durable daily spend plus atomic pending claims on the canonical event store."""
 
     def __init__(self, *, event_store: Any, caps: BudgetCaps, cache_ttl_s: float = DEFAULT_LLM_BUDGET_POLICY.cache_ttl_seconds) -> None:
-        self._es, self._caps, self._ttl = event_store, caps, float(cache_ttl_s)
-        self._cache: dict[tuple[str, str, str], tuple[float, int, int]] = {}
+        self._es, self._caps = event_store, caps
 
     def _day(self) -> str:
         return day_key_utc()
 
-    def _sum(self, *, tenant_id: str, user_id: str, fresh: bool = False) -> tuple[int, int]:
-        key = (self._day(), str(tenant_id), str(user_id))
-        now = time.time()
-        cached = self._cache.get(key)
-        if not fresh and cached and now - cached[0] <= self._ttl:
-            return cached[1], cached[2]
+    def _sum(self, *, tenant_id: str, user_id: str) -> tuple[int, int]:
         start_ms, end_ms = _utc_day_bounds_ms()
         fn = getattr(self._es, "sum_event_payload_int", None)
         if callable(fn):
@@ -88,21 +81,27 @@ class EventStoreDailyTokenBudget:
                         continue
                 return count
 
-        spent = (total(None), total(str(user_id)))
-        self._cache[key] = (now, *spent)
-        return spent
+        return total(None), total(str(user_id))
 
     def can_spend(self, *, tenant_id: str, user_id: str, tokens: int) -> bool:
         tenant, user = self._sum(tenant_id=tenant_id, user_id=user_id)
-        return (tenant + tokens <= self._caps.tenant_tokens_per_day
-                and user + tokens <= self._caps.user_tokens_per_day)
+        return tenant + tokens <= self._caps.tenant_tokens_per_day and user + tokens <= self._caps.user_tokens_per_day
 
     def spend(self, *, tenant_id: str, user_id: str, tokens: int) -> None:
-        # The authoritative spend is the LLM_COMPLETED event, not this cache.
-        key = (self._day(), str(tenant_id), str(user_id))
-        cached = self._cache.get(key)
-        if cached:
-            self._cache[key] = (time.time(), cached[1] + tokens, cached[2] + tokens)
+        return None  # The durable completion is authoritative; no cross-worker cache.
+
+    def _reconcile_completed(self, *, tenant_id: str, day: str, current: dict) -> bool:
+        """Reclaim only reservations with durable matching provider spend."""
+        it = getattr(self._es, "iter_events", None)
+        if not callable(it):
+            return False
+        start, end = _utc_day_bounds_ms()
+        completed = {(str(e.get("user_id") or ""), str((e.get("payload") or {}).get("request_id") or ""))
+                     for e in it(tenant_id=str(tenant_id), start_ms=start, end_ms=end, event_type=LLM_COMPLETED)
+                     if int((e.get("payload") or {}).get("total_tokens") or 0) > 0}
+        remaining = {rid: row for rid, row in current["pending"].items() if (str(row["user_id"]), rid) not in completed}
+        return len(remaining) < len(current["pending"]) and self._es.compare_and_set_setting(
+            tenant_id=str(tenant_id), key=f"llm:pending:v1:{day}", expected=current, value={"pending": remaining})
 
     def reserve(self, *, tenant_id: str, user_id: str, tokens: int, request_id: str) -> str | None:
         """Atomic headroom reservation; cross-day claim prevents provider replay."""
@@ -119,16 +118,19 @@ class EventStoreDailyTokenBudget:
             pending = (current or {}).get("pending", {})
             if not isinstance(pending, dict) or request_id in pending:
                 return None
-            spent_tenant, spent_user = self._sum(tenant_id=tenant_id, user_id=user_id, fresh=True)
+            spent_tenant, spent_user = self._sum(tenant_id=tenant_id, user_id=user_id)
             try:
                 reserved_tenant = sum(max(0, int(row["tokens"])) for row in pending.values())
                 reserved_user = sum(max(0, int(row["tokens"])) for row in pending.values()
                                     if str(row["user_id"]) == str(user_id))
             except (KeyError, TypeError, ValueError):
                 return None
+            if self._day() != day:
+                return None
             if (spent_tenant + reserved_tenant + tokens > self._caps.tenant_tokens_per_day
-                    or spent_user + reserved_user + tokens > self._caps.user_tokens_per_day
-                    or self._day() != day):
+                    or spent_user + reserved_user + tokens > self._caps.user_tokens_per_day):
+                if self._reconcile_completed(tenant_id=tenant_id, day=day, current=current):
+                    continue
                 return None
             state = {"pending": {**pending, request_id: {"user_id": str(user_id), "tokens": int(tokens)}}}
             if cas(tenant_id=str(tenant_id), key=key, expected=current, value=state):
@@ -157,9 +159,8 @@ class EventStoreDailyTokenBudget:
             pending = current.get("pending", {})
             if not isinstance(pending, dict) or request_id not in pending:
                 return False
-            next_pending = {rid: row for rid, row in pending.items() if rid != request_id}
             if self._es.compare_and_set_setting(
-                tenant_id=str(tenant_id), key=key, expected=current, value={"pending": next_pending},
-            ):
+                tenant_id=str(tenant_id), key=key, expected=current,
+                value={"pending": {rid: row for rid, row in pending.items() if rid != request_id}}):
                 return True
         return False

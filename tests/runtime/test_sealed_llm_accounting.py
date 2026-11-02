@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import asyncio
 
+import pytest
+
 from core.llm.contracts import LLMResponse, LLMUsage
 from core.telemetry.event_types import LLM_COMPLETED, LLM_REQUESTED
 from runtime._internal.effect_router import EffectRouter
@@ -50,31 +52,21 @@ def test_sealed_effect_records_actual_usage_once_and_blocks_replay(monkeypatch):
     assert client.calls == 2
 
 
-def test_sealed_effect_request_journal_failure_never_calls_provider(monkeypatch):
+@pytest.mark.parametrize("failed_event, expected_calls", [(LLM_REQUESTED, 0), (LLM_COMPLETED, 1)])
+def test_sealed_effect_journal_failure_is_fail_closed(monkeypatch, failed_event, expected_calls):
     class BrokenStore(MemoryEventStore):
         def append_event(self, event):
-            if event.get("event_type") == LLM_REQUESTED:
+            if event.get("event_type") == failed_event:
                 raise OSError("journal unavailable")
             return super().append_event(event)
 
-    store = BrokenStore()
-    client = _Provider()
+    store, client = BrokenStore(), _Provider()
     monkeypatch.setattr(module, "_client_for", lambda **kw: ("openai_compat", "mock", client, None))
     assert _invoke(store)["ok"] is False
-    assert client.calls == 0
-    assert store.get_setting(tenant_id="tenant", key=f"llm:pending:v1:{module.EventStoreDailyTokenBudget(event_store=store, caps=module.BudgetCaps())._day()}") == {"pending": {}}
-
-
-def test_sealed_effect_completion_failure_never_exposes_content(monkeypatch):
-    class BrokenStore(MemoryEventStore):
-        def append_event(self, event):
-            if event.get("event_type") == LLM_COMPLETED:
-                raise OSError("completion unavailable")
-            return super().append_event(event)
-
-    store = BrokenStore()
-    client = _Provider()
-    monkeypatch.setattr(module, "_client_for", lambda **kw: ("openai_compat", "mock", client, None))
-    assert _invoke(store)["ok"] is False
-    assert _invoke(store)["ok"] is False
-    assert client.calls == 1
+    assert client.calls == expected_calls
+    if failed_event == LLM_REQUESTED:
+        day = module.EventStoreDailyTokenBudget(event_store=store, caps=module.BudgetCaps())._day()
+        assert store.get_setting(tenant_id="tenant", key=f"llm:pending:v1:{day}") == {"pending": {}}
+    else:
+        assert _invoke(store)["ok"] is False
+        assert client.calls == 1
