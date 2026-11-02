@@ -85,7 +85,9 @@ def verify_webhook(
         if ":" not in decoded:
             raise WebhookAuthError("bad_basic_auth")
         u, p = decoded.split(":", 1)
-        if str(u) != str(basic_user or "") or str(p) != str(basic_pass or ""):
+        user_ok = hmac.compare_digest(u, str(basic_user or ""))
+        password_ok = hmac.compare_digest(p, str(basic_pass or ""))
+        if not (user_ok and password_ok):
             raise WebhookAuthError("invalid_basic_credentials")
         return
     if mode == "hmac_sha256":
