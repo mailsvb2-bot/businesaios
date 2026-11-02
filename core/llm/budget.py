@@ -54,6 +54,17 @@ def estimate_request_tokens(request: Any) -> int:
     return int(request.max_tokens) + 800 + sum(len(m.content.encode("utf-8")) for m in request.messages)
 
 
+def provider_reported_usage(usage: Any) -> tuple[int, int, int] | None:
+    """Validate provider measurements; never substitute a reservation estimate."""
+    if usage is None:
+        return None
+    values = tuple(getattr(usage, key, None) for key in ("prompt_tokens", "completion_tokens", "total_tokens"))
+    if any(type(value) is not int or value < 0 for value in values):
+        return None
+    prompt, completion, total = values
+    return (prompt, completion, max(prompt + completion, total)) if max(prompt + completion, total) else None
+
+
 def has_durable_budget_store(event_store: Any) -> bool:
     return all(callable(getattr(event_store, name, None)) for name in
                ("sum_event_payload_int", "iter_events", "get_setting", "compare_and_set_setting", "append_event"))
