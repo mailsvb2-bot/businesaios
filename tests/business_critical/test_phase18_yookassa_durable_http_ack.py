@@ -57,7 +57,8 @@ def test_http_webhook_ack_requires_durable_enqueue(monkeypatch):
         try:
             assert _post(server.server_port) == (503 if failed else 200)
             assert len(outbox.jobs) == (0 if failed else 1)
-            assert len(audit.events) == (0 if failed else 1)
+            # Tenant-scoped audit must not be emitted from untrusted PSP metadata.
+            assert audit.events == []
             if not failed:
                 assert _post(server.server_port) == 200
                 assert len(outbox.jobs) == 1
