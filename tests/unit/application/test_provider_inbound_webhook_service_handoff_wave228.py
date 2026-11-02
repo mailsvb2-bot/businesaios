@@ -49,3 +49,22 @@ def test_unverified_webhook_cannot_publish_executable_inbound_handoff(monkeypatc
         assert result.status == "invalid_signature" and not result.accepted
         assert result.metadata["messaging_handoff"] == {}
         assert result.metadata["messaging_inbound_result"] == {}
+
+def test_pending_replay_does_not_expose_executable_handoff_or_ack(monkeypatch):
+    monkeypatch.setattr(ProviderWebhookRuntime, "verify", lambda self, **kwargs: True)
+    service = ProviderInboundWebhookService(
+        webhook_runtime=ProviderWebhookRuntime(None),
+        replay_guard=ProviderWebhookReplayGuard(InMemoryIdempotencyStore()),
+    )
+    request = dict(
+        provider=provider_map()["telegram_bot"], tenant_id="t1", business_id="b1",
+        headers={}, body=b'{"update_id":123,"message":{"message_id":9,"text":"hello","chat":{"id":777},"from":{"id":777}}}',
+        event_key="pending-replay-1",
+    )
+    first = service.ingest(**request)
+    assert first.accepted and first.metadata["messaging_handoff"]
+    replay = service.ingest(**request)
+    assert replay.status == "replayed" and not replay.accepted
+    assert replay.metadata["messaging_handoff"] == {}
+    assert replay.metadata["messaging_inbound_result"] == {}
+    assert not service.transport_ack_safe(replay)
