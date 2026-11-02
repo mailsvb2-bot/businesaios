@@ -90,9 +90,7 @@ def _decision_contract_v2_seed(
         ) if value is None
     ]
 
-    product = _mapping(
-        state.get("product") if isinstance(state, Mapping) else getattr(state, "product", {})
-    )
+    product = _mapping(state.get("product") if isinstance(state, Mapping) else getattr(state, "product", {}))
     business_id = str(
         payload.get("business_id") or product.get("business_id") or state_meta.get("business_id") or "UNKNOWN"
     ).strip() or "UNKNOWN"
