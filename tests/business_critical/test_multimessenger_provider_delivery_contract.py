@@ -592,7 +592,7 @@ def test_delivery_evidence_never_mislabels_nontelegram_as_telegram(
             text="Canonical message",
             channel=channel,
         )
-    
+
     assert result["ok"] is True
     assert captured["action_type"] == expected_action_type
 
