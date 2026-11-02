@@ -289,6 +289,46 @@ def test_sqlite_budget_reservations_are_shared_between_store_connections(tmp_pat
         ) == day
 
 
+def test_postgres_budget_claim_is_atomic_across_independent_connections():
+    import os
+    from concurrent.futures import ThreadPoolExecutor
+    from threading import Barrier
+    from urllib.parse import urlsplit
+    from uuid import uuid4
+
+    from core.llm.budget import BudgetCaps, EventStoreDailyTokenBudget
+    from runtime.platform.event_store.postgres_event_store import PostgresEventStore
+
+    dsn = os.environ.get("BUSINESAIOS_TEST_POSTGRES_DSN", "")
+    if not dsn:
+        pytest.skip("isolated PostgreSQL test DSN not configured")
+    if not urlsplit(dsn).path.lstrip("/").startswith("businesaios_test_"):
+        pytest.fail("PostgreSQL budget test requires an isolated businesaios_test_* database")
+
+    tenant = f"budget-concurrency-{uuid4().hex}"
+    barrier = Barrier(8)
+    caps = BudgetCaps(tenant_tokens_per_day=1027, user_tokens_per_day=1027)
+
+    def reserve_once(index):
+        with PostgresEventStore(dsn, enabled=True) as store:
+            budget = EventStoreDailyTokenBudget(event_store=store, caps=caps)
+            barrier.wait(timeout=15)
+            return budget.reserve(
+                tenant_id=tenant, user_id="user", tokens=1020, request_id=f"request-{index}",
+            )
+
+    with ThreadPoolExecutor(max_workers=8) as pool:
+        outcomes = list(pool.map(reserve_once, range(8)))
+    assert sum(day is not None for day in outcomes) == 1
+
+    winner = outcomes.index(next(day for day in outcomes if day))
+    with PostgresEventStore(dsn, enabled=True) as store:
+        budget = EventStoreDailyTokenBudget(event_store=store, caps=caps)
+        assert budget.reserve(
+            tenant_id=tenant, user_id="user", tokens=1020, request_id=f"request-{winner}",
+        ) is None
+
+
 @pytest.mark.parametrize("async_mode", [False, True])
 @pytest.mark.asyncio
 async def test_replayed_message_id_does_not_recharge_or_reinvoke_provider(async_mode):
