@@ -108,23 +108,30 @@ async def emit_trace_async(*, event_store, debug_sampling, inp, model: str, prov
         await append_event(event_store, event_type=LLM_CACHE_HIT, ctx=ctx, payload=payload)
         return
     await append_event(event_store, event_type=(LLM_COMPLETED if ok else LLM_FAILED), ctx=ctx, payload=payload)
-    if bool(getattr(debug_sampling, "hit", lambda: False)()):
-        await append_event(
-            event_store,
-            event_type=str((policy or DEFAULT_MARKETING_LLM_TELEMETRY_POLICY).debug_sample_event_type),
-            ctx=ctx,
-            payload={
-                "request_id": request_id,
-                "prompt_version": prompt_version,
-                "prompt_hash": prompt_hash,
-                "provider": provider,
-                "model": model,
-                "ok": bool(ok),
-                "latency_ms": int(latency_ms),
-                "user_text_len": len(inp.last_user_text or ""),
-                "offer_id": str((inp.offer or {}).get("id", "")),
-            },
-        )
+    # The LLM_COMPLETED write above is authoritative for token accounting.
+    # Optional debug sampling must never turn an already-durable completion
+    # into an apparent accounting failure (which strands its reservation).
+    try:
+        if bool(getattr(debug_sampling, "hit", lambda: False)()):
+            await append_event(
+                event_store,
+                event_type=str((policy or DEFAULT_MARKETING_LLM_TELEMETRY_POLICY).debug_sample_event_type),
+                ctx=ctx,
+                payload={
+                    "request_id": request_id,
+                    "prompt_version": prompt_version,
+                    "prompt_hash": prompt_hash,
+                    "provider": provider,
+                    "model": model,
+                    "ok": bool(ok),
+                    "latency_ms": int(latency_ms),
+                    "user_text_len": len(inp.last_user_text or ""),
+                    "offer_id": str((inp.offer or {}).get("id", "")),
+                },
+            )
+    except Exception:  # noqa: BLE001
+        # Debug telemetry is best-effort; the canonical spend event is not.
+        pass
 
 
 async def maybe_emit_alert(*, event_store, inp, metrics, provider: str, model: str, reason: str, policy: MarketingLLMTelemetryPolicy | None = None) -> None:
