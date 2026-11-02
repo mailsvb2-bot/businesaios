@@ -2,7 +2,6 @@ from __future__ import annotations
 
 from core.llm.budget import EventStoreDailyTokenBudget, estimate_request_tokens, provider_reported_usage
 from core.llm.contracts import LLMUsage
-from core.marketing.async_runner import run_awaitable_sync
 from core.marketing.llm.cache_keys import build_cache_key
 from core.marketing.llm.compose_context import build_compose_context
 from core.marketing.llm.flow import build_request, finalize_text, idempotent_request_id, start_request
@@ -20,9 +19,6 @@ from core.telemetry.trace_utils import now_ms
 
 
 def compose_sync_flow(composer, inp):
-    gen_sync = getattr(composer._llm, "generate_sync", None)
-    if not callable(gen_sync):
-        return run_awaitable_sync(composer._compose_async(inp))
     request_id, t0 = start_request()
     compose_ctx = build_compose_context(inp)
     tenant_id, user_id = compose_ctx.tenant_id, compose_ctx.user_id
@@ -72,7 +68,7 @@ def compose_sync_flow(composer, inp):
         runtime.metrics.inc("accounting_unavailable")
         return None
     try:
-        resp = gen_sync(req)
+        resp = composer._llm.generate_sync(req)
         runtime.circuit.on_success()
     except Exception as e:  # noqa: BLE001
         runtime.circuit.on_failure()
