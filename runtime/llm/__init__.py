@@ -25,9 +25,9 @@ from core.llm import (
     build_yandexgpt_client,
 )
 from core.llm.agent.agent import LLMAgent, LLMAgentConfig
-from runtime.llm.accounted_gateway import AccountedSyncGateway
 from core.llm.budget import has_durable_budget_store
 from core.llm.contracts import LLMMessage, LLMRequest, LLMResponse
+from runtime.llm.accounted_gateway import AccountedSyncGateway
 from runtime.public_api_alias import install_public_api_alias
 
 Transport = Callable[[str, str, dict[str, object], int], dict[str, object]]
