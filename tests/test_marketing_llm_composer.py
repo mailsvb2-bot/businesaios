@@ -1,11 +1,9 @@
 import pytest
 
 from core.llm import MockLLMClient
+from core.llm.contracts import LLMResponse, LLMUsage
 from core.marketing.llm_composer import LLMComposerConfig, MarketingLLMComposer
 from core.marketing.llm_prompting import MarketingLLMInputs
-
-
-from core.llm.contracts import LLMResponse, LLMUsage
 from core.telemetry.event_types import LLM_COMPLETED
 from runtime.platform.event_store.memory_event_store import MemoryEventStore
 
@@ -246,32 +244,15 @@ def test_event_store_budget_reservation_blocks_concurrent_overspend():
 @pytest.mark.parametrize("async_mode", [False, True])
 @pytest.mark.asyncio
 async def test_missing_atomic_reservation_fails_closed_before_provider(async_mode):
-    from core.llm.contracts import LLMResponse
-    from runtime.platform.event_store.memory_event_store import MemoryEventStore
-
     class NoCASStore(MemoryEventStore):
         compare_and_set_setting = None
 
-    class CountingLLM:
-        def __init__(self):
-            self.calls = 0
-
-        def generate_sync(self, request):
-            self.calls += 1
-            return LLMResponse(content="some text")
-
-        async def generate(self, request):
-            return self.generate_sync(request)
-
-    llm = CountingLLM()
+    llm = _UsageLLM()
     composer = MarketingLLMComposer(
         llm, LLMComposerConfig(model="mock", budget_source="event_store"),
         event_store=NoCASStore(),
     )
-    inp = MarketingLLMInputs(
-        tenant_id="t-cas", user_id="u-cas", locale="ru",
-        channel="telegram", features={}, offer={"id": "cas", "title": "Сеанс"},
-    )
+    inp = _input(tenant="t-cas", user="u-cas")
     result = await composer.compose(inp) if async_mode else composer.compose_sync(inp)
     assert result is None
     assert llm.calls == 0
@@ -309,45 +290,21 @@ def test_sqlite_budget_reservations_are_shared_between_store_connections(tmp_pat
 @pytest.mark.parametrize("async_mode", [False, True])
 @pytest.mark.asyncio
 async def test_replayed_message_id_does_not_recharge_or_reinvoke_provider(async_mode):
-    from core.llm.contracts import LLMResponse, LLMUsage
-    from core.telemetry.event_types import LLM_COMPLETED
-    from runtime.platform.event_store.memory_event_store import MemoryEventStore
-
-    class CountingLLM:
-        def __init__(self):
-            self.calls = 0
-
-        def generate_sync(self, request):
-            self.calls += 1
-            return LLMResponse(
-                content="Хочешь продолжить? Есть «Сеанс» за 990₽. Нажми «Открыть».",
-                usage=LLMUsage(prompt_tokens=3, completion_tokens=4, total_tokens=7),
-            )
-
-        async def generate(self, request):
-            return self.generate_sync(request)
-
-    llm = CountingLLM()
-    store = MemoryEventStore()
+    llm, store = _UsageLLM(), MemoryEventStore()
     cfg = LLMComposerConfig(model="mock", budget_source="event_store")
-    inp = MarketingLLMInputs(
-        tenant_id="t-replay", user_id="u-replay", locale="ru",
-        channel="telegram", features={},
-        offer={"id": "replay", "title": "Сеанс", "price": 990, "currency": "₽"},
-        message_id="incoming-123",
-    )
-    # Different composer instances have different caches and rate limiters.
+    inp = _input(tenant="t-replay", user="u-replay", message_id="incoming-123")
     first = MarketingLLMComposer(llm, cfg, event_store=store)
     second = MarketingLLMComposer(llm, cfg, event_store=store)
-    changed_features = MarketingLLMInputs(
-        **{**inp.__dict__, "features": {"segment": "changed-after-retry"}},
+    changed = _input(
+        tenant="t-replay", user="u-replay", message_id="incoming-123",
+        features={"segment": "changed-after-retry"},
     )
     if async_mode:
         assert await first.compose(inp)
-        assert await second.compose(changed_features) is None
+        assert await second.compose(changed) is None
     else:
         assert first.compose_sync(inp)
-        assert second.compose_sync(changed_features) is None
+        assert second.compose_sync(changed) is None
     assert llm.calls == 1
     assert store.count_events(tenant_id="t-replay", event_type=LLM_COMPLETED) == 1
     assert store.sum_event_payload_int(
