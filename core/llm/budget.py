@@ -60,7 +60,7 @@ def validated_llm_usage(usage: Any) -> tuple[int, int, int] | None:
     if any(type(value) is not int or value < 0 for value in values):
         return None
     prompt, completion, total = values
-    return (prompt, completion, max(prompt + completion, total)) if max(prompt + completion, total) else None
+    return (prompt, completion, total) if total > 0 and total >= prompt + completion else None
 
 
 def has_durable_budget_store(event_store: Any) -> bool:
