@@ -56,8 +56,6 @@ def estimate_request_tokens(request: Any) -> int:
 
 def provider_reported_usage(usage: Any) -> tuple[int, int, int] | None:
     """Validate provider measurements; never substitute a reservation estimate."""
-    if usage is None:
-        return None
     values = tuple(getattr(usage, key, None) for key in ("prompt_tokens", "completion_tokens", "total_tokens"))
     if any(type(value) is not int or value < 0 for value in values):
         return None
