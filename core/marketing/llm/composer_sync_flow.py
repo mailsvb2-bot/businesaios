@@ -20,6 +20,9 @@ from core.telemetry.trace_utils import now_ms
 
 
 def compose_sync_flow(composer, inp):
+    gen_sync = getattr(composer._llm, "generate_sync", None)
+    if not callable(gen_sync):
+        return run_awaitable_sync(composer._compose_async(inp))
     request_id, t0 = start_request()
     compose_ctx = build_compose_context(inp)
     tenant_id, user_id = compose_ctx.tenant_id, compose_ctx.user_id
@@ -68,9 +71,6 @@ def compose_sync_flow(composer, inp):
             runtime.metrics.inc("reservation_release_failed")
         runtime.metrics.inc("accounting_unavailable")
         return None
-    gen_sync = getattr(composer._llm, "generate_sync", None)
-    if not callable(gen_sync):
-        return run_awaitable_sync(composer._compose_async(inp))
     try:
         resp = gen_sync(req)
         runtime.circuit.on_success()
