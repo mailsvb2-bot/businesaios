@@ -546,9 +546,9 @@ async def test_optional_debug_event_failure_does_not_strand_durable_spend():
 
 
 def test_event_store_idempotency_claim_survives_budget_day_rollover(monkeypatch):
+    from core.events.log import EventLog
     from core.llm.budget import BudgetCaps, EventStoreDailyTokenBudget
     from core.telemetry.event_types import LLM_COMPLETED
-    from core.events.log import EventLog
     from core.tenancy.scope import TenantScope
     from runtime.platform.event_store.memory_event_store import MemoryEventStore
 
