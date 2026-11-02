@@ -73,6 +73,8 @@ def verify_webhook(
     if mode == "none":
         return
     if mode == "basic":
+        if not basic_user or not basic_pass:
+            raise WebhookAuthError("missing_basic_credentials")
         auth = _get_header(headers, "Authorization") or ""
         if not auth.lower().startswith("basic "):
             raise WebhookAuthError("missing_basic_auth")
@@ -143,12 +145,7 @@ def redact_headers(headers: dict[str, str]) -> dict[str, str]:
     safe: dict[str, str] = {}
     for k, v in (headers or {}).items():
         lk = str(k).lower()
-        if lk in {"authorization", "cookie", "set-cookie"}:
-            continue
-        if lk.startswith("x-yookassa") or lk.startswith("x-yc") or lk.startswith("x-y-k") or lk.startswith("x-y"):
-            # Keep provider correlation ids but not secrets.
-            safe[str(k)] = str(v)[:200]
-        if lk in {"user-agent", "content-type", "x-request-id", "x-real-ip", "x-forwarded-for"}:
+        if lk in {"user-agent", "content-type", "x-request-id", "x-real-ip", "x-forwarded-for", "x-yookassa-request-id"}:
             safe[str(k)] = str(v)[:200]
     return safe
 
