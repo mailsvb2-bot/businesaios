@@ -68,6 +68,23 @@ def test_agent_gateway_journal_failure_blocks_output_and_replay(failed_event, ex
     assert client.calls == expected_calls
 
 
+@pytest.mark.parametrize("usage", [None, LLMUsage(), LLMUsage(prompt_tokens=-1, completion_tokens=4, total_tokens=3)])
+def test_gateway_missing_or_invalid_provider_usage_never_fabricates_spend(usage):
+    class Unreported(Provider):
+        def generate_sync(self, request):
+            self.calls += 1
+            return LLMResponse(content="unsafe to release", usage=usage)
+
+    store, client = MemoryEventStore(), Unreported()
+    gateway = AccountedSyncGateway(client, event_store=store, provider="openai_compat")
+    with pytest.raises(RuntimeError, match="LLM_ACCOUNTING_UNAVAILABLE"):
+        gateway.generate_sync(request())
+    assert store.count_events(tenant_id="tenant", event_type=LLM_COMPLETED) == 0
+    with pytest.raises(RuntimeError, match="LLM_BUDGET_BLOCKED"):
+        gateway.generate_sync(request())
+    assert client.calls == 1
+
+
 def test_boot_marketing_agent_uses_same_durable_gateway(monkeypatch):
     store, client = MemoryEventStore(), Provider()
     monkeypatch.setattr(builder, "build_marketing_llm_composer",
