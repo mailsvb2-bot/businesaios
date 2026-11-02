@@ -186,7 +186,7 @@ def test_webhook_server_compares_both_credentials_before_enqueue(
 
 @pytest.mark.parametrize("auth_mode", ["none", "token", "basic"])
 def test_forged_tenant_metadata_is_never_used_for_tenant_audit(monkeypatch, auth_mode):
-    monkeypatch.setattr(webhook, "env_str", lambda key, default="": {
+    monkeypatch.setattr(yookassa_webhook_server, "env_str", lambda key, default="": {
         "APP_ENV": "dev",
         "YOOKASSA_WEBHOOK_IP_ALLOWLIST": "127.0.0.1/32",
         "YOOKASSA_WEBHOOK_BASIC_USER": "merchant",
