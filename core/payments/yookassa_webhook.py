@@ -46,7 +46,6 @@ class WebhookParsed:
 
     @property
     def dedupe_key(self) -> str:
-        # Stable idempotency key.
         # Prefer explicit notification id; otherwise fallback to event+payment.
         nid = (self.notification_id or "").strip()
         if nid:
@@ -98,7 +97,6 @@ def verify_webhook(
             raise WebhookAuthError("missing_hmac_secret")
         mac = hmac.new(str(hmac_secret).encode("utf-8"), msg=bytes(body_bytes), digestmod=hashlib.sha256)
         expected = mac.hexdigest()
-        # constant-time compare
         if not hmac.compare_digest(str(sig).strip().lower(), str(expected).strip().lower()):
             raise WebhookAuthError("bad_signature")
         return
