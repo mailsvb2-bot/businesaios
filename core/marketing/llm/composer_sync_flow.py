@@ -13,7 +13,7 @@ from core.marketing.llm.runtime_flow import (
     emit_requested_sync,
     emit_trace_cache_hit_sync,
 )
-from core.marketing.llm.skip_flow import append_dedupe_skip_sync, emit_dedupe_skip_sync
+from core.marketing.llm.skip_flow import append_dedupe_skip_sync
 from core.marketing.llm_guardrails import err_code
 from core.marketing.llm_telemetry import emit_trace_sync
 from core.telemetry.trace_utils import now_ms
@@ -97,7 +97,6 @@ def compose_sync_flow(composer, inp):
     if not runtime.dedupe.allow(tenant_id=tenant_id, user_id=user_id, text=text):
         runtime.metrics.inc("deduped")
         append_dedupe_skip_sync(event_store=composer._event_store, ctx=ctx, provider=composer._cfg.provider, model=composer._cfg.model, request_id=request_id, prompt_version=prompt_version, prompt_hash=prompt_hash)
-        emit_dedupe_skip_sync(event_store=composer._event_store, inp=inp, provider=composer._cfg.provider, model=composer._cfg.model, request_id=request_id, prompt_version=prompt_version, prompt_hash=prompt_hash, latency_ms=latency, usage=usage_for_accounting)
         return None
 
     runtime.cache.set(cache_key, text)

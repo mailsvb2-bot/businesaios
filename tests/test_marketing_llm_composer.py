@@ -284,3 +284,46 @@ def test_marketing_cache_is_isolated_by_tenant_user_and_channel(different_scope)
     # Dedupe may reject identical text on the same tenant/user, but the
     # provider must not be bypassed by a cache hit across scopes.
     assert llm.calls == 2
+
+
+@pytest.mark.parametrize("async_mode", [False, True])
+@pytest.mark.asyncio
+async def test_deduped_marketing_response_records_one_completion_per_provider_call(async_mode):
+    from core.llm.contracts import LLMResponse, LLMUsage
+    from core.telemetry.event_types import LLM_COMPLETED, LLM_SKIPPED
+    from runtime.platform.event_store.memory_event_store import MemoryEventStore
+
+    class CountingLLM:
+        def generate_sync(self, request):
+            return LLMResponse(
+                content="Хочешь продолжить? Есть «Сеанс» за 990₽. Нажми «Открыть».",
+                usage=LLMUsage(prompt_tokens=3, completion_tokens=4, total_tokens=7),
+            )
+
+        async def generate(self, request):
+            return self.generate_sync(request)
+
+    store = MemoryEventStore()
+    composer = MarketingLLMComposer(
+        CountingLLM(), LLMComposerConfig(model="mock", budget_source="event_store"),
+        event_store=store,
+    )
+    common = {
+        "tenant_id": "t-dedupe", "user_id": "u-dedupe", "locale": "ru",
+        "channel": "telegram", "features": {},
+        "offer": {"id": "dedupe", "title": "Сеанс", "price": 990, "currency": "₽"},
+    }
+    first = MarketingLLMInputs(**common, last_user_text="первый запрос")
+    second = MarketingLLMInputs(**common, last_user_text="другой запрос")
+    compose = composer.compose if async_mode else composer.compose_sync
+    if async_mode:
+        assert await compose(first)
+        assert await compose(second) is None
+    else:
+        assert compose(first)
+        assert compose(second) is None
+    assert store.count_events(tenant_id="t-dedupe", event_type=LLM_COMPLETED) == 2
+    assert store.count_events(tenant_id="t-dedupe", event_type=LLM_SKIPPED) == 1
+    assert store.sum_event_payload_int(
+        tenant_id="t-dedupe", event_type=LLM_COMPLETED, field="total_tokens",
+    ) == 14
