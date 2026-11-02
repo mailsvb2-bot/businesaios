@@ -3,7 +3,7 @@ from __future__ import annotations
 import hashlib
 from typing import Any
 
-from core.llm.budget import BudgetCaps, EventStoreDailyTokenBudget, estimate_request_tokens, has_durable_budget_store, provider_reported_usage
+from core.llm.budget import BudgetCaps, EventStoreDailyTokenBudget, estimate_request_tokens, has_durable_budget_store, validated_llm_usage
 from core.marketing.llm_telemetry import append_event_sync
 from core.telemetry.event_types import LLM_COMPLETED, LLM_REQUESTED
 from core.telemetry.event_writer import TelemetryContext
@@ -37,7 +37,7 @@ class AccountedSyncGateway:
             budget.cancel_unstarted_reservation(tenant_id=tenant, request_id=request_id, day=day)
             raise RuntimeError("LLM_ACCOUNTING_UNAVAILABLE") from exc
         response = self._client.generate_sync(request)
-        usage = provider_reported_usage(getattr(response, "usage", None))
+        usage = validated_llm_usage(getattr(response, "usage", None))
         if usage is None:
             raise RuntimeError("LLM_ACCOUNTING_UNAVAILABLE")
         prompt, completion, total = usage
