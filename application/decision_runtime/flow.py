@@ -41,10 +41,9 @@ def _finite_number(value: object) -> float | None:
 
 
 def _world_model_meta_from_payload(payload: Mapping[str, Any]) -> dict[str, Any]:
-    direct = _mapping(payload.get("world_model_meta"))
-    if direct:
-        return direct
-    return _mapping(_mapping(payload.get("meta")).get("world_model_meta"))
+    return _mapping(payload.get("world_model_meta")) or _mapping(
+        _mapping(payload.get("meta")).get("world_model_meta")
+    )
 
 
 def _decision_contract_v2_seed(
@@ -110,9 +109,7 @@ def _decision_contract_v2_seed(
     return {
         "business_id": business_id,
         "goal_id": goal_id,
-        "world_state_version": str(
-            world_model_meta.get("semantic_state_id") or "UNKNOWN"
-        ),
+        "world_state_version": str(world_model_meta.get("semantic_state_id") or "UNKNOWN"),
         "agent_id": "PENDING_ISSUER_BINDING",
         "model_profile": model_profile,
         "decision_strategy": str(policy_id or "UNKNOWN"),
