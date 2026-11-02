@@ -41,10 +41,8 @@ def _trace_payload(*, inp, model: str, provider: str, request_id: str, prompt_ve
         error_code=str(error_code or ""),
     )
     ctx = TelemetryContext(
-        tenant_id=str(inp.tenant_id),
-        user_id=str(inp.user_id),
-        message_id=str(inp.message_id or ""),
-        correlation_id=str(inp.correlation_id or ""),
+        tenant_id=str(inp.tenant_id), user_id=str(inp.user_id),
+        message_id=str(inp.message_id or ""), correlation_id=str(inp.correlation_id or ""),
     )
     return ctx, trace.to_event_payload()
 
@@ -71,7 +69,6 @@ def append_event_sync(*, event_store, event_type: str, ctx: TelemetryContext, pa
 
 
 def emit_trace_sync(*, event_store, inp, model: str, provider: str, request_id: str, prompt_version: str, prompt_hash: str, ok: bool, cache_hit: bool, latency_ms: int, finish_reason: str, usage: Any, error_code: str, policy: MarketingLLMTelemetryPolicy | None = None, required: bool = False) -> None:
-    policy = policy or DEFAULT_MARKETING_LLM_TELEMETRY_POLICY
     ctx, payload = _trace_payload(
         inp=inp,
         model=model,
@@ -117,17 +114,12 @@ async def emit_trace_async(*, event_store, debug_sampling, inp, model: str, prov
                 event_store,
                 event_type=str((policy or DEFAULT_MARKETING_LLM_TELEMETRY_POLICY).debug_sample_event_type),
                 ctx=ctx,
-                payload={
-                    "request_id": request_id,
-                    "prompt_version": prompt_version,
-                    "prompt_hash": prompt_hash,
-                    "provider": provider,
-                    "model": model,
-                    "ok": bool(ok),
-                    "latency_ms": int(latency_ms),
-                    "user_text_len": len(inp.last_user_text or ""),
-                    "offer_id": str((inp.offer or {}).get("id", "")),
-                },
+                payload=dict(
+                    request_id=request_id, prompt_version=prompt_version, prompt_hash=prompt_hash,
+                    provider=provider, model=model, ok=bool(ok), latency_ms=int(latency_ms),
+                    user_text_len=len(inp.last_user_text or ""),
+                    offer_id=str((inp.offer or {}).get("id", "")),
+                ),
             )
     except Exception:  # noqa: BLE001
         # Debug telemetry is best-effort; the canonical spend event is not.
