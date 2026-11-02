@@ -496,3 +496,50 @@ async def test_replayed_message_id_does_not_recharge_or_reinvoke_provider(async_
     assert store.sum_event_payload_int(
         tenant_id="t-replay", event_type=LLM_COMPLETED, field="total_tokens",
     ) == 7
+
+
+@pytest.mark.asyncio
+async def test_optional_debug_event_failure_does_not_strand_durable_spend():
+    from core.llm.contracts import LLMResponse, LLMUsage
+    from core.llm.sampling import DebugSampling
+    from core.telemetry.event_types import LLM_COMPLETED
+    from runtime.platform.event_store.memory_event_store import MemoryEventStore
+
+    class FailingDebugStore(MemoryEventStore):
+        def append_event(self, event):
+            if event.get("event_type") == "llm_debug_sample":
+                raise OSError("debug telemetry unavailable")
+            return super().append_event(event)
+
+    class ValidLLM:
+        async def generate(self, request):
+            return LLMResponse(
+                content="Хочешь продолжить? Есть «Сеанс» за 990₽. Нажми «Открыть».",
+                usage=LLMUsage(prompt_tokens=3, completion_tokens=4, total_tokens=7),
+            )
+
+    store = FailingDebugStore()
+    composer = MarketingLLMComposer(
+        ValidLLM(),
+        LLMComposerConfig(
+            model="mock", budget_source="event_store",
+            debug_sampling=DebugSampling(rate=1.0),
+        ),
+        event_store=store,
+    )
+    inp = MarketingLLMInputs(
+        tenant_id="t-debug", user_id="u-debug", locale="ru",
+        channel="telegram", features={},
+        offer={"id": "debug", "title": "Сеанс", "price": 990, "currency": "₽"},
+        last_user_text="",
+        message_id="debug-event-1",
+    )
+    assert await composer.compose(inp)
+    assert store.count_events(tenant_id="t-debug", event_type=LLM_COMPLETED) == 1
+    assert store.sum_event_payload_int(
+        tenant_id="t-debug", event_type=LLM_COMPLETED, field="total_tokens",
+    ) == 7
+    day = composer._runtime.budget._day()
+    pending = store.get_setting(tenant_id="t-debug", key=f"llm:pending:v1:{day}")
+    assert pending == {"pending": {}}
+    assert composer._runtime.metrics.snapshot().counters.get("accounting_failed", 0) == 0
