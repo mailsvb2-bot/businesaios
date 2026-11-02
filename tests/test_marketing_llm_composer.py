@@ -543,3 +543,58 @@ async def test_optional_debug_event_failure_does_not_strand_durable_spend():
     pending = store.get_setting(tenant_id="t-debug", key=f"llm:pending:v1:{day}")
     assert pending == {"pending": {}}
     assert composer._runtime.metrics.snapshot().counters.get("accounting_failed", 0) == 0
+
+
+def test_event_store_idempotency_claim_survives_budget_day_rollover(monkeypatch):
+    from core.llm.budget import BudgetCaps, EventStoreDailyTokenBudget
+    from core.telemetry.event_types import LLM_COMPLETED
+    from core.events.log import EventLog
+    from core.tenancy.scope import TenantScope
+    from runtime.platform.event_store.memory_event_store import MemoryEventStore
+
+    store = MemoryEventStore()
+    budget = EventStoreDailyTokenBudget(
+        event_store=store,
+        caps=BudgetCaps(tenant_tokens_per_day=10000, user_tokens_per_day=10000),
+    )
+    monkeypatch.setattr(budget, "_day", lambda: "2026-11-01")
+    assert budget.reserve(
+        tenant_id="tenant", user_id="user", tokens=100,
+        request_id="same-inbound-event",
+    ) == "2026-11-01"
+    EventLog(store, tenant=TenantScope("tenant")).emit(
+        event_type=LLM_COMPLETED, source="telemetry", user_id="user",
+        payload={"total_tokens": 7, "request_id": "same-inbound-event"},
+    )
+    assert budget.release(
+        tenant_id="tenant", request_id="same-inbound-event", day="2026-11-01",
+    )
+    monkeypatch.setattr(budget, "_day", lambda: "2026-11-02")
+    assert budget.reserve(
+        tenant_id="tenant", user_id="user", tokens=100,
+        request_id="same-inbound-event",
+    ) is None
+    assert store.get_setting(
+        tenant_id="tenant", key="llm:pending:v1:2026-11-02",
+    ) == {"pending": {}}
+
+
+def test_inbound_idempotency_does_not_depend_on_mutable_offer_or_model():
+    from core.marketing.llm.flow import idempotent_request_id
+
+    common = {
+        "tenant_id": "tenant", "user_id": "user", "locale": "ru",
+        "channel": "telegram", "features": {},
+        "message_id": "event-123", "last_user_text": "",
+    }
+    first = MarketingLLMInputs(
+        **common, offer={"id": "offer-one", "title": "Первый"},
+    )
+    changed = MarketingLLMInputs(
+        **common, offer={"id": "offer-two", "title": "Второй"},
+    )
+    assert idempotent_request_id(
+        inp=first, provider="yandex", model="model-a", generated="one",
+    ) == idempotent_request_id(
+        inp=changed, provider="openai_compat", model="model-b", generated="two",
+    )
