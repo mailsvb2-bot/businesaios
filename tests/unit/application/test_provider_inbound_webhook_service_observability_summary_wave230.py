@@ -1,3 +1,5 @@
+from types import SimpleNamespace
+
 from application.business_autonomy.provider_catalog import provider_map
 from reliability.idempotency_store import InMemoryIdempotencyStore
 from runtime.business_autonomy.provider_inbound_webhook_service import ProviderInboundWebhookService
@@ -7,7 +9,7 @@ from runtime.business_autonomy.provider_webhook_runtime import ProviderWebhookRu
 
 class _Processor:
     def process(self, *, handoff):
-        return {'accepted': True, 'decision_envelope': {'decision_id': 'd1'}}
+        return {'accepted': True, 'decision_envelope': SimpleNamespace(decision=SimpleNamespace(decision_id='d1'))}
 
 
 class _Obs:
@@ -42,8 +44,6 @@ def test_inbound_webhook_service_emits_inbound_summary_and_observability(monkeyp
 
 
 def test_inbound_summary_supports_canonical_envelope_and_malformed_diagnostics():
-    from types import SimpleNamespace
-
     from runtime.business_autonomy.provider_webhook_inbound_result_summary import (
         summarize_provider_webhook_inbound_result,
     )
