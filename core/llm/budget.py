@@ -50,6 +50,10 @@ def _utc_day_bounds_ms(ts_ms: int | None = None) -> tuple[int, int]:
     return day * 86_400_000, (day + 1) * 86_400_000
 
 
+def estimate_request_tokens(request: Any) -> int:
+    return int(request.max_tokens) + 800 + sum(len(m.content.encode("utf-8")) for m in request.messages)
+
+
 class EventStoreDailyTokenBudget:
     """Durable daily spend plus atomic pending claims on the canonical event store."""
 

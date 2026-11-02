@@ -3,7 +3,7 @@ from __future__ import annotations
 import hashlib
 from typing import Any
 
-from core.llm.budget import BudgetCaps, EventStoreDailyTokenBudget
+from core.llm.budget import BudgetCaps, EventStoreDailyTokenBudget, estimate_request_tokens
 from core.marketing.llm_telemetry import append_event_sync
 from core.telemetry.event_types import LLM_COMPLETED, LLM_REQUESTED
 from core.telemetry.event_writer import TelemetryContext
@@ -90,7 +90,7 @@ def call_marketing_llm(*, provider: str, system: str, user: str, model: str | No
     claim_id = f"llm-effect-{identity}"
     ctx = TelemetryContext(tenant_id=str(tenant_id), user_id=str(user_id), message_id=str(request_id), correlation_id=str(request_id))
     budget = EventStoreDailyTokenBudget(event_store=event_store, caps=BudgetCaps())
-    estimated = int(req.max_tokens) + 800 + sum(len(message.content.encode("utf-8")) for message in req.messages)
+    estimated = estimate_request_tokens(req)
     try:
         day = budget.reserve(tenant_id=str(tenant_id), user_id=str(user_id), tokens=estimated, request_id=claim_id)
         if day is None:

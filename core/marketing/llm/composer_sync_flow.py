@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from core.llm.budget import EventStoreDailyTokenBudget
+from core.llm.budget import EventStoreDailyTokenBudget, estimate_request_tokens
 from core.llm.contracts import LLMUsage
 from core.marketing.async_runner import run_awaitable_sync
 from core.marketing.llm.cache_keys import build_cache_key
@@ -44,7 +44,7 @@ def compose_sync_flow(composer, inp):
         emit_trace_cache_hit_sync(event_store=composer._event_store, inp=inp, model=composer._cfg.model, provider=composer._cfg.provider, request_id=request_id, prompt_version=prompt_version, prompt_hash=prompt_hash)
         return cached
 
-    est = int(req.max_tokens) + 800
+    est = estimate_request_tokens(req)
     if not runtime.budget.can_spend(tenant_id=tenant_id, user_id=user_id, tokens=est):
         runtime.metrics.inc("budget_blocked")
         emit_budget_blocked_sync(event_store=composer._event_store, ctx=ctx, provider=composer._cfg.provider, model=composer._cfg.model, est=est, prompt_version=prompt_version, prompt_hash=prompt_hash, experiment=inp.experiment, variant=inp.variant, offer_id=offer_id)

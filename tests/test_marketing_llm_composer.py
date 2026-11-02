@@ -204,17 +204,12 @@ def test_event_store_budget_reservation_blocks_concurrent_overspend():
 
     store = MemoryEventStore()
     llm = BlockingLLM()
-    cfg = LLMComposerConfig(
-        model="mock", budget_source="event_store",
-        budget=BudgetCaps(tenant_tokens_per_day=1027, user_tokens_per_day=1027),
-    )
+    cfg = LLMComposerConfig(model="mock", budget_source="event_store",
+        budget=BudgetCaps(tenant_tokens_per_day=3000, user_tokens_per_day=3000))
     first = MarketingLLMComposer(llm, cfg, event_store=store)
     second = MarketingLLMComposer(llm, cfg, event_store=store)
-    inp = MarketingLLMInputs(
-        tenant_id="t-concurrent", user_id="u-concurrent", locale="ru",
-        channel="telegram", features={},
-        offer={"id": "concurrent", "title": "Сеанс", "price": 990, "currency": "₽"},
-    )
+    inp = MarketingLLMInputs(tenant_id="t-concurrent", user_id="u-concurrent", locale="ru",
+        channel="telegram", features={}, offer={"id": "concurrent", "title": "Сеанс", "price": 990, "currency": "₽"})
     with ThreadPoolExecutor(max_workers=2) as pool:
         running = pool.submit(first.compose_sync, inp)
         assert llm.entered.wait(timeout=5)
@@ -224,13 +219,14 @@ def test_event_store_budget_reservation_blocks_concurrent_overspend():
         finally:
             llm.resume.set()
         assert running.result(timeout=5)
-    assert store.sum_event_payload_int(
-        tenant_id="t-concurrent", event_type=LLM_COMPLETED, field="total_tokens",
-    ) == 7
+    # Long prompts must not bypass the reservation cap before provider execution.
+    huge = MarketingLLMInputs(**{**inp.__dict__, "last_user_text": "long " * 3000})
+    assert first.compose_sync(huge) is None
+    assert llm.calls == 1
+    assert store.sum_event_payload_int(tenant_id="t-concurrent",
+        event_type=LLM_COMPLETED, field="total_tokens") == 7
     # Once the durable completion is visible, headroom is available again.
-    assert second._runtime.budget.can_spend(
-        tenant_id="t-concurrent", user_id="u-concurrent", tokens=1020,
-    )
+    assert second._runtime.budget.can_spend(tenant_id="t-concurrent", user_id="u-concurrent", tokens=2993)
 
 
 @pytest.mark.parametrize("async_mode", [False, True])
