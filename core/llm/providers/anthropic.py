@@ -84,8 +84,7 @@ def _extract_text(raw: dict[str, Any]) -> str:
 
 
 def _extract_usage(raw: dict[str, Any]) -> LLMUsage | None:
-    usage = raw.get("usage")
-    if not isinstance(usage, dict):
+    if not isinstance(usage := raw.get("usage"), dict):
         return None
     values = (usage.get("input_tokens", usage.get("prompt_tokens")), usage.get("output_tokens", usage.get("completion_tokens")))
     cached = (usage.get("cache_creation_input_tokens", 0), usage.get("cache_read_input_tokens", 0))
