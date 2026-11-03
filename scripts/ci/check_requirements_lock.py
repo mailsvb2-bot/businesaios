@@ -1,23 +1,10 @@
 from __future__ import annotations
 
 import os
+import re
 from pathlib import Path
 
-"""Fail-closed dependency lock contract.
-
-The default check preserves the historical top-level drift guard:
-`requirements.txt` and `requirements.lock.txt` must contain the same direct pins.
-
-Release/pre-release gates require separate transitive lock evidence. This avoids
-mixing two different contracts in one file:
-
-- `requirements.lock.txt` is the direct dependency policy mirror.
-- `requirements.release.lock.txt` is a requirements-style transitive lock, or
-  `uv.lock` / `poetry.lock` is the resolver-native transitive lock.
-
-This keeps dev installs lightweight while preventing production release claims
-from passing on top-level-only dependency evidence.
-"""
+"""Fail-closed top-level parity and hashed transitive release-lock checks."""
 
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -121,9 +108,23 @@ def _check_top_level_lock() -> tuple[bool, str]:
     return True, f"requirements top-level lock is in sync ({len(locked)} direct dependencies)"
 
 
+_RELEASE_ENTRY = re.compile(
+    r"[A-Za-z0-9][A-Za-z0-9_.-]*(?:\[[A-Za-z0-9_,.-]+\])?==[A-Za-z0-9][A-Za-z0-9._+!-]*"
+    r"(?:\s*;\s*.+?)?(?:\s+--hash=sha256:[a-fA-F0-9]{64})+"
+)
+
+
+def _hashed_release_lock(path: Path) -> bool:
+    joined = re.sub(r"\\[ \t]*\r?\n[ \t]*", " ", path.read_text(encoding="utf-8"))
+    entries = [line.strip() for line in joined.splitlines() if line.strip() and not line.lstrip().startswith("#")]
+    return bool(entries) and all(_RELEASE_ENTRY.fullmatch(line) for line in entries)
+
+
 def _check_requirements_release_lock() -> tuple[bool, str] | None:
     if not RELEASE_REQUIREMENTS_LOCK.exists():
         return None
+    if not _hashed_release_lock(RELEASE_REQUIREMENTS_LOCK):
+        return False, "release lock contains an unpinned or unhashed dependency"
     requirements = _normalized_requirement_lines(REQUIREMENTS)
     release_locked = _normalized_requirement_lines(RELEASE_REQUIREMENTS_LOCK)
     requirement_keys = {_package_key(item) for item in requirements}
@@ -162,10 +163,7 @@ def _check_release_lock() -> tuple[bool, str]:
     native = _check_native_release_lock()
     if native is not None:
         return native
-    return (
-        False,
-        "release requires a transitive lock: add requirements.release.lock.txt, uv.lock, or poetry.lock",
-    )
+    return False, "release requires a transitive lock: add requirements.release.lock.txt, uv.lock, or poetry.lock"
 
 
 def main() -> int:

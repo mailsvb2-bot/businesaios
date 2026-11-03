@@ -31,3 +31,21 @@ def test_container_release_install_path_forces_release_lock_validation() -> None
     assert check_requirements_lock._container_install_requires_release_lock()
     ok, message = check_requirements_lock._check_release_lock()
     assert ok, message
+
+
+def test_release_gate_rejects_unhashed_or_unpinned_transitive_entries(tmp_path, monkeypatch) -> None:
+    original = RELEASE_LOCK.read_text(encoding="utf-8")
+    pin = "aiofiles==23.2.1 \\"
+    assert original.count(pin) == 1
+    corruptions = (
+        original.replace(pin, "aiofiles==23.2.1", 1),
+        original.replace(pin, "aiofiles>=23.2.1 \\", 1),
+        original.replace("--hash=sha256:19297512", "--hash=sha256:invalid", 1),
+        original + "\nrogue==1.0\n",
+    )
+    for corrupted in corruptions:
+        path = tmp_path / "release.lock"
+        path.write_text(corrupted, encoding="utf-8")
+        monkeypatch.setattr(check_requirements_lock, "RELEASE_REQUIREMENTS_LOCK", path)
+        valid, message = check_requirements_lock._check_release_lock()
+        assert not valid and "unpinned or unhashed" in message
