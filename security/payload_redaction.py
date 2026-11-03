@@ -11,7 +11,7 @@ CANON_PAYLOAD_REDACTION = True
 _FREE_TEXT_SECRET = re.compile(
     r'(?i)(?:\bBearer[ \t]+[A-Za-z0-9._~+/=-]{8,}|\b\d{6,12}:[A-Za-z0-9_-]{20,}'
     r'|\b(?:sk-[A-Za-z0-9_-]{12,}|live_[A-Za-z0-9]{16,})'
-    r'|\b(?:password|passwd|api[_-]?key|token|authorization|cookie|set-cookie|client_secret|refresh_token|secret)\b["\']?[ \t]*[:=][ \t]*(?:"(?:\\.|[^"\\])*"|\'(?:\\.|[^\'\\])*\'|[^\s,;]+))'
+    r'|\b(?:password|passwd|api[_-]?key|token|authorization|cookie|set-cookie|client_secret|refresh_token|secret)\b["\']?[ \t]*[:=][ \t]*(?:"(?:\\.|[^"\\])*"|\'(?:\\.|[^\'\\])*\'|[^,\r\n]+))'
 )
 
 
