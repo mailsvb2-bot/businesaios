@@ -324,6 +324,8 @@ def test_signed_reply_proof_binds_exact_recipient_channel_and_chat():
         {**payload, "user_id": "another-recipient"},
         {**payload, "channel": "max"},
         {**payload, "chat_id": "another-room"},
+        {**payload, "recipient_count": True},
+        {**payload, "recipient_count": "1"},
         {**payload, "meta": {"inbound_user_reply": {**proof, "user_id": "another-recipient"}}},
         {**payload, "meta": {"inbound_user_reply": {**proof, "chat_id": "another-room"}}},
         {**payload, "meta": {"inbound_user_reply": {key: value for key, value in proof.items() if key != "user_id"}}},
