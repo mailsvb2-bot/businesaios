@@ -53,17 +53,10 @@ class LLMEffectsMixin:
             swallow(__name__, "runtime/_internal/_effects_impl.py")
 
         return self.send_message(
-            decision_id=str(decision_id),
-            correlation_id=str(correlation_id),
-            user_id=str(user_id),
-            chat_id=chat_id,
-            text=text,
-            reply_markup=reply_markup,
-            callback_query_id=callback_query_id,
-            track_event_type=track_event_type,
-            track_payload=track_payload,
-            priority=priority,
-            critical=bool(critical),
+            decision_id=str(decision_id), correlation_id=str(correlation_id), user_id=str(user_id),
+            chat_id=chat_id, text=text, reply_markup=reply_markup,
+            callback_query_id=callback_query_id, track_event_type=track_event_type,
+            track_payload=track_payload, priority=priority, critical=bool(critical),
         )
 
     def marketing_llm_complete(
@@ -85,22 +78,17 @@ class LLMEffectsMixin:
                 self,
                 EffectActionType.LLM_MARKETING_COMPLETE,
                 {
-                    "provider": provider,
-                    "system": system,
-                    "user": user,
-                    "model": (model or configured_model),
+                    "provider": provider, "system": system, "user": user,
+                    "model": model or configured_model, "admin_id": str(admin_id),
+                    "decision_id": str(decision_id),
                 },
             )
             if result.get("ok"):
                 try:
                     emit_marketing_llm_success(
-                        event_log=self.event_log,
-                        admin_id=admin_id,
-                        decision_id=decision_id,
-                        correlation_id=correlation_id,
-                        provider=str(result.get("provider") or provider),
-                        model=str(result.get("model") or model or ""),
-                        text=str(result.get("text") or ""),
+                        event_log=self.event_log, admin_id=admin_id, decision_id=decision_id,
+                        correlation_id=correlation_id, provider=str(result.get("provider") or provider),
+                        model=str(result.get("model") or model or ""), text=str(result.get("text") or ""),
                     )
                 except Exception:
                     swallow(__name__, "runtime/_internal/_effects_impl.py")
@@ -108,11 +96,8 @@ class LLMEffectsMixin:
         except Exception as exc:
             try:
                 emit_marketing_llm_error(
-                    event_log=self.event_log,
-                    admin_id=admin_id,
-                    provider=provider,
-                    model=str(model or ""),
-                    error_name=type(exc).__name__,
+                    event_log=self.event_log, admin_id=admin_id, provider=provider,
+                    model=str(model or ""), error_name=type(exc).__name__,
                 )
             except Exception:
                 swallow(__name__, "runtime/_internal/_effects_impl.py")
@@ -132,20 +117,15 @@ class LLMEffectsMixin:
         try:
             from runtime._internal.router_support import execute_effect_action_sync
 
-            return dict(
-                execute_effect_action_sync(
-                    self, EffectActionType.IMAGE_YANDEX_ART_GENERATE, {**dict(brief), "payload_key": str(payload_key)}
-                )
-                or {}
-            )
+            return dict(execute_effect_action_sync(
+                self, EffectActionType.IMAGE_YANDEX_ART_GENERATE,
+                {**dict(brief), "payload_key": str(payload_key)},
+            ) or {})
         except Exception as exc:
             try:
                 self.event_log.emit(
-                    event_type="marketing_image_failed",
-                    source="marketing.image",
-                    user_id=str(admin_id or "system"),
-                    decision_id=str(decision_id or "-"),
-                    correlation_id=str(correlation_id or decision_id or "-"),
+                    event_type="marketing_image_failed", source="marketing.image", user_id=str(admin_id or "system"),
+                    decision_id=str(decision_id or "-"), correlation_id=str(correlation_id or decision_id or "-"),
                     payload={"error": type(exc).__name__},
                 )
             except Exception:
