@@ -23,20 +23,14 @@ def is_routine_reply(action: str, payload: Mapping[str, Any]) -> bool:
         return False
     channel, event_id = proof["channel"], proof.get("update_id")
     tenant_matches = bool(proof.get("tenant_id")) and str(proof["tenant_id"]) == str(payload.get("tenant_id") or "")
-    if channel == "telegram":
-        valid = type(event_id) is int and event_id >= 0
-    else:
-        valid = isinstance(event_id, str) and bool(event_id.strip()) and len(event_id) <= 256
-    recipient = payload.get("user_id")
-    if (not tenant_matches or not valid or not isinstance(recipient, str)
-            or not recipient.strip() or proof.get("user_id") != recipient):
-        return False
-    if payload.get("channel") is not None and str(payload["channel"]).strip().lower() != channel:
-        return False
-    if proof.get("chat_id") and str(payload.get("chat_id") or "") != str(proof["chat_id"]):
-        return False
-    recipient_count = payload.get("recipient_count")
-    if recipient_count is not None and (type(recipient_count) is not int or recipient_count != 1):
+    valid = (type(event_id) is int and event_id >= 0) if channel == "telegram" else (
+        isinstance(event_id, str) and bool(event_id.strip()) and len(event_id) <= 256)
+    recipient, count = payload.get("user_id"), payload.get("recipient_count")
+    if (not tenant_matches or not valid or not isinstance(recipient, str) or not recipient.strip()
+            or proof.get("user_id") != recipient
+            or (payload.get("channel") is not None and str(payload["channel"]).strip().lower() != channel)
+            or (proof.get("chat_id") and str(payload.get("chat_id") or "") != str(proof["chat_id"]))
+            or (count is not None and (type(count) is not int or count != 1))):
         return False
     try:
         return float(payload.get("estimated_cost") or 0.0) == 0.0
