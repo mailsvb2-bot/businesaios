@@ -27,7 +27,13 @@ def is_routine_reply(action: str, payload: Mapping[str, Any]) -> bool:
         valid = type(event_id) is int and event_id >= 0
     else:
         valid = isinstance(event_id, str) and bool(event_id.strip()) and len(event_id) <= 256
-    if not tenant_matches or not valid or not str(payload.get("user_id") or "").strip():
+    recipient = payload.get("user_id")
+    if (not tenant_matches or not valid or not isinstance(recipient, str)
+            or not recipient.strip() or proof.get("user_id") != recipient):
+        return False
+    if payload.get("channel") is not None and str(payload["channel"]).strip().lower() != channel:
+        return False
+    if proof.get("chat_id") and str(payload.get("chat_id") or "") != str(proof["chat_id"]):
         return False
     if payload.get("recipient_count") not in (None, 1):
         return False
