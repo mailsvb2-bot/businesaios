@@ -1,11 +1,11 @@
-from __future__ import annotations
-
 """Canonical single source of truth for environment access helpers.
 
 This module is intentionally outside ``runtime`` so config/core imports do not
 need to initialize the runtime package just to parse environment variables.
 That avoids runtime↔config import cycles while still keeping one parsing layer.
 """
+
+from __future__ import annotations
 
 import os
 from collections.abc import Mapping
