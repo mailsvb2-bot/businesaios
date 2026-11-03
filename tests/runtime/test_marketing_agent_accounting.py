@@ -191,7 +191,7 @@ def test_budget_over_cap_handles_legacy_empty_pending_state():
 
 
 @pytest.mark.parametrize("provider", ["openai_compat", "gigachat", "yandexgpt"])
-@pytest.mark.parametrize("usage_case", ["missing_total", "string_total", "bool_total", "string_prompt", "bool_completion", "numeric_strings", "nondecimal_total", "valid"])
+@pytest.mark.parametrize("usage_case", ["missing_total", "missing_prompt", "missing_completion", "string_total", "bool_total", "string_prompt", "bool_completion", "numeric_strings", "nondecimal_total", "valid"])
 def test_provider_transport_usage_is_not_synthesized_or_coerced(provider, usage_case):
     """Real adapter -> accounted gateway: unverified totals never become durable spend."""
     from core.llm.providers.gigachat import GigaChatClient
@@ -207,6 +207,10 @@ def test_provider_transport_usage_is_not_synthesized_or_coerced(provider, usage_
             usage["completionTokens"] = "4"
         if usage_case == "bool_completion":
             usage["completionTokens"] = True
+        if usage_case == "missing_prompt":
+            usage.pop("inputTextTokens")
+        if usage_case == "missing_completion":
+            usage.pop("completionTokens")
         if usage_case != "missing_total":
             usage["totalTokens"] = total
         response = {"result": {"usage": usage, "alternatives": [{"message": {"text": "ok"}}]}}
@@ -216,6 +220,10 @@ def test_provider_transport_usage_is_not_synthesized_or_coerced(provider, usage_
             usage["prompt_tokens"] = "6"
         if usage_case == "bool_completion":
             usage["completion_tokens"] = True
+        if usage_case == "missing_prompt":
+            usage.pop("prompt_tokens")
+        if usage_case == "missing_completion":
+            usage.pop("completion_tokens")
         if usage_case != "missing_total":
             usage["total_tokens"] = total
         response = {"usage": usage, "choices": [{"message": {"content": "ok"}}]}
