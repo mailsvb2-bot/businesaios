@@ -275,3 +275,17 @@ def test_remaining_effects_impl_branches(monkeypatch):
     assert effects.http_transport is preset_transport
     assert preset_router.outbound_queue == "existing"
     assert initialized == [effects]
+
+
+def test_sealed_llm_router_uses_canonical_tenant_store_and_rejects_rebinding():
+    from core.events.log import EventLog
+    from runtime.platform.event_store.memory_event_store import MemoryEventStore
+
+    store = MemoryEventStore()
+    effects = impl.Effects(event_log=EventLog(store, tenant="tenant-a"), policy_registry=object(), event_store=store)
+    assert effects.effect_router.llm_accounting_store is store
+    assert effects.effect_router.llm_tenant_id == "tenant-a"
+    with pytest.raises(RuntimeError, match="llm_effect_router_tenant_mismatch"):
+        impl.Effects(event_log=EventLog(store, tenant="tenant-b"), policy_registry=object(),
+                     event_store=store, effect_router=effects.effect_router)
+    assert effects.effect_router.llm_tenant_id == "tenant-a"

@@ -258,9 +258,9 @@ def start_telegram_webhook_server_in_thread(
 
 
 def start_yookassa_webhook_server_in_thread(*, host: str, port: int, path: str, event_store: Any, payment_outbox: Any) -> Any:
+    import hmac
     import json
     import os
-    import hmac
     import threading
     from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
@@ -388,6 +388,10 @@ class Effects(
                 self.effect_router.transport = self.http_transport
             if getattr(self.effect_router, "outbound_queue", None) is None:
                 self.effect_router.outbound_queue = self.telegram_outbound_queue
+        if getattr(self.effect_router, "llm_tenant_id", None) not in (None, getattr(self.event_log, "tenant_id", None)):
+            raise RuntimeError("llm_effect_router_tenant_mismatch")
+        self.effect_router.llm_accounting_store = self.event_store if self.event_store is not None else getattr(self.event_log, "_store", None)
+        self.effect_router.llm_tenant_id = getattr(self.event_log, "tenant_id", None)
         initialize_effects_runtime_state(self)
 
     def _throttled_emit_err(self, key: str, *, event_type: str, payload: dict[str, Any]) -> None:

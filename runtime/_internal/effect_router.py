@@ -57,6 +57,8 @@ class EffectRouter:
     transport: HttpTransport | None = None
     outbound_queue: Any | None = None
     delivery_state: Any | None = None
+    llm_accounting_store: Any | None = None
+    llm_tenant_id: str | None = None
     _handlers: dict[EffectActionType, EffectHandler] = field(init=False, repr=False, default_factory=dict)
 
     def __post_init__(self) -> None:
@@ -222,7 +224,7 @@ class EffectRouter:
         return {"ok": bool(ok), "text": str(text or ""), "meta": dict(meta or {})}
 
     async def _handle_marketing_llm_complete(self, payload: dict[str, Any]) -> dict[str, Any]:
-        result = await asyncio.to_thread(call_marketing_llm, provider=str(payload.get("provider") or ""), system=str(payload.get("system") or "You write concise marketing copy."), user=str(payload.get("user") or ""), model=_optional_text(payload.get("model")))
+        result = await asyncio.to_thread(call_marketing_llm, provider=str(payload.get("provider") or ""), system=str(payload.get("system") or "You write concise marketing copy."), user=str(payload.get("user") or ""), model=_optional_text(payload.get("model")), event_store=self.llm_accounting_store, tenant_id=self.llm_tenant_id, user_id=_optional_text(payload.get("admin_id")), request_id=_optional_text(payload.get("decision_id")))
         return dict(result or {})
 
     async def _handle_image_yandex_art_generate(self, payload: dict[str, Any]) -> dict[str, Any]:
