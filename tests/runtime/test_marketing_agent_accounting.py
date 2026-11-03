@@ -194,9 +194,7 @@ def test_budget_over_cap_handles_legacy_empty_pending_state():
 @pytest.mark.parametrize("usage_case", ["missing_total", "missing_prompt", "missing_completion", "string_total", "bool_total", "string_prompt", "bool_completion", "numeric_strings", "nondecimal_total", "valid"])
 def test_provider_transport_usage_is_not_synthesized_or_coerced(provider, usage_case):
     """Real adapter -> accounted gateway: unverified totals never become durable spend."""
-    from core.llm.providers.gigachat import GigaChatClient
-    from core.llm.providers.openai_provider import OpenAICompatClient, OpenAICompatConfig
-    from core.llm.providers.yandexgpt import YandexGPTClient
+    from core.llm import GigaChatClient, OpenAICompatClient, OpenAICompatConfig, YandexGPTClient
 
     total = {"string_total": "10", "bool_total": True, "string_prompt": 10, "bool_completion": 10, "numeric_strings": "10", "nondecimal_total": "10x", "valid": 10}.get(usage_case)
     if provider == "yandexgpt":
