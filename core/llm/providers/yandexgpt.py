@@ -74,8 +74,7 @@ def _extract_usage(raw: dict[str, Any]) -> LLMUsage | None:
     values = (usage.get("inputTextTokens", usage.get("prompt_tokens", usage.get("input_tokens"))), usage.get("completionTokens", usage.get("completion_tokens", usage.get("output_tokens"))), usage.get("totalTokens", usage.get("total_tokens")))
     if any(type(v) is not int and not (type(v) is str and v.isascii() and v.isdecimal() and len(v) <= 19) for v in values):
         return None
-    pt, ct, tt = map(int, values)
-    return LLMUsage(prompt_tokens=pt, completion_tokens=ct, total_tokens=tt)
+    return LLMUsage(*map(int, values))
 
 
 def _extract_finish(raw: dict[str, Any]) -> str:
