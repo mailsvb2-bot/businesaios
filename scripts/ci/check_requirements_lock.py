@@ -126,18 +126,18 @@ def _check_requirements_release_lock() -> tuple[bool, str] | None:
     if not _hashed_release_lock(RELEASE_REQUIREMENTS_LOCK):
         return False, "release lock contains an unpinned or unhashed dependency"
     requirements = _normalized_requirement_lines(REQUIREMENTS)
-    release_locked = _normalized_requirement_lines(RELEASE_REQUIREMENTS_LOCK)
-    requirement_keys = {_package_key(item) for item in requirements}
-    release_keys = {_package_key(item) for item in release_locked}
-    missing = sorted(requirement_keys - release_keys)
-    if missing:
-        return False, "requirements.release.lock.txt misses direct dependency keys: " + ", ".join(missing)
+    release_locked = {line.split()[0] for line in _normalized_requirement_lines(RELEASE_REQUIREMENTS_LOCK) if "==" in line}
+    required = {(_package_key(item), item.split("==", 1)[1]) for item in requirements}
+    pinned = {(_package_key(item), item.split("==", 1)[1]) for item in release_locked}
+    missing = sorted(name for name, version in required if (name, version) not in pinned)
+    if missing or len({_package_key(item) for item in release_locked}) != len(release_locked):
+        return False, "requirements.release.lock.txt has mismatched or duplicate direct pins: " + ", ".join(missing)
     has_marker = _path_has_any_marker(RELEASE_REQUIREMENTS_LOCK, _RELEASE_LOCK_MARKERS)
     has_transitive_depth = len(release_locked) > len(requirements)
     has_top_level_marker = _path_has_any_marker(RELEASE_REQUIREMENTS_LOCK, _TOP_LEVEL_ONLY_MARKERS)
     if has_top_level_marker:
         return False, "requirements.release.lock.txt is marked as top-level-only"
-    if not has_marker and not has_transitive_depth:
+    if not has_marker or not has_transitive_depth:
         return False, "requirements.release.lock.txt does not prove transitive dependency locking"
     return True, f"requirements release lock present ({len(release_locked)} pinned entries)"
 
