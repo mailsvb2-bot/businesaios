@@ -41,16 +41,16 @@ def _trace_payload(*, inp, model: str, provider: str, request_id: str, prompt_ve
         error_code=str(error_code or ""),
     )
     ctx = TelemetryContext(
-        tenant_id=str(inp.tenant_id),
-        user_id=str(inp.user_id),
-        message_id=str(inp.message_id or ""),
-        correlation_id=str(inp.correlation_id or ""),
+        tenant_id=str(inp.tenant_id), user_id=str(inp.user_id),
+        message_id=str(inp.message_id or ""), correlation_id=str(inp.correlation_id or ""),
     )
     return ctx, trace.to_event_payload()
 
 
-def append_event_sync(*, event_store, event_type: str, ctx: TelemetryContext, payload: dict, source: str = "telemetry") -> None:
+def append_event_sync(*, event_store, event_type: str, ctx: TelemetryContext, payload: dict, source: str = "telemetry", required: bool = False) -> None:
     if event_store is None:
+        if required:
+            raise RuntimeError("LLM_ACCOUNTING_EVENT_STORE_MISSING")
         return
     try:
         from core.events.log import EventLog
@@ -63,11 +63,12 @@ def append_event_sync(*, event_store, event_type: str, ctx: TelemetryContext, pa
         corr = (ctx.correlation_id or ctx.message_id or None)
         log.emit(event_type=str(event_type), source=str(source), user_id=str(ctx.user_id), payload=enriched, correlation_id=corr)
     except Exception:
+        if required:
+            raise
         return
 
 
-def emit_trace_sync(*, event_store, inp, model: str, provider: str, request_id: str, prompt_version: str, prompt_hash: str, ok: bool, cache_hit: bool, latency_ms: int, finish_reason: str, usage: Any, error_code: str, policy: MarketingLLMTelemetryPolicy | None = None) -> None:
-    policy = policy or DEFAULT_MARKETING_LLM_TELEMETRY_POLICY
+def emit_trace_sync(*, event_store, inp, model: str, provider: str, request_id: str, prompt_version: str, prompt_hash: str, ok: bool, cache_hit: bool, latency_ms: int, finish_reason: str, usage: Any, error_code: str, policy: MarketingLLMTelemetryPolicy | None = None, required: bool = False) -> None:
     ctx, payload = _trace_payload(
         inp=inp,
         model=model,
@@ -82,7 +83,7 @@ def emit_trace_sync(*, event_store, inp, model: str, provider: str, request_id: 
         ok=ok,
         error_code=error_code,
     )
-    append_event_sync(event_store=event_store, event_type=(LLM_CACHE_HIT if cache_hit else (LLM_COMPLETED if ok else LLM_FAILED)), ctx=ctx, payload=payload)
+    append_event_sync(event_store=event_store, event_type=(LLM_CACHE_HIT if cache_hit else (LLM_COMPLETED if ok else LLM_FAILED)), ctx=ctx, payload=payload, required=required)
 
 
 async def emit_trace_async(*, event_store, debug_sampling, inp, model: str, provider: str, request_id: str, prompt_version: str, prompt_hash: str, ok: bool, cache_hit: bool, latency_ms: int, finish_reason: str, usage: Any, error_code: str, policy: MarketingLLMTelemetryPolicy | None = None) -> None:
@@ -104,23 +105,25 @@ async def emit_trace_async(*, event_store, debug_sampling, inp, model: str, prov
         await append_event(event_store, event_type=LLM_CACHE_HIT, ctx=ctx, payload=payload)
         return
     await append_event(event_store, event_type=(LLM_COMPLETED if ok else LLM_FAILED), ctx=ctx, payload=payload)
-    if bool(getattr(debug_sampling, "hit", lambda: False)()):
-        await append_event(
-            event_store,
-            event_type=str((policy or DEFAULT_MARKETING_LLM_TELEMETRY_POLICY).debug_sample_event_type),
-            ctx=ctx,
-            payload={
-                "request_id": request_id,
-                "prompt_version": prompt_version,
-                "prompt_hash": prompt_hash,
-                "provider": provider,
-                "model": model,
-                "ok": bool(ok),
-                "latency_ms": int(latency_ms),
-                "user_text_len": len(inp.last_user_text or ""),
-                "offer_id": str((inp.offer or {}).get("id", "")),
-            },
-        )
+    # The LLM_COMPLETED write above is authoritative for token accounting.
+    # Optional debug sampling must never turn an already-durable completion
+    # into an apparent accounting failure (which strands its reservation).
+    try:
+        if bool(getattr(debug_sampling, "hit", lambda: False)()):
+            await append_event(
+                event_store,
+                event_type=str((policy or DEFAULT_MARKETING_LLM_TELEMETRY_POLICY).debug_sample_event_type),
+                ctx=ctx,
+                payload=dict(
+                    request_id=request_id, prompt_version=prompt_version, prompt_hash=prompt_hash,
+                    provider=provider, model=model, ok=bool(ok), latency_ms=int(latency_ms),
+                    user_text_len=len(inp.last_user_text or ""),
+                    offer_id=str((inp.offer or {}).get("id", "")),
+                ),
+            )
+    except Exception:  # noqa: BLE001
+        # Debug telemetry is best-effort; the canonical spend event is not.
+        pass
 
 
 async def maybe_emit_alert(*, event_store, inp, metrics, provider: str, model: str, reason: str, policy: MarketingLLMTelemetryPolicy | None = None) -> None:
