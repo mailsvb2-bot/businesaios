@@ -533,11 +533,28 @@ def test_only_authenticated_ingress_owners_can_open_signed_reply_scope():
         "runtime/entrypoints/telegram_longpoll.py",
         "runtime/business_autonomy/provider_inbound_webhook_service.py",
     }
+    # A public facade may re-export the signer, but must not open a scope.
+    import ast
+
+    facade = root / "runtime/safety/_surface.py"
+    tree = ast.parse(facade.read_text(encoding="utf-8"))
+    assert any(
+        isinstance(node, ast.ImportFrom)
+        and node.module == "core.safety.controls.action_budget.models"
+        and any(alias.name == "verified_inbound_reply_scope" for alias in node.names)
+        for node in tree.body
+    )
+    assert not any(
+        isinstance(node, ast.Call)
+        and isinstance(node.func, ast.Name)
+        and node.func.id == "verified_inbound_reply_scope"
+        for node in ast.walk(tree)
+    )
     for path in (root / "runtime", root / "interfaces", root / "application", root / "core"):
         for file in path.rglob("*.py"):
             rel = file.relative_to(root).as_posix()
             if "verified_inbound_reply_scope" in file.read_text(errors="replace"):
-                assert rel in allowed, f"unverified ingress signer: {rel}"
+                assert rel in allowed or rel == "runtime/safety/_surface.py", f"unverified ingress signer: {rel}"
 
 
 
