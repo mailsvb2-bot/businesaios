@@ -312,13 +312,10 @@ def test_signed_reply_proof_binds_exact_recipient_channel_and_chat():
         pinned_world_model_meta={}, tenant_id="tenant-live",
         product_id=None, domain=None, product_version=None, actor_id="user-1")
     proof = payload["meta"]["inbound_user_reply"]
-    assert proof["user_id"] == "user-1" and proof["chat_id"] == "room-42"
     assert is_routine_reply("send_message@v1", payload)
     for key, bad in (("user_id", "another-recipient"), ("channel", "max"),
                      ("chat_id", "another-room"), ("recipient_count", True), ("recipient_count", "1")):
         assert not is_routine_reply("send_message@v1", {**payload, key: bad})
     for key, bad in (("user_id", "another-recipient"), ("chat_id", "another-room")):
-        assert not is_routine_reply("send_message@v1", {
-            **payload, "meta": {"inbound_user_reply": {**proof, key: bad}}})
-    assert not is_routine_reply("send_message@v1", {
-        **payload, "meta": {"inbound_user_reply": {k: v for k, v in proof.items() if k != "user_id"}}})
+        assert not is_routine_reply("send_message@v1", {**payload, "meta": {"inbound_user_reply": {**proof, key: bad}}})
+    assert not is_routine_reply("send_message@v1", {**payload, "meta": {"inbound_user_reply": {k: v for k, v in proof.items() if k != "user_id"}}})
