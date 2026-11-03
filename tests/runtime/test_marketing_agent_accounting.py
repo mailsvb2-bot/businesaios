@@ -191,18 +191,20 @@ def test_budget_over_cap_handles_legacy_empty_pending_state():
 
 
 @pytest.mark.parametrize("provider", ["openai_compat", "gigachat", "yandexgpt"])
-@pytest.mark.parametrize("usage_case", ["missing_total", "string_total", "bool_total", "string_prompt", "bool_completion", "valid"])
+@pytest.mark.parametrize("usage_case", ["missing_total", "string_total", "bool_total", "string_prompt", "bool_completion", "numeric_strings", "nondecimal_total", "valid"])
 def test_provider_transport_usage_is_not_synthesized_or_coerced(provider, usage_case):
     """Real adapter -> accounted gateway: unverified totals never become durable spend."""
     from core.llm.providers.gigachat import GigaChatClient
     from core.llm.providers.openai_provider import OpenAICompatClient, OpenAICompatConfig
     from core.llm.providers.yandexgpt import YandexGPTClient
 
-    total = {"string_total": "10", "bool_total": True, "string_prompt": 10, "bool_completion": 10, "valid": 10}.get(usage_case)
+    total = {"string_total": "10", "bool_total": True, "string_prompt": 10, "bool_completion": 10, "numeric_strings": "10", "nondecimal_total": "10x", "valid": 10}.get(usage_case)
     if provider == "yandexgpt":
         usage: dict[str, object] = {"inputTextTokens": 6, "completionTokens": 4}
-        if usage_case == "string_prompt":
+        if usage_case in {"string_prompt", "numeric_strings"}:
             usage["inputTextTokens"] = "6"
+        if usage_case == "numeric_strings":
+            usage["completionTokens"] = "4"
         if usage_case == "bool_completion":
             usage["completionTokens"] = True
         if usage_case != "missing_total":
@@ -235,7 +237,10 @@ def test_provider_transport_usage_is_not_synthesized_or_coerced(provider, usage_
                                  api_key="unused", model="mock")
     store = MemoryEventStore()
     gateway = AccountedSyncGateway(client, event_store=store, provider=provider)
-    if usage_case == "valid":
+    verified = usage_case == "valid" or (provider == "yandexgpt" and usage_case in {
+        "string_total", "string_prompt", "numeric_strings",
+    })
+    if verified:
         assert gateway.generate_sync(request()).content == "ok"
         assert store.sum_event_payload_int(tenant_id="tenant", event_type=LLM_COMPLETED,
                                            field="total_tokens", user_id="user") == 10
