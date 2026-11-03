@@ -104,7 +104,7 @@ def is_routine_reply(action: str, payload: Mapping[str, Any]) -> bool:
             or not isinstance(recipient, str) or not recipient.strip()
             or proof.get("user_id") != recipient
             or str(payload.get("channel") or "").strip().lower() != channel
-            or (proof.get("chat_id") and str(payload.get("chat_id") or payload.get("user_id") or "") != str(proof["chat_id"]))
+            or str(payload.get("chat_id") or recipient) != str(proof.get("chat_id") or recipient)
             or (count is not None and (type(count) is not int or count != 1))):
         return False
     try:
