@@ -362,6 +362,37 @@ def test_signed_reply_proof_binds_exact_recipient_channel_and_chat():
     assert not is_routine_reply("send_message@v1", {**payload, "meta": {"inbound_user_reply": {k: v for k, v in proof.items() if k != "user_id"}}})
 
 
+
+@pytest.mark.parametrize("channel,event_id", [
+    ("telegram", 101), ("vk", "vk-event-101"), ("max", "max-event-101"),
+])
+def test_signed_reply_without_inbound_chat_cannot_target_unrelated_chat(channel, event_id):
+    """An absent inbound chat coordinate is not permission to select a new destination."""
+    with verified_inbound_reply_scope(
+        tenant_id="tenant-live", channel=channel, user_id="user-1", update_id=event_id,
+    ):
+        proof = issue_verified_reply(
+            tenant_id="tenant-live", channel=channel, user_id="user-1",
+            update_id=event_id, text="reply",
+        )
+    assert proof is not None and proof["chat_id"] == ""
+    payload = {
+        "tenant_id": "tenant-live", "user_id": "user-1", "channel": channel,
+        "text": "reply", "meta": {"inbound_user_reply": proof},
+    }
+    assert is_routine_reply("send_message@v1", payload)
+    assert is_routine_reply("send_message@v1", {**payload, "chat_id": "user-1"})
+    ledger = InMemoryActionBudgetLedger()
+    guard = ActionBudgetGuard(ledger, ActionBudget(max_cost=0, max_actions=0))
+    for other_chat in ("unrelated-room", "  ", "0"):
+        outbound = {**payload, "chat_id": other_chat}
+        assert not is_routine_reply("send_message@v1", outbound)
+        assert guard.evaluate(SafetyActionContext(
+            action="send_message@v1", tenant_id="tenant-live",
+            user_id="user-1", payload=outbound,
+        )).status == ControlStatus.BLOCK
+
+
 def test_unsigned_claim_and_untrusted_state_cannot_mint_budget_exemption():
     forged = _payload(meta={"inbound_user_reply": {
         "tenant_id": "tenant-live", "channel": "telegram", "user_id": "user-1",
