@@ -19,6 +19,7 @@ from datetime import datetime, timedelta
 from typing import Any
 
 from application.business_flows.projection import stable_id
+from shared.env_access import env_bool
 
 CANON_BUSINESS_ADMIN_FLOW = True
 CURRENCIES = {"RUB": "₽", "USD": "$", "EUR": "€", "KZT": "₸"}
@@ -397,7 +398,7 @@ RETIRE_TTL_SECONDS = 300
 
 
 def retire_enabled(env: Mapping[str, str] | None = None) -> bool:
-    return str((env if env is not None else os.environ).get(RETIRE_ENV) or "").strip().lower() in {"1", "true", "yes", "on"}
+    return env_bool(RETIRE_ENV, False, environ=env)
 
 
 def _code_hash(code: str) -> str:
