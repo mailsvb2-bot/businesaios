@@ -257,3 +257,51 @@ def test_provider_transport_usage_is_not_synthesized_or_coerced(provider, usage_
     with pytest.raises(RuntimeError, match="LLM_BUDGET_BLOCKED"):
         gateway.generate_sync(request())
     assert len(calls) == 1
+
+
+@pytest.mark.parametrize("case", ["valid", "missing_input", "missing_output", "bool_input",
+                                  "string_output", "cached_read", "cached_creation", "invalid_total"])
+def test_anthropic_provider_usage_is_measured_and_cache_fail_closed(case):
+    """Anthropic has no total_tokens; derive only from verified provider counters.
+
+    Cache token classes have different prices: block until the canonical
+    accounting boundary can attribute them separately.
+    """
+    from core.llm import AnthropicClient
+
+    usage = {"input_tokens": 6, "output_tokens": 4}
+    if case == "missing_input":
+        usage.pop("input_tokens")
+    elif case == "missing_output":
+        usage.pop("output_tokens")
+    elif case == "bool_input":
+        usage["input_tokens"] = True
+    elif case == "string_output":
+        usage["output_tokens"] = "4"
+    elif case == "cached_read":
+        usage["cache_read_input_tokens"] = 50
+    elif case == "cached_creation":
+        usage["cache_creation_input_tokens"] = 50
+    elif case == "invalid_total":
+        usage["total_tokens"] = "10"
+    calls = []
+
+    def transport(*args):
+        calls.append(args)
+        return {"usage": usage, "content": [{"type": "text", "text": "ok"}]}
+
+    client = AnthropicClient(transport=transport, base_url="https://example.invalid",
+                             api_key="unused", model="mock")
+    store = MemoryEventStore()
+    gateway = AccountedSyncGateway(client, event_store=store, provider="anthropic")
+    if case == "valid":
+        assert gateway.generate_sync(request()).content == "ok"
+        assert store.sum_event_payload_int(tenant_id="tenant", event_type=LLM_COMPLETED,
+                                           field="total_tokens", user_id="user") == 10
+    else:
+        with pytest.raises(RuntimeError, match="LLM_ACCOUNTING_UNAVAILABLE"):
+            gateway.generate_sync(request())
+        assert store.count_events(tenant_id="tenant", event_type=LLM_COMPLETED) == 0
+    with pytest.raises(RuntimeError, match="LLM_BUDGET_BLOCKED"):
+        gateway.generate_sync(request())
+    assert len(calls) == 1
