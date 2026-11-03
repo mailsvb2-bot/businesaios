@@ -81,7 +81,7 @@ def is_routine_reply(action: str, payload: Mapping[str, Any]) -> bool:
     } or any(payload.get(field) for field in (
         "recipients", "recipient_ids", "target_users", "audience", "segment_id",
         "broadcast", "bulk", "batch_id", "campaign_id", "scheduled_at",
-        "marketing", "autonomous", "proactive", "charge_amount",
+        "marketing", "autonomous", "proactive", "charge_amount", "channel_policy",
     )):
         return False
     track = payload.get("track_payload")
