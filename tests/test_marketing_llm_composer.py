@@ -36,7 +36,7 @@ class _UsageLLM:
 
 
 def test_composer_returns_text_and_caches():
-    composer = MarketingLLMComposer(MockLLMClient(fixed_text=_VALID), LLMComposerConfig(model="mock"))
+    composer = MarketingLLMComposer(MockLLMClient(fixed_text=_VALID), LLMComposerConfig(model="mock", budget_source="memory"))
     inp = _input(tenant="t1", user="u1")
     first = composer.compose_sync(inp)
     assert first
@@ -44,14 +44,14 @@ def test_composer_returns_text_and_caches():
 
 
 def test_composer_rejects_forbidden_phrase():
-    composer = MarketingLLMComposer(_UsageLLM(text=_REJECTED), LLMComposerConfig(model="mock"))
+    composer = MarketingLLMComposer(_UsageLLM(text=_REJECTED), LLMComposerConfig(model="mock", budget_source="memory"))
     assert composer.compose_sync(_input()) is None
 
 
 @pytest.mark.parametrize("async_mode", [False, True])
 @pytest.mark.asyncio
 async def test_provider_usage_is_charged_even_when_text_rejected(async_mode):
-    composer = MarketingLLMComposer(_UsageLLM(text=_REJECTED), LLMComposerConfig(model="mock"))
+    composer = MarketingLLMComposer(_UsageLLM(text=_REJECTED), LLMComposerConfig(model="mock", budget_source="memory"))
     assert (await composer.compose(_input()) if async_mode else composer.compose_sync(_input())) is None
     assert not composer._runtime.budget.can_spend(
         tenant_id="tenant", user_id="user", tokens=composer._cfg.budget.user_tokens_per_day - 6,
@@ -180,7 +180,7 @@ async def test_event_store_request_write_failure_prevents_provider_call(async_mo
 @pytest.mark.parametrize("different_scope", ["tenant", "user", "channel"])
 def test_marketing_cache_is_isolated_by_tenant_user_and_channel(different_scope):
     llm = _UsageLLM()
-    composer = MarketingLLMComposer(llm, LLMComposerConfig(model="mock"))
+    composer = MarketingLLMComposer(llm, LLMComposerConfig(model="mock", budget_source="memory"))
     inp = _input(tenant="t-cache", user="u-cache")
     assert composer.compose_sync(inp)
     assert composer.compose_sync(inp)
@@ -516,6 +516,31 @@ def test_completed_claim_reconciles_after_crash_but_uncompleted_claim_stays(comp
     assert set(store.get_setting(tenant_id="t", key=f"llm:pending:v1:{day}")["pending"]) == (
         {"new"} if expected_recovery else {"completed"}
     )
+
+@pytest.mark.parametrize("source", ["auto", "event_store", ""])
+def test_default_and_auto_budget_never_call_provider_without_durable_store(source):
+    llm = _UsageLLM()
+    with pytest.raises(RuntimeError, match="LLM_BUDGET_EVENT_STORE_UNAVAILABLE"):
+        MarketingLLMComposer(llm, LLMComposerConfig(model="mock", budget_source=source))
+    assert llm.calls == 0
+
+
+def test_real_provider_transport_never_runs_without_durable_budget():
+    from core.llm import build_openai_compat
+
+    calls = []
+    provider = build_openai_compat(base_url="https://example.invalid/v1", api_key="fake",
+                                  transport=lambda *args: calls.append(args) or {})
+    with pytest.raises(RuntimeError, match="LLM_BUDGET_EVENT_STORE_UNAVAILABLE"):
+        MarketingLLMComposer(provider, LLMComposerConfig(model="real-provider"))
+    assert calls == []
+
+
+def test_unknown_budget_source_cannot_fall_back_to_memory():
+    with pytest.raises(RuntimeError, match="LLM_BUDGET_SOURCE_INVALID"):
+        MarketingLLMComposer(_UsageLLM(), LLMComposerConfig(model="mock", budget_source="typo"),
+                             event_store=MemoryEventStore())
+
 
 def test_explicit_durable_budget_rejects_missing_store():
     with pytest.raises(RuntimeError, match="LLM_BUDGET_EVENT_STORE_UNAVAILABLE"):

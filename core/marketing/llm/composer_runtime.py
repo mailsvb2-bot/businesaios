@@ -26,12 +26,12 @@ def build_composer_runtime(*, cfg, event_store: Any = None) -> ComposerRuntime:
     limiter = TokenBucketLimiter(global_rps=cfg.global_rps, global_burst=cfg.global_burst,
                                  tenant_rps=cfg.tenant_rps, tenant_burst=cfg.tenant_burst)
     src = str(cfg.budget_source or "auto").lower()
-    if src == "event_store" and not has_durable_budget_store(event_store):
+    if src not in {"event_store", "auto", "memory"}:
+        raise RuntimeError("LLM_BUDGET_SOURCE_INVALID")
+    if src != "memory" and not has_durable_budget_store(event_store):
         raise RuntimeError("LLM_BUDGET_EVENT_STORE_UNAVAILABLE")
-    if src in {"event_store", "auto"} and event_store is not None and callable(getattr(event_store, "sum_event_payload_int", None)):
-        budget = EventStoreDailyTokenBudget(event_store=event_store, caps=cfg.budget)
-    else:
-        budget = DailyTokenBudget(cfg.budget)
+    budget = (DailyTokenBudget(cfg.budget) if src == "memory" else
+              EventStoreDailyTokenBudget(event_store=event_store, caps=cfg.budget))
     return ComposerRuntime(cache=cache, limiter=limiter, budget=budget,
                            circuit=CircuitBreaker(cfg.circuit), metrics=LLMMetrics(),
                            dedupe=MessageDedupe(DedupeConfig()))

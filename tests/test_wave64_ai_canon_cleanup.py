@@ -44,11 +44,11 @@ def test_ai_ceo_planner_delegates_to_single_canonical_builder() -> None:
 
 def test_marketing_llm_composer_exposes_public_llm_client() -> None:
     llm = _LLM()
-    composer = MarketingLLMComposer(llm, LLMComposerConfig(model="m"))
+    composer = MarketingLLMComposer(llm, LLMComposerConfig(model="m", budget_source="memory"))
     assert composer.llm_client is llm
 
 
-def test_ads_stack_prefers_public_llm_property_over_private_attr(tmp_path, monkeypatch) -> None:
+def test_ads_stack_never_injects_unaccounted_llm_client(tmp_path, monkeypatch) -> None:
     class _Composer:
         llm_client = object()
 
@@ -70,7 +70,7 @@ def test_ads_stack_prefers_public_llm_property_over_private_attr(tmp_path, monke
         logging_mod=_Log(),
         composer=_Composer(),
     )
-    assert out['campaign_builder'] is _Composer.llm_client
+    assert out['campaign_builder'] is None
 
 
 
