@@ -75,11 +75,9 @@ def _decision_contract_v2_seed(
     }
     if any(value is None for value in objective_projection.values()):
         objective_projection = None
-    risk: Any = payload.get("risk") if "risk" in payload else None
-    if risk is None:
-        risk_penalty = _finite_number(ranking.get("risk_penalty"))
-        if risk_penalty is not None:
-            risk = {"risk_penalty": risk_penalty}
+    risk: Any = payload.get("risk")
+    if risk is None and (risk_penalty := _finite_number(ranking.get("risk_penalty"))) is not None:
+        risk = {"risk_penalty": risk_penalty}
 
     baseline = state_meta.get("do_nothing_baseline")
     uncertainties = [
@@ -165,15 +163,13 @@ def build_payload(
     channel = str(session.get("channel") or "").strip().lower()
     event_id = session.get("messaging_update_id") if channel == "telegram" else session.get("transport_message_id")
     valid_event = (type(event_id) is int and event_id >= 0) if channel == "telegram" else (
-        isinstance(event_id, str) and bool(event_id.strip()) and len(event_id) <= 256
-    )
+        isinstance(event_id, str) and bool(event_id.strip()) and len(event_id) <= 256)
     state_user = str((state.get("user_id") if isinstance(state, Mapping) else getattr(state, "user_id", "")) or "")
     state_tenant = str((state.get("tenant_id") if isinstance(state, Mapping) else getattr(state, "tenant_id", "")) or "")
     tenant_matches = bool(state_tenant and str(payload.get("tenant_id") or "") == state_tenant)
     if (getattr(out, "action", "") == "send_message@v1"
             and session.get("source") in {"messaging", "customer_bot"}
-            and channel in ALL_CHANNELS and valid_event
-            and tenant_matches
+            and channel in ALL_CHANNELS and valid_event and tenant_matches
             and state_user and str(payload.get("user_id") or "") == state_user
             and str(payload.get("channel") or channel).strip().lower() == channel
             and (not session.get("chat_id") or str(payload.get("chat_id") or "") == str(session["chat_id"]))
