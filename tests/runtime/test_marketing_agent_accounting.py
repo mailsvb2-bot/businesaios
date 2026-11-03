@@ -191,21 +191,29 @@ def test_budget_over_cap_handles_legacy_empty_pending_state():
 
 
 @pytest.mark.parametrize("provider", ["openai_compat", "gigachat", "yandexgpt"])
-@pytest.mark.parametrize("usage_case", ["missing_total", "string_total", "bool_total", "valid"])
+@pytest.mark.parametrize("usage_case", ["missing_total", "string_total", "bool_total", "string_prompt", "bool_completion", "valid"])
 def test_provider_transport_usage_is_not_synthesized_or_coerced(provider, usage_case):
     """Real adapter -> accounted gateway: unverified totals never become durable spend."""
     from core.llm.providers.gigachat import GigaChatClient
     from core.llm.providers.openai_provider import OpenAICompatClient, OpenAICompatConfig
     from core.llm.providers.yandexgpt import YandexGPTClient
 
-    total = {"string_total": "10", "bool_total": True, "valid": 10}.get(usage_case)
+    total = {"string_total": "10", "bool_total": True, "string_prompt": 10, "bool_completion": 10, "valid": 10}.get(usage_case)
     if provider == "yandexgpt":
         usage: dict[str, object] = {"inputTextTokens": 6, "completionTokens": 4}
+        if usage_case == "string_prompt":
+            usage["inputTextTokens"] = "6"
+        if usage_case == "bool_completion":
+            usage["completionTokens"] = True
         if usage_case != "missing_total":
             usage["totalTokens"] = total
         response = {"result": {"usage": usage, "alternatives": [{"message": {"text": "ok"}}]}}
     else:
         usage = {"prompt_tokens": 6, "completion_tokens": 4}
+        if usage_case == "string_prompt":
+            usage["prompt_tokens"] = "6"
+        if usage_case == "bool_completion":
+            usage["completion_tokens"] = True
         if usage_case != "missing_total":
             usage["total_tokens"] = total
         response = {"usage": usage, "choices": [{"message": {"content": "ok"}}]}
