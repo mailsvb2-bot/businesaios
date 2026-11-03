@@ -19,7 +19,7 @@ from core.safety.operational.action_registry import build_default_operational_ac
 from core.safety.operational.operational_budget_accountant import OperationalBudgetAccountant
 from runtime import safety_controls
 
-REPLY_PROOF = {"channel": "telegram", "update_id": 462236768, "tenant_id": "tenant-live"}
+REPLY_PROOF = {"channel": "telegram", "update_id": 462236768, "tenant_id": "tenant-live", "user_id": "user-1"}
 
 
 def _payload(**kw):
@@ -301,3 +301,31 @@ def test_null_mapping_identity_cannot_be_signed_as_literal_none():
             product_id=None, domain=None, product_version=None, actor_id="user-1",
         )
         assert not is_routine_reply("send_message@v1", payload)
+
+
+def test_signed_reply_proof_binds_exact_recipient_channel_and_chat():
+    state = SimpleNamespace(
+        tenant_id="tenant-live", user_id="user-1", meta={}, product={},
+        session={"source": "messaging", "channel": "vk",
+                 "transport_message_id": "provider-event-42", "chat_id": "room-42"},
+    )
+    _, payload = build_payload(
+        state=state,
+        out=ProposedAction("send_message@v1", {
+            "user_id": "user-1", "text": "reply", "channel": "vk", "chat_id": "room-42",
+        }),
+        pinned_world_model_meta={}, tenant_id="tenant-live",
+        product_id=None, domain=None, product_version=None, actor_id="user-1",
+    )
+    proof = payload["meta"]["inbound_user_reply"]
+    assert proof["user_id"] == "user-1" and proof["chat_id"] == "room-42"
+    assert is_routine_reply("send_message@v1", payload)
+    for altered in (
+        {**payload, "user_id": "another-recipient"},
+        {**payload, "channel": "max"},
+        {**payload, "chat_id": "another-room"},
+        {**payload, "meta": {"inbound_user_reply": {**proof, "user_id": "another-recipient"}}},
+        {**payload, "meta": {"inbound_user_reply": {**proof, "chat_id": "another-room"}}},
+        {**payload, "meta": {"inbound_user_reply": {key: value for key, value in proof.items() if key != "user_id"}}},
+    ):
+        assert not is_routine_reply("send_message@v1", altered)
