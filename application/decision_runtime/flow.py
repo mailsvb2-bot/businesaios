@@ -6,8 +6,8 @@ from typing import Any
 
 from application.decision_runtime.envelope_builder import bind_product_metadata, build_decision_envelope
 from application.decision_state.world_model_metadata import attach_world_model_metadata
-from contracts.messaging_channels import ALL_CHANNELS
 from core.ai.action_ranking import OBJECTIVE_DIMENSIONS
+from core.safety.controls.action_budget.models import is_routine_reply, issue_verified_reply
 
 
 def _mapping(value: object) -> dict[str, Any]:
@@ -162,21 +162,24 @@ def build_payload(
     session = _mapping(state.get("session") if isinstance(state, Mapping) else getattr(state, "session", {}))
     channel = str(session.get("channel") or "").strip().lower()
     event_id = session.get("messaging_update_id") if channel == "telegram" else session.get("transport_message_id")
-    valid_event = (type(event_id) is int and event_id >= 0) if channel == "telegram" else (
-        isinstance(event_id, str) and bool(event_id.strip()) and len(event_id) <= 256)
-    state_user = str((state.get("user_id") if isinstance(state, Mapping) else getattr(state, "user_id", "")) or "")
-    state_tenant = str((state.get("tenant_id") if isinstance(state, Mapping) else getattr(state, "tenant_id", "")) or "")
-    tenant_matches = bool(state_tenant and str(payload.get("tenant_id") or "") == state_tenant)
+    state_user = (state.get("user_id") if isinstance(state, Mapping) else getattr(state, "user_id", None))
+    state_tenant = (state.get("tenant_id") if isinstance(state, Mapping) else getattr(state, "tenant_id", None))
     if (getattr(out, "action", "") == "send_message@v1"
             and session.get("source") in {"messaging", "customer_bot"}
-            and channel in ALL_CHANNELS and valid_event and tenant_matches
-            and state_user and str(payload.get("user_id") or "") == state_user
-            and str(payload.get("channel") or channel).strip().lower() == channel
-            and (not session.get("chat_id") or str(payload.get("chat_id") or "") == str(session["chat_id"]))
-            and payload.get("recipient_count") in (None, 1)):
-        meta_block["inbound_user_reply"] = {
-            "channel": channel, "update_id": event_id, "tenant_id": state_tenant,
-            "user_id": state_user, **({"chat_id": str(session["chat_id"])} if session.get("chat_id") else {})}
+            and state_user is not None and state_tenant is not None):
+        proof = issue_verified_reply(
+            tenant_id=str(state_tenant), channel=channel, user_id=str(state_user),
+            update_id=event_id, chat_id=str(session.get("chat_id") or session.get("messaging_chat_id") or ""),
+            text=str(payload.get("text") or ""),
+        )
+        if proof:
+            candidate = dict(payload)
+            candidate.setdefault("channel", channel)
+            if session.get("chat_id"):
+                candidate.setdefault("chat_id", str(session["chat_id"]))
+            if is_routine_reply("send_message@v1", {**candidate, "meta": {"inbound_user_reply": proof}}):
+                payload.update({key: candidate[key] for key in ("channel", "chat_id") if key in candidate})
+                meta_block["inbound_user_reply"] = proof
     canonical_goal_id = _canonical_goal_identity(state)
     if canonical_goal_id:
         payload_goal_id = str(payload.get("goal_id") or "").strip()

@@ -7,6 +7,7 @@ from dataclasses import dataclass, field
 from application.business_autonomy.provider_admin_contract import ProviderDefinition
 from application.business_autonomy.provider_runtime_contract import ProviderWebhookIngressResult
 from contracts.messaging_event_identity import MessageDirection, MessageIdentity
+from core.safety.controls.action_budget.models import verified_inbound_reply_scope
 from runtime.business_autonomy.provider_incident_registry import FileProviderIncidentRegistry
 from runtime.business_autonomy.provider_runtime_audit import ProviderRuntimeAuditRecorder
 from runtime.business_autonomy.provider_runtime_export_bridge import ProviderRuntimeExportBridge
@@ -196,7 +197,16 @@ class ProviderInboundWebhookService:
                                                       str(pin.get('text') or ''))
             except Exception as exc:  # attribution must never break inbound
                 promotion = {'error': exc.__class__.__name__}
-        inbound_result = self.inbound_processor.process(handoff=handoff) if decision.accepted and self.inbound_processor is not None and handoff else {}
+        inbound_result = {}
+        if decision.accepted and self.inbound_processor is not None and handoff:
+            inbound = dict(handoff.get("inbound_message") or {})
+            with verified_inbound_reply_scope(
+                tenant_id=str(tenant_id), channel=str(inbound.get("channel") or ""),
+                user_id=str(inbound.get("user_id") or ""),
+                update_id=str(inbound.get("transport_message_id") or ""),
+                chat_id=str(inbound.get("chat_id") or ""),
+            ):
+                inbound_result = self.inbound_processor.process(handoff=handoff)
         if decision.accepted and (not handoff or inbound_result):
             self.complete(provider=provider, tenant_id=tenant_id, business_id=business_id, event_key=event_key, payload_digest=payload_digest, owner_id=decision.owner_id, topic=topic)
         ack_required = provider.provider_key == 'vk_messaging' and str(topic or '') == 'message_event'

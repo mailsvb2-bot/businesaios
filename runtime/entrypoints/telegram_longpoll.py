@@ -18,6 +18,7 @@ from typing import Any
 
 from application.business_flows.bot_gateway import SESSION_SOURCE as CUSTOMER_SOURCE
 from core.ai.world_state import WorldStateV1
+from core.safety.controls.action_budget.models import verified_inbound_reply_scope
 from runtime.boot.env import (
     env_bool,
     env_int,
@@ -243,11 +244,11 @@ def _execute_update(
 ) -> Any:
     raw_update_id = update.get("update_id")
     state = _world_state_from_update(update, transport=transport)
-    result = execute_runtime_decision(
-        issuer=core,
-        executor=executor,
-        state=state,
-    )
+    with verified_inbound_reply_scope(
+        tenant_id=str(state.tenant_id), channel="telegram", user_id=str(state.user_id),
+        update_id=raw_update_id, chat_id=str((state.session or {}).get("messaging_chat_id") or ""),
+    ):
+        result = execute_runtime_decision(issuer=core, executor=executor, state=state)
     _append_event(
         event_log,
         event_type="telegram_update_executed",
@@ -263,7 +264,11 @@ def _execute_update(
 def _customer_dispatch(*, core: Any, executor: Any, event_log: Any):
     def dispatch(update: dict[str, Any], route: Any) -> None:
         state = _world_state_from_update(update, transport="customer_bot", customer_route=route)
-        result = execute_runtime_decision(issuer=core, executor=executor, state=state)
+        with verified_inbound_reply_scope(
+            tenant_id=str(state.tenant_id), channel="telegram", user_id=str(state.user_id),
+            update_id=update.get("update_id"), chat_id=str((state.session or {}).get("messaging_chat_id") or ""),
+        ):
+            result = execute_runtime_decision(issuer=core, executor=executor, state=state)
         _append_event(event_log, event_type="customer_bot_update_executed",
                       payload={"bot_id": route.external_bot_id, "update_id": update.get("update_id"),
                                "ok": bool(getattr(result, "ok", False))})  # fmt: skip

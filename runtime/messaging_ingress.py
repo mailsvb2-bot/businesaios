@@ -186,244 +186,32 @@ def _provider_event(
     )
 
 
-def whatsapp_payload_to_messaging_event(
-    payload: dict[str, Any],
-    *,
-    tenant_id: str,
-    product_name: str = "BusinesAIOS",
-    timezone: str = "Europe/Amsterdam",
-) -> MessagingIngressEvent:
-    return _provider_event(
-        "whatsapp",
-        payload,
-        tenant_id=tenant_id,
-        product_name=product_name,
-        timezone=timezone,
-    )
+def _provider_adapter(channel: str):
+    """Compatibility names sharing the one canonical provider normalization path."""
+    def adapter(payload: dict[str, Any], *, tenant_id: str,
+                product_name: str = "BusinesAIOS", timezone: str = "Europe/Amsterdam") -> MessagingIngressEvent:
+        return _provider_event(channel, payload, tenant_id=tenant_id,
+                               product_name=product_name, timezone=timezone)
+    adapter.__name__ = f"{channel.replace('_', '')}_payload_to_messaging_event"
+    adapter.__qualname__ = adapter.__name__
+    return adapter
 
 
-def vk_payload_to_messaging_event(
-    payload: dict[str, Any],
-    *,
-    tenant_id: str,
-    product_name: str = "BusinesAIOS",
-    timezone: str = "Europe/Amsterdam",
-) -> MessagingIngressEvent:
-    return _provider_event(
-        "vk",
-        payload,
-        tenant_id=tenant_id,
-        product_name=product_name,
-        timezone=timezone,
-    )
-
-
-def max_payload_to_messaging_event(
-    payload: dict[str, Any],
-    *,
-    tenant_id: str,
-    product_name: str = "BusinesAIOS",
-    timezone: str = "Europe/Amsterdam",
-) -> MessagingIngressEvent:
-    return _provider_event(
-        "max",
-        payload,
-        tenant_id=tenant_id,
-        product_name=product_name,
-        timezone=timezone,
-    )
-
-
-def slack_payload_to_messaging_event(
-    payload: dict[str, Any],
-    *,
-    tenant_id: str,
-    product_name: str = "BusinesAIOS",
-    timezone: str = "Europe/Amsterdam",
-) -> MessagingIngressEvent:
-    return _provider_event(
-        "slack",
-        payload,
-        tenant_id=tenant_id,
-        product_name=product_name,
-        timezone=timezone,
-    )
-
-
-def discord_payload_to_messaging_event(
-    payload: dict[str, Any],
-    *,
-    tenant_id: str,
-    product_name: str = "BusinesAIOS",
-    timezone: str = "Europe/Amsterdam",
-) -> MessagingIngressEvent:
-    return _provider_event(
-        "discord",
-        payload,
-        tenant_id=tenant_id,
-        product_name=product_name,
-        timezone=timezone,
-    )
-
-
-def viber_payload_to_messaging_event(
-    payload: dict[str, Any],
-    *,
-    tenant_id: str,
-    product_name: str = "BusinesAIOS",
-    timezone: str = "Europe/Amsterdam",
-) -> MessagingIngressEvent:
-    return _provider_event(
-        "viber",
-        payload,
-        tenant_id=tenant_id,
-        product_name=product_name,
-        timezone=timezone,
-    )
-
-
-def sms_payload_to_messaging_event(
-    payload: dict[str, Any],
-    *,
-    tenant_id: str,
-    product_name: str = "BusinesAIOS",
-    timezone: str = "Europe/Amsterdam",
-) -> MessagingIngressEvent:
-    return _provider_event(
-        "sms",
-        payload,
-        tenant_id=tenant_id,
-        product_name=product_name,
-        timezone=timezone,
-    )
-
-
-def email_payload_to_messaging_event(
-    payload: dict[str, Any],
-    *,
-    tenant_id: str,
-    product_name: str = "BusinesAIOS",
-    timezone: str = "Europe/Amsterdam",
-) -> MessagingIngressEvent:
-    return _provider_event(
-        "email",
-        payload,
-        tenant_id=tenant_id,
-        product_name=product_name,
-        timezone=timezone,
-    )
-
-
-def webchat_payload_to_messaging_event(
-    payload: dict[str, Any],
-    *,
-    tenant_id: str,
-    product_name: str = "BusinesAIOS",
-    timezone: str = "Europe/Amsterdam",
-) -> MessagingIngressEvent:
-    return _provider_event(
-        "web_chat",
-        payload,
-        tenant_id=tenant_id,
-        product_name=product_name,
-        timezone=timezone,
-    )
-
-
-def instagram_payload_to_messaging_event(
-    payload: dict[str, Any],
-    *,
-    tenant_id: str,
-    product_name: str = "BusinesAIOS",
-    timezone: str = "Europe/Amsterdam",
-) -> MessagingIngressEvent:
-    return _provider_event(
-        "instagram",
-        payload,
-        tenant_id=tenant_id,
-        product_name=product_name,
-        timezone=timezone,
-    )
-
-
-def messenger_payload_to_messaging_event(
-    payload: dict[str, Any],
-    *,
-    tenant_id: str,
-    product_name: str = "BusinesAIOS",
-    timezone: str = "Europe/Amsterdam",
-) -> MessagingIngressEvent:
-    return _provider_event(
-        "messenger",
-        payload,
-        tenant_id=tenant_id,
-        product_name=product_name,
-        timezone=timezone,
-    )
-
-
-def line_payload_to_messaging_event(
-    payload: dict[str, Any],
-    *,
-    tenant_id: str,
-    product_name: str = "BusinesAIOS",
-    timezone: str = "Europe/Amsterdam",
-) -> MessagingIngressEvent:
-    return _provider_event(
-        "line",
-        payload,
-        tenant_id=tenant_id,
-        product_name=product_name,
-        timezone=timezone,
-    )
-
-
-def wechat_payload_to_messaging_event(
-    payload: dict[str, Any],
-    *,
-    tenant_id: str,
-    product_name: str = "BusinesAIOS",
-    timezone: str = "Europe/Amsterdam",
-) -> MessagingIngressEvent:
-    return _provider_event(
-        "wechat",
-        payload,
-        tenant_id=tenant_id,
-        product_name=product_name,
-        timezone=timezone,
-    )
-
-
-def kakaotalk_payload_to_messaging_event(
-    payload: dict[str, Any],
-    *,
-    tenant_id: str,
-    product_name: str = "BusinesAIOS",
-    timezone: str = "Europe/Amsterdam",
-) -> MessagingIngressEvent:
-    return _provider_event(
-        "kakaotalk",
-        payload,
-        tenant_id=tenant_id,
-        product_name=product_name,
-        timezone=timezone,
-    )
-
-
-def api_payload_to_messaging_event(
-    payload: dict[str, Any],
-    *,
-    tenant_id: str,
-    product_name: str = "BusinesAIOS",
-    timezone: str = "Europe/Amsterdam",
-) -> MessagingIngressEvent:
-    return _provider_event(
-        "api",
-        payload,
-        tenant_id=tenant_id,
-        product_name=product_name,
-        timezone=timezone,
-    )
+whatsapp_payload_to_messaging_event = _provider_adapter("whatsapp")
+vk_payload_to_messaging_event = _provider_adapter("vk")
+max_payload_to_messaging_event = _provider_adapter("max")
+slack_payload_to_messaging_event = _provider_adapter("slack")
+discord_payload_to_messaging_event = _provider_adapter("discord")
+viber_payload_to_messaging_event = _provider_adapter("viber")
+sms_payload_to_messaging_event = _provider_adapter("sms")
+email_payload_to_messaging_event = _provider_adapter("email")
+webchat_payload_to_messaging_event = _provider_adapter("web_chat")
+instagram_payload_to_messaging_event = _provider_adapter("instagram")
+messenger_payload_to_messaging_event = _provider_adapter("messenger")
+line_payload_to_messaging_event = _provider_adapter("line")
+wechat_payload_to_messaging_event = _provider_adapter("wechat")
+kakaotalk_payload_to_messaging_event = _provider_adapter("kakaotalk")
+api_payload_to_messaging_event = _provider_adapter("api")
 
 
 __all__ = [
