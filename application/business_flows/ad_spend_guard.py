@@ -581,7 +581,7 @@ def yandex_provider(factory: Callable[[], AdProviderPort], env: Mapping[str, str
     DryRunAdProvider (no external call) is returned.
     """
     e = env if env is not None else os.environ
-    if not _flag(CONNECTIONS_ENV, e):
+    if not env_bool(CONNECTIONS_ENV, False, environ=e):
         raise RuntimeError("advertising account connections are disabled")
     if not str(e.get("YANDEX_DIRECT_CLIENT_ID") or "").strip():
         raise RuntimeError("Yandex Direct OAuth application is not configured")
