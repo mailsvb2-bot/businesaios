@@ -180,7 +180,8 @@ def build_payload(
             and payload.get("recipient_count") in (None, 1)):
         meta_block["inbound_user_reply"] = {
             "channel": channel, "update_id": event_id,
-            "tenant_id": state_tenant,
+            "tenant_id": state_tenant, "user_id": state_user,
+            **({"chat_id": str(session["chat_id"])} if session.get("chat_id") else {}),
         }
     canonical_goal_id = _canonical_goal_identity(state)
     if canonical_goal_id:
