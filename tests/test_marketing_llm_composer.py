@@ -571,3 +571,31 @@ def test_boot_llm_cannot_fall_back_to_process_local_budget(monkeypatch):
     composer = boot.build_marketing_llm_composer(settings=settings, event_store=MemoryEventStore(), logger=Logger())
     assert isinstance(composer._runtime.budget, EventStoreDailyTokenBudget)
     assert composer.compose_sync(_input(tenant="t-boot", user="u-boot", message_id="boot-1"))
+
+@pytest.mark.parametrize("provider", ["openai_compat", "anthropic", "gigachat", "yandexgpt"])
+def test_explicit_memory_budget_never_allows_live_provider_transport(provider):
+    """Explicit memory mode must not be an escape hatch for paid provider clients."""
+    from core.llm.providers import AnthropicClient, GigaChatClient, OpenAICompatClient, YandexGPTClient
+    from core.llm.providers.openai_provider import OpenAICompatConfig
+
+    called = []
+    def transport(*args):
+        called.append(args)
+        return {}
+    clients = {
+        "openai_compat": OpenAICompatClient(OpenAICompatConfig(
+            base_url="https://example.invalid", api_key="unused", transport=transport,
+        )),
+        "anthropic": AnthropicClient(
+            transport=transport, base_url="https://example.invalid", api_key="unused", model="mock",
+        ),
+        "gigachat": GigaChatClient(
+            transport=transport, base_url="https://example.invalid", api_key="unused", model="mock",
+        ),
+        "yandexgpt": YandexGPTClient(
+            transport=transport, base_url="https://example.invalid", api_key="unused", model="mock",
+        ),
+    }
+    with pytest.raises(RuntimeError, match="LLM_BUDGET_EVENT_STORE_UNAVAILABLE"):
+        MarketingLLMComposer(clients[provider], LLMComposerConfig(model="mock", budget_source="memory"))
+    assert called == []
