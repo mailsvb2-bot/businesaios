@@ -87,10 +87,11 @@ def _extract_usage(raw: dict[str, Any]) -> LLMUsage | None:
     usage = raw.get("usage")
     if not isinstance(usage, dict):
         return None
-    pt = int(usage.get("input_tokens") or usage.get("prompt_tokens") or 0)
-    ct = int(usage.get("output_tokens") or usage.get("completion_tokens") or 0)
-    tt = int(usage.get("total_tokens") or (pt + ct) or 0)
-    return LLMUsage(prompt_tokens=pt, completion_tokens=ct, total_tokens=tt)
+    values = (usage.get("input_tokens", usage.get("prompt_tokens")), usage.get("output_tokens", usage.get("completion_tokens")))
+    cached = (usage.get("cache_creation_input_tokens", 0), usage.get("cache_read_input_tokens", 0))
+    if any(type(v) is not int or v < 0 for v in values + cached) or any(cached) or usage.get("cache_creation"):
+        return None
+    return LLMUsage(*values, total_tokens=usage.get("total_tokens", sum(values)))
 
 
 def _extract_finish(raw: dict[str, Any]) -> str:
