@@ -35,7 +35,8 @@ def is_routine_reply(action: str, payload: Mapping[str, Any]) -> bool:
         return False
     if proof.get("chat_id") and str(payload.get("chat_id") or "") != str(proof["chat_id"]):
         return False
-    if payload.get("recipient_count") not in (None, 1):
+    recipient_count = payload.get("recipient_count")
+    if recipient_count is not None and (type(recipient_count) is not int or recipient_count != 1):
         return False
     try:
         return float(payload.get("estimated_cost") or 0.0) == 0.0
