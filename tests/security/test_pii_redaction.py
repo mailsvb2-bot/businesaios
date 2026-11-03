@@ -65,7 +65,7 @@ def test_payload_redactor_masks_embedded_secrets_without_wiping_safe_text() -> N
     samples = (
         '123456789:AAH-abcdefghijklmnopqrstuvwxyz0123456',
         'Authorization: Bearer eyJhbGciOiJIUzI1NiJ9.canarypayload.canarysig',
-        'sk-' + 'abcdefghijklmnop1234', 'password=hunter2-canary', 'Cookie: sid=cookiecanaryA; refresh=cookiecanaryB', 'Authorization: Basic basiccanarypayload',
+        'sk-' + 'abcdefghijklmnop1234', 'password=hunter2-canary', 'Cookie: sid=cookiecanaryA; refresh=cookiecanaryB', 'Authorization: Basic basiccanarypayload', 'Bearer x', 'Bearer abc123',
         'live_AbCdEfGhIjKlMnOpQrStUv',
         '{"password": "hunter2-canary", "authorization": "Basic dXNlcjpwYXNz"}',
         '{"client_secret": "opaque-secret", "refresh_token": "opaque-refresh"}',
