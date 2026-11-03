@@ -72,6 +72,6 @@ def test_payload_redactor_masks_embedded_secrets_without_wiping_safe_text() -> N
     )
     out = PayloadRedactor().redact({'notes': samples, 'safe': 'public text'})
     assert all(sample not in repr(out) for sample in samples)
-    assert not any(secret in repr(out) for secret in ('hunter2-canary', 'dXNlcjpwYXNz', 'opaque-secret', 'opaque-refresh'))
+    assert not any(secret in repr(out) for secret in ('hunter2-canary', 'dXNlcjpwYXNz', 'opaque-secret', 'opaque-refresh', 'canarypayload', 'canarysig'))
     assert all('***REDACTED***' in note for note in out['notes'])
     assert out['safe'] == 'public text'
