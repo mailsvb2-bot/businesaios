@@ -19,6 +19,8 @@ from datetime import UTC, datetime, timedelta
 from typing import Any
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
+from shared.env_access import env_bool
+
 REPORT_TZ_ENV = "YANDEX_DIRECT_REPORT_TIMEZONE"
 SNAPSHOT_VALIDITY = timedelta(seconds=30)
 MANAGED_PREFIX = "bai-managed:"
@@ -308,7 +310,7 @@ def consent_view(payloads: list[dict[str, Any]], auths: Iterable[Authorization],
 
 
 def mutations_enabled(env: dict[str, str] | None = None) -> bool:
-    return str((env if env is not None else os.environ).get(MUTATIONS_ENV) or "").strip().lower() in {"1", "true", "yes", "on"}
+    return env_bool(MUTATIONS_ENV, False, environ=env)
 
 
 def queue_operation(payloads: list[dict[str, Any]], auth: Authorization, kind: str, *,
@@ -344,8 +346,6 @@ CONNECTIONS_ENV = "BUSINESAIOS_AD_CONNECTIONS"
 DEFAULT_MAX_SPEND_MINOR, MICROS_PER_MINOR = 10_000, 10_000
 MAX_ATTEMPTS, LEASE_SECONDS = 8, 60
 _REF = re.compile(r"^(env|vault):[A-Za-z_][A-Za-z0-9_]{0,63}$")
-_TRUE = {"1", "true", "yes", "on"}
-
 
 @dataclass(frozen=True)
 class BudgetReadout:
@@ -411,12 +411,8 @@ class DryRunAdProvider(AdProviderPort):
         return {"dry_run": True, "action": "suspend_ad"}
 
 
-def _flag(name: str, env: Mapping[str, str] | None) -> bool:
-    return str((env if env is not None else os.environ).get(name) or "").strip().lower() in _TRUE
-
-
 def provider_enabled(env: Mapping[str, str] | None = None) -> bool:
-    return _flag(PROVIDER_ENV, env)
+    return env_bool(PROVIDER_ENV, False, environ=env)
 
 
 def utc_now() -> datetime:
@@ -585,7 +581,7 @@ def yandex_provider(factory: Callable[[], AdProviderPort], env: Mapping[str, str
     DryRunAdProvider (no external call) is returned.
     """
     e = env if env is not None else os.environ
-    if not _flag(CONNECTIONS_ENV, e):
+    if not env_bool(CONNECTIONS_ENV, False, environ=e):
         raise RuntimeError("advertising account connections are disabled")
     if not str(e.get("YANDEX_DIRECT_CLIENT_ID") or "").strip():
         raise RuntimeError("Yandex Direct OAuth application is not configured")

@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 """Canonical single source of truth for environment access helpers.
 
 This module is intentionally outside ``runtime`` so config/core imports do not
@@ -7,7 +5,10 @@ need to initialize the runtime package just to parse environment variables.
 That avoids runtime↔config import cycles while still keeping one parsing layer.
 """
 
+from __future__ import annotations
+
 import os
+from collections.abc import Mapping
 from pathlib import Path
 
 
@@ -37,8 +38,8 @@ def env_float(name: str, default: float, *, lo: float | None = None, hi: float |
     return value
 
 
-def env_bool(name: str, default: bool = False) -> bool:
-    raw = os.environ.get(name)
+def env_bool(name: str, default: bool = False, *, environ: Mapping[str, str] | None = None) -> bool:
+    raw = (os.environ if environ is None else environ).get(name)
     if raw is None:
         return bool(default)
     return str(raw).strip().lower() in {"1", "true", "yes", "y", "on"}
