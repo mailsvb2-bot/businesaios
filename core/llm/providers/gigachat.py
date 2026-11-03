@@ -61,10 +61,10 @@ def _extract_usage(raw: dict[str, Any]) -> LLMUsage | None:
     usage = raw.get("usage")
     if not isinstance(usage, dict):
         return None
-    pt = usage.get("prompt_tokens", usage.get("input_tokens", 0))
-    ct = usage.get("completion_tokens", usage.get("output_tokens", 0))
+    pt = usage.get("prompt_tokens", usage.get("input_tokens"))
+    ct = usage.get("completion_tokens", usage.get("output_tokens"))
     tt = usage.get("total_tokens", 0)
-    return LLMUsage(prompt_tokens=pt, completion_tokens=ct, total_tokens=tt)
+    return LLMUsage(prompt_tokens=pt, completion_tokens=ct, total_tokens=tt) if pt is not None and ct is not None else None
 
 
 def _extract_finish(raw: dict[str, Any]) -> str:
