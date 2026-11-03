@@ -559,6 +559,7 @@ def test_authenticated_reply_cannot_exempt_bulk_marketing_or_paid_effects(key, v
     {"track_payload": {"campaign_id": "campaign-1"}},
     {"track_payload": {"marketing_variant": "variant-b"}},
     {"track_payload": {"recipients": ["user-1", "user-2"]}},
+    {"channel_policy": {"fallback_channels": ["telegram", "max"]}},
 ])
 def test_signed_reply_does_not_exempt_marketing_routing_metadata(extra):
     assert not is_routine_reply("send_message@v1", _payload(**extra))
