@@ -104,9 +104,9 @@ def _extract_usage(data: dict[str, Any]) -> LLMUsage | None:
     u = data.get("usage")
     if not isinstance(u, dict):
         return None
-    pt = int(u.get("prompt_tokens") or u.get("input_tokens") or 0)
-    ct = int(u.get("completion_tokens") or u.get("output_tokens") or 0)
-    tt = int(u.get("total_tokens") or (pt + ct) or 0)
+    pt = u.get("prompt_tokens", u.get("input_tokens", 0))
+    ct = u.get("completion_tokens", u.get("output_tokens", 0))
+    tt = u.get("total_tokens", 0)
     return LLMUsage(prompt_tokens=pt, completion_tokens=ct, total_tokens=tt)
 
 
