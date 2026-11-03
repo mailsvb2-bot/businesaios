@@ -189,17 +189,18 @@ def test_budget_over_cap_handles_legacy_empty_pending_state():
     budget_store.set_setting(tenant_id="tenant", key=f"llm:pending:v1:{budget._day()}", value={})
     assert budget.reserve(tenant_id="tenant", user_id="admin", tokens=BudgetCaps().user_tokens_per_day + 1, request_id="oversized") is None
 
+
 @pytest.mark.parametrize("provider", ["openai_compat", "gigachat", "yandexgpt"])
 @pytest.mark.parametrize("usage_case", ["missing_total", "string_total", "bool_total", "valid"])
 def test_provider_transport_usage_is_not_synthesized_or_coerced(provider, usage_case):
     """Real adapter -> accounted gateway: unverified totals never become durable spend."""
-    from core.llm.providers.openai_provider import OpenAICompatClient, OpenAICompatConfig
     from core.llm.providers.gigachat import GigaChatClient
+    from core.llm.providers.openai_provider import OpenAICompatClient, OpenAICompatConfig
     from core.llm.providers.yandexgpt import YandexGPTClient
 
     total = {"string_total": "10", "bool_total": True, "valid": 10}.get(usage_case)
     if provider == "yandexgpt":
-        usage = {"inputTextTokens": 6, "completionTokens": 4}
+        usage: dict[str, object] = {"inputTextTokens": 6, "completionTokens": 4}
         if usage_case != "missing_total":
             usage["totalTokens"] = total
         response = {"result": {"usage": usage, "alternatives": [{"message": {"text": "ok"}}]}}
@@ -209,6 +210,7 @@ def test_provider_transport_usage_is_not_synthesized_or_coerced(provider, usage_
             usage["total_tokens"] = total
         response = {"usage": usage, "choices": [{"message": {"content": "ok"}}]}
     calls = []
+
     def transport(*args):
         calls.append(args)
         return response
