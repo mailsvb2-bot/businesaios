@@ -19,6 +19,8 @@ from collections.abc import Mapping
 from dataclasses import dataclass, field, replace
 from datetime import UTC, datetime
 
+from shared.env_access import env_bool
+
 CANON_VISUAL_CREATIVES = True
 STYLES = {
     "photo": "реалистичная фотография, естественный свет, живые эмоции",
@@ -222,7 +224,7 @@ def video_generation_mode(env: Mapping[str, str] | None = None, *, country_code:
     e = env if env is not None else os.environ
     if str(country_code or e.get("VISUAL_DEPLOYMENT_COUNTRY") or "RU").strip().upper() != "RU":
         return "unavailable"
-    return "motion" if str(e.get(VIDEO_ENV) or "").strip().lower() in {"1", "true", "yes", "on"} else "unavailable"
+    return "motion" if env_bool(VIDEO_ENV, False, environ=e) else "unavailable"
 
 
 def freeze_video_payload(*, request: str, brand_context: str = "", country_code: str = "RU", preferred_provider: str = "",
