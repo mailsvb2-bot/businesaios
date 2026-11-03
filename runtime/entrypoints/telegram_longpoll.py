@@ -18,7 +18,7 @@ from typing import Any
 
 from application.business_flows.bot_gateway import SESSION_SOURCE as CUSTOMER_SOURCE
 from core.ai.world_state import WorldStateV1
-from core.safety.controls.action_budget.models import verified_inbound_reply_scope
+from runtime.safety import verified_inbound_reply_scope
 from runtime.boot.env import (
     env_bool,
     env_int,
