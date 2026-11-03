@@ -7,7 +7,7 @@ from dataclasses import dataclass, field
 from application.business_autonomy.provider_admin_contract import ProviderDefinition
 from application.business_autonomy.provider_runtime_contract import ProviderWebhookIngressResult
 from contracts.messaging_event_identity import MessageDirection, MessageIdentity
-from core.safety.controls.action_budget.models import verified_inbound_reply_scope
+from runtime.safety import verified_inbound_reply_scope
 from runtime.business_autonomy.provider_incident_registry import FileProviderIncidentRegistry
 from runtime.business_autonomy.provider_runtime_audit import ProviderRuntimeAuditRecorder
 from runtime.business_autonomy.provider_runtime_export_bridge import ProviderRuntimeExportBridge
