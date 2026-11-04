@@ -90,3 +90,23 @@ def test_telegram_webhook_app_accepts_valid_secret(monkeypatch):
 
     assert response.status_code == 200
     assert response.json() == {"ok": True}
+
+def test_telegram_webhook_fails_closed_without_configured_secret(monkeypatch):
+    _configure_webhook(monkeypatch)
+    monkeypatch.setenv("TELEGRAM_WEBHOOK_ENABLED", "0")
+    monkeypatch.setenv("TELEGRAM_WEBHOOK_SECRET", "")
+    client = TestClient(_build_app())
+    for headers in ({}, {"X-Telegram-Bot-Api-Secret-Token": "attacker-token"}):
+        response = client.post("/telegram/webhook", headers=headers, json={"update_id": 1})
+        assert response.status_code == 401
+
+
+def test_telegram_webhook_rejects_incorrect_nonempty_secret(monkeypatch):
+    _configure_webhook(monkeypatch)
+    client = TestClient(_build_app())
+    response = client.post(
+        "/telegram/webhook",
+        headers={"X-Telegram-Bot-Api-Secret-Token": "wrong-secret"},
+        json={"update_id": 1},
+    )
+    assert response.status_code == 401
