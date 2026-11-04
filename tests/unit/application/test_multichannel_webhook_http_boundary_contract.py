@@ -133,3 +133,32 @@ def test_public_http_rejects_pending_single_event_replay_without_handoff() -> No
         assert handlers.calls == 1
         if not is_safe:
             assert response.json()["detail"] == "provider_webhook_processing_incomplete"
+
+
+def test_unsafe_discord_interaction_replay_cannot_bypass_http_503() -> None:
+    from fastapi import APIRouter, FastAPI
+    from fastapi.testclient import TestClient
+
+    from adapters.api.fastapi.provider_webhook_routes import register_provider_webhook_routes
+
+    class Handlers:
+        def ingest_provider_webhook(self, *, payload):
+            assert payload["provider_key"] == "discord_messaging"
+            return {
+                "status": "replayed",
+                "accepted": False,
+                "transport_ack_safe": False,
+                "metadata": {"messaging_handoff": {}, "decision": {"resolution": "replay_pending"}},
+            }
+
+    router = APIRouter()
+    register_provider_webhook_routes(router=router, provider_admin_handlers=Handlers())
+    app = FastAPI()
+    app.include_router(router)
+    with TestClient(app) as client:
+        response = client.post(
+            "/providers/webhook/tenant-a/biz-a/discord_messaging",
+            json={"type": 1},
+        )
+    assert response.status_code == 503
+    assert response.json()["detail"] == "provider_webhook_processing_incomplete"
