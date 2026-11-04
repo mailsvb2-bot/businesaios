@@ -27,7 +27,7 @@ def register_provider_webhook_routes(*, router, provider_admin_handlers) -> None
             return Response(content=challenge, media_type='text/plain')
         if provider_key == 'discord_messaging' and parsed.get('type') in {0, 1}:
             return Response(status_code=status.HTTP_204_NO_CONTENT) if parsed.get('type') == 0 or isinstance(parsed.get('event'), Mapping) else JSONResponse({'type': 1})
-        if (result.get('metadata', {}).get('messaging_handoff') or result.get('metadata', {}).get('batch_results')) and not result.get('transport_ack_safe'):
+        if result.get('transport_ack_safe') is False:
             raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail='provider_webhook_processing_incomplete')
         if provider_key == 'vk_messaging':
             if not result.get('response_body'):
