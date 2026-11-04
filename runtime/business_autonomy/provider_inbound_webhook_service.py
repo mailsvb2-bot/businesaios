@@ -7,7 +7,6 @@ from dataclasses import dataclass, field
 from application.business_autonomy.provider_admin_contract import ProviderDefinition
 from application.business_autonomy.provider_runtime_contract import ProviderWebhookIngressResult
 from contracts.messaging_event_identity import MessageDirection, MessageIdentity
-from runtime.safety import verified_inbound_reply_scope
 from runtime.business_autonomy.provider_incident_registry import FileProviderIncidentRegistry
 from runtime.business_autonomy.provider_runtime_audit import ProviderRuntimeAuditRecorder
 from runtime.business_autonomy.provider_runtime_export_bridge import ProviderRuntimeExportBridge
@@ -18,6 +17,7 @@ from runtime.business_autonomy.provider_webhook_inbound_result_summary import su
 from runtime.business_autonomy.provider_webhook_replay_guard import ProviderWebhookReplayGuard
 from runtime.business_autonomy.provider_webhook_route_registry import ProviderWebhookRouteRegistry
 from runtime.business_autonomy.provider_webhook_runtime import RAW_SIGNATURE_FIRST_PROVIDER_KEYS, ProviderWebhookRuntime
+from runtime.safety import verified_inbound_reply_scope
 
 CANON_PROVIDER_INBOUND_WEBHOOK_SERVICE = True
 
