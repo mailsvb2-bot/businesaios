@@ -66,9 +66,7 @@ def run() -> tuple[bool, str]:
         max_files_per_shard=12,
     )
     if not ok:
-        message = f"integration-core failed\\n{message}"
-    if not ok:
-        return False, message
+        return False, f"integration-core failed\n{message}"
 
     if _has_integration_target(targets):
         for index, path in enumerate(_HEADLESS_SMOKE_FILES, start=1):
