@@ -20,6 +20,8 @@ def register_provider_webhook_routes(*, router, provider_admin_handlers) -> None
         result = provider_admin_handlers.ingest_provider_webhook(payload={'tenant_id': tenant_id, 'business_id': business_id, 'provider_key': provider_key, 'headers': headers, 'body': raw_body if provider_key in RAW_SIGNATURE_FIRST_PROVIDER_KEYS else raw_body.decode('utf-8', errors='ignore'), 'event_key': event_key, 'topic': topic, 'owner_id': 'public_provider_webhook'})
         if result.get('status') == 'invalid_signature':
             raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED if provider_key == 'discord_messaging' else status.HTTP_403_FORBIDDEN, detail='provider_webhook_signature_denied')
+        if result.get('transport_ack_safe') is False:
+            raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail='provider_webhook_processing_incomplete')
         if provider_key == 'slack_messaging' and str(parsed.get('type') or '') == 'url_verification':
             challenge = str(parsed.get('challenge') or '')
             if not challenge:
@@ -27,8 +29,6 @@ def register_provider_webhook_routes(*, router, provider_admin_handlers) -> None
             return Response(content=challenge, media_type='text/plain')
         if provider_key == 'discord_messaging' and parsed.get('type') in {0, 1}:
             return Response(status_code=status.HTTP_204_NO_CONTENT) if parsed.get('type') == 0 or isinstance(parsed.get('event'), Mapping) else JSONResponse({'type': 1})
-        if result.get('transport_ack_safe') is False:
-            raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail='provider_webhook_processing_incomplete')
         if provider_key == 'vk_messaging':
             if not result.get('response_body'):
                 raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail='vk_callback_processing_incomplete')
