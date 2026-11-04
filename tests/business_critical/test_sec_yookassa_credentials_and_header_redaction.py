@@ -130,7 +130,7 @@ def test_core_verifier_compares_both_credentials(monkeypatch, user, password, ac
     else:
         with pytest.raises(WebhookAuthError, match="invalid_basic_credentials"):
             verify_webhook(**kwargs)
-    assert calls == [(user, "shop"), (password, "secret")]
+    assert calls == [(user.encode(), b"shop"), (password.encode(), b"secret")]
 
 
 @pytest.mark.parametrize("user,password,expected_status,expected_compares", [
@@ -239,3 +239,48 @@ def test_forged_tenant_metadata_is_never_used_for_tenant_audit(monkeypatch, auth
     finally:
         server.shutdown()
         server.server_close()
+
+
+@pytest.mark.parametrize("user,password,accepted", [
+    ("boutique", "pässword", True),
+    ("boutique", "wrong", False),
+    ("wrong", "pässword", False),
+])
+def test_non_ascii_basic_credentials_core_and_http(monkeypatch, user, password, accepted):
+    monkeypatch.setenv("APP_ENV", "dev")
+    monkeypatch.setenv("YOOKASSA_WEBHOOK_BASIC_USER", "boutique")
+    monkeypatch.setenv("YOOKASSA_WEBHOOK_BASIC_PASS", "pässword")
+    kwargs = dict(headers=_header(user, password), body_bytes=b"{}", auth_mode="basic",
+                  basic_user="boutique", basic_pass="pässword")
+    if accepted:
+        verify_webhook(**kwargs)
+    else:
+        with pytest.raises(WebhookAuthError, match="invalid_basic_credentials"):
+            verify_webhook(**kwargs)
+
+    class Outbox:
+        def __init__(self):
+            self.jobs = []
+
+        def enqueue_once(self, *, dedupe_key, payload):
+            self.jobs.append((dedupe_key, payload))
+
+    outbox = Outbox()
+    server = yookassa_webhook_server.start_yookassa_webhook_server_in_thread(
+        host="127.0.0.1", port=0, path="/yk", event_store=None,
+        payment_outbox=outbox, auth_mode="basic",
+    )
+    try:
+        conn = http.client.HTTPConnection("127.0.0.1", server.server_port, timeout=3)
+        try:
+            conn.request("POST", "/yk", body=b'{"object":{"id":"p-nonascii"}}',
+                         headers=_header(user, password))
+            response = conn.getresponse()
+            assert response.status == (200 if accepted else 401)
+            response.read()
+        finally:
+            conn.close()
+    finally:
+        server.shutdown()
+        server.server_close()
+    assert len(outbox.jobs) == int(accepted)
