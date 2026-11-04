@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from scripts.ci.config import project_shape_config
 from scripts.ci.paths import repo_root
-from scripts.ci.pytest_tools import run_pytest_with_report
+from scripts.ci.pytest_tools import run_pytest_sharded_with_report, run_pytest_with_report
 
 _HEADLESS_SMOKE_FILES = (
     "tests/integration/headless/test_cli_run_smoke.py",
@@ -54,14 +54,19 @@ def run() -> tuple[bool, str]:
 
     mark = cfg.integration_mark_expression
 
-    ok, message = _run_pytest_gate(
-        label="integration-core",
+    # A single 240-second process for the entire integration tree can time out
+    # even when individual tests pass. Bound each shard independently, retain
+    # its JUnit/diagnostics, and fail the gate on *any* failed shard.
+    ok, message = run_pytest_sharded_with_report(
         target_args=_core_targets_without_headless_smoke(targets),
         mark_expression=mark,
         junit_name="integration-core.xml",
         coverage_name="integration-core-coverage.xml",
-        timeout=240,
+        timeout_per_shard=240,
+        max_files_per_shard=12,
     )
+    if not ok:
+        message = f"integration-core failed\\n{message}"
     if not ok:
         return False, message
 
