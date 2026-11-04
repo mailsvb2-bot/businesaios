@@ -575,8 +575,7 @@ def test_boot_llm_cannot_fall_back_to_process_local_budget(monkeypatch):
 @pytest.mark.parametrize("provider", ["openai_compat", "anthropic", "gigachat", "yandexgpt"])
 def test_explicit_memory_budget_never_allows_live_provider_transport(provider):
     """Explicit memory mode must not be an escape hatch for paid provider clients."""
-    from core.llm.providers import AnthropicClient, GigaChatClient, OpenAICompatClient, YandexGPTClient
-    from core.llm.providers.openai_provider import OpenAICompatConfig
+    from core.llm import AnthropicClient, GigaChatClient, OpenAICompatClient, OpenAICompatConfig, YandexGPTClient
 
     called = []
     def transport(*args):
