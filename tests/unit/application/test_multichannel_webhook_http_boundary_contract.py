@@ -90,3 +90,46 @@ def test_vk_max_authenticated_ingress_scopes_signed_reply_to_real_event(tmp_path
         assert not is_routine_reply("send_message@v1", {**processor.payload, "text": "unsolicited"})
         replay = service.ingest(**request)
         assert not replay.accepted and processor.calls == 1
+
+
+def test_public_http_rejects_pending_single_event_replay_without_handoff() -> None:
+    """A pending replay cannot be HTTP-acknowledged just because no work is handed off."""
+    from fastapi import APIRouter, FastAPI
+    from fastapi.testclient import TestClient
+
+    from adapters.api.fastapi.provider_webhook_routes import register_provider_webhook_routes
+
+    class Handlers:
+        def __init__(self, safe):
+            self.safe = safe
+            self.calls = 0
+
+        def ingest_provider_webhook(self, *, payload):
+            self.calls += 1
+            assert payload["provider_key"] == "max_messaging"
+            return {
+                "status": "replayed",
+                "accepted": False,
+                "transport_ack_safe": self.safe,
+                "metadata": {
+                    "decision": {"resolution": "replay_pending" if not self.safe else "replay_completed"},
+                    "messaging_handoff": {},
+                    "batch_results": (),
+                },
+            }
+
+    for is_safe, expected_status in ((False, 503), (True, 200)):
+        handlers = Handlers(is_safe)
+        router = APIRouter()
+        register_provider_webhook_routes(router=router, provider_admin_handlers=handlers)
+        app = FastAPI()
+        app.include_router(router)
+        with TestClient(app) as client:
+            response = client.post(
+                "/providers/webhook/tenant-a/biz-a/max_messaging",
+                json={"update_type": "message_created"},
+            )
+        assert response.status_code == expected_status
+        assert handlers.calls == 1
+        if not is_safe:
+            assert response.json()["detail"] == "provider_webhook_processing_incomplete"
