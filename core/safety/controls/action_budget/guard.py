@@ -17,7 +17,7 @@ class ActionBudgetGuard:
 
     def evaluate(self, ctx: SafetyActionContext) -> ControlDecision:
         payload = dict(ctx.payload)
-        if is_routine_reply(ctx.action, payload):
+        if str(payload.get("tenant_id") or "") == str(ctx.tenant_id) and is_routine_reply(ctx.action, payload):
             # Verified inbound replies are already accounted for by the
             # canonical operational user_reply policy, not lifetime spend.
             return ControlDecision(

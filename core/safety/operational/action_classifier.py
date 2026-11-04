@@ -4,7 +4,7 @@ from dataclasses import dataclass, replace
 
 from contracts.action_impact_contract import ActionCategory, ActionExecutionContext
 from core.safety.controls.action_budget.models import is_routine_reply
-from core.safety.operational.action_registry import OperationalActionRegistry, USER_REPLY_INTERACTION
+from core.safety.operational.action_registry import USER_REPLY_INTERACTION, OperationalActionRegistry
 from core.safety.operational.action_spec import ActionOperationalSpec
 
 CANON_OPERATIONAL_ACTION_CLASSIFIER = True
@@ -47,7 +47,7 @@ class ActionClassifier:
                 is_known=False,
             )
         spec.validate()
-        if is_routine_reply(ctx.action_name, ctx.payload):
+        if str(ctx.payload.get("tenant_id") or "") == str(ctx.tenant_id) and is_routine_reply(ctx.action_name, ctx.payload):
             spec = replace(spec, dimensions={**spec.dimensions, "interaction": USER_REPLY_INTERACTION})
         return ClassifiedAction(
             spec=spec,
@@ -60,4 +60,4 @@ class ActionClassifier:
 __all__ = [
     "ActionClassifier",
     "ClassifiedAction",
-]
+]

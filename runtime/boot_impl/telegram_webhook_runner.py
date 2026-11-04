@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hmac
 import logging
 from contextlib import asynccontextmanager
 from typing import Any
@@ -162,10 +163,7 @@ def build_telegram_webhook_app(
         x_telegram_bot_api_secret_token: str | None = Header(default=None),
     ):
         expected = str(runtime.secret_token or "").strip()
-        if (
-            expected
-            and x_telegram_bot_api_secret_token != expected
-        ):
+        if not expected or not hmac.compare_digest(expected, x_telegram_bot_api_secret_token or ""):
             raise HTTPException(
                 status_code=401,
                 detail="invalid webhook secret",
