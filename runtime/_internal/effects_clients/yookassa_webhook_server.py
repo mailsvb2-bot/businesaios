@@ -92,8 +92,8 @@ def start_yookassa_webhook_server_in_thread(
                         self.send_response(401)
                         self.end_headers()
                         return
-                    user_ok = hmac.compare_digest(u, str(basic_user or ""))
-                    password_ok = hmac.compare_digest(p, str(basic_pass or ""))
+                    user_ok = hmac.compare_digest(u.encode("utf-8"), str(basic_user or "").encode("utf-8"))
+                    password_ok = hmac.compare_digest(p.encode("utf-8"), str(basic_pass or "").encode("utf-8"))
                     if not (user_ok and password_ok):
                         self.send_response(401)
                         self.end_headers()
