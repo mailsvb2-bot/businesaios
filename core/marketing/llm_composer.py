@@ -7,7 +7,7 @@ from config.marketing_llm_policy import DEFAULT_MARKETING_LLM_POLICY, MarketingL
 from core.llm.budget import BudgetCaps
 from core.llm.circuit import CircuitConfig
 from core.llm.contracts import LLMClient
-from core.llm.providers import AnthropicClient, GigaChatClient, OpenAICompatClient, YandexGPTClient
+from core.llm import AnthropicClient, GigaChatClient, OpenAICompatClient, YandexGPTClient
 from core.llm.sampling import DebugSampling
 from core.marketing.async_runner import run_awaitable_sync
 from core.marketing.llm.composer_runtime import build_composer_runtime
