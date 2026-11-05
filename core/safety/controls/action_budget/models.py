@@ -75,13 +75,7 @@ def _verified_signature(proof: Mapping[str, Any]) -> bool:
 
 
 def is_budget_free_text_message(action: str, payload: Mapping[str, Any]) -> bool:
-    """Pure single-recipient text delivery requires no spending or action quota.
-
-    This is accounting classification, not authorization: tenant isolation,
-    permission checks, rate limits, transport identity and signature enforcement
-    still run on the regular canonical execution path. Paid operations and
-    bulk/campaign sends are not classified as ordinary text delivery.
-    """
+    """Zero-budget text accounting, not authorization or bulk-send permission."""
     if action != "send_message@v1" or not isinstance(payload, Mapping):
         return False
     if not isinstance(payload.get("text"), str):
