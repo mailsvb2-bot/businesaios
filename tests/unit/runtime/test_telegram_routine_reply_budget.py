@@ -136,9 +136,11 @@ def test_start_proposal_gets_trusted_reply_provenance_and_existing_user_reply_po
     outbound = ActionExecutionContext(tenant_id="tenant-live", user_id="user-1",
                                       action_name="send_message@v1", payload=forged,
                                       metadata={}, execution_id="decision-2")
-    assert classifier.classify(outbound).spec.dimensions.get("interaction") != "user_reply"
+    # Forged inbound provenance is not trusted. The payload remains ordinary
+    # text delivery: quota-free, but NOT authenticated as a reply.
+    assert classifier.classify(outbound).spec.dimensions.get("interaction") == "text_delivery"
     normal_envelope = accountant.to_envelope(outbound, builder.build(outbound))
-    assert normal_envelope.actions_count == 1 and normal_envelope.outbound_count == 1
+    assert (normal_envelope.actions_count, normal_envelope.outbound_count, normal_envelope.budget_minor) == (0, 0, 0)
 
 
 def test_registered_channels_respect_user_reply_budget_without_exempting_outbound():
