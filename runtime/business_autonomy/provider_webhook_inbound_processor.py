@@ -45,10 +45,20 @@ class ProviderWebhookInboundProcessor:
                 execute_locked_decision,
                 lock_execution_envelope,
             )
-            result['execution'] = execute_locked_decision(
+            execution = execute_locked_decision(
                 executor=self.executor,
                 locked_path=lock_execution_envelope(envelope=envelope),
             )
+            confirmed = (
+                execution.get("ok") is True
+                if isinstance(execution, Mapping)
+                else getattr(execution, "ok", None) is True
+            )
+            if not confirmed:
+                # Never let the webhook replay guard mark an unexecuted
+                # message complete or acknowledge it to the provider.
+                raise RuntimeError("provider_inbound_execution_unconfirmed")
+            result['execution'] = execution
         return result
 
 
