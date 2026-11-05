@@ -136,12 +136,12 @@ def test_start_proposal_gets_trusted_reply_provenance_and_existing_user_reply_po
     outbound = ActionExecutionContext(tenant_id="tenant-live", user_id="user-1",
                                       action_name="send_message@v1", payload=forged,
                                       metadata={}, execution_id="decision-2")
-    # build_payload removes the untrusted inbound claim. The resulting
-    # plain text is quota-free, but it is NOT a verified user reply.
+    # Removing an untrusted claim must not turn an autonomous send into a free reply.
     assert "inbound_user_reply" not in forged.get("meta", {})
     assert classifier.classify(outbound).spec.dimensions.get("interaction") == "text_delivery"
     normal_envelope = accountant.to_envelope(outbound, builder.build(outbound))
-    assert (normal_envelope.actions_count, normal_envelope.outbound_count, normal_envelope.budget_minor) == (0, 0, 0)
+    assert (normal_envelope.actions_count, normal_envelope.outbound_count) == (1, 1)
+    assert normal_envelope.budget_minor == 0
 
     # An untrusted claim injected directly into an action payload must remain
     # ineligible for either exemption; do not weaken the signature boundary.
@@ -181,12 +181,11 @@ def test_registered_channels_respect_user_reply_budget_without_exempting_outboun
         assert is_routine_reply("send_message@v1", payload)
         assert guard.evaluate(SafetyActionContext(action="send_message@v1",
             tenant_id="tenant-live", user_id="user-1", payload=payload)).status == ControlStatus.ALLOW
-        # Plain text without an inbound claim stays quota-free. The claim
-        # itself is not an authorization shortcut and can be omitted.
+        # Stripping signed inbound provenance must restore autonomous quotas.
         assert guard.evaluate(SafetyActionContext(
             action="send_message@v1", tenant_id="tenant-live",
             user_id="user-1", payload={**payload, "meta": {}},
-        )).status == ControlStatus.ALLOW
+        )).status == ControlStatus.BLOCK
         for malicious in (
             {"action": "send_marketing_offer@v1", "payload": payload},
             {"action": "send_message@v1", "payload": {**payload, "estimated_cost": 1.0}},
