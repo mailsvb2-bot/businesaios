@@ -74,6 +74,54 @@ def _verified_signature(proof: Mapping[str, Any]) -> bool:
                 and hmac.compare_digest(proof["signature"], _proof_mac(proof, key.secret)))
 
 
+def is_budget_free_text_message(action: str, payload: Mapping[str, Any]) -> bool:
+    """Pure single-recipient text delivery requires no spending or action quota.
+
+    This is accounting classification, not authorization: tenant isolation,
+    permission checks, rate limits, transport identity and signature enforcement
+    still run on the regular canonical execution path. Paid operations and
+    bulk/campaign sends are not classified as ordinary text delivery.
+    """
+    if action != "send_message@v1" or not isinstance(payload, Mapping):
+        return False
+    if not isinstance(payload.get("text"), str):
+        return False
+    if not isinstance(payload.get("user_id"), str) or not payload["user_id"].strip():
+        return False
+    tenant = payload.get("tenant_id")
+    if not isinstance(tenant, str) or not tenant.strip():
+        return False
+    count = payload.get("recipient_count")
+    if count is not None and (type(count) is not int or count != 1):
+        return False
+    if str(payload.get("kind") or "").lower() in {
+        "marketing", "campaign", "broadcast", "bulk", "proactive",
+    }:
+        return False
+    if any(payload.get(field) for field in (
+        "recipients", "recipient_ids", "target_users", "audience", "segment_id",
+        "broadcast", "bulk", "batch_id", "campaign_id", "scheduled_at",
+        "marketing", "autonomous", "proactive", "charge_amount", "channel_policy",
+        "economy", "requested_budget", "budget_delta", "amount", "payment_id",
+    )):
+        return False
+    tracking = payload.get("track_payload")
+    if isinstance(tracking, Mapping) and any(tracking.get(field) for field in (
+        "campaign_id", "audience_id", "segment_id", "marketing_variant",
+        "recipient_ids", "recipients", "target_users", "broadcast", "bulk",
+        "scheduled_at",
+    )):
+        return False
+    cost = payload.get("estimated_cost", 0)
+    if isinstance(cost, bool):
+        return False
+    try:
+        cost_value = float(cost or 0)
+    except (TypeError, ValueError, OverflowError):
+        return False
+    return cost_value == 0 and cost_value == cost_value
+
+
 def is_routine_reply(action: str, payload: Mapping[str, Any]) -> bool:
     """Only zero-cost, single-recipient, inbound-bound sends bypass autonomous budgets."""
     if action != "send_message@v1" or str(payload.get("kind") or "").lower() in {
