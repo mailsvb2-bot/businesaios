@@ -174,9 +174,9 @@ def build_payload(
         )
         if proof:
             candidate = dict(payload)
-            candidate.setdefault("channel", channel)
+            candidate["channel"] = channel
             if session.get("chat_id"):
-                candidate.setdefault("chat_id", str(session["chat_id"]))
+                candidate["chat_id"] = str(session["chat_id"])
             if is_routine_reply("send_message@v1", {**candidate, "meta": {"inbound_user_reply": proof}}):
                 payload.update({key: candidate[key] for key in ("channel", "chat_id") if key in candidate})
                 meta_block["inbound_user_reply"] = proof
@@ -184,10 +184,14 @@ def build_payload(
     # silently fall through to the Telegram transport on a non-Telegram ingress.
     if (getattr(out, "action", "") == "send_message@v1"
             and session.get("source") in {"messaging", "customer_bot"} and channel):
-        payload.setdefault("channel", channel)
+        if payload.get("channel") not in (None, "", channel):
+            raise RuntimeError("DECISION_CHANNEL_MISMATCH")
+        payload["channel"] = channel
         chat = str(session.get("chat_id") or session.get("messaging_chat_id") or "")
+        if chat and str(payload.get("chat_id") or chat) != chat:
+            raise RuntimeError("DECISION_CHAT_ID_MISMATCH")
         if chat.lstrip("-").isdigit():
-            payload.setdefault("chat_id", int(chat))
+            payload["chat_id"] = int(chat)
     canonical_goal_id = _canonical_goal_identity(state)
     if canonical_goal_id:
         payload_goal_id = str(payload.get("goal_id") or "").strip()
