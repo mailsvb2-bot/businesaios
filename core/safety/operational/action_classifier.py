@@ -48,12 +48,9 @@ class ActionClassifier:
             )
         spec.validate()
         if str(ctx.payload.get("tenant_id") or "") == str(ctx.tenant_id):
-            if is_routine_reply(ctx.action_name, ctx.payload):
-                interaction = USER_REPLY_INTERACTION
-            elif is_budget_free_text_message(ctx.action_name, ctx.payload):
-                interaction = TEXT_DELIVERY_INTERACTION
-            else:
-                interaction = None
+            interaction = (USER_REPLY_INTERACTION if is_routine_reply(ctx.action_name, ctx.payload)
+                           else TEXT_DELIVERY_INTERACTION if is_budget_free_text_message(ctx.action_name, ctx.payload)
+                           else None)
             if interaction:
                 spec = replace(spec, dimensions={**spec.dimensions, "interaction": interaction})
         return ClassifiedAction(
