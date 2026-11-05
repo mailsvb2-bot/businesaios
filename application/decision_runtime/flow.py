@@ -180,6 +180,14 @@ def build_payload(
             if is_routine_reply("send_message@v1", {**candidate, "meta": {"inbound_user_reply": proof}}):
                 payload.update({key: candidate[key] for key in ("channel", "chat_id") if key in candidate})
                 meta_block["inbound_user_reply"] = proof
+    # Preserve existing verified reply sealing. For unverified messages never
+    # silently fall through to the Telegram transport on a non-Telegram ingress.
+    if (getattr(out, "action", "") == "send_message@v1"
+            and session.get("source") in {"messaging", "customer_bot"} and channel):
+        payload.setdefault("channel", channel)
+        chat = str(session.get("chat_id") or session.get("messaging_chat_id") or "")
+        if chat.lstrip("-").isdigit():
+            payload.setdefault("chat_id", int(chat))
     canonical_goal_id = _canonical_goal_identity(state)
     if canonical_goal_id:
         payload_goal_id = str(payload.get("goal_id") or "").strip()
