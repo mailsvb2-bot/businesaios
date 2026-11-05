@@ -118,21 +118,16 @@ class EconomicAutonomyLayer:
             if str(action) != "noop@v1":
                 return EconomicLayerVerdict(False, f"degraded_world:{world_state.get('reason', 'missing')}", survival=survival_verdict)
 
-        # Text delivery is not an economic expenditure. Keep survival and
-        # degraded-state safety gates above, then leave spending policy to
-        # actual funded actions. Every decision still follows the same
-        # signed DecisionCore -> Executor path and all later safety gates.
+        # A pure text reply is not a funded action; survival and degraded gates
+        # above remain authoritative, as do the later executor safety checks.
         raw_decision = self._read_field(decision_env, "decision", decision_env)
-        action = str(self._read_field(raw_decision, "action", ""))
-        payload = self._read_field(raw_decision, "payload", {})
-        text_delivery = is_budget_free_text_message(action, payload)
         explicit_cost = self._read_field(raw_decision, "cost", None)
-        if explicit_cost is not None:
-            text_delivery = (
-                text_delivery and type(explicit_cost) in (int, float)
-                and explicit_cost == 0
-            )
-        if text_delivery:
+        if (is_budget_free_text_message(
+            str(self._read_field(raw_decision, "action", "")),
+            self._read_field(raw_decision, "payload", {}),
+        ) and (explicit_cost is None or (
+            type(explicit_cost) in (int, float) and explicit_cost == 0
+        ))):
             return EconomicLayerVerdict(
                 allow=True, survival=survival_verdict,
                 metadata={"budget_class": "text_delivery", "estimated_spend": 0},

@@ -427,7 +427,7 @@ def test_business_critical_ci_uses_bounded_full_coverage_shards(monkeypatch):
         True, "business critical invariant gate passed"
     )
     assert captured["target_args"] == ["tests/business_critical"]
-    assert captured["max_files_per_shard"] == 16
+    assert captured["max_files_per_shard"] == 6
     assert captured["timeout_per_shard"] == 240
 
 

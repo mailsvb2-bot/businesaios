@@ -38,3 +38,91 @@ def test_provider_webhook_inbound_processor_issues_canonical_message_decision(mo
     assert out['decision_envelope']['decision_id'] == 'd1'
     assert calls['caller'] == 'runtime.business_autonomy.provider_webhook_inbound_processor'
     assert calls['message'].channel == 'telegram'
+
+
+def test_provider_webhook_processor_executes_through_locked_executor(monkeypatch):
+    executed = []
+
+    class _Gateway:
+        def __init__(self, *, decision_core, caller):
+            pass
+
+    class _Executor:
+        def execute(self, envelope):
+            executed.append(envelope)
+            return {"ok": True}
+
+    monkeypatch.setattr(
+        'runtime.business_autonomy.provider_webhook_inbound_processor.MessagingInboundDecisionGateway',
+        _Gateway,
+    )
+    monkeypatch.setattr(
+        'runtime.business_autonomy.provider_webhook_inbound_processor.process_inbound_gateway_message',
+        lambda *, gateway, message: {"signed": True},
+    )
+    monkeypatch.setattr(
+        'runtime.execution.execution_path_lock._validate_signed_envelope_shape',
+        lambda env: None,
+    )
+    out = ProviderWebhookInboundProcessor(
+        decision_core=_Core(), executor=_Executor()
+    ).process(
+        handoff={'inbound_message': {'tenant_id': 't1', 'channel': 'vk',
+                                    'user_id': 'u1', 'text': '/start'}}
+    )
+    assert executed == [{"signed": True}]
+    assert out['execution'] == {"ok": True}
+
+
+def test_provider_webhook_processor_without_executor_only_decides(monkeypatch):
+    class _Gateway:
+        def __init__(self, *, decision_core, caller):
+            pass
+
+    monkeypatch.setattr(
+        'runtime.business_autonomy.provider_webhook_inbound_processor.MessagingInboundDecisionGateway',
+        _Gateway,
+    )
+    monkeypatch.setattr(
+        'runtime.business_autonomy.provider_webhook_inbound_processor.process_inbound_gateway_message',
+        lambda *, gateway, message: {"signed": True},
+    )
+    out = ProviderWebhookInboundProcessor(decision_core=_Core()).process(
+        handoff={'inbound_message': {'tenant_id': 't1', 'channel': 'vk',
+                                    'user_id': 'u1', 'text': '/start'}}
+    )
+    assert 'execution' not in out
+
+
+def test_provider_webhook_processor_does_not_ack_rejected_execution(monkeypatch):
+    import pytest
+
+    class _Gateway:
+        def __init__(self, *, decision_core, caller):
+            pass
+
+    class _RejectedExecutor:
+        def execute(self, envelope):
+            return {"ok": False, "reason": "action_budget_exceeded"}
+
+    monkeypatch.setattr(
+        'runtime.business_autonomy.provider_webhook_inbound_processor.MessagingInboundDecisionGateway',
+        _Gateway,
+    )
+    monkeypatch.setattr(
+        'runtime.business_autonomy.provider_webhook_inbound_processor.process_inbound_gateway_message',
+        lambda *, gateway, message: {"signed": True},
+    )
+    monkeypatch.setattr(
+        'runtime.execution.execution_path_lock._validate_signed_envelope_shape',
+        lambda env: None,
+    )
+    with pytest.raises(RuntimeError, match="provider_inbound_execution_unconfirmed"):
+        ProviderWebhookInboundProcessor(
+            decision_core=_Core(), executor=_RejectedExecutor()
+        ).process(
+            handoff={'inbound_message': {
+                'tenant_id': 't1', 'channel': 'vk',
+                'user_id': 'u1', 'text': '/start',
+            }}
+        )

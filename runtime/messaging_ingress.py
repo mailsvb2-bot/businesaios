@@ -55,7 +55,7 @@ def split_command(text: str) -> tuple[str, str]:
     if not stripped.startswith("/"):
         return "", stripped
     head, _, tail = stripped.partition(" ")
-    return head, tail.strip()
+    return head.split("@", 1)[0].lower(), tail.strip()
 
 
 def messaging_event_to_world_state(

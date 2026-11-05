@@ -12,7 +12,7 @@ def run() -> tuple[bool, str]:
         timeout_per_shard=240,
         # Separate the 96 business-critical modules into bounded processes.
         # Every test is still executed and every shard failure blocks the gate.
-        max_files_per_shard=16,
+        max_files_per_shard=6,
     )
     if not ok:
         return False, message

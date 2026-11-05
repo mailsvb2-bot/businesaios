@@ -271,15 +271,15 @@ def test_inbound_reply_must_match_outbound_channel_and_chat():
     )
     for override in ({"channel": "max"}, {"chat_id": "chat-2"},
                      {"channel": "vk", "chat_id": "chat-2"}):
-        _, payload = _trusted_build_payload(
-            state=state,
-            out=ProposedAction("send_message@v1", {
-                "user_id": "user-1", "text": "not a reply", **override,
-            }),
-            pinned_world_model_meta={}, tenant_id="tenant-live",
-            product_id=None, domain=None, product_version=None, actor_id="user-1",
-        )
-        assert not is_routine_reply("send_message@v1", payload)
+        with pytest.raises(RuntimeError, match="DECISION_(CHANNEL|CHAT_ID)_MISMATCH"):
+            _trusted_build_payload(
+                state=state,
+                out=ProposedAction("send_message@v1", {
+                    "user_id": "user-1", "text": "not a reply", **override,
+                }),
+                pinned_world_model_meta={}, tenant_id="tenant-live",
+                product_id=None, domain=None, product_version=None, actor_id="user-1",
+            )
 
     _, reply = _trusted_build_payload(
         state=state, out=ProposedAction("send_message@v1", {
@@ -637,6 +637,30 @@ def test_operational_user_reply_classification_requires_same_tenant():
     assert classify("tenant-live") == USER_REPLY_INTERACTION
     assert classify("tenant-other") != USER_REPLY_INTERACTION
 
+
+@pytest.mark.parametrize("channel", ["vk", "max", "whatsapp"])
+def test_unverified_messaging_reply_is_sealed_to_session_channel(channel):
+    state = SimpleNamespace(user_id="user-1", meta={}, product={},
+        session={"source": "messaging", "channel": channel, "chat_id": "-9"})
+    _, payload = build_payload(
+        state=state, out=ProposedAction("send_message@v1", {"user_id": "user-1", "text": "menu"}),
+        pinned_world_model_meta={}, tenant_id="tenant-live",
+        product_id=None, domain=None, product_version=None, actor_id="user-1",
+    )
+    assert payload["channel"] == channel
+    assert payload["chat_id"] == -9
+
+@pytest.mark.parametrize("field,bad", [("channel", "telegram"), ("chat_id", "-10")])
+def test_unverified_reply_rejects_cross_transport_target(field, bad):
+    state = SimpleNamespace(user_id="user-1", meta={}, product={},
+        session={"source": "messaging", "channel": "vk", "chat_id": "-9"})
+    with pytest.raises(RuntimeError, match="DECISION_(CHANNEL|CHAT_ID)_MISMATCH"):
+        build_payload(
+            state=state, out=ProposedAction("send_message@v1",
+                {"user_id": "user-1", "text": "menu", field: bad}),
+            pinned_world_model_meta={}, tenant_id="tenant-live",
+            product_id=None, domain=None, product_version=None, actor_id="user-1",
+        )
 
 def test_canonical_start_policy_passes_all_budget_layers_without_capital(monkeypatch):
     import governance.economic_layer as economics
