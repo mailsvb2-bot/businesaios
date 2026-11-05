@@ -20,8 +20,7 @@ class ProviderWebhookInboundProcessor:
         if not isinstance(payload, Mapping) or not payload:
             return {}
         gateway = MessagingInboundDecisionGateway(
-            decision_core=self.decision_core,
-            caller='runtime.business_autonomy.provider_webhook_inbound_processor',
+            decision_core=self.decision_core, caller='runtime.business_autonomy.provider_webhook_inbound_processor',
         )
         message = InboundMessage(
             tenant_id=str(payload.get('tenant_id') or ''),
@@ -33,30 +32,15 @@ class ProviderWebhookInboundProcessor:
             external_user_ref=str(payload.get('external_user_ref') or payload.get('user_id') or ''),
             metadata={'source': 'provider_webhook_handoff', 'chat_id': str(payload.get('chat_id') or ''), **dict(payload.get('metadata') or {})},
         )
-        # Provider webhook handoff must not issue decisions directly. The
-        # inbound gateway owns the canonical bridge to DecisionCore.
         envelope = process_inbound_gateway_message(gateway=gateway, message=message)
-        result = {
-            'accepted': True,
-            'decision_envelope': envelope,
-        }
+        result = {'accepted': True, 'decision_envelope': envelope}
         if self.executor is not None and envelope is not None:
-            from runtime.execution.execution_path_lock import (
-                execute_locked_decision,
-                lock_execution_envelope,
-            )
+            from runtime.execution.execution_path_lock import execute_locked_decision, lock_execution_envelope
             execution = execute_locked_decision(
-                executor=self.executor,
-                locked_path=lock_execution_envelope(envelope=envelope),
+                executor=self.executor, locked_path=lock_execution_envelope(envelope=envelope),
             )
-            confirmed = (
-                execution.get("ok") is True
-                if isinstance(execution, Mapping)
-                else getattr(execution, "ok", None) is True
-            )
-            if not confirmed:
-                # Never let the webhook replay guard mark an unexecuted
-                # message complete or acknowledge it to the provider.
+            confirmed = execution.get("ok") if isinstance(execution, Mapping) else getattr(execution, "ok", None)
+            if confirmed is not True:
                 raise RuntimeError("provider_inbound_execution_unconfirmed")
             result['execution'] = execution
         return result

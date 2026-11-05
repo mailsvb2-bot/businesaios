@@ -51,6 +51,6 @@ def test_targeted_ci_runs_every_selected_file_in_bounded_chunks(monkeypatch, tmp
     monkeypatch.setattr(step, "run_pytest", run_pytest)
     ok, message = step.run()
     assert ok is True
-    assert [len(chunk) for chunk in chunks] == [12, 12, 1]
+    assert [len(chunk) for chunk in chunks] == [6, 6, 6, 6, 1]
     assert [path for chunk in chunks for path in chunk] == selected
-    assert "collected_chunks=3" in message
+    assert "collected_chunks=5" in message

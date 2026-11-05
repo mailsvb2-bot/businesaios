@@ -74,21 +74,70 @@ def _verified_signature(proof: Mapping[str, Any]) -> bool:
                 and hmac.compare_digest(proof["signature"], _proof_mac(proof, key.secret)))
 
 
-def is_routine_reply(action: str, payload: Mapping[str, Any]) -> bool:
-    """Only zero-cost, single-recipient, inbound-bound sends bypass autonomous budgets."""
+def _single_target_non_campaign(action: str, payload: Mapping[str, Any]) -> bool:
     if action != "send_message@v1" or str(payload.get("kind") or "").lower() in {
         "marketing", "campaign", "broadcast", "bulk", "proactive",
-    } or any(payload.get(field) for field in (
+    } or any(payload.get(key) for key in (
         "recipients", "recipient_ids", "target_users", "audience", "segment_id",
         "broadcast", "bulk", "batch_id", "campaign_id", "scheduled_at",
         "marketing", "autonomous", "proactive", "charge_amount", "channel_policy",
     )):
         return False
     track = payload.get("track_payload")
-    if isinstance(track, Mapping) and any(track.get(field) for field in (
-        "campaign_id", "audience_id", "segment_id", "marketing_variant", "recipient_ids",
-        "recipients", "target_users", "broadcast", "bulk", "scheduled_at",
+    return not (isinstance(track, Mapping) and any(track.get(key) for key in (
+        "campaign_id", "audience_id", "segment_id", "marketing_variant",
+        "recipient_ids", "recipients", "target_users", "broadcast",
+        "bulk", "scheduled_at",
+    )))
+
+
+def is_budget_free_text_message(action: str, payload: Mapping[str, Any]) -> bool:
+    """Classify zero-cost text for accounting, never for authorization."""
+    if not isinstance(payload, Mapping) or not _single_target_non_campaign(action, payload):
+        return False
+    if (not isinstance(payload.get("text"), str)
+        or any(not isinstance(payload.get(key), str) or not payload[key].strip()
+               for key in ("user_id", "tenant_id"))):
+        return False
+    count = payload.get("recipient_count")
+    if count is not None and (type(count) is not int or count != 1):
+        return False
+    if any(payload.get(key) for key in (
+        "economy", "requested_budget", "budget_delta", "amount", "payment_id",
     )):
+        return False
+    allowed = {
+        "tenant_id", "user_id", "text", "channel", "chat_id", "reply_markup",
+        "callback_query_id", "track_event_type", "track_payload", "product_id",
+        "domain", "product_version", "actor_id", "idempotency_key",
+        "world_model_meta", "meta", "recipient_count", "business_id", "goal_id",
+        "autonomy_tier", "estimated_cost",
+    }
+    if set(payload) - allowed:
+        return False
+    meta = payload.get("meta")
+    if meta is not None and not isinstance(meta, Mapping):
+        return False
+    if isinstance(meta, Mapping) and (
+        any(meta.get(key) for key in (
+            "requested_budget", "budget_delta", "estimated_cost", "amount",
+            "charge_amount", "campaign_id", "autonomous", "broadcast",
+        )) or ("inbound_user_reply" in meta and not is_routine_reply(action, payload))
+    ):
+        return False
+    cost = payload.get("estimated_cost", 0)
+    if isinstance(cost, bool):
+        return False
+    try:
+        value = float(cost or 0)
+    except (TypeError, ValueError, OverflowError):
+        return False
+    return value == 0 and value == value
+
+
+def is_routine_reply(action: str, payload: Mapping[str, Any]) -> bool:
+    """Only zero-cost, single-recipient, inbound-bound sends bypass autonomous budgets."""
+    if not _single_target_non_campaign(action, payload):
         return False
     meta = payload.get("meta")
     proof = meta.get("inbound_user_reply") if isinstance(meta, Mapping) else None

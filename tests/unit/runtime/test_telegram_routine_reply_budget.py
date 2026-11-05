@@ -136,9 +136,26 @@ def test_start_proposal_gets_trusted_reply_provenance_and_existing_user_reply_po
     outbound = ActionExecutionContext(tenant_id="tenant-live", user_id="user-1",
                                       action_name="send_message@v1", payload=forged,
                                       metadata={}, execution_id="decision-2")
-    assert classifier.classify(outbound).spec.dimensions.get("interaction") != "user_reply"
+    # build_payload removes the untrusted inbound claim. The resulting
+    # plain text is quota-free, but it is NOT a verified user reply.
+    assert "inbound_user_reply" not in forged.get("meta", {})
+    assert classifier.classify(outbound).spec.dimensions.get("interaction") == "text_delivery"
     normal_envelope = accountant.to_envelope(outbound, builder.build(outbound))
-    assert normal_envelope.actions_count == 1 and normal_envelope.outbound_count == 1
+    assert (normal_envelope.actions_count, normal_envelope.outbound_count, normal_envelope.budget_minor) == (0, 0, 0)
+
+    # An untrusted claim injected directly into an action payload must remain
+    # ineligible for either exemption; do not weaken the signature boundary.
+    injected = {**forged, "meta": {"inbound_user_reply": REPLY_PROOF}}
+    injected_ctx = ActionExecutionContext(
+        tenant_id="tenant-live", user_id="user-1",
+        action_name="send_message@v1", payload=injected,
+        metadata={}, execution_id="decision-3",
+    )
+    assert classifier.classify(injected_ctx).spec.dimensions.get("interaction") not in {
+        "user_reply", "text_delivery",
+    }
+    rejected_envelope = accountant.to_envelope(injected_ctx, builder.build(injected_ctx))
+    assert rejected_envelope.actions_count == 1 and rejected_envelope.outbound_count == 1
 
 
 def test_registered_channels_respect_user_reply_budget_without_exempting_outbound():
@@ -164,10 +181,18 @@ def test_registered_channels_respect_user_reply_budget_without_exempting_outboun
         assert is_routine_reply("send_message@v1", payload)
         assert guard.evaluate(SafetyActionContext(action="send_message@v1",
             tenant_id="tenant-live", user_id="user-1", payload=payload)).status == ControlStatus.ALLOW
+        # Plain text without an inbound claim stays quota-free. The claim
+        # itself is not an authorization shortcut and can be omitted.
+        assert guard.evaluate(SafetyActionContext(
+            action="send_message@v1", tenant_id="tenant-live",
+            user_id="user-1", payload={**payload, "meta": {}},
+        )).status == ControlStatus.ALLOW
         for malicious in (
             {"action": "send_marketing_offer@v1", "payload": payload},
             {"action": "send_message@v1", "payload": {**payload, "estimated_cost": 1.0}},
-            {"action": "send_message@v1", "payload": {**payload, "meta": {}}},
+            {"action": "send_message@v1", "payload": {**payload, "meta": {
+                "inbound_user_reply": {"signature": "forged"},
+            }}},
         ):
             assert guard.evaluate(SafetyActionContext(
                 action=malicious["action"], tenant_id="tenant-live",
@@ -636,3 +661,54 @@ def test_unverified_reply_rejects_cross_transport_target(field, bad):
             pinned_world_model_meta={}, tenant_id="tenant-live",
             product_id=None, domain=None, product_version=None, actor_id="user-1",
         )
+
+def test_canonical_start_policy_passes_all_budget_layers_without_capital(monkeypatch):
+    import governance.economic_layer as economics
+
+    monkeypatch.setattr(economics, "is_strict_mode", lambda: True)
+
+    class _Survival:
+        def evaluate(self):
+            return SimpleNamespace(allow_execution=True, reason="ok")
+
+    state = SimpleNamespace(
+        tenant_id="tenant-live", user_id="user-1", meta={"source": "messaging"},
+        economy={}, session={
+            "source": "messaging", "channel": "telegram", "command": "/start",
+            "text": "/start", "messaging_update_id": 462236768,
+            "messaging_chat_id": "user-1",
+        }, user={"id": "user-1", "messaging_channel": "telegram"},
+        product={"name": "ClientPlatform"},
+    )
+    proposed = UnifiedTelegramPolicyV3().propose(state)
+    assert proposed.action == "send_message@v1"
+    _, payload = _trusted_build_payload(
+        state=state, out=proposed, pinned_world_model_meta={},
+        tenant_id="tenant-live", product_id=None, domain=None,
+        product_version=None, actor_id="user-1",
+    )
+    envelope = SimpleNamespace(decision=SimpleNamespace(
+        action=proposed.action, payload=payload, cost=0,
+    ))
+    verdict = economics.EconomicAutonomyLayer(survival=_Survival()).review(
+        decision_env=envelope, world_state={},
+    )
+    assert verdict.allow, verdict.reason
+    assert verdict.metadata["budget_class"] == "text_delivery"
+
+    ledger = InMemoryActionBudgetLedger()
+    ledger.record("tenant-live", estimated_cost=100)
+    budget_guard = ActionBudgetGuard(ledger, ActionBudget(max_cost=0, max_actions=0))
+    assert budget_guard.evaluate(SafetyActionContext(
+        action=proposed.action, tenant_id="tenant-live",
+        user_id="user-1", payload=payload,
+    )).status == ControlStatus.ALLOW
+    ctx = ActionExecutionContext(
+        tenant_id="tenant-live", user_id="user-1", action_name=proposed.action,
+        payload=payload, execution_id="decision-1",
+    )
+    builder = ActionImpactBuilder(
+        ActionClassifier(build_default_operational_action_registry()), ActionCostModel(),
+    )
+    accounted = OperationalBudgetAccountant().to_envelope(ctx, builder.build(ctx))
+    assert (accounted.actions_count, accounted.outbound_count, accounted.budget_minor) == (0, 0, 0)

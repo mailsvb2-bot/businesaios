@@ -1,10 +1,4 @@
-"""Canonical provider webhook/update decoder for every messaging channel.
-
-Provider payloads are nested and differ by transport. This module is the sole
-owner of extracting the stable messaging envelope fields used by bindings and
-WorldState ingress. Channel packages may delegate here but must not maintain
-parallel path tables.
-"""
+"""Single-owner provider webhook/update decoder: channel packages reuse these paths."""
 
 from __future__ import annotations
 
@@ -348,19 +342,15 @@ def _canonical_or_passthrough(channel: str) -> str:
 
 
 def _vk_lookup_view(raw: dict[str, Any]) -> dict[str, Any]:
-    """Decode VK JSON-string keyboard payloads without modifying source data."""
-    obj = raw.get("object")
-    if not isinstance(obj, Mapping):
+    """Decode VK keyboard payloads for lookup without changing provider data."""
+    source = raw.get("object")
+    if not isinstance(source, Mapping):
         return raw
-    view = dict(obj)
+    view = dict(source)
     for key in ("payload", "message"):
-        if key == "message":
-            msg = view.get("message")
-            if not isinstance(msg, Mapping):
-                continue
-            holder = dict(msg)
-        else:
-            holder = view
+        holder = view if key == "payload" else view.get("message")
+        if not isinstance(holder, Mapping):
+            continue
         encoded = holder.get("payload")
         if not isinstance(encoded, str) or len(encoded) > 16384:
             continue
@@ -373,14 +363,14 @@ def _vk_lookup_view(raw: dict[str, Any]) -> dict[str, Any]:
         decoded = dict(parsed)
         if str(decoded.get("command") or "").strip().lower() == "start":
             decoded["command"] = "/start"
-        holder["payload"] = decoded
-        if key == "message":
-            view["message"] = holder
+        view["message" if key == "message" else "payload"] = (
+            {**holder, "payload": decoded} if key == "message" else decoded
+        )
     return {**raw, "object": view}
 
 
 def _provider_text(channel: str, raw: Mapping[str, Any], fallback: str) -> str:
-    if channel == "max" and str(raw.get("update_type") or "") == "bot_started":
+    if channel == "max" and raw.get("update_type") == "bot_started":
         return ("/start " + _scalar_text(raw.get("payload"))).strip()
     return fallback
 

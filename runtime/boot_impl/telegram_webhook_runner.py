@@ -28,76 +28,42 @@ def _load_internal_attr(module_name: str, attr_name: str) -> Any:
 
 
 def _build_runner_config() -> TelegramRunnerConfig:
+    numeric = (
+        ("poll_timeout_s", "TG_POLL_TIMEOUT_S", 20, 1, 60),
+        ("poll_limit", "TG_POLL_LIMIT", 50, 1, 100),
+        ("reconcile_every_s", "PAYMENTS_RECONCILE_EVERY_S", 30, 5, 3600),
+        ("reconcile_window_min", "PAYMENTS_RECONCILE_WINDOW_MIN", 30, 1, 1440),
+        ("ml_train_every_s", "SELF_DRIVING_ML_TRAIN_EVERY_S", 3600, 60, 86400),
+        ("ml_monitor_every_s", "SELF_DRIVING_ML_MONITOR_EVERY_S", 60, 10, 3600),
+    )
+    values = {key: env_int(env, default, lo=low, hi=high)
+              for key, env, default, low, high in numeric}
     return TelegramRunnerConfig(
-        poll_timeout_s=env_int("TG_POLL_TIMEOUT_S", 20, lo=1, hi=60),
-        poll_limit=env_int("TG_POLL_LIMIT", 50, lo=1, hi=100),
-        reconcile_every_s=env_int(
-            "PAYMENTS_RECONCILE_EVERY_S",
-            30,
-            lo=5,
-            hi=3600,
-        ),
-        reconcile_window_min=env_int(
-            "PAYMENTS_RECONCILE_WINDOW_MIN",
-            30,
-            lo=1,
-            hi=24 * 60,
-        ),
-        ml_enabled=env_bool("SELF_DRIVING_ML_ENABLED", True),
-        ml_train_every_s=env_int(
-            "SELF_DRIVING_ML_TRAIN_EVERY_S",
-            3600,
-            lo=60,
-            hi=24 * 3600,
-        ),
-        ml_monitor_every_s=env_int(
-            "SELF_DRIVING_ML_MONITOR_EVERY_S",
-            60,
-            lo=10,
-            hi=3600,
-        ),
+        ml_enabled=env_bool("SELF_DRIVING_ML_ENABLED", True), **values,
     )
 
 
 def _register_webhook(settings, *, token: str) -> None:
     if not settings.webhook_enabled or not settings.webhook_auto_register:
         return
-    effect_router_type = _load_internal_attr(
-        "runtime._internal.effect_router",
-        "EffectRouter",
-    )
-    router = effect_router_type()
+    router = _load_internal_attr("runtime._internal.effect_router", "EffectRouter")()
     result = router.telegram_set_webhook(
-        token=token,
-        url=settings.webhook_url,
+        token=token, url=settings.webhook_url,
         secret_token=settings.webhook_secret,
         drop_pending_updates=settings.webhook_drop_pending_updates,
         max_connections=settings.webhook_max_connections,
         allowed_updates=settings.webhook_allowed_updates,
     )
     if not bool((result or {}).get("ok")):
-        raise RuntimeError(
-            f"telegram webhook registration failed: {result}"
-        )
-    log.info(
-        "Telegram webhook registered url=%s path=%s",
-        settings.webhook_url,
-        settings.webhook_path,
-    )
+        raise RuntimeError(f"telegram webhook registration failed: {result}")
+    log.info("Telegram webhook registered url=%s path=%s", settings.webhook_url, settings.webhook_path)
 
 
-def _build_webhook_runtime(
-    *,
-    core: Any,
-    executor: Any,
-    event_store: Any,
-    event_log: Any,
-    payment_outbox: Any,
-    learning_job: Any,
-) -> TelegramWebhookRuntime:
+def _build_webhook_runtime(*, core: Any, executor: Any, event_store: Any,
+                           event_log: Any, payment_outbox: Any,
+                           learning_job: Any) -> TelegramWebhookRuntime:
     settings = validate_telegram_settings(load_telegram_settings())
-    token = resolve_telegram_bot_token()
-    if not token:
+    if not (token := resolve_telegram_bot_token()):
         raise RuntimeError("telegram_token_missing")
     webhook_runtime = TelegramWebhookRuntime(
         decide_fn=build_runtime_decision_callable(issuer=core),
@@ -108,8 +74,7 @@ def _build_webhook_runtime(
         learning_job=learning_job,
         runner_config=_build_runner_config(),
         webhook_config=TelegramWebhookConfig(
-            secret_token=settings.webhook_secret,
-            webhook_path=settings.webhook_path,
+            secret_token=settings.webhook_secret, webhook_path=settings.webhook_path,
         ),
     )
     _register_webhook(settings, token=token)
@@ -117,37 +82,31 @@ def _build_webhook_runtime(
 
 
 def _register_external_product_ingress(router, *, core: Any, executor: Any, event_store: Any) -> None:
-    """Signed external-product webhooks; owner = first ADMIN_USER_IDS entry (notifications go there)."""
+    """Signed external-product webhooks to the canonical owner."""
     import os
-
     from adapters.api.fastapi.external_product_webhook_routes import register_external_product_webhook_routes
     from runtime.integration import external_product_ingress as xpi
 
     tenant_id = os.environ.get("TENANT_ID", "").strip() or "default"
     admins = os.environ.get("ADMIN_USER_IDS", "") or os.environ.get("ADMIN_IDS", "")
-    owner = next((x.strip() for x in admins.split(",") if x.strip()), "")
+    owner = next((value.strip() for value in admins.split(",") if value.strip()), "")
 
-    def ingest(**kw):
-        return xpi.ingest(core=core, executor=executor, event_store=event_store, tenant_id=tenant_id,
-                          owner_user_id=owner, **kw)  # fmt: skip
+    def ingest(**kwargs):
+        return xpi.ingest(core=core, executor=executor, event_store=event_store,
+                          tenant_id=tenant_id, owner_user_id=owner, **kwargs)
 
     register_external_product_webhook_routes(router=router, ingest=ingest)
 
 
 def _register_provider_webhook_ingress(router, *, core: Any, executor: Any) -> None:
-    """Opt-in provider ingress on the process owning DecisionCore and Executor."""
+    """Opt-in provider ingress shares the existing DecisionCore and Executor."""
     from dataclasses import replace
-
     from runtime.platform.config.feature_flags import FeatureFlags
-
     if not FeatureFlags.is_enabled("PROVIDER_WEBHOOK_INBOUND_EXECUTION"):
         return
-
     from adapters.api.fastapi.provider_webhook_routes import register_provider_webhook_routes
     from entrypoints.api.provider_admin_route_handlers import ProviderAdminRouteHandlers
-    from runtime.business_autonomy.provider_webhook_inbound_processor import (
-        ProviderWebhookInboundProcessor,
-    )
+    from runtime.business_autonomy.provider_webhook_inbound_processor import ProviderWebhookInboundProcessor
 
     processor = ProviderWebhookInboundProcessor(decision_core=core, executor=executor)
     base_factory = ProviderAdminRouteHandlers.service_factory
@@ -158,37 +117,22 @@ def _register_provider_webhook_ingress(router, *, core: Any, executor: Any) -> N
         wired_admin = replace(admin, inbound_processor=processor)
         if admin is service:
             return wired_admin
-
         class ProviderServiceView:
             def __getattr__(self, name: str) -> Any:
-                if name == "_provider_admin_service":
-                    return wired_admin
-                return getattr(service, name)
-
+                return wired_admin if name == "_provider_admin_service" else getattr(service, name)
         return ProviderServiceView()
 
     register_provider_webhook_routes(
-        router=router,
-        provider_admin_handlers=ProviderAdminRouteHandlers(service_factory=service_factory),
+        router=router, provider_admin_handlers=ProviderAdminRouteHandlers(service_factory=service_factory),
     )
 
 
-def build_telegram_webhook_app(
-    *,
-    core: Any,
-    executor: Any,
-    event_store: Any,
-    event_log: Any,
-    payment_outbox: Any,
-    learning_job: Any,
-) -> FastAPI:
+def build_telegram_webhook_app(*, core: Any, executor: Any, event_store: Any,
+                               event_log: Any, payment_outbox: Any,
+                               learning_job: Any) -> FastAPI:
     runtime = _build_webhook_runtime(
-        core=core,
-        executor=executor,
-        event_store=event_store,
-        event_log=event_log,
-        payment_outbox=payment_outbox,
-        learning_job=learning_job,
+        core=core, executor=executor, event_store=event_store,
+        event_log=event_log, payment_outbox=payment_outbox, learning_job=learning_job,
     )
     router = APIRouter()
 
@@ -203,10 +147,7 @@ def build_telegram_webhook_app(
     ):
         expected = str(runtime.secret_token or "").strip()
         if not expected or not hmac.compare_digest(expected.encode("utf-8"), (x_telegram_bot_api_secret_token or "").encode("utf-8")):
-            raise HTTPException(
-                status_code=401,
-                detail="invalid webhook secret",
-            )
+            raise HTTPException(status_code=401, detail="invalid webhook secret")
         payload = await request.json()
         runtime.process_update(payload)
         return {"ok": True}
@@ -228,25 +169,8 @@ def build_telegram_webhook_app(
     return app
 
 
-def create_telegram_webhook_app(
-    *,
-    core: Any,
-    executor: Any,
-    event_store: Any,
-    event_log: Any,
-    payment_outbox: Any,
-    learning_job: Any,
-) -> FastAPI:
-    """Compatibility factory kept on the canonical webhook path."""
-
-    return build_telegram_webhook_app(
-        core=core,
-        executor=executor,
-        event_store=event_store,
-        event_log=event_log,
-        payment_outbox=payment_outbox,
-        learning_job=learning_job,
-    )
+# Both public factory names share the exact canonical application builder.
+create_telegram_webhook_app = build_telegram_webhook_app
 
 
 __all__ = [
