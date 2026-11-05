@@ -118,23 +118,32 @@ class EconomicAutonomyLayer:
             if str(action) != "noop@v1":
                 return EconomicLayerVerdict(False, f"degraded_world:{world_state.get('reason', 'missing')}", survival=survival_verdict)
 
-        capital_state = self._coerce_capital_state(self._read_field(world_state, "capital", None))
-        horizon_state = self._coerce_horizon_state(world_state, self._read_field(world_state, "horizon_state", None))
-
-        # Governance applies the existing economic intent contract to the
-        # already-issued decision; it does not classify Telegram payloads.
+        # Text delivery is not an economic expenditure. Keep survival and
+        # degraded-state safety gates above, then leave spending policy to
+        # actual funded actions. Every decision still follows the same
+        # signed DecisionCore -> Executor path and all later safety gates.
         raw_decision = self._read_field(decision_env, "decision", decision_env)
         action = str(self._read_field(raw_decision, "action", ""))
         payload = self._read_field(raw_decision, "payload", {})
         text_delivery = is_budget_free_text_message(action, payload)
-        # Legacy envelopes with an explicit cost must not disguise paid work
-        # as text. Signed Decisions omit cost and use the payload contract.
         explicit_cost = self._read_field(raw_decision, "cost", None)
         if explicit_cost is not None:
-            text_delivery = text_delivery and type(explicit_cost) in (int, float) and explicit_cost == 0
+            text_delivery = (
+                text_delivery and type(explicit_cost) in (int, float)
+                and explicit_cost == 0
+            )
+        if text_delivery:
+            return EconomicLayerVerdict(
+                allow=True, survival=survival_verdict,
+                metadata={"budget_class": "text_delivery", "estimated_spend": 0},
+            )
+
+        capital_state = self._coerce_capital_state(self._read_field(world_state, "capital", None))
+        horizon_state = self._coerce_horizon_state(world_state, self._read_field(world_state, "horizon_state", None))
+
+        # Preserve the historical zero-cost legacy-envelope admission contract.
         require_capital = (
-            strict and not text_delivery
-            and not ActionEconomicsIntent.is_unfunded_message_allowed(decision_env)
+            strict and not ActionEconomicsIntent.is_unfunded_message_allowed(decision_env)
         )
 
         if require_capital:
@@ -144,7 +153,7 @@ class EconomicAutonomyLayer:
                 return EconomicLayerVerdict(False, "missing_horizon_state", survival=survival_verdict)
 
         allocation = None
-        if capital_state is not None and not text_delivery:
+        if capital_state is not None:
             decision_cost = self._coerce_float(self._read_field(decision, "cost", self._read_field(decision_env, "cost", 0.0)), 0.0)
             try:
                 if hasattr(self.capital_engine, "allow_spend") and not self.capital_engine.allow_spend(decision_cost, capital_state):
@@ -173,7 +182,7 @@ class EconomicAutonomyLayer:
             return EconomicLayerVerdict(False, "capital_state_missing", survival=survival_verdict)
 
         strategic = None
-        if horizon_state is not None and not text_delivery:
+        if horizon_state is not None:
             try:
                 if isinstance(horizon_state, HorizonSystemState):
                     strategic = self.horizon_engine.evaluate(horizon_state)
