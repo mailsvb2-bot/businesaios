@@ -134,6 +134,45 @@ def _register_external_product_ingress(router, *, core: Any, executor: Any, even
     register_external_product_webhook_routes(router=router, ingest=ingest)
 
 
+def _register_provider_webhook_ingress(router, *, core: Any, executor: Any) -> None:
+    """Opt-in provider ingress on the process owning DecisionCore and Executor."""
+    from dataclasses import replace
+
+    from runtime.platform.config.feature_flags import FeatureFlags
+
+    if not FeatureFlags.is_enabled("PROVIDER_WEBHOOK_INBOUND_EXECUTION"):
+        return
+
+    from adapters.api.fastapi.provider_webhook_routes import register_provider_webhook_routes
+    from entrypoints.api.provider_admin_route_handlers import ProviderAdminRouteHandlers
+    from runtime.business_autonomy.provider_webhook_inbound_processor import (
+        ProviderWebhookInboundProcessor,
+    )
+
+    processor = ProviderWebhookInboundProcessor(decision_core=core, executor=executor)
+    base_factory = ProviderAdminRouteHandlers.service_factory
+
+    def service_factory(**kwargs):
+        service = base_factory(**kwargs)
+        admin = getattr(service, "_provider_admin_service", service)
+        wired_admin = replace(admin, inbound_processor=processor)
+        if admin is service:
+            return wired_admin
+
+        class ProviderServiceView:
+            def __getattr__(self, name: str) -> Any:
+                if name == "_provider_admin_service":
+                    return wired_admin
+                return getattr(service, name)
+
+        return ProviderServiceView()
+
+    register_provider_webhook_routes(
+        router=router,
+        provider_admin_handlers=ProviderAdminRouteHandlers(service_factory=service_factory),
+    )
+
+
 def build_telegram_webhook_app(
     *,
     core: Any,
@@ -173,6 +212,7 @@ def build_telegram_webhook_app(
         return {"ok": True}
 
     _register_external_product_ingress(router, core=core, executor=executor, event_store=event_store)
+    _register_provider_webhook_ingress(router, core=core, executor=executor)
 
     @asynccontextmanager
     async def lifespan(app: FastAPI):
