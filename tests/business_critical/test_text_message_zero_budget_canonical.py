@@ -116,3 +116,31 @@ def test_non_text_and_other_tenant_still_subject_to_action_budget():
             action=action, tenant_id=tenant, user_id="user-1", payload=payload,
         ))
         assert verdict.status == ControlStatus.BLOCK
+
+
+def test_zero_cost_text_cannot_be_blocked_by_financial_stoploss(strict_layer):
+    payload = _text()
+    decision = SimpleNamespace(action="send_message@v1", payload=payload, cost=0)
+    for economic_state in (
+        {"open_stop_loss_flags": ["active_stop"]},
+        {"protected_cash_reserve": 10000, "cash_on_hand": 0},
+    ):
+        verdict = strict_layer.review(
+            decision_env=SimpleNamespace(decision=decision),
+            world_state={"economics_state": economic_state},
+        )
+        assert verdict.allow, verdict.reason
+        assert verdict.metadata["budget_class"] == "text_delivery"
+
+
+def test_text_still_obeys_non_budget_survival_veto(strict_layer):
+    strict_layer.survival = SimpleNamespace(
+        evaluate=lambda: SimpleNamespace(allow_execution=False, reason="stopped")
+    )
+    verdict = strict_layer.review(
+        decision_env=SimpleNamespace(
+            decision=SimpleNamespace(action="send_message@v1", payload=_text(), cost=0)
+        ),
+        world_state={},
+    )
+    assert not verdict.allow and verdict.reason.startswith("survival_block:")
