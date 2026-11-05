@@ -35,6 +35,7 @@ from core.strategic_horizon.engine import (
     UserDynamics,
 )
 from governance.economic.action_economics_model import ActionEconomicsIntent
+from core.safety.controls.action_budget.models import is_budget_free_text_message
 from governance.economic_layer_env import is_strict_mode
 from governance.economic import EconomicPolicyConfig, EconomicPolicyEngine, EconomicPolicyVerdict
 
@@ -117,11 +118,30 @@ class EconomicAutonomyLayer:
             if str(action) != "noop@v1":
                 return EconomicLayerVerdict(False, f"degraded_world:{world_state.get('reason', 'missing')}", survival=survival_verdict)
 
+        # Text delivery is not an economic expenditure. Keep survival and
+        # degraded-state safety gates above, then leave spending policy to
+        # actual funded actions. Every decision still follows the same
+        # signed DecisionCore -> Executor path and all later safety gates.
+        raw_decision = self._read_field(decision_env, "decision", decision_env)
+        action = str(self._read_field(raw_decision, "action", ""))
+        payload = self._read_field(raw_decision, "payload", {})
+        text_delivery = is_budget_free_text_message(action, payload)
+        explicit_cost = self._read_field(raw_decision, "cost", None)
+        if explicit_cost is not None:
+            text_delivery = (
+                text_delivery and type(explicit_cost) in (int, float)
+                and explicit_cost == 0
+            )
+        if text_delivery:
+            return EconomicLayerVerdict(
+                allow=True, survival=survival_verdict,
+                metadata={"budget_class": "text_delivery", "estimated_spend": 0},
+            )
+
         capital_state = self._coerce_capital_state(self._read_field(world_state, "capital", None))
         horizon_state = self._coerce_horizon_state(world_state, self._read_field(world_state, "horizon_state", None))
 
-        # Governance applies the existing economic intent contract to the
-        # already-issued decision; it does not classify Telegram payloads.
+        # Preserve the historical zero-cost legacy-envelope admission contract.
         require_capital = (
             strict and not ActionEconomicsIntent.is_unfunded_message_allowed(decision_env)
         )

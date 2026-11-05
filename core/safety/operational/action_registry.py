@@ -124,6 +124,7 @@ TELEGRAM_INTERACTIVE_ACTION_DESCRIPTORS: dict[str, ActionCategory] = {
 # A reply to the user's own inbound update is bounded by inbound traffic, not by
 # tenant autonomy, so it must not consume the tenant's autonomous action budget.
 USER_REPLY_INTERACTION = 'user_reply'
+TEXT_DELIVERY_INTERACTION = 'text_delivery'
 
 
 def build_default_operational_action_registry() -> OperationalActionRegistry:
