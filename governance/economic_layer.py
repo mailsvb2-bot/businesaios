@@ -35,6 +35,7 @@ from core.strategic_horizon.engine import (
     UserDynamics,
 )
 from governance.economic.action_economics_model import ActionEconomicsIntent
+from core.safety.controls.action_budget.models import is_budget_free_text_message
 from governance.economic_layer_env import is_strict_mode
 from governance.economic import EconomicPolicyConfig, EconomicPolicyEngine, EconomicPolicyVerdict
 
@@ -122,8 +123,13 @@ class EconomicAutonomyLayer:
 
         # Governance applies the existing economic intent contract to the
         # already-issued decision; it does not classify Telegram payloads.
+        raw_decision = self._read_field(decision_env, "decision", decision_env)
+        action = str(self._read_field(raw_decision, "action", ""))
+        payload = self._read_field(raw_decision, "payload", {})
+        text_delivery = is_budget_free_text_message(action, payload)
         require_capital = (
-            strict and not ActionEconomicsIntent.is_unfunded_message_allowed(decision_env)
+            strict and not text_delivery
+            and not ActionEconomicsIntent.is_unfunded_message_allowed(decision_env)
         )
 
         if require_capital:
@@ -133,7 +139,7 @@ class EconomicAutonomyLayer:
                 return EconomicLayerVerdict(False, "missing_horizon_state", survival=survival_verdict)
 
         allocation = None
-        if capital_state is not None:
+        if capital_state is not None and not text_delivery:
             decision_cost = self._coerce_float(self._read_field(decision, "cost", self._read_field(decision_env, "cost", 0.0)), 0.0)
             try:
                 if hasattr(self.capital_engine, "allow_spend") and not self.capital_engine.allow_spend(decision_cost, capital_state):
@@ -162,7 +168,7 @@ class EconomicAutonomyLayer:
             return EconomicLayerVerdict(False, "capital_state_missing", survival=survival_verdict)
 
         strategic = None
-        if horizon_state is not None:
+        if horizon_state is not None and not text_delivery:
             try:
                 if isinstance(horizon_state, HorizonSystemState):
                     strategic = self.horizon_engine.evaluate(horizon_state)
