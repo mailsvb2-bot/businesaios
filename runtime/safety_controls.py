@@ -11,6 +11,7 @@ from runtime.safety import (
     SafetyEvent,
     canonical_action_id,
     canonical_breaker_key,
+    is_budget_free_text_message,
     is_routine_reply,
 )
 
@@ -96,10 +97,10 @@ def record_allowed_action(*, action: str, payload: Any) -> None:
     runtime = build_safety_control_runtime()
     data = _payload_dict(payload)
     spec = runtime.profile.action_catalog.resolve(str(action))
-    if is_routine_reply(action, data):
+    if is_budget_free_text_message(action, data) or is_routine_reply(action, data):
         _record_safety_event(
             action=action, payload=payload, stage="allow", status="allow",
-            reason="user_reply_not_charged", details={"estimated_cost": 0.0},
+            reason="text_delivery_not_charged", details={"estimated_cost": 0.0},
         )
         return
     default_cost = float(getattr(spec, "default_estimated_cost", 0.0) or 0.0)
