@@ -105,6 +105,25 @@ def is_budget_free_text_message(action: str, payload: Mapping[str, Any]) -> bool
         "economy", "requested_budget", "budget_delta", "amount", "payment_id",
     )):
         return False
+    # Strictly reject extra fields that can hide paid / bulk work while
+    # allowing the already sealed provider routing and inbound proof metadata.
+    allowed_fields = {
+        "tenant_id", "user_id", "text", "channel", "chat_id",
+        "reply_markup", "callback_query_id", "track_event_type", "track_payload",
+        "product_id", "domain", "product_version", "actor_id",
+        "idempotency_key", "world_model_meta", "meta", "recipient_count",
+        "business_id", "goal_id", "autonomy_tier", "estimated_cost",
+    }
+    if set(payload) - allowed_fields:
+        return False
+    meta = payload.get("meta")
+    if meta is not None and not isinstance(meta, Mapping):
+        return False
+    if isinstance(meta, Mapping) and any(meta.get(field) for field in (
+        "requested_budget", "budget_delta", "estimated_cost", "amount",
+        "charge_amount", "campaign_id", "autonomous", "broadcast",
+    )):
+        return False
     tracking = payload.get("track_payload")
     if isinstance(tracking, Mapping) and any(tracking.get(field) for field in (
         "campaign_id", "audience_id", "segment_id", "marketing_variant",
