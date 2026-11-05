@@ -167,10 +167,18 @@ def test_registered_channels_respect_user_reply_budget_without_exempting_outboun
         assert is_routine_reply("send_message@v1", payload)
         assert guard.evaluate(SafetyActionContext(action="send_message@v1",
             tenant_id="tenant-live", user_id="user-1", payload=payload)).status == ControlStatus.ALLOW
+        # Plain text without an inbound claim stays quota-free. The claim
+        # itself is not an authorization shortcut and can be omitted.
+        assert guard.evaluate(SafetyActionContext(
+            action="send_message@v1", tenant_id="tenant-live",
+            user_id="user-1", payload={**payload, "meta": {}},
+        )).status == ControlStatus.ALLOW
         for malicious in (
             {"action": "send_marketing_offer@v1", "payload": payload},
             {"action": "send_message@v1", "payload": {**payload, "estimated_cost": 1.0}},
-            {"action": "send_message@v1", "payload": {**payload, "meta": {}}},
+            {"action": "send_message@v1", "payload": {**payload, "meta": {
+                "inbound_user_reply": {"signature": "forged"},
+            }}},
         ):
             assert guard.evaluate(SafetyActionContext(
                 action=malicious["action"], tenant_id="tenant-live",
