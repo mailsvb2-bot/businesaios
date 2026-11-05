@@ -13,6 +13,7 @@ CANON_PROVIDER_WEBHOOK_INBOUND_PROCESSOR = True
 @dataclass(frozen=True)
 class ProviderWebhookInboundProcessor:
     decision_core: object
+    executor: object | None = None
 
     def process(self, *, handoff: Mapping[str, Any]) -> dict[str, Any]:
         payload = dict(handoff or {}).get("inbound_message") or {}
@@ -35,10 +36,20 @@ class ProviderWebhookInboundProcessor:
         # Provider webhook handoff must not issue decisions directly. The
         # inbound gateway owns the canonical bridge to DecisionCore.
         envelope = process_inbound_gateway_message(gateway=gateway, message=message)
-        return {
+        result = {
             'accepted': True,
             'decision_envelope': envelope,
         }
+        if self.executor is not None and envelope is not None:
+            from runtime.execution.execution_path_lock import (
+                execute_locked_decision,
+                lock_execution_envelope,
+            )
+            result['execution'] = execute_locked_decision(
+                executor=self.executor,
+                locked_path=lock_execution_envelope(envelope=envelope),
+            )
+        return result
 
 
 __all__ = ['CANON_PROVIDER_WEBHOOK_INBOUND_PROCESSOR', 'ProviderWebhookInboundProcessor']
