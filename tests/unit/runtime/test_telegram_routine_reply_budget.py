@@ -246,15 +246,15 @@ def test_inbound_reply_must_match_outbound_channel_and_chat():
     )
     for override in ({"channel": "max"}, {"chat_id": "chat-2"},
                      {"channel": "vk", "chat_id": "chat-2"}):
-        _, payload = _trusted_build_payload(
-            state=state,
-            out=ProposedAction("send_message@v1", {
-                "user_id": "user-1", "text": "not a reply", **override,
-            }),
-            pinned_world_model_meta={}, tenant_id="tenant-live",
-            product_id=None, domain=None, product_version=None, actor_id="user-1",
-        )
-        assert not is_routine_reply("send_message@v1", payload)
+        with pytest.raises(RuntimeError, match="DECISION_(CHANNEL|CHAT_ID)_MISMATCH"):
+            _trusted_build_payload(
+                state=state,
+                out=ProposedAction("send_message@v1", {
+                    "user_id": "user-1", "text": "not a reply", **override,
+                }),
+                pinned_world_model_meta={}, tenant_id="tenant-live",
+                product_id=None, domain=None, product_version=None, actor_id="user-1",
+            )
 
     _, reply = _trusted_build_payload(
         state=state, out=ProposedAction("send_message@v1", {
