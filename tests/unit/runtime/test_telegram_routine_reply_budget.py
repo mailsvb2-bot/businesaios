@@ -624,3 +624,15 @@ def test_unverified_messaging_reply_is_sealed_to_session_channel(channel):
     )
     assert payload["channel"] == channel
     assert payload["chat_id"] == -9
+
+@pytest.mark.parametrize("field,bad", [("channel", "telegram"), ("chat_id", "-10")])
+def test_unverified_reply_rejects_cross_transport_target(field, bad):
+    state = SimpleNamespace(user_id="user-1", meta={}, product={},
+        session={"source": "messaging", "channel": "vk", "chat_id": "-9"})
+    with pytest.raises(RuntimeError, match="DECISION_(CHANNEL|CHAT_ID)_MISMATCH"):
+        build_payload(
+            state=state, out=ProposedAction("send_message@v1",
+                {"user_id": "user-1", "text": "menu", field: bad}),
+            pinned_world_model_meta={}, tenant_id="tenant-live",
+            product_id=None, domain=None, product_version=None, actor_id="user-1",
+        )
