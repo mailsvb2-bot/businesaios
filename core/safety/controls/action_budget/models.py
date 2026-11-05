@@ -78,7 +78,7 @@ def is_budget_free_text_message(action: str, payload: Mapping[str, Any]) -> bool
     """Zero-budget text accounting, not authorization or bulk-send permission."""
     if action != "send_message@v1" or not isinstance(payload, Mapping):
         return False
-    if not isinstance(payload.get("text"), str):
+    if not isinstance(payload.get("text"), str) or not is_routine_reply(action, payload):
         return False
     if not isinstance(payload.get("user_id"), str) or not payload["user_id"].strip():
         return False
@@ -118,12 +118,6 @@ def is_budget_free_text_message(action: str, payload: Mapping[str, Any]) -> bool
         "charge_amount", "campaign_id", "autonomous", "broadcast",
     )):
         return False
-    # A claimed inbound-reply proof must stay bound to the actual channel,
-    # tenant, recipient and chat. Invalid claims are never reclassified as
-    # proof-free text, even though plain text itself has no spending quota.
-    if isinstance(meta, Mapping) and "inbound_user_reply" in meta:
-        if not is_routine_reply(action, payload):
-            return False
     tracking = payload.get("track_payload")
     if isinstance(tracking, Mapping) and any(tracking.get(field) for field in (
         "campaign_id", "audience_id", "segment_id", "marketing_variant",
