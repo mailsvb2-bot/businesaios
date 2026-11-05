@@ -613,3 +613,55 @@ def test_operational_user_reply_classification_requires_same_tenant():
         )).spec.dimensions.get("interaction")
     assert classify("tenant-live") == USER_REPLY_INTERACTION
     assert classify("tenant-other") != USER_REPLY_INTERACTION
+
+
+def test_canonical_start_policy_passes_all_budget_layers_without_capital(monkeypatch):
+    import governance.economic_layer as economics
+
+    monkeypatch.setattr(economics, "is_strict_mode", lambda: True)
+
+    class _Survival:
+        def evaluate(self):
+            return SimpleNamespace(allow_execution=True, reason="ok")
+
+    state = SimpleNamespace(
+        tenant_id="tenant-live", user_id="user-1", meta={"source": "messaging"},
+        economy={}, session={
+            "source": "messaging", "channel": "telegram", "command": "/start",
+            "text": "/start", "messaging_update_id": 462236768,
+            "messaging_chat_id": "user-1",
+        }, user={"id": "user-1", "messaging_channel": "telegram"},
+        product={"name": "ClientPlatform"},
+    )
+    proposed = UnifiedTelegramPolicyV3().propose(state)
+    assert proposed.action == "send_message@v1"
+    _, payload = _trusted_build_payload(
+        state=state, out=proposed, pinned_world_model_meta={},
+        tenant_id="tenant-live", product_id=None, domain=None,
+        product_version=None, actor_id="user-1",
+    )
+    envelope = SimpleNamespace(decision=SimpleNamespace(
+        action=proposed.action, payload=payload, cost=0,
+    ))
+    verdict = economics.EconomicAutonomyLayer(survival=_Survival()).review(
+        decision_env=envelope, world_state={},
+    )
+    assert verdict.allow, verdict.reason
+    assert verdict.metadata["budget_class"] == "text_delivery"
+
+    ledger = InMemoryActionBudgetLedger()
+    ledger.record("tenant-live", estimated_cost=100)
+    budget_guard = ActionBudgetGuard(ledger, ActionBudget(max_cost=0, max_actions=0))
+    assert budget_guard.evaluate(SafetyActionContext(
+        action=proposed.action, tenant_id="tenant-live",
+        user_id="user-1", payload=payload,
+    )).status == ControlStatus.ALLOW
+    ctx = ActionExecutionContext(
+        tenant_id="tenant-live", user_id="user-1", action_name=proposed.action,
+        payload=payload, execution_id="decision-1",
+    )
+    builder = ActionImpactBuilder(
+        ActionClassifier(build_default_operational_action_registry()), ActionCostModel(),
+    )
+    accounted = OperationalBudgetAccountant().to_envelope(ctx, builder.build(ctx))
+    assert (accounted.actions_count, accounted.outbound_count, accounted.budget_minor) == (0, 0, 0)
