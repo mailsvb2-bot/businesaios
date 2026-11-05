@@ -127,6 +127,11 @@ class EconomicAutonomyLayer:
         action = str(self._read_field(raw_decision, "action", ""))
         payload = self._read_field(raw_decision, "payload", {})
         text_delivery = is_budget_free_text_message(action, payload)
+        # Legacy envelopes with an explicit cost must not disguise paid work
+        # as text. Signed Decisions omit cost and use the payload contract.
+        explicit_cost = self._read_field(raw_decision, "cost", None)
+        if explicit_cost is not None:
+            text_delivery = text_delivery and type(explicit_cost) in (int, float) and explicit_cost == 0
         require_capital = (
             strict and not text_delivery
             and not ActionEconomicsIntent.is_unfunded_message_allowed(decision_env)
