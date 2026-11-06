@@ -46,8 +46,7 @@ class WebhookParsed:
 
     @property
     def dedupe_key(self) -> str:
-        # Stable idempotency key.
-        # Prefer explicit notification id; otherwise fallback to event+payment.
+            # Prefer explicit notification id; otherwise fallback to event+payment.
         nid = (self.notification_id or "").strip()
         if nid:
             return f"yk:webhook:{nid}"
@@ -85,7 +84,9 @@ def verify_webhook(
         if ":" not in decoded:
             raise WebhookAuthError("bad_basic_auth")
         u, p = decoded.split(":", 1)
-        if str(u) != str(basic_user or "") or str(p) != str(basic_pass or ""):
+        if not basic_user or not basic_pass:
+            raise WebhookAuthError("missing_basic_credentials")
+        if not (hmac.compare_digest(u, str(basic_user)) and hmac.compare_digest(p, str(basic_pass))):
             raise WebhookAuthError("invalid_basic_credentials")
         return
     if mode == "hmac_sha256":
@@ -96,7 +97,6 @@ def verify_webhook(
             raise WebhookAuthError("missing_hmac_secret")
         mac = hmac.new(str(hmac_secret).encode("utf-8"), msg=bytes(body_bytes), digestmod=hashlib.sha256)
         expected = mac.hexdigest()
-        # constant-time compare
         if not hmac.compare_digest(str(sig).strip().lower(), str(expected).strip().lower()):
             raise WebhookAuthError("bad_signature")
         return
@@ -143,12 +143,7 @@ def redact_headers(headers: dict[str, str]) -> dict[str, str]:
     safe: dict[str, str] = {}
     for k, v in (headers or {}).items():
         lk = str(k).lower()
-        if lk in {"authorization", "cookie", "set-cookie"}:
-            continue
-        if lk.startswith("x-yookassa") or lk.startswith("x-yc") or lk.startswith("x-y-k") or lk.startswith("x-y"):
-            # Keep provider correlation ids but not secrets.
-            safe[str(k)] = str(v)[:200]
-        if lk in {"user-agent", "content-type", "x-request-id", "x-real-ip", "x-forwarded-for"}:
+        if lk in {"user-agent", "content-type", "x-request-id", "x-real-ip", "x-forwarded-for", "x-yookassa-request-id"}:
             safe[str(k)] = str(v)[:200]
     return safe
 
