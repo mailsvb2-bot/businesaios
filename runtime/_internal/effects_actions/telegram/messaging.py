@@ -11,7 +11,7 @@ from runtime._internal.effects_actions.telegram.messaging_parts import (
     track_business_event,
     track_delivery,
 )
-from runtime.execution.context import current_execution_business_id
+from runtime.execution.context import assert_called_from_executor, current_execution_business_id
 
 
 def _resolve_business_scope(explicit_business_id: str) -> str:
@@ -42,6 +42,7 @@ def send_message_effect(
     channel_policy: dict | None = None,
     transport_guard: Any = None,
 ) -> Any:
+    assert_called_from_executor()
     resolved_business_id = _resolve_business_scope(business_id)
     msg = build_outbound_message(
         decision_id=decision_id,

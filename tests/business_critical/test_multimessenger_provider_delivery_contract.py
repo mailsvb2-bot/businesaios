@@ -15,6 +15,7 @@ from runtime._internal.effects_actions.telegram.delivery_evidence import (
 from runtime._internal.effects_actions.telegram.messaging_parts import (
     transport as delivery_transport,
 )
+from runtime.execution.context import executor_context
 from runtime.messaging import CHANNEL_SPECS
 from runtime.messaging.bootstrap import build_multichannel_dispatcher
 from runtime.messaging.delivery_result import DeliveryResult
@@ -579,15 +580,18 @@ def test_delivery_evidence_never_mislabels_nontelegram_as_telegram(
         fake_evidence,
     )
 
-    result = messaging_effect.send_message_effect(
-        object(),
-        decision_id="decision-1",
-        correlation_id="correlation-1",
-        tenant_id="business-a",
-        user_id="owner-1",
-        text="Canonical message",
-        channel=channel,
-    )
+    # The effect is executor-only; exercise delivery evidence inside the
+    # same authorized context as production execution, never disable the guard.
+    with executor_context():
+        result = messaging_effect.send_message_effect(
+            object(),
+            decision_id="decision-1",
+            correlation_id="correlation-1",
+            tenant_id="business-a",
+            user_id="owner-1",
+            text="Canonical message",
+            channel=channel,
+        )
 
     assert result["ok"] is True
     assert captured["action_type"] == expected_action_type
