@@ -46,7 +46,7 @@ class WebhookParsed:
 
     @property
     def dedupe_key(self) -> str:
-            # Prefer explicit notification id; otherwise fallback to event+payment.
+        # Prefer explicit notification id; otherwise fallback to event+payment.
         nid = (self.notification_id or "").strip()
         if nid:
             return f"yk:webhook:{nid}"
@@ -86,7 +86,7 @@ def verify_webhook(
         u, p = decoded.split(":", 1)
         if not basic_user or not basic_pass:
             raise WebhookAuthError("missing_basic_credentials")
-        if not (hmac.compare_digest(u, str(basic_user)) and hmac.compare_digest(p, str(basic_pass))):
+        if not (hmac.compare_digest(u, str(basic_user)) & hmac.compare_digest(p, str(basic_pass))):
             raise WebhookAuthError("invalid_basic_credentials")
         return
     if mode == "hmac_sha256":
