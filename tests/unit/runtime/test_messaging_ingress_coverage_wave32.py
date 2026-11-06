@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from inspect import signature
+
 import runtime.messaging_ingress as ingress
 from runtime.messaging.channel_types import ALL_CHANNELS
 
@@ -92,6 +94,8 @@ def test_every_concrete_provider_adapter_uses_the_shared_payload_contract() -> N
         "api": ingress.api_payload_to_messaging_event,
     }
     for expected_channel, adapter in wrappers.items():
+        assert adapter.__name__ == f"{expected_channel.replace('_', '')}_payload_to_messaging_event"
+        assert tuple(signature(adapter).parameters) == ("payload", "tenant_id", "product_name", "timezone")
         event = adapter(
             {"author_id": "user", "thread_id": "thread", "content": "hello", "id": "id-1"},
             tenant_id="tenant",

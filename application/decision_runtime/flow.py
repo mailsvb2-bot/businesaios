@@ -7,6 +7,7 @@ from typing import Any
 from application.decision_runtime.envelope_builder import bind_product_metadata, build_decision_envelope
 from application.decision_state.world_model_metadata import attach_world_model_metadata
 from core.ai.action_ranking import OBJECTIVE_DIMENSIONS
+from core.safety.controls.action_budget.models import is_routine_reply, issue_verified_reply
 
 
 def _mapping(value: object) -> dict[str, Any]:
@@ -40,10 +41,9 @@ def _finite_number(value: object) -> float | None:
 
 
 def _world_model_meta_from_payload(payload: Mapping[str, Any]) -> dict[str, Any]:
-    direct = _mapping(payload.get("world_model_meta"))
-    if direct:
-        return direct
-    return _mapping(_mapping(payload.get("meta")).get("world_model_meta"))
+    return _mapping(payload.get("world_model_meta")) or _mapping(
+        _mapping(payload.get("meta")).get("world_model_meta")
+    )
 
 
 def _decision_contract_v2_seed(
@@ -62,9 +62,9 @@ def _decision_contract_v2_seed(
         if isinstance(alternatives_raw, list | tuple)
         else None
     )
-    selection = _mapping(decision_context.get("selection", ranking.get("_decision_selection")))
-    if not selection:
-        selection = {"option_id": str(getattr(out, "action", "") or "")}
+    selection = _mapping(decision_context.get("selection", ranking.get("_decision_selection"))) or {
+        "option_id": str(getattr(out, "action", "") or "")
+    }
 
     world_model_meta = _world_model_meta_from_payload(payload)
     confidence = _finite_number(payload.get("confidence"))
@@ -73,52 +73,28 @@ def _decision_contract_v2_seed(
         dimension: _finite_number(ranking.get(f"objective:{dimension}"))
         for dimension in OBJECTIVE_DIMENSIONS
     }
-    has_complete_objective_projection = all(
-        value is not None for value in objective_projection.values()
-    )
-    if not has_complete_objective_projection:
+    if any(value is None for value in objective_projection.values()):
         objective_projection = None
-    risk: Any = payload.get("risk") if "risk" in payload else None
-    if risk is None:
-        risk_penalty = _finite_number(ranking.get("risk_penalty"))
-        if risk_penalty is not None:
-            risk = {"risk_penalty": risk_penalty}
+    risk: Any = payload.get("risk")
+    if risk is None and (risk_penalty := _finite_number(ranking.get("risk_penalty"))) is not None:
+        risk = {"risk_penalty": risk_penalty}
 
-    uncertainties: list[str] = []
-    if alternatives is None:
-        uncertainties.append("alternatives:UNKNOWN")
-    if confidence is None:
-        uncertainties.append("confidence:UNKNOWN")
-    if expected_value is None:
-        uncertainties.append("expected_value:UNKNOWN")
-    if objective_projection is None:
-        uncertainties.append("objective_vector:UNKNOWN")
-    if risk is None:
-        uncertainties.append("risk:UNKNOWN")
-    baseline = state_meta.get("do_nothing_baseline") if "do_nothing_baseline" in state_meta else None
-    if baseline is None:
-        uncertainties.append("do_nothing_baseline:UNKNOWN")
+    baseline = state_meta.get("do_nothing_baseline")
+    uncertainties = [
+        f"{name}:UNKNOWN" for name, value in (
+            ("alternatives", alternatives), ("confidence", confidence),
+            ("expected_value", expected_value), ("objective_vector", objective_projection),
+            ("risk", risk), ("do_nothing_baseline", baseline),
+        ) if value is None
+    ]
 
-    product = _mapping(
-        state.get("product") if isinstance(state, Mapping) else getattr(state, "product", {})
-    )
+    product = _mapping(state.get("product") if isinstance(state, Mapping) else getattr(state, "product", {}))
     business_id = str(
-        payload.get("business_id")
-        or product.get("business_id")
-        or state_meta.get("business_id")
-        or "UNKNOWN"
+        payload.get("business_id") or product.get("business_id") or state_meta.get("business_id") or "UNKNOWN"
     ).strip() or "UNKNOWN"
-    goal_id = str(
-        payload.get("goal_id")
-        or _mapping(payload.get("meta")).get("canonical_goal_id")
-        or ""
-    ).strip() or None
+    goal_id = str(payload.get("goal_id") or _mapping(payload.get("meta")).get("canonical_goal_id") or "").strip() or None
     model_profile_raw = state_meta.get("model_profile")
-    model_profile = (
-        str(model_profile_raw).strip()
-        if isinstance(model_profile_raw, str) and str(model_profile_raw).strip()
-        else "UNKNOWN"
-    )
+    model_profile = model_profile_raw.strip() if isinstance(model_profile_raw, str) and model_profile_raw.strip() else "UNKNOWN"
     canonical_goal_context = _mapping(state_meta.get("canonical_goal"))
     canonical_goal = _mapping(canonical_goal_context.get("goal"))
     constraint_view: Any = state_meta.get("constraint_explainability")
@@ -129,9 +105,7 @@ def _decision_contract_v2_seed(
     return {
         "business_id": business_id,
         "goal_id": goal_id,
-        "world_state_version": str(
-            world_model_meta.get("semantic_state_id") or "UNKNOWN"
-        ),
+        "world_state_version": str(world_model_meta.get("semantic_state_id") or "UNKNOWN"),
         "agent_id": "PENDING_ISSUER_BINDING",
         "model_profile": model_profile,
         "decision_strategy": str(policy_id or "UNKNOWN"),
@@ -181,22 +155,43 @@ def build_payload(
     )
     payload = attach_world_model_metadata(envelope_payload=tagged.payload, state=state)
     meta_block = dict(payload.get("meta") or {})
-    state_meta = _state_meta(state)
-    # A reply is credited only when the canonical inbound state and chosen
-    # one-recipient action agree. Drop any policy-supplied claim first.
     meta_block.pop("inbound_user_reply", None)
     if "meta" in payload:
         payload["meta"] = meta_block
+    state_meta = _state_meta(state)
     session = _mapping(state.get("session") if isinstance(state, Mapping) else getattr(state, "session", {}))
-    event_id = session.get("messaging_update_id")
-    state_user = str(state.get("user_id") if isinstance(state, Mapping) else getattr(state, "user_id", "") or "")
+    channel = str(session.get("channel") or "").strip().lower()
+    event_id = session.get("messaging_update_id") if channel == "telegram" else session.get("transport_message_id")
+    state_user = (state.get("user_id") if isinstance(state, Mapping) else getattr(state, "user_id", None))
+    state_tenant = (state.get("tenant_id") if isinstance(state, Mapping) else getattr(state, "tenant_id", None))
+    # Preserve existing verified reply sealing. For unverified messages never
+    # silently fall through to the Telegram transport on a non-Telegram ingress.
+    if (getattr(out, "action", "") == "send_message@v1"
+            and session.get("source") in {"messaging", "customer_bot"} and channel):
+        if payload.get("channel") not in (None, "", channel):
+            raise RuntimeError("DECISION_CHANNEL_MISMATCH")
+        payload["channel"] = channel
+        chat = str(session.get("chat_id") or session.get("messaging_chat_id") or "")
+        if chat and str(payload.get("chat_id") or chat) != chat:
+            raise RuntimeError("DECISION_CHAT_ID_MISMATCH")
+        if chat.lstrip("-").isdigit():
+            payload["chat_id"] = int(chat)
     if (getattr(out, "action", "") == "send_message@v1"
             and session.get("source") in {"messaging", "customer_bot"}
-            and session.get("channel") == "telegram"
-            and type(event_id) is int and event_id >= 0
-            and state_user and str(payload.get("user_id") or "") == state_user
-            and (payload.get("recipient_count") is None or payload.get("recipient_count") == 1)):
-        meta_block["inbound_user_reply"] = {"channel": "telegram", "update_id": event_id}
+            and state_user is not None and state_tenant is not None):
+        proof = issue_verified_reply(
+            tenant_id=str(state_tenant), channel=channel, user_id=str(state_user),
+            update_id=event_id, chat_id=str(session.get("chat_id") or session.get("messaging_chat_id") or ""),
+            text=str(payload.get("text") or ""),
+        )
+        if proof:
+            candidate = dict(payload)
+            candidate["channel"] = channel
+            if session.get("chat_id"):
+                candidate["chat_id"] = str(session["chat_id"])
+            if is_routine_reply("send_message@v1", {**candidate, "meta": {"inbound_user_reply": proof}}):
+                payload.update({key: candidate[key] for key in ("channel", "chat_id") if key in candidate})
+                meta_block["inbound_user_reply"] = proof
     canonical_goal_id = _canonical_goal_identity(state)
     if canonical_goal_id:
         payload_goal_id = str(payload.get("goal_id") or "").strip()

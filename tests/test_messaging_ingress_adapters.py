@@ -53,3 +53,34 @@ def test_concrete_messaging_adapters_return_ingress_events():
         assert state.session["source"] == "messaging"
         assert state.session["channel"] == channel
         assert state.session["messaging_update_id"] == "m1"
+
+
+def test_start_command_canonicalised_across_bot_mentions_and_case():
+    from runtime.messaging_ingress import split_command
+
+    assert split_command("/start@my_bot ref_1") == ("/start", "ref_1")
+    assert split_command("/START") == ("/start", "")
+    assert split_command("привет") == ("", "привет")
+
+
+def test_vk_start_button_json_payload_decodes_to_start_command():
+    from runtime.messaging.provider_inbound_decoder import decode_provider_inbound
+
+    raw = {"type": "message_new", "object": {"message": {
+        "from_id": 5, "peer_id": 5, "id": 9, "text": "Начать",
+        "payload": '{"command":"start"}'}}}
+    decoded = decode_provider_inbound(channel="vk", payload=raw)
+    assert decoded["text"] == "/start"
+    assert raw["object"]["message"]["payload"] == '{"command":"start"}'
+    raw["object"]["message"]["payload"] = '{"callback_data":"menu:main"}'
+    assert decode_provider_inbound(channel="vk", payload=raw)["text"] == "menu:main"
+
+
+def test_max_bot_started_decodes_to_start_with_payload():
+    from runtime.messaging.provider_inbound_decoder import decode_provider_inbound
+
+    raw = {"update_type": "bot_started", "timestamp": 1, "chat_id": 77,
+           "user": {"user_id": 42, "name": "A"}, "payload": "ref_abc"}
+    decoded = decode_provider_inbound(channel="max", payload=raw)
+    assert decoded["text"] == "/start ref_abc"
+    assert decoded["user_id"] == "42" and decoded["chat_id"] == "77"

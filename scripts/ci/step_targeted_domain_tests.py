@@ -68,7 +68,10 @@ def run() -> tuple[bool, str]:
     # Run matching domain tests even when every selected test carries the integration marker.
     # The previous filter silently deselected the entire impacted-domain matrix.
     mark_expression = "not slow and not gate"
-    chunk_size = max(1, int(os.environ.get("TARGETED_DOMAIN_CHUNK_SIZE", "40")))
+    # Bound each process independently: provider/headless suites can exceed
+    # 300s when 40 files run under one interpreter on the shared CI runner.
+    # Retain every selected file and the existing fail-closed per-chunk verdict.
+    chunk_size = max(1, int(os.environ.get("TARGETED_DOMAIN_CHUNK_SIZE", "6")))
     chunks = _chunks(tests, chunk_size)
     collected_chunks = 0
     empty_chunks = 0
