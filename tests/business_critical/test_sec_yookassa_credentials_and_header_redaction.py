@@ -71,3 +71,26 @@ def test_audit_header_values_remain_bounded():
         body_bytes=body,
     )
     assert payload["headers"] == {"X-Request-Id": "a" * 200}
+
+
+def test_basic_auth_evaluates_password_even_when_username_is_wrong(monkeypatch):
+    from core.payments import yookassa_webhook
+
+    calls = []
+    real_compare = yookassa_webhook.hmac.compare_digest
+
+    def observed_compare(actual, expected):
+        calls.append((actual, expected))
+        return real_compare(actual, expected)
+
+    monkeypatch.setattr(yookassa_webhook.hmac, "compare_digest", observed_compare)
+    token = base64.b64encode(b"wrong-user:wrong-pass").decode()
+    with pytest.raises(WebhookAuthError, match="invalid_basic_credentials"):
+        verify_webhook(
+            headers={"Authorization": f"Basic {token}"},
+            body_bytes=b"{}",
+            auth_mode="basic",
+            basic_user="merchant",
+            basic_pass="secret",
+        )
+    assert calls == [("wrong-user", "merchant"), ("wrong-pass", "secret")]
