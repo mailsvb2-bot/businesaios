@@ -91,7 +91,9 @@ def test_canonical_decision_without_cost_can_open_menu(layer, extra, allowed):
     evaluator, policy = layer
     result = evaluator.review(decision_env=envelope, world_state={})
     assert result.allow is allowed, result.reason
-    assert policy.called == int(allowed)
+    # Fully bound single-recipient text is never sent through a spend policy.
+    # Legacy unbound / ambiguous envelopes retain their previous review.
+    assert policy.called == int(allowed and not (extra.get("tenant_id") == "tenant-live"))
 
 @pytest.mark.parametrize("tenant_id,allowed", [("tenant-live", True), ("", False), (" ", False), (7, False), (None, True)])
 def test_tenant_scoped_free_menu_admission(layer, tenant_id, allowed):
@@ -99,7 +101,7 @@ def test_tenant_scoped_free_menu_admission(layer, tenant_id, allowed):
     payload = {"tenant_id": tenant_id, "user_id": "u", "text": "Menu"}
     result = evaluator.review(decision_env=_envelope("send_message@v1", payload), world_state={})
     assert result.allow is allowed, result.reason
-    assert policy.called == int(allowed)
+    assert policy.called == int(allowed and tenant_id is None)
     if not allowed:
         assert result.reason == "missing_capital_state"
 

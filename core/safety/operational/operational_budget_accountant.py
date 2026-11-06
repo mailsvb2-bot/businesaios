@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from core.safety.controls.action_budget.models import is_budget_free_text_message
 from datetime import UTC, datetime
 from typing import Any
 
@@ -38,7 +39,8 @@ class OperationalBudgetAccountant:
 
         # Replies to the requesting user's own update are paced by inbound traffic;
         # counting them would silently cut every chat off after the hourly budget.
-        user_reply = str((impact.dimensions or {}).get("interaction") or "") == "user_reply"
+        user_reply = (str((impact.dimensions or {}).get("interaction") or "") == "user_reply"
+                      or is_budget_free_text_message(ctx.action_name, ctx.payload))
         normalized_execution_id = None
         if ctx.execution_id is not None:
             text = str(ctx.execution_id).strip()
@@ -50,7 +52,7 @@ class OperationalBudgetAccountant:
             hour_bucket=now.strftime("%Y-%m-%dT%H"),
             day_bucket=now.strftime("%Y-%m-%d"),
             actions_count=0 if user_reply else 1,
-            budget_minor=int(impact.cost_minor),
+            budget_minor=0 if user_reply else int(impact.cost_minor),
             publications_count=int(impact.publication_count),
             outbound_count=0 if user_reply else int(impact.outbound_count),
             strategic_changes_without_approval=int(strategic_wo_approval),

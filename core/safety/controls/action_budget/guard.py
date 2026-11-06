@@ -4,7 +4,7 @@ from ..action_catalog import ActionSafetyCatalog, build_default_action_catalog
 from ..action_context import SafetyActionContext
 from ..control_result import ControlDecision, ControlStatus
 from .ledger import ActionBudgetLedger
-from .models import ActionBudget, is_routine_reply
+from .models import ActionBudget, is_budget_free_text_message, is_routine_reply
 
 
 class ActionBudgetGuard:
@@ -17,7 +17,13 @@ class ActionBudgetGuard:
 
     def evaluate(self, ctx: SafetyActionContext) -> ControlDecision:
         payload = dict(ctx.payload)
-        if is_routine_reply(ctx.action, payload):
+        if str(payload.get("tenant_id") or "") == str(ctx.tenant_id) and is_budget_free_text_message(ctx.action, payload):
+            return ControlDecision(
+                control=self.control_name, status=ControlStatus.ALLOW,
+                reason="text_delivery_budget_not_applicable",
+                details={"budget_class": "text_delivery"},
+            )
+        if str(payload.get("tenant_id") or "") == str(ctx.tenant_id) and is_routine_reply(ctx.action, payload):
             # Verified inbound replies are already accounted for by the
             # canonical operational user_reply policy, not lifetime spend.
             return ControlDecision(

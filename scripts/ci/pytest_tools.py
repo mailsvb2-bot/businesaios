@@ -146,7 +146,17 @@ def _discover_test_files(target_args: list[str]) -> tuple[Path, ...]:
                 for candidate in iter_repository_python_files(path)
                 if candidate.name.startswith("test_")
             )
-    return tuple(sorted(files))
+    # Keep pytest's --ignore contract when directory targets are expanded into
+    # explicit file shards. Otherwise ignored headless smoke files run twice.
+    ignored = tuple(
+        (root / arg.partition("=")[2]).resolve()
+        for arg in target_args
+        if arg.startswith("--ignore=") and arg.partition("=")[2]
+    )
+    return tuple(sorted(
+        path for path in files
+        if not any(path == excluded or path.is_relative_to(excluded) for excluded in ignored)
+    ))
 
 
 def _build_test_shards(

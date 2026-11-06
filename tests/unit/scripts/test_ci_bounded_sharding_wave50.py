@@ -427,7 +427,7 @@ def test_business_critical_ci_uses_bounded_full_coverage_shards(monkeypatch):
         True, "business critical invariant gate passed"
     )
     assert captured["target_args"] == ["tests/business_critical"]
-    assert captured["max_files_per_shard"] == 16
+    assert captured["max_files_per_shard"] == 6
     assert captured["timeout_per_shard"] == 240
 
 
@@ -445,3 +445,86 @@ def test_business_critical_shard_failure_is_release_blocker(monkeypatch):
     assert step_business_critical_tests.run() == (
         False, "shard failed: business invariant violated"
     )
+
+
+def test_test_discovery_honors_explicit_ignored_files_and_directories(
+    monkeypatch, tmp_path: Path,
+) -> None:
+    from scripts.ci import pytest_tools
+
+    keep = _write(tmp_path / "tests" / "test_keep.py", "def test_ok(): pass\n")
+    omitted = _write(tmp_path / "tests" / "test_omit.py", "def test_ok(): pass\n")
+    nested = _write(
+        tmp_path / "tests" / "ignored" / "test_nested.py",
+        "def test_ok(): pass\n",
+    )
+    monkeypatch.setattr(pytest_tools, "repo_root", lambda: tmp_path)
+    discovered = pytest_tools._discover_test_files([
+        "tests", "--ignore=tests/test_omit.py", "--ignore=tests/ignored",
+    ])
+    assert discovered == (keep,)
+    assert omitted not in discovered and nested not in discovered
+
+
+def test_integration_ci_preserves_headless_smoke_and_shards_core(monkeypatch) -> None:
+    from types import SimpleNamespace
+    from scripts.ci import step_integration_tests
+
+    monkeypatch.setattr(step_integration_tests, "repo_root", lambda: Path("/repo"))
+    monkeypatch.setattr(
+        step_integration_tests, "project_shape_config",
+        lambda _root: SimpleNamespace(
+            optional_integration_targets=("tests/integration", "tests/runtime", "tests/interfaces"),
+            integration_mark_expression="not slow and not gate",
+        ),
+    )
+    calls = []
+
+    def fake_sharded(**kwargs):
+        calls.append(("core", kwargs))
+        return True, "all core shards passed"
+
+    def fake_smoke(**kwargs):
+        calls.append(("headless", kwargs))
+        return True, "smoke passed"
+
+    monkeypatch.setattr(
+        step_integration_tests, "run_pytest_sharded_with_report", fake_sharded,
+    )
+    monkeypatch.setattr(step_integration_tests, "_run_pytest_gate", fake_smoke)
+    assert step_integration_tests.run()[0] is True
+    assert [kind for kind, _ in calls] == [
+        "core", "headless", "headless", "headless",
+    ]
+    core = calls[0][1]
+    assert core["max_files_per_shard"] == 12
+    assert core["timeout_per_shard"] == 240
+    assert all(
+        f"--ignore={path}" in core["target_args"]
+        for path in step_integration_tests._HEADLESS_SMOKE_FILES
+    )
+
+
+def test_integration_shard_failure_blocks_headless_and_release(monkeypatch) -> None:
+    from types import SimpleNamespace
+    from scripts.ci import step_integration_tests
+
+    monkeypatch.setattr(step_integration_tests, "repo_root", lambda: Path("/repo"))
+    monkeypatch.setattr(
+        step_integration_tests, "project_shape_config",
+        lambda _root: SimpleNamespace(
+            optional_integration_targets=("tests/integration",),
+            integration_mark_expression="not slow and not gate",
+        ),
+    )
+    monkeypatch.setattr(
+        step_integration_tests, "run_pytest_sharded_with_report",
+        lambda **kwargs: (False, "shard 2 failed: regression"),
+    )
+    monkeypatch.setattr(
+        step_integration_tests, "_run_pytest_gate",
+        lambda **kwargs: pytest.fail("headless must not run after core failure"),
+    )
+    ok, message = step_integration_tests.run()
+    assert not ok
+    assert "shard 2 failed: regression" in message
