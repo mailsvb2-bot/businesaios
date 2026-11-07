@@ -4,7 +4,7 @@ import json
 from collections.abc import Mapping
 from typing import Any
 
-from runtime.business_autonomy.provider_max_tls import max_tls_ca_file
+from runtime.business_autonomy.provider_transport_bindings import max_tls_ca_file
 from runtime.business_autonomy.provider_media import (
     ProviderMediaPreparationCoordinator,
     provider_media_file_digest,
