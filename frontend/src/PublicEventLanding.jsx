@@ -71,7 +71,7 @@ export function PublicEventLanding({ apiBase, identity }) {
       if (!response.ok || !data.ok || data.delivery_enabled !== false || data.payment_status !== "not_requested") {
         throw new Error("Сервер не подтвердил заявку.");
       }
-      setReceipt(data.duplicate ? "Заявка уже зарегистрирована." : "Заявка на участие сохранена.");
+      setReceipt("Заявка на участие получена.");
       pendingRegistration.current = null;
     } catch (error) {
       setRegistrationError(error.message || "Не удалось отправить заявку. Попробуйте снова.");
