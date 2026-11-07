@@ -1,10 +1,10 @@
 from __future__ import annotations
 
-import time
 import hashlib
 import hmac
 import os
 import re
+import time
 from typing import Any
 
 from application.ontology import EventFactLifecycleWriter
