@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import "./EventLandingWorkspace.css";
 
 function SafeList({ items }) {
@@ -42,6 +42,44 @@ export function parsePublicEventQuery(search) {
 
 export function PublicEventLanding({ apiBase, identity }) {
   const [state, setState] = useState({ loading: true, content: null, error: "" });
+
+  const [email, setEmail] = useState("");
+  const [consent, setConsent] = useState(false);
+  const [receipt, setReceipt] = useState("");
+  const [registrationError, setRegistrationError] = useState("");
+  const [registering, setRegistering] = useState(false);
+  const pendingRegistration = useRef(null);
+  const registrationEndpoint = apiBase.replace(/\/$/, "") + "/public-site/events/"
+    + encodeURIComponent(identity.tenantId) + "/" + encodeURIComponent(identity.businessId)
+    + "/" + encodeURIComponent(identity.eventId) + "/registrations";
+  const registerInterest = async (event) => {
+    event.preventDefault();
+    if (!state.content || !consent || registering) return;
+    setRegistering(true);
+    setRegistrationError("");
+    const normalizedEmail = String(email).trim().toLowerCase();
+    if (!pendingRegistration.current || pendingRegistration.current.email !== normalizedEmail) {
+      pendingRegistration.current = { email: normalizedEmail, key: crypto.randomUUID() };
+    }
+    try {
+      const response = await fetch(registrationEndpoint, {
+        method: "POST", credentials: "omit", cache: "no-store",
+        headers: { "Content-Type": "application/json", "X-Idempotency-Key": pendingRegistration.current.key },
+        body: JSON.stringify({ email: normalizedEmail, consent: true })
+      });
+      const data = await response.json();
+      if (!response.ok || !data.ok || data.delivery_enabled !== false || data.payment_status !== "not_requested") {
+        throw new Error("Сервер не подтвердил заявку.");
+      }
+      setReceipt(data.duplicate ? "Заявка уже зарегистрирована." : "Заявка на участие сохранена.");
+      pendingRegistration.current = null;
+    } catch (error) {
+      setRegistrationError(error.message || "Не удалось отправить заявку. Попробуйте снова.");
+    } finally {
+      setRegistering(false);
+    }
+  };
+
   useEffect(() => {
     let active = true;
     const endpoint = apiBase.replace(/\/$/, "") + "/public-site/events/"
@@ -66,7 +104,25 @@ export function PublicEventLanding({ apiBase, identity }) {
       <div className="event-public-brand">BusinessAIOS · Мероприятие</div>
       {state.loading ? <p role="status">Загружаем опубликованную страницу…</p> : null}
       {state.error ? <p role="alert" className="error-box">{state.error}</p> : null}
-      {state.content ? <EventLandingPreview content={state.content} /> : null}
+
+      {state.content ? <>
+        <EventLandingPreview content={state.content} />
+        <form className="event-public-registration" onSubmit={registerInterest}>
+          <h2>Оставить заявку на участие</h2>
+          <label>Email для заявки
+            <input type="email" required maxLength={254} autoComplete="email" value={email}
+              disabled={registering || Boolean(receipt)}
+              onChange={(event) => { setEmail(event.target.value); setReceipt(""); pendingRegistration.current = null; }} />
+          </label>
+          <label><input type="checkbox" required checked={consent} disabled={registering || Boolean(receipt)}
+            onChange={(event) => setConsent(event.target.checked)} /> Согласен на регистрацию заявки на это мероприятие</label>
+          <button type="submit" disabled={!consent || registering || Boolean(receipt)}>
+            {registering ? "Отправляем…" : "Оставить заявку"}
+          </button>
+          {receipt ? <p role="status">{receipt} Напоминания и оплата здесь пока не подключены.</p> : null}
+          {registrationError ? <p role="alert">{registrationError}</p> : null}
+        </form>
+      </> : null}
       <p className="event-public-footer">Данные страницы получены из опубликованной версии мероприятия.</p>
     </main>
   );
