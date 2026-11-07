@@ -7,6 +7,7 @@ from urllib.parse import parse_qs
 
 import runtime.business_autonomy.provider_webhook_reconciliation as sut
 from application.business_autonomy.provider_catalog import provider_map
+from runtime.business_autonomy.provider_transport_bindings import max_tls_ca_file
 from runtime.business_autonomy.provider_webhook_runtime import ProviderWebhookRuntime
 from security.secret_contract import SecretRecord, SecretRef, SecretSource
 from security.secret_vault import InMemorySecretVault
@@ -225,7 +226,7 @@ def test_vk_existing_callback_server_rewrites_current_secret(monkeypatch) -> Non
 
 
 
-from runtime.business_autonomy.provider_transport_bindings import max_tls_ca_file
+
 
 
 def test_max_ca_is_opt_in_and_never_changes_other_hosts(monkeypatch):
