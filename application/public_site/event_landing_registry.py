@@ -184,13 +184,13 @@ class EventLandingRegistry:
         entity_id = f"registration:{identifier}"
         payload = {"event_id": event_id, "email_fingerprint": identifier,
                    "consent_version": CONSENT_VERSION}
+        if not idempotency_key or len(idempotency_key) > 200:
+            raise ValueError("registration_idempotency_key_required")
         if any(row["email_fingerprint"] == identifier for row in self._registration_facts(
             tenant_id=tenant_id, business_id=business_id, event_id=event_id,
         )):
-            return {"ok": True, "registration_id": identifier, "duplicate": True,
+            return {"ok": True, "status": "received",
                     "delivery_enabled": False, "payment_status": "not_requested"}
-        if not idempotency_key or len(idempotency_key) > 200:
-            raise ValueError("registration_idempotency_key_required")
         try:
             self._writer.append_transition_once(
                 tenant_id=tenant_id, business_id=business_id, entity_id=entity_id,
@@ -204,9 +204,9 @@ class EventLandingRegistry:
                 tenant_id=tenant_id, business_id=business_id, event_id=event_id,
             )):
                 raise
-            return {"ok": True, "registration_id": identifier, "duplicate": True,
+            return {"ok": True, "status": "received",
                     "delivery_enabled": False, "payment_status": "not_requested"}
-        return {"ok": True, "registration_id": identifier, "duplicate": False,
+        return {"ok": True, "status": "received",
                 "delivery_enabled": False, "payment_status": "not_requested"}
 
 def event_landing_payload(state: EventLandingState) -> dict[str,object]:
