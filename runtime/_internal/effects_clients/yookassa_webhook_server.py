@@ -14,24 +14,6 @@ from typing import Any
 
 from runtime.observability.error_handling import swallow
 from runtime.platform.config.env_flags import env_str
-from runtime.tenancy import normalize_tenant_id
-
-
-def _extract_webhook_tenant_id(raw: dict[str, Any]) -> str:
-    obj = raw.get("object") if isinstance(raw.get("object"), dict) else {}
-    metadata = obj.get("metadata") if isinstance(obj.get("metadata"), dict) else {}
-    for candidate in (
-        raw.get("tenant_id"),
-        raw.get("metadata", {}).get("tenant_id") if isinstance(raw.get("metadata"), dict) else None,
-        metadata.get("tenant_id"),
-        metadata.get("tenant"),
-    ):
-        tenant_id = normalize_tenant_id(candidate)
-        if tenant_id:
-            return tenant_id
-    return "unknown_tenant"
-
-
 def start_yookassa_webhook_server_in_thread(
     *,
     host: str,
@@ -63,6 +45,8 @@ def start_yookassa_webhook_server_in_thread(
         raise RuntimeError("YOOKASSA_WEBHOOK_IP_ALLOWLIST required in production")
     if auth_mode not in {"none", "basic", "token", "hmac_sha256"}:
         raise RuntimeError("YOOKASSA_WEBHOOK_AUTH_MODE unsupported")
+    if auth_mode == "basic" and (not basic_user or not basic_pass):
+        raise RuntimeError("YOOKASSA_WEBHOOK_BASIC_CREDENTIALS_REQUIRED")
     if payment_outbox is None or not callable(getattr(payment_outbox, "enqueue_once", None)):
         raise RuntimeError("YOOKASSA_WEBHOOK_DURABLE_IDEMPOTENT_OUTBOX_REQUIRED")
 
@@ -74,6 +58,10 @@ def start_yookassa_webhook_server_in_thread(
     )
 
     class _Handler(BaseHTTPRequestHandler):
+        def setup(self):
+            super().setup()
+            self.connection.settimeout(5)
+
         def do_POST(self):  # noqa: N802
             try:
                 if self.path != str(path):
@@ -106,7 +94,9 @@ def start_yookassa_webhook_server_in_thread(
                         self.send_response(401)
                         self.end_headers()
                         return
-                    if u != (basic_user or "") or p != (basic_pass or ""):
+                    user_ok = hmac.compare_digest(u.encode("utf-8"), str(basic_user or "").encode("utf-8"))
+                    password_ok = hmac.compare_digest(p.encode("utf-8"), str(basic_pass or "").encode("utf-8"))
+                    if not (user_ok and password_ok):
                         self.send_response(401)
                         self.end_headers()
                         return
@@ -121,7 +111,15 @@ def start_yookassa_webhook_server_in_thread(
                         return
 
                 length = int(self.headers.get("Content-Length") or "0")
-                raw = self.rfile.read(length) if length > 0 else b""
+                if length <= 0 or length > 1_048_576:
+                    self.send_response(413 if length > 1_048_576 else 400)
+                    self.end_headers()
+                    return
+                raw = self.rfile.read(length)
+                if len(raw) != length:
+                    self.send_response(400)
+                    self.end_headers()
+                    return
 
                 # Verify webhook signature / integrity.
                 # For token auth we already validated the header above.
@@ -142,7 +140,6 @@ def start_yookassa_webhook_server_in_thread(
                     return
 
                 notif = parse_notification(body_bytes=raw)
-                tenant_id = _extract_webhook_tenant_id(notif.raw)
 
                 # Acknowledge only after the durable idempotent outbox commits.
                 # Audit events are secondary observations, not settlement proofs.
@@ -155,16 +152,6 @@ def start_yookassa_webhook_server_in_thread(
                     self.send_response(503)
                     self.end_headers()
                     return
-                if event_store is not None:
-                    try:
-                        event_store.emit(
-                            tenant_id=tenant_id,
-                            event_type="yookassa_webhook_received",
-                            payload={"type": "yookassa_webhook", "notification": notif,
-                                     "tenant_id": tenant_id},
-                        )
-                    except Exception:
-                        swallow(__name__, "event_store.emit")
 
                 self.send_response(200)
                 self.end_headers()
