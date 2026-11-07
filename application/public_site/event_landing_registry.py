@@ -181,7 +181,7 @@ class EventLandingRegistry:
             raise RuntimeError("registration_privacy_secret_not_configured")
         material = "\0".join((tenant_id, business_id, event_id, normalized)).encode()
         identifier = hmac.new(pepper.encode(), material, hashlib.sha256).hexdigest()
-        entity_id = f"{event_id}:registration:{identifier}"
+        entity_id = f"registration:{identifier}"
         payload = {"event_id": event_id, "email_fingerprint": identifier,
                    "consent_version": CONSENT_VERSION}
         if any(row["email_fingerprint"] == identifier for row in self._registration_facts(
