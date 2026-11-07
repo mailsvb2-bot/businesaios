@@ -174,12 +174,12 @@ class EventLandingRegistry:
         if consent is not True:
             raise ValueError("registration_consent_required")
         normalized = str(email or "").strip().casefold()
-        if len(normalized) > 254 or not re.fullmatch(r"[^@\\s]+@[^@\\s]+\\.[^@\\s]+", normalized):
+        if len(normalized) > 254 or not re.fullmatch(r"[^@\s]+@[^@\s]+\.[^@\s]+", normalized):
             raise ValueError("registration_email_invalid")
         pepper = os.getenv("API_CONTROL_PLANE_API_KEY_PEPPER", "").strip()
         if len(pepper) < 20:
             raise RuntimeError("registration_privacy_secret_not_configured")
-        material = "\\0".join((tenant_id, business_id, event_id, normalized)).encode()
+        material = "\0".join((tenant_id, business_id, event_id, normalized)).encode()
         identifier = hmac.new(pepper.encode(), material, hashlib.sha256).hexdigest()
         entity_id = f"{event_id}:registration:{identifier}"
         payload = {"event_id": event_id, "email_fingerprint": identifier,
