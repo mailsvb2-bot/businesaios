@@ -278,3 +278,36 @@ def test_equal_millisecond_lifecycle_replays_durable_append_order() -> None:
     restarted = EventLandingRegistry(event_store=events, idempotency_store=claims)
     assert restarted.get(**scope).is_published
     assert [r["sequence"] for r in restarted._history(**scope)] == [1, 2, 3, 4]
+
+
+def test_event_registration_is_scoped_durable_and_privacy_preserving(monkeypatch):
+    monkeypatch.setenv("API_CONTROL_PLANE_API_KEY_PEPPER", "test-only-private-registration-secret-1234567")
+    events, claims = _EventStore(), InMemoryIdempotencyStore()
+    registry = EventLandingRegistry(event_store=events, idempotency_store=claims)
+    scope = dict(tenant_id="tenant-a", business_id="business-a", event_id="event")
+    registry.create(**scope, content=_content("Event"), source="manual",
+                    idempotency_key="create", actor_id="owner")
+    with pytest.raises(ValueError, match="registration_closed"):
+        registry.register(**scope, email="person@example.test", consent=True, idempotency_key="first")
+    registry.transition(**scope, action="publish", expected_revision=1,
+                        idempotency_key="publish", actor_id="owner")
+    with pytest.raises(ValueError, match="consent_required"):
+        registry.register(**scope, email="person@example.test", consent=False, idempotency_key="first")
+    first = registry.register(**scope, email="PERSON@example.test", consent=True, idempotency_key="first")
+    again = registry.register(**scope, email="person@example.test", consent=True, idempotency_key="another")
+    assert first["ok"] and not first["duplicate"] and again["duplicate"]
+    assert first["registration_id"] == again["registration_id"]
+    assert first["payment_status"] == "not_requested" and first["delivery_enabled"] is False
+    assert registry.registration_count(**scope) == 1
+    assert EventLandingRegistry(event_store=events, idempotency_store=claims).registration_count(**scope) == 1
+    assert "person@example.test" not in str(events.events).lower()
+    with pytest.raises(KeyError):
+        registry.registration_count(tenant_id="tenant-a", business_id="business-b", event_id="event")
+    with pytest.raises(KeyError):
+        registry.register(tenant_id="tenant-b", business_id="business-a", event_id="event",
+                          email="person@example.test", consent=True, idempotency_key="other")
+    registry.transition(**scope, action="unpublish", expected_revision=1,
+                        idempotency_key="unpublish", actor_id="owner")
+    with pytest.raises(ValueError, match="registration_closed"):
+        registry.register(**scope, email="new@example.test", consent=True, idempotency_key="new")
+    assert registry.registration_count(**scope) == 1
