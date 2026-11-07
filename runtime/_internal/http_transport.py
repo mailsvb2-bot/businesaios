@@ -172,43 +172,12 @@ def sync_request(
             error_kind="http_error",
             error_message=str(exc),
         )
-    except _urllib_error().URLError as exc:
+    except (_urllib_error().URLError, _socket_module().timeout, OSError, ValueError) as exc:
         reason = getattr(exc, "reason", exc)
-        if isinstance(reason, _socket_module().timeout):
-            return SyncHTTPResult(
-                status=None,
-                headers={},
-                json=None,
-                text="",
-                error_kind="timeout",
-                error_message=str(reason),
-            )
-        return SyncHTTPResult(
-            status=None,
-            headers={},
-            json=None,
-            text="",
-            error_kind="transport_error",
-            error_message=str(reason),
-        )
-    except _socket_module().timeout as exc:
-        return SyncHTTPResult(
-            status=None,
-            headers={},
-            json=None,
-            text="",
-            error_kind="timeout",
-            error_message=str(exc),
-        )
-    except (OSError, ValueError) as exc:
-        return SyncHTTPResult(
-            status=None,
-            headers={},
-            json=None,
-            text="",
-            error_kind="transport_error",
-            error_message=str(exc),
-        )
+        is_timeout = isinstance(reason, _socket_module().timeout)
+        return SyncHTTPResult(status=None, headers={}, json=None, text="",
+                              error_kind="timeout" if is_timeout else "transport_error",
+                              error_message=str(reason))
 
 class DisabledNetworkTransport(HttpTransport):
     async def post_json(self, **_: Any) -> HTTPResponse:
