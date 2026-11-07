@@ -4,6 +4,7 @@ import json
 from collections.abc import Mapping
 from typing import Any
 
+from runtime.business_autonomy.provider_max_tls import max_tls_ca_file
 from runtime.business_autonomy.provider_media import (
     ProviderMediaPreparationCoordinator,
     provider_media_file_digest,
@@ -123,6 +124,7 @@ def _prepare_media_token(
         headers={"Authorization": access_token},
         body=None,
         timeout_s=timeout_seconds,
+        tls_ca_file=max_tls_ca_file(f"{provider_base_url.rstrip('/')}/uploads?type=audio"),
     )
     upload_meta = _json_mapping(upload_meta_result)
     status = int(getattr(upload_meta_result, "status", 0) or 0)
@@ -215,6 +217,7 @@ def execute_max_media_message(
         headers={"Authorization": access_token, "Content-Type": "application/json"},
         body=json.dumps(body, ensure_ascii=False, separators=(",", ":")).encode("utf-8"),
         timeout_s=timeout_seconds,
+        tls_ca_file=max_tls_ca_file(url),
     )
     response_body = str(getattr(result, "text", "") or "")[:2000]
     body_mapping = _json_mapping(result)

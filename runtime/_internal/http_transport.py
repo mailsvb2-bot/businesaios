@@ -3,6 +3,7 @@ from __future__ import annotations
 import importlib
 import json as _json
 import os
+import ssl
 from collections.abc import Callable, Iterable, Mapping
 from dataclasses import dataclass
 from pathlib import Path
@@ -102,7 +103,7 @@ def same_origin_url(source_url: str, target_url: str) -> bool:
     return _url_origin(source_url) == _url_origin(target_url)
 
 
-def _authenticated_urlopen(source_url: str) -> Callable[..., object]:
+def _authenticated_urlopen(source_url: str, *, tls_context: Any | None = None) -> Callable[..., object]:
     request_module = _urllib_request()
     error_module = _urllib_error()
 
@@ -112,7 +113,10 @@ def _authenticated_urlopen(source_url: str) -> Callable[..., object]:
                 raise error_module.HTTPError(newurl, code, "cross_origin_redirect_blocked", headers, fp)
             return super().redirect_request(req, fp, code, msg, headers, newurl)
 
-    return request_module.build_opener(_SameOriginRedirectHandler()).open
+    handlers = [_SameOriginRedirectHandler()]
+    if tls_context is not None:
+        handlers.append(request_module.HTTPSHandler(context=tls_context))
+    return request_module.build_opener(*handlers).open
 
 
 def sync_request(
@@ -123,6 +127,7 @@ def sync_request(
     body: bytes | None = None,
     timeout_s: float = 30,
     opener: Callable[..., object] | None = None,
+    tls_ca_file: str | None = None,
 ) -> SyncHTTPResult:
     hdrs = dict(headers or {})
     req = _urllib_request().Request(
@@ -132,7 +137,13 @@ def sync_request(
         method=str(method or "GET").upper(),
     )
     has_authorization = any(str(key).lower() == "authorization" for key in hdrs)
-    open_call = opener or (_authenticated_urlopen(str(url)) if has_authorization else _urllib_request().urlopen)
+    tls_context = None
+    if tls_ca_file is not None:
+        if _url_origin(str(url))[0] != "https":
+            raise ValueError("custom_tls_ca_requires_https")
+        tls_context = ssl.create_default_context()
+        tls_context.load_verify_locations(cafile=tls_ca_file)
+    open_call = opener or (_authenticated_urlopen(str(url), tls_context=tls_context) if has_authorization or tls_context is not None else _urllib_request().urlopen)
     try:
         with open_call(req, timeout=timeout_s) as resp:
             decoded = _decode_response(resp)

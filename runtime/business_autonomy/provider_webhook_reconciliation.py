@@ -7,6 +7,7 @@ from dataclasses import dataclass
 from typing import Any
 
 from application.business_autonomy.provider_admin_contract import ProviderDefinition
+from runtime.business_autonomy.provider_max_tls import max_tls_ca_file
 from runtime.business_autonomy.provider_transport_bindings import ProviderTransportBindings
 from runtime.business_autonomy.provider_webhook_route_registry import ProviderWebhookRouteRegistry
 from runtime.handler_loader import import_internal_attr
@@ -167,6 +168,7 @@ class ProviderWebhookReconciler:
             headers=request_headers,
             body=raw,
             timeout_s=20,
+            **({"tls_ca_file": max_tls_ca_file(url)} if url.startswith("https://platform-api2.max.ru/") else {}),
         )
         return _require_http_success(result, operation='provider_webhook_reconcile')
 
