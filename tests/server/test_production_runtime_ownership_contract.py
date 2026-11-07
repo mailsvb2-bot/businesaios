@@ -88,6 +88,15 @@ def test_host_lifecycle_owns_production_tenant_pricing_and_enabled_connector_rea
         assert token in text
 
 
+def test_telegram_readiness_probe_allows_observed_latency_but_total_deadline_stays_bounded() -> None:
+    source = HOST_LIFECYCLE.read_text(encoding="utf-8")
+    assert 'timeout 60s bash -c' in source
+    assert 'curl -fsS --max-time 5 "$LOCAL_TELEGRAM_READINESS_URL"' in source
+    assert 'systemctl is-active --quiet "$TELEGRAM_SERVICE"' in source
+    assert 'telegram_ready=1' in source
+    assert '[[ "$API_READY" == "1" ]]' in source
+
+
 def test_production_template_has_single_persistent_pricing_and_policy_surfaces() -> None:
     text = PRODUCTION_ENV_TEMPLATE.read_text(encoding="utf-8")
     for token in (
