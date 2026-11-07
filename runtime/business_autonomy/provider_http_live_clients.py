@@ -7,7 +7,7 @@ from typing import Any
 
 from application.business_autonomy.provider_admin_contract import ProviderDefinition
 from runtime.business_autonomy.provider_max_media_http import execute_max_media_message
-from runtime.business_autonomy.provider_max_tls import max_tls_ca_file
+from runtime.business_autonomy.provider_transport_bindings import max_tls_ca_file
 from runtime.business_autonomy.provider_media import ProviderMediaPreparationCoordinator, public_provider_media_payload
 from runtime.business_autonomy.provider_payload_normalizers import ProviderPayloadNormalizers
 from runtime.business_autonomy.provider_response_parsers import ProviderResponseParsers
