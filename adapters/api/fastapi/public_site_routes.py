@@ -179,6 +179,27 @@ def register_public_site_routes(*, router, enforce_public_security, auth_bundle=
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail='event_landing_not_published')
         return {'ok': True, 'event_id': event_id, 'revision': state.published_revision, 'content': published.to_payload()}
 
+    @router.post('/public-site/events/{tenant_id}/{business_id}/{event_id}/registrations', tags=['public-site'])
+    async def public_event_registration(tenant_id: str, business_id: str, event_id: str, http_request: Request) -> dict:
+        # Public security sees the scope, never the raw participant email.
+        secure(http_request, '/public-site/events/{tenant_id}/{business_id}/{event_id}',
+               {'tenant_id': tenant_id, 'business_id': business_id, 'event_id': event_id})
+        if event_landing_registry is None:
+            raise HTTPException(status_code=404, detail='event_landing_not_found')
+        body = await json_body(http_request)
+        if set(body) != {'email', 'consent'}:
+            raise HTTPException(status_code=422, detail='registration_fields_invalid')
+        key = str(http_request.headers.get('x-idempotency-key') or '').strip()
+        try:
+            return event_landing_registry.register(
+                tenant_id=tenant_id, business_id=business_id, event_id=event_id,
+                email=body['email'], consent=body['consent'], idempotency_key=key,
+            )
+        except KeyError as exc:
+            raise HTTPException(status_code=404, detail='event_landing_not_found') from exc
+        except ValueError as exc:
+            raise HTTPException(status_code=422, detail=str(exc)) from exc
+
     @router.get('/public-site/integrations', tags=['public-site'])
     async def public_site_integrations(http_request: Request) -> dict:
         secure(http_request, '/public-site/integrations', {})
