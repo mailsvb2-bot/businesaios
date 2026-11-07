@@ -1,7 +1,6 @@
 """MAX API trust cannot be replaced by a global TLS bypass."""
 from __future__ import annotations
 
-from pathlib import Path
 
 import pytest
 
