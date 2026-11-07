@@ -295,8 +295,7 @@ def test_event_registration_is_scoped_durable_and_privacy_preserving(monkeypatch
         registry.register(**scope, email="person@example.test", consent=False, idempotency_key="first")
     first = registry.register(**scope, email="PERSON@example.test", consent=True, idempotency_key="first")
     again = registry.register(**scope, email="person@example.test", consent=True, idempotency_key="another")
-    assert first["ok"] and not first["duplicate"] and again["duplicate"]
-    assert first["registration_id"] == again["registration_id"]
+    assert first == again and first["status"] == "received"
     assert first["payment_status"] == "not_requested" and first["delivery_enabled"] is False
     assert registry.registration_count(**scope) == 1
     assert EventLandingRegistry(event_store=events, idempotency_store=claims).registration_count(**scope) == 1
