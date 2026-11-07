@@ -1,6 +1,10 @@
 from __future__ import annotations
 
 import time
+import hashlib
+import hmac
+import os
+import re
 from typing import Any
 
 from application.ontology import EventFactLifecycleWriter
@@ -141,6 +145,69 @@ class EventLandingRegistry:
         self._writer.append_transition_once(tenant_id=tenant_id,business_id=business_id,entity_id=event_id,expected_state_token=token,operation=action,idempotency_key=idempotency_key,fact_type=fact_type,payload=payload,occurred_at_ms=self._now(),event_metadata={"actor_id":actor_id})
         return self.get(tenant_id=tenant_id,business_id=business_id,event_id=event_id)
 
+
+
+    def _registration_facts(self, *, tenant_id: str, business_id: str, event_id: str):
+        for event in self._events.iter_events(
+            tenant_id=tenant_id, start_ms=0, event_type=BUSINESS_FACT_EVENT_TYPE,
+        ):
+            fact = dict(event.get("payload") or {})
+            if (event.get("source") == _SOURCE
+                and fact.get("business_id") == business_id
+                and fact.get("fact_type") == "event_landing.registration"
+                and (fact.get("payload") or {}).get("event_id") == event_id):
+                yield dict(fact["payload"])
+
+    def registration_count(self, *, tenant_id: str, business_id: str, event_id: str) -> int:
+        self.get(tenant_id=tenant_id, business_id=business_id, event_id=event_id)
+        return sum(1 for _ in self._registration_facts(
+            tenant_id=tenant_id, business_id=business_id, event_id=event_id,
+        ))
+
+    def register(self, *, tenant_id: str, business_id: str, event_id: str,
+                 email: str, consent: bool, idempotency_key: str) -> dict[str, object]:
+        """Scoped consent receipt; no plaintext contact is stored or outbound sent."""
+        from application.business_flows.public_events import CONSENT_VERSION
+        state = self.get(tenant_id=tenant_id, business_id=business_id, event_id=event_id)
+        if not state.is_published:
+            raise ValueError("event_registration_closed")
+        if consent is not True:
+            raise ValueError("registration_consent_required")
+        normalized = str(email or "").strip().casefold()
+        if len(normalized) > 254 or not re.fullmatch(r"[^@\\s]+@[^@\\s]+\\.[^@\\s]+", normalized):
+            raise ValueError("registration_email_invalid")
+        pepper = os.getenv("API_CONTROL_PLANE_API_KEY_PEPPER", "").strip()
+        if len(pepper) < 20:
+            raise RuntimeError("registration_privacy_secret_not_configured")
+        material = "\\0".join((tenant_id, business_id, event_id, normalized)).encode()
+        identifier = hmac.new(pepper.encode(), material, hashlib.sha256).hexdigest()
+        entity_id = f"{event_id}:registration:{identifier}"
+        payload = {"event_id": event_id, "email_fingerprint": identifier,
+                   "consent_version": CONSENT_VERSION}
+        if any(row["email_fingerprint"] == identifier for row in self._registration_facts(
+            tenant_id=tenant_id, business_id=business_id, event_id=event_id,
+        )):
+            return {"ok": True, "registration_id": identifier, "duplicate": True,
+                    "delivery_enabled": False, "payment_status": "not_requested"}
+        if not idempotency_key or len(idempotency_key) > 200:
+            raise ValueError("registration_idempotency_key_required")
+        try:
+            self._writer.append_transition_once(
+                tenant_id=tenant_id, business_id=business_id, entity_id=entity_id,
+                expected_state_token="absent", operation="register", idempotency_key=idempotency_key,
+                fact_type="event_landing.registration", payload=payload, occurred_at_ms=self._now(),
+            )
+        except RuntimeError as exc:
+            if not str(exc).startswith("ontology transition rejected:"):
+                raise
+            if not any(row["email_fingerprint"] == identifier for row in self._registration_facts(
+                tenant_id=tenant_id, business_id=business_id, event_id=event_id,
+            )):
+                raise
+            return {"ok": True, "registration_id": identifier, "duplicate": True,
+                    "delivery_enabled": False, "payment_status": "not_requested"}
+        return {"ok": True, "registration_id": identifier, "duplicate": False,
+                "delivery_enabled": False, "payment_status": "not_requested"}
 
 def event_landing_payload(state: EventLandingState) -> dict[str,object]:
     return {"event_id":state.event_id,"revision":state.revision,"status":state.status.value,"draft_source":state.draft_source,"has_unpublished_changes":state.has_unpublished_changes,"draft":state.draft.to_payload(),"published":None if state.public_content() is None else state.public_content().to_payload(),"published_revision":state.published_revision}
