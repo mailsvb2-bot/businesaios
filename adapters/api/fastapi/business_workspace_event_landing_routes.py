@@ -1,17 +1,12 @@
 from __future__ import annotations
-
 from fastapi import APIRouter, HTTPException, Request, status
-
 from adapters.api.fastapi.router_support import business_owner_scope, json_body
 from application.public_site.event_landing_registry import EventLandingRegistry, event_landing_payload
 from contracts.landing_page import EventLandingContent
-
-
 def register_business_workspace_event_landing_routes(*, router: APIRouter, auth_bundle, event_landing_registry: EventLandingRegistry) -> None:
     def scope(request: Request):
         principal,tenant_id,business_id=business_owner_scope(request=request,auth_bundle=auth_bundle)
         return principal,tenant_id,business_id
-
     @router.get('/business-workspace/event-landings/{event_id}', tags=['business-workspace'])
     async def get_event_landing(event_id: str, request: Request):
         _,tenant_id,business_id=scope(request)
@@ -19,7 +14,6 @@ def register_business_workspace_event_landing_routes(*, router: APIRouter, auth_
             return event_landing_payload(event_landing_registry.get(tenant_id=tenant_id,business_id=business_id,event_id=event_id))
         except KeyError as exc:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND,detail='event_landing_not_found') from exc
-
     @router.get('/business-workspace/event-landings/{event_id}/registrations/summary', tags=['business-workspace'])
     async def get_event_registrations_summary(event_id: str, request: Request):
         _,tenant_id,business_id=scope(request)
@@ -30,7 +24,6 @@ def register_business_workspace_event_landing_routes(*, router: APIRouter, auth_
         except KeyError as exc:
             raise HTTPException(status_code=404,detail='event_landing_not_found') from exc
         return {'event_id':event_id,'registrations':count,'delivery_status':'not_proven','payments_status':'not_proven'}
-
     @router.post('/business-workspace/event-landings/{event_id}', tags=['business-workspace'])
     async def mutate_event_landing(event_id: str, request: Request):
         principal,tenant_id,business_id=scope(request)
