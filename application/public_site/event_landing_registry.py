@@ -1,10 +1,12 @@
 from __future__ import annotations
+
 import hashlib
 import hmac
 import os
 import re
 import time
 from typing import Any
+
 from application.ontology import EventFactLifecycleWriter
 from application.public_site.landing_content import EventLandingContent, EventLandingState
 from contracts.event_store import BUSINESS_FACT_EVENT_TYPE
