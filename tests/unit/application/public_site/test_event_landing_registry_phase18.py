@@ -1,12 +1,8 @@
 from __future__ import annotations
-
 import pytest
-
 from application.public_site.event_landing_registry import EventLandingRegistry
 from contracts.landing_page import EventLandingContent, EventLandingFaq
 from reliability.idempotency_store import InMemoryIdempotencyStore
-
-
 class _EventStore:
     def __init__(self) -> None: self.events=[]
     def append_event(self,event):
@@ -30,8 +26,6 @@ class _EventStore:
         return rows
     def count_events(self,*,tenant_id,start_ms,end_ms,user_id=None,event_type=None):
         return len(tuple(self.iter_events(tenant_id=tenant_id,start_ms=start_ms,end_ms=end_ms,user_id=user_id,event_type=event_type)))
-
-
 def _content(title: str) -> EventLandingContent:
     return EventLandingContent(
         eyebrow="Онлайн",hero_title=title,hero_subtitle="Подзаголовок",
@@ -41,8 +35,6 @@ def _content(title: str) -> EventLandingContent:
         speaker_text="Команда",faq_title="FAQ",faq=(EventLandingFaq(question="Когда?",answer="Сегодня."),),
         cta_title="Регистрация",cta_text="Оставьте данные.",
     )
-
-
 def test_event_landing_registry_survives_restart_and_replays_same_mutation() -> None:
     events,idempotency=_EventStore(),InMemoryIdempotencyStore()
     registry=EventLandingRegistry(event_store=events,idempotency_store=idempotency)
@@ -50,15 +42,12 @@ def test_event_landing_registry_survives_restart_and_replays_same_mutation() -> 
     assert (created.revision,created.is_published)==(1,False)
     published=registry.transition(tenant_id="tenant-a",business_id="business-a",event_id="event-1",action="publish",expected_revision=1,idempotency_key="publish-1",actor_id="owner")
     assert published.public_content().hero_title=="Draft"
-
     restarted=EventLandingRegistry(event_store=events,idempotency_store=idempotency)
     recovered=restarted.get(tenant_id="tenant-a",business_id="business-a",event_id="event-1")
     assert (recovered.status.value,recovered.published_revision,recovered.public_content().hero_title)==("published",1,"Draft")
     replayed=restarted.transition(tenant_id="tenant-a",business_id="business-a",event_id="event-1",action="publish",expected_revision=1,idempotency_key="publish-1",actor_id="owner")
     assert replayed==recovered
     assert len(events.events)==2
-
-
 def test_event_landing_registry_fails_closed_on_scope_and_revision_conflicts() -> None:
     events,idempotency=_EventStore(),InMemoryIdempotencyStore()
     registry=EventLandingRegistry(event_store=events,idempotency_store=idempotency)
@@ -69,8 +58,6 @@ def test_event_landing_registry_fails_closed_on_scope_and_revision_conflicts() -
         registry.create(tenant_id="tenant-a",business_id="business-a",event_id="event-1",content=_content("A"),source="manual",idempotency_key="create-2",actor_id="owner")
     with pytest.raises(RuntimeError,match="revision_conflict"):
         registry.transition(tenant_id="tenant-a",business_id="business-a",event_id="event-1",action="publish",expected_revision=99,idempotency_key="publish-stale",actor_id="owner")
-
-
 def test_invalid_event_landing_source_and_identity_never_poison_canonical_history() -> None:
     events, claims = _EventStore(), InMemoryIdempotencyStore()
     registry = EventLandingRegistry(event_store=events, idempotency_store=claims)
@@ -85,7 +72,6 @@ def test_invalid_event_landing_source_and_identity_never_poison_canonical_histor
                 actor_id="owner",
             )
         assert events.events == [], "rejected create must not append a replay-breaking fact"
-
     created = registry.create(
         tenant_id="tenant-a", business_id="business-a", event_id="event-1",
         content=_content("Draft"), source="manual", idempotency_key="create-good", actor_id="owner",
@@ -100,16 +86,12 @@ def test_invalid_event_landing_source_and_identity_never_poison_canonical_histor
         )
     assert events.events == original
     assert registry.get(tenant_id="tenant-a", business_id="business-a", event_id="event-1") == created
-
     updated = registry.transition(
         tenant_id="tenant-a", business_id="business-a", event_id="event-1",
         action="save", expected_revision=1, idempotency_key="save-good",
         actor_id="owner", content=_content("Updated"), source="manual",
     )
     assert updated.revision == 2
-
-
-
 def test_reused_landing_idempotency_key_may_not_mutate_authorized_payload() -> None:
     events, claims = _EventStore(), InMemoryIdempotencyStore()
     registry = EventLandingRegistry(event_store=events, idempotency_store=claims)
@@ -133,15 +115,11 @@ def test_reused_landing_idempotency_key_may_not_mutate_authorized_payload() -> N
             expected_revision=2, idempotency_key="publish", actor_id="owner",
         )
     assert events.events == rows
-
-
 def test_foreign_fact_source_cannot_create_or_mutate_public_event_landing() -> None:
     """The shared Event Spine is not a shared write authority for landing state."""
     from contracts.event_store import BusinessFactV1
-
     events, idempotency = _EventStore(), InMemoryIdempotencyStore()
     registry = EventLandingRegistry(event_store=events, idempotency_store=idempotency)
-
     def foreign_fact(kind: str, payload: dict, *, timestamp: int, fact_id: str) -> None:
         events.append_event(BusinessFactV1(
             fact_id=fact_id,
@@ -154,7 +132,6 @@ def test_foreign_fact_source_cannot_create_or_mutate_public_event_landing() -> N
             source="other_domain",
             payload=payload,
         ).as_event())
-
     # Even an otherwise well-formed foreign CREATE is not owned by the
     # event-landing registry. It must not make an unpublished page appear.
     foreign_fact(
@@ -164,7 +141,6 @@ def test_foreign_fact_source_cannot_create_or_mutate_public_event_landing() -> N
     )
     with pytest.raises(KeyError, match="event_landing_not_found"):
         registry.get(tenant_id="tenant-a", business_id="business-a", event_id="event-1")
-
     created = registry.create(
         tenant_id="tenant-a", business_id="business-a", event_id="event-1",
         content=_content("Canonical"), source="manual",
@@ -177,7 +153,6 @@ def test_foreign_fact_source_cannot_create_or_mutate_public_event_landing() -> N
         idempotency_key="canonical-publish", actor_id="owner",
     )
     assert published.public_content().hero_title == "Canonical"
-
     # A later, matching foreign UNPUBLISH must not revoke the real public page.
     foreign_fact(
         "event_landing.unpublished", {"expected_revision": 1},
@@ -190,8 +165,6 @@ def test_foreign_fact_source_cannot_create_or_mutate_public_event_landing() -> N
     assert recovered.is_published
     assert recovered.public_content().hero_title == "Canonical"
     assert len(events.events) == 4
-
-
 def test_publish_unpublish_publish_cycles_use_unique_canonical_guards() -> None:
     events, claims = _EventStore(), InMemoryIdempotencyStore()
     owner = EventLandingRegistry(event_store=events, idempotency_store=claims)
@@ -219,18 +192,14 @@ def test_publish_unpublish_publish_cycles_use_unique_canonical_guards() -> None:
     assert again.is_published
     assert len(events.events) == 8
     assert restarted.get(**fields) == again
-
-
 def test_competing_create_requests_cannot_append_two_created_facts() -> None:
     from concurrent.futures import ThreadPoolExecutor
     from threading import Barrier, Lock
-
     events, claims = _EventStore(), InMemoryIdempotencyStore()
     registry = EventLandingRegistry(event_store=events, idempotency_store=claims)
     args = dict(tenant_id="tenant-a", business_id="business-a", event_id="raced")
     original_get = registry.get
     gate, lock, seen = Barrier(2), Lock(), [0]
-
     def simultaneous_missing_read(**kwargs):
         try:
             return original_get(**kwargs)
@@ -241,9 +210,7 @@ def test_competing_create_requests_cannot_append_two_created_facts() -> None:
             if first_pair:
                 gate.wait(timeout=10)
             raise
-
     registry.get = simultaneous_missing_read
-
     def create(key):
         try:
             return registry.create(
@@ -252,7 +219,6 @@ def test_competing_create_requests_cannot_append_two_created_facts() -> None:
             ).draft.hero_title
         except RuntimeError as exc:
             return str(exc)
-
     with ThreadPoolExecutor(max_workers=2) as pool:
         result = list(pool.map(create, ("one", "two")))
     assert sorted(result).count("event_landing_already_exists") == 1
@@ -260,8 +226,6 @@ def test_competing_create_requests_cannot_append_two_created_facts() -> None:
     assert len(events.events) == 1
     recovered = EventLandingRegistry(event_store=events, idempotency_store=claims).get(**args)
     assert recovered.draft.hero_title in {"one", "two"}
-
-
 def test_equal_millisecond_lifecycle_replays_durable_append_order() -> None:
     events, claims = _EventStore(), InMemoryIdempotencyStore()
     registry = EventLandingRegistry(event_store=events, idempotency_store=claims)
@@ -278,8 +242,6 @@ def test_equal_millisecond_lifecycle_replays_durable_append_order() -> None:
     restarted = EventLandingRegistry(event_store=events, idempotency_store=claims)
     assert restarted.get(**scope).is_published
     assert [r["sequence"] for r in restarted._history(**scope)] == [1, 2, 3, 4]
-
-
 def test_event_registration_is_scoped_durable_and_privacy_preserving(monkeypatch):
     monkeypatch.setenv("API_CONTROL_PLANE_API_KEY_PEPPER", "test-only-private-registration-secret-1234567")
     events, claims = _EventStore(), InMemoryIdempotencyStore()
