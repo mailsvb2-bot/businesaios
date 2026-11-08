@@ -175,7 +175,7 @@ class EventLandingRegistry:
             return any(row["email_fingerprint"] == identifier for row in self._registration_facts(**scope))
         if not already_registered():
             payload = {"event_id": event_id, "email_fingerprint": identifier,
-                       "consent_version": CONSENT_VERSION}
+                       "consent_version": CONSENT_VERSION, "registration_id": entity_id}
             try:
                 self._writer.append_transition_once(
                     tenant_id=tenant_id, business_id=business_id, entity_id=entity_id,
@@ -185,7 +185,7 @@ class EventLandingRegistry:
             except RuntimeError as exc:
                 if not str(exc).startswith("ontology transition rejected:") or not already_registered():
                     raise
-        return {"ok": True, "status": "received",
+        return {"ok": True, "status": "received", "registration_id": entity_id,
                 "delivery_enabled": False, "payment_status": "not_requested"}
 
 def event_landing_payload(state: EventLandingState) -> dict[str,object]:

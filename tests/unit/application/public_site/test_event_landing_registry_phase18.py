@@ -184,6 +184,11 @@ def test_event_registration_is_scoped_durable_and_privacy_preserving(monkeypatch
     first = registry.register(**scope, email="PERSON@example.test", consent=True, idempotency_key="first")
     again = registry.register(**scope, email="person@example.test", consent=True, idempotency_key="another")
     assert first == again and first["status"] == "received"
+    assert first["registration_id"].startswith("registration:")
+    fact = next(e for e in events.events
+                if e.get("payload", {}).get("fact_type") == "event_landing.registration")
+    assert fact["payload"]["payload"]["registration_id"] == first["registration_id"]
+    assert first["registration_id"] != "person@example.test"
     assert first["payment_status"] == "not_requested" and first["delivery_enabled"] is False
     assert registry.registration_count(**scope) == 1
     assert EventLandingRegistry(event_store=events, idempotency_store=claims).registration_count(**scope) == 1
