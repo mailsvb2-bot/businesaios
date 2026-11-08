@@ -1,19 +1,13 @@
 from __future__ import annotations
-
 from fastapi import HTTPException, Request, Response, status
-
 from adapters.api.fastapi.router_support import business_owner_scope, json_body
-
 from application.public_site.cta_intake import CTALandingIntakeService, public_integration_marketplace
 from entrypoints.api.request_context import RequestContext
 from tenancy.tenant_registry import ensure_tenant_record
-
 _OWNER_RESUME_COOKIE = 'businessaios_owner_resume'
 _OWNER_RESUME_TTL_SECONDS = 86400
 _OWNER_ACCOUNT_COOKIE = 'businessaios_owner_account'
 _OWNER_ACCOUNT_TTL_SECONDS = 86400
-
-
 def _product_fields(value) -> dict:
     return {
         'business_profile': dict(getattr(value, 'business_profile', None) or {}),
@@ -23,8 +17,6 @@ def _product_fields(value) -> dict:
         'first_value_preview': dict(getattr(value, 'first_value_preview', None) or {}),
         'onboarding_progress': dict(getattr(value, 'onboarding_progress', None) or {}),
     }
-
-
 def _base_response(value) -> dict:
     return {
         'ok': True,
@@ -42,13 +34,9 @@ def _base_response(value) -> dict:
         'approval_required_before_execution': True,
         **_product_fields(value),
     }
-
-
 def _cta_submit_response(result, owner_session: dict | None = None, owner_businesses=()) -> dict:
     payload = {**_base_response(result), 'next': {'ui_url': result.app_url}, 'owner_businesses': list(owner_businesses or ())}
     return {**payload, 'owner_session': owner_session} if owner_session else payload
-
-
 def _cta_status_response(status_payload, owner_session: dict | None = None, owner_businesses=()) -> dict:
     if not status_payload.found:
         return {'ok': False, 'error': 'not_found', 'intake_id': status_payload.intake_id}
