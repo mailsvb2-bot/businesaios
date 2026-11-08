@@ -8,13 +8,7 @@ from adapters.api.fastapi.public_site_routes import register_public_site_routes
 from application.public_site.landing_content import EventLandingState
 from contracts.landing_page import EventLandingContent, EventLandingFaq
 def _content(title: str) -> EventLandingContent:
-    return EventLandingContent(
-        eyebrow="Онлайн", hero_title=title, hero_subtitle="Подзаголовок",
-        audience_title="Для кого", audience_points=("Владельцы",), outcomes_title="Результат",
-        outcome_points=("Польза",), agenda_title="Программа", agenda_points=("Шаг",),
-        speaker_title="Спикер", speaker_text="Команда", faq_title="FAQ",
-        faq=(EventLandingFaq(question="Когда?", answer="Сегодня."),), cta_title="Регистрация", cta_text="Оставьте данные.",
-    )
+    return EventLandingContent( eyebrow="Онлайн", hero_title=title, hero_subtitle="Подзаголовок", audience_title="Для кого", audience_points=("Владельцы",), outcomes_title="Результат", outcome_points=("Польза",), agenda_title="Программа", agenda_points=("Шаг",), speaker_title="Спикер", speaker_text="Команда", faq_title="FAQ", faq=(EventLandingFaq(question="Когда?", answer="Сегодня."),), cta_title="Регистрация", cta_text="Оставьте данные.", )
 def _endpoint(router: APIRouter, path: str, method: str):
     return next(r.endpoint for r in router.routes if getattr(r, "path", None)==path and method in getattr(r, "methods", set()))
 class _Registry:
@@ -56,13 +50,8 @@ def test_owner_event_duplicate_create_returns_conflict_not_server_error(monkeypa
             raise RuntimeError("event_landing_already_exists")
     state = EventLandingState(event_id="event-1", draft=_content("Draft"), draft_source="manual")
     router = APIRouter()
-    monkeypatch.setattr(
-        owner_routes, "business_owner_scope",
-        lambda **_: (SimpleNamespace(actor_id="owner", subject="owner"), "tenant-a", "business-a"),
-    )
-    owner_routes.register_business_workspace_event_landing_routes(
-        router=router, auth_bundle=object(), event_landing_registry=_ExistingRegistry(state),
-    )
+    monkeypatch.setattr( owner_routes, "business_owner_scope", lambda **_: (SimpleNamespace(actor_id="owner", subject="owner"), "tenant-a", "business-a"), )
+    owner_routes.register_business_workspace_event_landing_routes( router=router, auth_bundle=object(), event_landing_registry=_ExistingRegistry(state), )
     async def body(_):
         return {
             "action": "create",
@@ -80,17 +69,13 @@ def test_public_registration_protects_scope_and_never_infers_payment(monkeypatch
             self.calls.append(("register", kwargs))
             return {"ok": True, "registration_id": "opaque", "duplicate": False,
                     "delivery_enabled": False, "payment_status": "not_requested"}
-    registry = _PublicRegistry(EventLandingState(
-        event_id="event-1", draft=_content("Public"), draft_source="manual",
-    ).publish(expected_revision=1))
+    registry = _PublicRegistry(EventLandingState( event_id="event-1", draft=_content("Public"), draft_source="manual", ).publish(expected_revision=1))
     router = APIRouter()
     seen = []
     register_public_site_routes(router=router,
                                 enforce_public_security=lambda **kw: seen.append(kw),
                                 event_landing_registry=registry)
-    endpoint = _endpoint(
-        router, "/public-site/events/{tenant_id}/{business_id}/{event_id}/registrations", "POST",
-    )
+    endpoint = _endpoint( router, "/public-site/events/{tenant_id}/{business_id}/{event_id}/registrations", "POST", )
     class _Request:
         headers = {"x-idempotency-key": "registration-1"}
     import adapters.api.fastapi.public_site_routes as public_routes
@@ -107,18 +92,12 @@ def test_owner_registration_summary_uses_authenticated_scope(monkeypatch):
         def registration_count(self, **kwargs):
             self.calls.append(("registration_count", kwargs))
             return 2
-    registry = _SummaryRegistry(EventLandingState(
-        event_id="event-1", draft=_content("Public"), draft_source="manual",
-    ))
+    registry = _SummaryRegistry(EventLandingState( event_id="event-1", draft=_content("Public"), draft_source="manual", ))
     router = APIRouter()
     monkeypatch.setattr(owner_routes, "business_owner_scope",
                         lambda **_: (SimpleNamespace(actor_id="owner"), "tenant-a", "business-a"))
-    owner_routes.register_business_workspace_event_landing_routes(
-        router=router, auth_bundle=object(), event_landing_registry=registry,
-    )
-    endpoint = _endpoint(
-        router, "/business-workspace/event-landings/{event_id}/registrations/summary", "GET",
-    )
+    owner_routes.register_business_workspace_event_landing_routes( router=router, auth_bundle=object(), event_landing_registry=registry, )
+    endpoint = _endpoint( router, "/business-workspace/event-landings/{event_id}/registrations/summary", "GET", )
     result = asyncio.run(endpoint("event-1", object()))
     assert result["registrations"] == 2 and result["payments_status"] == "not_proven"
     assert registry.calls[-1][1] == {
