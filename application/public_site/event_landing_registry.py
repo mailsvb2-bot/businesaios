@@ -155,8 +155,7 @@ class EventLandingRegistry:
                  email: str, consent: bool, idempotency_key: str) -> dict[str, object]:
         """Scoped consent receipt; no plaintext contact is stored or outbound sent."""
         from application.business_flows.public_events import CONSENT_VERSION
-        state = self.get(tenant_id=tenant_id, business_id=business_id, event_id=event_id)
-        if not state.is_published:
+        if not self.get(tenant_id=tenant_id, business_id=business_id, event_id=event_id).is_published:
             raise ValueError("event_registration_closed")
         if consent is not True:
             raise ValueError("registration_consent_required")
@@ -169,31 +168,25 @@ class EventLandingRegistry:
         material = "\0".join((tenant_id, business_id, event_id, normalized)).encode()
         identifier = hmac.new(pepper.encode(), material, hashlib.sha256).hexdigest()
         entity_id = f"registration:{identifier}"
-        payload = {"event_id": event_id, "email_fingerprint": identifier,
-                   "consent_version": CONSENT_VERSION}
         if not idempotency_key or len(idempotency_key) > 200:
             raise ValueError("registration_idempotency_key_required")
-        if any(row["email_fingerprint"] == identifier for row in self._registration_facts(
-            tenant_id=tenant_id, business_id=business_id, event_id=event_id,
-        )):
-            return {"ok": True, "status": "received",
-                    "delivery_enabled": False, "payment_status": "not_requested"}
-        try:
-            self._writer.append_transition_once(
-                tenant_id=tenant_id, business_id=business_id, entity_id=entity_id,
-                expected_state_token="absent", operation="register", idempotency_key=idempotency_key,
-                fact_type="event_landing.registration", payload=payload, occurred_at_ms=self._now(),
-            )
-        except RuntimeError as exc:
-            if not str(exc).startswith("ontology transition rejected:"):
-                raise
-            if not any(row["email_fingerprint"] == identifier for row in self._registration_facts(
-                tenant_id=tenant_id, business_id=business_id, event_id=event_id,
-            )):
-                raise
-            return {"ok": True, "status": "received",
-                    "delivery_enabled": False, "payment_status": "not_requested"}
+        scope = dict(tenant_id=tenant_id, business_id=business_id, event_id=event_id)
+        def already_registered() -> bool:
+            return any(row["email_fingerprint"] == identifier for row in self._registration_facts(**scope))
+        if not already_registered():
+            payload = {"event_id": event_id, "email_fingerprint": identifier,
+                       "consent_version": CONSENT_VERSION}
+            try:
+                self._writer.append_transition_once(
+                    tenant_id=tenant_id, business_id=business_id, entity_id=entity_id,
+                    expected_state_token="absent", operation="register", idempotency_key=idempotency_key,
+                    fact_type="event_landing.registration", payload=payload, occurred_at_ms=self._now(),
+                )
+            except RuntimeError as exc:
+                if not str(exc).startswith("ontology transition rejected:") or not already_registered():
+                    raise
         return {"ok": True, "status": "received",
                 "delivery_enabled": False, "payment_status": "not_requested"}
+
 def event_landing_payload(state: EventLandingState) -> dict[str,object]:
     return {"event_id":state.event_id,"revision":state.revision,"status":state.status.value,"draft_source":state.draft_source,"has_unpublished_changes":state.has_unpublished_changes,"draft":state.draft.to_payload(),"published":None if state.public_content() is None else state.public_content().to_payload(),"published_revision":state.published_revision}
