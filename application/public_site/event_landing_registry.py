@@ -10,6 +10,8 @@ from typing import Any
 from application.ontology import EventFactLifecycleWriter
 from application.public_site.landing_content import EventLandingContent, EventLandingState
 from contracts.event_store import BUSINESS_FACT_EVENT_TYPE
+
+
 _CREATED="event_landing.created"; _DRAFT="event_landing.draft_saved"; _PUBLISHED="event_landing.published"; _UNPUBLISHED="event_landing.unpublished"
 _FACTS=frozenset({_CREATED,_DRAFT,_PUBLISHED,_UNPUBLISHED})
 _SOURCE="event_landing_registry"
