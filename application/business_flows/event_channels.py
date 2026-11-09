@@ -93,11 +93,19 @@ def issue_for_registration(
 
 def channels(payloads: list[dict[str, Any]]) -> dict[tuple[str, str, str], str]:
     """(slot, customer, platform) -> verified external subject."""
-    return {
-        (str(p.get("slot_id") or p.get("registration_id")), str(p["customer_id"]), str(p["platform"])): str(p["external_subject"])
-        for p in payloads
-        if p.get("step") == "channel_verified"
-    }
+    state: dict[tuple[str, str, str], str] = {}
+    for p in payloads:
+        if p.get("step") not in {"channel_verified", "channel_revoked"}:
+            continue
+        scope = p.get("slot_id") or p.get("registration_id")
+        if not scope or not p.get("customer_id") or p.get("platform") not in PLATFORMS:
+            continue
+        key = (str(scope), str(p["customer_id"]), str(p["platform"]))
+        if p["step"] == "channel_revoked":
+            state.pop(key, None)
+        elif p.get("external_subject"):
+            state[key] = str(p["external_subject"])
+    return state
 
 
 def consume(
