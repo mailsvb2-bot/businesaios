@@ -146,9 +146,22 @@ class EventLandingRegistry:
                 and fact.get("fact_type") == "event_landing.registration"
                 and (fact.get("payload") or {}).get("event_id") == event_id):
                 yield dict(fact["payload"])
-    def registration_count(self, *, tenant_id: str, business_id: str, event_id: str) -> int:
+    def list_registration_receipts(self, *, tenant_id: str, business_id: str,
+                                   event_id: str) -> list[dict[str, str]]:
+        """Owner-only receipts. Never expose contact or fingerprint evidence."""
         self.get(tenant_id=tenant_id, business_id=business_id, event_id=event_id)
-        return sum(1 for _ in self._registration_facts(
+        receipts: dict[str, dict[str, str]] = {}
+        for row in self._registration_facts(
+            tenant_id=tenant_id, business_id=business_id, event_id=event_id,
+        ):
+            rid = row.get("registration_id")
+            if isinstance(rid, str) and rid and rid not in receipts:
+                receipts[rid] = {"registration_id": rid,
+                                 "consent_version": str(row.get("consent_version") or "")}
+        return sorted(receipts.values(), key=lambda r: r["registration_id"])
+
+    def registration_count(self, *, tenant_id: str, business_id: str, event_id: str) -> int:
+        return len(self.list_registration_receipts(
             tenant_id=tenant_id, business_id=business_id, event_id=event_id,
         ))
     def register(self, *, tenant_id: str, business_id: str, event_id: str,
