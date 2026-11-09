@@ -161,8 +161,10 @@ def event_registration_messenger_target(connections: list[dict[str, Any]], chann
         return None
     eligible = _eligible(connections, platform)
     stored = [c for c in eligible if str(c["id"]) == str(channel.get("connection_id"))]  # type: ignore[union-attr]
-    pick = stored or (eligible if len(eligible) == 1 else [])
-    return EventTarget(platform, str(pick[0]["id"]), "external_subject", None, subject) if pick else None
+    # Never infer verification from a different, merely eligible connection.
+    if len(stored) != 1:
+        return None
+    return EventTarget(platform, str(stored[0]["id"]), "external_subject", None, subject)
 
 
 def event_messenger_target(connections: list[dict[str, Any]], *, platform: str, channel: dict[str, Any] | None,
