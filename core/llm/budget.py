@@ -71,7 +71,6 @@ def has_durable_budget_store(event_store: Any) -> bool:
 
 class EventStoreDailyTokenBudget:
     """Durable daily spend plus atomic pending claims on the canonical event store."""
-
     def __init__(self, *, event_store: Any, caps: BudgetCaps, cache_ttl_s: float = DEFAULT_LLM_BUDGET_POLICY.cache_ttl_seconds) -> None:
         self._es, self._caps = event_store, caps
 
@@ -89,7 +88,6 @@ class EventStoreDailyTokenBudget:
             it = getattr(self._es, "iter_events", None)
             if not callable(it):
                 raise RuntimeError("LLM_BUDGET_EVENT_AGGREGATOR_UNAVAILABLE")
-
             def total(who):
                 count = 0
                 for event in it(tenant_id=str(tenant_id), start_ms=start_ms, end_ms=end_ms,
@@ -99,7 +97,6 @@ class EventStoreDailyTokenBudget:
                     except (TypeError, ValueError, AttributeError):
                         continue
                 return count
-
         return total(None), total(str(user_id))
 
     def can_spend(self, *, tenant_id: str, user_id: str, tokens: int) -> bool:
