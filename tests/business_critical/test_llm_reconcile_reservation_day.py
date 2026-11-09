@@ -1,15 +1,11 @@
 from __future__ import annotations
-
 from datetime import datetime, timezone
-
 from core.llm.budget import BudgetCaps, EventStoreDailyTokenBudget
 from core.telemetry.event_types import LLM_COMPLETED
-
 class _Store:
     def __init__(self) -> None:
         self.state = {"pending": {"request-1": {"user_id": "user-1", "tokens": 10}}}
         self.windows: list[tuple[int, int]] = []
-
     def iter_events(self, *, tenant_id, start_ms, end_ms, event_type):
         assert (tenant_id, event_type) == ("tenant-1", LLM_COMPLETED)
         self.windows.append((start_ms, end_ms))
