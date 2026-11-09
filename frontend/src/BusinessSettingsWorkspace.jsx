@@ -152,7 +152,9 @@ export function BusinessSettingsWorkspace({ apiBase, apiKey, getJson, postJson, 
               {zoneOptions.map(([id, title]) => <option value={id} key={id}>{title}</option>)}
             </select>
           </label>
-          {/* Explicit click handling avoids WebKit native submit gaps; onSubmit retains Enter-key access.\n              Both events share save() and its synchronous submitting ref for at-most-once dispatch. */}\n          <button type="submit" className="primary" onClick={save} disabled={!apiKey || Boolean(busy) || !name.trim()}>
+          {/* Explicit click handling avoids WebKit native submit gaps; onSubmit retains Enter-key access.
+              Both events share save() and its synchronous submitting ref for at-most-once dispatch. */}
+          <button type="submit" className="primary" onClick={save} disabled={!apiKey || Boolean(busy) || !name.trim()}>
             {busy === "save" ? "Сохраняем…" : "Сохранить настройки"}
           </button>
         </form>
