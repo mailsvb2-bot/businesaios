@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import time
+from datetime import date, datetime, timezone
 from dataclasses import dataclass, field
 from typing import Any, Protocol
 
@@ -70,7 +71,6 @@ def has_durable_budget_store(event_store: Any) -> bool:
 
 class EventStoreDailyTokenBudget:
     """Durable daily spend plus atomic pending claims on the canonical event store."""
-
     def __init__(self, *, event_store: Any, caps: BudgetCaps, cache_ttl_s: float = DEFAULT_LLM_BUDGET_POLICY.cache_ttl_seconds) -> None:
         self._es, self._caps = event_store, caps
 
@@ -88,7 +88,6 @@ class EventStoreDailyTokenBudget:
             it = getattr(self._es, "iter_events", None)
             if not callable(it):
                 raise RuntimeError("LLM_BUDGET_EVENT_AGGREGATOR_UNAVAILABLE")
-
             def total(who):
                 count = 0
                 for event in it(tenant_id=str(tenant_id), start_ms=start_ms, end_ms=end_ms,
@@ -98,7 +97,6 @@ class EventStoreDailyTokenBudget:
                     except (TypeError, ValueError, AttributeError):
                         continue
                 return count
-
         return total(None), total(str(user_id))
 
     def can_spend(self, *, tenant_id: str, user_id: str, tokens: int) -> bool:
@@ -113,7 +111,13 @@ class EventStoreDailyTokenBudget:
         it = getattr(self._es, "iter_events", None)
         if not callable(it) or not isinstance(current, dict) or not isinstance(current.get("pending"), dict):
             return False
-        start, end = _utc_day_bounds_ms()
+        try:
+            reservation_day = date.fromisoformat(day)
+            if reservation_day.isoformat() != day:
+                return False
+            start, end = _utc_day_bounds_ms(int(datetime.combine(reservation_day, datetime.min.time(), tzinfo=timezone.utc).timestamp() * 1000))
+        except (TypeError, ValueError, OverflowError):
+            return False
         completed = {(str(e.get("user_id") or ""), str((e.get("payload") or {}).get("request_id") or ""))
                      for e in it(tenant_id=str(tenant_id), start_ms=start, end_ms=end, event_type=LLM_COMPLETED)
                      if int((e.get("payload") or {}).get("total_tokens") or 0) > 0}
