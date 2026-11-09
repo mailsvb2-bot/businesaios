@@ -24,6 +24,17 @@ def register_business_workspace_event_landing_routes(*, router: APIRouter, auth_
         except KeyError as exc:
             raise HTTPException(status_code=404,detail='event_landing_not_found') from exc
         return {'event_id':event_id,'registrations':count,'delivery_status':'not_proven','payments_status':'not_proven'}
+    @router.get('/business-workspace/event-landings/{event_id}/registrations', tags=['business-workspace'])
+    async def get_event_registration_receipts(event_id: str, request: Request):
+        _, tenant_id, business_id = scope(request)
+        try:
+            receipts = event_landing_registry.list_registration_receipts(
+                tenant_id=tenant_id, business_id=business_id, event_id=event_id,
+            )
+        except KeyError as exc:
+            raise HTTPException(status_code=404, detail='event_landing_not_found') from exc
+        return {'event_id': event_id, 'registrations': receipts, 'total': len(receipts)}
+
     @router.post('/business-workspace/event-landings/{event_id}', tags=['business-workspace'])
     async def mutate_event_landing(event_id: str, request: Request):
         principal,tenant_id,business_id=scope(request)
