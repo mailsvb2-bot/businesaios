@@ -32,10 +32,8 @@ def test_reconcile_uses_reservation_day_not_current_day():
     store = _Store()
     budget = EventStoreDailyTokenBudget(event_store=store, caps=BudgetCaps())
     assert budget._reconcile_completed(tenant_id="tenant-1", day="2026-11-08", current=store.state)
-    assert store.state == {"pending": {}}
-    start, end = store.windows[0]
-    assert (end - start) == 86_400_000
-    assert start == int(datetime(2026, 11, 8, tzinfo=timezone.utc).timestamp() * 1000)
+    expected_start = int(datetime(2026, 11, 8, tzinfo=timezone.utc).timestamp() * 1000)
+    assert (store.state, store.windows) == ({"pending": {}}, [(expected_start, expected_start + 86_400_000)])
 
 
 def test_reconcile_rejects_invalid_day_without_releasing_claim():
