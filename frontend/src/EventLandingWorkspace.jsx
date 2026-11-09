@@ -85,6 +85,7 @@ export function EventLandingWorkspace({ apiBase, tenantId, businessId, apiKey, g
   const [busy, setBusy] = useState("");
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
+  const [registrationSummary, setRegistrationSummary] = useState(null);
   const pending = useRef(null);
   const currentId = eventId.trim();
   const loaded = Boolean(snapshot && snapshot.event_id === currentId);
@@ -98,6 +99,7 @@ export function EventLandingWorkspace({ apiBase, tenantId, businessId, apiKey, g
   const changeEventId = (value) => {
     setEventId(value);
     setSnapshot(null);
+    setRegistrationSummary(null);
     setEditor(asEditor());
     setDirty(false);
     setError("");
@@ -119,6 +121,7 @@ export function EventLandingWorkspace({ apiBase, tenantId, businessId, apiKey, g
     try {
       const result = await getJson(endpoint, headers);
       setSnapshot(result);
+      setRegistrationSummary(null);
       setEditor(asEditor(result.draft));
       setDirty(false);
       pending.current = null;
@@ -174,6 +177,7 @@ export function EventLandingWorkspace({ apiBase, tenantId, businessId, apiKey, g
         throw new Error("Статус изменился после запроса. Загрузите актуальную версию.");
       }
       setSnapshot(result);
+      setRegistrationSummary(null);
       setEditor(asEditor(result.draft));
       setDirty(false);
       pending.current = null;
@@ -185,6 +189,23 @@ export function EventLandingWorkspace({ apiBase, tenantId, businessId, apiKey, g
       } else {
         setError("Сервер не подтвердил действие: " + (reason.message || "ошибка сети") + ". Повтор того же действия использует прежний ключ.");
       }
+    } finally {
+      setBusy("");
+    }
+  };
+
+  const loadRegistrations = async () => {
+    if (!loaded || !apiKey || busy) return;
+    setBusy("registration-summary");
+    setError("");
+    try {
+      const result = await getJson(endpoint + "/registrations/summary", headers);
+      if (result.event_id !== currentId || !Number.isInteger(result.registrations)) {
+        throw new Error("Неподтверждённая статистика.");
+      }
+      setRegistrationSummary(result);
+    } catch (reason) {
+      setError("Не удалось загрузить регистрации: " + (reason.message || "ошибка сети"));
     } finally {
       setBusy("");
     }
@@ -247,11 +268,18 @@ export function EventLandingWorkspace({ apiBase, tenantId, businessId, apiKey, g
         <button className="ghost" type="button" disabled={!published || dirty || Boolean(busy)} onClick={() => commit("unpublish")}>Снять с публикации</button>
       </div>
       {loaded && published ? <p className="event-landing-notice">Публичная ссылка: <a href={publicLink(tenantId, businessId, currentId)} target="_blank" rel="noopener noreferrer">{publicLink(tenantId, businessId, currentId)}</a></p> : null}
+      {loaded ? <div className="event-landing-notice">
+        <button type="button" className="ghost" onClick={loadRegistrations} disabled={!apiKey || Boolean(busy)}>
+          {busy === "registration-summary" ? "Считаем…" : "Показать заявки участников"}
+        </button>
+        {registrationSummary ? <p role="status">Заявок на участие: {registrationSummary.registrations}.
+          Доставка уведомлений и оплаты не подтверждены.</p> : null}
+      </div> : null}
       <details className="event-landing-preview" open={false}>
         <summary>Предпросмотр текущих полей (не публичная публикация)</summary>
         {previewContent ? <EventLandingPreview content={previewContent} /> : <p role="status">Заполните все пары FAQ и сократите списки до шести пунктов для предпросмотра.</p>}
       </details>
-      <small className="muted-text">Эта страница информирует о мероприятии. Приём регистраций и проведение платежей не включаются автоматически.</small>
+      <small className="muted-text">С опубликованной страницы можно оставить заявку. Доставка уведомлений и проведение платежей не подключаются автоматически.</small>
     </section>
   );
 }
