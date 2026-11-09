@@ -20,8 +20,7 @@ class _Store:
             yield {"user_id": "user-1", "payload": {"request_id": "request-1", "total_tokens": 10}}
 
     def compare_and_set_setting(self, *, tenant_id, key, expected, value):
-        assert tenant_id == "tenant-1"
-        assert key == "llm:pending:v1:2026-11-08"
+        assert (tenant_id, key) == ("tenant-1", "llm:pending:v1:2026-11-08")
         if self.state != expected:
             return False
         self.state = value
