@@ -181,7 +181,9 @@ def funnel(payloads: list[dict[str, Any]], event_id: str) -> Funnel:
         for k, step in MARKS.items():
             if p.get("step") == step and rid in regs:
                 seen[k].add(rid)
-        if p.get("step") == "event_payment_linked" and p.get("event_id") == event_id:
+        # Payment attribution must not cross event registration boundaries.
+        if (p.get("step") == "event_payment_linked" and p.get("event_id") == event_id
+                and rid in regs):
             if (rid, p["payment_ref"]) in links:
                 continue
             links.add((rid, p["payment_ref"]))
