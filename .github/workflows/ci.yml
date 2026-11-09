@@ -9,25 +9,21 @@ on:
       - opened
       - synchronize
       - reopened
-  pull_request_target:
-    types:
-      - closed
 
 permissions:
   contents: read
 
 concurrency:
-  group: ${{ github.workflow }}-${{ github.event_name }}-${{ github.event_name == 'push' && github.sha || github.event_name == 'pull_request_target' && github.event.pull_request.merged == true && github.event.pull_request.merge_commit_sha || github.event_name == 'pull_request_target' && format('pr-{0}-closed-unmerged', github.event.pull_request.number) || github.ref }}
+  group: ${{ github.workflow }}-${{ github.event_name }}-${{ github.event_name == 'push' && github.sha || github.ref }}
   cancel-in-progress: true
 
 env:
-  BAIOS_CI_TARGET_SHA: ${{ github.event_name == 'pull_request_target' && github.event.pull_request.merged == true && github.event.pull_request.merge_commit_sha || github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}
+  BAIOS_CI_TARGET_SHA: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}
 
 jobs:
   clean-source:
     if: >-
-      (github.event_name != 'pull_request_target' || github.event.pull_request.merged == true) &&
-      (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)
+      github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
     name: clean source archive (3.12)
     runs-on: [self-hosted, Linux, X64, businesaios]
     env:
@@ -69,8 +65,7 @@ jobs:
 
   test:
     if: >-
-      (github.event_name != 'pull_request_target' || github.event.pull_request.merged == true) &&
-      (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)
+      github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
     runs-on: [self-hosted, Linux, X64, businesaios]
     strategy:
       fail-fast: false
@@ -107,7 +102,6 @@ jobs:
           if-no-files-found: warn
 
   frontend:
-    if: github.event_name != 'pull_request_target' || github.event.pull_request.merged == true
     name: frontend production build + browser E2E
     runs-on: ubuntu-latest
     steps:
@@ -195,8 +189,7 @@ jobs:
 
   complete-tree:
     if: >-
-      (github.event_name != 'pull_request_target' || github.event.pull_request.merged == true) &&
-      (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)
+      github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
     name: complete pytest tree (3.12)
     needs: test
     runs-on: [self-hosted, Linux, X64, businesaios]
@@ -247,7 +240,6 @@ jobs:
           if-no-files-found: warn
 
   windows-acceptance:
-    if: github.event_name != 'pull_request_target' || github.event.pull_request.merged == true
     name: Windows canonical user scenarios (3.12)
     runs-on: windows-2025
     env:
