@@ -225,37 +225,25 @@ def link_verified_payment(
     r = pe.replay(payloads).registrations.get(registration_id)
     if r is None or r.event_id != event_id:
         raise ValueError("event registration does not belong to the supplied business/event")
-    dup = any(
+    already_linked = any(
         p.get("step") == "event_payment_linked"
         and p.get("registration_id") == registration_id
-        and p.get("payment_ref") == ref
-        for p in payloads
+        and p.get("payment_ref") == ref for p in payloads
     )
-    out = (
-        []
-        if dup
-        else [
-            {
-                "step": "event_payment_linked",
-                "event_id": event_id,
-                "registration_id": registration_id,
-                "payment_ref": ref,
-                "amount_minor": amount_minor,
-                "currency": cur,
-                "occurred_at": pe._dt(occurred_at).isoformat(),
-            }
-        ]
-    )
-    return [
-        *out,
-        {
-            "step": "event_dispatch_cancelled",
-            "event_id": event_id,
-            "registration_ids": [registration_id],
-            "reason": "event_offer_paid",
-            "scope": "commercial",
-        },
-    ]
+    facts = []
+    if not already_linked:
+        facts.append({
+            "step": "event_payment_linked", "event_id": event_id,
+            "registration_id": registration_id, "payment_ref": ref,
+            "amount_minor": amount_minor, "currency": cur,
+            "occurred_at": pe._dt(occurred_at).isoformat(),
+        })
+    facts.append({
+        "step": "event_dispatch_cancelled", "event_id": event_id,
+        "registration_ids": [registration_id],
+        "reason": "event_offer_paid", "scope": "commercial",
+    })
+    return facts
 
 
 # --- acquisition attribution & ROAS (donor event_growth) ---
