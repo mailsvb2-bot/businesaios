@@ -58,12 +58,16 @@ def handle(ctx: TelegramCtx, *, default_price_rub: int, bot_username: str = "", 
         if out is not None:
             return out
 
-    if ctx.callback_data in {"cp:section:customers", "cp:section:sales"}:
+    if ctx.callback_data in {"cp:section:customers", "cp:section:sales", "cp:section:ad-channels"}:
         if not ctx.is_admin:
             return pm(text="Доступ к данным бизнеса запрещён.", reply_markup=kb_back_main())
         from dataclasses import replace
         from core.policies.telegram.routes.business_flow_routes import handle_business_flow_routes
-        route_ctx = (replace(ctx, callback_data="cpm:customers") if ctx.callback_data.endswith("customers") else replace(ctx, callback_data="", cmd="/leads", args=""))
+        target = {"cp:section:customers": "cpm:customers",
+                  "cp:section:sales": "/leads",
+                  "cp:section:ad-channels": "/ad_channels"}[ctx.callback_data]
+        route_ctx = (replace(ctx, callback_data=target) if target.startswith("cpm:")
+                     else replace(ctx, callback_data="", cmd=target, args=""))
         outcome = handle_business_flow_routes(route_ctx, user_id=str(user_id))
         if outcome is None:
             raise RuntimeError("clientplatform_canonical_owner_route_missing")
