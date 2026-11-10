@@ -30,20 +30,16 @@ class EventLandingRegistry:
             if event.get("source") != _SOURCE:
                 continue
             envelope = dict(event.get("payload") or {})
-            if (
-                envelope.get("business_id") != business_id
-                or envelope.get("entity_id") != event_id
-                or envelope.get("fact_type") not in _FACTS
-            ):
+            if (envelope.get("business_id") != business_id
+                    or envelope.get("entity_id") != event_id
+                    or envelope.get("fact_type") not in _FACTS):
                 continue
             append_seq = event.get("append_seq")
             if type(append_seq) is not int or append_seq < 1:
                 raise RuntimeError("event_landing_durable_append_sequence_required")
-            rows.append({
-                "type": envelope["fact_type"],
-                "payload": dict(envelope.get("payload") or {}),
-                "sequence": append_seq,
-            })
+            rows.append({"type": envelope["fact_type"],
+                         "payload": dict(envelope.get("payload") or {}),
+                         "sequence": append_seq})
         rows.sort(key=lambda row: row["sequence"])
         if len({row["sequence"] for row in rows}) != len(rows):
             raise RuntimeError("event_landing_duplicate_append_sequence")
