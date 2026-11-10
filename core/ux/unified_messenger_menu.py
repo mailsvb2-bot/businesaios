@@ -7,10 +7,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from core.ux.callbacks import (
-    CB_ADMIN_MENU, CB_ADS_APPLY_MENU, CB_AUTOPILOT_MENU, CB_GROWTH_MENU,
-    CB_MENU_MAIN, CB_SETTINGS_MENU, CB_SETTINGS_STATE, CB_SUB_MENU,
-)
+from core.ux.callbacks import CB_ADMIN_MENU, CB_ADS_APPLY_MENU, CB_AUTOPILOT_MENU, CB_MENU_MAIN, CB_SETTINGS_MENU
 
 BRAND = "ClientPlatform"
 
