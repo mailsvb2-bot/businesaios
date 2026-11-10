@@ -63,8 +63,7 @@ def handle(ctx: TelegramCtx, *, default_price_rub: int, bot_username: str = "", 
             return pm(text="Доступ к данным бизнеса запрещён.", reply_markup=kb_back_main())
         from dataclasses import replace
         from core.policies.telegram.routes.business_flow_routes import handle_business_flow_routes
-        target = {"cp:section:customers": "cpm:customers",
-                  "cp:section:sales": "/leads",
+        target = {"cp:section:customers": "cpm:customers", "cp:section:sales": "/leads",
                   "cp:section:ad-channels": "/ad_channels"}[ctx.callback_data]
         route_ctx = (replace(ctx, callback_data=target) if target.startswith("cpm:")
                      else replace(ctx, callback_data="", cmd=target, args=""))
