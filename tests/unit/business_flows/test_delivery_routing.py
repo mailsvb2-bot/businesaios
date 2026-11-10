@@ -59,7 +59,9 @@ def test_email_and_scoped():
     assert dr.event_email_target(C, notification_connection_id="e1", email="a@b.ru").connection_id == "e1"
     assert dr.event_email_target(C, notification_connection_id=None, email="a@b.ru") is None
     t = dr.event_registration_messenger_target(C, {"external_subject": "42", "connection_id": "gone"}, "telegram")
-    assert t and t.connection_id == "t1" and t.recipient_kind == "external_subject"
+    assert t is None  # stale or revoked connection must not silently reroute
+    assert dr.event_registration_messenger_target(C, {"external_subject": "42", "connection_id": "t1"}, "telegram").connection_id == "t1"
+    assert dr.event_messenger_target(C, platform="telegram", channel={"external_subject": "42", "connection_id": "gone"}, identities=[{"id": "i1", "platform": "telegram", "external_subject": "99"}]) is None
     assert dr.event_registration_messenger_target(C, {"external_subject": "1"}, "vk") is None  # ambiguous
     assert dr.event_registration_messenger_target(C, {"external_subject": "1", "connection_id": "v2"}, "vk").connection_id == "v2"
     with pytest.raises(ValueError):
