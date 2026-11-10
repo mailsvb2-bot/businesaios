@@ -177,14 +177,14 @@ def event_messenger_target(connections: list[dict[str, Any]], *, platform: str, 
     # different identity or connection after revocation or disconnection.
     if channel and channel.get("external_subject"):
         return None
-    live = {str(c["id"]) for c in _eligible(connections, platform)}
+    eligible = _eligible(connections, platform)
+    live = {str(c["id"]) for c in eligible}
     idents = [i for i in identities if i.get("platform") == platform and i.get("status", "active") == "active"]
     if last_sent and str(last_sent.get("connection_id")) in live:
         hit = next((i for i in idents if i["id"] == last_sent.get("customer_identity_id")), None)
         if hit is not None:
             subj = str(hit.get("external_subject") or "").strip()
             return EventTarget(platform, str(last_sent["connection_id"]), "customer_identity", hit["id"], subj) if subj else None
-    eligible = _eligible(connections, platform)
     if len(idents) != 1 or len(eligible) != 1:
         return None
     subj = str(idents[0].get("external_subject") or "").strip()
