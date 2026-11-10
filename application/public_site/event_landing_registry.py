@@ -30,20 +30,16 @@ class EventLandingRegistry:
             if event.get("source") != _SOURCE:
                 continue
             envelope = dict(event.get("payload") or {})
-            if (
-                envelope.get("business_id") != business_id
-                or envelope.get("entity_id") != event_id
-                or envelope.get("fact_type") not in _FACTS
-            ):
+            if (envelope.get("business_id") != business_id
+                    or envelope.get("entity_id") != event_id
+                    or envelope.get("fact_type") not in _FACTS):
                 continue
             append_seq = event.get("append_seq")
             if type(append_seq) is not int or append_seq < 1:
                 raise RuntimeError("event_landing_durable_append_sequence_required")
-            rows.append({
-                "type": envelope["fact_type"],
-                "payload": dict(envelope.get("payload") or {}),
-                "sequence": append_seq,
-            })
+            rows.append({"type": envelope["fact_type"],
+                         "payload": dict(envelope.get("payload") or {}),
+                         "sequence": append_seq})
         rows.sort(key=lambda row: row["sequence"])
         if len({row["sequence"] for row in rows}) != len(rows):
             raise RuntimeError("event_landing_duplicate_append_sequence")
@@ -53,12 +49,9 @@ class EventLandingRegistry:
         if not rows or rows[0]["type"] != _CREATED:
             raise KeyError("event_landing_not_found")
         initial = dict(rows[0]["payload"])
-        state = EventLandingState(
-            event_id=event_id,
-            draft=EventLandingContent.from_payload(initial["content"]),
-            draft_source=str(initial["source"]),
-            revision=1,
-        )
+        state = EventLandingState(event_id=event_id,
+                                  draft=EventLandingContent.from_payload(initial["content"]),
+                                  draft_source=str(initial["source"]), revision=1)
         for row in rows[1:]:
             if row["type"] == _CREATED:
                 raise RuntimeError("event_landing_duplicate_create_fact")
@@ -138,19 +131,31 @@ class EventLandingRegistry:
         return self.get(tenant_id=tenant_id,business_id=business_id,event_id=event_id)
     def _registration_facts(self, *, tenant_id: str, business_id: str, event_id: str):
         for event in self._events.iter_events(
-            tenant_id=tenant_id, start_ms=0, event_type=BUSINESS_FACT_EVENT_TYPE,
-        ):
+            tenant_id=tenant_id, start_ms=0, event_type=BUSINESS_FACT_EVENT_TYPE):
             fact = dict(event.get("payload") or {})
             if (event.get("source") == _SOURCE
                 and fact.get("business_id") == business_id
                 and fact.get("fact_type") == "event_landing.registration"
                 and (fact.get("payload") or {}).get("event_id") == event_id):
                 yield dict(fact["payload"])
-    def registration_count(self, *, tenant_id: str, business_id: str, event_id: str) -> int:
+    def list_registration_receipts(self, *, tenant_id: str, business_id: str,
+                                   event_id: str) -> list[dict[str, str]]:
+        """Owner-only receipts. Never expose contact or fingerprint evidence."""
         self.get(tenant_id=tenant_id, business_id=business_id, event_id=event_id)
-        return sum(1 for _ in self._registration_facts(
+        receipts: dict[str, dict[str, str]] = {}
+        for row in self._registration_facts(
             tenant_id=tenant_id, business_id=business_id, event_id=event_id,
-        ))
+        ):
+            rid = row.get("registration_id")
+            if isinstance(rid, str) and rid:
+                receipts.setdefault(rid, {"registration_id": rid,
+                                          "consent_version": str(row.get("consent_version") or "")})
+        return sorted(receipts.values(), key=lambda r: r["registration_id"])
+
+    def registration_count(self, *, tenant_id: str, business_id: str, event_id: str) -> int:
+        return len(self.list_registration_receipts(tenant_id=tenant_id,
+                                                   business_id=business_id, event_id=event_id))
+
     def register(self, *, tenant_id: str, business_id: str, event_id: str,
                  email: str, consent: bool, idempotency_key: str) -> dict[str, object]:
         """Scoped consent receipt; no plaintext contact is stored or outbound sent."""
@@ -185,8 +190,8 @@ class EventLandingRegistry:
             except RuntimeError as exc:
                 if not str(exc).startswith("ontology transition rejected:") or not already_registered():
                     raise
-        return {"ok": True, "status": "received", "registration_id": entity_id,
-                "delivery_enabled": False, "payment_status": "not_requested"}
+        return {"ok": True, "status": "received", "registration_id": entity_id, "delivery_enabled": False,
+                "payment_status": "not_requested"}
 
 def event_landing_payload(state: EventLandingState) -> dict[str,object]:
     return {"event_id":state.event_id,"revision":state.revision,"status":state.status.value,"draft_source":state.draft_source,"has_unpublished_changes":state.has_unpublished_changes,"draft":state.draft.to_payload(),"published":None if state.public_content() is None else state.public_content().to_payload(),"published_revision":state.published_revision}

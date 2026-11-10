@@ -97,6 +97,11 @@ def grant(
     }
 
 
+def _commercial_cancel_fact(event_id: str, registration_id: str, reason: str) -> dict[str, Any]:
+    return {"step": "event_dispatch_cancelled", "event_id": event_id,
+            "registration_ids": [registration_id], "reason": reason, "scope": "commercial"}
+
+
 def revoke_by_token(b: pe.Board, payloads: list[dict[str, Any]], token: str) -> list[dict[str, Any]]:
     """Revoke all commercial channels; the registration itself stays active."""
     th = pe._h(str(token or "").strip())
@@ -104,21 +109,10 @@ def revoke_by_token(b: pe.Board, payloads: list[dict[str, Any]], token: str) -> 
     if r is None:
         raise ValueError("event registration token is invalid")
     chans = active_channels(payloads, r.registration_id)
-    out: list[dict[str, Any]] = []
-    if chans:
-        out.append(
-            {"step": "event_commercial_consent_revoked", "registration_id": r.registration_id, "channels": list(chans)}
-        )
-    out.append(
-        {
-            "step": "event_dispatch_cancelled",
-            "event_id": r.event_id,
-            "registration_ids": [r.registration_id],
-            "reason": "event_commercial_consent_revoked",
-            "scope": "commercial",
-        }
-    )
-    return out
+    revoked = ([{"step": "event_commercial_consent_revoked",
+                 "registration_id": r.registration_id, "channels": list(chans)}] if chans else [])
+    return [*revoked, _commercial_cancel_fact(r.event_id, r.registration_id,
+                                              "event_commercial_consent_revoked")]
 
 
 # --- event funnel analytics & verified-payment linking (donor event_analytics) ---
@@ -181,7 +175,9 @@ def funnel(payloads: list[dict[str, Any]], event_id: str) -> Funnel:
         for k, step in MARKS.items():
             if p.get("step") == step and rid in regs:
                 seen[k].add(rid)
-        if p.get("step") == "event_payment_linked" and p.get("event_id") == event_id:
+        # Payment attribution must not cross event registration boundaries.
+        if (p.get("step") == "event_payment_linked" and p.get("event_id") == event_id
+                and rid in regs):
             if (rid, p["payment_ref"]) in links:
                 continue
             links.add((rid, p["payment_ref"]))
@@ -223,37 +219,21 @@ def link_verified_payment(
     r = pe.replay(payloads).registrations.get(registration_id)
     if r is None or r.event_id != event_id:
         raise ValueError("event registration does not belong to the supplied business/event")
-    dup = any(
+    already_linked = any(
         p.get("step") == "event_payment_linked"
         and p.get("registration_id") == registration_id
-        and p.get("payment_ref") == ref
-        for p in payloads
+        and p.get("payment_ref") == ref for p in payloads
     )
-    out = (
-        []
-        if dup
-        else [
-            {
-                "step": "event_payment_linked",
-                "event_id": event_id,
-                "registration_id": registration_id,
-                "payment_ref": ref,
-                "amount_minor": amount_minor,
-                "currency": cur,
-                "occurred_at": pe._dt(occurred_at).isoformat(),
-            }
-        ]
-    )
-    return [
-        *out,
-        {
-            "step": "event_dispatch_cancelled",
-            "event_id": event_id,
-            "registration_ids": [registration_id],
-            "reason": "event_offer_paid",
-            "scope": "commercial",
-        },
-    ]
+    facts = []
+    if not already_linked:
+        facts.append({
+            "step": "event_payment_linked", "event_id": event_id,
+            "registration_id": registration_id, "payment_ref": ref,
+            "amount_minor": amount_minor, "currency": cur,
+            "occurred_at": pe._dt(occurred_at).isoformat(),
+        })
+    facts.append(_commercial_cancel_fact(event_id, registration_id, "event_offer_paid"))
+    return facts
 
 
 # --- acquisition attribution & ROAS (donor event_growth) ---
