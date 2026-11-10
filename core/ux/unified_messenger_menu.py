@@ -28,11 +28,11 @@ class NavigationItem:
 _ITEMS = (
     NavigationItem("customers", "💬 Клиенты и обращения", SECTION_PREFIX + "customers", frozenset({"owner", "admin", "operator"})),
     NavigationItem("sales", "💰 Продажи", SECTION_PREFIX + "sales", frozenset({"owner", "admin", "operator", "marketer"})),
-    NavigationItem("marketing", "📣 Реклама и продвижение", CB_GROWTH_MENU, frozenset({"owner", "admin", "marketer"})),
+    NavigationItem("marketing", "📣 Реклама и продвижение", "cpm:growth", frozenset({"owner", "admin", "marketer"})),
     NavigationItem("ai", "🤖 ИИ и автопилот", CB_AUTOPILOT_MENU, frozenset({"owner", "admin", "operator", "marketer"})),
     NavigationItem("ads_apply", "🧩 Ads Apply (prod)", CB_ADS_APPLY_MENU, frozenset({"marketer", "operator"})),
-    NavigationItem("results", "📊 Результаты", CB_SETTINGS_STATE, frozenset({"owner", "admin", "operator", "marketer"})),
-    NavigationItem("payments", "💳 Оплаты и тарифы", CB_SUB_MENU, frozenset({"owner", "admin"})),
+    NavigationItem("results", "📊 Результаты", "cpm:growth-an:7", frozenset({"owner", "admin", "operator", "marketer"})),
+    NavigationItem("payments", "💳 Оплаты и тарифы", "cpm:money", frozenset({"owner", "admin"})),
     NavigationItem("settings", "⚙️ Настройки", CB_SETTINGS_MENU, frozenset({"owner", "admin"})),
     NavigationItem("administration", "🛠 Администрирование", CB_ADMIN_MENU, frozenset({"admin"})),
 )
