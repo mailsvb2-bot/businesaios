@@ -139,8 +139,6 @@ def warmup_window(sessions: list[dict[str, Any]], *, timezone_name: str, now: da
     """Max warmup days = calendar days (event tz) until the first session."""
     if not sessions:
         raise ValueError("event sessions are required")
-    from zoneinfo import ZoneInfo
-
     z = ZoneInfo(timezone_name)
     first = min(pe._dt(s["starts_at"]) for s in sessions).astimezone(z).date()
     return max((first - pe._dt(now).astimezone(z).date()).days, 0)
