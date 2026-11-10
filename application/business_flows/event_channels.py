@@ -43,6 +43,16 @@ def _digest(token: str) -> str:
     return hashlib.sha256(token.encode("utf-8")).hexdigest()
 
 
+def _link_fact(*, scope: dict[str, str], customer_id: str, platforms: Iterable[str],
+               marketing: frozenset[str], now_ms: int, ttl_seconds: int) -> tuple[dict[str, str], dict[str, Any]]:
+    tokens = {p: secrets.token_urlsafe(32) for p in platforms}
+    return tokens, {
+        "step": "channel_links_issued", **scope, "customer_id": customer_id,
+        "expires_at_ms": now_ms + min(max(int(ttl_seconds), 60), 3600) * 1000,
+        "links": [{"platform": p, "digest": _digest(t), "marketing": p in marketing} for p, t in tokens.items()],
+    }
+
+
 def issue(
     slot: Any, *, customer_id: str, marketing: Iterable[object] = (), now_ms: int, ttl_seconds: int = 3600
 ) -> tuple[dict[str, str], dict[str, Any]]:
@@ -50,16 +60,8 @@ def issue(
     wanted = marketing_platforms(marketing)
     if slot is None or slot.status != "booked" or slot.customer_id != customer_id or slot.starts_at_ms <= now_ms:
         raise LinkRejected("booking is not available for messenger verification")
-    expires = now_ms + min(max(int(ttl_seconds), 60), 3600) * 1000
-    tokens = {p: secrets.token_urlsafe(32) for p in PLATFORMS}
-    fact = {
-        "step": "channel_links_issued",
-        "slot_id": slot.slot_id,
-        "customer_id": customer_id,
-        "expires_at_ms": expires,
-        "links": [{"platform": p, "digest": _digest(t), "marketing": p in wanted} for p, t in tokens.items()],
-    }
-    return tokens, fact
+    return _link_fact(scope={"slot_id": slot.slot_id}, customer_id=customer_id,
+                      platforms=PLATFORMS, marketing=wanted, now_ms=now_ms, ttl_seconds=ttl_seconds)
 
 
 def issue_for_registration(
@@ -80,15 +82,8 @@ def issue_for_registration(
     plats = [p for p in PLATFORMS if p not in skip]
     if not plats:
         return {}, None
-    tokens = {p: secrets.token_urlsafe(32) for p in plats}
-    fact = {
-        "step": "channel_links_issued",
-        "registration_id": registration_id,
-        "customer_id": reg.customer_id,
-        "expires_at_ms": now_ms + min(max(int(ttl_seconds), 60), 3600) * 1000,
-        "links": [{"platform": p, "digest": _digest(t), "marketing": p in wanted} for p, t in tokens.items()],
-    }
-    return tokens, fact
+    return _link_fact(scope={"registration_id": registration_id}, customer_id=reg.customer_id,
+                      platforms=plats, marketing=wanted, now_ms=now_ms, ttl_seconds=ttl_seconds)
 
 
 def channels(payloads: list[dict[str, Any]]) -> dict[tuple[str, str, str], str]:
