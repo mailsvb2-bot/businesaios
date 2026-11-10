@@ -97,6 +97,11 @@ def grant(
     }
 
 
+def _commercial_cancel_fact(event_id: str, registration_id: str, reason: str) -> dict[str, Any]:
+    return {"step": "event_dispatch_cancelled", "event_id": event_id,
+            "registration_ids": [registration_id], "reason": reason, "scope": "commercial"}
+
+
 def revoke_by_token(b: pe.Board, payloads: list[dict[str, Any]], token: str) -> list[dict[str, Any]]:
     """Revoke all commercial channels; the registration itself stays active."""
     th = pe._h(str(token or "").strip())
@@ -106,11 +111,8 @@ def revoke_by_token(b: pe.Board, payloads: list[dict[str, Any]], token: str) -> 
     chans = active_channels(payloads, r.registration_id)
     revoked = ([{"step": "event_commercial_consent_revoked",
                  "registration_id": r.registration_id, "channels": list(chans)}] if chans else [])
-    return [*revoked, {
-        "step": "event_dispatch_cancelled", "event_id": r.event_id,
-        "registration_ids": [r.registration_id],
-        "reason": "event_commercial_consent_revoked", "scope": "commercial",
-    }]
+    return [*revoked, _commercial_cancel_fact(r.event_id, r.registration_id,
+                                              "event_commercial_consent_revoked")]
 
 
 # --- event funnel analytics & verified-payment linking (donor event_analytics) ---
@@ -230,11 +232,7 @@ def link_verified_payment(
             "amount_minor": amount_minor, "currency": cur,
             "occurred_at": pe._dt(occurred_at).isoformat(),
         })
-    facts.append({
-        "step": "event_dispatch_cancelled", "event_id": event_id,
-        "registration_ids": [registration_id],
-        "reason": "event_offer_paid", "scope": "commercial",
-    })
+    facts.append(_commercial_cancel_fact(event_id, registration_id, "event_offer_paid"))
     return facts
 
 
