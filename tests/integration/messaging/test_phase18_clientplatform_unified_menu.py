@@ -3,8 +3,7 @@ from __future__ import annotations
 import pytest
 
 from core.ux.callbacks import (
-    CB_ADMIN_MENU, CB_AUTOPILOT_MENU, CB_GROWTH_MENU, CB_MENU_MAIN,
-    CB_SETTINGS_MENU, CB_SETTINGS_STATE, CB_SUB_MENU,
+    CB_ADMIN_MENU, CB_AUTOPILOT_MENU, CB_MENU_MAIN, CB_SETTINGS_MENU,
 )
 from core.ux.unified_messenger_menu import (
     BRAND, menu_items, menu_text, telegram_menu, plain_channel_menu,
