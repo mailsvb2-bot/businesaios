@@ -14,25 +14,22 @@ def register_business_workspace_event_landing_routes(*, router: APIRouter, auth_
             return event_landing_payload(event_landing_registry.get(tenant_id=tenant_id,business_id=business_id,event_id=event_id))
         except KeyError as exc:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND,detail='event_landing_not_found') from exc
-    @router.get('/business-workspace/event-landings/{event_id}/registrations/summary', tags=['business-workspace'])
-    async def get_event_registrations_summary(event_id: str, request: Request):
-        _,tenant_id,business_id=scope(request)
-        try:
-            count=event_landing_registry.registration_count(
-                tenant_id=tenant_id,business_id=business_id,event_id=event_id,
-            )
-        except KeyError as exc:
-            raise HTTPException(status_code=404,detail='event_landing_not_found') from exc
-        return {'event_id':event_id,'registrations':count,'delivery_status':'not_proven','payments_status':'not_proven'}
-    @router.get('/business-workspace/event-landings/{event_id}/registrations', tags=['business-workspace'])
-    async def get_event_registration_receipts(event_id: str, request: Request):
+    def registration_receipts(request: Request, event_id: str):
         _, tenant_id, business_id = scope(request)
         try:
-            receipts = event_landing_registry.list_registration_receipts(
-                tenant_id=tenant_id, business_id=business_id, event_id=event_id,
-            )
+            return event_landing_registry.list_registration_receipts(
+                tenant_id=tenant_id, business_id=business_id, event_id=event_id)
         except KeyError as exc:
             raise HTTPException(status_code=404, detail='event_landing_not_found') from exc
+
+    @router.get('/business-workspace/event-landings/{event_id}/registrations/summary', tags=['business-workspace'])
+    async def get_event_registrations_summary(event_id: str, request: Request):
+        count = len(registration_receipts(request, event_id))
+        return {'event_id':event_id,'registrations':count,'delivery_status':'not_proven','payments_status':'not_proven'}
+
+    @router.get('/business-workspace/event-landings/{event_id}/registrations', tags=['business-workspace'])
+    async def get_event_registration_receipts(event_id: str, request: Request):
+        receipts = registration_receipts(request, event_id)
         return {'event_id': event_id, 'registrations': receipts, 'total': len(receipts)}
 
     @router.post('/business-workspace/event-landings/{event_id}', tags=['business-workspace'])
