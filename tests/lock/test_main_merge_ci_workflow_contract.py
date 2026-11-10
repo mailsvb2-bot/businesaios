@@ -12,27 +12,25 @@ MANDATORY = (
     ".github/workflows/full-ci.yml",
     ".github/workflows/targeted-domain-ci.yml",
 )
-MERGE_SHA = "github.event.pull_request.merge_commit_sha"
 TARGET_ENV = "BAIOS_CI_TARGET_SHA"
-MERGED_TARGET_GUARD = "github.event_name != 'pull_request_target' || github.event.pull_request.merged == true"
 SAME_REPO_PR_GUARD = "github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository"
 SELF_HOSTED_RUNNER = "runs-on: [self-hosted, Linux, X64, businesaios]"
 SELF_HOSTED_MANDATORY = tuple(path for path in MANDATORY if path != ".github/workflows/deep-release-validation.yml")
-UNMERGED_TARGET_GROUP = "format('pr-{0}-closed-unmerged', github.event.pull_request.number)"
-TARGET_SCOPED_CONCURRENCY = "group: ${{ github.workflow }}-${{ github.event_name }}-${{ github.event_name == 'push' && github.sha || github.event_name == 'pull_request_target' && github.event.pull_request.merged == true && github.event.pull_request.merge_commit_sha || github.event_name == 'pull_request_target' && format('pr-{0}-closed-unmerged', github.event.pull_request.number) || github.ref }}"
-ORDINARY_PR_TYPES = "  pull_request:\n    types:\n      - opened\n      - synchronize\n      - reopened\n  pull_request_target:\n    types:\n      - closed"
+TARGET_SCOPED_CONCURRENCY = "group: ${{ github.workflow }}-${{ github.event_name }}-${{ github.event_name == 'push' && github.sha || github.ref }}"
+ORDINARY_PR_TYPES = "  pull_request:\n    types:\n      - opened\n      - synchronize\n      - reopened"
+EXACT_TARGET = "${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}"
 
 
-def test_mandatory_ci_uses_reliable_merged_pr_event_and_exact_main_commit() -> None:
+def test_mandatory_ci_checks_pr_and_exact_main_commit_without_privileged_target_event() -> None:
     for relative in MANDATORY:
         text = (ROOT / relative).read_text(encoding="utf-8")
+        assert "  push:\n    branches:\n      - main" in text
         assert ORDINARY_PR_TYPES in text
-        assert MERGE_SHA in text
+        assert "pull_request_target" not in text
         assert TARGET_ENV in text
-        assert MERGED_TARGET_GUARD in text
+        assert f"{TARGET_ENV}: {EXACT_TARGET}" in text
         assert "ref: ${{ env.BAIOS_CI_TARGET_SHA }}" in text
         assert "EXPECTED_SHA: ${{ env.BAIOS_CI_TARGET_SHA }}" in text
-        assert "github.event_name == 'pull_request_target'" in text
 
 
 def test_self_hosted_mandatory_ci_rejects_fork_pr_heads() -> None:
@@ -43,33 +41,29 @@ def test_self_hosted_mandatory_ci_rejects_fork_pr_heads() -> None:
         assert text.count(SAME_REPO_PR_GUARD) == runner_count
 
 
-def test_mandatory_ci_concurrency_is_scoped_to_target_identity() -> None:
+def test_mandatory_ci_concurrency_is_scoped_to_push_sha_or_pr_ref() -> None:
     for relative in MANDATORY:
         text = (ROOT / relative).read_text(encoding="utf-8")
         assert TARGET_SCOPED_CONCURRENCY in text
-        assert UNMERGED_TARGET_GROUP in text
+        assert "cancel-in-progress: true" in text
         assert "group: ${{ github.workflow }}-${{ github.ref }}" not in text
 
 
-def test_targeted_ci_uses_pre_change_base_without_network_fetch_for_pr_push_and_merged_events() -> None:
+def test_targeted_ci_uses_pre_change_base_without_network_fetch() -> None:
     text = (ROOT / ".github/workflows/targeted-domain-ci.yml").read_text(encoding="utf-8")
     assert "BAIOS_TARGETED_BASE_SHA:" in text
     assert "github.event_name == 'push' && github.event.before" in text
     assert "github.event_name == 'pull_request' && github.event.pull_request.base.sha" in text
-    assert "github.event_name == 'pull_request_target'" in text
-    assert "github.event.pull_request.base.sha" in text
+    assert "pull_request_target" not in text
     assert 'if [ -n "$BAIOS_TARGETED_BASE_SHA" ]; then' in text
     assert "TARGETED_CI_BASE=$BAIOS_TARGETED_BASE_SHA" in text
     assert "TARGETED_CI_BASE=origin/main" in text
     assert "TARGETED_CI_BASE: origin/main" not in text
 
 
-def test_deep_release_keeps_untrusted_pr_head_blocked_but_allows_merged_commit() -> None:
+def test_deep_release_blocks_untrusted_pr_and_keeps_exact_commit_evidence() -> None:
     text = (ROOT / ".github/workflows/deep-release-validation.yml").read_text(encoding="utf-8")
-    assert (
-        "github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository"
-        in text
-    )
-    assert MERGED_TARGET_GUARD in text
+    assert SAME_REPO_PR_GUARD in text
+    assert "pull_request_target" not in text
     assert "GIT_COMMIT_SHA: ${{ env.BAIOS_CI_TARGET_SHA }}" in text
     assert "deep-release-${{ env.BAIOS_CI_TARGET_SHA }}" in text
