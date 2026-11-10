@@ -155,15 +155,15 @@ class EventLandingRegistry:
             tenant_id=tenant_id, business_id=business_id, event_id=event_id,
         ):
             rid = row.get("registration_id")
-            if isinstance(rid, str) and rid and rid not in receipts:
-                receipts[rid] = {"registration_id": rid,
-                                 "consent_version": str(row.get("consent_version") or "")}
+            if isinstance(rid, str) and rid:
+                receipts.setdefault(rid, {"registration_id": rid,
+                                          "consent_version": str(row.get("consent_version") or "")})
         return sorted(receipts.values(), key=lambda r: r["registration_id"])
 
     def registration_count(self, *, tenant_id: str, business_id: str, event_id: str) -> int:
         return len(self.list_registration_receipts(
-            tenant_id=tenant_id, business_id=business_id, event_id=event_id,
-        ))
+            tenant_id=tenant_id, business_id=business_id, event_id=event_id))
+
     def register(self, *, tenant_id: str, business_id: str, event_id: str,
                  email: str, consent: bool, idempotency_key: str) -> dict[str, object]:
         """Scoped consent receipt; no plaintext contact is stored or outbound sent."""
