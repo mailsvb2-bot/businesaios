@@ -211,6 +211,8 @@ def _screen(parsed: Parsed, s: Snapshot) -> tuple[str, list[list[tuple[str, str]
             ("🪜 Лестница предложений", "cpm:ladder"),
             ("📈 Отчёт о росте", "cpm:growth-report"),
             ("📊 Аналитика 7/30 дн.", "cpm:growth-an:7"),
+            ("📣 Рекламные каналы", "cp:section:ad-channels"),
+            ("🧠 AI Growth Strategy", "growth:menu"),
         )
     if a == "partners":
         if not s.partners:
@@ -370,7 +372,7 @@ def _extra_screen(a: str, parsed: Parsed, s: Snapshot) -> tuple[str, list[list[t
     if a == "money":
         body = s.money_text(adm) if adm is not None and s.money_text else "Платежей нет."
         return body + "\n\nЗаписать: /pay Услуга | 1500 RUB | номер · Возврат: /refund", _rows(
-            ("💳 Все платежи", "cpm:payments:0")
+            ("💳 Все платежи", "cpm:payments:0"), ("💳 Тарифы ClientPlatform", "sub:menu")
         )
     if a == "services":
         prices = getattr(adm, "prices", {}) or {}
