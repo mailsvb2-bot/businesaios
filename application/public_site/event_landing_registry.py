@@ -49,12 +49,9 @@ class EventLandingRegistry:
         if not rows or rows[0]["type"] != _CREATED:
             raise KeyError("event_landing_not_found")
         initial = dict(rows[0]["payload"])
-        state = EventLandingState(
-            event_id=event_id,
-            draft=EventLandingContent.from_payload(initial["content"]),
-            draft_source=str(initial["source"]),
-            revision=1,
-        )
+        state = EventLandingState(event_id=event_id,
+                                  draft=EventLandingContent.from_payload(initial["content"]),
+                                  draft_source=str(initial["source"]), revision=1)
         for row in rows[1:]:
             if row["type"] == _CREATED:
                 raise RuntimeError("event_landing_duplicate_create_fact")
@@ -194,8 +191,8 @@ class EventLandingRegistry:
             except RuntimeError as exc:
                 if not str(exc).startswith("ontology transition rejected:") or not already_registered():
                     raise
-        return {"ok": True, "status": "received", "registration_id": entity_id,
-                "delivery_enabled": False, "payment_status": "not_requested"}
+        return {"ok": True, "status": "received", "registration_id": entity_id, "delivery_enabled": False,
+                "payment_status": "not_requested"}
 
 def event_landing_payload(state: EventLandingState) -> dict[str,object]:
     return {"event_id":state.event_id,"revision":state.revision,"status":state.status.value,"draft_source":state.draft_source,"has_unpublished_changes":state.has_unpublished_changes,"draft":state.draft.to_payload(),"published":None if state.public_content() is None else state.public_content().to_payload(),"published_revision":state.published_revision}
