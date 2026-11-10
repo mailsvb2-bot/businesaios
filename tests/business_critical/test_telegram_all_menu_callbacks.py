@@ -82,6 +82,52 @@ def test_owner_section_calls_existing_canonical_operation(monkeypatch, callback,
     assert result.payload["callback_query_id"] == "callback-12"
 
 
+@pytest.mark.parametrize(("callback", "action", "operation", "argument"), [
+    ("cpm:growth", "business_ops_summary@v1", "cockpit", "cpm:growth"),
+    ("cpm:growth-an:7", "business_ops_summary@v1", "cockpit", "cpm:growth-an:7"),
+    ("cpm:money", "business_ops_summary@v1", "cockpit", "cpm:money"),
+    ("cp:section:ad-channels", "bookings@v1", "ad_channels", ""),
+])
+def test_owner_main_business_sections_use_canonical_executor_contract(
+    monkeypatch, callback, action, operation, argument,
+):
+    monkeypatch.setattr("runtime.entrypoints.telegram_longpoll._configured_telegram_tenant_id",
+                        lambda: "tenant-live")
+    result = UnifiedTelegramPolicyV3(admin_user_ids=("4001",)).propose(
+        _callback_state(callback)
+    )
+    assert result.action == action
+    assert result.payload["op"] == operation
+    assert result.payload["arg"] == argument
+    assert result.payload["callback_query_id"] == "callback-12"
+
+
+def test_growth_and_finance_surfaces_expose_real_existing_actions():
+    from application.business_flows.cockpit import Parsed, Snapshot, render
+
+    growth, growth_rows = render(Parsed("growth"), Snapshot(), is_owner=True)
+    assert "Рост" in growth
+    growth_targets = {callback for row in growth_rows for _, callback in row}
+    assert {"cp:section:ad-channels", "growth:menu", "cpm:growth-an:7"} <= growth_targets
+
+    finance, finance_rows = render(Parsed("money"), Snapshot(), is_owner=True)
+    assert finance
+    finance_targets = {callback for row in finance_rows for _, callback in row}
+    assert {"cpm:payments:0", "sub:menu"} <= finance_targets
+
+
+@pytest.mark.parametrize("callback", [
+    "cpm:growth", "cpm:growth-an:7", "cpm:money", "cp:section:ad-channels",
+])
+def test_owner_business_sections_reject_unprivileged_role(monkeypatch, callback):
+    monkeypatch.setattr("runtime.entrypoints.telegram_longpoll._configured_telegram_tenant_id",
+                        lambda: "tenant-live")
+    state = replace(_callback_state(callback), user={"roles": ["operator"]})
+    proposal = UnifiedTelegramPolicyV3().propose(state)
+    assert proposal.action != "business_ops_summary@v1"
+    assert proposal.action != "bookings@v1"
+
+
 @pytest.mark.parametrize("callback", ["cp:section:customers", "cp:section:sales"])
 def test_owner_section_rejects_unprivileged_telegram_user(monkeypatch, callback):
     monkeypatch.setattr("runtime.entrypoints.telegram_longpoll._configured_telegram_tenant_id", lambda: "tenant-live")
