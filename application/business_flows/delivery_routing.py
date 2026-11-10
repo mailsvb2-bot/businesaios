@@ -173,6 +173,10 @@ def event_messenger_target(connections: list[dict[str, Any]], *, platform: str, 
     scoped = event_registration_messenger_target(connections, channel, platform)
     if scoped is not None:
         return scoped
+    # An explicit registration recipient must never be silently rerouted to a
+    # different identity or connection after revocation or disconnection.
+    if channel and channel.get("external_subject"):
+        return None
     live = {str(c["id"]) for c in connections if c.get("platform") == platform and c.get("status") == "active"}
     idents = [i for i in identities if i.get("platform") == platform and i.get("status", "active") == "active"]
     if last_sent and str(last_sent.get("connection_id")) in live:
