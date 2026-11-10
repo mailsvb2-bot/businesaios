@@ -104,21 +104,13 @@ def revoke_by_token(b: pe.Board, payloads: list[dict[str, Any]], token: str) -> 
     if r is None:
         raise ValueError("event registration token is invalid")
     chans = active_channels(payloads, r.registration_id)
-    out: list[dict[str, Any]] = []
-    if chans:
-        out.append(
-            {"step": "event_commercial_consent_revoked", "registration_id": r.registration_id, "channels": list(chans)}
-        )
-    out.append(
-        {
-            "step": "event_dispatch_cancelled",
-            "event_id": r.event_id,
-            "registration_ids": [r.registration_id],
-            "reason": "event_commercial_consent_revoked",
-            "scope": "commercial",
-        }
-    )
-    return out
+    revoked = ([{"step": "event_commercial_consent_revoked",
+                 "registration_id": r.registration_id, "channels": list(chans)}] if chans else [])
+    return [*revoked, {
+        "step": "event_dispatch_cancelled", "event_id": r.event_id,
+        "registration_ids": [r.registration_id],
+        "reason": "event_commercial_consent_revoked", "scope": "commercial",
+    }]
 
 
 # --- event funnel analytics & verified-payment linking (donor event_analytics) ---
