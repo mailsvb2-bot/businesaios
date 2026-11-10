@@ -76,6 +76,7 @@ def test_identity_fallbacks_and_all():
                                   identities=[{"id": "i2", "platform": "vk", "external_subject": "5"}],
                                   last_sent={"connection_id": "v2", "customer_identity_id": "i2"})
     assert h and h.connection_id == "v2"
+    assert dr.event_messenger_target([{"id": "v2", "platform": "vk", "type": "wrong", "status": "active"}], platform="vk", channel=None, identities=[{"id": "i2", "platform": "vk", "external_subject": "5"}], last_sent={"connection_id": "v2", "customer_identity_id": "i2"}) is None
     allt = dr.event_organizational_targets(C, notification_connection_id="e1", email="a@b.ru", channels={},
                                            identities=ids)
     assert [x.platform for x in allt] == ["email", "telegram"]
