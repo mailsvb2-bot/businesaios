@@ -131,8 +131,7 @@ class EventLandingRegistry:
         return self.get(tenant_id=tenant_id,business_id=business_id,event_id=event_id)
     def _registration_facts(self, *, tenant_id: str, business_id: str, event_id: str):
         for event in self._events.iter_events(
-            tenant_id=tenant_id, start_ms=0, event_type=BUSINESS_FACT_EVENT_TYPE,
-        ):
+            tenant_id=tenant_id, start_ms=0, event_type=BUSINESS_FACT_EVENT_TYPE):
             fact = dict(event.get("payload") or {})
             if (event.get("source") == _SOURCE
                 and fact.get("business_id") == business_id
@@ -154,8 +153,8 @@ class EventLandingRegistry:
         return sorted(receipts.values(), key=lambda r: r["registration_id"])
 
     def registration_count(self, *, tenant_id: str, business_id: str, event_id: str) -> int:
-        return len(self.list_registration_receipts(
-            tenant_id=tenant_id, business_id=business_id, event_id=event_id))
+        return len(self.list_registration_receipts(tenant_id=tenant_id,
+                                                   business_id=business_id, event_id=event_id))
 
     def register(self, *, tenant_id: str, business_id: str, event_id: str,
                  email: str, consent: bool, idempotency_key: str) -> dict[str, object]:
