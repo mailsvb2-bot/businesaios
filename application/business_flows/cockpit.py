@@ -207,10 +207,8 @@ def _screen(parsed: Parsed, s: Snapshot) -> tuple[str, list[list[tuple[str, str]
     if a == "growth":
         return "📈 Рост\n\nПартнёры и лестница предложений.", _rows(
             ("🧭 Что делать сейчас", "cpm:growth-now"),
-            ("🤝 Партнёры", "cpm:partners:0"),
-            ("🪜 Лестница предложений", "cpm:ladder"),
-            ("📈 Отчёт о росте", "cpm:growth-report"),
-            ("📊 Аналитика 7/30 дн.", "cpm:growth-an:7"),
+            ("🤝 Партнёры", "cpm:partners:0"), ("🪜 Лестница предложений", "cpm:ladder"),
+            ("📈 Отчёт о росте", "cpm:growth-report"), ("📊 Аналитика 7/30 дн.", "cpm:growth-an:7"),
             ("📣 Рекламные каналы", "cp:section:ad-channels"),
             ("🧠 AI Growth Strategy", "growth:menu"),
         )
