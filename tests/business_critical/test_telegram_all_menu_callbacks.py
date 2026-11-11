@@ -1,4 +1,4 @@
-"""Executable Telegram menu contract: each visible button is a routed callback."""
+"""Executable Telegram menu contract: callback buttons route; HTTPS links are checked separately."""
 from dataclasses import replace
 
 import pytest
@@ -22,7 +22,7 @@ def _callback_state(callback):
     return replace(state, user={**state.user, "roles": ["admin"]})
 
 
-@pytest.mark.parametrize("item", menu_items(role="admin", is_admin=True), ids=lambda x: x.key)
+@pytest.mark.parametrize("item", (x for x in menu_items(role="admin", is_admin=True) if x.key != "connect"), ids=lambda x: x.key)
 def test_every_visible_main_menu_button_enters_its_own_route(monkeypatch, item):
     monkeypatch.setattr("runtime.entrypoints.telegram_longpoll._configured_telegram_tenant_id", lambda: "tenant-live")
     state = _callback_state(item.callback)
