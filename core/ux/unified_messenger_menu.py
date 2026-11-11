@@ -53,7 +53,8 @@ def menu_text(*, role: str, is_admin: bool = False) -> str:
 
 
 def telegram_menu(*, role: str, is_admin: bool = False) -> dict:
-    rows = [[{"text": item.label, "callback_data": item.callback}]
+    rows = [[{"text": item.label, "url": "https://app.businessaios.ru/"}] if item.key == "connect"
+            else [{"text": item.label, "callback_data": item.callback}]
             for item in menu_items(role=role, is_admin=is_admin)]
     return {"inline_keyboard": rows}
 
