@@ -173,7 +173,7 @@ _READ_PROJECTIONS = {
 }
 _READ_FIELDS = frozenset({"tenant_id", "business_id", "user_id", "actor_id",
                           "op", "arg", "callback_query_id", "product_id",
-                          "domain", "product_version", "idempotency_key",
+                          "domain", "product_version", "goal_id", "autonomy_tier", "idempotency_key",
                           "world_model_meta", "meta", "estimated_cost"})
 
 
