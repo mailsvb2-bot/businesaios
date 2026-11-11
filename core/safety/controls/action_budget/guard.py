@@ -33,16 +33,10 @@ class ActionBudgetGuard:
         incremental_cost = float(payload.get("estimated_cost", default_cost) or default_cost)
         next_cost = current_cost + incremental_cost
         next_actions = current_actions + 1
-        if next_cost > self._default_budget.max_cost or next_actions > self._default_budget.max_actions:
-            return ControlDecision(
-                control=self.control_name,
-                status=ControlStatus.BLOCK,
-                reason="action_budget_exceeded",
-                details={"next_cost": next_cost, "next_actions": next_actions},
-            )
+        exceeded = next_cost > self._default_budget.max_cost or next_actions > self._default_budget.max_actions
         return ControlDecision(
             control=self.control_name,
-            status=ControlStatus.ALLOW,
-            reason="action_budget_ok",
+            status=ControlStatus.BLOCK if exceeded else ControlStatus.ALLOW,
+            reason="action_budget_exceeded" if exceeded else "action_budget_ok",
             details={"next_cost": next_cost, "next_actions": next_actions},
         )
