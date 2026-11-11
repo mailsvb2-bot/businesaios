@@ -39,10 +39,6 @@ def redact_text(text: str) -> RedactionResult:
 
 
 def safe_metadata(meta: dict) -> dict:
-    allow: dict = {}
-    for k, v in (meta or {}).items():
-        if str(k).lower() in {"user_text", "prompt", "messages", "email", "phone", "card"}:
-            continue
-        if isinstance(v, str | int | float | bool) and len(str(v)) <= 256:
-            allow[k] = v
-    return allow
+    """Only non-identifying numeric diagnostics may leave the LLM boundary."""
+    value = (meta or {}).get("context_tokens")
+    return {"context_tokens": value} if type(value) is int and 0 <= value <= 10_000_000 else {}
