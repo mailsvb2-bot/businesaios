@@ -17,8 +17,7 @@ class ActionBudgetGuard:
 
     def evaluate(self, ctx: SafetyActionContext) -> ControlDecision:
         payload = dict(ctx.payload)
-        tenant_bound = str(payload.get("tenant_id") or "") == str(ctx.tenant_id)
-        if tenant_bound:
+        if str(payload.get("tenant_id") or "") == str(ctx.tenant_id):
             for predicate, reason, budget_class in (
                 (is_budget_free_text_message, "text_delivery_budget_not_applicable", "text_delivery"),
                 (is_routine_reply, "user_reply_budget_not_applicable", "user_reply"),
@@ -30,8 +29,7 @@ class ActionBudgetGuard:
         current_cost, current_actions = self._ledger.snapshot(ctx.tenant_id)
         spec = self._catalog.resolve(ctx.action)
         default_cost = float(getattr(spec, "default_estimated_cost", 0.0) or 0.0)
-        incremental_cost = float(payload.get("estimated_cost", default_cost) or default_cost)
-        next_cost = current_cost + incremental_cost
+        next_cost = current_cost + float(payload.get("estimated_cost", default_cost) or default_cost)
         next_actions = current_actions + 1
         exceeded = next_cost > self._default_budget.max_cost or next_actions > self._default_budget.max_actions
         return ControlDecision(
