@@ -295,3 +295,14 @@ def test_clientplatform_telegram_entrypoint_gateway_persists_outcome(
         assert len(outcomes) == 1
         assert outcomes[0]["payload"]["ok"] is True
         assert outcomes[0]["payload"]["update_id"] == 12
+
+
+def test_connect_business_opens_real_onboarding_not_stub(monkeypatch):
+    monkeypatch.setattr("runtime.entrypoints.telegram_longpoll._configured_telegram_tenant_id",
+                        lambda: "tenant-live")
+    proposal = UnifiedTelegramPolicyV3().propose(_callback_state("cp:section:connect"))
+    assert proposal.action == "send_message@v1"
+    assert "Подключить мой бизнес" in proposal.payload["text"]
+    rows = proposal.payload["reply_markup"]["inline_keyboard"]
+    assert rows[0][0]["url"] == "https://app.businessaios.ru/"
+    assert proposal.payload["callback_query_id"] == "callback-12"
