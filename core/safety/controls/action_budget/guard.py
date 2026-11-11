@@ -4,7 +4,7 @@ from ..action_catalog import ActionSafetyCatalog, build_default_action_catalog
 from ..action_context import SafetyActionContext
 from ..control_result import ControlDecision, ControlStatus
 from .ledger import ActionBudgetLedger
-from .models import ActionBudget, is_budget_free_text_message, is_routine_reply
+from .models import ActionBudget, is_budget_free_text_message, is_routine_reply, is_budget_free_read_projection
 
 
 class ActionBudgetGuard:
@@ -31,6 +31,8 @@ class ActionBudgetGuard:
                 reason="user_reply_budget_not_applicable",
                 details={"budget_class": "user_reply"},
             )
+        if is_budget_free_read_projection(ctx.action, payload):
+            return ControlDecision(self.control_name, ControlStatus.ALLOW, "read_projection_budget_not_applicable", {"budget_class": "read_projection"})
         current_cost, current_actions = self._ledger.snapshot(ctx.tenant_id)
         spec = self._catalog.resolve(ctx.action)
         default_cost = float(getattr(spec, "default_estimated_cost", 0.0) or 0.0)
