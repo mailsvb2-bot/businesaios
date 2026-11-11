@@ -84,11 +84,9 @@ def _single_target_non_campaign(action: str, payload: Mapping[str, Any]) -> bool
     )):
         return False
     track = payload.get("track_payload")
-    return not (isinstance(track, Mapping) and any(track.get(key) for key in (
-        "campaign_id", "audience_id", "segment_id", "marketing_variant",
-        "recipient_ids", "recipients", "target_users", "broadcast",
-        "bulk", "scheduled_at",
-    )))
+    blocked = ("campaign_id", "audience_id", "segment_id", "marketing_variant",
+               "recipient_ids", "recipients", "target_users", "broadcast", "bulk", "scheduled_at")
+    return not (isinstance(track, Mapping) and any(track.get(key) for key in blocked))
 
 
 def is_budget_free_text_message(action: str, payload: Mapping[str, Any]) -> bool:
@@ -165,22 +163,20 @@ _READ_FIELDS = frozenset({"tenant_id", "business_id", "user_id", "actor_id",
 
 
 def is_budget_free_read_projection(action: str, payload: Mapping[str, Any]) -> bool:
-    """Only exact zero-cost reads are exempt from lifetime action accounting."""
+    """Exempt only exact, zero-cost read projections, not authorization."""
     if not isinstance(payload, Mapping) or set(payload) - _READ_FIELDS:
         return False
     op, arg = payload.get("op"), str(payload.get("arg") or "")
-    if not ((action == "business_ops_summary@v1" and op == "cockpit" and arg in _READ_COCKPIT)
-            or (action == "sales_pipeline@v1" and op == "list" and not arg)
-            or (action == "bookings@v1" and op == "ad_channels" and not arg)):
-        return False
-    if any(not isinstance(payload.get(k), str) or not payload[k].strip()
-           for k in ("tenant_id", "user_id")):
+    allowed = (action == "business_ops_summary@v1" and op == "cockpit" and arg in _READ_COCKPIT
+               or action == "sales_pipeline@v1" and op == "list" and not arg
+               or action == "bookings@v1" and op == "ad_channels" and not arg)
+    if not allowed or any(not isinstance(payload.get(k), str) or not payload[k].strip()
+                          for k in ("tenant_id", "user_id")):
         return False
     meta = payload.get("meta")
-    if meta is not None and (not isinstance(meta, Mapping) or any(meta.get(k) for k in (
-        "amount", "estimated_cost", "charge_amount", "requested_budget",
-        "budget_delta", "autonomous", "campaign_id", "broadcast"
-    ))):
+    forbidden = ("amount", "estimated_cost", "charge_amount", "requested_budget",
+                 "budget_delta", "autonomous", "campaign_id", "broadcast")
+    if meta is not None and (not isinstance(meta, Mapping) or any(meta.get(k) for k in forbidden)):
         return False
     cost = payload.get("estimated_cost", 0)
     try:
