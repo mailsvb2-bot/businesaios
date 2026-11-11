@@ -134,8 +134,8 @@ def is_routine_reply(action: str, payload: Mapping[str, Any]) -> bool:
     valid = (type(event_id) is int and event_id >= 0) if channel == "telegram" else (
         isinstance(event_id, str) and bool(event_id.strip()) and len(event_id) <= 256)
     recipient, count = payload.get("user_id"), payload.get("recipient_count")
-    text_digest = hashlib.sha256(str(payload.get("text") or "").encode()).hexdigest()
-    if (not tenant_matches or not valid or proof.get("content_sha256") != text_digest
+    if (not tenant_matches or not valid or
+            proof.get("content_sha256") != hashlib.sha256(str(payload.get("text") or "").encode()).hexdigest()
             or not isinstance(recipient, str) or not recipient.strip() or proof.get("user_id") != recipient
             or str(payload.get("channel") or "").strip().lower() != channel
             or str(payload.get("chat_id") or recipient) != str(proof.get("chat_id") or recipient)
@@ -148,8 +148,8 @@ def is_routine_reply(action: str, payload: Mapping[str, Any]) -> bool:
 
 # Read projection accounting never substitutes for authorization or other controls.
 _READ_COCKPIT = frozenset({"", "cpm:menu", "cpm:work", "cpm:manage", "cpm:customers",
-                           "cpm:customers:0", "cpm:growth", "cpm:growth-an:7",
-                           "cpm:growth-an:30", "cpm:money", "cpm:payments:0"})
+                           "cpm:customers:0", "cpm:growth", "cpm:growth-an:7", "cpm:growth-an:30",
+                           "cpm:money", "cpm:payments:0"})
 _READ_FIELDS = frozenset({"tenant_id", "business_id", "user_id", "actor_id", "op", "arg",
                           "callback_query_id", "product_id", "domain", "product_version",
                           "goal_id", "autonomy_tier", "idempotency_key", "world_model_meta",
@@ -168,9 +168,10 @@ def is_budget_free_read_projection(action: str, payload: Mapping[str, Any]) -> b
                           for k in ("tenant_id", "user_id")):
         return False
     meta = payload.get("meta")
-    forbidden = ("amount", "estimated_cost", "charge_amount", "requested_budget",
-                 "budget_delta", "autonomous", "campaign_id", "broadcast")
-    if meta is not None and (not isinstance(meta, Mapping) or any(meta.get(k) for k in forbidden)):
+    if meta is not None and (not isinstance(meta, Mapping) or any(meta.get(k) for k in (
+        "amount", "estimated_cost", "charge_amount", "requested_budget",
+        "budget_delta", "autonomous", "campaign_id", "broadcast"
+    ))):
         return False
     cost = payload.get("estimated_cost", 0)
     try:
