@@ -75,13 +75,13 @@ def _verified_signature(proof: Mapping[str, Any]) -> bool:
 
 
 def _single_target_non_campaign(action: str, payload: Mapping[str, Any]) -> bool:
-    if action != "send_message@v1" or str(payload.get("kind") or "").lower() in {
-        "marketing", "campaign", "broadcast", "bulk", "proactive",
-    } or any(payload.get(key) for key in (
-        "recipients", "recipient_ids", "target_users", "audience", "segment_id",
-        "broadcast", "bulk", "batch_id", "campaign_id", "scheduled_at",
-        "marketing", "autonomous", "proactive", "charge_amount", "channel_policy",
-    )):
+    excluded = {"marketing", "campaign", "broadcast", "bulk", "proactive"}
+    bulk_keys = ("recipients", "recipient_ids", "target_users", "audience", "segment_id",
+                 "broadcast", "bulk", "batch_id", "campaign_id", "scheduled_at",
+                 "marketing", "autonomous", "proactive", "charge_amount", "channel_policy")
+    if action != "send_message@v1" or str(payload.get("kind") or "").lower() in excluded or any(
+        payload.get(key) for key in bulk_keys
+    ):
         return False
     track = payload.get("track_payload")
     blocked = ("campaign_id", "audience_id", "segment_id", "marketing_variant",
@@ -94,8 +94,7 @@ def is_budget_free_text_message(action: str, payload: Mapping[str, Any]) -> bool
     if not isinstance(payload, Mapping) or not _single_target_non_campaign(action, payload):
         return False
     if not isinstance(payload.get("text"), str) or any(
-        not isinstance(payload.get(key), str) or not payload[key].strip()
-        for key in ("user_id", "tenant_id")
+        not isinstance(payload.get(k), str) or not payload[k].strip() for k in ("user_id", "tenant_id")
     ):
         return False
     count = payload.get("recipient_count")
@@ -113,10 +112,10 @@ def is_budget_free_text_message(action: str, payload: Mapping[str, Any]) -> bool
     meta = payload.get("meta")
     if meta is not None and not isinstance(meta, Mapping):
         return False
-    if isinstance(meta, Mapping) and (any(meta.get(key) for key in (
-        "requested_budget", "budget_delta", "estimated_cost", "amount",
-        "charge_amount", "campaign_id", "autonomous", "broadcast",
-    )) or ("inbound_user_reply" in meta and not is_routine_reply(action, payload))):
+    unsafe = ("requested_budget", "budget_delta", "estimated_cost", "amount",
+              "charge_amount", "campaign_id", "autonomous", "broadcast")
+    if isinstance(meta, Mapping) and (any(meta.get(k) for k in unsafe)
+                                     or ("inbound_user_reply" in meta and not is_routine_reply(action, payload))):
         return False
     cost = payload.get("estimated_cost", 0)
     try:
@@ -140,8 +139,7 @@ def is_routine_reply(action: str, payload: Mapping[str, Any]) -> bool:
     recipient, count = payload.get("user_id"), payload.get("recipient_count")
     text_digest = hashlib.sha256(str(payload.get("text") or "").encode()).hexdigest()
     if (not tenant_matches or not valid or proof.get("content_sha256") != text_digest
-            or not isinstance(recipient, str) or not recipient.strip()
-            or proof.get("user_id") != recipient
+            or not isinstance(recipient, str) or not recipient.strip() or proof.get("user_id") != recipient
             or str(payload.get("channel") or "").strip().lower() != channel
             or str(payload.get("chat_id") or recipient) != str(proof.get("chat_id") or recipient)
             or (count is not None and (type(count) is not int or count != 1))):
