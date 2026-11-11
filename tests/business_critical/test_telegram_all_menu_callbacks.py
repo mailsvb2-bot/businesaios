@@ -306,3 +306,51 @@ def test_connect_business_opens_real_onboarding_not_stub(monkeypatch):
     rows = proposal.payload["reply_markup"]["inline_keyboard"]
     assert rows[0][0]["url"] == "https://app.businessaios.ru/"
     assert proposal.payload["callback_query_id"] == "callback-12"
+
+
+@pytest.mark.parametrize(("action", "op", "arg"), [
+    ("business_ops_summary@v1", "cockpit", "cpm:growth-an:7"),
+    ("business_ops_summary@v1", "cockpit", "cpm:money"),
+    ("business_ops_summary@v1", "cockpit", "cpm:growth"),
+    ("sales_pipeline@v1", "list", ""),
+    ("bookings@v1", "ad_channels", ""),
+])
+def test_readonly_business_buttons_work_after_action_budget_reaches_limit(action, op, arg):
+    from core.safety.controls.action_budget.guard import ActionBudgetGuard
+    from core.safety.controls.action_budget.ledger import InMemoryActionBudgetLedger
+    from core.safety.controls.action_budget.models import ActionBudget
+    from core.safety.controls.action_context import SafetyActionContext
+    from core.safety.controls.control_result import ControlStatus
+
+    ledger = InMemoryActionBudgetLedger()
+    ledger.record("tenant-live", estimated_cost=5000)
+    guard = ActionBudgetGuard(ledger, ActionBudget(max_cost=5000, max_actions=1))
+    payload = {"tenant_id": "tenant-live", "user_id": "4001", "op": op, "arg": arg}
+    result = guard.evaluate(SafetyActionContext(action, "tenant-live", "4001", payload))
+    assert result.status == ControlStatus.ALLOW
+    assert result.reason == "read_projection_budget_not_applicable"
+
+
+@pytest.mark.parametrize(("action", "op", "arg", "extra"), [
+    ("business_ops_summary@v1", "cockpit", "cpm:pay-rf:payment123", {}),
+    ("business_ops_summary@v1", "cockpit", "cpm:money", {"amount": 1}),
+    ("business_ops_summary@v1", "cockpit", "cpm:money", {"estimated_cost": 1}),
+    ("business_ops_summary@v1", "cockpit", "cpm:money", {"meta": {"requested_budget": 1}}),
+    ("sales_pipeline@v1", "add", "", {}),
+    ("bookings@v1", "book", "", {}),
+    ("bookings@v1", "ad_channels", "", {"campaign_id": "forged"}),
+])
+def test_readonly_accounting_never_exempts_writes_or_financial_markers(action, op, arg, extra):
+    from core.safety.controls.action_budget.guard import ActionBudgetGuard
+    from core.safety.controls.action_budget.ledger import InMemoryActionBudgetLedger
+    from core.safety.controls.action_budget.models import ActionBudget
+    from core.safety.controls.action_context import SafetyActionContext
+    from core.safety.controls.control_result import ControlStatus
+
+    ledger = InMemoryActionBudgetLedger()
+    ledger.record("tenant-live", estimated_cost=5000)
+    guard = ActionBudgetGuard(ledger, ActionBudget(max_cost=5000, max_actions=1))
+    payload = {"tenant_id": "tenant-live", "user_id": "4001", "op": op, "arg": arg, **extra}
+    result = guard.evaluate(SafetyActionContext(action, "tenant-live", "4001", payload))
+    assert result.status == ControlStatus.BLOCK
+    assert result.reason == "action_budget_exceeded"
