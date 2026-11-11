@@ -58,14 +58,6 @@ def handle(ctx: TelegramCtx, *, default_price_rub: int, bot_username: str = "", 
         if out is not None:
             return out
 
-    if ctx.callback_data == "cp:section:connect":
-        return pm(
-            text="➕ Подключить мой бизнес\n\nОткройте защищённый мастер: создайте кабинет бизнеса, выберите цель и подключите источники данных. Расходы и внешние действия без подтверждения не запускаются.",
-            reply_markup={"inline_keyboard": [
-                [{"text": "➕ Открыть подключение бизнеса", "url": "https://app.businessaios.ru/"}],
-                [{"text": "⬅️ Назад", "callback_data": CB_MENU_MAIN}],
-            ]},
-        )
     if ctx.callback_data in {"cp:section:customers", "cp:section:sales", "cp:section:ad-channels"}:
         if not ctx.is_admin:
             return pm(text="Доступ к данным бизнеса запрещён.", reply_markup=kb_back_main())
