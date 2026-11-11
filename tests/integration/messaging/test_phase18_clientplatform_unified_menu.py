@@ -18,9 +18,11 @@ def test_brand_and_owner_navigation_are_stable():
     assert keys == ["connect", "customers", "sales", "marketing", "ai",
                     "results", "payments", "settings", "administration"]
     assert "ClientPlatform" in menu_text(role="owner", is_admin=True)
-    callbacks = [row[0]["callback_data"] for row in telegram_menu(role="owner", is_admin=True)["inline_keyboard"]]
+    menu = telegram_menu(role="owner", is_admin=True)["inline_keyboard"]
+    assert menu[0][0] == {"text": "➕ Подключить мой бизнес", "url": "https://app.businessaios.ru/"}
+    callbacks = [row[0]["callback_data"] for row in menu[1:]]
     assert callbacks == [
-        "cp:section:connect", "cp:section:customers", "cp:section:sales", "cpm:growth",
+        "cp:section:customers", "cp:section:sales", "cpm:growth",
         CB_AUTOPILOT_MENU, "cpm:growth-an:7", "cpm:money",
         CB_SETTINGS_MENU, CB_ADMIN_MENU,
     ]
@@ -48,7 +50,7 @@ def test_channels_share_exact_same_navigation_semantics(channel):
     assert result["channel"] == channel
     assert result["text"] == menu_text(role="owner", is_admin=True)
     assert tuple(row["callback"] for row in result["actions"]) == tuple(
-        row[0]["callback_data"] for row in telegram_menu(role="owner", is_admin=True)["inline_keyboard"]
+        item.callback for item in menu_items(role="owner", is_admin=True)
     )
 
 def test_unsupported_provider_fails_closed_without_fake_button_support():
