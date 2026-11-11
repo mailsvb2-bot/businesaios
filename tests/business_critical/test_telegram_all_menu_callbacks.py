@@ -346,3 +346,13 @@ def test_readonly_accounting_never_exempts_writes_or_financial_markers(action, o
     result = guard.evaluate(SafetyActionContext(action, "tenant-live", "4001", payload))
     assert result.status == ControlStatus.BLOCK
     assert result.reason == "action_budget_exceeded"
+
+
+def test_read_projection_audit_reason_is_distinct_from_text_delivery(monkeypatch):
+    from types import SimpleNamespace
+    import runtime.safety_controls as safety
+    events = []
+    monkeypatch.setattr(safety, "build_safety_control_runtime", lambda: SimpleNamespace(profile=SimpleNamespace(action_catalog=SimpleNamespace(resolve=lambda action: SimpleNamespace(default_estimated_cost=0)))))
+    monkeypatch.setattr(safety, "_record_safety_event", lambda **kwargs: events.append(kwargs))
+    safety.record_allowed_action(action="business_ops_summary@v1", payload={"tenant_id": "t", "user_id": "u", "op": "cockpit", "arg": "cpm:menu"})
+    assert events[0]["reason"] == "read_projection_not_charged"
