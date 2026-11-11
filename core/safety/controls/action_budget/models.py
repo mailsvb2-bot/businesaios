@@ -153,39 +153,37 @@ def is_routine_reply(action: str, payload: Mapping[str, Any]) -> bool:
     except (ValueError, TypeError, OverflowError):
         return False
 
-# Exact, zero-cost projections: only the accounting limit is inapplicable.
-_READ_PROJECTIONS = {
-    "business_ops_summary@v1": ("cockpit", frozenset({
-        "", "cpm:menu", "cpm:work", "cpm:manage", "cpm:customers",
-        "cpm:customers:0", "cpm:growth", "cpm:growth-an:7",
-        "cpm:growth-an:30", "cpm:money", "cpm:payments:0",
-    })),
-    "sales_pipeline@v1": ("list", frozenset({""})),
-    "bookings@v1": ("ad_channels", frozenset({""})),
-}
+# Read projection accounting never substitutes for authorization or other controls.
+_READ_COCKPIT = frozenset({"", "cpm:menu", "cpm:work", "cpm:manage",
+                           "cpm:customers", "cpm:customers:0", "cpm:growth",
+                           "cpm:growth-an:7", "cpm:growth-an:30", "cpm:money",
+                           "cpm:payments:0"})
 _READ_FIELDS = frozenset({"tenant_id", "business_id", "user_id", "actor_id",
-                          "op", "arg", "callback_query_id", "product_id",
-                          "domain", "product_version", "goal_id", "autonomy_tier", "idempotency_key",
-                          "world_model_meta", "meta", "estimated_cost"})
+                          "op", "arg", "callback_query_id", "product_id", "domain",
+                          "product_version", "goal_id", "autonomy_tier",
+                          "idempotency_key", "world_model_meta", "meta", "estimated_cost"})
 
 
 def is_budget_free_read_projection(action: str, payload: Mapping[str, Any]) -> bool:
-    """Accounting only; authorization and every other safety control still run."""
-    if not isinstance(payload, Mapping) or action not in _READ_PROJECTIONS or set(payload) - _READ_FIELDS:
+    """Only exact zero-cost reads are exempt from lifetime action accounting."""
+    if not isinstance(payload, Mapping) or set(payload) - _READ_FIELDS:
         return False
-    op, arguments = _READ_PROJECTIONS[action]
-    if payload.get("op") != op or str(payload.get("arg") or "") not in arguments:
+    op, arg = payload.get("op"), str(payload.get("arg") or "")
+    if not ((action == "business_ops_summary@v1" and op == "cockpit" and arg in _READ_COCKPIT)
+            or (action == "sales_pipeline@v1" and op == "list" and not arg)
+            or (action == "bookings@v1" and op == "ad_channels" and not arg)):
         return False
-    if any(not isinstance(payload.get(k), str) or not payload[k].strip() for k in ("tenant_id", "user_id")):
+    if any(not isinstance(payload.get(k), str) or not payload[k].strip()
+           for k in ("tenant_id", "user_id")):
         return False
     meta = payload.get("meta")
-    if meta is not None and (not isinstance(meta, Mapping) or any(
-        meta.get(k) for k in ("amount", "estimated_cost", "charge_amount", "requested_budget",
-                             "budget_delta", "autonomous", "campaign_id", "broadcast")
-    )):
+    if meta is not None and (not isinstance(meta, Mapping) or any(meta.get(k) for k in (
+        "amount", "estimated_cost", "charge_amount", "requested_budget",
+        "budget_delta", "autonomous", "campaign_id", "broadcast"
+    ))):
         return False
+    cost = payload.get("estimated_cost", 0)
     try:
-        cost = payload.get("estimated_cost", 0)
         return type(cost) is not bool and float(cost or 0) == 0.0
     except (TypeError, ValueError, OverflowError):
         return False
