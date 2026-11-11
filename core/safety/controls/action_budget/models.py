@@ -83,8 +83,7 @@ def _single_target_non_campaign(action: str, payload: Mapping[str, Any]) -> bool
             any(payload.get(key) for key in bulk_keys)):
         return False
     track = payload.get("track_payload")
-    blocked = ("campaign_id", "audience_id", "segment_id", "marketing_variant", "recipient_ids",
-               "recipients", "target_users", "broadcast", "bulk", "scheduled_at")
+    blocked = ("campaign_id", "audience_id", "segment_id", "marketing_variant", "recipient_ids", "recipients", "target_users", "broadcast", "bulk", "scheduled_at")
     return not (isinstance(track, Mapping) and any(track.get(key) for key in blocked))
 
 
@@ -147,13 +146,11 @@ def is_routine_reply(action: str, payload: Mapping[str, Any]) -> bool:
         return False
 
 # Read projection accounting never substitutes for authorization or other controls.
-_READ_COCKPIT = frozenset({"", "cpm:menu", "cpm:work", "cpm:manage", "cpm:customers",
-                           "cpm:customers:0", "cpm:growth", "cpm:growth-an:7", "cpm:growth-an:30",
-                           "cpm:money", "cpm:payments:0"})
-_READ_FIELDS = frozenset({"tenant_id", "business_id", "user_id", "actor_id", "op", "arg",
-                          "callback_query_id", "product_id", "domain", "product_version",
-                          "goal_id", "autonomy_tier", "idempotency_key", "world_model_meta",
-                          "meta", "estimated_cost"})
+_READ_COCKPIT = frozenset({"", "cpm:menu", "cpm:work", "cpm:manage", "cpm:customers", "cpm:customers:0",
+                           "cpm:growth", "cpm:growth-an:7", "cpm:growth-an:30", "cpm:money", "cpm:payments:0"})
+_READ_FIELDS = frozenset({"tenant_id", "business_id", "user_id", "actor_id", "op", "arg", "callback_query_id",
+                          "product_id", "domain", "product_version", "goal_id", "autonomy_tier",
+                          "idempotency_key", "world_model_meta", "meta", "estimated_cost"})
 
 
 def is_budget_free_read_projection(action: str, payload: Mapping[str, Any]) -> bool:
