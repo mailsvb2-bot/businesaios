@@ -3,8 +3,7 @@ from __future__ import annotations
 import pytest
 
 from core.ux.callbacks import (
-    CB_ADMIN_MENU, CB_AUTOPILOT_MENU, CB_GROWTH_MENU, CB_MENU_MAIN,
-    CB_SETTINGS_MENU, CB_SETTINGS_STATE, CB_SUB_MENU,
+    CB_ADMIN_MENU, CB_AUTOPILOT_MENU, CB_MENU_MAIN, CB_SETTINGS_MENU,
 )
 from core.ux.unified_messenger_menu import (
     BRAND, menu_items, menu_text, telegram_menu, plain_channel_menu,
@@ -20,9 +19,10 @@ def test_brand_and_owner_navigation_are_stable():
                     "results", "payments", "settings", "administration"]
     assert "ClientPlatform" in menu_text(role="owner", is_admin=True)
     callbacks = [row[0]["callback_data"] for row in telegram_menu(role="owner", is_admin=True)["inline_keyboard"]]
-    assert callbacks[2:] == [
-        CB_GROWTH_MENU, CB_AUTOPILOT_MENU, CB_SETTINGS_STATE,
-        CB_SUB_MENU, CB_SETTINGS_MENU, CB_ADMIN_MENU,
+    assert callbacks == [
+        "cp:section:customers", "cp:section:sales", "cpm:growth",
+        CB_AUTOPILOT_MENU, "cpm:growth-an:7", "cpm:money",
+        CB_SETTINGS_MENU, CB_ADMIN_MENU,
     ]
     assert kb_main() == telegram_menu(role="owner")
 
@@ -33,6 +33,8 @@ def test_role_visibility_cannot_expose_admin_or_payments_to_operator():
     assert "settings" not in [x.key for x in operator]
     assert "customers" not in [x.key for x in operator]
     assert "sales" not in [x.key for x in operator]
+    assert not {"marketing", "results", "payments"} & {x.key for x in operator}
+    assert not {"marketing", "results", "payments"} & {x.key for x in menu_items(role="marketer")}
     admin = menu_items(role="owner", is_admin=True)
     assert admin[-1].callback == CB_ADMIN_MENU
 
