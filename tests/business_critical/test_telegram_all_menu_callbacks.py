@@ -318,6 +318,9 @@ def test_readonly_business_buttons_work_after_action_budget_reaches_limit(action
     result = guard.evaluate(SafetyActionContext(action, "tenant-live", "4001", payload))
     assert result.status == ControlStatus.ALLOW
     assert result.reason == "read_projection_budget_not_applicable"
+    enriched = {**payload, "goal_id": "owner-goal", "autonomy_tier": "supervised",
+                "meta": {"world_model_meta": {"source": "canonical"}}}
+    assert guard.evaluate(SafetyActionContext(action, "tenant-live", "4001", enriched)).status == ControlStatus.ALLOW
 
 
 @pytest.mark.parametrize(("action", "op", "arg", "extra"), [
