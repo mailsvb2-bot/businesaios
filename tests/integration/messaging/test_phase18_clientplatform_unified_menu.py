@@ -33,6 +33,8 @@ def test_role_visibility_cannot_expose_admin_or_payments_to_operator():
     assert "settings" not in [x.key for x in operator]
     assert "customers" not in [x.key for x in operator]
     assert "sales" not in [x.key for x in operator]
+    assert not {"marketing", "results", "payments"} & {x.key for x in operator}
+    assert not {"marketing", "results", "payments"} & {x.key for x in menu_items(role="marketer")}
     admin = menu_items(role="owner", is_admin=True)
     assert admin[-1].callback == CB_ADMIN_MENU
 
