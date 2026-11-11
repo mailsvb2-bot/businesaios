@@ -23,6 +23,7 @@ class NavigationItem:
 
 
 _ITEMS = (
+    NavigationItem("connect", "➕ Подключить мой бизнес", SECTION_PREFIX + "connect", frozenset({"owner", "admin", "operator", "marketer"})),
     NavigationItem("customers", "💬 Клиенты и обращения", SECTION_PREFIX + "customers", frozenset({"owner", "admin", "operator"})),
     NavigationItem("sales", "💰 Продажи", SECTION_PREFIX + "sales", frozenset({"owner", "admin", "operator", "marketer"})),
     NavigationItem("marketing", "📣 Реклама и продвижение", "cpm:growth", frozenset({"owner", "admin", "marketer"})),
