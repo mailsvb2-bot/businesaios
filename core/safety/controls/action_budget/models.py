@@ -161,8 +161,7 @@ def is_budget_free_read_projection(action: str, payload: Mapping[str, Any]) -> b
     allowed = ((action == "business_ops_summary@v1" and op == "cockpit" and arg in _READ_COCKPIT) or
                (action == "sales_pipeline@v1" and op == "list" and not arg) or
                (action == "bookings@v1" and op == "ad_channels" and not arg))
-    if not allowed or any(not isinstance(payload.get(k), str) or not payload[k].strip()
-                          for k in ("tenant_id", "user_id")):
+    if not allowed or any(not isinstance(payload.get(k), str) or not payload[k].strip() for k in ("tenant_id", "user_id")):
         return False
     meta = payload.get("meta")
     if meta is not None and (not isinstance(meta, Mapping) or any(meta.get(k) for k in (
