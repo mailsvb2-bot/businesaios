@@ -161,52 +161,39 @@ def is_routine_reply(action: str, payload: Mapping[str, Any]) -> bool:
     except (ValueError, TypeError, OverflowError):
         return False
 
-# Accounting exemption for a deliberately narrow set of *pure projections*.
-# Authorization, tenant binding, other safety controls and execution still apply.
-_READ_COCKPIT = frozenset({
-    "", "cpm:menu", "cpm:work", "cpm:manage", "cpm:customers",
-    "cpm:customers:0", "cpm:growth", "cpm:growth-an:7",
-    "cpm:growth-an:30", "cpm:money", "cpm:payments:0",
-})
-_BUDGET_READ_OPERATIONS = {
-    "business_ops_summary@v1": frozenset({"cockpit"}),
-    "sales_pipeline@v1": frozenset({"list"}),
-    "bookings@v1": frozenset({"ad_channels"}),
+# Exact, zero-cost projections: only the accounting limit is inapplicable.
+_READ_PROJECTIONS = {
+    "business_ops_summary@v1": ("cockpit", frozenset({
+        "", "cpm:menu", "cpm:work", "cpm:manage", "cpm:customers",
+        "cpm:customers:0", "cpm:growth", "cpm:growth-an:7",
+        "cpm:growth-an:30", "cpm:money", "cpm:payments:0",
+    })),
+    "sales_pipeline@v1": ("list", frozenset({""})),
+    "bookings@v1": ("ad_channels", frozenset({""})),
 }
-_READ_PAYLOAD_KEYS = frozenset({
-    "tenant_id", "business_id", "user_id", "actor_id", "op", "arg",
-    "callback_query_id", "product_id", "domain", "product_version",
-    "idempotency_key", "world_model_meta", "meta", "estimated_cost",
-})
+_READ_FIELDS = frozenset({"tenant_id", "business_id", "user_id", "actor_id",
+                          "op", "arg", "callback_query_id", "product_id",
+                          "domain", "product_version", "idempotency_key",
+                          "world_model_meta", "meta", "estimated_cost"})
 
 
 def is_budget_free_read_projection(action: str, payload: Mapping[str, Any]) -> bool:
-    """Zero-cost exact read operations; never exempt writes or monetary metadata."""
-    if not isinstance(payload, Mapping) or action not in _BUDGET_READ_OPERATIONS:
+    """Accounting only; authorization and every other safety control still run."""
+    if not isinstance(payload, Mapping) or action not in _READ_PROJECTIONS or set(payload) - _READ_FIELDS:
         return False
-    if set(payload) - _READ_PAYLOAD_KEYS or str(payload.get("op") or "") not in _BUDGET_READ_OPERATIONS[action]:
+    op, arguments = _READ_PROJECTIONS[action]
+    if payload.get("op") != op or str(payload.get("arg") or "") not in arguments:
         return False
-    if not all(isinstance(payload.get(key), str) and payload[key].strip()
-               for key in ("tenant_id", "user_id")):
+    if any(not isinstance(payload.get(k), str) or not payload[k].strip() for k in ("tenant_id", "user_id")):
         return False
-    if any(payload.get(key) for key in ("economy", "amount", "charge_amount",
-                                        "requested_budget", "budget_delta")):
+    meta = payload.get("meta")
+    if meta is not None and (not isinstance(meta, Mapping) or any(
+        meta.get(k) for k in ("amount", "estimated_cost", "charge_amount", "requested_budget",
+                             "budget_delta", "autonomous", "campaign_id", "broadcast")
+    )):
         return False
     try:
         cost = payload.get("estimated_cost", 0)
-        if type(cost) is bool or float(cost or 0) != 0.0:
-            return False
-    except (ValueError, TypeError, OverflowError):
+        return type(cost) is not bool and float(cost or 0) == 0.0
+    except (TypeError, ValueError, OverflowError):
         return False
-    meta = payload.get("meta")
-    if meta is not None and (not isinstance(meta, Mapping) or
-                              any(meta.get(key) for key in ("amount", "estimated_cost",
-                                  "charge_amount", "requested_budget", "budget_delta",
-                                  "autonomous", "campaign_id", "broadcast"))):
-        return False
-    arg = str(payload.get("arg") or "")
-    if action == "business_ops_summary@v1":
-        return arg in _READ_COCKPIT
-    return not arg if action == "bookings@v1" else arg == ""
-
-
