@@ -712,3 +712,20 @@ def test_canonical_start_policy_passes_all_budget_layers_without_capital(monkeyp
     )
     accounted = OperationalBudgetAccountant().to_envelope(ctx, builder.build(ctx))
     assert (accounted.actions_count, accounted.outbound_count, accounted.budget_minor) == (0, 0, 0)
+
+
+def test_canonical_business_scope_is_carried_without_goal_and_cannot_be_spoofed():
+    state = SimpleNamespace(user_id="owner", tenant_id="tenant-a",
+                            session={"source": "messaging", "business_id": "untrusted"},
+                            product={"business_id": "verified-business"}, meta={})
+    _, payload = build_payload(
+        state=state, out=ProposedAction("send_message@v1", {"user_id": "owner", "text": "Ready"}),
+        pinned_world_model_meta={}, tenant_id="tenant-a", product_id=None,
+        domain=None, product_version=None, actor_id="owner")
+    assert payload["business_id"] == "verified-business"
+    with pytest.raises(RuntimeError, match="DECISION_BUSINESS_ID_MISMATCH"):
+        build_payload(
+            state=state, out=ProposedAction("send_message@v1", {
+                "user_id": "owner", "text": "Ready", "business_id": "other"}),
+            pinned_world_model_meta={}, tenant_id="tenant-a", product_id=None,
+            domain=None, product_version=None, actor_id="owner")
