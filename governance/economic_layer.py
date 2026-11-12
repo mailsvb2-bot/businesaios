@@ -35,7 +35,7 @@ from core.strategic_horizon.engine import (
     UserDynamics,
 )
 from governance.economic.action_economics_model import ActionEconomicsIntent
-from core.safety.controls.action_budget.models import is_budget_free_text_message
+from core.safety.controls.action_budget.models import is_budget_free_text_message, is_budget_free_read_projection
 from governance.economic_layer_env import is_strict_mode
 from governance.economic import EconomicPolicyConfig, EconomicPolicyEngine, EconomicPolicyVerdict
 
@@ -122,15 +122,16 @@ class EconomicAutonomyLayer:
         # above remain authoritative, as do the later executor safety checks.
         raw_decision = self._read_field(decision_env, "decision", decision_env)
         explicit_cost = self._read_field(raw_decision, "cost", None)
-        if (is_budget_free_text_message(
-            str(self._read_field(raw_decision, "action", "")),
-            self._read_field(raw_decision, "payload", {}),
-        ) and (explicit_cost is None or (
+        action = str(self._read_field(raw_decision, "action", ""))
+        payload = self._read_field(raw_decision, "payload", {})
+        text_only = is_budget_free_text_message(action, payload)
+        read_only = is_budget_free_read_projection(action, payload)
+        if (text_only or read_only) and (explicit_cost is None or (
             type(explicit_cost) in (int, float) and explicit_cost == 0
-        ))):
+        )):
             return EconomicLayerVerdict(
                 allow=True, survival=survival_verdict,
-                metadata={"budget_class": "text_delivery", "estimated_spend": 0},
+                metadata={"budget_class": "text_delivery" if text_only else "read_projection", "estimated_spend": 0},
             )
 
         capital_state = self._coerce_capital_state(self._read_field(world_state, "capital", None))
