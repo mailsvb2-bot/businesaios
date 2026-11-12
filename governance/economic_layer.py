@@ -127,8 +127,7 @@ class EconomicAutonomyLayer:
         text_only = is_budget_free_text_message(action, payload)
         read_only = is_budget_free_read_projection(action, payload)
         if (text_only or read_only) and (explicit_cost is None or (
-            type(explicit_cost) in (int, float) and explicit_cost == 0
-        )):
+            type(explicit_cost) in (int, float) and explicit_cost == 0)):
             return EconomicLayerVerdict(
                 allow=True, survival=survival_verdict,
                 metadata={"budget_class": "text_delivery" if text_only else "read_projection", "estimated_spend": 0},
