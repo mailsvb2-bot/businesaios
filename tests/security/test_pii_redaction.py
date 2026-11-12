@@ -59,3 +59,21 @@ def test_payload_redactor_stops_recursive_explosion_fail_closed() -> None:
     redacted = redactor.redact(payload)
 
     assert redacted['a']['b']['c'] == '<max-depth-redacted>'
+
+
+def test_payload_redactor_masks_embedded_credentials_without_key_hints() -> None:
+    redactor = PayloadRedactor()
+    secrets = (
+        'Bearer abcdefghijklmnopqrstuvwxyz123456',
+        '123456789:abcdefghijklmnopqrstuvwxyz123456',
+        'sk-' + 'abcdefghijklmnopqrstuvwx',
+        'password=very-private-secret',
+        'Authorization: Basic abcdefghijklmnop',
+        'Cookie: session=private-value; refresh=other-private-value',
+        'client_secret="quoted-private-value"',
+    )
+    for raw in secrets:
+        result = redactor.redact({'notes': 'diagnostic ' + raw})['notes']
+        assert raw not in result
+        assert '***REDACTED***' in result
+    assert redactor.redact({'notes': 'ordinary diagnostic status'})['notes'] == 'ordinary diagnostic status'
