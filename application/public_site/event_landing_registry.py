@@ -23,23 +23,16 @@ class EventLandingRegistry:
         # requested. Ordinary iter_events reads may sort tied timestamps by
         # event_id, which is NOT lifecycle chronology.
         rows: list[dict[str, object]] = []
-        for event in self._events.iter_events(
-            tenant_id=tenant_id, start_ms=0,
-            event_type=BUSINESS_FACT_EVENT_TYPE, after_append_seq=0,
-        ):
+        for event in self._events.iter_events(tenant_id=tenant_id, start_ms=0, event_type=BUSINESS_FACT_EVENT_TYPE, after_append_seq=0):
             if event.get("source") != _SOURCE:
                 continue
             envelope = dict(event.get("payload") or {})
-            if (envelope.get("business_id") != business_id
-                    or envelope.get("entity_id") != event_id
-                    or envelope.get("fact_type") not in _FACTS):
+            if envelope.get("business_id") != business_id or envelope.get("entity_id") != event_id or envelope.get("fact_type") not in _FACTS:
                 continue
             append_seq = event.get("append_seq")
             if type(append_seq) is not int or append_seq < 1:
                 raise RuntimeError("event_landing_durable_append_sequence_required")
-            rows.append({"type": envelope["fact_type"],
-                         "payload": dict(envelope.get("payload") or {}),
-                         "sequence": append_seq})
+            rows.append({"type": envelope["fact_type"], "payload": dict(envelope.get("payload") or {}), "sequence": append_seq})
         rows.sort(key=lambda row: row["sequence"])
         if len({row["sequence"] for row in rows}) != len(rows):
             raise RuntimeError("event_landing_duplicate_append_sequence")
@@ -49,20 +42,14 @@ class EventLandingRegistry:
         if not rows or rows[0]["type"] != _CREATED:
             raise KeyError("event_landing_not_found")
         initial = dict(rows[0]["payload"])
-        state = EventLandingState(event_id=event_id,
-                                  draft=EventLandingContent.from_payload(initial["content"]),
-                                  draft_source=str(initial["source"]), revision=1)
+        state = EventLandingState(event_id=event_id, draft=EventLandingContent.from_payload(initial["content"]), draft_source=str(initial["source"]), revision=1)
         for row in rows[1:]:
             if row["type"] == _CREATED:
                 raise RuntimeError("event_landing_duplicate_create_fact")
             payload = dict(row["payload"])
             expected = int(payload["expected_revision"])
             if row["type"] == _DRAFT:
-                state = state.save_draft(
-                    content=EventLandingContent.from_payload(payload["content"]),
-                    source=str(payload["source"]),
-                    expected_revision=expected,
-                )
+                state = state.save_draft(content=EventLandingContent.from_payload(payload["content"]), source=str(payload["source"]), expected_revision=expected)
             elif row["type"] == _PUBLISHED:
                 state = state.publish(expected_revision=expected)
             elif row["type"] == _UNPUBLISHED:
@@ -145,13 +132,9 @@ class EventLandingRegistry:
         self._writer.append_transition_once(tenant_id=tenant_id,business_id=business_id,entity_id=event_id,expected_state_token=token,operation=action,idempotency_key=idempotency_key,fact_type=fact_type,payload=payload,occurred_at_ms=self._now(),event_metadata={"actor_id":actor_id})
         return self.get(tenant_id=tenant_id,business_id=business_id,event_id=event_id)
     def _registration_facts(self, *, tenant_id: str, business_id: str, event_id: str):
-        for event in self._events.iter_events(
-            tenant_id=tenant_id, start_ms=0, event_type=BUSINESS_FACT_EVENT_TYPE):
+        for event in self._events.iter_events(tenant_id=tenant_id, start_ms=0, event_type=BUSINESS_FACT_EVENT_TYPE):
             fact = dict(event.get("payload") or {})
-            if (event.get("source") == _SOURCE
-                and fact.get("business_id") == business_id
-                and fact.get("fact_type") == "event_landing.registration"
-                and (fact.get("payload") or {}).get("event_id") == event_id):
+            if event.get("source") == _SOURCE and fact.get("business_id") == business_id and fact.get("fact_type") == "event_landing.registration" and (fact.get("payload") or {}).get("event_id") == event_id:
                 yield dict(fact["payload"])
     def list_registration_receipts(self, *, tenant_id: str, business_id: str,
                                    event_id: str) -> list[dict[str, str]]:
