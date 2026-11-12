@@ -18,6 +18,7 @@ from scripts.ci.subprocess_io import CommandOutcome
 
 TITLE = "onboarding creates a read-only OWNER workspace without persisting the API key"
 SPEC = "onboarding-workspace.spec.js"
+NO_PROVIDER_TITLE = "owner can create a protected workspace without selecting any integration"
 STEP_SHA = "7b10447e40fc8228a8fcbc772a3eab9a8bf606adad7cd201c68ec84de449822d"
 SOURCE_SHA = "1bb3566a7aede24a89037d7a688371a4f6e738127713fd5254c5e0c6489c76ae"
 EVENT_TITLE = "event landing owner journey: draft stays private, publish becomes public, unpublish revokes access"
@@ -33,7 +34,7 @@ COMMERCIAL_TITLE = "owner can quote, create and recover a canonical sale without
 COMMERCIAL_SPEC = "commercial-sale-journey.spec.js"
 COMMERCIAL_SOURCE_SHA = "178e295519feed1c180fcd1705c375aad7a027211d7e5d71bf500b59b5b05923"
 BROWSER_SCENARIOS = (
-    (TITLE, SPEC), (EVENT_TITLE, EVENT_SPEC), (SUPPORT_TITLE, SUPPORT_SPEC),
+    (TITLE, SPEC), (NO_PROVIDER_TITLE, SPEC), (EVENT_TITLE, EVENT_SPEC), (SUPPORT_TITLE, SUPPORT_SPEC),
     (PROGRAM_TITLE, PROGRAM_SPEC), (COMMERCIAL_TITLE, COMMERCIAL_SPEC),
 )
 STEP_SHAPE = json.loads(Path("tests/fixtures/playwright/onboarding-step-shape.json").read_text(encoding="utf-8"))
@@ -54,6 +55,9 @@ def test_browser_contract_plans_provisioning_and_security_are_locked() -> None:
         "scenarios": [{
             "id": "onboarding_owner_workspace", "title": TITLE, "file": SPEC,
             "detail_step_sha256": STEP_SHA, "source_sha256": SOURCE_SHA,
+        }, {
+            "id": "onboarding_owner_no_provider", "title": NO_PROVIDER_TITLE, "file": SPEC,
+            "proof_mode": "source_locked_execution", "source_sha256": SOURCE_SHA,
         }, {
             "id": "event_landing_owner_publication", "title": EVENT_TITLE, "file": EVENT_SPEC,
             "proof_mode": "source_locked_execution", "source_sha256": EVENT_SOURCE_SHA,
@@ -101,6 +105,7 @@ def test_browser_contract_plans_provisioning_and_security_are_locked() -> None:
     assert 'BUSINESAIOS_KEY_PROVIDER_BACKEND: production ? "file"' in config
     assert 'find((item) => item?.id === "onboarding_owner_workspace")' in scenario
     assert "test(canonicalScenario.title" in scenario and "testInfo.project.name" in scenario
+    assert f'test("{NO_PROVIDER_TITLE}"' in scenario
     assert "hasNoHorizontalOverflow" in scenario and "indexedDB.databases()" in scenario and "context().cookies()" in scenario
     assert "expect(ownerKey)" not in scenario and ".toContain(ownerKey)" not in scenario
     assert "browser" in allowed_gates() and callable(handler_for_step("browser-e2e"))
