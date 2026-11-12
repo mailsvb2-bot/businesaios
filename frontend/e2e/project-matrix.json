@@ -41,6 +41,13 @@
       "source_sha256": "1bb3566a7aede24a89037d7a688371a4f6e738127713fd5254c5e0c6489c76ae"
     },
     {
+      "id": "onboarding_owner_no_provider",
+      "title": "owner can create a protected workspace without selecting any integration",
+      "file": "onboarding-workspace.spec.js",
+      "proof_mode": "source_locked_execution",
+      "source_sha256": "1bb3566a7aede24a89037d7a688371a4f6e738127713fd5254c5e0c6489c76ae"
+    },
+    {
       "id": "event_landing_owner_publication",
       "title": "event landing owner journey: draft stays private, publish becomes public, unpublish revokes access",
       "file": "event-landing-journey.spec.js",
