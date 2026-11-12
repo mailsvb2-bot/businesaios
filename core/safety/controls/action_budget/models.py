@@ -147,7 +147,8 @@ def is_routine_reply(action: str, payload: Mapping[str, Any]) -> bool:
 
 # Read projection accounting never substitutes for authorization or other controls.
 _READ_COCKPIT = frozenset({"", "cpm:menu", "cpm:work", "cpm:manage", "cpm:customers", "cpm:customers:0",
-                           "cpm:growth", "cpm:growth-an:7", "cpm:growth-an:30", "cpm:money", "cpm:payments:0"})
+                           "cpm:growth", "cpm:growth-an:7", "cpm:growth-an:30", "cpm:money", "cpm:payments:0",
+                           "cpm:calendar", "cpm:automation"})
 _READ_FIELDS = frozenset({"tenant_id", "business_id", "user_id", "actor_id", "op", "arg", "callback_query_id",
                           "product_id", "domain", "product_version", "goal_id", "autonomy_tier",
                           "idempotency_key", "world_model_meta", "meta", "estimated_cost"})
@@ -158,7 +159,8 @@ def is_budget_free_read_projection(action: str, payload: Mapping[str, Any]) -> b
     if not isinstance(payload, Mapping) or set(payload) - _READ_FIELDS:
         return False
     op, arg = payload.get("op"), str(payload.get("arg") or "")
-    allowed = ((action == "business_ops_summary@v1" and op == "cockpit" and arg in _READ_COCKPIT) or
+    indexed_read = (arg.startswith(("cpm:customers:", "cpm:payments:", "cpm:team:")) and arg.rsplit(":", 1)[-1].isdecimal() and len(arg.rsplit(":", 1)[-1]) <= 7)
+    allowed = ((action == "business_ops_summary@v1" and op == "cockpit" and (arg in _READ_COCKPIT or indexed_read)) or
                (action == "sales_pipeline@v1" and op == "list" and not arg) or
                (action == "bookings@v1" and op == "ad_channels" and not arg))
     if not allowed or any(not isinstance(payload.get(k), str) or not payload[k].strip() for k in ("tenant_id", "user_id")):
