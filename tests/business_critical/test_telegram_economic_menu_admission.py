@@ -105,3 +105,55 @@ def test_tenant_scoped_free_menu_admission(layer, tenant_id, allowed):
     if not allowed:
         assert result.reason == "missing_capital_state"
 
+
+
+@pytest.mark.parametrize("action,op,arg", [
+    ("business_ops_summary@v1", "cockpit", "cpm:growth-an:7"),
+    ("business_ops_summary@v1", "cockpit", "cpm:money"),
+    ("business_ops_summary@v1", "cockpit", "cpm:growth"),
+    ("sales_pipeline@v1", "list", ""),
+    ("bookings@v1", "ad_channels", ""),
+])
+def test_canonical_read_projection_needs_no_fictional_capital(layer, action, op, arg):
+    evaluator, policy = layer
+    payload = {"tenant_id": "tenant-live", "user_id": "owner", "actor_id": "owner",
+               "op": op, "arg": arg, "meta": {"world_model_meta": {}},
+               "goal_id": "owner-goal", "autonomy_tier": "supervised"}
+    verdict = evaluator.review(decision_env=_envelope(action, payload, 0.0), world_state={})
+    assert verdict.allow is True
+    assert verdict.metadata["budget_class"] == "read_projection"
+    assert policy.called == 0
+
+
+@pytest.mark.parametrize("action,op,arg,extra,cost", [
+    ("business_ops_summary@v1", "cockpit", "cpm:money", {"amount": 10}, 0.0),
+    ("business_ops_summary@v1", "cockpit", "cpm:money", {"estimated_cost": 10}, 0.0),
+    ("business_ops_summary@v1", "cockpit", "cpm:money", {"meta": {"requested_budget": 10}}, 0.0),
+    ("business_ops_summary@v1", "cockpit", "cpm:money", {"user_id": ""}, 0.0),
+    ("business_ops_summary@v1", "cockpit", "cpm:money", {"tenant_id": " "}, 0.0),
+    ("business_ops_summary@v1", "cockpit", "cpm:pay-rf:ref", {}, 0.0),
+    ("business_ops_summary@v1", "cockpit", "cpm:money", {}, 1.0),
+    ("business_ops_summary@v1", "cockpit", "cpm:money", {}, float("nan")),
+    ("sales_pipeline@v1", "add", "", {}, 0.0),
+    ("bookings@v1", "dispatch", "", {}, 0.0),
+])
+def test_strict_economics_still_vetoes_unsafe_menu_actions(layer, action, op, arg, extra, cost):
+    evaluator, policy = layer
+    payload = {"tenant_id": "tenant-live", "user_id": "owner", "op": op, "arg": arg, **extra}
+    verdict = evaluator.review(decision_env=_envelope(action, payload, cost), world_state={})
+    assert verdict.allow is False
+    assert verdict.reason == "missing_capital_state"
+    assert policy.called == 0
+
+
+def test_canonical_read_projection_does_not_override_survival_or_degraded_world(layer):
+    evaluator, policy = layer
+    payload = {"tenant_id": "tenant-live", "user_id": "owner",
+               "op": "cockpit", "arg": "cpm:money"}
+    evaluator.survival = SimpleNamespace(evaluate=lambda: SimpleNamespace(allow_execution=False, reason="offline"))
+    assert evaluator.review(decision_env=_envelope("business_ops_summary@v1", payload),
+                            world_state={}).reason.startswith("survival_block:")
+    evaluator.survival = _Survival()
+    assert evaluator.review(decision_env=_envelope("business_ops_summary@v1", payload),
+                            world_state={"mode": "degraded", "reason": "missing_snapshot"}).reason.startswith("degraded_world:")
+    assert policy.called == 0
