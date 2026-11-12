@@ -71,32 +71,20 @@ class EventLandingRegistry:
     def get(self, *, tenant_id: str, business_id: str, event_id: str) -> EventLandingState:
         return self._snapshot(tenant_id=tenant_id, business_id=business_id, event_id=event_id)[0]
     def list_pages(self, *, tenant_id: str, business_id: str, limit: int = 100) -> list[dict[str, object]]:
-        """Owner-scoped event pages from canonical facts; no parallel index or storage."""
+        """List only current business pages using the existing canonical event store."""
         if not tenant_id or not business_id or type(limit) is not int or not 1 <= limit <= 100:
             raise ValueError("event_landing_list_scope_invalid")
-        event_ids: set[str] = set()
-        for event in self._events.iter_events(
-            tenant_id=tenant_id, start_ms=0,
-            event_type=BUSINESS_FACT_EVENT_TYPE, after_append_seq=0,
-        ):
-            if event.get("source") != _SOURCE:
-                continue
+        event_ids = set()
+        for event in self._events.iter_events(tenant_id=tenant_id, start_ms=0, event_type=BUSINESS_FACT_EVENT_TYPE, after_append_seq=0):
             fact = dict(event.get("payload") or {})
-            if fact.get("business_id") == business_id and fact.get("fact_type") == _CREATED:
-                event_id = fact.get("entity_id")
-                if isinstance(event_id, str) and event_id:
-                    event_ids.add(event_id)
-        pages: list[dict[str, object]] = []
+            if event.get("source") == _SOURCE and fact.get("business_id") == business_id and fact.get("fact_type") == _CREATED:
+                entity_id = fact.get("entity_id")
+                if isinstance(entity_id, str) and entity_id: event_ids.add(entity_id)
+        pages = []
         for event_id in sorted(event_ids)[:limit]:
             state = self.get(tenant_id=tenant_id, business_id=business_id, event_id=event_id)
-            pages.append({
-                "event_id": event_id,
-                "title": state.draft.hero_title,
-                "status": state.status.value,
-                "revision": state.revision,
-            })
+            pages.append({"event_id": event_id, "title": state.draft.hero_title, "status": state.status.value, "revision": state.revision})
         return pages
-
     @staticmethod
     def _now() -> int: return int(time.time()*1000)
     def create(self, *, tenant_id: str, business_id: str, event_id: str, content: EventLandingContent, source: str, idempotency_key: str, actor_id: str) -> EventLandingState:
