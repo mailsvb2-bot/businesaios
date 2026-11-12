@@ -50,3 +50,20 @@ class TelegramCtx:
 
     # Business Autopilot dashboards (read-only, computed in read-model)
     autopilot_dashboard: dict[str, Any] = field(default_factory=dict)
+
+    @property
+    def tenant_id(self) -> str:
+        return str(getattr(self.state, "tenant_id", "") or "")
+
+    @property
+    def chat_id(self) -> str:
+        session = dict(getattr(self.state, "session", {}) or {})
+        user = dict(getattr(self.state, "user", {}) or {})
+        return str(session.get("chat_id") or session.get("messaging_chat_id")
+                   or session.get("telegram_chat_id") or user.get("telegram_chat_id")
+                   or getattr(self.state, "user_id", "") or "")
+
+    @property
+    def bot_username(self) -> str:
+        product = getattr(self.state, "product", {}) or {}
+        return str(product.get("bot_username") or "") if isinstance(product, dict) else ""
