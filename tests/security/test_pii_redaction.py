@@ -66,7 +66,7 @@ def test_payload_redactor_masks_embedded_credentials_without_key_hints() -> None
     secrets = (
         'Bearer abcdefghijklmnopqrstuvwxyz123456',
         '123456789:abcdefghijklmnopqrstuvwxyz123456',
-        'sk-abcdefghijklmnopqrstuvwx',
+        'sk-' + 'abcdefghijklmnopqrstuvwx',
         'password=very-private-secret',
         'Authorization: Basic abcdefghijklmnop',
         'Cookie: session=private-value; refresh=other-private-value',
