@@ -40,6 +40,14 @@ def test_every_visible_main_menu_button_enters_its_own_route(monkeypatch, item):
         assert result.payload.get("callback_query_id") == "callback-12"
 
 
+@pytest.mark.parametrize("callback", ["ceo:plan", "ceo:run", "admin:evolution:regen_copy:nudge", "demo_kind_work", "weather:city"])
+def test_ceo_and_retired_callbacks_have_live_routes(monkeypatch, callback):
+    monkeypatch.setattr("runtime.entrypoints.telegram_longpoll._configured_telegram_tenant_id", lambda: "tenant-live")
+    result = UnifiedTelegramPolicyV3(admin_user_ids=("4001",)).propose(_callback_state(callback))
+    assert result.action
+    assert "Этот раздел пока недоступен" not in str((result.payload or {}).get("text") or "")
+
+
 @pytest.mark.parametrize("callback", ["menu:main", "settings:state", "state:rate", "state:today", "settings:time:work", "settings:time:home"])
 def test_nested_and_back_callbacks_never_fall_through(monkeypatch, callback):
     monkeypatch.setattr("runtime.entrypoints.telegram_longpoll._configured_telegram_tenant_id", lambda: "tenant-live")
