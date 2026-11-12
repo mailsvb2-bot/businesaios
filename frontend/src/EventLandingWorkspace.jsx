@@ -124,7 +124,7 @@ export function EventLandingWorkspace({ apiBase, tenantId, businessId, apiKey, g
     setError("");
     setNotice("");
     try {
-      const result = await getJson(apiBase.replace(/\\/$/, "") + "/business-workspace/event-landings/" + encodeURIComponent(requestedId), headers);
+      const result = await getJson((apiBase.endsWith("/") ? apiBase.slice(0, -1) : apiBase) + "/business-workspace/event-landings/" + encodeURIComponent(requestedId), headers);
       if (result.event_id !== requestedId) throw new Error("Сервер вернул другое мероприятие.");
       setEventId(requestedId);
       setSnapshot(result);
@@ -152,7 +152,7 @@ export function EventLandingWorkspace({ apiBase, tenantId, businessId, apiKey, g
     setBusy("list");
     setError("");
     try {
-      const result = await getJson(apiBase.replace(/\\/$/, "") + "/business-workspace/event-landings", headers);
+      const result = await getJson((apiBase.endsWith("/") ? apiBase.slice(0, -1) : apiBase) + "/business-workspace/event-landings", headers);
       if (result.tenant_id !== tenantId || result.business_id !== businessId || !Array.isArray(result.items)) {
         throw new Error("Сервер не подтвердил список вашего бизнеса.");
       }
