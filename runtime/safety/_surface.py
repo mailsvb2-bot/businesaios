@@ -5,7 +5,7 @@ records through this module without binding itself to core safety internals.
 from __future__ import annotations
 from core.runtime.safe_mode import is_safe_mode
 from core.safety.controls.action_context import SafetyActionContext
-from core.safety.controls.action_budget.models import is_budget_free_text_message, is_routine_reply, verified_inbound_reply_scope
+from core.safety.controls.action_budget.models import is_budget_free_text_message, is_budget_free_read_projection, is_routine_reply, verified_inbound_reply_scope
 from core.safety.controls.key_registry import SafetyKeyRegistry
 from core.safety.controls.simulation_gate.evidence import SimulationEvidenceVerifier
 from core.safety.controls.action_identity import canonical_action_id, canonical_breaker_key
@@ -48,6 +48,7 @@ __all__ = [
     "SAFETY_CONTROLS_CANON",
     "SafetyActionContext",
     "is_budget_free_text_message",
+    "is_budget_free_read_projection",
     "is_routine_reply",
     "verified_inbound_reply_scope",
     "SafetyKeyRegistry",

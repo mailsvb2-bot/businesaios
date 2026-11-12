@@ -1,4 +1,4 @@
-"""Executable Telegram menu contract: each visible button is a routed callback."""
+"""Executable Telegram menu contract: callback buttons route; HTTPS links are checked separately."""
 from dataclasses import replace
 
 import pytest
@@ -22,7 +22,7 @@ def _callback_state(callback):
     return replace(state, user={**state.user, "roles": ["admin"]})
 
 
-@pytest.mark.parametrize("item", menu_items(role="admin", is_admin=True), ids=lambda x: x.key)
+@pytest.mark.parametrize("item", (x for x in menu_items(role="admin", is_admin=True) if x.key != "connect"), ids=lambda x: x.key)
 def test_every_visible_main_menu_button_enters_its_own_route(monkeypatch, item):
     monkeypatch.setattr("runtime.entrypoints.telegram_longpoll._configured_telegram_tenant_id", lambda: "tenant-live")
     state = _callback_state(item.callback)
@@ -295,3 +295,64 @@ def test_clientplatform_telegram_entrypoint_gateway_persists_outcome(
         assert len(outcomes) == 1
         assert outcomes[0]["payload"]["ok"] is True
         assert outcomes[0]["payload"]["update_id"] == 12
+
+
+@pytest.mark.parametrize(("action", "op", "arg"), [
+    ("business_ops_summary@v1", "cockpit", "cpm:growth-an:7"),
+    ("business_ops_summary@v1", "cockpit", "cpm:money"),
+    ("business_ops_summary@v1", "cockpit", "cpm:growth"),
+    ("sales_pipeline@v1", "list", ""),
+    ("bookings@v1", "ad_channels", ""),
+])
+def test_readonly_business_buttons_work_after_action_budget_reaches_limit(action, op, arg):
+    from core.safety.controls.action_budget.guard import ActionBudgetGuard
+    from core.safety.controls.action_budget.ledger import InMemoryActionBudgetLedger
+    from core.safety.controls.action_budget.models import ActionBudget
+    from core.safety.controls.action_context import SafetyActionContext
+    from core.safety.controls.control_result import ControlStatus
+
+    ledger = InMemoryActionBudgetLedger()
+    ledger.record("tenant-live", estimated_cost=5000)
+    guard = ActionBudgetGuard(ledger, ActionBudget(max_cost=5000, max_actions=1))
+    payload = {"tenant_id": "tenant-live", "user_id": "4001", "op": op, "arg": arg}
+    result = guard.evaluate(SafetyActionContext(action, "tenant-live", "4001", payload))
+    assert result.status == ControlStatus.ALLOW
+    assert result.reason == "read_projection_budget_not_applicable"
+    enriched = {**payload, "goal_id": "owner-goal", "autonomy_tier": "supervised",
+                "meta": {"world_model_meta": {"source": "canonical"}}}
+    assert guard.evaluate(SafetyActionContext(action, "tenant-live", "4001", enriched)).status == ControlStatus.ALLOW
+
+
+@pytest.mark.parametrize(("action", "op", "arg", "extra"), [
+    ("business_ops_summary@v1", "cockpit", "cpm:pay-rf:payment123", {}),
+    ("business_ops_summary@v1", "cockpit", "cpm:money", {"amount": 1}),
+    ("business_ops_summary@v1", "cockpit", "cpm:money", {"estimated_cost": 1}),
+    ("business_ops_summary@v1", "cockpit", "cpm:money", {"meta": {"requested_budget": 1}}),
+    ("sales_pipeline@v1", "add", "", {}),
+    ("bookings@v1", "book", "", {}),
+    ("bookings@v1", "ad_channels", "", {"campaign_id": "forged"}),
+])
+def test_readonly_accounting_never_exempts_writes_or_financial_markers(action, op, arg, extra):
+    from core.safety.controls.action_budget.guard import ActionBudgetGuard
+    from core.safety.controls.action_budget.ledger import InMemoryActionBudgetLedger
+    from core.safety.controls.action_budget.models import ActionBudget
+    from core.safety.controls.action_context import SafetyActionContext
+    from core.safety.controls.control_result import ControlStatus
+
+    ledger = InMemoryActionBudgetLedger()
+    ledger.record("tenant-live", estimated_cost=5000)
+    guard = ActionBudgetGuard(ledger, ActionBudget(max_cost=5000, max_actions=1))
+    payload = {"tenant_id": "tenant-live", "user_id": "4001", "op": op, "arg": arg, **extra}
+    result = guard.evaluate(SafetyActionContext(action, "tenant-live", "4001", payload))
+    assert result.status == ControlStatus.BLOCK
+    assert result.reason == "action_budget_exceeded"
+
+
+def test_read_projection_audit_reason_is_distinct_from_text_delivery(monkeypatch):
+    from types import SimpleNamespace
+    import runtime.safety_controls as safety
+    events = []
+    monkeypatch.setattr(safety, "build_safety_control_runtime", lambda: SimpleNamespace(profile=SimpleNamespace(action_catalog=SimpleNamespace(resolve=lambda action: SimpleNamespace(default_estimated_cost=0)))))
+    monkeypatch.setattr(safety, "_record_safety_event", lambda **kwargs: events.append(kwargs))
+    safety.record_allowed_action(action="business_ops_summary@v1", payload={"tenant_id": "t", "user_id": "u", "op": "cockpit", "arg": "cpm:menu"})
+    assert events[0]["reason"] == "read_projection_not_charged"

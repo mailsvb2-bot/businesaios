@@ -63,26 +63,22 @@ def handle(ctx: TelegramCtx, *, default_price_rub: int, bot_username: str = "", 
             return pm(text="Доступ к данным бизнеса запрещён.", reply_markup=kb_back_main())
         from dataclasses import replace
         from core.policies.telegram.routes.business_flow_routes import handle_business_flow_routes
-        target = {"cp:section:customers": "cpm:customers", "cp:section:sales": "/leads",
-                  "cp:section:ad-channels": "/ad_channels"}[ctx.callback_data]
-        route_ctx = (replace(ctx, callback_data=target) if target.startswith("cpm:")
-                     else replace(ctx, callback_data="", cmd=target, args=""))
+        target = {"cp:section:customers": "cpm:customers",
+                  "cp:section:sales": "/leads", "cp:section:ad-channels": "/ad_channels"}[ctx.callback_data]
+        route_ctx = (replace(ctx, callback_data=target) if target.startswith("cpm:") else
+                     replace(ctx, callback_data="", cmd=target, args=""))
         outcome = handle_business_flow_routes(route_ctx, user_id=str(user_id))
         if outcome is None:
             raise RuntimeError("clientplatform_canonical_owner_route_missing")
-        return replace(outcome, payload={**outcome.payload,
-                                        **({"callback_query_id": ctx.callback_query_id}
-                                           if ctx.callback_query_id else {})})
+        ack = {"callback_query_id": ctx.callback_query_id} if ctx.callback_query_id else {}
+        return replace(outcome, payload={**outcome.payload, **ack})
     if ctx.cmd == "/start" and str(ctx.args or "").strip().startswith(("cpa_", "ecv_")):
         from core.policies.telegram.routes.business_flow_routes import handle_business_flow_routes
-
         return handle_business_flow_routes(ctx, user_id=str(user_id))
     if ctx.cmd in {"/start", "/menu"} or ctx.callback_data in {CB_MENU_MAIN, "menu_main"}:
-        step = "menu_main"
-        variant = choose_marketing_variant(user_id=str(user_id), step_key=step, seed=str(ctx.marketing_seed or "1"), bandit=(ctx.marketing_bandit or {}).get(step))
-        variants = (ctx.marketing_variants or {}).get(step) or {}
+        variant = choose_marketing_variant(user_id=str(user_id), step_key="menu_main", seed=str(ctx.marketing_seed or "1"), bandit=(ctx.marketing_bandit or {}).get("menu_main"))
         msg = menu_text(role=user_role.role, is_admin=ctx.is_admin)
-        return pm(text=msg, reply_markup=kb_main(is_admin=ctx.is_admin, role=user_role), track_event_type="marketing_copy_chosen", track_payload={"step_key": step, "variant": variant})
+        return pm(text=msg, reply_markup=kb_main(is_admin=ctx.is_admin, role=user_role), track_event_type="marketing_copy_chosen", track_payload={"step_key": "menu_main", "variant": variant})
 
     if ctx.callback_data == "full":
         if ctx.full_access:
@@ -103,10 +99,9 @@ def handle(ctx: TelegramCtx, *, default_price_rub: int, bot_username: str = "", 
     if ctx.callback_data:
         return pm(text="Этот раздел пока недоступен в Telegram. Вернись в главное меню.", reply_markup=kb_back_main())
 
-    if ctx.full_access:
-        msg = "Рабочее пространство подключено. Выберите раздел меню или опишите бизнес-задачу."
-    else:
-        msg = "Опишите задачу бизнеса или выберите раздел в меню. Доступные тарифы — в разделе «Оплаты и тарифы»."
+    msg = ("Рабочее пространство подключено. Выберите раздел меню или опишите бизнес-задачу."
+           if ctx.full_access else
+           "Опишите задачу бизнеса или выберите раздел в меню. Доступные тарифы — в разделе «Оплаты и тарифы».")
     if not ctx.is_admin and not ctx.cmd and str(ctx.text or "").strip():
         from core.policies.telegram.helpers import propose
 
