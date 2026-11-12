@@ -53,6 +53,14 @@ test("event landing owner journey: draft stays private, publish becomes public, 
   const layoutAfter = await measureHorizontalOverflow();
   expect(layoutAfter.document, JSON.stringify(layoutAfter)).toBeLessThanOrEqual(layoutAfter.viewport + 1);
   await expect(panel.getByText(/Статус: черновик/)).toBeVisible();
+  await panel.getByRole("button", { name: "Мои мероприятия" }).click();
+  const existing = panel.getByRole("button", { name: title + " · черновик" });
+  await expect(existing).toBeVisible();
+  await panel.getByLabel("ID мероприятия").fill("non-existent-event");
+  await existing.click();
+  await expect(panel.getByLabel("ID мероприятия")).toHaveValue(eventId);
+  await expect(panel.getByLabel("Название мероприятия *")).toHaveValue(title);
+
 
   const apiPublicUrl = "/api/public-site/events/" +
     encodeURIComponent(account.tenant_id) + "/" +
