@@ -75,64 +75,49 @@ def _verified_signature(proof: Mapping[str, Any]) -> bool:
 
 
 def _single_target_non_campaign(action: str, payload: Mapping[str, Any]) -> bool:
-    if action != "send_message@v1" or str(payload.get("kind") or "").lower() in {
-        "marketing", "campaign", "broadcast", "bulk", "proactive",
-    } or any(payload.get(key) for key in (
-        "recipients", "recipient_ids", "target_users", "audience", "segment_id",
-        "broadcast", "bulk", "batch_id", "campaign_id", "scheduled_at",
-        "marketing", "autonomous", "proactive", "charge_amount", "channel_policy",
-    )):
+    bulk_keys = ("recipients", "recipient_ids", "target_users", "audience", "segment_id",
+                 "broadcast", "bulk", "batch_id", "campaign_id", "scheduled_at",
+                 "marketing", "autonomous", "proactive", "charge_amount", "channel_policy")
+    if (action != "send_message@v1" or str(payload.get("kind") or "").lower() in
+            {"marketing", "campaign", "broadcast", "bulk", "proactive"} or
+            any(payload.get(key) for key in bulk_keys)):
         return False
     track = payload.get("track_payload")
-    return not (isinstance(track, Mapping) and any(track.get(key) for key in (
-        "campaign_id", "audience_id", "segment_id", "marketing_variant",
-        "recipient_ids", "recipients", "target_users", "broadcast",
-        "bulk", "scheduled_at",
-    )))
+    blocked = ("campaign_id", "audience_id", "segment_id", "marketing_variant", "recipient_ids", "recipients", "target_users", "broadcast", "bulk", "scheduled_at")
+    return not (isinstance(track, Mapping) and any(track.get(key) for key in blocked))
 
 
 def is_budget_free_text_message(action: str, payload: Mapping[str, Any]) -> bool:
     """Classify zero-cost text for accounting, never for authorization."""
     if not isinstance(payload, Mapping) or not _single_target_non_campaign(action, payload):
         return False
-    if (not isinstance(payload.get("text"), str)
-        or any(not isinstance(payload.get(key), str) or not payload[key].strip()
-               for key in ("user_id", "tenant_id"))):
+    if not isinstance(payload.get("text"), str) or any(
+            not isinstance(payload.get(k), str) or not payload[k].strip() for k in ("user_id", "tenant_id")):
         return False
     count = payload.get("recipient_count")
     if count is not None and (type(count) is not int or count != 1):
         return False
-    if any(payload.get(key) for key in (
-        "economy", "requested_budget", "budget_delta", "amount", "payment_id",
-    )):
+    if any(payload.get(key) for key in ("economy", "requested_budget", "budget_delta", "amount", "payment_id")):
         return False
-    allowed = {
-        "tenant_id", "user_id", "text", "channel", "chat_id", "reply_markup",
-        "callback_query_id", "track_event_type", "track_payload", "product_id",
-        "domain", "product_version", "actor_id", "idempotency_key",
-        "world_model_meta", "meta", "recipient_count", "business_id", "goal_id",
-        "autonomy_tier", "estimated_cost",
-    }
+    allowed = {"tenant_id", "user_id", "text", "channel", "chat_id", "reply_markup",
+               "callback_query_id", "track_event_type", "track_payload", "product_id",
+               "domain", "product_version", "actor_id", "idempotency_key", "world_model_meta",
+               "meta", "recipient_count", "business_id", "goal_id", "autonomy_tier", "estimated_cost"}
     if set(payload) - allowed:
         return False
     meta = payload.get("meta")
     if meta is not None and not isinstance(meta, Mapping):
         return False
-    if isinstance(meta, Mapping) and (
-        any(meta.get(key) for key in (
-            "requested_budget", "budget_delta", "estimated_cost", "amount",
-            "charge_amount", "campaign_id", "autonomous", "broadcast",
-        )) or ("inbound_user_reply" in meta and not is_routine_reply(action, payload))
-    ):
+    unsafe = ("requested_budget", "budget_delta", "estimated_cost", "amount", "charge_amount",
+              "campaign_id", "autonomous", "broadcast")
+    if isinstance(meta, Mapping) and (any(meta.get(k) for k in unsafe) or
+                                      ("inbound_user_reply" in meta and not is_routine_reply(action, payload))):
         return False
     cost = payload.get("estimated_cost", 0)
-    if isinstance(cost, bool):
-        return False
     try:
-        value = float(cost or 0)
+        return not isinstance(cost, bool) and float(cost or 0) == 0
     except (TypeError, ValueError, OverflowError):
         return False
-    return value == 0 and value == value
 
 
 def is_routine_reply(action: str, payload: Mapping[str, Any]) -> bool:
@@ -148,10 +133,9 @@ def is_routine_reply(action: str, payload: Mapping[str, Any]) -> bool:
     valid = (type(event_id) is int and event_id >= 0) if channel == "telegram" else (
         isinstance(event_id, str) and bool(event_id.strip()) and len(event_id) <= 256)
     recipient, count = payload.get("user_id"), payload.get("recipient_count")
-    text_digest = hashlib.sha256(str(payload.get("text") or "").encode()).hexdigest()
-    if (not tenant_matches or not valid or proof.get("content_sha256") != text_digest
-            or not isinstance(recipient, str) or not recipient.strip()
-            or proof.get("user_id") != recipient
+    if (not tenant_matches or not valid or
+            proof.get("content_sha256") != hashlib.sha256(str(payload.get("text") or "").encode()).hexdigest()
+            or not isinstance(recipient, str) or not recipient.strip() or proof.get("user_id") != recipient
             or str(payload.get("channel") or "").strip().lower() != channel
             or str(payload.get("chat_id") or recipient) != str(proof.get("chat_id") or recipient)
             or (count is not None and (type(count) is not int or count != 1))):
@@ -159,4 +143,34 @@ def is_routine_reply(action: str, payload: Mapping[str, Any]) -> bool:
     try:
         return float(payload.get("estimated_cost") or 0.0) == 0.0
     except (ValueError, TypeError, OverflowError):
+        return False
+
+# Read projection accounting never substitutes for authorization or other controls.
+_READ_COCKPIT = frozenset({"", "cpm:menu", "cpm:work", "cpm:manage", "cpm:customers", "cpm:customers:0",
+                           "cpm:growth", "cpm:growth-an:7", "cpm:growth-an:30", "cpm:money", "cpm:payments:0"})
+_READ_FIELDS = frozenset({"tenant_id", "business_id", "user_id", "actor_id", "op", "arg", "callback_query_id",
+                          "product_id", "domain", "product_version", "goal_id", "autonomy_tier",
+                          "idempotency_key", "world_model_meta", "meta", "estimated_cost"})
+
+
+def is_budget_free_read_projection(action: str, payload: Mapping[str, Any]) -> bool:
+    """Exempt only exact, zero-cost read projections, not authorization."""
+    if not isinstance(payload, Mapping) or set(payload) - _READ_FIELDS:
+        return False
+    op, arg = payload.get("op"), str(payload.get("arg") or "")
+    allowed = ((action == "business_ops_summary@v1" and op == "cockpit" and arg in _READ_COCKPIT) or
+               (action == "sales_pipeline@v1" and op == "list" and not arg) or
+               (action == "bookings@v1" and op == "ad_channels" and not arg))
+    if not allowed or any(not isinstance(payload.get(k), str) or not payload[k].strip() for k in ("tenant_id", "user_id")):
+        return False
+    meta = payload.get("meta")
+    if meta is not None and (not isinstance(meta, Mapping) or any(meta.get(k) for k in (
+        "amount", "estimated_cost", "charge_amount", "requested_budget",
+        "budget_delta", "autonomous", "campaign_id", "broadcast"
+    ))):
+        return False
+    cost = payload.get("estimated_cost", 0)
+    try:
+        return type(cost) is not bool and float(cost or 0) == 0.0
+    except (TypeError, ValueError, OverflowError):
         return False

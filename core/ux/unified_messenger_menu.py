@@ -7,10 +7,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from core.ux.callbacks import (
-    CB_ADMIN_MENU, CB_ADS_APPLY_MENU, CB_AUTOPILOT_MENU, CB_GROWTH_MENU,
-    CB_MENU_MAIN, CB_SETTINGS_MENU, CB_SETTINGS_STATE, CB_SUB_MENU,
-)
+from core.ux.callbacks import CB_ADMIN_MENU, CB_ADS_APPLY_MENU, CB_AUTOPILOT_MENU, CB_MENU_MAIN, CB_SETTINGS_MENU
 
 BRAND = "ClientPlatform"
 
@@ -26,13 +23,14 @@ class NavigationItem:
 
 
 _ITEMS = (
+    NavigationItem("connect", "➕ Подключить мой бизнес", SECTION_PREFIX + "connect", frozenset({"owner", "admin", "operator", "marketer"})),
     NavigationItem("customers", "💬 Клиенты и обращения", SECTION_PREFIX + "customers", frozenset({"owner", "admin", "operator"})),
     NavigationItem("sales", "💰 Продажи", SECTION_PREFIX + "sales", frozenset({"owner", "admin", "operator", "marketer"})),
-    NavigationItem("marketing", "📣 Реклама и продвижение", CB_GROWTH_MENU, frozenset({"owner", "admin", "marketer"})),
+    NavigationItem("marketing", "📣 Реклама и продвижение", "cpm:growth", frozenset({"owner", "admin", "marketer"})),
     NavigationItem("ai", "🤖 ИИ и автопилот", CB_AUTOPILOT_MENU, frozenset({"owner", "admin", "operator", "marketer"})),
     NavigationItem("ads_apply", "🧩 Ads Apply (prod)", CB_ADS_APPLY_MENU, frozenset({"marketer", "operator"})),
-    NavigationItem("results", "📊 Результаты", CB_SETTINGS_STATE, frozenset({"owner", "admin", "operator", "marketer"})),
-    NavigationItem("payments", "💳 Оплаты и тарифы", CB_SUB_MENU, frozenset({"owner", "admin"})),
+    NavigationItem("results", "📊 Результаты", "cpm:growth-an:7", frozenset({"owner", "admin", "operator", "marketer"})),
+    NavigationItem("payments", "💳 Оплаты и тарифы", "cpm:money", frozenset({"owner", "admin"})),
     NavigationItem("settings", "⚙️ Настройки", CB_SETTINGS_MENU, frozenset({"owner", "admin"})),
     NavigationItem("administration", "🛠 Администрирование", CB_ADMIN_MENU, frozenset({"admin"})),
 )
@@ -46,7 +44,7 @@ def menu_items(*, role: str, is_admin: bool = False) -> tuple[NavigationItem, ..
     if is_admin:
         roles.add("admin")
     return tuple(item for item in _ITEMS if item.roles.intersection(roles)
-                 and (is_admin or item.key not in {"customers", "sales"}))
+                 and (is_admin or item.key not in {"customers", "sales", "marketing", "results", "payments"}))
 
 
 def menu_text(*, role: str, is_admin: bool = False) -> str:
@@ -55,7 +53,8 @@ def menu_text(*, role: str, is_admin: bool = False) -> str:
 
 
 def telegram_menu(*, role: str, is_admin: bool = False) -> dict:
-    rows = [[{"text": item.label, "callback_data": item.callback}]
+    rows = [[{"text": item.label, "url": "https://app.businessaios.ru/"}] if item.key == "connect"
+            else [{"text": item.label, "callback_data": item.callback}]
             for item in menu_items(role=role, is_admin=is_admin)]
     return {"inline_keyboard": rows}
 
