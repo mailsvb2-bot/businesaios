@@ -3,6 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 
 from runtime.messaging.inbound_message import InboundMessage
+from runtime.messaging_ingress import split_command
 
 _CALLBACK_MARKERS = ("cpm:", "cp:", "menu:", "menu_", "settings:", "ads:", "admin:", "state:", "gift:", "sub:", "pay:", "autopilot:", "ceo:", "growth:", "profit_sprint:")
 
@@ -22,10 +23,7 @@ class WorldStateMessageInput:
 def map_inbound_to_world_state(msg: InboundMessage) -> WorldStateMessageInput:
     md, text = dict(msg.metadata or {}), str(msg.text)
     stripped = text.strip()
-    command, args = "", stripped
-    if stripped.startswith("/"):
-        head, _, tail = stripped.partition(" ")
-        command, args = head.split("@", 1)[0].lower(), tail.strip()
+    command, args = split_command(text)
     callback = str(md.get("callback_data") or "")
     is_cb = bool(callback or md.get("callback_query_id") or (
         not command and any(stripped.startswith(marker) for marker in _CALLBACK_MARKERS)))
