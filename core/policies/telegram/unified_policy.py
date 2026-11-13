@@ -44,14 +44,9 @@ class UnifiedTelegramPolicyV3:
         self._sales = SalesDomainPolicyV1()
         self._ret = RetentionDomainPolicyV1()
 
-    @staticmethod
-    def _domain(state: WorldStateV1) -> str:
-        product = getattr(state, "product", None)
-        values = product if isinstance(product, dict) else {}
-        return str(values.get("domain") or "organization_platform")
-
     def _domain_proposal(self, state: WorldStateV1) -> ProposedAction | None:
-        domain = self._domain(state)
+        product = getattr(state, "product", None)
+        domain = str((product if isinstance(product, dict) else {}).get("domain") or "organization_platform")
         if domain == "sales":
             return normalize_proposed_action(self._sales.propose(state))
         if domain == "retention":
@@ -67,11 +62,7 @@ class UnifiedTelegramPolicyV3:
         payments = economy.get("payments")
         payments = payments if isinstance(payments, dict) else {}
         roles = [str(role) for role in list(user_fields["roles"]) if str(role).strip()]
-        permissions = [
-            str(permission)
-            for permission in list(user_fields["perms"])
-            if str(permission).strip()
-        ]
+        permissions = [str(permission) for permission in user_fields["perms"] if str(permission).strip()]
         # Provider-local IDs are not Telegram admin identities. Without an
         # authenticated cross-channel account link, never inherit privileges.
         channel = str((getattr(state, "session", None) or {}).get("channel") or "").lower()
