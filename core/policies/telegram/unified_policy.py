@@ -128,17 +128,10 @@ class UnifiedTelegramPolicyV3:
             bot_username=self._bot_username, gift_ttl_sec=self._gift_ttl_sec,
         )), context)
 
-    def _propose_base(self, state: WorldStateV1) -> ProposedAction:
-        domain = self._domain_proposal(state)
-        if domain is not None:
-            return domain
-        context, _is_admin = self._context(state)
-        return self._handle_base(context)
-
     def propose(self, state: WorldStateV1) -> ProposedAction:
         """Compatibility: produce the unchanged base UX action."""
-
-        return self._propose_base(state)
+        domain = self._domain_proposal(state)
+        return domain if domain is not None else self._handle_base(self._context(state)[0])
 
     def propose_many(self, state: WorldStateV1) -> list[ProposedAction]:
         """Expose base and retention alternatives to canonical DecisionCore ranking."""
