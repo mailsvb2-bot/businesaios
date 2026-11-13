@@ -35,8 +35,8 @@ def map_inbound_to_world_state(msg: InboundMessage) -> WorldStateMessageInput:
                "chat_id": str(md.get("chat_id") or ""), "text": text,
                "command": command, "args": args, "is_callback": is_cb,
                "callback_data": callback, "callback_query_id": md.get("callback_query_id")}
-    if business_id := str(md.get("business_id") or "").strip():
-        session["business_id"] = business_id
+    # Provider metadata is not a tenant/business membership proof. The canonical
+    # authenticated binding must supply business authority, never a webhook field.
     return WorldStateMessageInput(
         tenant_id=str(msg.tenant_id), user_id=str(msg.user_id), channel=str(msg.channel),
         message_text=text, correlation_id=str(msg.correlation_id or ""),
