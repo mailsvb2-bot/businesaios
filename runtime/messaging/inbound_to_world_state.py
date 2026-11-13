@@ -3,7 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 
 from runtime.messaging.inbound_message import InboundMessage
-from runtime.messaging_ingress import split_command
+from runtime.messaging.channel_normalizer import split_command
 
 _CALLBACK_MARKERS = ("cpm:", "cp:", "menu:", "menu_", "settings:", "ads:", "admin:", "state:", "gift:", "sub:", "pay:", "autopilot:", "ceo:", "growth:", "profit_sprint:")
 
