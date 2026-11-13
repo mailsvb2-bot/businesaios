@@ -72,7 +72,12 @@ class UnifiedTelegramPolicyV3:
             for permission in list(user_fields["perms"])
             if str(permission).strip()
         ]
-        is_superadmin = bool(state.user_id) and str(state.user_id) in self._admin_user_ids
+        # Provider-local IDs are not Telegram admin identities. Without an
+        # authenticated cross-channel account link, never inherit privileges.
+        channel = str((getattr(state, "session", None) or {}).get("channel") or "").lower()
+        if channel not in ("", "telegram"):
+            roles, permissions = [], []
+        is_superadmin = channel in ("", "telegram") and bool(state.user_id) and str(state.user_id) in self._admin_user_ids
         is_admin = bool(is_superadmin) or "admin" in set(roles)
         if is_customer_session(getattr(state, "session", None)):
             is_admin = False  # a customer bot never grants owner/admin rights
