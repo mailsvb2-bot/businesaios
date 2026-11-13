@@ -66,6 +66,10 @@ def test_provider_handoff_foreign_business_metadata_never_reaches_decision_or_ex
     assert "business_id" not in core.state.session
     assert "tenant_id" not in core.state.session
     assert "foreign-business" not in repr(core.state)
+    from core.policies.telegram.unified_policy import UnifiedTelegramPolicyV3
+    proposal = UnifiedTelegramPolicyV3().propose(core.state)
+    assert proposal.action == "send_message@v1"
+    assert "foreign-business" not in repr(proposal.payload)
     assert "execution" not in result
 
 
