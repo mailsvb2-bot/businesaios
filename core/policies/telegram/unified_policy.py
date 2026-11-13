@@ -121,19 +121,19 @@ class UnifiedTelegramPolicyV3:
             return action
         return replace(action, payload={**action.payload, "callback_query_id": context.callback_query_id})
 
+    def _handle_base(self, context: TelegramCtx) -> ProposedAction:
+        """One canonical menu proposal path for single and ranked decisions."""
+        return self._bind_callback(normalize_proposed_action(handle(
+            context, default_price_rub=self._default_price_rub,
+            bot_username=self._bot_username, gift_ttl_sec=self._gift_ttl_sec,
+        )), context)
+
     def _propose_base(self, state: WorldStateV1) -> ProposedAction:
         domain = self._domain_proposal(state)
         if domain is not None:
             return domain
         context, _is_admin = self._context(state)
-        return self._bind_callback(normalize_proposed_action(
-            handle(
-                context,
-                default_price_rub=self._default_price_rub,
-                bot_username=self._bot_username,
-                gift_ttl_sec=self._gift_ttl_sec,
-            )
-        ), context)
+        return self._handle_base(context)
 
     def propose(self, state: WorldStateV1) -> ProposedAction:
         """Compatibility: produce the unchanged base UX action."""
@@ -149,16 +149,7 @@ class UnifiedTelegramPolicyV3:
         context, is_admin = self._context(state)
         telegram_update = getattr(state, "telegram_update", None)
         if self._retention is None or is_admin or telegram_update is None or is_customer_session(getattr(state, "session", None)):
-            return [
-                self._bind_callback(normalize_proposed_action(
-                    handle(
-                        context,
-                        default_price_rub=self._default_price_rub,
-                        bot_username=self._bot_username,
-                        gift_ttl_sec=self._gift_ttl_sec,
-                    )
-                ), context)
-            ]
+            return [self._handle_base(context)]
 
         evaluation = self._retention.evaluate(state)
         constrained_state = apply_retention_constraints_to_state(
@@ -167,14 +158,7 @@ class UnifiedTelegramPolicyV3:
         )
         if constrained_state is not state:
             context = replace(context, state=constrained_state)
-        base = self._bind_callback(normalize_proposed_action(
-            handle(
-                context,
-                default_price_rub=self._default_price_rub,
-                bot_username=self._bot_username,
-                gift_ttl_sec=self._gift_ttl_sec,
-            )
-        ), context)
+        base = self._handle_base(context)
         return self._retention.propose_candidates(
             state=constrained_state,
             base=base,
