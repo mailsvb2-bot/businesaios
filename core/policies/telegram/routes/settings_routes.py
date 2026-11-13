@@ -13,7 +13,7 @@ _CANONICAL_SCREENS = {
     "cp:settings:notifications": "cpm:automation",
     "cp:settings:access": "cpm:team:0",
 }
-_LEGACY_CALLBACK_PREFIXES = ("settings:time:", "settings:ref", "state:")
+_LEGACY_CALLBACK_PREFIXES = ("settings:time:", "settings:ref", "state:", "weather:", "demo")
 _LEGACY_COMMANDS = {"/time_work", "/time_home"}
 
 

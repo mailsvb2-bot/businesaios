@@ -203,3 +203,30 @@ def test_event_registration_is_scoped_durable_and_privacy_preserving(monkeypatch
     with pytest.raises(ValueError, match="registration_closed"):
         registry.register(**scope, email="new@example.test", consent=True, idempotency_key="new")
     assert registry.registration_count(**scope) == 1
+
+
+def test_owner_can_list_only_own_event_pages_from_canonical_event_facts() -> None:
+    events, claims = _EventStore(), InMemoryIdempotencyStore()
+    registry = EventLandingRegistry(event_store=events, idempotency_store=claims)
+    registry.create(tenant_id="t", business_id="one", event_id="event-a",
+                    content=_content("Own event"), source="manual",
+                    idempotency_key="own-create", actor_id="owner")
+    registry.create(tenant_id="t", business_id="two", event_id="event-b",
+                    content=_content("Other business"), source="manual",
+                    idempotency_key="other-create", actor_id="other-owner")
+    registry.create(tenant_id="another", business_id="one", event_id="event-c",
+                    content=_content("Other tenant"), source="manual",
+                    idempotency_key="foreign-create", actor_id="foreign-owner")
+    registry.transition(tenant_id="t", business_id="one", event_id="event-a",
+                        action="publish", expected_revision=1,
+                        idempotency_key="own-publish", actor_id="owner")
+    restarted = EventLandingRegistry(event_store=events, idempotency_store=claims)
+    assert restarted.list_pages(tenant_id="t", business_id="one") == [
+        {"event_id": "event-a", "title": "Own event", "status": "published", "revision": 1}
+    ]
+    assert restarted.list_pages(tenant_id="t", business_id="two") == [
+        {"event_id": "event-b", "title": "Other business", "status": "draft", "revision": 1}
+    ]
+    assert restarted.list_pages(tenant_id="another", business_id="one")[0]["event_id"] == "event-c"
+    with pytest.raises(ValueError, match="list_scope_invalid"):
+        restarted.list_pages(tenant_id="t", business_id="", limit=100)

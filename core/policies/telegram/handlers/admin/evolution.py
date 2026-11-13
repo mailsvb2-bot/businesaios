@@ -48,7 +48,7 @@ def handle_evolution(ctx: TelegramCtx, *, user_id: str, has_perm, pm) -> Propose
                 "payload": {
                     "step_key": step_key,
                     "admin_id": user_id,
-                    "chat_id": ctx.chat_id,
+                    "chat_id": str((getattr(ctx.state, "session", None) or {}).get("chat_id") or (getattr(ctx.state, "session", None) or {}).get("messaging_chat_id") or (getattr(ctx.state, "session", None) or {}).get("telegram_chat_id") or (getattr(ctx.state, "user", None) or {}).get("telegram_chat_id") or getattr(ctx.state, "user_id", "") or ""),
                     "notify_text": notify,
                     "notify_reply_markup": kb_staff_menu(),
                     "callback_query_id": ctx.callback_query_id,

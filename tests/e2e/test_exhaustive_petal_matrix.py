@@ -81,7 +81,7 @@ def test_every_declared_action_schema_accepts_only_its_contract() -> None:
     # case; the existing checks still execute for every field in the catalog.
     # Port wave PD export: privacy_export@v1 adds 11 schema cases.
     # Port: business_admin@v1, event_series@v1, sales_pipeline@v1 (+13 each, measured).
-    assert cases == 927 + 4 + 11 + 13 + 13 + 13 + 13 + 13 + 13 + 13 + 13 + 13 + 2 + 3 + 13 + 1  # +1: sales_pipeline@v1 optional reply (str) bad-type case; +13 conference_join_run; +2: optional callback_query_id (event_series, ops_summary); +3: business_admin xp webhook connector_id/raw_body/headers
+    # Production journey extends existing action contracts with six optional typed fields:\n    # execute_plan@v1: callback_query_id (1); ai_ceo_plan@v1: text,\n    # reply_markup, callback_query_id, track_event_type, track_payload (5).\n    # Verify the actual catalog contract, not merely an increased test counter.\n    catalog = build_catalog()\n    assert catalog["execute_plan@v1"].schema.optional >= {"callback_query_id"}\n    assert catalog["execute_plan@v1"].schema.field_types["callback_query_id"] is str\n    ai_ceo_schema = catalog["ai_ceo_plan@v1"].schema\n    assert {"text", "reply_markup", "callback_query_id", "track_event_type", "track_payload"} <= ai_ceo_schema.optional\n    assert {name: ai_ceo_schema.field_types[name] for name in ("text", "reply_markup", "callback_query_id", "track_event_type", "track_payload")} == {"text": str, "reply_markup": dict, "callback_query_id": str, "track_event_type": str, "track_payload": dict}\n    assert cases == 927 + 4 + 11 + 13 + 13 + 13 + 13 + 13 + 13 + 13 + 13 + 13 + 2 + 3 + 13 + 1 + 6
 
 
 def test_every_runtime_handler_and_compatibility_import_door_resolves() -> None:

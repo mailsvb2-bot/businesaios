@@ -10,3 +10,11 @@ def normalize_channel(value: str | None) -> str:
     if out not in ALL_CHANNELS:
         raise ValueError(f"UNKNOWN_CHANNEL:{out}")
     return out
+
+
+def split_command(text: str) -> tuple[str, str]:
+    stripped = str(text or "").strip()
+    if not stripped.startswith("/"):
+        return "", stripped
+    head, _, tail = stripped.partition(" ")
+    return head.split("@", 1)[0].lower(), tail.strip()

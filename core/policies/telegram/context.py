@@ -50,3 +50,4 @@ class TelegramCtx:
 
     # Business Autopilot dashboards (read-only, computed in read-model)
     autopilot_dashboard: dict[str, Any] = field(default_factory=dict)
+

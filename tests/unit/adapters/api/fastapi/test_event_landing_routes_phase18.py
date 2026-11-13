@@ -103,3 +103,24 @@ def test_owner_registration_summary_uses_authenticated_scope(monkeypatch):
     assert registry.calls[-1][1] == {
         "tenant_id": "tenant-a", "business_id": "business-a", "event_id": "event-1",
     }
+
+
+def test_owner_event_list_uses_authenticated_scope_not_an_untrusted_query(monkeypatch) -> None:
+    class _ListRegistry(_Registry):
+        def list_pages(self, **kwargs):
+            self.calls.append(("list_pages", kwargs))
+            return [{"event_id": "my-event", "title": "Mine", "status": "draft", "revision": 1}]
+    state = EventLandingState(event_id="my-event", draft=_content("Mine"), draft_source="manual")
+    registry = _ListRegistry(state)
+    router = APIRouter()
+    monkeypatch.setattr(owner_routes, "business_owner_scope", lambda **_: (
+        SimpleNamespace(actor_id="owner", subject="owner"), "verified-tenant", "verified-business"))
+    owner_routes.register_business_workspace_event_landing_routes(
+        router=router, auth_bundle=object(), event_landing_registry=registry)
+    endpoint = _endpoint(router, "/business-workspace/event-landings", "GET")
+    result = asyncio.run(endpoint(object()))
+    assert result["items"][0]["event_id"] == "my-event"
+    assert result["tenant_id"] == "verified-tenant"
+    assert result["business_id"] == "verified-business"
+    assert registry.calls[-1] == ("list_pages", {
+        "tenant_id": "verified-tenant", "business_id": "verified-business"})

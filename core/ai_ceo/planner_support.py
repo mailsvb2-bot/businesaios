@@ -62,7 +62,7 @@ class CEOContextReader:
 
     @staticmethod
     def default_intent_from_state(state: WorldStateV1) -> CEOIntentV1:
-        session = state.session or {}
+        session = getattr(state, "session", None) or {}
         return build_intent_from_session_args(
             args=session.get("args"),
             objective=str(session.get("objective") or "increase_profit"),

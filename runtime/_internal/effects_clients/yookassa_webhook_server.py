@@ -105,7 +105,7 @@ def start_yookassa_webhook_server_in_thread(
                     hdr = self.headers.get("X-Webhook-Token") or self.headers.get("X-YooKassa-Token")
                     expected = str(token_secret or "").strip()
                     got = str(hdr or "").strip()
-                    if (not expected) or (not got) or (not hmac.compare_digest(expected, got)):
+                    if (not expected) or (not got) or (not hmac.compare_digest(expected.encode("utf-8"), got.encode("utf-8"))):
                         self.send_response(401)
                         self.end_headers()
                         return

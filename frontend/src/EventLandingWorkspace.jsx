@@ -86,6 +86,7 @@ export function EventLandingWorkspace({ apiBase, tenantId, businessId, apiKey, g
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
   const [registrationSummary, setRegistrationSummary] = useState(null);
+  const [pages, setPages] = useState(null);
   const pending = useRef(null);
   const currentId = eventId.trim();
   const loaded = Boolean(snapshot && snapshot.event_id === currentId);
@@ -113,13 +114,19 @@ export function EventLandingWorkspace({ apiBase, tenantId, businessId, apiKey, g
     setNotice("");
   };
 
-  const refresh = async () => {
-    if (!currentId || !apiKey || busy) return;
+  const loadPage = async (requestedId) => {
+    if (!requestedId || !apiKey || busy) return;
+    if (loaded && dirty && requestedId !== currentId) {
+      setError("Сначала сохраните изменения текущего мероприятия перед переходом.");
+      return;
+    }
     setBusy("load");
     setError("");
     setNotice("");
     try {
-      const result = await getJson(endpoint, headers);
+      const result = await getJson((apiBase.endsWith("/") ? apiBase.slice(0, -1) : apiBase) + "/business-workspace/event-landings/" + encodeURIComponent(requestedId), headers);
+      if (result.event_id !== requestedId) throw new Error("Сервер вернул другое мероприятие.");
+      setEventId(requestedId);
       setSnapshot(result);
       setRegistrationSummary(null);
       setEditor(asEditor(result.draft));
@@ -133,6 +140,25 @@ export function EventLandingWorkspace({ apiBase, tenantId, businessId, apiKey, g
       } else {
         setError("Не удалось загрузить страницу: " + (reason.message || "ошибка сети"));
       }
+    } finally {
+      setBusy("");
+    }
+  };
+
+  const refresh = () => loadPage(currentId);
+
+  const loadPages = async () => {
+    if (!apiKey || busy) return;
+    setBusy("list");
+    setError("");
+    try {
+      const result = await getJson((apiBase.endsWith("/") ? apiBase.slice(0, -1) : apiBase) + "/business-workspace/event-landings", headers);
+      if (result.tenant_id !== tenantId || result.business_id !== businessId || !Array.isArray(result.items)) {
+        throw new Error("Сервер не подтвердил список вашего бизнеса.");
+      }
+      setPages(result.items);
+    } catch (reason) {
+      setError("Не удалось получить список мероприятий: " + (reason.message || "ошибка сети"));
     } finally {
       setBusy("");
     }
@@ -226,6 +252,20 @@ export function EventLandingWorkspace({ apiBase, tenantId, businessId, apiKey, g
         <span className="privacy-badge">Ваш черновик · канонический Event Store</span>
       </div>
       <p className="muted-text">Откройте мероприятие по его ID или создайте черновик. После сохранения можно опубликовать страницу, а затем снять её с публикации. Пока вы не нажали «Опубликовать», посетители не увидят черновик.</p>
+      <div className="event-landing-id">
+        <button type="button" className="ghost" disabled={!apiKey || Boolean(busy)} onClick={loadPages}>
+          {busy === "list" ? "Загружаем мероприятия…" : "Мои мероприятия"}
+        </button>
+      </div>
+      {pages ? <div className="event-landing-notice">
+        {pages.length ? pages.map((page) => (
+          <button type="button" className="ghost" key={page.event_id}
+            disabled={Boolean(busy) || (loaded && dirty)}
+            onClick={() => loadPage(page.event_id)}>
+            {page.title || page.event_id} · {page.status === "published" ? "опубликовано" : "черновик"}
+          </button>
+        )) : <p>Страниц мероприятий пока нет. Создайте первую ниже.</p>}
+      </div> : null}
       <div className="event-landing-id">
         <label>Идентификатор мероприятия
           <input aria-label="ID мероприятия" maxLength={200} disabled={Boolean(busy)} value={eventId} onChange={(e) => changeEventId(e.target.value)} placeholder="Например, webinar-2026-10" />

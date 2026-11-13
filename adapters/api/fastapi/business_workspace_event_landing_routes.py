@@ -7,6 +7,10 @@ def register_business_workspace_event_landing_routes(*, router: APIRouter, auth_
     def scope(request: Request):
         principal,tenant_id,business_id=business_owner_scope(request=request,auth_bundle=auth_bundle)
         return principal,tenant_id,business_id
+    @router.get('/business-workspace/event-landings', tags=['business-workspace'])
+    async def list_event_landings(request: Request):
+        _, tenant_id, business_id = scope(request)
+        return {'items': event_landing_registry.list_pages(tenant_id=tenant_id, business_id=business_id), 'tenant_id': tenant_id, 'business_id': business_id}
     @router.get('/business-workspace/event-landings/{event_id}', tags=['business-workspace'])
     async def get_event_landing(event_id: str, request: Request):
         _,tenant_id,business_id=scope(request)
