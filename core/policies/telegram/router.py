@@ -26,14 +26,6 @@ from core.ux.unified_messenger_menu import menu_text
 from core.ux.telegram_keyboards import kb_back_main, kb_main
 
 
-def _has_perm(ctx: TelegramCtx, perm: str) -> bool:
-    if bool(getattr(ctx, "is_superadmin", False)):
-        return True
-    perms = {str(x) for x in (getattr(ctx, "perms", []) or [])}
-    roles = {str(x) for x in (getattr(ctx, "roles", []) or [])}
-    return (str(perm) in perms) or ("admin" in roles)
-
-
 def handle(ctx: TelegramCtx, *, default_price_rub: int, bot_username: str = "", gift_ttl_sec: int = 7 * 24 * 3600) -> ProposedAction:
     user_id = ctx.state.user_id or "anonymous"
     if is_customer_session(getattr(ctx.state, "session", None)):  # tenant's own bot: customer routes only
