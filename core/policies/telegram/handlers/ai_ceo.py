@@ -49,7 +49,8 @@ def _build(ctx: TelegramCtx, *, event_store: Any | None) -> Any:
     if snapshot is None:
         from core.ai_ceo.ledger import GrowthSnapshotV1
         snapshot = GrowthSnapshotV1()
-    return build_plan(state=ctx.state, snapshot=snapshot, autonomy=autonomy, bot_username=str(ctx.bot_username or ""))
+    product = getattr(ctx.state, "product", {}) or {}
+    return build_plan(state=ctx.state, snapshot=snapshot, autonomy=autonomy, bot_username=str(product.get("bot_username") or "") if isinstance(product, dict) else "")
 
 
 def _propose_plan(ctx: TelegramCtx, *, user_id: str, event_store: Any | None) -> ProposedAction:
