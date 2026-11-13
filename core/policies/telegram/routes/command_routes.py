@@ -26,6 +26,8 @@ def handle_command_routes(ctx: TelegramCtx, *, user_id: str, pm) -> ProposedActi
     if ctx.cmd == "/privacy":
         return pm(text="🔐 Персональные данные\n\n• /export_data — показать, какие данные о вас хранятся", reply_markup=kb_back_main())
     if ctx.cmd == "/export_data":
+        if (getattr(ctx.state, "session", None) or {}).get("channel") not in (None, "", "telegram"):
+            return pm(text="Экспорт доступен после подтверждения личности в Telegram.", reply_markup=kb_back_main())
         return propose("privacy_export@v1", {"user_id": user_id})
     if ctx.cmd == "/report":
         today = ctx.autopilot_dashboard.get("today") if isinstance(ctx.autopilot_dashboard, dict) else None
