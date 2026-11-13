@@ -89,3 +89,64 @@ def test_provider_handoff_rejects_conflicting_verified_identity_before_decision(
                     "tenant_id": "tenant-a", "channel": "telegram", "user_id": "u1",
                     "chat_id": "u1", "metadata": forged,
                 }})
+
+
+def test_verified_webhook_business_scope_survives_to_decision_without_metadata_authority():
+    from types import SimpleNamespace
+    from runtime.business_autonomy.provider_webhook_inbound_handoff import build_provider_webhook_inbound_handoff
+    from runtime.business_autonomy.provider_webhook_inbound_processor import ProviderWebhookInboundProcessor
+
+    class RecordingCore:
+        state = None
+
+        def issue(self, state):
+            self.state = state
+            return SimpleNamespace(decision=SimpleNamespace(
+                decision_id="d1", correlation_id="c1"))
+
+    core = RecordingCore()
+    handoff = build_provider_webhook_inbound_handoff(
+        tenant_id="tenant-owner", business_id="business-owner",
+        provider_key="vk_community", messaging_ingress={
+            "channel": "vk", "user_id": "77", "chat_id": "77",
+            "text": "/start", "correlation_id": "c1", "transport_message_id": "m1",
+        })
+    result = ProviderWebhookInboundProcessor(decision_core=core).process(handoff=handoff)
+    assert result["accepted"] is True
+    assert core.state.product == {"business_id": "business-owner"}
+    assert "business_id" not in core.state.session
+
+    from application.decision_runtime.flow import build_payload
+    from core.policies.telegram.unified_policy import UnifiedTelegramPolicyV3
+    proposal = UnifiedTelegramPolicyV3().propose(core.state)
+    _, payload = build_payload(
+        state=core.state, out=proposal, pinned_world_model_meta={},
+        tenant_id="tenant-owner", product_id=None, domain=None,
+        product_version=None, actor_id="77",
+    )
+    assert payload["business_id"] == "business-owner"
+
+    forged = {**handoff, "inbound_message": {
+        **handoff["inbound_message"],
+        "metadata": {**handoff["inbound_message"]["metadata"], "business_id": "other-business"},
+    }}
+    import pytest
+    with pytest.raises(RuntimeError, match="provider_inbound_business_scope_mismatch"):
+        ProviderWebhookInboundProcessor(decision_core=RecordingCore()).process(handoff=forged)
+
+
+def test_provider_local_user_id_cannot_become_telegram_admin_or_erase_telegram_data():
+    from core.policies.telegram.unified_policy import UnifiedTelegramPolicyV3
+
+    policy = UnifiedTelegramPolicyV3(admin_user_ids=("77",))
+    for channel in ("vk", "max", "whatsapp"):
+        for command in ("/ops", "/delete_my_data ПОДТВЕРЖДАЮ", "/export_data"):
+            state = map_inbound_to_world_state(InboundMessage(
+                tenant_id="tenant-a", channel=channel, user_id="77",
+                text=command, metadata={"chat_id": "77"},
+                transport_message_id="signed-message-1",
+            ))
+            proposal = policy.propose(state)
+            assert proposal.action not in {
+                "business_ops_summary@v1", "privacy_delete@v1", "privacy_export@v1",
+            }, (channel, command, proposal.action)
