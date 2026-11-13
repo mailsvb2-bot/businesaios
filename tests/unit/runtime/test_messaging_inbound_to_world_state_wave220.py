@@ -40,7 +40,7 @@ def test_inbound_mapper_keeps_command_and_callback_without_untrusted_business_sc
 
 
 
-def test_signed_inbound_foreign_business_metadata_never_reaches_decision_or_executor():
+def test_provider_handoff_foreign_business_metadata_never_reaches_decision_or_executor():
     from types import SimpleNamespace
     from runtime.business_autonomy.provider_webhook_inbound_processor import ProviderWebhookInboundProcessor
 
@@ -56,8 +56,8 @@ def test_signed_inbound_foreign_business_metadata_never_reaches_decision_or_exec
     handoff = {"inbound_message": {
         "tenant_id": "tenant-a", "channel": "telegram", "user_id": "user-1",
         "text": "/start", "correlation_id": "update-1",
-        "metadata": {"tenant_id": "tenant-b", "business_id": "foreign-business",
-                     "chat_id": "user-1", "verified": True},
+        "chat_id": "user-1", "metadata": {"business_id": "foreign-business",
+                                           "chat_id": "user-1", "verified": True},
     }}
     result = ProviderWebhookInboundProcessor(decision_core=core).process(handoff=handoff)
     assert result["accepted"] is True
@@ -67,3 +67,21 @@ def test_signed_inbound_foreign_business_metadata_never_reaches_decision_or_exec
     assert "tenant_id" not in core.state.session
     assert "foreign-business" not in repr(core.state)
     assert "execution" not in result
+
+
+def test_provider_handoff_rejects_conflicting_verified_identity_before_decision():
+    import pytest
+    from runtime.business_autonomy.provider_webhook_inbound_processor import ProviderWebhookInboundProcessor
+
+    class MustNotIssue:
+        def issue(self, state):
+            raise AssertionError("untrusted identity reached DecisionCore")
+
+    for forged in ({"tenant_id": "tenant-b"}, {"channel": "max"},
+                   {"user_id": "victim"}, {"chat_id": "victim"}):
+        with pytest.raises(RuntimeError, match="provider_inbound_identity_mismatch"):
+            ProviderWebhookInboundProcessor(decision_core=MustNotIssue()).process(
+                handoff={"inbound_message": {
+                    "tenant_id": "tenant-a", "channel": "telegram", "user_id": "u1",
+                    "chat_id": "u1", "metadata": forged,
+                }})
