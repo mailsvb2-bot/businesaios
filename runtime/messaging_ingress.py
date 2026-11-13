@@ -4,7 +4,7 @@ from dataclasses import dataclass, field
 from typing import Any
 
 from core.ai.world_state import WorldStateV1
-from runtime.messaging.channel_normalizer import normalize_channel
+from runtime.messaging.channel_normalizer import normalize_channel, split_command
 from runtime.messaging.channel_types import ALL_CHANNELS
 from runtime.messaging.provider_inbound_decoder import decode_provider_inbound
 
@@ -48,14 +48,6 @@ def normalize_messaging_channel(channel: str) -> str:
         return normalize_channel(value)
     except ValueError:
         return value
-
-
-def split_command(text: str) -> tuple[str, str]:
-    stripped = str(text or "").strip()
-    if not stripped.startswith("/"):
-        return "", stripped
-    head, _, tail = stripped.partition(" ")
-    return head.split("@", 1)[0].lower(), tail.strip()
 
 
 def messaging_event_to_world_state(
