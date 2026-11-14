@@ -189,11 +189,17 @@ def test_signed_uiii_jws_enters_existing_decision_path_only_when_bound(flow, mon
             "tenant_id": "t1", "user_id": "owner", "event_type": "business_admin@v1",
             "timestamp_ms": 1, "payload": row,
         })
-    context, keys, _, sign = proof_fixture()
+    context, keys, payload, sign = proof_fixture()
     context = replace(
         context, tenant_id="t1", business_id="business-1",
         connection_id=cid, customer_ref="person-1",
     )
+    signed_payload = {
+        **payload,
+        "scope": {**payload["scope"], "tenant_id": "t1", "business_id": "business-1",
+                  "connection_id": cid},
+        "customer_ref": "person-1",
+    }
     captured = []
     monkeypatch.setattr(
         ingress, "execute_runtime_decision",
@@ -204,12 +210,12 @@ def test_signed_uiii_jws_enters_existing_decision_path_only_when_bound(flow, mon
         owner_user_id="owner", connector_id=cid, context=context,
         verified_keys=keys, now_ms=int(PROOF_NOW.timestamp() * 1000),
     )
-    assert ingress.ingest_uiii_proof(compact_jws=sign(), **kwargs) == (202, "accepted")
+    assert ingress.ingest_uiii_proof(compact_jws=sign(signed_payload), **kwargs) == (202, "accepted")
     assert len(captured) == 1 and captured[0].session["xp_business_id"] == "business-1"
     assert ingress.ingest_uiii_proof(
-        compact_jws=sign(), **{**kwargs, "context": replace(context, business_id="foreign")}
+        compact_jws=sign(signed_payload), **{**kwargs, "context": replace(context, business_id="foreign")}
     )[0] == 403
     assert ingress.ingest_uiii_proof(
-        compact_jws=sign(), **{**kwargs, "verified_keys": {}}
+        compact_jws=sign(signed_payload), **{**kwargs, "verified_keys": {}}
     ) == (403, "unknown_or_revoked_key")
     assert len(captured) == 1
