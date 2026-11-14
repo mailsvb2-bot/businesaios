@@ -215,14 +215,18 @@ def _parse_observation(value: Any) -> dict[str, Any] | None:
         raise ValueError("external product observation must be an object")
     if set(value) - _OBS_KEYS:
         raise ValueError("external product observation contains unsupported fields")
-    lim = value.get("limitations") or []
+    lim = value.get("limitations", [])
     if not isinstance(lim, list) or any(not isinstance(x, str) for x in lim):
         raise ValueError("external product observation limitations must be strings")
     rev = value.get("revision", 1)
     if isinstance(rev, bool) or not isinstance(rev, int) or rev < 1:
         raise ValueError("external product observation revision must be an integer")
-    state = str(value.get("state") or "active").strip().lower()
-    quality = str(value.get("quality") or "source_asserted").strip().lower()
+    raw_state = value.get("state", "active")
+    raw_quality = value.get("quality", "source_asserted")
+    if not isinstance(raw_state, str) or not isinstance(raw_quality, str):
+        raise ValueError("external product observation state/quality is invalid")
+    state = raw_state.strip().lower()
+    quality = raw_quality.strip().lower()
     if state not in OBS_STATES or quality not in OBS_QUALITY:
         raise ValueError("external product observation state/quality is invalid")
     for key, maximum in (("observation_key", 200), ("kind", 80), ("label", 160), ("provenance_ref", 300)):
