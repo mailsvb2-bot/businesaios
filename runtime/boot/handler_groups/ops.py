@@ -46,7 +46,7 @@ from runtime.handlers_ops import (
 CANON_BOOT_WIRING_ONLY = True
 
 
-def register_ops_handlers(*, handlers: ActionHandlerRegistry, event_store) -> None:
+def register_ops_handlers(*, handlers: ActionHandlerRegistry, event_store, settings_gateway=None) -> None:
     handlers.register("answer_callback@v1", handle_answer_callback)
     handlers.register("send_audio@v1", handle_send_audio)
     handlers.register("send_weather@v1", handle_send_weather)
@@ -77,7 +77,7 @@ def register_ops_handlers(*, handlers: ActionHandlerRegistry, event_store) -> No
     )
     handlers.register(
         "business_admin@v1",
-        lambda payload, effects, env: handle_business_admin(payload, effects, env, event_store=event_store),
+        lambda payload, effects, env: handle_business_admin(payload, effects, env, event_store=event_store, settings_gateway=settings_gateway),
     )
     handlers.register(
         "event_series@v1",
