@@ -509,7 +509,7 @@ def handle_business_ops_summary(payload, effects, env, *, event_store, now_ms: i
     return send_tracked(body, effects, env, text=text, event_type=None, event_payload=None)
 
 
-def handle_business_admin(payload, effects, env, *, event_store, settings_gateway=None, now_ms: int | None = None):
+def handle_business_admin(payload, effects, env, *, event_store, settings_gateway=None, organization_idempotency_path=None, now_ms: int | None = None):
     """Owner admin ops (settings, autopilot, prices, recorded payments/refunds, approvals)."""
     from application.business_flows import admin as ad
 
@@ -523,6 +523,30 @@ def handle_business_admin(payload, effects, env, *, event_store, settings_gatewa
             body, effects, env, text=text, event_type="business_admin@v1" if change else None, event_payload=change
         )
 
+    if op in {"organization_show", "organization_create", "organization_name", "organization_type"}:
+        from pathlib import Path
+        from application.organization.registry import OrganizationRegistry
+        from reliability.idempotency_store import JsonlIdempotencyStore
+        from runtime.handler_impl.domains.organization_settings_ops import organization_card
+
+        if not organization_idempotency_path or not str(body.get("business_id") or "").strip():
+            return send_tracked(body, effects, env, text="🏢 Выберите бизнес; реестр недоступен без подтверждённого контекста.",
+                                event_type=None, event_payload=None)
+        try:
+            registry = OrganizationRegistry(
+                event_store=event_store,
+                idempotency_store=JsonlIdempotencyStore(Path(organization_idempotency_path)),
+            )
+            text, markup = organization_card(
+                registry=registry, tenant_id=tenant_id,
+                business_id=required_str(body, "business_id"),
+                user_id=required_str(body, "user_id"), operation=op,
+                arg=arg, decision_id=env.decision.decision_id,
+            )
+        except (RuntimeError, ValueError, LookupError, OSError):
+            text, markup = ("🏢 Не удалось открыть или сохранить карточку. Проверьте формат команды и доступ к реестру.",
+                            {"inline_keyboard": [[{"text": "⬅️ Настройки", "callback_data": "settings:menu"}]]})
+        return send_tracked(body, effects, env, text=text, event_type=None, event_payload=None, reply_markup=markup)
     if op in {"notifications_show", "notifications_toggle", "notifications_level"}:
         from runtime.handler_impl.domains.notification_settings_ops import notification_preferences
 
