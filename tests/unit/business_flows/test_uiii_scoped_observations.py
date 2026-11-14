@@ -100,3 +100,36 @@ def test_boolean_event_version_never_accepted():
            "occurred_at": "2027-01-01T10:00:00Z"}
     with pytest.raises(ValueError, match="version"):
         xp.parse_event(json.dumps(raw).encode())
+
+
+def test_cockpit_reads_only_matching_business_and_owner():
+    from application.business_flows import cockpit as cp
+
+    connector = xp.provision(
+        xp.State(), product_key="lms", display_name="LMS",
+        secret_ref="env:XP_SECRET", business_id="business-a",
+    )
+    cid = connector["connector_id"]
+    rows = [
+        connector,
+        {"step": "xp_activated", "connector_id": cid, "business_id": "business-a"},
+        {"step": "xp_bound", "connector_id": cid, "business_id": "business-a",
+         "customer_ref": "ref-1", "customer_id": "customer-1"},
+    ]
+    st = xp.replay(rows, business_id="business-a")
+    obs = parsed("e1")
+    change, _ = xp.ingest_authenticated(
+        st, st.connectors[cid], obs,
+        fingerprint="fingerprint-1", received_at="2027-01-01T10:01:00+00:00",
+    )
+    rows.append(change)
+    owner = cp.Snapshot(external_product_facts=rows, business_id="business-a",
+                        now_ms=1_800_000_000_000)
+    shown, _ = cp.render(cp.parse("cpm:cust-time:customer-1"), owner, is_owner=True)
+    assert "Подтверждено" in shown and "LMS" in shown
+    other = cp.Snapshot(external_product_facts=rows, business_id="business-b",
+                        now_ms=1_800_000_000_000)
+    hidden, _ = cp.render(cp.parse("cpm:cust-time:customer-1"), other, is_owner=True)
+    assert "Подтверждено" not in hidden
+    denied, _ = cp.render(cp.parse("cpm:cust-time:customer-1"), owner, is_owner=False)
+    assert "Подтверждено" not in denied
