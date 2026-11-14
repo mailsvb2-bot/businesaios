@@ -7,13 +7,14 @@ from __future__ import annotations
 
 from runtime.messaging_policy_alert_subscriptions.settings_key import SETTING_KEY
 from runtime.messaging_policy_alert_subscriptions.settings_value_builder import canonical_alert_subscriptions_value
-from runtime.settings.event_store_gateway import build_event_store_settings_gateway
 
 
-def notification_preferences(*, event_store, tenant_id: str, user_id: str, operation: str) -> tuple[str, dict]:
+def notification_preferences(*, settings_gateway, tenant_id: str, user_id: str, operation: str) -> tuple[str, dict]:
     if operation not in {"notifications_show", "notifications_toggle", "notifications_level"}:
         raise ValueError("unsupported notification operation")
-    gateway = build_event_store_settings_gateway(event_store=event_store)
+    gateway = settings_gateway
+    if gateway is None:
+        raise RuntimeError("canonical_notification_settings_gateway_missing")
     level_order = ("info", "warn", "critical")
 
     def selected(value):
