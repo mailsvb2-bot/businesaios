@@ -73,7 +73,10 @@ def replay(payloads: list[dict[str, Any]], *, business_id: str = "", discover: b
         step, cid = p.get("step"), str(p.get("connector_id") or "")
         c = st.connectors.get(cid)
         if step == "xp_provisioned":
-            st.connectors[cid] = Connector(cid, p["product_key"], p["display_name"], p["secret_ref"], business_id=str(p.get("business_id") or ""))
+            st.connectors[cid] = Connector(
+                cid, p["product_key"], p["display_name"], p["secret_ref"],
+                business_id=str(p.get("business_id") or ""),
+            )
         elif step in ("xp_activated", "xp_disabled") and c:
             c.status = "active" if step == "xp_activated" else "disabled"
         elif step == "xp_bound" and c:
@@ -95,7 +98,9 @@ def _get(st: State, connector_id: str) -> Connector:
     return c
 
 
-def provision(st: State, *, product_key: str, display_name: str, secret_ref: str, business_id: str = "") -> dict[str, Any]:
+def provision(
+    st: State, *, product_key: str, display_name: str, secret_ref: str, business_id: str = ""
+) -> dict[str, Any]:
     """Donor ``provision_external_product_connector``: pending connector with a secret reference only."""
     key = str(product_key or "").strip().lower()
     if not re.fullmatch(r"[a-z][a-z0-9_]{1,63}", key):
