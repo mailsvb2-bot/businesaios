@@ -42,7 +42,7 @@ def wire_handlers(*, ctx, event_store, composer):
         behavior_graph_store=get_ctx_value(ctx, "behavior_graph_store"),
         marketing_llm=get_ctx_value(ctx, "marketing_llm"),
     )
-    register_ops_handlers(handlers=handlers, event_store=event_store, settings_gateway=get_ctx_value(ctx, "settings_gateway"))
+    register_ops_handlers(handlers=handlers, event_store=event_store, settings_gateway=get_ctx_value(ctx, "settings_gateway"), organization_idempotency_path=get_ctx_value(ctx, "organization_idempotency_path"))
 
     from runtime.boot.actions_registry import handler_actions
 
