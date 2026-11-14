@@ -65,8 +65,7 @@ def validated_llm_usage(usage: Any) -> tuple[int, int, int] | None:
 
 
 def has_durable_budget_store(event_store: Any) -> bool:
-    return all(callable(getattr(event_store, name, None)) for name in
-               ("sum_event_payload_int", "iter_events", "get_setting", "compare_and_set_setting", "append_event"))
+    return all(callable(getattr(event_store, name, None)) for name in ("sum_event_payload_int", "iter_events", "get_setting", "compare_and_set_setting", "append_event"))
 
 
 class EventStoreDailyTokenBudget:
@@ -82,16 +81,14 @@ class EventStoreDailyTokenBudget:
         fn = getattr(self._es, "sum_event_payload_int", None)
         if callable(fn):
             def total(who):
-                return int(fn(tenant_id=str(tenant_id), event_type=LLM_COMPLETED, field="total_tokens",
-                              start_ms=start_ms, end_ms=end_ms, user_id=who))
+                return int(fn(tenant_id=str(tenant_id), event_type=LLM_COMPLETED, field="total_tokens", start_ms=start_ms, end_ms=end_ms, user_id=who))
         else:
             it = getattr(self._es, "iter_events", None)
             if not callable(it):
                 raise RuntimeError("LLM_BUDGET_EVENT_AGGREGATOR_UNAVAILABLE")
             def total(who):
                 count = 0
-                for event in it(tenant_id=str(tenant_id), start_ms=start_ms, end_ms=end_ms,
-                                user_id=who, event_type=LLM_COMPLETED):
+                for event in it(tenant_id=str(tenant_id), start_ms=start_ms, end_ms=end_ms, user_id=who, event_type=LLM_COMPLETED):
                     try:
                         value = (event.get("payload") or {}).get("total_tokens")
                         if type(value) is not int or value <= 0:
@@ -132,8 +129,7 @@ class EventStoreDailyTokenBudget:
         except (TypeError, ValueError, AttributeError):
             return False
         remaining = {rid: row for rid, row in current["pending"].items() if (str(row["user_id"]), rid) not in completed}
-        return len(remaining) < len(current["pending"]) and self._es.compare_and_set_setting(
-            tenant_id=str(tenant_id), key=f"llm:pending:v1:{day}", expected=current, value={"pending": remaining})
+        return len(remaining) < len(current["pending"]) and self._es.compare_and_set_setting(tenant_id=str(tenant_id), key=f"llm:pending:v1:{day}", expected=current, value={"pending": remaining})
 
     def reserve(self, *, tenant_id: str, user_id: str, tokens: int, request_id: str) -> str | None:
         """Atomic headroom reservation; cross-day claim prevents provider replay."""
@@ -153,14 +149,12 @@ class EventStoreDailyTokenBudget:
             spent_tenant, spent_user = self._sum(tenant_id=tenant_id, user_id=user_id)
             try:
                 reserved_tenant = sum(max(0, int(row["tokens"])) for row in pending.values())
-                reserved_user = sum(max(0, int(row["tokens"])) for row in pending.values()
-                                    if str(row["user_id"]) == str(user_id))
+                reserved_user = sum(max(0, int(row["tokens"])) for row in pending.values() if str(row["user_id"]) == str(user_id))
             except (KeyError, TypeError, ValueError):
                 return None
             if self._day() != day:
                 return None
-            if (spent_tenant + reserved_tenant + tokens > self._caps.tenant_tokens_per_day
-                    or spent_user + reserved_user + tokens > self._caps.user_tokens_per_day):
+            if (spent_tenant + reserved_tenant + tokens > self._caps.tenant_tokens_per_day or spent_user + reserved_user + tokens > self._caps.user_tokens_per_day):
                 if self._reconcile_completed(tenant_id=tenant_id, day=day, current=current):
                     continue
                 return None
@@ -191,8 +185,7 @@ class EventStoreDailyTokenBudget:
             pending = current.get("pending", {})
             if not isinstance(pending, dict) or request_id not in pending:
                 return False
-            if self._es.compare_and_set_setting(
-                tenant_id=str(tenant_id), key=key, expected=current,
-                value={"pending": {rid: row for rid, row in pending.items() if rid != request_id}}):
+            remaining = {rid: row for rid, row in pending.items() if rid != request_id}
+            if self._es.compare_and_set_setting(tenant_id=str(tenant_id), key=key, expected=current, value={"pending": remaining}):
                 return True
         return False
