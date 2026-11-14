@@ -174,3 +174,42 @@ def test_unbound_customer_reference_never_joins_another_reference():
     st = xp.replay(rows, business_id="b1")
     assert len(xp.latest_observations(st)) == 2
     assert xp.timeline_rows(st, customer_id="customer-1") == []
+
+
+def test_signed_uiii_jws_enters_existing_decision_path_only_when_bound(flow, monkeypatch):
+    from dataclasses import replace
+
+    from runtime.integration import external_product_ingress as ingress
+    from tests.unit.interfaces.test_uiii_wire import NOW as PROOF_NOW, fixture as proof_fixture
+
+    monkeypatch.setenv("XP_SECRET", SECRET)
+    rows, cid = state("business-1")
+    for row in rows:
+        flow.store.events.append({
+            "tenant_id": "t1", "user_id": "owner", "event_type": "business_admin@v1",
+            "timestamp_ms": 1, "payload": row,
+        })
+    context, keys, _, sign = proof_fixture()
+    context = replace(
+        context, tenant_id="t1", business_id="business-1",
+        connection_id=cid, customer_ref="person-1",
+    )
+    captured = []
+    monkeypatch.setattr(
+        ingress, "execute_runtime_decision",
+        lambda *, issuer, executor, state: captured.append(state),
+    )
+    kwargs = dict(
+        core=None, executor=None, event_store=flow.store, tenant_id="t1",
+        owner_user_id="owner", connector_id=cid, context=context,
+        verified_keys=keys, now_ms=int(PROOF_NOW.timestamp() * 1000),
+    )
+    assert ingress.ingest_uiii_proof(compact_jws=sign(), **kwargs) == (202, "accepted")
+    assert len(captured) == 1 and captured[0].session["xp_business_id"] == "business-1"
+    assert ingress.ingest_uiii_proof(
+        compact_jws=sign(), **{**kwargs, "context": replace(context, business_id="foreign")}
+    )[0] == 403
+    assert ingress.ingest_uiii_proof(
+        compact_jws=sign(), **{**kwargs, "verified_keys": {}}
+    ) == (403, "unknown_or_revoked_key")
+    assert len(captured) == 1
