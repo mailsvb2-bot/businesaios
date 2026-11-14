@@ -509,7 +509,7 @@ def handle_business_ops_summary(payload, effects, env, *, event_store, now_ms: i
     return send_tracked(body, effects, env, text=text, event_type=None, event_payload=None)
 
 
-def handle_business_admin(payload, effects, env, *, event_store, now_ms: int | None = None):
+def handle_business_admin(payload, effects, env, *, event_store, settings_gateway=None, now_ms: int | None = None):
     """Owner admin ops (settings, autopilot, prices, recorded payments/refunds, approvals)."""
     from application.business_flows import admin as ad
 
@@ -528,7 +528,7 @@ def handle_business_admin(payload, effects, env, *, event_store, now_ms: int | N
 
         try:
             text, markup = notification_preferences(
-                event_store=event_store, tenant_id=tenant_id,
+                settings_gateway=settings_gateway, tenant_id=tenant_id,
                 user_id=required_str(body, "user_id"), operation=op,
             )
         except (RuntimeError, ValueError):
