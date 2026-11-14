@@ -6,8 +6,7 @@ from core.llm.budget import BudgetCaps, EventStoreDailyTokenBudget
 
 
 def corrupt_store():
-    store = Mock()
-    store.sum_event_payload_int = None  # Exercise the actual iterator fallback, not Mock's synthetic aggregator.
+    store = Mock(sum_event_payload_int=None)  # Force the real iterator fallback.
     store.iter_events.return_value = [{"user_id": "u", "payload": {"request_id": "req", "total_tokens": "not-a-number"}}]
     store.get_setting.return_value = {"pending": {"req": {"user_id": "u", "tokens": 10}}}
     return store
