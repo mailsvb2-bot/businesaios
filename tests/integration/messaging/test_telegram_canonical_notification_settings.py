@@ -45,7 +45,7 @@ def test_toggle_persists_and_reopens_without_touching_other_user():
                                                    operation="notifications_show")[0]
     assert "выключены" in notification_preferences(settings_gateway=gateway, tenant_id="t1", user_id="owner",
                                                      operation="notifications_toggle")[0]
-    assert "info" in notification_preferences(settings_gateway=gateway, tenant_id="t1", user_id="owner",
+    assert "critical" in notification_preferences(settings_gateway=gateway, tenant_id="t1", user_id="owner",
                                               operation="notifications_level")[0]
 
 
