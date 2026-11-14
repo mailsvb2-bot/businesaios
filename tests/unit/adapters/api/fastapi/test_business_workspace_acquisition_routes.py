@@ -64,11 +64,11 @@ def test_acquisition_plan_uses_session_scope_and_canonical_solver(monkeypatch) -
 
     monkeypatch.setattr(acquisition_routes, 'json_body', fake_json_body)
     result = asyncio.run(_route(router)(object()))
-    assert result['tenant_id'] == 'tenant-session'
-    assert result['business_id'] == 'business-session'
-    assert result['assumption_source'] == 'owner_input'
-    assert result['calculation_only'] is True
+    assert (result['tenant_id'], result['business_id']) == ('tenant-session', 'business-session')
+    assert (result['assumption_source'], result['calculation_only']) == ('owner_input', True)
     assert result['write_actions_enabled'] is False
+    assert result['ad_launch_ready'] is False
+    assert result['ad_provider_truth']['yandex_direct']['production_ready'] is False
     assert result['plan']['feasible'] is True
     assert result['plan']['achievable_customers'] >= 10
     assert result['economics']['overall_conversion_rate'] == 0.5
