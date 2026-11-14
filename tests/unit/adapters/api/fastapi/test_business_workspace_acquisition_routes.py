@@ -67,7 +67,7 @@ def test_acquisition_plan_uses_session_scope_and_canonical_solver(monkeypatch) -
     assert (result['tenant_id'], result['business_id']) == ('tenant-session', 'business-session')
     assert (result['assumption_source'], result['calculation_only']) == ('owner_input', True)
     assert result['write_actions_enabled'] is False
-    assert result['ad_launch_ready'] is False
+    assert result['ad_provider_capability_ready'] is False
     assert result['ad_provider_truth']['yandex_direct']['production_ready'] is False
     assert result['plan']['feasible'] is True
     assert result['plan']['achievable_customers'] >= 10
