@@ -9,17 +9,15 @@ from fastapi import APIRouter, HTTPException, Request, status
 from acquisition import evaluate_acquisition_payload
 from adapters.api.fastapi.router_support import business_owner_scope, json_body
 from presentation import build_acquisition_view_model
+from interfaces.ads.registry import CONNECTORS
 
 CANON_BUSINESS_WORKSPACE_ACQUISITION_ROUTES = True
 
 
 def _json_safe(value: Any) -> Any:
-    if isinstance(value, float) and not math.isfinite(value):
-        return None
-    if isinstance(value, dict):
-        return {key: _json_safe(item) for key, item in value.items()}
-    if isinstance(value, (list, tuple)):
-        return [_json_safe(item) for item in value]
+    if isinstance(value, float) and not math.isfinite(value): return None
+    if isinstance(value, dict): return {key: _json_safe(item) for key, item in value.items()}
+    if isinstance(value, (list, tuple)): return [_json_safe(item) for item in value]
     return value
 
 
@@ -40,6 +38,8 @@ def register_business_workspace_acquisition_routes(*, router: APIRouter, auth_bu
             'assumption_source': 'owner_input',
             'calculation_only': True,
             'write_actions_enabled': False,
+            'ad_provider_truth': {name: {'production_ready': bool(row['production_ready']), 'write': bool(row['write']), 'verify': bool(row['verify'])} for name, row in CONNECTORS.items()},
+            'ad_launch_ready': any(row['production_ready'] and row['write'] and row['verify'] for row in CONNECTORS.values()),
             'plan': asdict(view),
             'economics': {
                 'feasibility_score': result.feasibility_score,
