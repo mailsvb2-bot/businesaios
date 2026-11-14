@@ -28,7 +28,10 @@ def parsed(event_id, **changes):
         "version": 1, "event_id": event_id, "type": "evidence",
         "occurred_at": "2027-01-01T10:00:00Z",
         "customer_ref": "ref-1",
-        "observation": {**observation(), **changes},
+        "observation": {**observation(), **{
+            ("supersedes_external_event_id" if k == "previous" else k): v
+            for k, v in changes.items()
+        }},
     }).encode())
 
 
