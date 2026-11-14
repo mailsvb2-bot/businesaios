@@ -78,24 +78,19 @@ class EventStoreDailyTokenBudget:
 
     def _sum(self, *, tenant_id: str, user_id: str) -> tuple[int, int]:
         start_ms, end_ms = _utc_day_bounds_ms()
-        fn = getattr(self._es, "sum_event_payload_int", None)
-        if callable(fn):
+        if callable(fn := getattr(self._es, "sum_event_payload_int", None)):
             def total(who):
                 return int(fn(tenant_id=str(tenant_id), event_type=LLM_COMPLETED, field="total_tokens", start_ms=start_ms, end_ms=end_ms, user_id=who))
         else:
-            it = getattr(self._es, "iter_events", None)
-            if not callable(it):
+            if not callable(it := getattr(self._es, "iter_events", None)):
                 raise RuntimeError("LLM_BUDGET_EVENT_AGGREGATOR_UNAVAILABLE")
             def total(who):
                 count = 0
                 for event in it(tenant_id=str(tenant_id), start_ms=start_ms, end_ms=end_ms, user_id=who, event_type=LLM_COMPLETED):
-                    try:
-                        value = (event.get("payload") or {}).get("total_tokens")
-                        if type(value) is not int or value <= 0:
-                            raise RuntimeError("LLM_BUDGET_CORRUPT_COMPLETION")
-                        count += value
-                    except (TypeError, ValueError, AttributeError) as exc:
-                        raise RuntimeError("LLM_BUDGET_CORRUPT_COMPLETION") from exc
+                    value = (event.get("payload") or {}).get("total_tokens")
+                    if type(value) is not int or value <= 0:
+                        raise RuntimeError("LLM_BUDGET_CORRUPT_COMPLETION")
+                    count += value
                 return count
         return total(None), total(str(user_id))
 
