@@ -27,7 +27,7 @@ def preauthenticate(event_store, *, tenant_id: str, connector_id: str, raw_body:
     """``None`` when authentic, else the rejection code. Never writes."""
     if len(raw_body) > MAX_BODY:
         return "external_product_body_too_large"
-    st = xp.replay(flow_payloads(event_store, tenant_id=tenant_id, event_type="business_admin@v1"))
+    st = xp.replay(flow_payloads(event_store, tenant_id=tenant_id, event_type="business_admin@v1"), discover=True)
     c = st.connectors.get(connector_id)
     secret = c and resolve_secret_ref(c.secret_ref, tenant_id=tenant_id, connector_id=connector_id, vault=vault)
     h = {str(k).lower(): str(v) for k, v in headers.items()}
@@ -41,14 +41,14 @@ def preauthenticate(event_store, *, tenant_id: str, connector_id: str, raw_body:
 
 
 def world_state(*, tenant_id: str, owner_user_id: str, connector_id: str, raw_body: bytes,
-                headers: dict[str, str], now_ms: int):  # fmt: skip
+                headers: dict[str, str], now_ms: int, business_id: str = ""):  # fmt: skip
     base = messaging_event_to_world_state(
         MessagingIngressEvent(channel="telegram", user_id=owner_user_id, chat_id=owner_user_id, tenant_id=tenant_id,
                               timestamp_ms=now_ms)  # fmt: skip
     )
     h = {str(k).lower(): str(v)[:512] for k, v in headers.items() if str(k).lower() in _HEADERS}
     session = {**dict(base.session), "source": SOURCE, "connector_id": connector_id[:64],
-               "raw_body": raw_body.decode("utf-8", errors="replace"), "headers": h}  # fmt: skip
+               "raw_body": raw_body.decode("utf-8", errors="strict"), "headers": h, "xp_business_id": business_id}  # fmt: skip
     return replace(base, session=session)
 
 
@@ -63,8 +63,18 @@ def ingest(*, core, executor, event_store, tenant_id: str, owner_user_id: str, c
                                headers=headers, now_ms=now, vault=vault)  # fmt: skip
     if rejected:
         return 403, rejected
+    connectors = xp.replay(
+        flow_payloads(event_store, tenant_id=tenant_id, event_type="business_admin@v1"), discover=True
+    )
+    connector = connectors.connectors.get(cid)
+    if connector is None:
+        return 403, "external_product_connector_inactive"
+    try:
+        xp.parse_event(raw_body)
+    except (ValueError, UnicodeError):
+        return 422, "external_product_schema_invalid"
     state = world_state(tenant_id=tenant_id, owner_user_id=owner_user_id, connector_id=cid, raw_body=raw_body,
-                        headers=headers, now_ms=now)  # fmt: skip
+                        headers=headers, now_ms=now, business_id=connector.business_id)  # fmt: skip
     execute_runtime_decision(issuer=core, executor=executor, state=state)
     return 202, "accepted"
 
