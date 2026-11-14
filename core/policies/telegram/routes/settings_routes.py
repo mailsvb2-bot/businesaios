@@ -10,7 +10,6 @@ from core.ux.telegram_keyboards import kb_back_main, kb_settings_menu
 # business_ops_summary@v1. No secondary settings store or execution path.
 _CANONICAL_SCREENS = {
     "cp:settings:organization": "cpm:manage",
-    "cp:settings:notifications": "cpm:automation",
     "cp:settings:access": "cpm:team:0",
 }
 _LEGACY_CALLBACK_PREFIXES = ("settings:time:", "settings:ref", "state:", "weather:", "demo")
@@ -20,6 +19,18 @@ _LEGACY_COMMANDS = {"/time_work", "/time_home"}
 def handle_settings_routes(ctx: TelegramCtx, *, user_id: str, bot_username: str, pm) -> ProposedAction | None:
     if ctx.callback_data == CB_SETTINGS_MENU:
         return pm(text="⚙️ Настройки ClientPlatform\n\nВыберите раздел:", reply_markup=kb_settings_menu())
+    notification_ops = {
+        "cp:settings:notifications": "notifications_show",
+        "cp:settings:notifications:toggle": "notifications_toggle",
+        "cp:settings:notifications:level": "notifications_level",
+    }
+    if ctx.callback_data in notification_ops:
+        if not ctx.is_admin:
+            return pm(text="Настройки служебных оповещений доступны администратору бизнеса.", reply_markup=kb_back_main())
+        return propose("business_admin@v1", {
+            "user_id": user_id, "op": notification_ops[ctx.callback_data], "arg": "",
+            **({"callback_query_id": ctx.callback_query_id} if ctx.callback_query_id else {}),
+        })
     if ctx.callback_data in _CANONICAL_SCREENS:
         if not ctx.is_admin:
             return pm(text="Управление доступно только администратору.", reply_markup=kb_back_main())
