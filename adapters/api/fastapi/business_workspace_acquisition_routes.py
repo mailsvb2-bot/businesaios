@@ -8,8 +8,8 @@ from fastapi import APIRouter, HTTPException, Request, status
 
 from acquisition import evaluate_acquisition_payload
 from adapters.api.fastapi.router_support import business_owner_scope, json_body
-from presentation import build_acquisition_view_model
 from interfaces.ads.registry import CONNECTORS
+from presentation import build_acquisition_view_model
 
 CANON_BUSINESS_WORKSPACE_ACQUISITION_ROUTES = True
 
