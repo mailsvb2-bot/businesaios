@@ -15,9 +15,12 @@ CANON_BUSINESS_WORKSPACE_ACQUISITION_ROUTES = True
 
 
 def _json_safe(value: Any) -> Any:
-    if isinstance(value, float) and not math.isfinite(value): return None
-    if isinstance(value, dict): return {key: _json_safe(item) for key, item in value.items()}
-    if isinstance(value, (list, tuple)): return [_json_safe(item) for item in value]
+    if isinstance(value, float) and not math.isfinite(value):
+        return None
+    if isinstance(value, dict):
+        return {key: _json_safe(item) for key, item in value.items()}
+    if isinstance(value, (list, tuple)):
+        return [_json_safe(item) for item in value]
     return value
 
 
@@ -32,11 +35,8 @@ def register_business_workspace_acquisition_routes(*, router: APIRouter, auth_bu
         except (TypeError, ValueError, OverflowError) as exc:
             raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)) from exc
         return _json_safe({
-            'ok': True,
-            'tenant_id': tenant_id,
-            'business_id': business_id,
-            'assumption_source': 'owner_input',
-            'calculation_only': True,
+            'ok': True, 'tenant_id': tenant_id, 'business_id': business_id,
+            'assumption_source': 'owner_input', 'calculation_only': True,
             'write_actions_enabled': False,
             'ad_provider_truth': {name: {'production_ready': bool(row['production_ready']), 'write': bool(row['write']), 'verify': bool(row['verify'])} for name, row in CONNECTORS.items()},
             'ad_launch_ready': any(row['production_ready'] and row['write'] and row['verify'] for row in CONNECTORS.values()),
