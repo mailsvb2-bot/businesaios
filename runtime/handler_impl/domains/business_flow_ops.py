@@ -523,6 +523,18 @@ def handle_business_admin(payload, effects, env, *, event_store, now_ms: int | N
             body, effects, env, text=text, event_type="business_admin@v1" if change else None, event_payload=change
         )
 
+    if op in {"notifications_show", "notifications_toggle", "notifications_level"}:
+        from runtime.handler_impl.domains.notification_settings_ops import notification_preferences
+
+        try:
+            text, markup = notification_preferences(
+                event_store=event_store, tenant_id=tenant_id,
+                user_id=required_str(body, "user_id"), operation=op,
+            )
+        except (RuntimeError, ValueError):
+            text, markup = "🔔 Настройки не сохранены. Попробуйте ещё раз.", None
+        return send_tracked(body, effects, env, text=text, event_type=None,
+                            event_payload=None, reply_markup=markup)
     if op in XP_OPS:
         try:
             facts_ = flow_payloads(event_store, tenant_id=tenant_id, event_type="business_admin@v1")
