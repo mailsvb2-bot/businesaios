@@ -39,7 +39,7 @@ def register_business_workspace_acquisition_routes(*, router: APIRouter, auth_bu
             'assumption_source': 'owner_input', 'calculation_only': True,
             'write_actions_enabled': False,
             'ad_provider_truth': {name: {'production_ready': bool(row['production_ready']), 'write': bool(row['write']), 'verify': bool(row['verify'])} for name, row in CONNECTORS.items()},
-            'ad_launch_ready': any(row['production_ready'] and row['write'] and row['verify'] for row in CONNECTORS.values()),
+            'ad_provider_capability_ready': any(row['production_ready'] and row['write'] and row['verify'] for row in CONNECTORS.values()),
             'plan': asdict(view),
             'economics': {
                 'feasibility_score': result.feasibility_score,
