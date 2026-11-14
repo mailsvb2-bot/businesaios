@@ -480,9 +480,17 @@ def _external_products(done, op, arg, facts_, *, tenant_id, body, now_ms, vault=
     from datetime import UTC, datetime
 
     from application.business_flows import external_products as xp
+    from runtime.execution.context import current_execution_business_id
     from runtime.integration.external_product_secrets import resolve_secret_ref
 
-    st = xp.replay(facts_)
+    business_id = current_execution_business_id()
+    st = xp.replay(facts_, business_id=business_id)
+    deliver = done
+
+    def done(text, change=None):
+        if change is not None and business_id:
+            change = {**change, "business_id": business_id}
+        return deliver(text, change)
     parts = arg.split()
 
     def secret(cid):
@@ -495,13 +503,18 @@ def _external_products(done, op, arg, facts_, *, tenant_id, body, now_ms, vault=
         return parts
 
     if op == "xp_list":
-        rows = [f"• {c.connector_id} · {c.product_key} · {c.status} · {c.display_name}" for c in st.connectors.values()]
+        rows = [
+            f"• {c.connector_id} · {c.product_key} · {c.status} · {c.display_name} · scope={c.business_id or 'legacy'}"
+            for c in st.connectors.values()
+        ]
         return done(
             "🔌 Внешние продукты\n\n" + ("\n".join(rows) or "Коннекторов нет. /xp_add key env:SECRET_NAME Название")
         )
     if op == "xp_add":
         p = need(2, "/xp_add key env:NAME|vault:NAME [название]")
-        ch = xp.provision(st, product_key=p[0], display_name=" ".join(p[2:]) or p[0], secret_ref=p[1])
+        ch = xp.provision(
+            st, product_key=p[0], display_name=" ".join(p[2:]) or p[0], secret_ref=p[1], business_id=business_id
+        )
         return done(
             f"🔌 Коннектор {ch['connector_id']} создан (ожидает активации: /xp_activate {ch['connector_id']})", ch
         )
