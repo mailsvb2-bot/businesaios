@@ -79,4 +79,56 @@ def ingest(*, core, executor, event_store, tenant_id: str, owner_user_id: str, c
     return 202, "accepted"
 
 
-__all__ = ["MAX_BODY", "SOURCE", "ingest", "preauthenticate", "world_state"]
+def ingest_uiii_proof(
+    *, core, executor, event_store, tenant_id: str, owner_user_id: str,
+    connector_id: str, compact_jws: str, context, verified_keys,
+    now_ms: int | None = None, vault=None,
+) -> tuple[int, str]:
+    """Trusted internal bridge: pinned JWS proof -> existing signed XP ingress.
+
+    Caller must supply a server-authorized MappingContext and canonical pinned
+    key registry; no public client may supply either. This function creates no
+    new decision or store and fails closed on unbound customer/connection scope.
+    """
+    from interfaces.uiii.signals import (
+        SignalRejected, to_external_product_event, verify_signal, xp_headers,
+    )
+
+    now = int(now_ms if now_ms is not None else time.time() * 1000)
+    when = datetime.fromtimestamp(now / 1000, UTC)
+    if tenant_id != context.tenant_id or connector_id != context.connection_id:
+        return 403, "uiii_connection_scope_mismatch"
+    st = xp.replay(
+        flow_payloads(event_store, tenant_id=tenant_id, event_type="business_admin@v1"),
+        discover=True,
+    )
+    connector = st.connectors.get(connector_id)
+    if (
+        connector is None or connector.status != "active"
+        or connector.business_id != context.business_id
+        or not connector.bindings.get(context.customer_ref)
+    ):
+        return 403, "uiii_customer_or_business_binding_missing"
+    secret = resolve_secret_ref(
+        connector.secret_ref, tenant_id=tenant_id,
+        connector_id=connector_id, vault=vault,
+    )
+    if not secret or len(secret.encode("utf-8")) < xp.MIN_SECRET_BYTES:
+        return 503, "uiii_connector_secret_unavailable"
+    try:
+        verified = verify_signal(compact_jws, context=context, keys=verified_keys, now=when)
+        body = to_external_product_event(
+            verified, context=context, keys=verified_keys, now=when,
+        )
+        headers = xp_headers(body, secret=secret.encode("utf-8"), now=when)
+    except SignalRejected as exc:
+        return 403, str(exc)
+    return ingest(
+        core=core, executor=executor, event_store=event_store,
+        tenant_id=tenant_id, owner_user_id=owner_user_id,
+        connector_id=connector_id, raw_body=body, headers=headers,
+        now_ms=now, vault=vault,
+    )
+
+
+__all__ = ["MAX_BODY", "SOURCE", "ingest", "ingest_uiii_proof", "preauthenticate", "world_state"]
