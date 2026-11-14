@@ -200,7 +200,8 @@ def handle_business_flow_routes(ctx: TelegramCtx, *, user_id: str) -> ProposedAc
         return propose("business_admin@v1", {"user_id": user_id, "op": "xp_ingest", "arg": "",
                                              "connector_id": str(session.get("connector_id") or "")[:64],
                                              "raw_body": str(session.get("raw_body") or "")[:65536],
-                                             "headers": dict(session.get("headers") or {})})  # fmt: skip
+                                             "headers": dict(session.get("headers") or {}),
+                                             **({"business_id": session["xp_business_id"]} if session.get("xp_business_id") else {})})  # fmt: skip
     if session.get("source") == "managed_bot_update":  # Bot API managed_bot update, not user text
         mb = session.get("managed_bot") or {}
         arg = f"{str(mb.get('bot_id') or '')[:20]} {str(mb.get('username') or '')[:64]}"
