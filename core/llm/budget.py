@@ -93,9 +93,12 @@ class EventStoreDailyTokenBudget:
                 for event in it(tenant_id=str(tenant_id), start_ms=start_ms, end_ms=end_ms,
                                 user_id=who, event_type=LLM_COMPLETED):
                     try:
-                        count += int((event.get("payload") or {}).get("total_tokens") or 0)
-                    except (TypeError, ValueError, AttributeError):
-                        continue
+                        value = (event.get("payload") or {}).get("total_tokens")
+                        if type(value) is not int or value <= 0:
+                            raise RuntimeError("LLM_BUDGET_CORRUPT_COMPLETION")
+                        count += value
+                    except (TypeError, ValueError, AttributeError) as exc:
+                        raise RuntimeError("LLM_BUDGET_CORRUPT_COMPLETION") from exc
                 return count
         return total(None), total(str(user_id))
 
@@ -118,9 +121,16 @@ class EventStoreDailyTokenBudget:
             start, end = _utc_day_bounds_ms(int(datetime.combine(reservation_day, datetime.min.time(), tzinfo=timezone.utc).timestamp() * 1000))
         except (TypeError, ValueError, OverflowError):
             return False
-        completed = {(str(e.get("user_id") or ""), str((e.get("payload") or {}).get("request_id") or ""))
-                     for e in it(tenant_id=str(tenant_id), start_ms=start, end_ms=end, event_type=LLM_COMPLETED)
-                     if int((e.get("payload") or {}).get("total_tokens") or 0) > 0}
+        completed = set()
+        try:
+            for event in it(tenant_id=str(tenant_id), start_ms=start, end_ms=end, event_type=LLM_COMPLETED):
+                payload = event.get("payload") or {}
+                tokens = payload.get("total_tokens")
+                if type(tokens) is not int or tokens <= 0:
+                    return False  # Never reclaim reservations on ambiguous provider spend.
+                completed.add((str(event.get("user_id") or ""), str(payload.get("request_id") or "")))
+        except (TypeError, ValueError, AttributeError):
+            return False
         remaining = {rid: row for rid, row in current["pending"].items() if (str(row["user_id"]), rid) not in completed}
         return len(remaining) < len(current["pending"]) and self._es.compare_and_set_setting(
             tenant_id=str(tenant_id), key=f"llm:pending:v1:{day}", expected=current, value={"pending": remaining})
