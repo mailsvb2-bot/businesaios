@@ -244,9 +244,13 @@ def _execute_update(
 ) -> Any:
     raw_update_id = update.get("update_id")
     state = _world_state_from_update(update, transport=transport)
+    session = dict(state.session or {})
+    customer_bot = session.get("customer_bot")
+    bot_id = str(customer_bot.get("bot_id") or "primary") if isinstance(customer_bot, dict) else "primary"
+    chat_id = str(session.get("chat_id") or session.get("messaging_chat_id") or session.get("telegram_chat_id") or "")
     with verified_inbound_reply_scope(
         tenant_id=str(state.tenant_id), channel="telegram", user_id=str(state.user_id),
-        update_id=raw_update_id, chat_id=str((state.session or {}).get("messaging_chat_id") or ""),
+        update_id=raw_update_id, chat_id=chat_id, bot_id=bot_id,
     ):
         result = execute_runtime_decision(issuer=core, executor=executor, state=state)
     _append_event(
@@ -264,9 +268,13 @@ def _execute_update(
 def _customer_dispatch(*, core: Any, executor: Any, event_log: Any):
     def dispatch(update: dict[str, Any], route: Any) -> None:
         state = _world_state_from_update(update, transport="customer_bot", customer_route=route)
+        session = dict(state.session or {})
+        customer_bot = session.get("customer_bot")
+        bot_id = str(route.external_bot_id or (customer_bot.get("bot_id") if isinstance(customer_bot, dict) else "") or "primary")
+        chat_id = str(session.get("chat_id") or session.get("messaging_chat_id") or session.get("telegram_chat_id") or "")
         with verified_inbound_reply_scope(
             tenant_id=str(state.tenant_id), channel="telegram", user_id=str(state.user_id),
-            update_id=update.get("update_id"), chat_id=str((state.session or {}).get("messaging_chat_id") or ""),
+            update_id=update.get("update_id"), chat_id=chat_id, bot_id=bot_id,
         ):
             result = execute_runtime_decision(issuer=core, executor=executor, state=state)
         _append_event(event_log, event_type="customer_bot_update_executed",
@@ -307,8 +315,8 @@ def _run_longpoll(
                     raise RuntimeError("telegram_update_outcome_unconfirmed")
                 inbox.complete(update_id)
             except Exception as exc:
-                inbox.failed(update_id, exc)
-                _LOG.exception("telegram update %s retained for durable retry", update_id)
+                status = inbox.failed(update_id, exc)
+                _LOG.exception("telegram update %s retained in durable inbox status=%s", update_id, status)
 
 
     _append_event(
@@ -319,7 +327,13 @@ def _run_longpoll(
     _LOG.info("telegram long polling started (durable ingress)")
 
     # Recover pending work even when Telegram no longer returns old updates.
+    backlog = inbox.backlog_counts()
+    _LOG.info("telegram inbox recovery started pending=%d dead_letter=%d",
+              backlog["pending"], backlog["dead_letter"])
     replay_pending()
+    backlog = inbox.backlog_counts()
+    _LOG.info("telegram inbox recovery finished pending=%d dead_letter=%d",
+              backlog["pending"], backlog["dead_letter"])
     while True:
         try:
             payload: dict[str, Any] = {"timeout": poll_timeout_s}
