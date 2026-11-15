@@ -4,7 +4,7 @@ from core.llm import MockLLMClient
 from core.llm.contracts import LLMResponse, LLMUsage
 from core.marketing.llm_composer import LLMComposerConfig, MarketingLLMComposer
 from core.marketing.llm_prompting import MarketingLLMInputs
-from core.telemetry.event_types import LLM_COMPLETED
+from core.telemetry.event_types import LLM_COMPLETED, LLM_REQUESTED
 from runtime.platform.event_store.memory_event_store import MemoryEventStore
 
 _VALID = "Хочешь продолжить? Есть «Сеанс» за 990₽. Нажми «Открыть»."
@@ -118,6 +118,16 @@ def test_event_store_budget_counts_one_provider_completion_after_rejected_text()
     assert store.sum_event_payload_int(
         tenant_id="tenant", event_type=LLM_COMPLETED, field="total_tokens", user_id="user",
     ) == 7
+    completed = list(store.iter_events(tenant_id="tenant", event_type=LLM_COMPLETED))
+    assert len(completed) == 1
+    payload = completed[0]["payload"]
+    assert payload["provider"] == composer._cfg.provider
+    assert payload["task_type"] == "marketing_message"
+    assert payload["channel"] == "telegram"
+    assert payload["locale"] == "ru"
+    assert payload["prompt_version"]
+    assert len(payload["prompt_hash"]) == 64
+    assert store.count_events(tenant_id="tenant", event_type=LLM_REQUESTED) == 1
     assert composer._runtime.budget.can_spend(
         tenant_id="tenant", user_id="user", tokens=cfg.budget.user_tokens_per_day - 7,
     )
