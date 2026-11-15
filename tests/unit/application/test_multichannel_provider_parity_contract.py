@@ -171,7 +171,7 @@ def test_provider_decoder_never_promotes_chat_recipient_to_sender() -> None:
 
 
 def test_web_chat_session_identity_is_explicit_not_recipient_fallback() -> None:
-    payload = {'session_id': 'session-1', 'chat_id': 'room-1', 'message': 'hello'}
+    payload = {'session_id': 'session-1', 'chat_id': 'room-1', 'text': 'hello'}
     ingress = resolve_provider_webhook_messaging_ingress(
         provider=provider_map()['generic_website'],
         normalized_payload=payload,
