@@ -107,7 +107,7 @@ def record_allowed_action(*, action: str, payload: Any) -> None:
     default_cost = float(getattr(spec, "default_estimated_cost", 0.0) or 0.0)
     estimated_cost = float(data.get("estimated_cost", default_cost) or default_cost)
     tenant_id = str(data.get("tenant_id") or "unknown")
-    idempotency_key = verified_telegram_idempotency_key(data)
+    idempotency_key = verified_telegram_idempotency_key(action, data)
     record_once = getattr(runtime.profile.action_budget_ledger, "record_once", None)
     if idempotency_key and callable(record_once):
         if not record_once(tenant_id, idempotency_key=idempotency_key,
