@@ -4,7 +4,7 @@ from dataclasses import dataclass, field
 from typing import Any
 
 from config.marketing_llm_policy import DEFAULT_MARKETING_LLM_POLICY, MarketingLLMPolicy
-from core.llm import AnthropicClient, GigaChatClient, MockLLMClient, OpenAICompatClient, YandexGPTClient
+from core.llm import MockLLMClient
 from core.llm.budget import BudgetCaps, EventStoreDailyTokenBudget
 from core.llm.circuit import CircuitConfig
 from core.llm.contracts import LLMClient
