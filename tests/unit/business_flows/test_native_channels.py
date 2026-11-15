@@ -103,7 +103,7 @@ def test_vk_lifecycle_lease_failure_and_inbound() -> None:
     conf = json.dumps({"type": "confirmation", "group_id": 42}).encode()
     assert rt.response_body(provider=vk, **SC, body=conf) == "abc123"
     bad = json.dumps({"type": "message_new", "secret": "x"}).encode()
-    good = json.dumps({"type": "message_new", "secret": secret}).encode()
+    good = json.dumps({"type": "message_new", "group_id": 42, "secret": secret}).encode()
     assert not rt.verify(provider=vk, **SC, headers={}, body=bad)
     assert rt.verify(provider=vk, **SC, headers={}, body=good)
 
