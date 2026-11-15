@@ -175,9 +175,7 @@ def handle_bookings(payload, effects, env, *, event_store, now_ms: int | None = 
         slot, minutes, label = due[0]
         text = f"⏰ Напоминание ({label}): {bk.fmt(slot)}\n\n" + text
         change = {"step": "reminder_sent", "slot_id": slot.slot_id, "minutes": minutes, "revision": slot.revision}
-    return send_tracked(
-        body, effects, env, text=text, event_type="bookings@v1" if change else None, event_payload=change
-    )
+    return done(text, change)
 
 
 def _dispatch_reminders(body, effects, env, bk, slots, facts, now):
@@ -460,26 +458,23 @@ def handle_business_admin(payload, effects, env, *, event_store, settings_gatewa
             body, effects, env, text=text, event_type="business_admin@v1" if change else None, event_payload=change
         )
 
-    organization_ops = {"organization_show", "organization_create", "organization_name", "organization_type"}
-    notification_ops = {"notifications_show", "notifications_toggle", "notifications_level"}
-    if op in organization_ops | notification_ops:
-        if op in organization_ops:
-            text, markup = _organization_settings(
-                event_store=event_store, idempotency_path=organization_idempotency_path,
-                body=body, tenant_id=tenant_id, op=op, arg=arg,
-                decision_id=env.decision.decision_id,
-            )
-        else:
-            try:
-                text, markup = notification_preferences(
-                    settings_gateway=settings_gateway, tenant_id=tenant_id,
-                    user_id=required_str(body, "user_id"), operation=op,
-                )
-            except (RuntimeError, ValueError):
-                text, markup = "🔔 Настройки не сохранены. Попробуйте ещё раз.", None
-        return send_tracked(
-            body, effects, env, text=text, event_type=None, event_payload=None, reply_markup=markup,
+    if op in {"organization_show", "organization_create", "organization_name", "organization_type"}:
+        text, markup = _organization_settings(
+            event_store=event_store, idempotency_path=organization_idempotency_path,
+            body=body, tenant_id=tenant_id, op=op, arg=arg,
+            decision_id=env.decision.decision_id,
         )
+        return send_tracked(body, effects, env, text=text, event_type=None, event_payload=None, reply_markup=markup)
+    if op in {"notifications_show", "notifications_toggle", "notifications_level"}:
+        try:
+            text, markup = notification_preferences(
+                settings_gateway=settings_gateway, tenant_id=tenant_id,
+                user_id=required_str(body, "user_id"), operation=op,
+            )
+        except (RuntimeError, ValueError):
+            text, markup = "🔔 Настройки не сохранены. Попробуйте ещё раз.", None
+        return send_tracked(body, effects, env, text=text, event_type=None,
+                            event_payload=None, reply_markup=markup)
     if op in XP_OPS:
         try:
             facts_ = flow_payloads(event_store, tenant_id=tenant_id, event_type="business_admin@v1")

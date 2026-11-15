@@ -353,11 +353,10 @@ def _events(done, push, bk, op, arg, now, slots, *, tenant_id, event_store):
     slot = live[int(n) - 1] if n.isdigit() and 0 < int(n) <= len(live) else None
     if op == "event_schedule":
         from application.business_flows import event_schedule_edit as ese
-        from application.business_flows.owner_panels import series_of
 
         if slot is None:
             raise ValueError("slot_not_found: /event_schedule N")
-        series = series_of(slot, slots)
+        series = op_.series_of(slot, slots)
         if not rest.strip():
             return done(ese.edit_message(series, tz=tz) + f"\n\nОтвет: /event_schedule {n} и строки ниже", None)
         text, ch, moved = ese.edit_result(series, rest, now_ms=now, tz=tz)
@@ -407,7 +406,6 @@ PANEL_OPS = frozenset({"announce", "event_promo", "attention", "ad_channels", "a
 
 def _owner_journey(bk, slots, *, tenant_id, event_store):
     from application.business_flows import event_series as es
-    from application.business_flows import promotions as pr
 
     def facts(t):
         return flow_payloads(event_store, tenant_id=tenant_id, event_type=t)
@@ -419,7 +417,7 @@ def _owner_journey(bk, slots, *, tenant_id, event_store):
         slots=slots,
         attendance=es.replay(facts("event_series@v1")).attendance,
         payments=list(ad.replay(facts("business_admin@v1")).payments.values()),
-        camps=pr.replay(facts("bookings@v1")),
+        camps=pm.replay(facts("bookings@v1")),
         reactivated=sum(1 for x in leads if x.source.startswith("reactivation:") and x.customer_id in booked),
     )
 
@@ -433,7 +431,6 @@ def _panels(done, *a, **kw):
 
 
 def _panel(done, bk, op, arg, now, slots, facts, *, tenant_id, event_store):
-    from application.business_flows import promotions as pr
     from runtime.ads.connector_wiring import ad_connections_enabled, yandex_direct_configured
 
     ready = ad_connections_enabled() and yandex_direct_configured()
@@ -452,7 +449,7 @@ def _panel(done, bk, op, arg, now, slots, facts, *, tenant_id, event_store):
     n, _, rest = arg.partition(" ")
     if not (n.isdigit() and 0 < int(n) <= len(live)):
         raise ValueError("укажите номер из /schedule")
-    slot, camps = live[int(n) - 1], pr.replay(facts)
+    slot, camps = live[int(n) - 1], pm.replay(facts)
     if op == "announce":
         return done(op_.announcement(slot, slots, camps, description=rest), None)
     return done(op_.promotion_text(op_.promotion_snapshot(slot, slots, camps)), None)
