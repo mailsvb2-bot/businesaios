@@ -622,3 +622,16 @@ def test_memory_budget_rejects_unregistered_provider_clients() -> None:
             _UsageLLM(),
             LLMComposerConfig(model="custom", budget_source="memory"),
         )
+
+
+def test_accounted_gateway_rejects_budget_owned_by_another_event_store() -> None:
+    from core.llm.budget import BudgetCaps, EventStoreDailyTokenBudget
+    from runtime.llm.accounted_gateway import AccountedSyncGateway
+
+    reservation_store = MemoryEventStore()
+    telemetry_store = MemoryEventStore()
+    budget = EventStoreDailyTokenBudget(event_store=reservation_store, caps=BudgetCaps())
+    with pytest.raises(ValueError, match="LLM_BUDGET_STORE_MISMATCH"):
+        AccountedSyncGateway(
+            _UsageLLM(), event_store=telemetry_store, provider="test-provider", budget=budget,
+        )
