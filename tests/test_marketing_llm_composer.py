@@ -171,7 +171,7 @@ async def test_event_store_request_write_failure_prevents_provider_call(async_mo
     assert composer._runtime.metrics.snapshot().counters.get("accounting_unavailable") == 1
     assert composer._event_store.get_setting(
         tenant_id="t-no-request", key="llm:pending:v2",
-    ) == {"pending": {}}
+    ) == {"revision": 2, "pending": {}}
     # Retained claim prevents retrying a failed preflight under the same inbound id.
     assert (await composer.compose(inp) if async_mode else composer.compose_sync(inp)) is None
     assert llm.calls == 0
@@ -411,7 +411,7 @@ async def test_optional_debug_event_failure_does_not_strand_durable_spend():
     ) == 7
     day = composer._runtime.budget._day()
     pending = store.get_setting(tenant_id="t-debug", key="llm:pending:v2")
-    assert pending == {"pending": {}}
+    assert pending == {"revision": 2, "pending": {}}
     assert composer._runtime.metrics.snapshot().counters.get("accounting_failed", 0) == 0
 
 
@@ -444,7 +444,7 @@ def test_event_store_idempotency_claim_survives_budget_day_rollover(monkeypatch)
     ) is None
     assert store.get_setting(
         tenant_id="tenant", key="llm:pending:v2",
-    ) == {"pending": {}}
+    ) == {"revision": 2, "pending": {}}
 
 
 @pytest.mark.parametrize("claim_was_committed", [False, True])
@@ -470,7 +470,7 @@ def test_claim_write_error_releases_pending_headroom_without_replaying(claim_was
     )
     with pytest.raises(OSError, match="claim storage interrupted"):
         budget.reserve(tenant_id="t", user_id="u", tokens=50, request_id="event-1")
-    assert store.get_setting(tenant_id="t", key="llm:pending:v2") == {"pending": {}}
+    assert store.get_setting(tenant_id="t", key="llm:pending:v2") == {"revision": 2, "pending": {}}
     assert bool(store.get_setting(tenant_id="t", key="llm:claim:v2:event-1")) is claim_was_committed
     if claim_was_committed:
         assert budget.reserve(tenant_id="t", user_id="u", tokens=50, request_id="event-1") is None
