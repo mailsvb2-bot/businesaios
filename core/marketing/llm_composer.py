@@ -4,7 +4,7 @@ from dataclasses import dataclass, field
 from typing import Any
 
 from config.marketing_llm_policy import DEFAULT_MARKETING_LLM_POLICY, MarketingLLMPolicy
-from core.llm import AnthropicClient, GigaChatClient, OpenAICompatClient, YandexGPTClient
+from core.llm import AnthropicClient, GigaChatClient, MockLLMClient, OpenAICompatClient, YandexGPTClient
 from core.llm.budget import BudgetCaps, EventStoreDailyTokenBudget
 from core.llm.circuit import CircuitConfig
 from core.llm.contracts import LLMClient
@@ -42,10 +42,9 @@ class MarketingLLMComposer:
     """DecisionCore decides, LLM composes."""
 
     def __init__(self, llm: LLMClient, cfg: LLMComposerConfig, *, event_store: Any = None) -> None:
-        # Real providers cannot use process-local accounting.
-        if str(cfg.budget_source or "").lower() == "memory" and isinstance(llm, (
-            OpenAICompatClient, AnthropicClient, GigaChatClient, YandexGPTClient,
-        )):
+        # Only the explicit deterministic mock may use process-local accounting.
+        # Every other injected client must pass through the durable accounted gateway.
+        if str(cfg.budget_source or "").lower() == "memory" and not isinstance(llm, MockLLMClient):
             raise RuntimeError("LLM_BUDGET_EVENT_STORE_UNAVAILABLE")
         self._llm = llm
         self._cfg = cfg
