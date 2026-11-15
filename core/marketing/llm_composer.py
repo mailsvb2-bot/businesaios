@@ -67,15 +67,6 @@ class MarketingLLMComposer:
             raise RuntimeError("LLM_ACCOUNTED_GATEWAY_REQUIRED")
         return self._accounted_gateway
 
-    @property
-    def llm_client(self) -> LLMClient:
-        """Canonical read-only access to the injected client.
-
-        Exposes the already-wired client without forcing callers to reach into
-        a private attribute. This keeps boot wiring on a single path.
-        """
-        return self._llm
-
     async def compose(self, inp: MarketingLLMInputs) -> str | None:
         return await compose_marketing_text_async(self, inp)
 
