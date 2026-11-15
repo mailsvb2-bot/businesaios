@@ -5,7 +5,7 @@ from typing import Any
 
 from config.marketing_llm_policy import DEFAULT_MARKETING_LLM_POLICY, MarketingLLMPolicy
 from core.llm import AnthropicClient, GigaChatClient, OpenAICompatClient, YandexGPTClient
-from core.llm.budget import BudgetCaps
+from core.llm.budget import BudgetCaps, EventStoreDailyTokenBudget
 from core.llm.circuit import CircuitConfig
 from core.llm.contracts import LLMClient
 from core.llm.sampling import DebugSampling
@@ -15,6 +15,7 @@ from core.marketing.llm.service import compose_marketing_text_async, compose_mar
 from core.marketing.llm_prompt_builder import MarketingLLMInputs
 from core.marketing.llm_telemetry import emit_trace_async, maybe_emit_alert
 from core.marketing.llm_text_policy import validate_marketing_text as _validate_marketing_text
+from runtime.llm.accounted_gateway import AccountedSyncGateway
 
 validate_marketing_text = _validate_marketing_text
 
@@ -50,6 +51,16 @@ class MarketingLLMComposer:
         self._cfg = cfg
         self._event_store = event_store
         self._runtime = build_composer_runtime(cfg=cfg, event_store=event_store)
+        self._accounted_gateway = (
+            AccountedSyncGateway(
+                llm,
+                event_store=event_store,
+                provider=cfg.provider,
+                budget=self._runtime.budget,
+            )
+            if isinstance(self._runtime.budget, EventStoreDailyTokenBudget)
+            else None
+        )
 
     @property
     def llm_client(self) -> LLMClient:
