@@ -35,12 +35,10 @@ def test_generic_payload_adapter_preserves_zero_ids_and_field_priority() -> None
     event = ingress.payload_to_messaging_event(
         "facebook_messenger",
         {
-            "text": None,
-            "message": "/buy plan-pro",
-            "user_id": None,
-            "from_id": 42,
-            "chat_id": None,
-            "conversation_id": "conversation-7",
+            "entry": [{"messaging": [{
+                "sender": {"id": "42"},
+                "message": {"text": "/buy plan-pro"},
+            }]}],
             "timestamp_ms": "bad",
             "created_at_ms": "1700",
             "update_id": 0,
@@ -52,7 +50,7 @@ def test_generic_payload_adapter_preserves_zero_ids_and_field_priority() -> None
     )
     assert event.channel == "messenger"
     assert event.user_id == "42"
-    assert event.chat_id == "conversation-7"
+    assert event.chat_id == "42"
     assert event.text == "/buy plan-pro"
     assert event.command == "/buy"
     assert event.args == "plan-pro"
@@ -75,7 +73,45 @@ def test_generic_payload_adapter_preserves_zero_ids_and_field_priority() -> None
     assert str(fallback.update_id).startswith("synthetic-future_channel-")
 
 
-def test_every_concrete_provider_adapter_uses_the_shared_payload_contract() -> None:
+def test_every_concrete_provider_adapter_uses_the_provider_sender_contract() -> None:
+    fixtures = {
+        "whatsapp": ({"entry": [{"changes": [{"value": {"messages": [{
+            "from": "user", "text": {"body": "hello"}, "id": "id-1",
+        }]}}]}]}, "user"),
+        "vk": ({"object": {"message": {
+            "user_id": 7, "peer_id": 70, "text": "hello", "id": 1,
+        }}}, "70"),
+        "max": ({"message": {
+            "sender": {"user_id": "user"},
+            "recipient": {"chat_id": "thread"},
+            "body": {"text": "hello", "mid": "id-1"},
+        }}, "thread"),
+        "slack": ({"event": {
+            "user": "user", "channel": "thread", "text": "hello", "client_msg_id": "id-1",
+        }}, "thread"),
+        "discord": ({"author": {"id": "user"}, "channel_id": "thread", "content": "hello", "id": "id-1"}, "thread"),
+        "viber": ({"sender": {"id": "user"}, "chat_id": "thread",
+                   "message": {"text": "hello"}, "message_token": "id-1"}, "thread"),
+        "sms": ({"from": "user", "to": "thread", "body": "hello", "message_id": "id-1"}, "thread"),
+        "email": ({"from": "user@example.test", "to": "inbox@example.test",
+                   "text": "hello", "message_id": "id-1"}, "inbox@example.test"),
+        "instagram": ({"entry": [{"messaging": [{
+            "sender": {"id": "user"}, "message": {"text": "hello", "mid": "id-1"},
+        }]}]}, "user"),
+        "messenger": ({"entry": [{"messaging": [{
+            "sender": {"id": "user"}, "message": {"text": "hello", "mid": "id-1"},
+        }]}]}, "user"),
+        "line": ({"events": [{
+            "source": {"userId": "user", "groupId": "thread"},
+            "message": {"text": "hello", "id": "id-1"},
+        }]}, "thread"),
+        "wechat": ({"FromUserName": "user", "ToUserName": "thread",
+                    "Content": "hello", "MsgId": "id-1"}, "thread"),
+        "kakaotalk": ({"userRequest": {
+            "user": {"id": "user", "properties": {"plusfriendUserKey": "thread"}},
+            "utterance": "hello", "block": {"id": "id-1"},
+        }}, "thread"),
+    }
     wrappers = {
         "whatsapp": ingress.whatsapp_payload_to_messaging_event,
         "vk": ingress.vk_payload_to_messaging_event,
@@ -85,30 +121,64 @@ def test_every_concrete_provider_adapter_uses_the_shared_payload_contract() -> N
         "viber": ingress.viber_payload_to_messaging_event,
         "sms": ingress.sms_payload_to_messaging_event,
         "email": ingress.email_payload_to_messaging_event,
-        "web_chat": ingress.webchat_payload_to_messaging_event,
         "instagram": ingress.instagram_payload_to_messaging_event,
         "messenger": ingress.messenger_payload_to_messaging_event,
         "line": ingress.line_payload_to_messaging_event,
         "wechat": ingress.wechat_payload_to_messaging_event,
         "kakaotalk": ingress.kakaotalk_payload_to_messaging_event,
-        "api": ingress.api_payload_to_messaging_event,
     }
     for expected_channel, adapter in wrappers.items():
         assert adapter.__name__ == f"{expected_channel.replace('_', '')}_payload_to_messaging_event"
         assert tuple(signature(adapter).parameters) == ("payload", "tenant_id", "product_name", "timezone")
+        payload, expected_chat = fixtures[expected_channel]
+        event = adapter(payload, tenant_id="tenant", product_name="Product", timezone="UTC")
+        assert event.channel == expected_channel
+        assert event.user_id == "user" if expected_channel != "vk" else "7"
+        assert event.chat_id == expected_chat
+        assert event.text == "hello"
+        assert event.update_id == "id-1"
+        assert event.product_name == "Product"
+        assert event.timezone == "UTC"
+
+    for expected_channel, adapter in {
+        "web_chat": ingress.webchat_payload_to_messaging_event,
+        "api": ingress.api_payload_to_messaging_event,
+    }.items():
         event = adapter(
-            {"author_id": "user", "thread_id": "thread", "content": "hello", "id": "id-1"},
-            tenant_id="tenant",
-            product_name="Product",
-            timezone="UTC",
+            {"user_id": "user", "chat_id": "thread", "text": "hello", "message_id": "id-1"},
+            tenant_id="tenant", product_name="Product", timezone="UTC",
         )
         assert event.channel == expected_channel
         assert event.user_id == "user"
         assert event.chat_id == "thread"
         assert event.text == "hello"
         assert event.update_id == "id-1"
-        assert event.product_name == "Product"
-        assert event.timezone == "UTC"
+
+
+def test_provider_adapters_never_promote_generic_author_or_thread_to_verified_sender() -> None:
+    wrappers = (
+        ingress.whatsapp_payload_to_messaging_event,
+        ingress.vk_payload_to_messaging_event,
+        ingress.max_payload_to_messaging_event,
+        ingress.slack_payload_to_messaging_event,
+        ingress.discord_payload_to_messaging_event,
+        ingress.viber_payload_to_messaging_event,
+        ingress.sms_payload_to_messaging_event,
+        ingress.email_payload_to_messaging_event,
+        ingress.instagram_payload_to_messaging_event,
+        ingress.messenger_payload_to_messaging_event,
+        ingress.line_payload_to_messaging_event,
+        ingress.wechat_payload_to_messaging_event,
+        ingress.kakaotalk_payload_to_messaging_event,
+    )
+    for adapter in wrappers:
+        event = adapter(
+            {"author_id": "spoofed-user", "thread_id": "recipient-only", "content": "hello"},
+            tenant_id="tenant",
+        )
+        assert event.user_id == ""
+        assert event.chat_id == "recipient-only"
+        assert event.text == "hello"
 
 
 def test_world_state_adapter_is_normalization_only_and_preserves_decision_coordinates() -> None:
@@ -128,8 +198,8 @@ def test_world_state_adapter_is_normalization_only_and_preserves_decision_coordi
     assert state.tenant_id == "default"
     assert state.user_id == "chat-1"
     assert state.user == {
-        "id": "chat-1",
-        "messaging_user_id": "chat-1",
+        "id": "messaging_user",
+        "messaging_user_id": "messaging_user",
         "messaging_chat_id": "chat-1",
         "messaging_channel": "web_chat",
         "timezone": "Europe/Amsterdam",
@@ -214,7 +284,7 @@ def test_telegram_callback_and_message_variants_are_fail_closed() -> None:
         tenant_id="tenant",
     )
     assert no_data.text == "message text"
-    assert no_data.user_id == "chat"
+    assert no_data.user_id == ""
 
     edited = ingress.telegram_update_to_messaging_event(
         {"edited_message": {"caption": "edited", "from": {"id": "sender"}}},
@@ -225,7 +295,7 @@ def test_telegram_callback_and_message_variants_are_fail_closed() -> None:
     assert edited.chat_id == ""
 
     empty = ingress.telegram_update_to_messaging_event({}, tenant_id="tenant")
-    assert empty.user_id == "telegram_user"
+    assert empty.user_id == ""
     assert empty.text == ""
     assert empty.raw == {}
 
@@ -252,7 +322,7 @@ def test_ingress_has_no_private_parallel_extractors_and_decoder_fails_closed() -
         tenant_id="tenant",
     )
     assert event.channel == "telegram"
-    assert event.user_id == "telegram_user"
+    assert event.user_id == ""
     assert event.chat_id == ""
     assert event.text == ""
     assert event.timestamp_ms == 0
