@@ -1,8 +1,8 @@
 from __future__ import annotations
 
 import time
-from datetime import date, datetime, timezone
 from dataclasses import dataclass, field
+from datetime import UTC, date, datetime
 from typing import Any, Protocol
 
 from config.llm_budget_policy import DEFAULT_LLM_BUDGET_POLICY, LLMBudgetPolicy
@@ -78,21 +78,20 @@ class EventStoreDailyTokenBudget:
 
     def _sum(self, *, tenant_id: str, user_id: str) -> tuple[int, int]:
         start_ms, end_ms = _utc_day_bounds_ms()
-        if callable(fn := getattr(self._es, "sum_event_payload_int", None)):
-            def total(who):
-                return int(fn(tenant_id=str(tenant_id), event_type=LLM_COMPLETED, field="total_tokens", start_ms=start_ms, end_ms=end_ms, user_id=who))
-        else:
-            if not callable(it := getattr(self._es, "iter_events", None)):
-                raise RuntimeError("LLM_BUDGET_EVENT_AGGREGATOR_UNAVAILABLE")
-            def total(who):
-                count = 0
-                for event in it(tenant_id=str(tenant_id), start_ms=start_ms, end_ms=end_ms, user_id=who, event_type=LLM_COMPLETED):
-                    value = (event.get("payload") or {}).get("total_tokens")
-                    if type(value) is not int or value <= 0:
-                        raise RuntimeError("LLM_BUDGET_CORRUPT_COMPLETION")
-                    count += value
-                return count
-        return total(None), total(str(user_id))
+        it = getattr(self._es, "iter_events", None)
+        if not callable(it):
+            raise RuntimeError("LLM_BUDGET_EVENT_AGGREGATOR_UNAVAILABLE")
+        tenant = user = 0
+        for event in it(tenant_id=str(tenant_id), start_ms=start_ms, end_ms=end_ms, event_type=LLM_COMPLETED):
+            payload = event.get("payload") if isinstance(event, dict) else None
+            event_user = event.get("user_id") if isinstance(event, dict) else None
+            value = payload.get("total_tokens") if isinstance(payload, dict) else None
+            if not isinstance(event_user, str) or not event_user.strip() or type(value) is not int or value <= 0:
+                raise RuntimeError("LLM_BUDGET_CORRUPT_COMPLETION")
+            tenant += value
+            if event_user == str(user_id):
+                user += value
+        return tenant, user
 
     def can_spend(self, *, tenant_id: str, user_id: str, tokens: int) -> bool:
         tenant, user = self._sum(tenant_id=tenant_id, user_id=user_id)
@@ -110,7 +109,7 @@ class EventStoreDailyTokenBudget:
             reservation_day = date.fromisoformat(day)
             if reservation_day.isoformat() != day:
                 return False
-            start, end = _utc_day_bounds_ms(int(datetime.combine(reservation_day, datetime.min.time(), tzinfo=timezone.utc).timestamp() * 1000))
+            start, end = _utc_day_bounds_ms(int(datetime.combine(reservation_day, datetime.min.time(), tzinfo=UTC).timestamp() * 1000))
         except (TypeError, ValueError, OverflowError):
             return False
         completed = set()
