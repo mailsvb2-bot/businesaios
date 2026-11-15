@@ -125,7 +125,10 @@ def build_marketing_llm_composer(*, settings: Any, event_store: Any, logger: Any
     cfg = LLMComposerConfig(model=model, provider=provider, budget_source="event_store",
         global_rps=env_float("LLM_GLOBAL_RPS", 15.0), global_burst=env_int("LLM_GLOBAL_BURST", 20),
         tenant_rps=env_float("LLM_TENANT_RPS", 4.0), tenant_burst=env_int("LLM_TENANT_BURST", 6))
-    return MarketingLLMComposer(llm, cfg, event_store=event_store)
+    return MarketingLLMComposer(
+        llm, cfg, event_store=event_store,
+        accounted_gateway_factory=AccountedSyncGateway,
+    )
 
 
 def build_marketing_llm_agent(*, settings: Any, event_store: Any, logger: Any) -> Any | None:
