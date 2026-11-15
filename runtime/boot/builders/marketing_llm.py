@@ -142,12 +142,11 @@ def build_marketing_llm_agent(*, settings: Any, event_store: Any, logger: Any) -
     if composer is None:
         return None
 
-    llm_client = composer.llm_client
-    provider, _base_url, _api_key, agent_model, _anthropic_version = _provider_settings(settings)
+    _provider, _base_url, _api_key, agent_model, _anthropic_version = _provider_settings(settings)
     cfg = LLMAgentConfig(
         default_model=agent_model,
         temperature=env_float("LLM_TEMPERATURE", 0.4),
         max_tokens=env_int("LLM_MAX_TOKENS", 700),
         timeout_s=float(_runtime_timeout_s(settings)),
     )
-    return LLMAgent(AccountedSyncGateway(llm_client, event_store=event_store, provider=provider), cfg)
+    return LLMAgent(composer.accounted_gateway, cfg)
