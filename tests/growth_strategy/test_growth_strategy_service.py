@@ -500,4 +500,4 @@ def test_growth_accounting_failures_never_fall_back_to_unaccounted_plan(tmp_path
                     goal=GrowthGoalV1(primary_stage="acquisition"),
                     n=2,
                 )
-            assert service.backlog(tenant_id="t1", business_id="business-a", limit=20) == []
+            assert service.backlog(tenant_id="t1", business_id="business-a", limit=20) == ()
