@@ -55,8 +55,16 @@ def test_agent_gateway_fails_closed_without_scoped_identity(missing):
     assert client.calls == 0
 
 
-@pytest.mark.parametrize("failed_event, expected_calls", [(LLM_REQUESTED, 0), (LLM_COMPLETED, 1)])
-def test_agent_gateway_journal_failure_blocks_output_and_replay(failed_event, expected_calls):
+@pytest.mark.parametrize(
+    "failed_event, expected_calls, expected_error",
+    [
+        (LLM_REQUESTED, 0, "LLM_ACCOUNTING_REQUEST_WRITE_FAILED"),
+        (LLM_COMPLETED, 1, "LLM_ACCOUNTING_COMPLETION_WRITE_FAILED"),
+    ],
+)
+def test_agent_gateway_journal_failure_blocks_output_and_replay(
+    failed_event, expected_calls, expected_error
+):
     class BrokenStore(MemoryEventStore):
         def append_event(self, event):
             if event.get("event_type") == failed_event:
@@ -65,9 +73,15 @@ def test_agent_gateway_journal_failure_blocks_output_and_replay(failed_event, ex
 
     store, client = BrokenStore(), Provider()
     gateway = AccountedSyncGateway(client, event_store=store, provider="openai_compat")
-    with pytest.raises(RuntimeError, match="LLM_ACCOUNTING_UNAVAILABLE"):
+    with pytest.raises(RuntimeError, match=expected_error):
         gateway.generate_sync(request())
     assert client.calls == expected_calls
+
+    day = EventStoreDailyTokenBudget(event_store=store, caps=BudgetCaps())._day()
+    pending = store.get_setting(tenant_id="tenant", key=f"llm:pending:v1:{day}")
+    assert isinstance(pending, dict)
+    assert bool(pending.get("pending")) is (failed_event == LLM_COMPLETED)
+
     with pytest.raises(RuntimeError, match="LLM_BUDGET_BLOCKED"):
         gateway.generate_sync(request())
     assert client.calls == expected_calls
