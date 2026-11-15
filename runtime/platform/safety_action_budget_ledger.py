@@ -65,6 +65,7 @@ class PlatformSqliteActionBudgetLedger:
                 tenant_id TEXT NOT NULL,
                 idempotency_key TEXT NOT NULL,
                 action TEXT NOT NULL,
+                payload_hash TEXT NOT NULL,
                 PRIMARY KEY (tenant_id, idempotency_key)
             )
             """
@@ -101,30 +102,33 @@ class PlatformSqliteActionBudgetLedger:
             conn.execute("BEGIN IMMEDIATE")
             self._record_total(conn, key, float(estimated_cost))
 
-    def recorded_action(self, tenant_id: str, idempotency_key: str) -> str | None:
+    def recorded_action(self, tenant_id: str, idempotency_key: str) -> tuple[str, str] | None:
         with self._connect() as conn:
             row = conn.execute(
-                "SELECT action FROM safety_action_budget_ledger_idempotency WHERE tenant_id=? AND idempotency_key=?",
+                "SELECT action,payload_hash FROM safety_action_budget_ledger_idempotency WHERE tenant_id=? AND idempotency_key=?",
                 (str(tenant_id).strip() or "unknown", str(idempotency_key)),
             ).fetchone()
-        return str(row[0]) if row else None
+        return (str(row[0]), str(row[1])) if row else None
 
     def record_once(self, tenant_id: str, *, idempotency_key: str,
-                    action: str, estimated_cost: float) -> bool:
-        tenant, key, action_name = str(tenant_id).strip() or "unknown", str(idempotency_key), str(action)
+                    action: str, payload_hash: str, estimated_cost: float) -> bool:
+        tenant, key, action_name, fingerprint = (
+            str(tenant_id).strip() or "unknown", str(idempotency_key),
+            str(action), str(payload_hash),
+        )
         with self._connect() as conn:
             conn.execute("BEGIN IMMEDIATE")
             row = conn.execute(
-                "SELECT action FROM safety_action_budget_ledger_idempotency WHERE tenant_id=? AND idempotency_key=?",
+                "SELECT action,payload_hash FROM safety_action_budget_ledger_idempotency WHERE tenant_id=? AND idempotency_key=?",
                 (tenant, key),
             ).fetchone()
             if row:
-                if str(row[0]) != action_name:
+                if (str(row[0]), str(row[1])) != (action_name, fingerprint):
                     raise RuntimeError("action_budget_idempotency_conflict")
                 return False
             conn.execute(
-                "INSERT INTO safety_action_budget_ledger_idempotency(tenant_id,idempotency_key,action) VALUES(?,?,?)",
-                (tenant, key, action_name),
+                "INSERT INTO safety_action_budget_ledger_idempotency(tenant_id,idempotency_key,action,payload_hash) VALUES(?,?,?,?)",
+                (tenant, key, action_name, fingerprint),
             )
             self._record_total(conn, tenant, float(estimated_cost))
         return True
