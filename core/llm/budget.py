@@ -59,14 +59,16 @@ def estimate_request_tokens(request: Any) -> int:
 def validated_llm_usage(usage: Any) -> tuple[int, int, int] | None:
     """Validate provider measurements; never substitute a reservation estimate."""
     value = (lambda key: usage.get(key) if isinstance(usage, Mapping) else getattr(usage, key, None))
-    prompt, completion, total = (value(key) for key in ("prompt_tokens", "completion_tokens", "total_tokens"))
-    return (prompt, completion, total) if all(type(v) is int and v >= 0 for v in (prompt, completion, total)) and total > 0 and total >= prompt + completion else None
+    values = tuple(value(key) for key in ("prompt_tokens", "completion_tokens", "total_tokens"))
+    return values if all(type(v) is int and v >= 0 for v in values) and values[2] > 0 and values[2] >= values[0] + values[1] else None
 
 
 def validated_llm_completion_event(event: Any) -> tuple[str, str, tuple[int, int, int]] | None:
-    if not isinstance(event, dict): return None
+    if not isinstance(event, dict):
+        return None
     user, payload = event.get("user_id"), event.get("payload")
-    if not isinstance(user, str) or not user.strip() or not isinstance(payload, dict): return None
+    if not isinstance(user, str) or not user.strip() or not isinstance(payload, dict):
+        return None
     request_id, provider, model = (payload.get(key) for key in ("request_id", "provider", "model"))
     usage = validated_llm_usage(payload)
     return (user, request_id, usage) if all(isinstance(v, str) and v.strip() for v in (request_id, provider, model)) and usage is not None else None
@@ -94,7 +96,7 @@ class EventStoreDailyTokenBudget:
             fact = validated_llm_completion_event(event)
             if fact is None:
                 raise RuntimeError("LLM_BUDGET_CORRUPT_COMPLETION")
-            tenant += fact[2][2]; user += fact[2][2] if fact[0] == str(user_id) else 0
+            tenant, user = tenant + fact[2][2], user + (fact[2][2] if fact[0] == str(user_id) else 0)
         return tenant, user
 
     def can_spend(self, *, tenant_id: str, user_id: str, tokens: int) -> bool:
@@ -109,7 +111,9 @@ class EventStoreDailyTokenBudget:
         if not callable(it) or not isinstance(current, dict) or not isinstance(current.get("pending"), dict):
             return False
         try:
-            if (reservation_day := date.fromisoformat(day)).isoformat() != day: return False
+            reservation_day = date.fromisoformat(day)
+            if reservation_day.isoformat() != day:
+                return False
             start, end = _utc_day_bounds_ms(int(datetime.combine(reservation_day, datetime.min.time(), tzinfo=UTC).timestamp() * 1000))
         except (TypeError, ValueError, OverflowError):
             return False
@@ -127,11 +131,9 @@ class EventStoreDailyTokenBudget:
 
     def reserve(self, *, tenant_id: str, user_id: str, tokens: int, request_id: str) -> str | None:
         get, cas = getattr(self._es, "get_setting", None), getattr(self._es, "compare_and_set_setting", None)
-        if not callable(get) or not callable(cas) or type(tokens) is not int or tokens <= 0 or any(
-            not isinstance(value, str) or not value.strip() for value in (tenant_id, user_id, request_id)
-        ):
+        if not callable(get) or not callable(cas) or type(tokens) is not int or tokens <= 0 or any(not isinstance(v, str) or not v.strip() for v in (tenant_id, user_id, request_id)):
             return None
-        day = self._day(); key = f"llm:pending:v1:{day}"
+        key = f"llm:pending:v1:{(day := self._day())}"
         for _ in range(16):
             current = get(tenant_id=str(tenant_id), key=key)
             if current is not None and not isinstance(current, dict):
@@ -147,7 +149,7 @@ class EventStoreDailyTokenBudget:
                 row_user, row_tokens = row.get("user_id"), row.get("tokens")
                 if not isinstance(row_user, str) or not row_user.strip() or type(row_tokens) is not int or row_tokens <= 0:
                     return None
-                reserved_tenant += row_tokens; reserved_user += row_tokens if row_user == str(user_id) else 0
+                reserved_tenant, reserved_user = reserved_tenant + row_tokens, reserved_user + (row_tokens if row_user == str(user_id) else 0)
             if self._day() != day:
                 return None
             if (spent_tenant + reserved_tenant + tokens > self._caps.tenant_tokens_per_day or spent_user + reserved_user + tokens > self._caps.user_tokens_per_day):
