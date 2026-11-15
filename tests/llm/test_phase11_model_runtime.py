@@ -6,6 +6,7 @@ from core.llm import (
     LLMMessage,
     LLMRequest,
     LLMResponse,
+    LLMUsage,
     ModelCapability,
     ModelCapabilityRegistry,
     ModelEvaluation,
@@ -15,6 +16,8 @@ from core.llm import (
     ModelRouteRequest,
 )
 from runtime.llm import RoutedLLMClient
+from runtime.platform.event_store.memory_event_store import MemoryEventStore
+from core.telemetry.event_types import LLM_COMPLETED
 
 
 def _profile(
@@ -145,7 +148,7 @@ class _CaptureClient:
 
     def generate_sync(self, req: LLMRequest) -> LLMResponse:
         self.request = req
-        return LLMResponse(content="ok", raw={"provider_receipt": "r-1"})
+        return LLMResponse(content="ok", usage=LLMUsage(prompt_tokens=3, completion_tokens=2, total_tokens=5), raw={"provider_receipt": "r-1"})
 
     async def generate(self, req: LLMRequest) -> LLMResponse:
         return self.generate_sync(req)
@@ -159,10 +162,12 @@ def test_routed_client_records_model_version_policy_and_route() -> None:
         cost=0.01,
     )
     client = _CaptureClient()
+    store = MemoryEventStore()
     routed = RoutedLLMClient(
         router=ModelRouter(ModelCapabilityRegistry([profile])),
         clients_by_profile_id={"canonical": client},
         policy=ModelPolicy(policy_id="prod", version="11"),
+        event_store=store,
     )
     request = LLMRequest(
         messages=[LLMMessage(role="user", content="hello")],
@@ -171,6 +176,10 @@ def test_routed_client_records_model_version_policy_and_route() -> None:
         metadata={
             "required_model_capabilities": ("structured_output",),
             "context_tokens": 50,
+            "tenant_id": "tenant-a",
+            "user_id": "owner-1",
+            "correlation_key": "decision-1",
+            "task_type": "model_route_test",
         },
     )
 
@@ -186,3 +195,27 @@ def test_routed_client_records_model_version_policy_and_route() -> None:
     assert response.raw is not None
     assert response.raw["provider_receipt"] == "r-1"
     assert response.raw["model_route"]["profile_id"] == "canonical"
+    completed = list(store.iter_events(tenant_id="tenant-a", event_type=LLM_COMPLETED))
+    assert len(completed) == 1
+    assert completed[0]["payload"]["provider"] == "provider-a"
+    assert completed[0]["payload"]["model"] == "canonical-v2"
+    assert completed[0]["payload"]["total_tokens"] == 5
+
+
+def test_routed_client_fails_closed_before_provider_call_without_identity() -> None:
+    profile = _profile("canonical", provider="provider-a", model="canonical-v2", cost=0.01)
+    client = _CaptureClient()
+    routed = RoutedLLMClient(
+        router=ModelRouter(ModelCapabilityRegistry([profile])),
+        clients_by_profile_id={"canonical": client},
+        policy=ModelPolicy(policy_id="prod", version="11"),
+        event_store=MemoryEventStore(),
+    )
+    request = LLMRequest(
+        messages=[LLMMessage(role="user", content="hello")],
+        model="legacy-placeholder",
+        metadata={"required_model_capabilities": ("structured_output",)},
+    )
+    with pytest.raises(RuntimeError, match="LLM_ACCOUNTING_UNAVAILABLE"):
+        routed.generate_sync(request)
+    assert client.request is None
