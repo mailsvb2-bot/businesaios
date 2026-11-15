@@ -1,13 +1,18 @@
 from __future__ import annotations
 
+import base64
 import hashlib
 import hmac
 import json
 import pytest
 from types import SimpleNamespace
+
+from cryptography.hazmat.primitives import serialization
+from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
 from urllib.parse import parse_qs
 
 import runtime.business_autonomy.provider_webhook_reconciliation as sut
+import runtime.business_autonomy.provider_webhook_runtime as webhook_runtime_module
 from application.business_autonomy.provider_catalog import provider_map
 from runtime.business_autonomy.provider_transport_bindings import max_tls_ca_file
 from runtime.business_autonomy.provider_webhook_runtime import ProviderWebhookRuntime
@@ -399,3 +404,93 @@ def test_vk_webhook_fails_closed_when_group_binding_is_missing() -> None:
         headers={'X-BusinessAIOS-Webhook-Secret': 'vk-hook-secret'}, body=body,
     ) is False
 
+
+
+@pytest.mark.parametrize(
+    ("provider_key", "account_fields", "payload", "foreign_payload"),
+    (
+        ("slack_messaging", {"team_id": "T1", "api_app_id": "A1"},
+         {"type": "event_callback", "team_id": "T1", "api_app_id": "A1", "event": {"type": "message", "channel": "C1", "user": "U1", "text": "hello"}},
+         {"type": "event_callback", "team_id": "T2", "api_app_id": "A1", "event": {"type": "message", "channel": "C1", "user": "U1", "text": "hello"}}),
+        ("discord_messaging", {"application_id": "app-1"},
+         {"application_id": "app-1", "id": "interaction-1", "type": 2, "channel_id": "channel-1"},
+         {"application_id": "app-2", "id": "interaction-1", "type": 2, "channel_id": "channel-1"}),
+        ("line_messaging", {"bot_user_id": "Ubot1"},
+         {"destination": "Ubot1", "events": [{"type": "message", "source": {"type": "user", "userId": "U1"}, "message": {"type": "text", "id": "m1", "text": "hello"}}]},
+         {"destination": "Ubot2", "events": [{"type": "message", "source": {"type": "user", "userId": "U1"}, "message": {"type": "text", "id": "m1", "text": "hello"}}]}),
+        ("kakaotalk_messaging", {"bot_id": "bot-1"},
+         {"bot": {"id": "bot-1", "name": "Bot"}, "userRequest": {"user": {"properties": {"appUserId": "u1"}}, "utterance": "hello"}},
+         {"bot": {"id": "bot-2", "name": "Bot"}, "userRequest": {"user": {"properties": {"appUserId": "u1"}}, "utterance": "hello"}}),
+        ("wechat_messaging", {"to_user_name": "gh_account"},
+         {"ToUserName": "gh_account", "FromUserName": "user-1", "MsgType": "text", "Content": "hello"},
+         {"ToUserName": "foreign-account", "FromUserName": "user-1", "MsgType": "text", "Content": "hello"}),
+    ),
+)
+def test_signed_messaging_bridges_require_exact_provider_recipient(
+    provider_key: str, account_fields: dict[str, str], payload: dict, foreign_payload: dict,
+) -> None:
+    provider = provider_map()[provider_key]
+    vault = InMemorySecretVault()
+    _put(vault, provider, "biz-a", "webhook_secret", "bridge-secret")
+    for name, value in account_fields.items():
+        _put(vault, provider, "biz-a", name, value)
+    runtime = ProviderWebhookRuntime(vault)
+    headers = {"X-BusinessAIOS-Webhook-Secret": "bridge-secret"}
+    body = json.dumps(payload).encode()
+    assert runtime.verify(provider=provider, tenant_id="tenant-a", business_id="biz-a", headers=headers, body=body) is True
+    foreign = json.dumps(foreign_payload).encode()
+    assert runtime.verify(provider=provider, tenant_id="tenant-a", business_id="biz-a", headers=headers, body=foreign) is False
+    assert runtime.verify(provider=provider, tenant_id="tenant-b", business_id="biz-a", headers=headers, body=body) is False
+
+
+def test_native_slack_signature_also_requires_exact_workspace_and_app(monkeypatch) -> None:
+    provider = provider_map()["slack_messaging"]
+    vault = InMemorySecretVault()
+    for name, value in {"webhook_secret": "slack-signing-secret", "team_id": "T1", "api_app_id": "A1"}.items():
+        _put(vault, provider, "biz-slack", name, value)
+    monkeypatch.setattr(webhook_runtime_module.time, "time", lambda: 1_700_000_000)
+    body = json.dumps({"type": "event_callback", "team_id": "T1", "api_app_id": "A1", "event": {"type": "message"}}).encode()
+    timestamp = "1700000000"
+    base = b"v0:" + timestamp.encode() + b":" + body
+    signature = "v0=" + hmac.new(b"slack-signing-secret", base, hashlib.sha256).hexdigest()
+    runtime = ProviderWebhookRuntime(vault)
+    headers = {"X-Slack-Request-Timestamp": timestamp, "X-Slack-Signature": signature}
+    assert runtime.verify(provider=provider, tenant_id="tenant-a", business_id="biz-slack", headers=headers, body=body) is True
+    foreign = json.dumps({"type": "event_callback", "team_id": "T2", "api_app_id": "A1", "event": {"type": "message"}}).encode()
+    foreign_base = b"v0:" + timestamp.encode() + b":" + foreign
+    foreign_signature = "v0=" + hmac.new(b"slack-signing-secret", foreign_base, hashlib.sha256).hexdigest()
+    assert runtime.verify(provider=provider, tenant_id="tenant-a", business_id="biz-slack", headers={"X-Slack-Request-Timestamp": timestamp, "X-Slack-Signature": foreign_signature}, body=foreign) is False
+
+
+def test_native_discord_signature_also_requires_exact_application_id() -> None:
+    provider = provider_map()["discord_messaging"]
+    vault = InMemorySecretVault()
+    private_key = Ed25519PrivateKey.generate()
+    public_key = private_key.public_key().public_bytes(
+        encoding=serialization.Encoding.Raw, format=serialization.PublicFormat.Raw,
+    ).hex()
+    _put(vault, provider, "biz-discord", "application_public_key", public_key)
+    _put(vault, provider, "biz-discord", "application_id", "app-1")
+    runtime = ProviderWebhookRuntime(vault)
+    timestamp = "1700000000"
+    body = json.dumps({"application_id": "app-1", "id": "interaction-1", "type": 2}).encode()
+    signature = private_key.sign(timestamp.encode() + body).hex()
+    headers = {"X-Signature-Timestamp": timestamp, "X-Signature-Ed25519": signature}
+    assert runtime.verify(provider=provider, tenant_id="tenant-a", business_id="biz-discord", headers=headers, body=body) is True
+    foreign = json.dumps({"application_id": "app-2", "id": "interaction-1", "type": 2}).encode()
+    foreign_signature = private_key.sign(timestamp.encode() + foreign).hex()
+    assert runtime.verify(provider=provider, tenant_id="tenant-a", business_id="biz-discord", headers={"X-Signature-Timestamp": timestamp, "X-Signature-Ed25519": foreign_signature}, body=foreign) is False
+
+
+def test_native_line_signature_also_requires_exact_bot_destination() -> None:
+    provider = provider_map()["line_messaging"]
+    vault = InMemorySecretVault()
+    _put(vault, provider, "biz-line", "channel_secret", "line-channel-secret")
+    _put(vault, provider, "biz-line", "bot_user_id", "Ubot1")
+    runtime = ProviderWebhookRuntime(vault)
+    body = json.dumps({"destination": "Ubot1", "events": [{"type": "message", "source": {"userId": "U1"}}]}).encode()
+    signature = base64.b64encode(hmac.new(b"line-channel-secret", body, hashlib.sha256).digest()).decode("ascii")
+    assert runtime.verify(provider=provider, tenant_id="tenant-a", business_id="biz-line", headers={"X-Line-Signature": signature}, body=body) is True
+    foreign = json.dumps({"destination": "Ubot2", "events": [{"type": "message", "source": {"userId": "U1"}}]}).encode()
+    foreign_signature = base64.b64encode(hmac.new(b"line-channel-secret", foreign, hashlib.sha256).digest()).decode("ascii")
+    assert runtime.verify(provider=provider, tenant_id="tenant-a", business_id="biz-line", headers={"X-Line-Signature": foreign_signature}, body=foreign) is False
