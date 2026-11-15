@@ -8,6 +8,7 @@ from fastapi import APIRouter, HTTPException, Request, status
 
 from acquisition import evaluate_acquisition_payload
 from adapters.api.fastapi.router_support import business_owner_scope, json_body
+from interfaces.ads.registry import CONNECTORS
 from presentation import build_acquisition_view_model
 
 CANON_BUSINESS_WORKSPACE_ACQUISITION_ROUTES = True
@@ -34,12 +35,11 @@ def register_business_workspace_acquisition_routes(*, router: APIRouter, auth_bu
         except (TypeError, ValueError, OverflowError) as exc:
             raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)) from exc
         return _json_safe({
-            'ok': True,
-            'tenant_id': tenant_id,
-            'business_id': business_id,
-            'assumption_source': 'owner_input',
-            'calculation_only': True,
+            'ok': True, 'tenant_id': tenant_id, 'business_id': business_id,
+            'assumption_source': 'owner_input', 'calculation_only': True,
             'write_actions_enabled': False,
+            'ad_provider_truth': {name: {'production_ready': bool(row['production_ready']), 'write': bool(row['write']), 'verify': bool(row['verify'])} for name, row in CONNECTORS.items()},
+            'ad_provider_capability_ready': any(row['production_ready'] and row['write'] and row['verify'] for row in CONNECTORS.values()),
             'plan': asdict(view),
             'economics': {
                 'feasibility_score': result.feasibility_score,
