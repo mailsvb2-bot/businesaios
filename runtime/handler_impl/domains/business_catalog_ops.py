@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from datetime import UTC, datetime
+
 from application.business_flows.projection import flow_payloads, flow_rows
 
 CATALOG_OPS = frozenset(
@@ -477,7 +479,6 @@ XP_OPS = frozenset(
 
 def _external_products(done, op, arg, facts_, *, tenant_id, body, now_ms, vault=None):
     """External product connectors (external_products.py); facts carry secret refs only."""
-    from datetime import UTC, datetime
 
     from application.business_flows import external_products as xp
     from runtime.execution.context import current_execution_business_id
@@ -579,7 +580,6 @@ def channel_reminder_copies(effects, env, body, facts, bk, slot, minutes, label)
 
 def _partner_growth(pt, op, arg, tenant_id, known, facts):
     """Partner campaigns (discovery provider not connected: preparation only) and confirmed referral results."""
-    from datetime import UTC, datetime
 
     try:
         if op == "campaign":  # Название | N
