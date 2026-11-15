@@ -36,9 +36,10 @@ def _execution_owner() -> tuple[int, object | None]:
 
 @contextmanager
 def verified_inbound_reply_scope(*, tenant_id: str, channel: str, user_id: str,
-                                 update_id: object, chat_id: str = "") -> Iterator[None]:
+                                 update_id: object, chat_id: str = "", bot_id: str = "primary") -> Iterator[None]:
+    bot_scope = str(bot_id or "primary").strip() or "primary"
     token = _VERIFIED_INGRESS.set((str(tenant_id), str(channel), str(user_id), update_id,
-                                   str(chat_id), _execution_owner()))
+                                   str(chat_id), _execution_owner(), bot_scope))
     try:
         yield
     finally:
@@ -52,8 +53,11 @@ def _proof_mac(proof: Mapping[str, Any], secret: bytes) -> str:
 
 
 def issue_verified_reply(*, tenant_id: str, channel: str, user_id: str,
-                         update_id: object, chat_id: str = "", text: str = "") -> dict[str, Any] | None:
-    if _VERIFIED_INGRESS.get() != (tenant_id, channel, user_id, update_id, chat_id, _execution_owner()):
+                         update_id: object, chat_id: str = "", text: str = "",
+                         bot_id: str = "primary") -> dict[str, Any] | None:
+    bot_scope = str(bot_id or "primary").strip() or "primary"
+    expected = (str(tenant_id), str(channel), str(user_id), update_id, str(chat_id), _execution_owner(), bot_scope)
+    if _VERIFIED_INGRESS.get() != expected:
         return None
     key = SafetyKeyRegistry().current
     if key.insecure_fallback or not key.active:
@@ -63,6 +67,42 @@ def issue_verified_reply(*, tenant_id: str, channel: str, user_id: str,
                  issued_at=int(time.time()), key_id=key.key_id)
     proof["signature"] = _proof_mac(proof, key.secret)
     return proof
+
+
+def _telegram_update_key(tenant_id: str, bot_id: str, user_id: str, update_id: int) -> str:
+    material = json.dumps([tenant_id, bot_id, user_id, update_id],
+                          separators=(",", ":"), ensure_ascii=False).encode()
+    return "telegram:" + hashlib.sha256(material).hexdigest()
+
+
+def issue_verified_update_idempotency_key(*, tenant_id: str, channel: str, user_id: str,
+                                          update_id: object, chat_id: str = "",
+                                          bot_id: str = "primary") -> str | None:
+    if channel != "telegram" or type(update_id) is not int or update_id < 0:
+        return None
+    bot_scope = str(bot_id or "primary").strip() or "primary"
+    expected = (str(tenant_id), str(channel), str(user_id), update_id, str(chat_id),
+                _execution_owner(), bot_scope)
+    if _VERIFIED_INGRESS.get() != expected:
+        return None
+    return _telegram_update_key(str(tenant_id), bot_scope, str(user_id), update_id)
+
+
+def verified_telegram_idempotency_key(payload: Mapping[str, Any]) -> str | None:
+    if not isinstance(payload, Mapping):
+        return None
+    scope = _VERIFIED_INGRESS.get()
+    if not isinstance(scope, tuple) or len(scope) != 7:
+        return None
+    tenant_id, channel, user_id, update_id, _chat_id, owner, bot_scope = scope
+    if (owner != _execution_owner() or channel != "telegram" or
+            type(update_id) is not int or update_id < 0):
+        return None
+    if (str(payload.get("tenant_id") or "") != tenant_id or
+            str(payload.get("user_id") or "") != user_id):
+        return None
+    expected = _telegram_update_key(tenant_id, bot_scope, user_id, update_id)
+    return expected if payload.get("idempotency_key") == expected else None
 
 
 def _verified_signature(proof: Mapping[str, Any]) -> bool:
