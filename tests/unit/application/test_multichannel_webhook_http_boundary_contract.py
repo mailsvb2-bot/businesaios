@@ -173,8 +173,12 @@ def test_wrong_signed_whatsapp_recipient_is_rejected_before_replay_or_handoff(tm
     monkeypatch.chdir(tmp_path)
     provider = provider_map()["whatsapp_cloud"]
     vault = InMemorySecretVault()
-    _put(vault, provider, "business-a", "app_secret", "meta-app-secret")
-    _put(vault, provider, "business-a", "phone_number_id", "phone-123")
+    app_secret_ref = SecretRef(tenant_id="tenant-a", connector_id=provider.connector_id,
+                              scope="business-a", secret_name=f"{provider.connector_id}.app_secret")
+    phone_ref = SecretRef(tenant_id="tenant-a", connector_id=provider.connector_id,
+                          scope="business-a", secret_name=f"{provider.connector_id}.phone_number_id")
+    vault.seed_plaintext(ref=app_secret_ref, plaintext="meta-app-secret")
+    vault.seed_plaintext(ref=phone_ref, plaintext="phone-123")
     body = json.dumps({
         "object": "whatsapp_business_account",
         "entry": [{
