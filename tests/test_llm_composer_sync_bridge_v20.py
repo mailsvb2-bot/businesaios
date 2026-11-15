@@ -6,6 +6,7 @@ from core.llm.contracts import LLMResponse, LLMUsage
 from core.marketing.llm_composer import LLMComposerConfig, MarketingLLMComposer
 from core.marketing.llm_prompting import MarketingLLMInputs
 from runtime.platform.event_store.memory_event_store import MemoryEventStore
+from runtime.llm import AccountedSyncGateway
 
 
 class _FakeLLM:
@@ -29,7 +30,7 @@ def _inp() -> MarketingLLMInputs:
 
 
 def test_compose_sync_works_inside_running_loop():
-    composer = MarketingLLMComposer(_FakeLLM(), LLMComposerConfig(model="test-model", budget_source="event_store"), event_store=MemoryEventStore())
+    composer = MarketingLLMComposer(_FakeLLM(), LLMComposerConfig(model="test-model", budget_source="event_store"), event_store=MemoryEventStore(), accounted_gateway_factory=AccountedSyncGateway)
 
     async def _run() -> str | None:
         return composer.compose_sync(_inp())
