@@ -10,7 +10,6 @@ from __future__ import annotations
 
 import ast
 import pathlib
-from datetime import UTC, datetime
 
 ROOT = pathlib.Path(__file__).resolve().parents[2]
 
@@ -331,77 +330,79 @@ def test_iron_33_idempotence_key_rejects_empty():
         idempotence_key_for_order(" ")
 
 
-def test_iron_34_reconcile_module_is_pure_no_requests():
-    txt = _read(ROOT / "core" / "payments" / "reconcile.py")
-    assert "requests" not in txt
+def test_iron_34_canonical_reconciliation_is_pure_no_network_imports():
+    path = ROOT / "runtime" / "_internal" / "effects_actions" / "payments" / "reconciliation.py"
+    tree = _parse(path)
+    forbidden = {"requests", "httpx", "aiohttp", "urllib3"}
+    imports = set()
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Import):
+            imports.update(alias.name.split(".")[0] for alias in node.names)
+        elif isinstance(node, ast.ImportFrom) and node.module:
+            imports.add(node.module.split(".")[0])
+    assert not (imports & forbidden)
 
 
-def test_iron_35_reconcile_counts_reconciled_records():
-    from core.payments.reconcile import reconcile_pending_payments
+def test_iron_35_canonical_terminal_payment_event_is_idempotent():
+    from types import SimpleNamespace
 
-    class ES:
-        def __init__(self, events):
-            self._events = events
+    from runtime._internal.effects_actions.payments.reconciliation import _emit_terminal_event_once
 
-        def iter_events(self, *, tenant_id=None, start_ms=0, end_ms=None, event_type=None):
-            for e in self._events:
-                if event_type is None or e.get("event_type") == event_type:
-                    yield e
-
-    class L:
+    class EventLog:
         def __init__(self):
-            self.ok = []
-            self.bad = []
+            self.events = []
 
-        def mark_effect_completed(self, envelope_id: str) -> None:
-            self.ok.append(envelope_id)
+        def iter_events(self):
+            return iter(self.events)
 
-        def mark_effect_failed(self, envelope_id: str) -> None:
-            self.bad.append(envelope_id)
+        def emit(self, **event):
+            self.events.append(event)
 
-    class P:
-        def __init__(self, mapping):
-            self.mapping = mapping
-
-        def get_payment_status(self, *, external_payment_id: str) -> str:
-            return self.mapping.get(external_payment_id, "pending")
-
-    now = datetime.now(tz=UTC)
-    es = ES([
-        {"event_type": "payment_created", "payload": {"external_id": "p1"}, "decision_id": "d1"},
-        {"event_type": "payment_created", "payload": {"external_id": "p2"}, "decision_id": "d2"},
-        {"event_type": "payment_created", "payload": {"external_id": "p3"}, "decision_id": "d3"},
-    ])
-    ledger = L()
-    payments = P({"p1": "succeeded", "p2": "canceled", "p3": "pending"})
-    n = reconcile_pending_payments(now=now, event_store=es, ledger=ledger, payments=payments)
-    assert n == 2
-    assert ledger.ok == ["d1"]
-    assert ledger.bad == ["d2"]
+    effects = SimpleNamespace(event_log=EventLog())
+    args = {
+        "event_type": "payment_succeeded",
+        "source": "payments",
+        "user_id": "user-a",
+        "decision_id": "decision-a",
+        "correlation_id": "correlation-a",
+        "original_decision_id": "decision-a",
+        "external_id": "payment-a",
+        "payload": {"status": "succeeded"},
+    }
+    first = _emit_terminal_event_once(effects, **args)
+    second = _emit_terminal_event_once(effects, **args)
+    assert first == second
+    assert len(effects.event_log.events) == 1
+    assert effects.event_log.events[0]["event_id"] == first
 
 
-def test_iron_36_reconcile_skips_missing_ids():
-    from core.payments.reconcile import reconcile_pending_payments
+def test_iron_36_canonical_reconciliation_checks_tenant_before_reading_events(monkeypatch):
+    import pytest
+    from types import SimpleNamespace
 
-    class ES:
-        def iter_events(self, *, tenant_id=None, start_ms=0, end_ms=None, event_type=None):
-            yield {"event_type": "payment_created", "payload": {}, "decision_id": "d1"}
-            yield {"event_type": "payment_created", "payload": {"external_id": "p1"}}
+    from runtime._internal.effects_actions.payments import reconciliation
 
-    class L:
-        def mark_effect_completed(self, envelope_id: str) -> None:
-            raise AssertionError("should not be called")
+    class EventLog:
+        def iter_events(self):
+            raise AssertionError("foreign tenant must be rejected before event enumeration")
 
-        def mark_effect_failed(self, envelope_id: str) -> None:
-            raise AssertionError("should not be called")
+    monkeypatch.setattr(reconciliation, "assert_called_from_executor", lambda: None)
 
-    class P:
-        def get_payment_status(self, *, external_payment_id: str) -> str:
-            return "succeeded"
+    def reject_foreign_tenant(*, event_log, tenant_id, operation):
+        assert tenant_id == "tenant-foreign"
+        assert operation == "reconcile_payments"
+        raise RuntimeError("payment tenant scope rejected")
 
-    now = datetime.now(tz=UTC)
-    n = reconcile_pending_payments(now=now, event_store=ES(), ledger=L(), payments=P())
-    assert n == 0
+    monkeypatch.setattr(reconciliation, "assert_event_log_tenant", reject_foreign_tenant)
+    effects = SimpleNamespace(event_log=EventLog(), ledger=object())
+    with pytest.raises(RuntimeError, match="tenant scope rejected"):
+        reconciliation.reconcile_payments_effect(
+            effects,
+            decision_id="decision-a",
+            correlation_id="correlation-a",
+            tenant_id="tenant-foreign",
+            business_id="business-a",
+        )
 
 
 def test_iron_37_effects_impl_payment_uses_idempotence_key_logic_in_core():
@@ -419,18 +420,19 @@ def test_iron_38_no_payment_provider_network_in_core_tree():
     assert not offenders
 
 
-def test_iron_39_payment_created_event_schema_exists():
-    # Proof that payment orchestration can emit canonical event types.
-    # We simply ensure the string is referenced in code (schema registry may live elsewhere).
-    txt = _read(ROOT / "core" / "payments" / "reconcile.py")
-    assert "payment_created" in txt
+def test_iron_39_canonical_payment_reconciler_consumes_created_events():
+    from runtime._internal.effects_actions.payments import reconciliation
+
+    assert "payment_created" in _read(pathlib.Path(reconciliation.__file__))
+    assert callable(reconciliation.reconcile_payments_effect)
 
 
-def test_iron_40_payment_reconcile_window_constant_is_int():
-    from core.payments.reconcile import RECONCILE_WINDOW_MIN
+def test_iron_40_canonical_payment_reconcile_window_is_bounded():
+    import inspect
 
-    assert isinstance(RECONCILE_WINDOW_MIN, int)
-    assert RECONCILE_WINDOW_MIN > 0
+    from runtime._internal.effects_actions.payments.reconciliation import reconcile_payments_effect
+
+    assert inspect.signature(reconcile_payments_effect).parameters["window_min"].default == 30
 
 
 # ---------------------------------------------------------------------------
