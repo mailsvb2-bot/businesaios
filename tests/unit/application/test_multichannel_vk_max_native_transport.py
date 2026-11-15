@@ -185,6 +185,12 @@ def test_telegram_vk_and_max_never_promote_recipient_or_bot_identity_to_customer
     assert telegram_channel_post['user_id'] == ''
     assert telegram_channel_post['chat_id'] == '-100123'
     assert telegram_channel_post['external_user_ref'] is None
+    telegram_human = decode_provider_inbound(
+        channel='telegram',
+        payload={'message': {'from': {'id': 42, 'is_bot': False}, 'chat': {'id': 42}, 'text': 'hello', 'message_id': 11}},
+    )
+    assert telegram_human['user_id'] == '42'
+    assert telegram_human['external_user_ref'] == '42'
 
     vk_group_sender = decode_provider_inbound(
         channel='vk',
