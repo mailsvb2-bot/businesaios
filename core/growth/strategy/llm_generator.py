@@ -25,9 +25,9 @@ _GROWTH_CHANNEL_ALIASES = {"partnership": "partnerships"}
 _SUPPORTED_MESSAGING_CHANNELS = ", ".join(GROWTH_MESSAGING_CHANNELS)
 
 
-def generate_hypotheses(llm: Any, *, tenant_id: str, goal: GrowthGoalV1, signals: GrowthSignalV1, n: int = 8, model: str = "", excluded_channels: tuple[str, ...] = ()) -> tuple[GrowthHypothesisV1, ...]:
+def generate_hypotheses(llm: Any, *, tenant_id: str, user_id: str, correlation_id: str, goal: GrowthGoalV1, signals: GrowthSignalV1, n: int = 8, model: str = "", excluded_channels: tuple[str, ...] = ()) -> tuple[GrowthHypothesisV1, ...]:
     try:
-        req = _build_request(tenant_id=tenant_id, goal=goal, signals=signals, n=int(n), model=str(model or ""))
+        req = _build_request(tenant_id=tenant_id, user_id=user_id, correlation_id=correlation_id, goal=goal, signals=signals, n=int(n), model=str(model or ""))
         resp = _generate_sync(llm, req)
         items = _parse_json_array(resp)
         blocked = frozenset(str(channel).strip().lower() for channel in excluded_channels)
@@ -49,7 +49,7 @@ def generate_hypotheses(llm: Any, *, tenant_id: str, goal: GrowthGoalV1, signals
         return ()
 
 
-def _build_request(*, tenant_id: str, goal: GrowthGoalV1, signals: GrowthSignalV1, n: int, model: str) -> LLMRequest:
+def _build_request(*, tenant_id: str, user_id: str, correlation_id: str, goal: GrowthGoalV1, signals: GrowthSignalV1, n: int, model: str) -> LLMRequest:
     sys = f"""You are an AI growth strategist for a small business autopilot.
 Return ONLY valid JSON.
 
@@ -84,7 +84,7 @@ Rules:
         temperature=0.35,
         max_tokens=900,
         timeout_s=25.0,
-        metadata={"tenant_id": str(tenant_id), "use": "growth_strategy"},
+        metadata={"tenant_id": str(tenant_id), "user_id": str(user_id), "correlation_key": str(correlation_id), "task_type": "growth_strategy", "use": "growth_strategy"},
     )
 
 

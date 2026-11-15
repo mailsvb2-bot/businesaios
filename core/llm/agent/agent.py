@@ -50,6 +50,10 @@ class LLMAgent:
         self._cfg = cfg
         self._clock = clock or time
 
+    def generate_sync(self, req: LLMRequest) -> Any:
+        """Route raw domain prompts through the same accounted gateway as agent tasks."""
+        return _invoke_gateway(self._gateway, req)
+
     def run_task(
         self,
         task: TaskType,
