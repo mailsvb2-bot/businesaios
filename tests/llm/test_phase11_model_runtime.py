@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import asyncio
+
 import pytest
 
 from core.llm import (
@@ -145,12 +147,14 @@ def test_degraded_structured_output_profile_is_excluded() -> None:
 class _CaptureClient:
     def __init__(self) -> None:
         self.request: LLMRequest | None = None
+        self.async_calls = 0
 
     def generate_sync(self, req: LLMRequest) -> LLMResponse:
         self.request = req
         return LLMResponse(content="ok", usage=LLMUsage(prompt_tokens=3, completion_tokens=2, total_tokens=5), raw={"provider_receipt": "r-1"})
 
     async def generate(self, req: LLMRequest) -> LLMResponse:
+        self.async_calls += 1
         return self.generate_sync(req)
 
 
@@ -219,3 +223,34 @@ def test_routed_client_fails_closed_before_provider_call_without_identity() -> N
     with pytest.raises(RuntimeError, match="LLM_ACCOUNTING_UNAVAILABLE"):
         routed.generate_sync(request)
     assert client.request is None
+
+
+def test_routed_client_async_uses_the_same_accounted_gateway() -> None:
+    profile = _profile("canonical", provider="provider-a", model="canonical-v2", cost=0.01)
+    client = _CaptureClient()
+    store = MemoryEventStore()
+    routed = RoutedLLMClient(
+        router=ModelRouter(ModelCapabilityRegistry([profile])),
+        clients_by_profile_id={"canonical": client},
+        policy=ModelPolicy(policy_id="prod", version="11"),
+        event_store=store,
+    )
+    request = LLMRequest(
+        messages=[LLMMessage(role="user", content="hello")],
+        model="legacy-placeholder",
+        max_tokens=100,
+        metadata={
+            "required_model_capabilities": ("structured_output",),
+            "tenant_id": "tenant-a",
+            "user_id": "owner-1",
+            "correlation_key": "decision-async",
+            "task_type": "model_route_test",
+        },
+    )
+    response = asyncio.run(routed.generate(request))
+    assert response.content == "ok"
+    assert client.request is not None and client.request.model == "canonical-v2"
+    assert client.async_calls == 0
+    completed = list(store.iter_events(tenant_id="tenant-a", event_type=LLM_COMPLETED))
+    assert len(completed) == 1
+    assert completed[0]["payload"]["total_tokens"] == 5
