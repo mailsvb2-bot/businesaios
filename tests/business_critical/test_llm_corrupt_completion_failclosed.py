@@ -10,7 +10,8 @@ def corrupt_store():
     store.iter_events.return_value = [
         {"user_id": "u", "payload": {"request_id": "req", "provider": "openai", "model": "gpt-4.1-mini", "prompt_tokens": 2, "completion_tokens": 8, "total_tokens": "not-a-number"}}
     ]
-    store.get_setting.return_value = {"revision": 0, "pending": {"req": {"user_id": "u", "tokens": 10}}}
+    state = {"revision": 0, "pending": {"req": {"user_id": "u", "tokens": 10}}}
+    store.get_setting.side_effect = lambda *, tenant_id=None, key=None: state if key in {None, "llm:pending:v2"} else None
     return store
 
 
@@ -77,7 +78,8 @@ def test_completion_without_user_identity_fails_closed():
 )
 def test_corrupt_pending_reservation_cannot_release_budget_headroom(row):
     store = Mock()
-    store.get_setting.return_value = {"revision": 0, "pending": {"stale": row}}
+    state = {"revision": 0, "pending": {"stale": row}}
+    store.get_setting.side_effect = lambda *, tenant_id=None, key=None: state if key == "llm:pending:v2" else None
     store.iter_events.return_value = []
     budget = EventStoreDailyTokenBudget(event_store=store, caps=BudgetCaps())
     assert budget.reserve(tenant_id="t", user_id="u", tokens=1, request_id="new") is None
