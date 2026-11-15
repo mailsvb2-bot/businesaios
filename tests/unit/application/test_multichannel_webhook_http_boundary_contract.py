@@ -41,7 +41,8 @@ def test_vk_max_authenticated_ingress_scopes_signed_reply_to_real_event(tmp_path
         "vk_messaging": {"type": "message_new", "group_id": 42, "object": {"message": {
             "id": 9, "from_id": 777, "peer_id": 777, "text": "hello"}}},
         "max_messaging": {"update_type": "message_created", "message": {
-            "sender": {"user_id": 777}, "recipient": {"chat_id": 777},
+            "sender": {"user_id": 777, "is_bot": False},
+            "recipient": {"chat_id": 777, "chat_type": "dialog", "user_id": 9001},
             "body": {"mid": "max-msg-9", "text": "hello"}}},
     }
     for provider_key, body_dict in bodies.items():
@@ -53,6 +54,9 @@ def test_vk_max_authenticated_ingress_scopes_signed_reply_to_real_event(tmp_path
         if provider_key == "vk_messaging":
             group_ref = SecretRef(tenant_id="tenant-a", connector_id=provider.connector_id, scope="business-a", secret_name=f"{provider.connector_id}.group_id")
             vault.seed_plaintext(ref=group_ref, plaintext="42")
+        elif provider_key == "max_messaging":
+            bot_ref = SecretRef(tenant_id="tenant-a", connector_id=provider.connector_id, scope="business-a", secret_name=f"{provider.connector_id}.bot_id")
+            vault.seed_plaintext(ref=bot_ref, plaintext="9001")
         class Processor:
             calls = 0
             proof = None
