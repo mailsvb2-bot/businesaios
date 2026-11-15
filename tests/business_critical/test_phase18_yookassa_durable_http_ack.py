@@ -7,6 +7,7 @@ import http.client
 import json
 
 from runtime._internal.effects_clients import yookassa_webhook_server as webhook
+from runtime._internal.effects_actions.payments.yookassa import yookassa_create_payment
 
 
 class Outbox:
@@ -67,7 +68,6 @@ def test_http_webhook_ack_requires_durable_enqueue(monkeypatch):
             server.shutdown()
             server.server_close()
 
-from runtime._internal.effects_actions.payments.yookassa import yookassa_create_payment
 @pytest.mark.parametrize("currency,amount", [
     ("RUB", 100), ("USD", 100), ("RUB", 0),
 ])
