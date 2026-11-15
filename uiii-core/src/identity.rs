@@ -63,3 +63,4 @@ pub fn clusters(links: &[Link], graph: &Graph, scope: &Scope, at: i64, known_at:
         else { groups.insert(root.clone(), members); }
     }
     groups
+}
