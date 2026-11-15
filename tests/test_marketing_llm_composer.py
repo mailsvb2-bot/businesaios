@@ -127,6 +127,9 @@ def test_event_store_budget_counts_one_provider_completion_after_rejected_text()
     assert payload["locale"] == "ru"
     assert payload["prompt_version"]
     assert len(payload["prompt_hash"]) == 64
+    assert payload["ok"] is True
+    assert payload["cache_hit"] is False
+    assert payload["error_code"] == ""
     assert store.count_events(tenant_id="tenant", event_type=LLM_REQUESTED) == 1
     assert composer._runtime.budget.can_spend(
         tenant_id="tenant", user_id="user", tokens=cfg.budget.user_tokens_per_day - 7,
