@@ -1,6 +1,7 @@
 import pytest
-from runtime.execution.context import executor_context
+
 from runtime.effects.message_effects import send_message_effect
+from runtime.execution.context import executor_context
 
 
 class _DummyEventLog:

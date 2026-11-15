@@ -1,13 +1,13 @@
 """Real HTTP ingress: durable queue first, never a fabricated receipt."""
 from __future__ import annotations
 
-import pytest
-
 import http.client
 import json
 
-from runtime._internal.effects_clients import yookassa_webhook_server as webhook
+import pytest
+
 from runtime._internal.effects_actions.payments.yookassa import yookassa_create_payment
+from runtime._internal.effects_clients import yookassa_webhook_server as webhook
 
 
 class Outbox:
