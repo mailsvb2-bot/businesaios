@@ -453,3 +453,51 @@ def test_growth_strategy_llm_uses_the_single_accounted_gateway_and_is_idempotent
     )
     assert replay.top_hypotheses[0].title == "Accounted growth hypothesis"
     assert len(client.requests) == 1
+
+
+def test_growth_provider_failure_is_reported_as_deterministic_fallback(tmp_path: Path) -> None:
+    class _UnavailableProvider:
+        def generate_sync(self, _request):
+            raise ConnectionError("provider unavailable")
+
+    with SqliteEventStore(str(tmp_path / "provider-fallback.db")) as store:
+        service = GrowthStrategyService(event_store=store, llm=_UnavailableProvider())
+        plan = service.generate_backlog(
+            tenant_id="t1",
+            business_id="business-a",
+            user_id="u1",
+            decision_id="provider-fallback-d1",
+            correlation_id="provider-fallback-c1",
+            goal=GrowthGoalV1(primary_stage="acquisition"),
+            n=2,
+        )
+
+    assert plan.top_hypotheses
+    assert "llm_fallback" in plan.notes
+    assert "llm" not in plan.notes
+
+
+def test_growth_accounting_failures_never_fall_back_to_unaccounted_plan(tmp_path: Path) -> None:
+    import pytest
+
+    class _BlockedGateway:
+        def __init__(self, code: str) -> None:
+            self.code = code
+
+        def generate_sync(self, _request):
+            raise RuntimeError(self.code)
+
+    for code in ("LLM_ACCOUNTING_UNAVAILABLE", "LLM_BUDGET_BLOCKED"):
+        with SqliteEventStore(str(tmp_path / f"{code}.db")) as store:
+            service = GrowthStrategyService(event_store=store, llm=_BlockedGateway(code))
+            with pytest.raises(RuntimeError, match=code):
+                service.generate_backlog(
+                    tenant_id="t1",
+                    business_id="business-a",
+                    user_id="u1",
+                    decision_id=f"blocked-{code}",
+                    correlation_id=f"blocked-{code}-correlation",
+                    goal=GrowthGoalV1(primary_stage="acquisition"),
+                    n=2,
+                )
+            assert service.backlog(tenant_id="t1", business_id="business-a", limit=20) == []
