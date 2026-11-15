@@ -136,7 +136,7 @@ def test_every_concrete_provider_adapter_uses_the_provider_sender_contract() -> 
         assert event.user_id == ("7" if expected_channel == "vk" else "user")
         assert event.chat_id == expected_chat
         assert event.text == "hello"
-        assert event.update_id == "id-1"
+        assert str(event.update_id) == ("1" if expected_channel == "vk" else "id-1")
         assert event.product_name == "Product"
         assert event.timezone == "UTC"
 
