@@ -326,8 +326,14 @@ def test_readonly_business_buttons_work_after_action_budget_reaches_limit(action
     result = guard.evaluate(SafetyActionContext(action, "tenant-live", "4001", payload))
     assert result.status == ControlStatus.ALLOW
     assert result.reason == "read_projection_budget_not_applicable"
-    enriched = {**payload, "goal_id": "owner-goal", "autonomy_tier": "supervised",
-                "meta": {"world_model_meta": {"source": "canonical"}}}
+    enriched = {
+        **payload, "actor_id": "4001", "callback_query_id": "callback-12",
+        "product_id": "clientplatform", "domain": "business", "product_version": "v1",
+        "idempotency_key": "telegram:0123456789abcdef",
+        "world_model_meta": {"source": "canonical"},
+        "goal_id": "owner-goal", "autonomy_tier": "supervised",
+        "meta": {"world_model_meta": {"source": "canonical"}},
+    }
     assert guard.evaluate(SafetyActionContext(action, "tenant-live", "4001", enriched)).status == ControlStatus.ALLOW
 
 
@@ -364,3 +370,28 @@ def test_read_projection_audit_reason_is_distinct_from_text_delivery(monkeypatch
     monkeypatch.setattr(safety, "_record_safety_event", lambda **kwargs: events.append(kwargs))
     safety.record_allowed_action(action="business_ops_summary@v1", payload={"tenant_id": "t", "user_id": "u", "op": "cockpit", "arg": "cpm:menu"})
     assert events[0]["reason"] == "read_projection_not_charged"
+
+
+
+@pytest.mark.parametrize(("callback", "action", "operation"), [
+    ("cp:section:customers", "business_ops_summary@v1", "cockpit"),
+    ("cp:section:sales", "sales_pipeline@v1", "list"),
+    ("cp:section:ad-channels", "bookings@v1", "ad_channels"),
+])
+def test_owner_section_callback_payload_passes_closed_action_schema(
+    monkeypatch, callback, action, operation,
+):
+    from core.actions.catalog import build_catalog
+
+    monkeypatch.setattr(
+        "runtime.entrypoints.telegram_longpoll._configured_telegram_tenant_id",
+        lambda: "tenant-live",
+    )
+    proposal = UnifiedTelegramPolicyV3(admin_user_ids=("4001",)).propose(
+        _callback_state(callback)
+    )
+    assert proposal.action == action
+    assert proposal.payload["op"] == operation
+    assert proposal.payload["callback_query_id"] == "callback-12"
+    payload = {"tenant_id": "tenant-live", **proposal.payload}
+    build_catalog()[action].schema.validate(payload)
