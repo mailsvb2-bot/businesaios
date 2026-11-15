@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from pathlib import Path
+
 import pytest
 
 from runtime.boot.actions_catalog import EFFECT_ONLY_ACTIONS
@@ -85,7 +87,7 @@ def test_idempotency_requirement_is_explicit_and_consistent():
 @pytest.mark.lock
 def test_yookassa_webhook_server_has_one_canonical_owner():
     """The legacy Effects monolith must not expose a weaker webhook ingress."""
-    root = pathlib.Path(__file__).resolve().parents[2]
+    root = Path(__file__).resolve().parents[2]
     legacy = root / "runtime" / "_internal" / "_effects_impl.py"
     legacy_source = legacy.read_text(encoding="utf-8")
     assert "def start_yookassa_webhook_server_in_thread" not in legacy_source
