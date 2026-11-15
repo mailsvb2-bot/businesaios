@@ -832,7 +832,7 @@ def notification_preferences(*, settings_gateway, tenant_id: str, user_id: str, 
                 updated["enabled"] = not bool(current["enabled"])
             else:
                 updated["min_level"] = levels[(levels.index(current["min_level"]) + 1) % len(levels)]
-            entries = [row for row in entries if row is not own_entry(entries)] + [updated]
+            entries = [row for row in entries if not (row["recipient_user_id"] == user_id and row["channel"] == "telegram" and not row["business_id"])] + [updated]
             if settings_gateway.compare_and_set_value(
                 tenant_id=tenant_id, key=key, expected=before, value=entries,
             ):
