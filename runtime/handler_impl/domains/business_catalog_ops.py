@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 from application.business_flows.projection import flow_payloads, flow_rows
+from application.business_flows import admin as ad, catalog as cg, event_channels as ec, event_notifications as en, owner_panels as op_, promotions as pm, sales as sl
+from runtime.platform.config.env_flags import env_str
 from application.organization.registry import OrganizationRegistry
 from contracts.organization import OrganizationStatus
 from runtime.messaging_policy_alert_subscriptions.settings_key import SETTING_KEY
@@ -38,7 +40,6 @@ COMMERCE_OPS = frozenset({"commerce", "commerce_check", "commerce_expand"})
 
 def _catalog(done, op, arg, facts_, now=None):
     """Directions / offerings / formats; archive keeps history (catalog.py)."""
-    from application.business_flows import catalog as cg
 
     c = cg.replay(facts_)
     if op == "offering_process":
@@ -101,7 +102,6 @@ def _ads(body, done, st, op, arg, facts_, sl_replay=None):
     """Governed ad proposals: drafts, exact-cap consent via approvals, publish gated by connector truth."""
     from application.business_flows import ad_proposals as ap
     from interfaces.ads.registry import CONNECTORS
-    from runtime.platform.config.env_flags import env_str
 
     drafts = ap.replay(facts_)
     if op == "ad_draft":
@@ -161,7 +161,6 @@ def _creatives_text(arg):
 
 def _retention(done, st, op, arg, now, *, tenant_id, event_store):
     """/retention cohorts and /reactivate -> sales lead; never sends (retention.py)."""
-    from application.business_flows import admin as ad
     from application.business_flows import bookings as bk
     from application.business_flows import retention as rt
 
@@ -182,7 +181,6 @@ def _retention(done, st, op, arg, now, *, tenant_id, event_store):
 
 def _slot_with_offering(bk, arg, now, *, tenant_id, event_store):
     """/add_slot in the business timezone; ``#N`` binds the slot to catalog offering N."""
-    from application.business_flows import catalog as cg
 
     c = cg.replay(flow_payloads(event_store, tenant_id=tenant_id, event_type="business_admin@v1"))
     change = bk.parse_slot(arg, now_ms=now, tz=c.timezone)
@@ -195,7 +193,6 @@ def _slot_with_offering(bk, arg, now, *, tenant_id, event_store):
 
 def _sales_inbound(done, body, env, *, tenant_id, event_store):
     """Customer free text -> one lead_inbound fact (sales_intelligence); reply is the policy's text."""
-    from application.business_flows import admin as ad
     from application.business_flows import sales_inbound as si
 
     reply = str(body.get("reply") or "Спасибо, сообщение получено.")[:1000]
@@ -223,8 +220,6 @@ FOLLOWUP_OPS = frozenset({"followup", "followup_plan", "followup_cancel", "optou
 def _followups(done, push, st, op, arg, now, *, tenant_id, event_store):
     """Per-lead follow-ups (sales_followups.py); delivery only via ``push`` to the lead's Telegram id."""
     from application.business_flows import automation_policy as ap
-    from application.business_flows import catalog as cg
-    from application.business_flows import sales as sl
     from application.business_flows import sales_followups as sf
 
     tz = cg.replay(flow_payloads(event_store, tenant_id=tenant_id, event_type="business_admin@v1")).timezone
@@ -262,9 +257,7 @@ PROMO_OPS = frozenset({"promote", "promotions", "promo_open", "promo_book"})
 def _destination(camp, *, tenant_id, event_store):
     """Acquisition destination for a campaign over the replayed bot + native channel connections."""
     from application.business_flows import bot_provisioning as botprov
-    from application.business_flows import promotions as pm
     from runtime.handler_impl.domains.business_flow_ops import _messenger_connections
-    from runtime.platform.config.env_flags import env_str
 
     bots = list(botprov.replay(flow_payloads(event_store, tenant_id=tenant_id, event_type="bot_provisioning@v1")).values())
     conns = _messenger_connections(flow_payloads(event_store, tenant_id=tenant_id, event_type="business_admin@v1"))
@@ -275,8 +268,6 @@ def _promotions(done, bk, op, arg, now, slots, facts, *, user_id, tenant_id, eve
     """Slot promotions (donor ``promotions``): owner creates/refreshes, customer opens/books with attribution."""
     import secrets
 
-    from application.business_flows import catalog as cg
-    from application.business_flows import promotions as pm
 
     camps = pm.replay(facts)
     c = cg.replay(flow_payloads(event_store, tenant_id=tenant_id, event_type="business_admin@v1"))
@@ -343,8 +334,6 @@ EVENT_OPS = frozenset({"add_sessions", "edit_slot", "event_schedule", "reschedul
 
 def _events(done, push, bk, op, arg, now, slots, *, tenant_id, event_store):
     """Owner event editing over sessions (donor events + event_notifications reschedule)."""
-    from application.business_flows import catalog as cg
-    from application.business_flows import event_notifications as en
 
     tz = cg.replay(flow_payloads(event_store, tenant_id=tenant_id, event_type="business_admin@v1")).timezone
     live = [s for s in bk.upcoming(slots, now_ms=now) if s.status != "closed"]
@@ -395,7 +384,6 @@ CHANNEL_OPS = frozenset({"link_channels", "channel_verify"})
 
 def _event_channels(done, bk, op, arg, now, slots, facts, *, user_id, platform="telegram"):
     """Booking messenger verification (donor event_registration_channels)."""
-    from application.business_flows import event_channels as ec
 
     if op == "channel_verify":
         ch = ec.consume(
@@ -418,11 +406,8 @@ PANEL_OPS = frozenset({"announce", "event_promo", "attention", "ad_channels", "a
 
 
 def _owner_journey(bk, slots, *, tenant_id, event_store):
-    from application.business_flows import admin as ad
     from application.business_flows import event_series as es
-    from application.business_flows import owner_panels as op_
     from application.business_flows import promotions as pr
-    from application.business_flows import sales as sl
 
     def facts(t):
         return flow_payloads(event_store, tenant_id=tenant_id, event_type=t)
@@ -448,7 +433,6 @@ def _panels(done, *a, **kw):
 
 
 def _panel(done, bk, op, arg, now, slots, facts, *, tenant_id, event_store):
-    from application.business_flows import owner_panels as op_
     from application.business_flows import promotions as pr
     from runtime.ads.connector_wiring import ad_connections_enabled, yandex_direct_configured
 
@@ -546,8 +530,6 @@ def channel_reminder_copies(effects, env, body, facts, bk, slot, minutes, label)
     native provider queue; returns the reminder text (channel vk/max -> _NativeProviderQueueAdapter; MAX paced by ProviderPacingCoordinator)."""
     import hashlib
 
-    from application.business_flows import event_channels as ec
-    from application.business_flows import event_notifications as en
 
     text = f"⏰ Напоминание ({label}): {bk.fmt(slot)}\n" + en.reminder_text(slot, minutes)
     tenant_id = str(body.get("tenant_id") or "")
@@ -617,7 +599,6 @@ def _trials(op, arg, facts):
 
 def _revenue_text(op, arg, now, event_store, tenant_id):
     """Owner read-only attribution/outcome screens (promotions attribution spine; no spend input)."""
-    from application.business_flows import promotions as pm
 
     adm = flow_rows(event_store, tenant_id=tenant_id, event_type="business_admin@v1")
     bkg = flow_rows(event_store, tenant_id=tenant_id, event_type="bookings@v1")
@@ -648,7 +629,6 @@ def _visual(body, effects, env, facts, arg, done):
     """/visual Название [| стиль [| формат]] or /visual Название | style x: YandexART via executor."""
     from application.business_flows import event_landing as el
     from application.business_flows import visual_creatives as vc
-    from runtime.platform.config.env_flags import env_str
 
     title, cmd, val = vc.parse_command(arg)
     st = vc.replay(facts("event_series@v1"))
@@ -686,12 +666,9 @@ def _visual(body, effects, env, facts, arg, done):
 
 def _sales_ai(send, body, effects, st, arg, *, decision, tenant_id, event_store):
     """/lead_ai N | текст клиента -> draft reply note + optional stage button (never sent to the customer)."""
-    from application.business_flows import admin as ad
     from application.business_flows import cockpit as cp
     from application.business_flows import cockpit_sales as cs
-    from application.business_flows import sales as sl
     from application.business_flows import sales_ai as sa
-    from runtime.platform.config.env_flags import env_str
 
     ref, _, text = (x.strip() for x in arg.partition("|"))
     lead = sl.pick(st, ref)
@@ -730,7 +707,6 @@ def _sales_ai(send, body, effects, st, arg, *, decision, tenant_id, event_store)
 
 def _commerce(done, body, st, op, arg, *, tenant_id, event_store):
     """Tariff usage/limits (ai_commerce port): usage from team roles + bookings customers; no private ledger."""
-    from application.business_flows import admin as ad
 
     usage = ad.commerce_usage(event_store, tenant_id, str(body.get("user_id") or ""), st.archived_customers)
     if op == "commerce_check":
