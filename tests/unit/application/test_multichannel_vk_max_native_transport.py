@@ -201,6 +201,14 @@ def test_telegram_vk_and_max_never_promote_recipient_or_bot_identity_to_customer
     assert vk_group_sender['user_id'] == ''
     assert vk_group_sender['chat_id'] == '2000000001'
     assert vk_group_sender['external_user_ref'] is None
+    vk_human_sender = decode_provider_inbound(
+        channel='vk',
+        payload={'type': 'message_new', 'object': {'message': {
+            'id': 10, 'from_id': -123, 'user_id': 42, 'peer_id': 2000000001, 'text': 'human member',
+        }}},
+    )
+    assert vk_human_sender['user_id'] == '42'
+    assert vk_human_sender['external_user_ref'] == '42'
 
     max_recipient_only = decode_provider_inbound(
         channel='max',
