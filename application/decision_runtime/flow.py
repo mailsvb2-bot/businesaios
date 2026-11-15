@@ -230,8 +230,7 @@ def build_payload(
     if channel == "telegram" and state_user is not None and state_tenant is not None and type(event_id) is int:
         idempotency_key = issue_verified_update_idempotency_key(
             tenant_id=str(state_tenant), channel=channel, user_id=str(state_user),
-            update_id=event_id, action=str(getattr(out, "action", "")),
-            payload=payload, chat_id=chat_id, bot_id=bot_id,
+            update_id=event_id, chat_id=chat_id, bot_id=bot_id,
         )
         if idempotency_key:
             payload["idempotency_key"] = idempotency_key
