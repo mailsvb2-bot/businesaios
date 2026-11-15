@@ -1,6 +1,7 @@
-import pytest
 """Real HTTP ingress: durable queue first, never a fabricated receipt."""
 from __future__ import annotations
+
+import pytest
 
 import http.client
 import json
