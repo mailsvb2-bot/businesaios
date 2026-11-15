@@ -62,6 +62,12 @@ class MarketingLLMComposer:
             )
 
     @property
+    def accounted_gateway(self) -> Any:
+        if self._accounted_gateway is None:
+            raise RuntimeError("LLM_ACCOUNTED_GATEWAY_REQUIRED")
+        return self._accounted_gateway
+
+    @property
     def llm_client(self) -> LLMClient:
         """Canonical read-only access to the injected client.
 
