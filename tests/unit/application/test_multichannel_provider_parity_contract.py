@@ -25,7 +25,7 @@ from security.secret_vault import InMemorySecretVault
 SAMPLES = {
     'telegram': {'message': {'from': {'id': 1}, 'chat': {'id': 1}, 'text': 'tg', 'message_id': 11}, 'update_id': 101},
     'whatsapp': {'entry': [{'changes': [{'value': {'messages': [{'from': 'wa1', 'id': 'wamid', 'text': {'body': 'wa'}}]}}]}]},
-    'vk': {'object': {'message': {'from_id': 2, 'peer_id': 2, 'text': 'vk', 'id': 22}}, 'event_id': 'vk-event'},
+    'vk': {'group_id': 2, 'object': {'message': {'from_id': 2, 'peer_id': 2, 'text': 'vk', 'id': 22}}, 'event_id': 'vk-event'},
     'max': {'message': {'sender': {'user_id': 3}, 'recipient': {'chat_id': 3}, 'body': {'text': 'max', 'mid': 'max-mid'}}},
     'instagram': {'entry': [{'messaging': [{'sender': {'id': 'ig1'}, 'message': {'text': 'ig', 'mid': 'ig-mid'}}]}]},
     'messenger': {'entry': [{'messaging': [{'sender': {'id': 'fb1'}, 'message': {'text': 'fb', 'mid': 'fb-mid'}}]}]},
@@ -144,6 +144,8 @@ def test_bridge_shared_secret_is_verified_fail_closed() -> None:
     vault = InMemorySecretVault()
     ref = SecretRef(tenant_id='tenant-a', connector_id=provider.connector_id, scope='business-a', secret_name=f'{provider.connector_id}.webhook_secret')
     vault.put(SecretRecord(ref=ref, ciphertext=b'pending', source=SecretSource.CONNECTOR), plaintext=b'shared-secret')
+    group_ref = SecretRef(tenant_id='tenant-a', connector_id=provider.connector_id, scope='business-a', secret_name=f'{provider.connector_id}.group_id')
+    vault.put(SecretRecord(ref=group_ref, ciphertext=b'pending', source=SecretSource.CONNECTOR), plaintext=b'2')
     runtime = ProviderWebhookRuntime(vault)
     body = json.dumps(SAMPLES['vk']).encode()
     assert runtime.verify(provider=provider, tenant_id='tenant-a', business_id='business-a', headers={'X-BusinessAIOS-Webhook-Secret': 'shared-secret'}, body=body) is True
