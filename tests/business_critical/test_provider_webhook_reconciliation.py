@@ -44,6 +44,7 @@ def test_provider_webhook_never_promotes_untrusted_session_id_to_sender() -> Non
     _put(vault, whatsapp, 'biz-wa', 'phone_number_id', 'phone-123')
     body = json.dumps({
         'session_id': 'attacker-controlled-session',
+        'chat_id': 'recipient-only',
         'message': 'hello',
         'entry': [{
             'changes': [{
