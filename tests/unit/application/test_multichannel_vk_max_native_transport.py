@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import json
+
 from application.business_autonomy.provider_catalog import provider_map
 from runtime.business_autonomy.provider_payload_normalizers import ProviderPayloadNormalizers
 from runtime.business_autonomy.provider_response_parsers import ProviderResponseParsers
@@ -24,6 +26,7 @@ def test_vk_and_max_keep_bridge_onboarding_while_exposing_native_credentials() -
     max_fields = {field.secret_name: field for field in providers['max_messaging'].secret_fields}
     assert vk['webhook_secret'].required is True and vk['access_token'].required is False and vk['group_id'].required is False and vk['confirmation_code'].required is False
     assert max_fields['webhook_secret'].required is True and max_fields['access_token'].required is False
+    assert max_fields['bot_id'].required is False and max_fields['bot_id'].secret_kind == 'config'
     assert all('message_send' in ProviderSyncRuntimePlanner().describe(providers[key]).write_operations for key in ('vk_messaging', 'max_messaging'))
 
 
@@ -127,3 +130,30 @@ def test_vk_messaging_adapter_surfaces_provider_approval_without_generic_webhook
     sent = service.calls[0]
     assert sent['provider_key'] == 'vk_messaging' and sent['payload']['peer_id'] == '42'
     assert sent['payload']['_approval'] == {'decision_id': 'dec-1', 'execution_id': 'dec-1'}
+
+
+def test_max_direct_webhook_message_requires_the_configured_bot_recipient() -> None:
+    provider = provider_map()['max_messaging']
+    vault = InMemorySecretVault()
+    _put(vault, provider, 'webhook_secret', 'max-secret')
+    _put(vault, provider, 'bot_id', '9001')
+    runtime = ProviderWebhookRuntime(vault)
+    body = json.dumps({'update_type': 'message_created', 'message': {
+        'sender': {'user_id': 77, 'is_bot': False},
+        'recipient': {'chat_id': 700, 'chat_type': 'dialog', 'user_id': 9001},
+        'body': {'mid': 'max-mid', 'text': 'hello'},
+    }}).encode()
+    headers = {'X-Max-Bot-Api-Secret': 'max-secret'}
+    assert runtime.verify(provider=provider, tenant_id='tenant-a', business_id='business-a', headers=headers, body=body) is True
+    foreign = json.loads(body)
+    foreign['message']['recipient']['user_id'] = 9002
+    assert runtime.verify(provider=provider, tenant_id='tenant-a', business_id='business-a', headers=headers, body=json.dumps(foreign).encode()) is False
+
+
+def test_max_direct_webhook_message_fails_closed_without_bot_identity() -> None:
+    provider = provider_map()['max_messaging']
+    vault = InMemorySecretVault()
+    _put(vault, provider, 'webhook_secret', 'max-secret')
+    runtime = ProviderWebhookRuntime(vault)
+    body = b'{"update_type":"message_created","message":{"sender":{"user_id":77},"recipient":{"chat_id":700,"chat_type":"dialog","user_id":9001},"body":{"mid":"max-mid","text":"hello"}}}'
+    assert runtime.verify(provider=provider, tenant_id='tenant-a', business_id='business-a', headers={'X-Max-Bot-Api-Secret': 'max-secret'}, body=body) is False
