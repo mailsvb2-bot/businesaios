@@ -20,7 +20,7 @@ class ActionBudgetGuard:
 
     def evaluate(self, ctx: SafetyActionContext) -> ControlDecision:
         payload = dict(ctx.payload)
-        idempotency_key = verified_telegram_idempotency_key(payload)
+        idempotency_key = verified_telegram_idempotency_key(ctx.action, payload)
         if idempotency_key:
             lookup = getattr(self._ledger, "recorded_action", None)
             previous = lookup(ctx.tenant_id, idempotency_key) if callable(lookup) else None
