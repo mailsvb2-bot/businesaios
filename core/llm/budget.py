@@ -189,6 +189,7 @@ class EventStoreDailyTokenBudget:
                 pending[request_id] = normalized
         return pending, snapshots
 
+    # Revision is inside the CAS value: pending-map equality alone permits ABA after reserve/complete/release.
     def _pending_state(self, *, tenant_id: str, day: str) -> tuple[Any, dict[str, Any], dict[str, dict[str, Any]]]:
         current = self._es.get_setting(tenant_id=str(tenant_id), key=_PENDING_STATE_KEY)
         legacy, snapshots = self._legacy_pending(tenant_id=tenant_id, day=day)
