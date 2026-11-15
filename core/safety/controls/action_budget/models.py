@@ -69,24 +69,14 @@ def issue_verified_reply(*, tenant_id: str, channel: str, user_id: str,
     return proof
 
 
-def _telegram_update_key(tenant_id: str, bot_id: str, user_id: str, update_id: int,
-                         action: str, payload: Mapping[str, Any]) -> str:
-    stable_payload = dict(payload)
-    stable_payload.pop("idempotency_key", None)
-    meta = stable_payload.get("meta")
-    if isinstance(meta, Mapping):
-        stable_payload["meta"] = {key: value for key, value in meta.items()
-                                  if key != "inbound_user_reply"}
-    material = json.dumps(
-        [tenant_id, bot_id, user_id, update_id, action, stable_payload],
-        sort_keys=True, separators=(",", ":"), ensure_ascii=False, default=str,
-    ).encode()
+def _telegram_update_key(tenant_id: str, bot_id: str, user_id: str, update_id: int) -> str:
+    material = json.dumps([tenant_id, bot_id, user_id, update_id],
+                          separators=(",", ":"), ensure_ascii=False).encode()
     return "telegram:" + hashlib.sha256(material).hexdigest()
 
 
 def issue_verified_update_idempotency_key(*, tenant_id: str, channel: str, user_id: str,
-                                          update_id: object, action: str,
-                                          payload: Mapping[str, Any], chat_id: str = "",
+                                          update_id: object, chat_id: str = "",
                                           bot_id: str = "primary") -> str | None:
     if channel != "telegram" or type(update_id) is not int or update_id < 0:
         return None
@@ -95,11 +85,10 @@ def issue_verified_update_idempotency_key(*, tenant_id: str, channel: str, user_
                 _execution_owner(), bot_scope)
     if _VERIFIED_INGRESS.get() != expected:
         return None
-    return _telegram_update_key(str(tenant_id), bot_scope, str(user_id), update_id,
-                                str(action), payload)
+    return _telegram_update_key(str(tenant_id), bot_scope, str(user_id), update_id)
 
 
-def verified_telegram_idempotency_key(action: str, payload: Mapping[str, Any]) -> str | None:
+def verified_telegram_idempotency_key(payload: Mapping[str, Any]) -> str | None:
     if not isinstance(payload, Mapping):
         return None
     scope = _VERIFIED_INGRESS.get()
@@ -112,9 +101,27 @@ def verified_telegram_idempotency_key(action: str, payload: Mapping[str, Any]) -
     if (str(payload.get("tenant_id") or "") != tenant_id or
             str(payload.get("user_id") or "") != user_id):
         return None
-    expected = _telegram_update_key(tenant_id, bot_scope, user_id, update_id,
-                                    str(action), payload)
+    expected = _telegram_update_key(tenant_id, bot_scope, user_id, update_id)
     return expected if payload.get("idempotency_key") == expected else None
+
+
+def telegram_action_fingerprint(action: str, payload: Mapping[str, Any]) -> str:
+    stable_payload = dict(payload)
+    for key in ("idempotency_key", "world_model_meta", "world_model_explainability",
+                "constraint_explainability"):
+        stable_payload.pop(key, None)
+    meta = stable_payload.get("meta")
+    if isinstance(meta, Mapping):
+        stable_payload["meta"] = {
+            key: value for key, value in meta.items()
+            if key not in {"inbound_user_reply", "world_model_meta",
+                           "world_model_explainability", "constraint_explainability"}
+        }
+    material = json.dumps(
+        [str(action), stable_payload], sort_keys=True, separators=(",", ":"),
+        ensure_ascii=False, default=str,
+    ).encode()
+    return hashlib.sha256(material).hexdigest()
 
 
 def _verified_signature(proof: Mapping[str, Any]) -> bool:
