@@ -44,14 +44,14 @@ def test_composer_returns_text_and_caches():
 
 
 def test_composer_rejects_forbidden_phrase():
-    composer = MarketingLLMComposer(_UsageLLM(text=_REJECTED), LLMComposerConfig(model="mock", budget_source="memory"))
+    composer = MarketingLLMComposer(_UsageLLM(text=_REJECTED), LLMComposerConfig(model="mock", budget_source="event_store"), event_store=MemoryEventStore())
     assert composer.compose_sync(_input()) is None
 
 
 @pytest.mark.parametrize("async_mode", [False, True])
 @pytest.mark.asyncio
 async def test_provider_usage_is_charged_even_when_text_rejected(async_mode):
-    composer = MarketingLLMComposer(_UsageLLM(text=_REJECTED), LLMComposerConfig(model="mock", budget_source="memory"))
+    composer = MarketingLLMComposer(_UsageLLM(text=_REJECTED), LLMComposerConfig(model="mock", budget_source="event_store"), event_store=MemoryEventStore())
     assert (await composer.compose(_input()) if async_mode else composer.compose_sync(_input())) is None
     assert not composer._runtime.budget.can_spend(
         tenant_id="tenant", user_id="user", tokens=composer._cfg.budget.user_tokens_per_day - 6,
@@ -190,7 +190,10 @@ async def test_event_store_request_write_failure_prevents_provider_call(async_mo
 @pytest.mark.parametrize("different_scope", ["tenant", "user", "channel"])
 def test_marketing_cache_is_isolated_by_tenant_user_and_channel(different_scope):
     llm = _UsageLLM()
-    composer = MarketingLLMComposer(llm, LLMComposerConfig(model="mock", budget_source="memory"))
+    composer = MarketingLLMComposer(
+        llm, LLMComposerConfig(model="mock", budget_source="event_store"),
+        event_store=MemoryEventStore(),
+    )
     inp = _input(tenant="t-cache", user="u-cache")
     assert composer.compose_sync(inp)
     assert composer.compose_sync(inp)
@@ -608,3 +611,11 @@ def test_explicit_memory_budget_never_allows_live_provider_transport(provider):
     with pytest.raises(RuntimeError, match="LLM_BUDGET_EVENT_STORE_UNAVAILABLE"):
         MarketingLLMComposer(clients[provider], LLMComposerConfig(model="mock", budget_source="memory"))
     assert called == []
+
+
+def test_memory_budget_rejects_unregistered_provider_clients() -> None:
+    with pytest.raises(RuntimeError, match="LLM_BUDGET_EVENT_STORE_UNAVAILABLE"):
+        MarketingLLMComposer(
+            _UsageLLM(),
+            LLMComposerConfig(model="custom", budget_source="memory"),
+        )
