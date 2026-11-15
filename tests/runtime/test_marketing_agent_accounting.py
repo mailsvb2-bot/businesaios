@@ -107,13 +107,15 @@ def test_gateway_missing_or_invalid_provider_usage_never_fabricates_spend(usage)
     assert client.calls == 1
 
 
-def test_boot_marketing_agent_uses_same_durable_gateway(monkeypatch):
+def test_boot_marketing_agent_reuses_the_composer_accounted_gateway(monkeypatch):
     store, client = MemoryEventStore(), Provider()
-    monkeypatch.setattr(builder, "build_marketing_llm_composer",
-                        lambda **kw: SimpleNamespace(llm_client=client))
+    gateway = AccountedSyncGateway(client, event_store=store, provider="openai_compat")
+    composer = SimpleNamespace(llm_client=client, accounted_gateway=gateway)
+    monkeypatch.setattr(builder, "build_marketing_llm_composer", lambda **kw: composer)
     monkeypatch.setattr(builder, "_provider_settings",
                         lambda settings: ("openai_compat", "", "", "mock", None))
     agent = builder.build_marketing_llm_agent(settings=SimpleNamespace(), event_store=store, logger=None)
+    assert agent._gateway is gateway
     ctx = LLMTaskContext(tenant_id="tenant", user_id="user", correlation_key="creative-1")
     assert agent.run_task(TaskType.ADS_CREATIVE_GENERATE, ctx).text == "safe text"
     with pytest.raises(RuntimeError, match="LLM_BUDGET_BLOCKED"):
