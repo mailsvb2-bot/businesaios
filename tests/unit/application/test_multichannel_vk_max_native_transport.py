@@ -60,6 +60,7 @@ def test_vk_official_body_secret_and_callback_response_are_supported() -> None:
     provider = provider_map()['vk_messaging']
     vault = InMemorySecretVault()
     _put(vault, provider, 'webhook_secret', 'vk-secret')
+    _put(vault, provider, 'group_id', '123')
     _put(vault, provider, 'confirmation_code', 'confirm-123')
     runtime = ProviderWebhookRuntime(vault)
     confirmation = b'{"type":"confirmation","group_id":123,"secret":"vk-secret"}'
