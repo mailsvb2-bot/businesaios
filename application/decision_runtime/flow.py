@@ -170,13 +170,6 @@ def build_payload(
     customer_bot = _mapping(session.get("customer_bot"))
     bot_id = str(customer_bot.get("bot_id") or "primary").strip() or "primary"
     chat_id = str(session.get("chat_id") or session.get("messaging_chat_id") or session.get("telegram_chat_id") or "")
-    if channel == "telegram" and state_user is not None and state_tenant is not None and type(event_id) is int:
-        idempotency_key = issue_verified_update_idempotency_key(
-            tenant_id=str(state_tenant), channel=channel, user_id=str(state_user),
-            update_id=event_id, chat_id=chat_id, bot_id=bot_id,
-        )
-        if idempotency_key:
-            payload["idempotency_key"] = idempotency_key
     # Preserve existing verified reply sealing. For unverified messages never
     # silently fall through to the Telegram transport on a non-Telegram ingress.
     if (getattr(out, "action", "") == "send_message@v1"
@@ -234,6 +227,14 @@ def build_payload(
         meta_block["constraint_explainability"] = state_meta["constraint_explainability"]
     if meta_block:
         payload["meta"] = meta_block
+    if channel == "telegram" and state_user is not None and state_tenant is not None and type(event_id) is int:
+        idempotency_key = issue_verified_update_idempotency_key(
+            tenant_id=str(state_tenant), channel=channel, user_id=str(state_user),
+            update_id=event_id, action=str(getattr(out, "action", "")),
+            payload=payload, chat_id=chat_id, bot_id=bot_id,
+        )
+        if idempotency_key:
+            payload["idempotency_key"] = idempotency_key
     return tagged, payload
 
 
