@@ -417,7 +417,7 @@ def decode_provider_inbound(
         "chat_id": chat_id,
         "text": _provider_text(canonical, raw, field_text("text")),
         "message_id": message_id,
-        "external_user_ref": user_id or chat_id,
+        "external_user_ref": user_id or None,
         "timestamp_ms": _timestamp_from_payload(raw, paths.get("timestamp", ())),
         "locale": field_text("locale") or None,
         "subject": field_text("subject") or None,
