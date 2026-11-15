@@ -123,7 +123,7 @@ class ProviderWebhookRuntime:
     def _recipient_matches(self, *, provider: ProviderDefinition, tenant_id: str, business_id: str, body: bytes) -> bool:
         """Bind signed messaging webhooks to the account configured for this tenant/business."""
         key = str(provider.provider_key)
-        if key not in {'whatsapp_cloud', 'instagram_messaging', 'messenger_messaging', 'vk_messaging'}:
+        if key not in {'whatsapp_cloud', 'instagram_messaging', 'messenger_messaging', 'vk_messaging', 'max_messaging'}:
             return True
         payload = ProviderPayloadNormalizers.parse_webhook_json(body)
         if key == 'whatsapp_cloud':
@@ -155,6 +155,21 @@ class ProviderWebhookRuntime:
                 return False
             observed = [str(entry.get('id') or '').strip() for entry in entries if isinstance(entry, Mapping)]
             return bool(observed) and len(observed) == len(entries) and all(value == expected for value in observed)
+        if key == 'max_messaging':
+            message, = (payload.get('message'),)
+            if not isinstance(message, Mapping):
+                return True
+            recipient, sender = message.get('recipient'), message.get('sender')
+            if not isinstance(recipient, Mapping) or not isinstance(sender, Mapping):
+                return False
+            chat_type, chat_id = str(recipient.get('chat_type') or ''), str(recipient.get('chat_id') or '').strip()
+            sender_id, observed = str(sender.get('user_id') or '').strip(), str(recipient.get('user_id') or '').strip()
+            if not chat_id or not sender_id or sender.get('is_bot') is True:
+                return False
+            if chat_type == 'dialog' or observed:
+                expected = self._read_secret(tenant_id=tenant_id, connector_id=provider.connector_id, business_id=business_id, secret_name=f'{provider.connector_id}.bot_id')
+                return bool(expected and observed and observed == expected)
+            return chat_type in {'chat', 'channel'}
         expected = self._read_secret(tenant_id=tenant_id, connector_id=provider.connector_id, business_id=business_id, secret_name=f'{provider.connector_id}.group_id')
         observed = str(payload.get('group_id') or '').strip()
         return bool(expected and observed and observed == expected)
