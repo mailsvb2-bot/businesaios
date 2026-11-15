@@ -129,3 +129,16 @@ def test_completion_without_provider_identity_or_consistent_token_measurements_f
     budget = EventStoreDailyTokenBudget(event_store=store, caps=BudgetCaps())
     with pytest.raises(RuntimeError, match="LLM_BUDGET_CORRUPT_COMPLETION"):
         budget.can_spend(tenant_id="t", user_id="u", tokens=1)
+
+
+def test_durable_budget_contract_does_not_require_unused_fast_aggregate():
+    from core.llm.budget import has_durable_budget_store
+
+    store = Mock(
+        sum_event_payload_int=None,
+        iter_events=Mock(),
+        get_setting=Mock(),
+        compare_and_set_setting=Mock(),
+        append_event=Mock(),
+    )
+    assert has_durable_budget_store(store)
