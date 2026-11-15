@@ -74,8 +74,25 @@ def start_telegram_webhook_server_in_thread(
     )
 
 
-def start_yookassa_webhook_server_in_thread(*, host: str, port: int, path: str, event_store: Any, payment_outbox: Any) -> Any:
-    return _effects_impl().start_yookassa_webhook_server_in_thread(host=host, port=port, path=path, event_store=event_store, payment_outbox=payment_outbox)
+def start_yookassa_webhook_server_in_thread(
+    *,
+    host: str,
+    port: int,
+    path: str,
+    event_store: Any,
+    payment_outbox: Any,
+    auth_mode: str | None = None,
+    webhook_token: str | None = None,
+) -> Any:
+    return _start_yookassa_webhook_server_in_thread(
+        host=str(host),
+        port=int(port),
+        path=str(path),
+        event_store=event_store,
+        payment_outbox=payment_outbox,
+        auth_mode=auth_mode,
+        webhook_token=webhook_token,
+    )
 
 
 # -------- HTTP (network facade) --------
