@@ -31,7 +31,12 @@ def handle_settings_routes(ctx: TelegramCtx, *, user_id: str, bot_username: str,
         state = getattr(ctx, "state", None)
         session = getattr(state, "session", None)
         session = session if isinstance(session, dict) else {}
-        business_id = str(session.get("selected_business_id") or session.get("business_id") or "").strip()
+        selected = str(session.get("selected_business_id") or "").strip()
+        bound = str(session.get("business_id") or "").strip()
+        if selected and bound and selected != bound:
+            return pm(text="Контекст бизнеса изменился. Выберите бизнес заново, чтобы открыть правильную организацию.",
+                      reply_markup=kb_back_main())
+        business_id = selected or bound
         if not business_id:
             return pm(text="Сначала выберите бизнес. Без подтверждённого выбора карточка организации не открывается.",
                       reply_markup=kb_back_main())

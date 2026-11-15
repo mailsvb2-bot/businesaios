@@ -65,6 +65,13 @@ def test_organization_telegram_requires_admin_and_selected_business():
                                      user_id="u", bot_username="", pm=pm)
     assert allowed.action == "business_admin@v1"
     assert allowed.payload["business_id"] == "b1"
+    conflicting = handle_settings_routes(
+        ctx(admin=True, session={"selected_business_id": "b1", "business_id": "b2"},
+            callback="cp:settings:organization"),
+        user_id="u", bot_username="", pm=pm,
+    )
+    assert conflicting.action == "send_message@v1"
+    assert "Выберите бизнес заново" in conflicting.payload["text"]
     rename = handle_settings_routes(ctx(admin=True, session={"business_id": "b1"}, cmd="/org_name"),
                                     user_id="u", bot_username="", pm=pm)
     assert rename.payload["op"] == "organization_name" and rename.payload["arg"] == "Новое название"
