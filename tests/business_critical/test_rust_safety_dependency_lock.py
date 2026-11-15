@@ -99,3 +99,10 @@ def test_pull_request_dependency_review_is_strict_and_sha_pinned() -> None:
     assert "fail-on-severity: low" in workflow
     assert "fail-on-scopes: runtime, development, unknown" in workflow
     assert "warn-only: true" not in workflow
+
+def test_uvloop_release_dependency_is_excluded_on_windows() -> None:
+    lock = (REPO_ROOT / "requirements.release.lock.txt").read_text(encoding="utf-8")
+    uvloop_lines = [line for line in lock.splitlines() if line.startswith("uvloop==")]
+    assert len(uvloop_lines) == 1
+    assert 'sys_platform != "win32"' in uvloop_lines[0]
+
