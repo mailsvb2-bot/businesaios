@@ -59,19 +59,14 @@ def estimate_request_tokens(request: Any) -> int:
 def validated_llm_usage(usage: Any) -> tuple[int, int, int] | None:
     """Validate provider measurements; never substitute a reservation estimate."""
     value = (lambda key: usage.get(key) if isinstance(usage, Mapping) else getattr(usage, key, None))
-    values = tuple(value(key) for key in ("prompt_tokens", "completion_tokens", "total_tokens"))
-    if any(type(item) is not int or item < 0 for item in values):
-        return None
-    prompt, completion, total = values
-    return (prompt, completion, total) if total > 0 and total >= prompt + completion else None
+    prompt, completion, total = (value(key) for key in ("prompt_tokens", "completion_tokens", "total_tokens"))
+    return (prompt, completion, total) if all(type(v) is int and v >= 0 for v in (prompt, completion, total)) and total > 0 and total >= prompt + completion else None
 
 
 def validated_llm_completion_event(event: Any) -> tuple[str, str, tuple[int, int, int]] | None:
-    if not isinstance(event, dict):
-        return None
+    if not isinstance(event, dict): return None
     user, payload = event.get("user_id"), event.get("payload")
-    if not isinstance(user, str) or not user.strip() or not isinstance(payload, dict):
-        return None
+    if not isinstance(user, str) or not user.strip() or not isinstance(payload, dict): return None
     request_id, provider, model = (payload.get(key) for key in ("request_id", "provider", "model"))
     usage = validated_llm_usage(payload)
     return (user, request_id, usage) if all(isinstance(v, str) and v.strip() for v in (request_id, provider, model)) and usage is not None else None
@@ -99,8 +94,7 @@ class EventStoreDailyTokenBudget:
             fact = validated_llm_completion_event(event)
             if fact is None:
                 raise RuntimeError("LLM_BUDGET_CORRUPT_COMPLETION")
-            tenant += fact[2][2]
-            user += fact[2][2] if fact[0] == str(user_id) else 0
+            tenant += fact[2][2]; user += fact[2][2] if fact[0] == str(user_id) else 0
         return tenant, user
 
     def can_spend(self, *, tenant_id: str, user_id: str, tokens: int) -> bool:
@@ -111,14 +105,11 @@ class EventStoreDailyTokenBudget:
         return None  # The durable completion is authoritative; no cross-worker cache.
 
     def _reconcile_completed(self, *, tenant_id: str, day: str, current: dict) -> bool:
-        """Reclaim only reservations with durable matching provider spend."""
         it = getattr(self._es, "iter_events", None)
         if not callable(it) or not isinstance(current, dict) or not isinstance(current.get("pending"), dict):
             return False
         try:
-            reservation_day = date.fromisoformat(day)
-            if reservation_day.isoformat() != day:
-                return False
+            if (reservation_day := date.fromisoformat(day)).isoformat() != day: return False
             start, end = _utc_day_bounds_ms(int(datetime.combine(reservation_day, datetime.min.time(), tzinfo=UTC).timestamp() * 1000))
         except (TypeError, ValueError, OverflowError):
             return False
@@ -135,15 +126,12 @@ class EventStoreDailyTokenBudget:
         return len(remaining) < len(current["pending"]) and self._es.compare_and_set_setting(tenant_id=str(tenant_id), key=f"llm:pending:v1:{day}", expected=current, value={"pending": remaining})
 
     def reserve(self, *, tenant_id: str, user_id: str, tokens: int, request_id: str) -> str | None:
-        """Atomic headroom reservation; cross-day claim prevents provider replay."""
-        get = getattr(self._es, "get_setting", None)
-        cas = getattr(self._es, "compare_and_set_setting", None)
+        get, cas = getattr(self._es, "get_setting", None), getattr(self._es, "compare_and_set_setting", None)
         if not callable(get) or not callable(cas) or type(tokens) is not int or tokens <= 0 or any(
             not isinstance(value, str) or not value.strip() for value in (tenant_id, user_id, request_id)
         ):
             return None
-        day = self._day()
-        key = f"llm:pending:v1:{day}"
+        day = self._day(); key = f"llm:pending:v1:{day}"
         for _ in range(16):
             current = get(tenant_id=str(tenant_id), key=key)
             if current is not None and not isinstance(current, dict):
@@ -159,8 +147,7 @@ class EventStoreDailyTokenBudget:
                 row_user, row_tokens = row.get("user_id"), row.get("tokens")
                 if not isinstance(row_user, str) or not row_user.strip() or type(row_tokens) is not int or row_tokens <= 0:
                     return None
-                reserved_tenant += row_tokens
-                reserved_user += row_tokens if row_user == str(user_id) else 0
+                reserved_tenant += row_tokens; reserved_user += row_tokens if row_user == str(user_id) else 0
             if self._day() != day:
                 return None
             if (spent_tenant + reserved_tenant + tokens > self._caps.tenant_tokens_per_day or spent_user + reserved_user + tokens > self._caps.user_tokens_per_day):
@@ -185,7 +172,6 @@ class EventStoreDailyTokenBudget:
             return False
 
     def release(self, *, tenant_id: str, request_id: str, day: str) -> bool:
-        """Release after durable completion or a proven pre-provider abort."""
         key = f"llm:pending:v1:{day}"
         for _ in range(16):
             current = self._es.get_setting(tenant_id=str(tenant_id), key=key)
