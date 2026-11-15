@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import time
+from collections.abc import Mapping
 from dataclasses import dataclass, field
 from datetime import UTC, date, datetime
 from typing import Any, Protocol
@@ -57,11 +58,27 @@ def estimate_request_tokens(request: Any) -> int:
 
 def validated_llm_usage(usage: Any) -> tuple[int, int, int] | None:
     """Validate provider measurements; never substitute a reservation estimate."""
-    values = tuple(getattr(usage, key, None) for key in ("prompt_tokens", "completion_tokens", "total_tokens"))
-    if any(type(value) is not int or value < 0 for value in values):
+    value = (lambda key: usage.get(key) if isinstance(usage, Mapping) else getattr(usage, key, None))
+    values = tuple(value(key) for key in ("prompt_tokens", "completion_tokens", "total_tokens"))
+    if any(type(item) is not int or item < 0 for item in values):
         return None
     prompt, completion, total = values
     return (prompt, completion, total) if total > 0 and total >= prompt + completion else None
+
+
+def validated_llm_completion_event(event: Any) -> tuple[str, str, tuple[int, int, int]] | None:
+    """Validate the durable provider identity and measured usage as one fact."""
+    if not isinstance(event, dict):
+        return None
+    user_id = event.get("user_id")
+    payload = event.get("payload")
+    if not isinstance(user_id, str) or not user_id.strip() or not isinstance(payload, dict):
+        return None
+    request_id, provider, model = (payload.get(key) for key in ("request_id", "provider", "model"))
+    if any(not isinstance(value, str) or not value.strip() for value in (request_id, provider, model)):
+        return None
+    usage = validated_llm_usage(payload)
+    return (user_id, request_id, usage) if usage is not None else None
 
 
 def has_durable_budget_store(event_store: Any) -> bool:
@@ -83,11 +100,10 @@ class EventStoreDailyTokenBudget:
             raise RuntimeError("LLM_BUDGET_EVENT_AGGREGATOR_UNAVAILABLE")
         tenant = user = 0
         for event in it(tenant_id=str(tenant_id), start_ms=start_ms, end_ms=end_ms, event_type=LLM_COMPLETED):
-            payload = event.get("payload") if isinstance(event, dict) else None
-            event_user = event.get("user_id") if isinstance(event, dict) else None
-            value = payload.get("total_tokens") if isinstance(payload, dict) else None
-            if not isinstance(event_user, str) or not event_user.strip() or type(value) is not int or value <= 0:
+            validated = validated_llm_completion_event(event)
+            if validated is None:
                 raise RuntimeError("LLM_BUDGET_CORRUPT_COMPLETION")
+            event_user, _request_id, (_prompt, _completion, value) = validated
             tenant += value
             if event_user == str(user_id):
                 user += value
@@ -115,11 +131,11 @@ class EventStoreDailyTokenBudget:
         completed = set()
         try:
             for event in it(tenant_id=str(tenant_id), start_ms=start, end_ms=end, event_type=LLM_COMPLETED):
-                payload = event.get("payload") or {}
-                tokens = payload.get("total_tokens")
-                if type(tokens) is not int or tokens <= 0:
+                validated = validated_llm_completion_event(event)
+                if validated is None:
                     return False  # Never reclaim reservations on ambiguous provider spend.
-                completed.add((str(event.get("user_id") or ""), str(payload.get("request_id") or "")))
+                event_user, request_id, _usage = validated
+                completed.add((event_user, request_id))
         except (TypeError, ValueError, AttributeError):
             return False
         remaining = {rid: row for rid, row in current["pending"].items() if (str(row["user_id"]), rid) not in completed}
