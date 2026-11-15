@@ -49,6 +49,16 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           python -m pip install -r requirements.lock.txt
+      - name: Check UIII pure Rust crate (offline, pinned, no runtime deployment)
+        if: matrix.python-version == '3.12'
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ -f uiii-core/Cargo.toml ]; then
+            command -v cargo >/dev/null || { echo "cargo missing: UIII source not verifiable" >&2; exit 2; }
+            export CARGO_TARGET_DIR="${RUNNER_TEMP}/uiii-core-build-${GITHUB_RUN_ID}"
+            cargo test --manifest-path uiii-core/Cargo.toml --locked --offline
+          fi
       - name: Resolve targeted diff base
         shell: bash
         run: |

@@ -55,6 +55,7 @@ class Connector:
     secret_ref: str
     status: str = "pending"  # pending | active | disabled
     bindings: dict[str, str] = field(default_factory=dict)  # customer_ref -> customer_id
+    business_id: str = ""
 
 
 @dataclass
@@ -64,18 +65,26 @@ class State:
     feedback: dict[str, str] = field(default_factory=dict)
 
 
-def replay(payloads: list[dict[str, Any]]) -> State:
+def replay(payloads: list[dict[str, Any]], *, business_id: str = "", discover: bool = False) -> State:
     st = State()
     for p in payloads:
+        if not discover and str(p.get("business_id") or "") != business_id:
+            continue
         step, cid = p.get("step"), str(p.get("connector_id") or "")
         c = st.connectors.get(cid)
         if step == "xp_provisioned":
-            st.connectors[cid] = Connector(cid, p["product_key"], p["display_name"], p["secret_ref"])
+            st.connectors[cid] = Connector(
+                cid, p["product_key"], p["display_name"], p["secret_ref"],
+                business_id=str(p.get("business_id") or ""),
+            )
         elif step in ("xp_activated", "xp_disabled") and c:
             c.status = "active" if step == "xp_activated" else "disabled"
         elif step == "xp_bound" and c:
             c.bindings[p["customer_ref"]] = p["customer_id"]
         elif step == "xp_event":
+            old = st.receipts.get(p["receipt_id"])
+            if old is not None and old.get("payload_fingerprint") != p.get("payload_fingerprint"):
+                raise ValueError("durable XP receipt fingerprint conflict")
             st.receipts[p["receipt_id"]] = p
         elif step == "xp_feedback" and p.get("receipt_id") in st.receipts:
             st.feedback[p["receipt_id"]] = p["feedback"]
@@ -89,18 +98,21 @@ def _get(st: State, connector_id: str) -> Connector:
     return c
 
 
-def provision(st: State, *, product_key: str, display_name: str, secret_ref: str) -> dict[str, Any]:
+def provision(
+    st: State, *, product_key: str, display_name: str, secret_ref: str, business_id: str = ""
+) -> dict[str, Any]:
     """Donor ``provision_external_product_connector``: pending connector with a secret reference only."""
     key = str(product_key or "").strip().lower()
     if not re.fullmatch(r"[a-z][a-z0-9_]{1,63}", key):
         raise ValueError("product_key: латиница/цифры/_, 2..64")
     if not _REF.fullmatch(str(secret_ref or "")):
         raise ValueError("нужна ссылка на секрет env:NAME или vault:NAME — сам секрет в чат не передавайте")
-    cid = stable_id("xp", key)
+    cid = stable_id("xp", business_id, key) if business_id else stable_id("xp", key)
     if cid in st.connectors and st.connectors[cid].status != "disabled":
         raise ValueError("коннектор уже есть")
     name = " ".join(str(display_name or key).split())[:120]
     return {
+        **({"business_id": business_id} if business_id else {}),
         "step": "xp_provisioned",
         "connector_id": cid,
         "product_key": key,
@@ -147,7 +159,7 @@ def record_feedback(st: State, receipt_id: str, feedback: str) -> dict[str, Any]
 def value_snapshot(st: State, connector_id: str | None = None) -> dict[str, int]:
     """Donor ``get_external_observation_value_snapshot`` (accepted observations + feedback counts)."""
     rec = [r for r in st.receipts.values() if connector_id in (None, r["connector_id"])]
-    obs = [r for r in rec if r.get("observation")]
+    obs = latest_observations(st, connector_id=connector_id)
     fb = [st.feedback[r["receipt_id"]] for r in rec if r["receipt_id"] in st.feedback]
     return {
         "events": len(rec),
@@ -208,16 +220,29 @@ def _parse_observation(value: Any) -> dict[str, Any] | None:
         raise ValueError("external product observation must be an object")
     if set(value) - _OBS_KEYS:
         raise ValueError("external product observation contains unsupported fields")
-    lim = value.get("limitations") or []
+    lim = value.get("limitations", [])
     if not isinstance(lim, list) or any(not isinstance(x, str) for x in lim):
         raise ValueError("external product observation limitations must be strings")
     rev = value.get("revision", 1)
-    if isinstance(rev, bool) or not isinstance(rev, int):
+    if isinstance(rev, bool) or not isinstance(rev, int) or rev < 1:
         raise ValueError("external product observation revision must be an integer")
-    state = str(value.get("state") or "active").strip().lower()
-    quality = str(value.get("quality") or "source_asserted").strip().lower()
+    raw_state = value.get("state", "active")
+    raw_quality = value.get("quality", "source_asserted")
+    if not isinstance(raw_state, str) or not isinstance(raw_quality, str):
+        raise ValueError("external product observation state/quality is invalid")
+    state = raw_state.strip().lower()
+    quality = raw_quality.strip().lower()
     if state not in OBS_STATES or quality not in OBS_QUALITY:
         raise ValueError("external product observation state/quality is invalid")
+    for key, maximum in (("observation_key", 200), ("kind", 80), ("label", 160), ("provenance_ref", 300)):
+        text = value.get(key)
+        if not isinstance(text, str) or not text.strip() or len(text) > maximum or any(ord(c) < 32 for c in text):
+            raise ValueError(f"external observation {key} is invalid")
+    if len(lim) > 8 or any(len(x) > 200 for x in lim):
+        raise ValueError("external observation limitations exceed bounds")
+    observed = _parse_occurred_at(value.get("observed_at"))
+    if value.get("fresh_until") is not None and _parse_occurred_at(value["fresh_until"]) < observed:
+        raise ValueError("fresh_until precedes observation")
     return {
         "observation_key": str(value.get("observation_key") or ""),
         "kind": str(value.get("kind") or ""),
@@ -270,7 +295,7 @@ def parse_event(body: bytes) -> dict[str, Any]:
         raise ValueError("external product body must be a JSON object")
     if set(payload) - _EVENT_KEYS:
         raise ValueError("external product body contains unsupported fields")
-    if payload.get("version") != 1:
+    if type(payload.get("version")) is not int or payload["version"] != 1:
         raise ValueError("external product event version must be 1")
     occurred = _parse_occurred_at(payload.get("occurred_at"))
     etype = str(payload.get("type") or "").strip()
@@ -324,7 +349,19 @@ def ingest_authenticated(st: State, c: Connector, event: dict[str, Any], *, fing
             raise ValueError("external product event_id reused with a different payload")
         return None, rid
     customer = c.bindings.get(event["customer_ref"] or "", "")
+    observation = event.get("observation")
+    if observation:
+        heads = latest_observations(st, customer_ref=event.get("customer_ref"), connector_id=c.connector_id)
+        prior = next((r for r in heads if r["observation"]["observation_key"] == observation["observation_key"]), None)
+        if prior:
+            if observation["revision"] <= prior["observation"]["revision"]:
+                raise ValueError("external observation revision must advance")
+            if observation.get("supersedes_external_event_id") != prior["external_event_id"]:
+                raise ValueError("external observation supersession mismatch")
+        elif observation["revision"] != 1 or observation.get("supersedes_external_event_id"):
+            raise ValueError("external observation initial revision must be 1")
     fact = {
+        **({"business_id": c.business_id} if c.business_id else {}),
         "step": "xp_event", "receipt_id": rid, "connector_id": c.connector_id, "payload_fingerprint": fingerprint,
         "received_at": received_at, "customer_id": customer, **event,
     }  # fmt: skip
@@ -341,3 +378,48 @@ def ingest_webhook(
         body=body, now=now,
     )  # fmt: skip
     return ingest_authenticated(st, c, parse_event(body), fingerprint=fp, received_at=now.astimezone(UTC).isoformat())
+
+def latest_observations(st: State, *, customer_id: str | None = None, customer_ref: str | None = None,
+                        connector_id: str | None = None) -> list[dict[str, Any]]:
+    """Newest revision per connector/customer/observation; tombstones remain visible."""
+    heads: dict[tuple[str, str, str], dict[str, Any]] = {}
+    for row in st.receipts.values():
+        obs = row.get("observation")
+        if not obs or (customer_id is not None and row.get("customer_id") != customer_id):
+            continue
+        if customer_ref is not None and row.get("customer_ref") != customer_ref:
+            continue
+        if connector_id is not None and row.get("connector_id") != connector_id:
+            continue
+        key = (row["connector_id"], str(row.get("customer_ref") or ""), obs["observation_key"])
+        previous = heads.get(key)
+        if previous and obs["revision"] == previous["observation"]["revision"] and row != previous:
+            raise ValueError("conflicting observation revision")
+        if previous is None or obs["revision"] > previous["observation"]["revision"]:
+            heads[key] = row
+    return sorted(heads.values(), key=lambda r: (r["observation"]["observed_at"], r["receipt_id"]))
+
+
+def timeline_rows(st: State, *, customer_id: str) -> list[dict[str, Any]]:
+    """Convert verified XP facts into the existing customer-timeline read model."""
+    out = []
+    for row in latest_observations(st, customer_id=customer_id):
+        if st.feedback.get(row["receipt_id"]) in {"incorrect", "wrong_customer"}:
+            continue
+        obs = row["observation"]
+        connector = st.connectors.get(row["connector_id"])
+        if connector is None:
+            continue
+        out.append({
+            "connector_name": connector.display_name,
+            "observation_revision": obs["revision"],
+            "observation_state": obs["state"],
+            "observation_fresh_until": obs["fresh_until"],
+            "metadata": {
+                "external_observation_schema": "2026-09-20.v2",
+                **{f"external_observation_{k}": obs[k] for k in (
+                    "kind", "label", "observed_at", "provenance_ref", "quality", "limitations"
+                )},
+            },
+        })
+    return out
