@@ -145,7 +145,22 @@ def test_line_viber_webhook_identity_uses_vendor_event_ids_for_canonical_idempot
     assert viber == {'topic': 'message', 'source_ref': 'V1', 'resource_id': '991', 'event_key_hint': '991'}
     assert routes.extract(providers['line_messaging'], {}, line_body)['event_key'] == 'evt-line-1'
     batch = json.dumps({'events': [json.loads(line_body)['events'][0], {'type': 'message', 'webhookEventId': 'evt-line-2', 'source': {'groupId': 'G2'}, 'message': {'id': 'm2', 'text': 'two'}}, {'type': 'message', 'webhookEventId': 'evt-line-3', 'source': {'roomId': 'R3'}, 'message': {'id': 'm3', 'text': 'three'}}]}).encode(); batch_routes = routes.extract_many(providers['line_messaging'], {'X-Request-Id': 'callback-1'}, batch)
-    assert tuple(row['event_key'] for row in batch_routes) == ('evt-line-1', 'evt-line-2', 'evt-line-3') and tuple(row['messaging_ingress']['user_id'] for row in batch_routes[1:]) == ('G2', 'R3')
+    assert tuple(row['event_key'] for row in batch_routes) == ('evt-line-1', 'evt-line-2', 'evt-line-3')
+    # LINE groupId/roomId identify the conversation, not the human sender.
+    # Missing source.userId must therefore not become a customer identity.
+    assert tuple(row['messaging_ingress'] for row in batch_routes[1:]) == ({}, {})
+    group_with_sender = json.dumps({
+        'events': [{
+            'type': 'message', 'webhookEventId': 'evt-line-group-sender',
+            'source': {'groupId': 'G2', 'userId': 'U2'},
+            'message': {'id': 'm-group', 'text': 'from a member'},
+        }]
+    }).encode()
+    group_route = routes.extract_many(
+        providers['line_messaging'], {}, group_with_sender
+    )[0]
+    assert group_route['messaging_ingress']['user_id'] == 'U2'
+    assert group_route['messaging_ingress']['chat_id'] == 'G2'
     assert routes.extract(providers['viber_messaging'], {'X-Request-Id': 'callback-2'}, viber_body)['event_key'] == '991'
 
 
