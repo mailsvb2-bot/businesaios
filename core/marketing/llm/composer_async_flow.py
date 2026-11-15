@@ -65,6 +65,8 @@ async def compose_async_flow(composer, inp):
             if code == "LLM_BUDGET_BLOCKED":
                 runtime.metrics.inc("budget_blocked")
                 await emit_budget_blocked_async(event_store=composer._event_store, ctx=ctx, provider=composer._cfg.provider, model=composer._cfg.model, est=est, prompt_version=prompt_version, prompt_hash=prompt_hash, experiment=inp.experiment, variant=inp.variant, offer_id=offer_id)
+            elif code in {"LLM_ACCOUNTING_COMPLETION_WRITE_FAILED", "LLM_ACCOUNTING_RESERVATION_RELEASE_FAILED"}:
+                runtime.metrics.inc("accounting_failed")
             elif code.startswith("LLM_ACCOUNTING_"):
                 runtime.metrics.inc("accounting_unavailable")
             else:
