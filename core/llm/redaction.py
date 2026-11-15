@@ -15,29 +15,25 @@ class RedactionResult:
     mapping: dict[str, str]
 
 
-def redact_free_text(text: str, replacement: str = "***REDACTED***") -> str: return _RE_SECRET.sub(replacement, str(text))
+def redact_free_text(text: str, replacement: str = "***REDACTED***") -> str:
+    return _RE_SECRET.sub(replacement, str(text))
 
 
 def redact_text(text: str) -> RedactionResult:
     mapping: dict[str, str] = {}
+    counters: dict[str, int] = {}
 
     def _sub(regex: re.Pattern, label: str, s: str) -> str:
-        idx = 0
-
         def repl(m: re.Match) -> str:
-            nonlocal idx
-            idx += 1
-            token = f"<{label}_{idx}>"
+            counters[label] = counters.get(label, 0) + 1
+            token = f"<{label}_{counters[label]}>"
             mapping[token] = m.group(0)
             return token
-
         return regex.sub(repl, s)
 
     out = str(text or "")
-    out = _sub(_RE_SECRET, "SECRET", out)
-    out = _sub(_RE_EMAIL, "EMAIL", out)
-    out = _sub(_RE_PHONE, "PHONE", out)
-    out = _sub(_RE_CARD, "CARD", out)
+    for regex, label in ((_RE_SECRET, "SECRET"), (_RE_EMAIL, "EMAIL"), (_RE_PHONE, "PHONE"), (_RE_CARD, "CARD")):
+        out = _sub(regex, label, out)
     return RedactionResult(text=out, mapping=mapping)
 
 
