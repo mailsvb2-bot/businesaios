@@ -810,52 +810,47 @@ def organization_card(*, registry: OrganizationRegistry, tenant_id: str, busines
 def notification_preferences(*, settings_gateway, tenant_id: str, user_id: str, operation: str) -> tuple[str, dict]:
     if operation not in {"notifications_show", "notifications_toggle", "notifications_level"}:
         raise ValueError("unsupported notification operation")
-    gateway = settings_gateway
-    if gateway is None:
+    if settings_gateway is None:
         raise RuntimeError("canonical_notification_settings_gateway_missing")
-    level_order = ("info", "warn", "critical")
+    levels = ("info", "warn", "critical")
+    key = SETTING_KEY
 
-    def selected(value):
-        entries = canonical_alert_subscriptions_value(value, tenant_id=tenant_id)
-        own = next((item for item in entries if item["recipient_user_id"] == user_id
-                    and item["channel"] == "telegram" and not item["business_id"]), None)
-        return entries, own
+    def own_entry(rows):
+        return next((item for item in rows if item["recipient_user_id"] == user_id
+                     and item["channel"] == "telegram" and not item["business_id"]), None)
 
     if operation != "notifications_show":
         for _ in range(3):
-            before = gateway.get_value(tenant_id=tenant_id, key=SETTING_KEY)
-            entries, own = selected(before)
-            current = own or {"recipient_user_id": user_id, "channel": "telegram",
-                              "business_id": "", "enabled": False, "min_level": "warn",
-                              "code_filters": [], "user_scope": []}
+            before = settings_gateway.get_value(tenant_id=tenant_id, key=key)
+            entries = canonical_alert_subscriptions_value(before, tenant_id=tenant_id)
+            current = own_entry(entries) or {
+                "recipient_user_id": user_id, "channel": "telegram", "business_id": "",
+                "enabled": False, "min_level": "warn", "code_filters": [], "user_scope": [],
+            }
             updated = dict(current)
             if operation == "notifications_toggle":
                 updated["enabled"] = not bool(current["enabled"])
             else:
-                level = str(current["min_level"])
-                updated["min_level"] = level_order[(level_order.index(level) + 1) % len(level_order)]
-            entries = [item for item in entries if not (
-                item["recipient_user_id"] == user_id and item["channel"] == "telegram"
-                and not item["business_id"])]
-            entries.append(updated)
-            if gateway.compare_and_set_value(tenant_id=tenant_id, key=SETTING_KEY,
-                                             expected=before, value=entries):
+                updated["min_level"] = levels[(levels.index(current["min_level"]) + 1) % len(levels)]
+            entries = [row for row in entries if row is not own_entry(entries)] + [updated]
+            if settings_gateway.compare_and_set_value(
+                tenant_id=tenant_id, key=key, expected=before, value=entries,
+            ):
                 break
         else:
             raise RuntimeError("notification_preferences_concurrent_change")
-    after = gateway.get_value(tenant_id=tenant_id, key=SETTING_KEY)
-    _, own = selected(after)
-    enabled = bool(own and own["enabled"])
-    level = own["min_level"] if own else "warn"
-    text = ("🔔 Системные уведомления\n\n"
-            f"Получатель: ваш Telegram-аккаунт\n"
+    after = canonical_alert_subscriptions_value(
+        settings_gateway.get_value(tenant_id=tenant_id, key=key), tenant_id=tenant_id,
+    )
+    own = own_entry(after)
+    enabled, level = bool(own and own["enabled"]), own["min_level"] if own else "warn"
+    text = ("🔔 Системные уведомления\n\nПолучатель: ваш Telegram-аккаунт\n"
             f"Оповещения: {'включены' if enabled else 'выключены'}\n"
             f"Минимальная важность: {level}\n\n"
             "Настройки относятся к служебным оповещениям, а не к рекламным рассылкам.")
-    markup = {"inline_keyboard": [
+    return text, {"inline_keyboard": [
         [{"text": "🔕 Отключить" if enabled else "🔔 Включить",
           "callback_data": "cp:settings:notifications:toggle"}],
         [{"text": "⚙️ Изменить важность", "callback_data": "cp:settings:notifications:level"}],
         [{"text": "⬅️ Настройки", "callback_data": "settings:menu"}],
     ]}
-    return text, markup
