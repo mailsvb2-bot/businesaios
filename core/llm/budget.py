@@ -58,8 +58,7 @@ def estimate_request_tokens(request: Any) -> int:
 
 def validated_llm_usage(usage: Any) -> tuple[int, int, int] | None:
     """Validate provider measurements; never substitute a reservation estimate."""
-    value = (lambda key: usage.get(key) if isinstance(usage, Mapping) else getattr(usage, key, None))
-    values = tuple(value(key) for key in ("prompt_tokens", "completion_tokens", "total_tokens"))
+    values = tuple((usage.get(key) if isinstance(usage, Mapping) else getattr(usage, key, None)) for key in ("prompt_tokens", "completion_tokens", "total_tokens"))
     return values if all(type(v) is int and v >= 0 for v in values) and values[2] > 0 and values[2] >= values[0] + values[1] else None
 
 
@@ -79,7 +78,6 @@ def has_durable_budget_store(event_store: Any) -> bool:
 
 
 class EventStoreDailyTokenBudget:
-    """Durable daily spend plus atomic pending claims on the canonical event store."""
     def __init__(self, *, event_store: Any, caps: BudgetCaps, cache_ttl_s: float = DEFAULT_LLM_BUDGET_POLICY.cache_ttl_seconds) -> None:
         self._es, self._caps = event_store, caps
 
