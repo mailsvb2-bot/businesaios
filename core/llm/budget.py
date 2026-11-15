@@ -129,7 +129,9 @@ class EventStoreDailyTokenBudget:
         """Atomic headroom reservation; cross-day claim prevents provider replay."""
         get = getattr(self._es, "get_setting", None)
         cas = getattr(self._es, "compare_and_set_setting", None)
-        if not callable(get) or not callable(cas) or not request_id or tokens <= 0:
+        if not callable(get) or not callable(cas) or type(tokens) is not int or tokens <= 0:
+            return None
+        if any(not isinstance(value, str) or not value.strip() for value in (tenant_id, user_id, request_id)):
             return None
         day = self._day()
         key = f"llm:pending:v1:{day}"
