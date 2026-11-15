@@ -134,6 +134,9 @@ class AccountedSyncGateway:
                     "total_tokens": total,
                     "latency_ms": max(0, int((time.monotonic() - started) * 1000)),
                     "finish_reason": str(getattr(response, "finish_reason", "") or ""),
+                    "cache_hit": False,
+                    "ok": True,
+                    "error_code": "",
                     **event_metadata,
                 },
             )
