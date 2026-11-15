@@ -9,7 +9,6 @@ import pytest
 from runtime._internal.effects_actions.payments import yookassa
 from runtime._internal.effects_actions.telegram import messaging
 from runtime._internal.effects_actions.telegram_actions import TelegramEffectsMixin
-from runtime._internal.effects_clients import yookassa_webhook_server as webhook
 from runtime.execution.context import executor_context
 
 
