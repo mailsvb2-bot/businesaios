@@ -27,13 +27,13 @@ class AccountedSyncGateway:
         self._provider = str(provider or "").strip()
         if not self._provider:
             raise ValueError("LLM_PROVIDER_ID_REQUIRED")
+        if budget is not None and not isinstance(budget, EventStoreDailyTokenBudget):
+            raise ValueError("LLM_BUDGET_OWNER_INVALID")
+        if budget is not None and getattr(budget, "_es", None) is not event_store:
+            raise ValueError("LLM_BUDGET_STORE_MISMATCH")
         self._budget = budget or EventStoreDailyTokenBudget(
             event_store=event_store, caps=BudgetCaps(),
         )
-        if not all(callable(getattr(self._budget, name, None)) for name in (
-            "reserve", "release", "cancel_unstarted_reservation",
-        )):
-            raise ValueError("LLM_BUDGET_OWNER_INVALID")
 
     @staticmethod
     def _event_metadata(meta: dict[str, Any]) -> dict[str, str]:
@@ -108,9 +108,14 @@ class AccountedSyncGateway:
                 },
             )
         except Exception as exc:
-            self._budget.cancel_unstarted_reservation(
-                tenant_id=tenant, request_id=request_id, day=day,
-            )
+            try:
+                cancelled = self._budget.cancel_unstarted_reservation(
+                    tenant_id=tenant, request_id=request_id, day=day,
+                )
+            except Exception as cancel_exc:
+                raise RuntimeError("LLM_ACCOUNTING_RESERVATION_CANCEL_FAILED") from cancel_exc
+            if not cancelled:
+                raise RuntimeError("LLM_ACCOUNTING_RESERVATION_CANCEL_FAILED") from exc
             raise RuntimeError("LLM_ACCOUNTING_REQUEST_WRITE_FAILED") from exc
 
         started = time.monotonic()
