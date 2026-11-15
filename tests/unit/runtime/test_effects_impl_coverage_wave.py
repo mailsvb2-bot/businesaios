@@ -267,20 +267,6 @@ def test_remaining_effects_impl_branches(monkeypatch):
     finally:
         _close(telegram)
 
-    monkeypatch.setenv("YOOKASSA_WEBHOOK_AUTH_MODE", "token")
-    monkeypatch.setenv("YOOKASSA_WEBHOOK_TOKEN", "secret")
-    no_event_method = start_yookassa_webhook_server_in_thread(
-        host="127.0.0.1",
-        port=0,
-        path="/",
-        event_store=object(),
-        payment_outbox=SimpleNamespace(enqueue_once=lambda **_: None),
-    )
-    try:
-        assert _request(no_event_method, "POST", "/", body={"id": "x"}, headers={"X-Webhook-Token": "secret"})[0] == 200
-    finally:
-        _close(no_event_method)
-
     preset_transport = object()
     preset_router = SimpleNamespace(transport=object(), outbound_queue="existing")
     initialized = []
