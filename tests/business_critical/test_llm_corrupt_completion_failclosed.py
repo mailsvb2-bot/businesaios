@@ -8,7 +8,7 @@ from core.llm.budget import BudgetCaps, EventStoreDailyTokenBudget
 def corrupt_store():
     store = Mock(sum_event_payload_int=None)
     store.iter_events.return_value = [
-        {"user_id": "u", "payload": {"request_id": "req", "total_tokens": "not-a-number"}}
+        {"user_id": "u", "payload": {"request_id": "req", "provider": "openai", "model": "gpt-4.1-mini", "prompt_tokens": 2, "completion_tokens": 8, "total_tokens": "not-a-number"}}
     ]
     store.get_setting.return_value = {"pending": {"req": {"user_id": "u", "tokens": 10}}}
     return store
@@ -33,7 +33,7 @@ def test_corrupt_completion_fallback_aggregator_fails_closed():
 def test_fast_aggregate_cannot_hide_corrupt_provider_completion(value):
     store = Mock()
     store.sum_event_payload_int.return_value = 0
-    store.iter_events.return_value = [{"user_id": "u", "payload": {"request_id": "req", "total_tokens": value}}]
+    store.iter_events.return_value = [{"user_id": "u", "payload": {"request_id": "req", "provider": "openai", "model": "gpt-4.1-mini", "prompt_tokens": 5, "completion_tokens": 5, "total_tokens": value}}]
     budget = EventStoreDailyTokenBudget(event_store=store, caps=BudgetCaps())
     with pytest.raises(RuntimeError, match="LLM_BUDGET_CORRUPT_COMPLETION"):
         budget.can_spend(tenant_id="t", user_id="u", tokens=1)
@@ -43,7 +43,7 @@ def test_fast_aggregate_cannot_hide_corrupt_provider_completion(value):
 def test_fast_aggregate_cannot_underreport_valid_provider_completion():
     store = Mock()
     store.sum_event_payload_int.return_value = 0
-    store.iter_events.return_value = [{"user_id": "u", "payload": {"request_id": "req", "total_tokens": 20}}]
+    store.iter_events.return_value = [{"user_id": "u", "payload": {"request_id": "req", "provider": "openai", "model": "gpt-4.1-mini", "prompt_tokens": 8, "completion_tokens": 12, "total_tokens": 20}}]
     budget = EventStoreDailyTokenBudget(
         event_store=store,
         caps=BudgetCaps(tenant_tokens_per_day=20, user_tokens_per_day=20),
@@ -54,7 +54,7 @@ def test_fast_aggregate_cannot_underreport_valid_provider_completion():
 
 def test_completion_without_user_identity_fails_closed():
     store = Mock()
-    store.iter_events.return_value = [{"user_id": "", "payload": {"request_id": "req", "total_tokens": 20}}]
+    store.iter_events.return_value = [{"user_id": "", "payload": {"request_id": "req", "provider": "openai", "model": "gpt-4.1-mini", "prompt_tokens": 8, "completion_tokens": 12, "total_tokens": 20}}]
     budget = EventStoreDailyTokenBudget(event_store=store, caps=BudgetCaps())
     with pytest.raises(RuntimeError, match="LLM_BUDGET_CORRUPT_COMPLETION"):
         budget.can_spend(tenant_id="t", user_id="u", tokens=1)
@@ -100,3 +100,32 @@ def test_invalid_reservation_identity_fails_closed_before_event_store_access(fie
     assert budget.reserve(**arguments) is None
     store.get_setting.assert_not_called()
     store.compare_and_set_setting.assert_not_called()
+
+
+@pytest.mark.parametrize(
+    "changes",
+    [
+        {"request_id": ""},
+        {"provider": ""},
+        {"model": ""},
+        {"prompt_tokens": -1},
+        {"completion_tokens": True},
+        {"prompt_tokens": "8"},
+        {"prompt_tokens": 9, "completion_tokens": 12, "total_tokens": 20},
+    ],
+)
+def test_completion_without_provider_identity_or_consistent_token_measurements_fails_closed(changes):
+    payload = {
+        "request_id": "req",
+        "provider": "openai",
+        "model": "gpt-4.1-mini",
+        "prompt_tokens": 8,
+        "completion_tokens": 12,
+        "total_tokens": 20,
+    }
+    payload.update(changes)
+    store = Mock()
+    store.iter_events.return_value = [{"user_id": "u", "payload": payload}]
+    budget = EventStoreDailyTokenBudget(event_store=store, caps=BudgetCaps())
+    with pytest.raises(RuntimeError, match="LLM_BUDGET_CORRUPT_COMPLETION"):
+        budget.can_spend(tenant_id="t", user_id="u", tokens=1)
