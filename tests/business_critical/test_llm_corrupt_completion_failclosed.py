@@ -79,3 +79,24 @@ def test_corrupt_pending_reservation_cannot_release_budget_headroom(row):
     budget = EventStoreDailyTokenBudget(event_store=store, caps=BudgetCaps())
     assert budget.reserve(tenant_id="t", user_id="u", tokens=1, request_id="new") is None
     store.compare_and_set_setting.assert_not_called()
+
+
+@pytest.mark.parametrize("tokens", [True, 1.5, "1", 0, -1, None])
+def test_invalid_reservation_token_types_fail_closed_before_event_store_access(tokens):
+    store = Mock()
+    budget = EventStoreDailyTokenBudget(event_store=store, caps=BudgetCaps())
+    assert budget.reserve(tenant_id="t", user_id="u", tokens=tokens, request_id="req") is None
+    store.get_setting.assert_not_called()
+    store.compare_and_set_setting.assert_not_called()
+
+
+@pytest.mark.parametrize("field", ["tenant_id", "user_id", "request_id"])
+@pytest.mark.parametrize("value", ["", " ", None, 1])
+def test_invalid_reservation_identity_fails_closed_before_event_store_access(field, value):
+    store = Mock()
+    budget = EventStoreDailyTokenBudget(event_store=store, caps=BudgetCaps())
+    arguments = {"tenant_id": "t", "user_id": "u", "tokens": 1, "request_id": "req"}
+    arguments[field] = value
+    assert budget.reserve(**arguments) is None
+    store.get_setting.assert_not_called()
+    store.compare_and_set_setting.assert_not_called()
