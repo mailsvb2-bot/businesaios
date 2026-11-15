@@ -44,6 +44,7 @@ def test_fast_aggregate_cannot_underreport_valid_provider_completion():
     store = Mock()
     store.sum_event_payload_int.return_value = 0
     store.iter_events.return_value = [{"user_id": "u", "payload": {"request_id": "req", "provider": "openai", "model": "gpt-4.1-mini", "prompt_tokens": 8, "completion_tokens": 12, "total_tokens": 20}}]
+    store.get_setting.return_value = None
     budget = EventStoreDailyTokenBudget(
         event_store=store,
         caps=BudgetCaps(tenant_tokens_per_day=20, user_tokens_per_day=20),
