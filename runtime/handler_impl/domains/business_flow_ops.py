@@ -108,71 +108,39 @@ def handle_bookings(payload, effects, env, *, event_store, now_ms: int | None = 
     mine = bk.upcoming(slots, now_ms=now, customer_id=user_id)
     if op == "dispatch":
         return _dispatch_reminders(body, effects, env, bk, slots, facts, now)
-    if op in PROMO_OPS:
-        try:
-            return _promotions(
-                lambda t, ch: send_tracked(
-                    body, effects, env, text=t, event_type="bookings@v1" if ch else None, event_payload=ch
-                ),
-                bk,
-                op,
-                arg,
-                now,
-                slots,
-                facts,
-                user_id=user_id,
-                tenant_id=tenant_id,
-                event_store=event_store,
-            )
-        except ValueError as exc:
-            return send_tracked(
-                body, effects, env, text=f"📣 Не получилось: {exc}", event_type=None, event_payload=None
-            )
-    if op in CHANNEL_OPS:
-        try:
-            return _event_channels(
-                lambda t, ch: send_tracked(
-                    body, effects, env, text=t, event_type="bookings@v1" if ch else None, event_payload=ch
-                ),
-                bk,
-                op,
-                arg,
-                now,
-                slots,
-                facts,
-                user_id=user_id,
-                platform=str(body.get("platform") or "telegram"),
-            )
-        except ValueError as exc:
-            return send_tracked(
-                body, effects, env, text=f"🔗 Не получилось: {exc}", event_type=None, event_payload=None
-            )
-    if op in PANEL_OPS:  # read-only owner panels
-        say = partial(send_tracked, body, effects, env, event_type=None, event_payload=None)
-        return _panels(
-            lambda t, _ch: say(text=t), bk, op, arg, now, slots, facts, tenant_id=tenant_id, event_store=event_store
+    def done(text, change=None):
+        return send_tracked(
+            body, effects, env, text=text,
+            event_type="bookings@v1" if change else None, event_payload=change,
         )
-    if op in EVENT_OPS:
+
+    if op in PROMO_OPS | CHANNEL_OPS | PANEL_OPS | EVENT_OPS:
         try:
+            if op in PROMO_OPS:
+                return _promotions(
+                    done, bk, op, arg, now, slots, facts,
+                    user_id=user_id, tenant_id=tenant_id, event_store=event_store,
+                )
+            if op in CHANNEL_OPS:
+                return _event_channels(
+                    done, bk, op, arg, now, slots, facts,
+                    user_id=user_id, platform=str(body.get("platform") or "telegram"),
+                )
+            if op in PANEL_OPS:
+                return _panels(
+                    lambda text, _ch: done(text), bk, op, arg, now, slots, facts,
+                    tenant_id=tenant_id, event_store=event_store,
+                )
             return _events(
-                lambda t, ch: send_tracked(
-                    body, effects, env, text=t, event_type="bookings@v1" if ch else None, event_payload=ch
+                done,
+                lambda text, uid: send_tracked(
+                    body, effects, env, text=text, event_type=None, event_payload=None, to_user_id=uid,
                 ),
-                lambda t, uid: send_tracked(
-                    body, effects, env, text=t, event_type=None, event_payload=None, to_user_id=uid
-                ),
-                bk,
-                op,
-                arg,
-                now,
-                slots,
-                tenant_id=tenant_id,
-                event_store=event_store,
+                bk, op, arg, now, slots, tenant_id=tenant_id, event_store=event_store,
             )
         except ValueError as exc:
-            return send_tracked(
-                body, effects, env, text=f"📅 Не получилось: {exc}", event_type=None, event_payload=None
-            )
+            marker = "📣" if op in PROMO_OPS else "🔗" if op in CHANNEL_OPS else "📅"
+            return done(f"{marker} Не получилось: {exc}")
     pick = {"book": open_slots, "cancel": mine}.get(op, [])
     chosen = pick[int(arg) - 1] if arg.isdigit() and 0 < int(arg) <= len(pick) else None
     try:
