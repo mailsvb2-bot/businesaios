@@ -356,6 +356,131 @@ def test_readonly_accounting_never_exempts_writes_or_financial_markers(action, o
     assert result.reason == "action_budget_exceeded"
 
 
+@pytest.mark.parametrize("callback", [
+    "cp:section:customers",
+    "cp:section:sales",
+    "cpm:growth",
+    "cpm:growth-an:7",
+    "cpm:money",
+    "cp:section:ad-channels",
+])
+def test_owner_read_callbacks_survive_real_payload_build_and_exhausted_budget(
+    monkeypatch, callback,
+):
+    from application.decision_runtime.flow import build_payload
+    from core.actions.catalog import build_schema_registry
+    from core.safety.controls.action_budget.guard import ActionBudgetGuard
+    from core.safety.controls.action_budget.ledger import InMemoryActionBudgetLedger
+    from core.safety.controls.action_budget.models import ActionBudget
+    from core.safety.controls.action_context import SafetyActionContext
+    from core.safety.controls.control_result import ControlStatus
+
+    monkeypatch.setattr(
+        "runtime.entrypoints.telegram_longpoll._configured_telegram_tenant_id",
+        lambda: "tenant-live",
+    )
+    state = _callback_state(callback)
+    state = replace(
+        state,
+        meta={**state.meta, "goal_id": "owner-goal", "autonomy_tier": "supervised"},
+    )
+    proposal = UnifiedTelegramPolicyV3(admin_user_ids=("4001",)).propose(state)
+    _, payload = build_payload(
+        state=state,
+        out=proposal,
+        pinned_world_model_meta={"source": "telegram-callback-regression"},
+        tenant_id="tenant-live",
+        product_id=None,
+        domain=None,
+        product_version=None,
+        actor_id="4001",
+    )
+
+    # The same strict registry and budget guard used by DecisionCore must
+    # accept the real policy payload without widening any action contract.
+    build_schema_registry().validate(proposal.action, payload)
+    assert payload["goal_id"] == "owner-goal"
+    assert payload["autonomy_tier"] == "supervised"
+    assert payload["meta"]["canonical_goal_id"] == "owner-goal"
+    assert payload["meta"]["world_model_meta"]["source"] == "telegram-callback-regression"
+
+    ledger = InMemoryActionBudgetLedger()
+    ledger.record("tenant-live", estimated_cost=5000)
+    before = ledger.snapshot("tenant-live")
+    guard = ActionBudgetGuard(ledger, ActionBudget(max_cost=5000, max_actions=1))
+    decision = guard.evaluate(
+        SafetyActionContext(
+            proposal.action, "tenant-live", "4001", payload,
+        )
+    )
+    assert decision.status == ControlStatus.ALLOW, (
+        f"{callback}: action={proposal.action}, keys={sorted(payload)}, "
+        f"reason={decision.reason}"
+    )
+    assert decision.reason == "read_projection_budget_not_applicable"
+    assert ledger.snapshot("tenant-live") == before
+
+
+def test_telegram_main_menu_reply_keeps_zero_cost_callback_response_budget_exemption(
+    monkeypatch,
+):
+    from application.decision_runtime.flow import build_payload
+    from core.safety.controls.action_budget.guard import ActionBudgetGuard
+    from core.safety.controls.action_budget.ledger import InMemoryActionBudgetLedger
+    from core.safety.controls.action_budget.models import (
+        ActionBudget,
+        is_routine_reply,
+        verified_inbound_reply_scope,
+    )
+    from core.safety.controls.action_context import SafetyActionContext
+    from core.safety.controls.control_result import ControlStatus
+
+    monkeypatch.setenv(
+        "BUSINESAIOS_SAFETY_SIGNING_SECRET",
+        "test-only-strong-inbound-signing-secret",
+    )
+    monkeypatch.setattr(
+        "runtime.entrypoints.telegram_longpoll._configured_telegram_tenant_id",
+        lambda: "tenant-live",
+    )
+    state = _callback_state("menu:main")
+    state = replace(
+        state,
+        meta={**state.meta, "goal_id": "owner-goal", "autonomy_tier": "supervised"},
+    )
+    proposal = UnifiedTelegramPolicyV3(admin_user_ids=("4001",)).propose(state)
+    assert proposal.action == "send_message@v1"
+    with verified_inbound_reply_scope(
+        tenant_id="tenant-live",
+        channel="telegram",
+        user_id=str(state.user_id),
+        update_id=state.session["messaging_update_id"],
+        chat_id=str(state.session.get("messaging_chat_id") or ""),
+    ):
+        _, payload = build_payload(
+            state=state,
+            out=proposal,
+            pinned_world_model_meta={},
+            tenant_id="tenant-live",
+            product_id=None,
+            domain=None,
+            product_version=None,
+            actor_id="4001",
+        )
+
+    assert payload["callback_query_id"] == "callback-12"
+    assert is_routine_reply("send_message@v1", payload)
+    ledger = InMemoryActionBudgetLedger()
+    ledger.record("tenant-live", estimated_cost=5000)
+    before = ledger.snapshot("tenant-live")
+    decision = ActionBudgetGuard(
+        ledger, ActionBudget(max_cost=5000, max_actions=1),
+    ).evaluate(SafetyActionContext("send_message@v1", "tenant-live", "4001", payload))
+    assert decision.status == ControlStatus.ALLOW
+    assert decision.reason == "text_delivery_budget_not_applicable"
+    assert ledger.snapshot("tenant-live") == before
+
+
 @pytest.mark.parametrize(("callback", "action", "operation", "argument"), [
     ("cp:section:sales", "sales_pipeline@v1", "list", ""),
     ("cp:section:ad-channels", "bookings@v1", "ad_channels", ""),
