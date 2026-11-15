@@ -34,15 +34,14 @@ def test_verified_telegram_retry_is_charged_once(monkeypatch):
         tenant_id=tenant, channel="telegram", user_id=user,
         update_id=update_id, chat_id=chat, bot_id=bot,
     ):
+        payload = {"tenant_id": tenant, "user_id": user, "op": "book", "arg": "1"}
         key = issue_verified_update_idempotency_key(
             tenant_id=tenant, channel="telegram", user_id=user,
-            update_id=update_id, chat_id=chat, bot_id=bot,
+            update_id=update_id, action="bookings@v1", payload=payload,
+            chat_id=chat, bot_id=bot,
         )
         assert key
-        payload = {
-            "tenant_id": tenant, "user_id": user, "op": "book",
-            "arg": "1", "idempotency_key": key,
-        }
+        payload["idempotency_key"] = key
         context = SafetyActionContext("bookings@v1", tenant, user, payload)
 
         first = guard.evaluate(context)
