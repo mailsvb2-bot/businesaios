@@ -138,5 +138,6 @@ def compose_sync_flow(composer, inp):
         append_dedupe_skip_sync(event_store=composer._event_store, ctx=ctx, provider=composer._cfg.provider, model=composer._cfg.model, request_id=request_id, prompt_version=prompt_version, prompt_hash=prompt_hash)
         return None
 
+    runtime.metrics.inc("ok")
     runtime.cache.set(cache_key, text)
     return text
