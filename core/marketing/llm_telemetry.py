@@ -106,7 +106,7 @@ async def emit_trace_async(*, event_store, debug_sampling, inp, model: str, prov
         return
     if not completion_recorded:
         await append_event(event_store, event_type=(LLM_COMPLETED if ok else LLM_FAILED), ctx=ctx, payload=payload)
-    # The LLM_COMPLETED write above is authoritative for token accounting.
+    # The durable LLM_COMPLETED write (here or in the accounted gateway) is authoritative for token accounting.
     # Optional debug sampling must never turn an already-durable completion
     # into an apparent accounting failure (which strands its reservation).
     try:
