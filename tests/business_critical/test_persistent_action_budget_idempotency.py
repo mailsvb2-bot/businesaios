@@ -14,7 +14,7 @@ def test_sqlite_action_budget_retry_is_atomic_and_preserves_existing_totals(tmp_
         results = list(pool.map(
             lambda _index: ledger.record_once(
                 "tenant-live", idempotency_key=key,
-                action="bookings@v1", estimated_cost=3.5,
+                action="bookings@v1", payload_hash="payload-v1", estimated_cost=3.5,
             ),
             range(4),
         ))
@@ -25,6 +25,6 @@ def test_sqlite_action_budget_retry_is_atomic_and_preserves_existing_totals(tmp_
     with pytest.raises(RuntimeError, match="action_budget_idempotency_conflict"):
         ledger.record_once(
             "tenant-live", idempotency_key=key,
-            action="capture_payment@v1", estimated_cost=99.0,
+            action="capture_payment@v1", payload_hash="payload-v2", estimated_cost=99.0,
         )
     assert ledger.snapshot("tenant-live") == (6.0, 2)
