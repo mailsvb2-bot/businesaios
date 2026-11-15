@@ -386,79 +386,46 @@ def _cockpit(body, effects, env, future, steps, facts, now, team=None, timed=Non
         connections=_messenger_connections(facts("business_admin@v1")),
     )
     parsed = cp.parse(str(body.get("arg") or "cpm:menu"))
-    if parsed.action == "sales-ev":
-        try:
+    change = None
+    event_type = None
+    after, screen, prefix = snap, parsed, ""
+    try:
+        if parsed.action == "sales-ev":
             change = cs.mutation(parsed.args, snap.sales)
-        except ValueError as exc:
-            return send_tracked(body, effects, env, text=f"⚠️ Не получилось: {exc}", event_type=None, event_payload=None)
-        lead_screen = cp.Parsed("sales-lead", (change["lead_id"],))
-        after = replace(snap, sales=sl.replay([*facts("sales_pipeline@v1"), change]))
-        text, rows = cp.render(lead_screen, after, is_owner=True)
-        return send_tracked(
-            body,
-            effects,
-            env,
-            text=cs.result_text(change, after.sales) + "\n\n" + text,
-            event_type="sales_pipeline@v1",
-            event_payload=change,
-            reply_markup=cp.markup(rows),
-        )
-    if parsed.action in ce.MUTATIONS:
-        try:
+            after = replace(snap, sales=sl.replay([*facts("sales_pipeline@v1"), change]))
+            screen = cp.Parsed("sales-lead", (change["lead_id"],))
+            prefix = cs.result_text(change, after.sales) + "\n\n"
+            event_type = "sales_pipeline@v1"
+        elif parsed.action in ce.MUTATIONS:
             note, change = ce.mutation(parsed.action, parsed.args, snap)
-        except ValueError as exc:
-            return send_tracked(body, effects, env, text=f"⚠️ Не получилось: {exc}", event_type=None, event_payload=None)
-        after = replace(snap, series=es.replay([*facts("event_series@v1"), *([change] if change else [])]))
-        text, rows = cp.render(cp.Parsed("ev-conduct"), after, is_owner=True)
-        return send_tracked(
-            body,
-            effects,
-            env,
-            text=note + "\n\n" + text,
-            event_type="event_series@v1" if change else None,
-            event_payload=change or None,
-            reply_markup=cp.markup(rows),
-        )
-    if parsed.action in cm.MUTATIONS:
-        try:
+            after = replace(snap, series=es.replay([*facts("event_series@v1"), *([change] if change else [])]))
+            screen, prefix = cp.Parsed("ev-conduct"), note + "\n\n"
+            event_type = "event_series@v1" if change else None
+        elif parsed.action in cm.MUTATIONS:
             note, change = cm.mutation(parsed.action, parsed.args, snap)
-        except ValueError as exc:
-            return send_tracked(body, effects, env, text=f"⚠️ Не получилось: {exc}", event_type=None, event_payload=None)
-        after = replace(snap, admin=ad.replay([*facts("business_admin@v1"), *([change] if change else [])]))
-        text, rows = cp.render(cp.Parsed("payments", ("0",)), after, is_owner=True)
-        return send_tracked(
-            body,
-            effects,
-            env,
-            text=note + "\n\n" + text,
-            event_type="business_admin@v1" if change else None,
-            event_payload=change,
-            reply_markup=cp.markup(rows),
-        )
-    if parsed.action in cb.MUTATIONS:
-        try:
+            after = replace(snap, admin=ad.replay([*facts("business_admin@v1"), *([change] if change else [])]))
+            screen, prefix = cp.Parsed("payments", ("0",)), note + "\n\n"
+            event_type = "business_admin@v1" if change else None
+        elif parsed.action in cb.MUTATIONS:
             change = cb.mutation(parsed.args, snap.admin, now_ms=now)
-        except ValueError as exc:
-            return send_tracked(body, effects, env, text=f"⚠️ Не получилось: {exc}", event_type=None, event_payload=None)
-        if change["slot_id"] in bk.replay(facts("bookings@v1")):
-            return send_tracked(
-                body, effects, env, text="Это время уже добавлено.", event_type=None, event_payload=None
-            )
-        text, rows = cp.render(cp.Parsed("bookings", ("0",)), snap, is_owner=True)
+            if change["slot_id"] in bk.replay(facts("bookings@v1")):
+                return send_tracked(
+                    body, effects, env, text="Это время уже добавлено.", event_type=None, event_payload=None
+                )
+            screen = cp.Parsed("bookings", ("0",))
+            event_type = "bookings@v1"
+    except ValueError as exc:
         return send_tracked(
-            body,
-            effects,
-            env,
-            text=cb.result_text(change) + "\n\nДобавить ещё: кнопка ниже.",
-            event_type="bookings@v1",
-            event_payload=change,
-            reply_markup=cp.markup(rows),
+            body, effects, env, text=f"⚠️ Не получилось: {exc}", event_type=None, event_payload=None
         )
-    text, rows = cp.render(parsed, snap, is_owner=True)
+    text, rows = cp.render(screen, after, is_owner=True)
+    if parsed.action in cb.MUTATIONS:
+        text = cb.result_text(change) + "\n\nДобавить ещё: кнопка ниже."
     return send_tracked(
-        body, effects, env, text=text, event_type=None, event_payload=None, reply_markup=cp.markup(rows)
+        body, effects, env, text=prefix + text,
+        event_type=event_type, event_payload=change,
+        reply_markup=cp.markup(rows),
     )
-
 
 def handle_business_ops_summary(payload, effects, env, *, event_store, now_ms: int | None = None):
     """Owner operations summary over the business-flow projections (read-only)."""
