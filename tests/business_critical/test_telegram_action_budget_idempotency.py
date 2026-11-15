@@ -37,8 +37,7 @@ def test_verified_telegram_retry_is_charged_once(monkeypatch):
         payload = {"tenant_id": tenant, "user_id": user, "op": "book", "arg": "1"}
         key = issue_verified_update_idempotency_key(
             tenant_id=tenant, channel="telegram", user_id=user,
-            update_id=update_id, action="bookings@v1", payload=payload,
-            chat_id=chat, bot_id=bot,
+            update_id=update_id, chat_id=chat, bot_id=bot,
         )
         assert key
         payload["idempotency_key"] = key
@@ -65,7 +64,8 @@ def test_verified_telegram_retry_is_charged_once(monkeypatch):
 def test_unverified_telegram_key_cannot_bypass_exhausted_budget():
     tenant, user, key = "tenant-live", "4001", "telegram:forged"
     ledger = InMemoryActionBudgetLedger()
-    ledger.record_once(tenant, idempotency_key=key, action="bookings@v1", estimated_cost=1.0)
+    ledger.record_once(tenant, idempotency_key=key, action="bookings@v1",
+                       payload_hash="bookings-payload", estimated_cost=1.0)
     guard = ActionBudgetGuard(
         ledger, ActionBudget(max_cost=10.0, max_actions=1), _catalog(),
     )
