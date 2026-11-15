@@ -722,13 +722,8 @@ def handle_event_series(payload, effects, env, *, event_store, now_ms: int | Non
             ch = wz.draft(user_id, arg)
             text, rows, _ = wz.step(ch["title"], "", now_ms=now)
             return send_tracked(
-                body,
-                effects,
-                env,
-                text=text,
-                event_type="event_series@v1",
-                event_payload=ch,
-                reply_markup=_markup(rows),
+                body, effects, env, text=text, event_type="event_series@v1",
+                event_payload=ch, reply_markup=_markup(rows),
             )
         if op == "wizard":
             from application.business_flows import event_wizard as wz
@@ -737,55 +732,23 @@ def handle_event_series(payload, effects, env, *, event_store, now_ms: int | Non
             text, rows, result = wz.step(title, arg, now_ms=now)
             if result is None:
                 return send_tracked(
-                    body, effects, env, text=text, event_type=None, event_payload=None, reply_markup=_markup(rows)
+                    body, effects, env, text=text, event_type=None,
+                    event_payload=None, reply_markup=_markup(rows),
                 )
-            slot = result["slot"]
             if result["warmup"]:
-                send_tracked(
-                    body,
-                    effects,
-                    env,
-                    text="🔥 Прогрев: за " + ", ".join(map(str, result["warmup"]["days"])) + " дн.",
-                    event_type="event_series@v1",
-                    event_payload=result["warmup"],
-                )
-            send_tracked(
-                body,
-                effects,
-                env,
-                text="🧭 Мастер завершён",
-                event_type="event_series@v1",
-                event_payload={"step": "wizard_done", "user_id": user_id},
-            )
-            send_tracked(
-                body,
-                effects,
-                env,
-                text="📌 Формат: " + wz.MODES[result["mode"]["mode"]],
-                event_type="event_series@v1",
-                event_payload=result["mode"],
-            )
+                done("🔥 Прогрев: за " + ", ".join(map(str, result["warmup"]["days"])) + " дн.", result["warmup"])
+            done("🧭 Мастер завершён", {"step": "wizard_done", "user_id": user_id})
+            done("📌 Формат: " + wz.MODES[result["mode"]["mode"]], result["mode"])
             sent = None
             for slot in result["slots"]:
+                message = ("✅ Слот открыт: "
+                           + bk.fmt(bk.Slot(slot["slot_id"], slot["title"], slot["starts_at_ms"], slot["duration_min"]))
+                           + f", {slot['duration_min']} мин")
                 sent = send_tracked(
-                    body,
-                    effects,
-                    env,
-                    text="✅ Слот открыт: "
-                    + bk.fmt(bk.Slot(slot["slot_id"], slot["title"], slot["starts_at_ms"], slot["duration_min"]))
-                    + f", {slot['duration_min']} мин",
-                    event_type="bookings@v1",
-                    event_payload=slot,
+                    body, effects, env, text=message, event_type="bookings@v1", event_payload=slot,
                 )
             hint = "ссылку на комнату (https://…)" if result["mode"]["mode"] == "on" else "адрес площадки"
-            send_tracked(
-                body,
-                effects,
-                env,
-                text=f"Дальше: /event_place {slot['title']} | {hint}",
-                event_type=None,
-                event_payload=None,
-            )
+            done(f"Дальше: /event_place {slot['title']} | {hint}")
             return sent
         if op == "followups":
             st = es.replay(facts("event_series@v1"))
