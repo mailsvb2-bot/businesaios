@@ -86,6 +86,7 @@ def test_llm_redaction_uses_canonical_free_text_secret_patterns() -> None:
         "Bearer eyJhbGciOiJIUzI1NiJ9.canarypayload.canarysig",
         "123456789:AAH-abcdefghijklmnopqrstuvwxyz0123456",
         "sk-abcdefghijklmnop1234",
+        "AIzaSyDUMMYabcdefghijklmnopqrstuv",
         "live_AbCdEfGhIjKlMnOpQrStUv",
         "password=hunter2-canary",
     )
