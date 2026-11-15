@@ -60,6 +60,7 @@ def test_line_native_signature_uses_raw_body_and_cannot_downgrade_to_bridge() ->
     provider, vault = provider_map()['line_messaging'], InMemorySecretVault()
     _put(vault, provider, 'webhook_secret', 'bridge-secret')
     _put(vault, provider, 'channel_secret', 'line-channel-secret')
+    _put(vault, provider, 'bot_user_id', 'U1')
     runtime = ProviderWebhookRuntime(vault)
     body = b'{"destination":"U1","events":[{"type":"message","webhookEventId":"evt-line-1","source":{"userId":"U2"},"message":{"id":"m1","type":"text","text":"hello"}}]}'
     signature = base64.b64encode(hmac.new(b'line-channel-secret', body, hashlib.sha256).digest()).decode('ascii')
@@ -68,7 +69,7 @@ def test_line_native_signature_uses_raw_body_and_cannot_downgrade_to_bridge() ->
     assert runtime.verify(provider=provider, tenant_id='tenant-a', business_id='business-a', headers={'X-Line-Signature': signature}, body=body + b' ') is False
     assert runtime.verify(provider=provider, tenant_id='tenant-a', business_id='business-a', headers={'X-BusinessAIOS-Webhook-Secret': 'bridge-secret'}, body=body) is True
     assert runtime.verify(provider=provider, tenant_id='tenant-a', business_id='business-a', headers={'X-Line-Signature': '   ', 'X-BusinessAIOS-Webhook-Secret': 'bridge-secret'}, body=body) is False
-    missing_native = InMemorySecretVault(); _put(missing_native, provider, 'webhook_secret', 'bridge-secret')
+    missing_native = InMemorySecretVault(); _put(missing_native, provider, 'webhook_secret', 'bridge-secret'); _put(missing_native, provider, 'bot_user_id', 'U1')
     assert ProviderWebhookRuntime(missing_native).verify(provider=provider, tenant_id='tenant-a', business_id='business-a', headers={'X-Line-Signature': signature, 'X-BusinessAIOS-Webhook-Secret': 'bridge-secret'}, body=body) is False
 
 
@@ -114,7 +115,7 @@ def test_line_invalid_signature_is_rejected_before_batch_expansion(tmp_path, mon
 def test_line_batch_processes_every_event_and_rebatch_replays_safely(tmp_path, monkeypatch) -> None:
     monkeypatch.setenv('DATA_DIR', str(tmp_path / 'data'))
     provider, vault, processor = provider_map()['line_messaging'], InMemorySecretVault(), _CaptureInboundProcessor()
-    _put(vault, provider, 'webhook_secret', 'bridge-secret'); _put(vault, provider, 'channel_secret', 'line-channel-secret')
+    _put(vault, provider, 'webhook_secret', 'bridge-secret'); _put(vault, provider, 'channel_secret', 'line-channel-secret'); _put(vault, provider, 'bot_user_id', 'BOT')
     service = ProviderInboundWebhookService(webhook_runtime=ProviderWebhookRuntime(vault), replay_guard=ProviderWebhookReplayGuard(InMemoryIdempotencyStore()), inbound_processor=processor, incident_registry=_MemoryIncidents())
     events = [
         {'type': 'message', 'webhookEventId': 'evt-line-1', 'deliveryContext': {'isRedelivery': False}, 'source': {'userId': 'U1'}, 'message': {'id': 'm1', 'type': 'text', 'text': 'one'}},
