@@ -141,11 +141,16 @@ class EventStoreDailyTokenBudget:
             if not isinstance(pending, dict) or request_id in pending:
                 return None
             spent_tenant, spent_user = self._sum(tenant_id=tenant_id, user_id=user_id)
-            try:
-                reserved_tenant = sum(max(0, int(row["tokens"])) for row in pending.values())
-                reserved_user = sum(max(0, int(row["tokens"])) for row in pending.values() if str(row["user_id"]) == str(user_id))
-            except (KeyError, TypeError, ValueError):
-                return None
+            reserved_tenant = reserved_user = 0
+            for rid, row in pending.items():
+                if not isinstance(rid, str) or not rid or not isinstance(row, dict):
+                    return None
+                row_user, row_tokens = row.get("user_id"), row.get("tokens")
+                if not isinstance(row_user, str) or not row_user.strip() or type(row_tokens) is not int or row_tokens <= 0:
+                    return None
+                reserved_tenant += row_tokens
+                if row_user == str(user_id):
+                    reserved_user += row_tokens
             if self._day() != day:
                 return None
             if (spent_tenant + reserved_tenant + tokens > self._caps.tenant_tokens_per_day or spent_user + reserved_user + tokens > self._caps.user_tokens_per_day):

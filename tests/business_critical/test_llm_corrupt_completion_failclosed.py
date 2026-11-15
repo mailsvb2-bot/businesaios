@@ -58,3 +58,24 @@ def test_completion_without_user_identity_fails_closed():
     budget = EventStoreDailyTokenBudget(event_store=store, caps=BudgetCaps())
     with pytest.raises(RuntimeError, match="LLM_BUDGET_CORRUPT_COMPLETION"):
         budget.can_spend(tenant_id="t", user_id="u", tokens=1)
+
+
+@pytest.mark.parametrize(
+    "row",
+    [
+        {"user_id": "u", "tokens": "10"},
+        {"user_id": "u", "tokens": True},
+        {"user_id": "u", "tokens": 0},
+        {"user_id": "u", "tokens": -10},
+        {"user_id": "", "tokens": 10},
+        {"tokens": 10},
+        None,
+    ],
+)
+def test_corrupt_pending_reservation_cannot_release_budget_headroom(row):
+    store = Mock()
+    store.get_setting.return_value = {"pending": {"stale": row}}
+    store.iter_events.return_value = []
+    budget = EventStoreDailyTokenBudget(event_store=store, caps=BudgetCaps())
+    assert budget.reserve(tenant_id="t", user_id="u", tokens=1, request_id="new") is None
+    store.compare_and_set_setting.assert_not_called()
