@@ -13,6 +13,8 @@ from typing import Any
 
 from runtime.platform.delivery_state import _get_db_path, _open_connection, _ensure_db
 
+DEFAULT_MAX_ATTEMPTS = 12
+
 
 class TelegramInbox:
     def __init__(self, token: str) -> None:
@@ -83,7 +85,9 @@ class TelegramInbox:
             db.execute("""UPDATE telegram_ingress_inbox SET status='completed',last_error=NULL
                           WHERE bot_scope=? AND update_id=?""", (self.scope, update_id))
 
-    def failed(self, update_id: int, exc: Exception, *, max_delay: int = 300) -> None:
+    def failed(self, update_id: int, exc: Exception, *, max_delay: int = 300,
+               max_attempts: int = DEFAULT_MAX_ATTEMPTS) -> str:
+        max_attempts, max_delay = max(1, int(max_attempts)), max(1, int(max_delay))
         with self._db() as db:
             db.execute("BEGIN IMMEDIATE")
             row = db.execute("""SELECT attempts FROM telegram_ingress_inbox
@@ -92,12 +96,37 @@ class TelegramInbox:
             if row is None:
                 raise RuntimeError("telegram_inbox_missing_pending_update")
             attempts = int(row[0]) + 1
+            status = "dead_letter" if attempts >= max_attempts else "pending"
             delay = min(max_delay, 2 ** min(attempts - 1, 12))
             db.execute("""UPDATE telegram_ingress_inbox
-                          SET attempts=?,retry_at=?,last_error=?
+                          SET status=?,attempts=?,retry_at=?,last_error=?
                           WHERE bot_scope=? AND update_id=? AND status='pending'""",
-                       (attempts, time.time() + delay, type(exc).__name__,
-                        self.scope, update_id))
+                       (status, attempts, 0 if status == "dead_letter" else time.time() + delay,
+                        type(exc).__name__, self.scope, update_id))
+        return status
+
+    def dead_letter_count(self) -> int:
+        with self._db() as db:
+            return int(db.execute("""SELECT COUNT(*) FROM telegram_ingress_inbox
+                                     WHERE bot_scope=? AND status='dead_letter'""",
+                                  (self.scope,)).fetchone()[0])
+
+    def backlog_counts(self) -> dict[str, int]:
+        with self._db() as db:
+            rows = db.execute("""SELECT status,COUNT(*) FROM telegram_ingress_inbox
+                                 WHERE bot_scope=? AND status IN ('pending','dead_letter')
+                                 GROUP BY status""", (self.scope,)).fetchall()
+        counts = {"pending": 0, "dead_letter": 0}
+        counts.update({str(status): int(count) for status, count in rows if status in counts})
+        return counts
+
+    def requeue_dead_letter(self, update_id: int) -> bool:
+        with self._db() as db:
+            result = db.execute("""UPDATE telegram_ingress_inbox
+                                   SET status='pending',attempts=0,retry_at=0,last_error=NULL
+                                   WHERE bot_scope=? AND update_id=? AND status='dead_letter'""",
+                                (self.scope, update_id))
+        return result.rowcount > 0
 
     def pending_count(self) -> int:
         with self._db() as db:
