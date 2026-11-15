@@ -156,20 +156,23 @@ class ProviderWebhookRuntime:
             observed = [str(entry.get('id') or '').strip() for entry in entries if isinstance(entry, Mapping)]
             return bool(observed) and len(observed) == len(entries) and all(value == expected for value in observed)
         if key == 'max_messaging':
-            message = payload.get('message')
+            event_type, message = str(payload.get('update_type') or '').strip(), payload.get('message')
+            if not event_type:
+                return False
             if not isinstance(message, Mapping):
-                return True
+                return event_type not in {'message_created', 'message_edited', 'message_callback', 'comment_created', 'comment_edited'}
             recipient, sender = message.get('recipient'), message.get('sender')
             if not isinstance(recipient, Mapping) or not isinstance(sender, Mapping):
                 return False
-            chat_type, chat_id = str(recipient.get('chat_type') or ''), str(recipient.get('chat_id') or '').strip()
-            sender_id, observed = str(sender.get('user_id') or '').strip(), str(recipient.get('user_id') or '').strip()
-            if not chat_id or not sender_id or sender.get('is_bot') is True:
+            chat_type = str(recipient.get('chat_type') or '')
+            chat_id, sender_id = str(recipient.get('chat_id') or '').strip(), str(sender.get('user_id') or '').strip()
+            observed = str(recipient.get('user_id') or '').strip()
+            if chat_type not in {'dialog', 'chat', 'channel'} or not chat_id.isdecimal() or not sender_id.isdecimal() or sender.get('is_bot') is True:
                 return False
             if chat_type == 'dialog' or observed:
                 expected = self._read_secret(tenant_id=tenant_id, connector_id=provider.connector_id, business_id=business_id, secret_name=f'{provider.connector_id}.bot_id')
-                return bool(expected and observed and observed == expected)
-            return chat_type in {'chat', 'channel'}
+                return bool(expected and expected.isdecimal() and observed == expected)
+            return True
         expected = self._read_secret(tenant_id=tenant_id, connector_id=provider.connector_id, business_id=business_id, secret_name=f'{provider.connector_id}.group_id')
         observed = str(payload.get('group_id') or '').strip()
         return bool(expected and observed and observed == expected)
