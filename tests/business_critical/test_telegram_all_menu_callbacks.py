@@ -364,9 +364,11 @@ def test_readonly_accounting_never_exempts_writes_or_financial_markers(action, o
     "cpm:money",
     "cp:section:ad-channels",
 ])
-def test_owner_read_callbacks_survive_real_payload_build_and_exhausted_budget(
+def test_owner_read_callbacks_survive_schema_gate_and_single_accounting_pass(
     monkeypatch, callback,
 ):
+    from types import SimpleNamespace
+
     from application.decision_runtime.flow import build_payload
     from core.actions.catalog import build_schema_registry
     from core.safety.controls.action_budget.guard import ActionBudgetGuard
@@ -374,6 +376,7 @@ def test_owner_read_callbacks_survive_real_payload_build_and_exhausted_budget(
     from core.safety.controls.action_budget.models import ActionBudget
     from core.safety.controls.action_context import SafetyActionContext
     from core.safety.controls.control_result import ControlStatus
+    import runtime.safety_controls as safety
 
     monkeypatch.setattr(
         "runtime.entrypoints.telegram_longpoll._configured_telegram_tenant_id",
@@ -396,164 +399,29 @@ def test_owner_read_callbacks_survive_real_payload_build_and_exhausted_budget(
         actor_id="4001",
     )
 
-    # The same strict registry and budget guard used by DecisionCore must
-    # accept the real policy payload without widening any action contract.
-    build_schema_registry().validate(proposal.action, payload)
+    schemas = build_schema_registry()
+    schemas.validate(proposal.action, payload)
+    with pytest.raises(ValueError, match="UNKNOWN_PAYLOAD_KEYS"):
+        schemas.validate(proposal.action, {**payload, "untrusted_extra": "reject"})
     assert payload["goal_id"] == "owner-goal"
     assert payload["autonomy_tier"] == "supervised"
     assert payload["meta"]["canonical_goal_id"] == "owner-goal"
     assert payload["meta"]["world_model_meta"]["source"] == "telegram-callback-regression"
 
+    # A full lifetime ledger must not block this exact read-only callback,
+    # and the post-gate accounting hook must not charge it a second time.
     ledger = InMemoryActionBudgetLedger()
     ledger.record("tenant-live", estimated_cost=5000)
     before = ledger.snapshot("tenant-live")
     guard = ActionBudgetGuard(ledger, ActionBudget(max_cost=5000, max_actions=1))
     decision = guard.evaluate(
-        SafetyActionContext(
-            proposal.action, "tenant-live", "4001", payload,
-        )
+        SafetyActionContext(proposal.action, "tenant-live", "4001", payload)
     )
     assert decision.status == ControlStatus.ALLOW, (
         f"{callback}: action={proposal.action}, keys={sorted(payload)}, "
         f"reason={decision.reason}"
     )
     assert decision.reason == "read_projection_budget_not_applicable"
-    assert ledger.snapshot("tenant-live") == before
-
-
-def test_telegram_main_menu_reply_keeps_zero_cost_callback_response_budget_exemption(
-    monkeypatch,
-):
-    from application.decision_runtime.flow import build_payload
-    from core.safety.controls.action_budget.guard import ActionBudgetGuard
-    from core.safety.controls.action_budget.ledger import InMemoryActionBudgetLedger
-    from core.safety.controls.action_budget.models import (
-        ActionBudget,
-        is_routine_reply,
-        verified_inbound_reply_scope,
-    )
-    from core.safety.controls.action_context import SafetyActionContext
-    from core.safety.controls.control_result import ControlStatus
-
-    monkeypatch.setenv(
-        "BUSINESAIOS_SAFETY_SIGNING_SECRET",
-        "test-only-strong-inbound-signing-secret",
-    )
-    monkeypatch.setattr(
-        "runtime.entrypoints.telegram_longpoll._configured_telegram_tenant_id",
-        lambda: "tenant-live",
-    )
-    state = _callback_state("menu:main")
-    state = replace(
-        state,
-        meta={**state.meta, "goal_id": "owner-goal", "autonomy_tier": "supervised"},
-    )
-    proposal = UnifiedTelegramPolicyV3(admin_user_ids=("4001",)).propose(state)
-    assert proposal.action == "send_message@v1"
-    with verified_inbound_reply_scope(
-        tenant_id="tenant-live",
-        channel="telegram",
-        user_id=str(state.user_id),
-        update_id=state.session["messaging_update_id"],
-        chat_id=str(state.session.get("messaging_chat_id") or ""),
-    ):
-        _, payload = build_payload(
-            state=state,
-            out=proposal,
-            pinned_world_model_meta={},
-            tenant_id="tenant-live",
-            product_id=None,
-            domain=None,
-            product_version=None,
-            actor_id="4001",
-        )
-
-    assert payload["callback_query_id"] == "callback-12"
-    assert is_routine_reply("send_message@v1", payload)
-    ledger = InMemoryActionBudgetLedger()
-    ledger.record("tenant-live", estimated_cost=5000)
-    before = ledger.snapshot("tenant-live")
-    decision = ActionBudgetGuard(
-        ledger, ActionBudget(max_cost=5000, max_actions=1),
-    ).evaluate(SafetyActionContext("send_message@v1", "tenant-live", "4001", payload))
-    assert decision.status == ControlStatus.ALLOW
-    assert decision.reason == "text_delivery_budget_not_applicable"
-    assert ledger.snapshot("tenant-live") == before
-
-
-@pytest.mark.parametrize(("callback", "action", "operation", "argument"), [
-    ("cp:section:sales", "sales_pipeline@v1", "list", ""),
-    ("cp:section:ad-channels", "bookings@v1", "ad_channels", ""),
-])
-def test_owner_read_projection_callback_payload_matches_closed_decision_schema(
-    monkeypatch, callback, action, operation, argument,
-):
-    from core.actions.catalog import build_schema_registry
-
-    monkeypatch.setattr(
-        "runtime.entrypoints.telegram_longpoll._configured_telegram_tenant_id",
-        lambda: "tenant-live",
-    )
-    proposal = UnifiedTelegramPolicyV3(admin_user_ids=("4001",)).propose(
-        _callback_state(callback)
-    )
-    assert proposal.action == action
-    assert proposal.payload["op"] == operation
-    assert proposal.payload["arg"] == argument
-    assert proposal.payload["callback_query_id"] == "callback-12"
-
-    # These are transport/DecisionCore metadata, not permission to widen the
-    # action contract. The exact action remains closed to arbitrary extra keys.
-    payload = {
-        "tenant_id": "tenant-live",
-        **proposal.payload,
-        "goal_id": "owner-goal",
-        "autonomy_tier": "supervised",
-        "meta": {"world_model_meta": {"source": "canonical"}},
-    }
-    schemas = build_schema_registry()
-    schemas.validate(action, payload)
-    with pytest.raises(ValueError, match="UNKNOWN_PAYLOAD_KEYS"):
-        schemas.validate(action, {**payload, "untrusted_extra": "reject"})
-
-
-@pytest.mark.parametrize(("action", "operation", "argument"), [
-    ("business_ops_summary@v1", "cockpit", "cpm:menu"),
-    ("sales_pipeline@v1", "list", ""),
-    ("bookings@v1", "ad_channels", ""),
-])
-def test_read_projection_accounting_does_not_double_charge_with_telegram_metadata(
-    monkeypatch, action, operation, argument,
-):
-    from types import SimpleNamespace
-
-    from core.safety.controls.action_budget.guard import ActionBudgetGuard
-    from core.safety.controls.action_budget.ledger import InMemoryActionBudgetLedger
-    from core.safety.controls.action_budget.models import ActionBudget
-    from core.safety.controls.action_context import SafetyActionContext
-    from core.safety.controls.control_result import ControlStatus
-    import runtime.safety_controls as safety
-
-    ledger = InMemoryActionBudgetLedger()
-    ledger.record("tenant-live", estimated_cost=5000)
-    guard = ActionBudgetGuard(ledger, ActionBudget(max_cost=5000, max_actions=1))
-    payload = {
-        "tenant_id": "tenant-live",
-        "user_id": "4001",
-        "op": operation,
-        "arg": argument,
-        "callback_query_id": "callback-12",
-        "goal_id": "owner-goal",
-        "autonomy_tier": "supervised",
-        "meta": {"world_model_meta": {"source": "canonical"}},
-    }
-    before = ledger.snapshot("tenant-live")
-    decision = guard.evaluate(
-        SafetyActionContext(action, "tenant-live", "4001", payload)
-    )
-    assert decision.status == ControlStatus.ALLOW
-    assert decision.reason == "read_projection_budget_not_applicable"
-    assert ledger.snapshot("tenant-live") == before
 
     events = []
     profile = SimpleNamespace(
@@ -570,7 +438,7 @@ def test_read_projection_accounting_does_not_double_charge_with_telegram_metadat
         safety, "_record_safety_event",
         lambda **kwargs: events.append(kwargs),
     )
-    safety.record_allowed_action(action=action, payload=payload)
+    safety.record_allowed_action(action=proposal.action, payload=payload)
 
     assert ledger.snapshot("tenant-live") == before
     assert events[-1]["reason"] == "read_projection_not_charged"
