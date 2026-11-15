@@ -16,6 +16,7 @@ import runtime.business_autonomy.provider_webhook_runtime as webhook_runtime_mod
 from application.business_autonomy.provider_catalog import provider_map
 from runtime.business_autonomy.provider_transport_bindings import max_tls_ca_file
 from runtime.business_autonomy.provider_webhook_runtime import ProviderWebhookRuntime
+from runtime.business_autonomy.provider_webhook_route_registry import ProviderWebhookRouteRegistry
 from security.secret_contract import SecretRecord, SecretRef, SecretSource
 from security.secret_vault import InMemorySecretVault
 
@@ -33,6 +34,39 @@ def _put(vault, provider, business_id: str, name: str, value: str) -> None:
 
 def _response(payload, status: int = 200):
     return SimpleNamespace(status=status, json=payload, text=json.dumps(payload), error_kind=None)
+
+
+def test_provider_webhook_never_promotes_untrusted_session_id_to_sender() -> None:
+    registry = ProviderWebhookRouteRegistry()
+    whatsapp = provider_map()['whatsapp_cloud']
+    route = registry.extract(
+        whatsapp,
+        {},
+        json.dumps({
+            'session_id': 'attacker-controlled-session',
+            'message': 'hello',
+            'entry': [{
+                'changes': [{
+                    'value': {
+                        'metadata': {'phone_number_id': 'phone-123'},
+                        'messages': [{'id': 'message-1', 'text': {'body': 'hello'}}],
+                    },
+                }],
+            }],
+        }).encode(),
+    )
+    assert route['messaging_ingress'] == {}
+    assert route['external_user_ref'] is None
+
+    website = provider_map()['generic_website']
+    web_chat_route = registry.extract(
+        website,
+        {},
+        json.dumps({'session_id': 'trusted-web-session', 'message': 'hello'}).encode(),
+    )
+    assert web_chat_route['messaging_ingress']['channel'] == 'web_chat'
+    assert web_chat_route['messaging_ingress']['user_id'] == 'trusted-web-session'
+    assert web_chat_route['external_user_ref'] == 'trusted-web-session'
 
 
 def test_telegram_reconcile_generates_separate_webhook_secret(monkeypatch) -> None:
