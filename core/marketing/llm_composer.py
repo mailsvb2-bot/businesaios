@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -15,7 +16,6 @@ from core.marketing.llm.service import compose_marketing_text_async, compose_mar
 from core.marketing.llm_prompt_builder import MarketingLLMInputs
 from core.marketing.llm_telemetry import emit_trace_async, maybe_emit_alert
 from core.marketing.llm_text_policy import validate_marketing_text as _validate_marketing_text
-from runtime.llm.accounted_gateway import AccountedSyncGateway
 
 validate_marketing_text = _validate_marketing_text
 
@@ -41,7 +41,7 @@ class LLMComposerConfig:
 class MarketingLLMComposer:
     """DecisionCore decides, LLM composes."""
 
-    def __init__(self, llm: LLMClient, cfg: LLMComposerConfig, *, event_store: Any = None) -> None:
+    def __init__(self, llm: LLMClient, cfg: LLMComposerConfig, *, event_store: Any = None, accounted_gateway_factory: Callable[..., Any] | None = None) -> None:
         # Only the explicit deterministic mock may use process-local accounting.
         # Every other injected client must pass through the durable accounted gateway.
         if str(cfg.budget_source or "").lower() == "memory" and not isinstance(llm, MockLLMClient):
@@ -50,16 +50,16 @@ class MarketingLLMComposer:
         self._cfg = cfg
         self._event_store = event_store
         self._runtime = build_composer_runtime(cfg=cfg, event_store=event_store)
-        self._accounted_gateway = (
-            AccountedSyncGateway(
+        self._accounted_gateway = None
+        if isinstance(self._runtime.budget, EventStoreDailyTokenBudget):
+            if not callable(accounted_gateway_factory):
+                raise RuntimeError("LLM_ACCOUNTED_GATEWAY_REQUIRED")
+            self._accounted_gateway = accounted_gateway_factory(
                 llm,
                 event_store=event_store,
                 provider=cfg.provider,
                 budget=self._runtime.budget,
             )
-            if isinstance(self._runtime.budget, EventStoreDailyTokenBudget)
-            else None
-        )
 
     @property
     def llm_client(self) -> LLMClient:
