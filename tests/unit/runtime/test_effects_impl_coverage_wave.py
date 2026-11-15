@@ -177,7 +177,7 @@ def test_yookassa_webhook_delivery_and_persistence_errors(monkeypatch):
         assert queued[0]["dedupe_key"] == "yk:webhook:payment.succeeded:p1"
         assert queued[0]["payload"]["type"] == "yookassa_webhook"
         assert events == []  # The canonical durable outbox is authoritative; event_store is not a second path.
-        assert _request(server, "POST", "/hook", body=b"x" * 1_048_577, headers={"X-Webhook-Token": "secret"})[0] == 413
+        assert _request(server, "POST", "/hook", headers={"X-Webhook-Token": "secret", "Content-Length": "1048577"})[0] == 413
     finally:
         _close(server)
 
