@@ -110,8 +110,8 @@ _PROVIDER_PATHS: dict[str, dict[str, tuple[FieldPath, ...]]] = {
     },
     "vk": {
         "user_id": (
-            ("object", "message", "from_id"),
             ("object", "message", "user_id"),
+            ("object", "message", "from_id"),
             ("object", "user_id"),
             ("object", "from_id"),
         ),
