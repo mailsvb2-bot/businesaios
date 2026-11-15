@@ -54,7 +54,7 @@ def messaging_event_to_world_state(
     event: MessagingIngressEvent,
 ) -> WorldStateV1:
     channel = normalize_messaging_channel(event.channel)
-    user_id = str(event.user_id or "messaging_user")
+    user_id = str(event.user_id or "")
     chat_id = str(event.chat_id or "")
     command = str(event.command or "")
     args = str(event.args or "")
@@ -110,8 +110,6 @@ def payload_to_messaging_event(
     text = str(decoded.get("text") or "")
     command, args = split_command(text)
     user_id = str(decoded.get("user_id") or "")
-    if not user_id and normalized_channel not in SUPPORTED_MESSAGING_CHANNELS:
-        user_id = f"{normalized_channel}_user"
     return MessagingIngressEvent(
         channel=normalized_channel,
         user_id=user_id,
