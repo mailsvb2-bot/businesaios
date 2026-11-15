@@ -188,3 +188,118 @@ def test_budget_over_cap_handles_legacy_empty_pending_state():
     budget = EventStoreDailyTokenBudget(event_store=budget_store, caps=BudgetCaps())
     budget_store.set_setting(tenant_id="tenant", key=f"llm:pending:v1:{budget._day()}", value={})
     assert budget.reserve(tenant_id="tenant", user_id="admin", tokens=BudgetCaps().user_tokens_per_day + 1, request_id="oversized") is None
+
+
+@pytest.mark.parametrize("provider", ["openai_compat", "gigachat", "yandexgpt"])
+@pytest.mark.parametrize("usage_case", ["missing_total", "missing_prompt", "missing_completion", "string_total", "bool_total", "string_prompt", "bool_completion", "numeric_strings", "nondecimal_total", "valid"])
+def test_provider_transport_usage_is_not_synthesized_or_coerced(provider, usage_case):
+    """Real adapter -> accounted gateway: unverified totals never become durable spend."""
+    from core.llm import GigaChatClient, OpenAICompatClient, OpenAICompatConfig, YandexGPTClient
+
+    total = {"string_total": "10", "bool_total": True, "string_prompt": 10, "bool_completion": 10, "numeric_strings": "10", "nondecimal_total": "10x", "valid": 10}.get(usage_case)
+    if provider == "yandexgpt":
+        usage: dict[str, object] = {"inputTextTokens": 6, "completionTokens": 4}
+        if usage_case in {"string_prompt", "numeric_strings"}:
+            usage["inputTextTokens"] = "6"
+        if usage_case == "numeric_strings":
+            usage["completionTokens"] = "4"
+        if usage_case == "bool_completion":
+            usage["completionTokens"] = True
+        if usage_case == "missing_prompt":
+            usage.pop("inputTextTokens")
+        if usage_case == "missing_completion":
+            usage.pop("completionTokens")
+        if usage_case != "missing_total":
+            usage["totalTokens"] = total
+        response = {"result": {"usage": usage, "alternatives": [{"message": {"text": "ok"}}]}}
+    else:
+        usage = {"prompt_tokens": 6, "completion_tokens": 4}
+        if usage_case == "string_prompt":
+            usage["prompt_tokens"] = "6"
+        if usage_case == "bool_completion":
+            usage["completion_tokens"] = True
+        if usage_case == "missing_prompt":
+            usage.pop("prompt_tokens")
+        if usage_case == "missing_completion":
+            usage.pop("completion_tokens")
+        if usage_case != "missing_total":
+            usage["total_tokens"] = total
+        response = {"usage": usage, "choices": [{"message": {"content": "ok"}}]}
+    calls = []
+
+    def transport(*args):
+        calls.append(args)
+        return response
+
+    if provider == "openai_compat":
+        client = OpenAICompatClient(OpenAICompatConfig(
+            base_url="https://example.invalid/chat/completions", api_key="unused", transport=transport,
+        ))
+    elif provider == "gigachat":
+        client = GigaChatClient(transport=transport, base_url="https://example.invalid",
+                                api_key="unused", model="mock")
+    else:
+        client = YandexGPTClient(transport=transport, base_url="https://example.invalid",
+                                 api_key="unused", model="mock")
+    store = MemoryEventStore()
+    gateway = AccountedSyncGateway(client, event_store=store, provider=provider)
+    verified = usage_case == "valid" or (provider == "yandexgpt" and usage_case in {
+        "string_total", "string_prompt", "numeric_strings",
+    })
+    if verified:
+        assert gateway.generate_sync(request()).content == "ok"
+        assert store.sum_event_payload_int(tenant_id="tenant", event_type=LLM_COMPLETED,
+                                           field="total_tokens", user_id="user") == 10
+    else:
+        with pytest.raises(RuntimeError, match="LLM_ACCOUNTING_UNAVAILABLE"):
+            gateway.generate_sync(request())
+        assert store.count_events(tenant_id="tenant", event_type=LLM_COMPLETED) == 0
+    with pytest.raises(RuntimeError, match="LLM_BUDGET_BLOCKED"):
+        gateway.generate_sync(request())
+    assert len(calls) == 1
+
+
+@pytest.mark.parametrize("case", ["valid", "missing_input", "missing_output", "bool_input",
+                                  "string_output", "cached_read", "cached_creation", "invalid_total"])
+def test_anthropic_provider_usage_is_measured_and_cache_fail_closed(case):
+    """Anthropic totals use measured components; unpriced cache classes block.
+    The canonical accounting boundary cannot attribute cached-token costs yet.
+    """
+    from core.llm import AnthropicClient
+
+    usage = {"input_tokens": 6, "output_tokens": 4}
+    if case == "missing_input":
+        usage.pop("input_tokens")
+    elif case == "missing_output":
+        usage.pop("output_tokens")
+    elif case == "bool_input":
+        usage["input_tokens"] = True
+    elif case == "string_output":
+        usage["output_tokens"] = "4"
+    elif case == "cached_read":
+        usage["cache_read_input_tokens"] = 50
+    elif case == "cached_creation":
+        usage["cache_creation_input_tokens"] = 50
+    elif case == "invalid_total":
+        usage["total_tokens"] = "10"
+    calls = []
+
+    def transport(*args):
+        calls.append(args)
+        return {"usage": usage, "content": [{"type": "text", "text": "ok"}]}
+
+    client = AnthropicClient(transport=transport, base_url="https://example.invalid",
+                             api_key="unused", model="mock")
+    store = MemoryEventStore()
+    gateway = AccountedSyncGateway(client, event_store=store, provider="anthropic")
+    if case == "valid":
+        assert gateway.generate_sync(request()).content == "ok"
+        assert store.sum_event_payload_int(tenant_id="tenant", event_type=LLM_COMPLETED,
+                                           field="total_tokens", user_id="user") == 10
+    else:
+        with pytest.raises(RuntimeError, match="LLM_ACCOUNTING_UNAVAILABLE"):
+            gateway.generate_sync(request())
+        assert store.count_events(tenant_id="tenant", event_type=LLM_COMPLETED) == 0
+    with pytest.raises(RuntimeError, match="LLM_BUDGET_BLOCKED"):
+        gateway.generate_sync(request())
+    assert len(calls) == 1

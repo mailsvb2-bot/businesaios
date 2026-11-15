@@ -50,7 +50,10 @@ def test_release_requirements_lock_allows_transitive_entries(tmp_path: Path, mon
     _, _, release_lock = _bind_paths(monkeypatch, tmp_path)
     _write(
         release_lock,
-        "# BAIOS_TRANSITIVE_LOCK: true\nfastapi==0.115.0\nuvicorn[standard]==0.34.2\nstarlette==0.38.6\n",
+        "# BAIOS_TRANSITIVE_LOCK: true\n" + "".join(
+            f"{pin} --hash=sha256:{'0' * 64}\n"
+            for pin in ("fastapi==0.115.0", "uvicorn[standard]==0.34.2", "starlette==0.38.6")
+        ),
     )
 
     ok, message = lock._check_release_lock()
@@ -70,3 +73,19 @@ def test_release_requirements_lock_rejects_top_level_only_marker(tmp_path: Path,
 
     assert ok is False
     assert "top-level-only" in message
+
+
+def test_release_requirements_lock_rejects_identical_duplicate_pin(tmp_path: Path, monkeypatch) -> None:
+    _, _, release_lock = _bind_paths(monkeypatch, tmp_path)
+    hash_pin = " --hash=sha256:" + "0" * 64 + "\n"
+    _write(
+        release_lock,
+        "# BAIOS_TRANSITIVE_LOCK: true\n"
+        + "fastapi==0.115.0" + hash_pin
+        + "uvicorn[standard]==0.34.2" + hash_pin
+        + "starlette==0.38.6" + hash_pin
+        + "starlette==0.38.6" + hash_pin,
+    )
+    ok, message = lock._check_release_lock()
+    assert ok is False
+    assert "duplicate" in message

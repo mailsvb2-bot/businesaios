@@ -28,7 +28,7 @@ MUTATIONS = (
         "runtime.inmemory_ledger",
         "InMemoryLedger.try_mark_executed",
         "def broken(self, envelope):\n    return True\n",
-        "tests/business_critical/test_execute_once_ledger_contract.py::test_second_claim_of_same_decision_id_is_refused",
+        "tests/business_critical/test_execute_once_ledger_contract.py::test_second_claim_of_same_decision_id_is_refused[memory]",
     ),
 )
 
@@ -50,8 +50,14 @@ def test_security_suite_kills_injected_control_failure(
     )
     env = dict(os.environ)
     env["PYTHONPATH"] = os.pathsep.join((str(tmp_path), str(ROOT), env.get("PYTHONPATH", "")))
+    # Keep this injected-fault subprocess independent of the parent pytest run.
+    # Auto-loaded third-party plugins and inherited addopts are unrelated to
+    # detecting whether the deliberately broken execute-once invariant fails.
+    env["PYTEST_DISABLE_PLUGIN_AUTOLOAD"] = "1"
+    env.pop("PYTEST_ADDOPTS", None)
     result = subprocess.run(
-        [sys.executable, "-m", "pytest", "-q", "-p", "security_fault_plugin", test_target],
+        [sys.executable, "-m", "pytest", "-q", "-o", "addopts=",
+         "-p", "pytest_asyncio.plugin", "-p", "security_fault_plugin", test_target],
         cwd=ROOT, env=env, text=True, stdout=subprocess.PIPE,
         stderr=subprocess.STDOUT, timeout=90, check=False,
     )

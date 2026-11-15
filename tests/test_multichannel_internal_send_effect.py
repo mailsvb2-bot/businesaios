@@ -1,5 +1,6 @@
-from runtime.effects.message_effects import send_message_effect
+import pytest
 from runtime.execution.context import executor_context
+from runtime.effects.message_effects import send_message_effect
 
 
 class _DummyEventLog:
@@ -51,3 +52,8 @@ def test_telegram_send_stays_in_telegram_transport():
         out = send_message_effect(dummy, decision_id="d1", correlation_id="c1", user_id="123456", text="hello", channel="telegram")
     assert out["ok"] is True
     assert out["meta"]["channel"] == "telegram"
+
+
+def test_direct_send_is_rejected_before_transport():
+    with pytest.raises(RuntimeError, match="SIDE_EFFECT_REQUIRES_EXECUTOR"):
+        send_message_effect(_DummySelf(), decision_id="d1", correlation_id="c1", user_id="123", text="blocked")

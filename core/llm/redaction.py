@@ -39,6 +39,6 @@ def redact_text(text: str) -> RedactionResult:
 
 
 def safe_metadata(meta: dict) -> dict:
-    """Only non-identifying numeric diagnostics may leave the canonical LLM boundary."""
+    """Only non-identifying numeric diagnostics may leave the LLM boundary."""
     value = (meta or {}).get("context_tokens")
     return {"context_tokens": value} if type(value) is int and 0 <= value <= 10_000_000 else {}

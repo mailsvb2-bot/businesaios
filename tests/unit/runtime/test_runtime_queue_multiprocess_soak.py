@@ -29,7 +29,17 @@ def _worker_process(db_path: str, rounds: int) -> None:
         lease_seconds=5,
     )
     for _ in range(rounds):
-        worker.tick(tenant_id='tenant-a', queue_name='ops')
+        # Competing SQLite writers can temporarily reject BEGIN IMMEDIATE.
+        # Retry only a lock-contention error, within a finite test deadline;
+        # other errors and persistent contention must still fail this soak.
+        for attempt in range(12):
+            try:
+                worker.tick(tenant_id='tenant-a', queue_name='ops')
+                break
+            except sqlite3.OperationalError as exc:
+                if not any(token in str(exc).lower() for token in ("locked", "busy")) or attempt == 11:
+                    raise
+                time.sleep(min(0.02 * (attempt + 1), 0.1))
         time.sleep(0.005)
 
 

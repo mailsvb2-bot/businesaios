@@ -43,13 +43,14 @@ def handle_ai_ceo(ctx: TelegramCtx, *, user_id: str, event_store: Any | None = N
 
 
 def _build(ctx: TelegramCtx, *, event_store: Any | None) -> Any:
-    tenant_id = str(ctx.tenant_id or "")
+    tenant_id = str(getattr(ctx.state, "tenant_id", "") or "")
     autonomy = autonomy_from_env()
     snapshot = read_growth_snapshot(event_store, tenant_id=tenant_id) if event_store is not None else None
     if snapshot is None:
         from core.ai_ceo.ledger import GrowthSnapshotV1
         snapshot = GrowthSnapshotV1()
-    return build_plan(state=ctx.state, snapshot=snapshot, autonomy=autonomy, bot_username=str(ctx.bot_username or ""))
+    product = getattr(ctx.state, "product", {}) or {}
+    return build_plan(state=ctx.state, snapshot=snapshot, autonomy=autonomy, bot_username=str(product.get("bot_username") or "") if isinstance(product, dict) else "")
 
 
 def _propose_plan(ctx: TelegramCtx, *, user_id: str, event_store: Any | None) -> ProposedAction:

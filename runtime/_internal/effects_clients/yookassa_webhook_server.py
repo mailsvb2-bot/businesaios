@@ -70,7 +70,8 @@ def start_yookassa_webhook_server_in_thread(
                     self.wfile.write(b"not_found")
                     return
 
-                # Use the TCP peer, never a caller-supplied X-Forwarded-For.
+                # Client IP is the direct TCP peer; never trust an unverified
+                # X-Forwarded-For supplied by the caller.
                 if allowed_networks and not any(
                     ipaddress.ip_address(self.client_address[0]) in net
                     for net in allowed_networks
@@ -79,6 +80,7 @@ def start_yookassa_webhook_server_in_thread(
                     self.end_headers()
                     return
 
+                # Auth
                 if auth_mode == "basic":
                     hdr = self.headers.get("Authorization")
                     if not hdr or not hdr.startswith("Basic "):
@@ -103,7 +105,7 @@ def start_yookassa_webhook_server_in_thread(
                     hdr = self.headers.get("X-Webhook-Token") or self.headers.get("X-YooKassa-Token")
                     expected = str(token_secret or "").strip()
                     got = str(hdr or "").strip()
-                    if (not expected) or (not got) or (not hmac.compare_digest(expected, got)):
+                    if (not expected) or (not got) or (not hmac.compare_digest(expected.encode("utf-8"), got.encode("utf-8"))):
                         self.send_response(401)
                         self.end_headers()
                         return
@@ -139,10 +141,8 @@ def start_yookassa_webhook_server_in_thread(
 
                 notif = parse_notification(body_bytes=raw)
 
-                # Ingress metadata is not a trusted tenant binding. Only the
-                # canonical payment reconciliation may attribute tenant events
-                # after resolving the locally created checkout/payment context.
-                # Keep the raw notification in the durable idempotent outbox.
+                # Acknowledge only after the durable idempotent outbox commits.
+                # Audit events are secondary observations, not settlement proofs.
                 payload = {"type": "yookassa_webhook", "payload": notif.raw}
                 try:
                     payment_outbox.enqueue_once(

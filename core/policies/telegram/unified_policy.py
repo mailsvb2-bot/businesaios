@@ -44,14 +44,9 @@ class UnifiedTelegramPolicyV3:
         self._sales = SalesDomainPolicyV1()
         self._ret = RetentionDomainPolicyV1()
 
-    @staticmethod
-    def _domain(state: WorldStateV1) -> str:
-        product = getattr(state, "product", None)
-        values = product if isinstance(product, dict) else {}
-        return str(values.get("domain") or "organization_platform")
-
     def _domain_proposal(self, state: WorldStateV1) -> ProposedAction | None:
-        domain = self._domain(state)
+        product = getattr(state, "product", None)
+        domain = str((product if isinstance(product, dict) else {}).get("domain") or "organization_platform")
         if domain == "sales":
             return normalize_proposed_action(self._sales.propose(state))
         if domain == "retention":
@@ -67,12 +62,13 @@ class UnifiedTelegramPolicyV3:
         payments = economy.get("payments")
         payments = payments if isinstance(payments, dict) else {}
         roles = [str(role) for role in list(user_fields["roles"]) if str(role).strip()]
-        permissions = [
-            str(permission)
-            for permission in list(user_fields["perms"])
-            if str(permission).strip()
-        ]
-        is_superadmin = bool(state.user_id) and str(state.user_id) in self._admin_user_ids
+        permissions = [str(permission) for permission in user_fields["perms"] if str(permission).strip()]
+        # Provider-local IDs are not Telegram admin identities. Without an
+        # authenticated cross-channel account link, never inherit privileges.
+        channel = str((getattr(state, "session", None) or {}).get("channel") or "").lower()
+        if channel not in ("", "telegram"):
+            roles, permissions = [], []
+        is_superadmin = channel in ("", "telegram") and bool(state.user_id) and str(state.user_id) in self._admin_user_ids
         is_admin = bool(is_superadmin) or "admin" in set(roles)
         if is_customer_session(getattr(state, "session", None)):
             is_admin = False  # a customer bot never grants owner/admin rights
@@ -116,24 +112,17 @@ class UnifiedTelegramPolicyV3:
             return action
         return replace(action, payload={**action.payload, "callback_query_id": context.callback_query_id})
 
-    def _propose_base(self, state: WorldStateV1) -> ProposedAction:
-        domain = self._domain_proposal(state)
-        if domain is not None:
-            return domain
-        context, _is_admin = self._context(state)
-        return self._bind_callback(normalize_proposed_action(
-            handle(
-                context,
-                default_price_rub=self._default_price_rub,
-                bot_username=self._bot_username,
-                gift_ttl_sec=self._gift_ttl_sec,
-            )
-        ), context)
+    def _handle_base(self, context: TelegramCtx) -> ProposedAction:
+        """One canonical menu proposal path for single and ranked decisions."""
+        return self._bind_callback(normalize_proposed_action(handle(
+            context, default_price_rub=self._default_price_rub,
+            bot_username=self._bot_username, gift_ttl_sec=self._gift_ttl_sec,
+        )), context)
 
     def propose(self, state: WorldStateV1) -> ProposedAction:
         """Compatibility: produce the unchanged base UX action."""
-
-        return self._propose_base(state)
+        domain = self._domain_proposal(state)
+        return domain if domain is not None else self._handle_base(self._context(state)[0])
 
     def propose_many(self, state: WorldStateV1) -> list[ProposedAction]:
         """Expose base and retention alternatives to canonical DecisionCore ranking."""
@@ -144,16 +133,7 @@ class UnifiedTelegramPolicyV3:
         context, is_admin = self._context(state)
         telegram_update = getattr(state, "telegram_update", None)
         if self._retention is None or is_admin or telegram_update is None or is_customer_session(getattr(state, "session", None)):
-            return [
-                self._bind_callback(normalize_proposed_action(
-                    handle(
-                        context,
-                        default_price_rub=self._default_price_rub,
-                        bot_username=self._bot_username,
-                        gift_ttl_sec=self._gift_ttl_sec,
-                    )
-                ), context)
-            ]
+            return [self._handle_base(context)]
 
         evaluation = self._retention.evaluate(state)
         constrained_state = apply_retention_constraints_to_state(
@@ -162,14 +142,7 @@ class UnifiedTelegramPolicyV3:
         )
         if constrained_state is not state:
             context = replace(context, state=constrained_state)
-        base = self._bind_callback(normalize_proposed_action(
-            handle(
-                context,
-                default_price_rub=self._default_price_rub,
-                bot_username=self._bot_username,
-                gift_ttl_sec=self._gift_ttl_sec,
-            )
-        ), context)
+        base = self._handle_base(context)
         return self._retention.propose_candidates(
             state=constrained_state,
             base=base,

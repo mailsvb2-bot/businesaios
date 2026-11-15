@@ -1,3 +1,4 @@
+import pytest
 """Real HTTP ingress: durable queue first, never a fabricated receipt."""
 from __future__ import annotations
 
@@ -57,11 +58,26 @@ def test_http_webhook_ack_requires_durable_enqueue(monkeypatch):
         try:
             assert _post(server.server_port) == (503 if failed else 200)
             assert len(outbox.jobs) == (0 if failed else 1)
-            # Tenant-scoped audit must not be emitted from untrusted PSP metadata.
-            assert audit.events == []
+            assert audit.events == []  # Untrusted ingress cannot author tenant audit.
             if not failed:
                 assert _post(server.server_port) == 200
                 assert len(outbox.jobs) == 1
         finally:
             server.shutdown()
             server.server_close()
+
+from runtime._internal.effects_actions.payments.yookassa import yookassa_create_payment
+@pytest.mark.parametrize("currency,amount", [
+    ("RUB", 100), ("USD", 100), ("RUB", 0),
+])
+def test_payment_create_is_rejected_before_any_psp_side_effect(currency, amount):
+    class NoCalls:
+        def __getattr__(self, attr):
+            raise AssertionError("External transport unexpectedly touched: " + attr)
+
+    with pytest.raises(RuntimeError, match="SIDE_EFFECT_REQUIRES_EXECUTOR"):
+        yookassa_create_payment(
+            effects=NoCalls(), decision_id="decision-1", amount=amount,
+            currency=currency, user_id="user-1",
+            metadata={"order_id": "order-1"},
+        )

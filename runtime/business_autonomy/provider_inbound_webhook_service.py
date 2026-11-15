@@ -17,6 +17,7 @@ from runtime.business_autonomy.provider_webhook_inbound_result_summary import su
 from runtime.business_autonomy.provider_webhook_replay_guard import ProviderWebhookReplayGuard
 from runtime.business_autonomy.provider_webhook_route_registry import ProviderWebhookRouteRegistry
 from runtime.business_autonomy.provider_webhook_runtime import RAW_SIGNATURE_FIRST_PROVIDER_KEYS, ProviderWebhookRuntime
+from runtime.safety import verified_inbound_reply_scope
 
 CANON_PROVIDER_INBOUND_WEBHOOK_SERVICE = True
 
@@ -64,8 +65,7 @@ class ProviderInboundWebhookService:
             export_refs = self.export_bridge.export_runtime_event(tenant_id=str(tenant_id), business_id=str(business_id), provider_key=provider.provider_key, event_kind='webhook', payload={'status': 'invalid_signature', 'accepted': False, 'topic': effective_topic})
             self.observability.record_webhook(tenant_id=str(tenant_id), provider_key=provider.provider_key, status='invalid_signature', accepted=False, topic=effective_topic)
             incident = self.incident_registry.append({'tenant_id': str(tenant_id), 'business_id': str(business_id), 'provider_key': provider.provider_key, 'kind': 'webhook', 'status': 'invalid_signature', 'severity': 'major', 'category': 'webhook_signature', 'message': 'invalid webhook signature', 'metadata': {'topic': effective_topic}})
-            handoff = build_provider_webhook_inbound_handoff(tenant_id=tenant_id, business_id=business_id, provider_key=provider.provider_key, messaging_ingress=first_route.get('messaging_ingress'), route_metadata=first_route)
-            return ProviderWebhookIngressResult(provider_key=provider.provider_key, event_key=effective_event_key, accepted=False, status='invalid_signature', metadata={'topic': effective_topic, 'audit_refs': refs, 'export_refs': export_refs, 'route': first_route, 'messaging_handoff': handoff, 'messaging_inbound_result': {}, 'incident': incident})
+            return ProviderWebhookIngressResult(provider_key=provider.provider_key, event_key=effective_event_key, accepted=False, status='invalid_signature', metadata={'topic': effective_topic, 'audit_refs': refs, 'export_refs': export_refs, 'route': first_route, 'messaging_handoff': {}, 'messaging_inbound_result': {}, 'incident': incident})
         routes = route_registry.extract_many(provider, headers, body)
         first_route = routes[0]
         if signature_first:
@@ -197,7 +197,16 @@ class ProviderInboundWebhookService:
                                                       str(pin.get('text') or ''))
             except Exception as exc:  # attribution must never break inbound
                 promotion = {'error': exc.__class__.__name__}
-        inbound_result = self.inbound_processor.process(handoff=handoff) if decision.accepted and self.inbound_processor is not None and handoff else {}
+        inbound_result = {}
+        if decision.accepted and self.inbound_processor is not None and handoff:
+            inbound = dict(handoff.get("inbound_message") or {})
+            with verified_inbound_reply_scope(
+                tenant_id=str(tenant_id), channel=str(inbound.get("channel") or ""),
+                user_id=str(inbound.get("user_id") or ""),
+                update_id=str(inbound.get("transport_message_id") or ""),
+                chat_id=str(inbound.get("chat_id") or ""),
+            ):
+                inbound_result = self.inbound_processor.process(handoff=handoff)
         if decision.accepted and (not handoff or inbound_result):
             self.complete(provider=provider, tenant_id=tenant_id, business_id=business_id, event_key=event_key, payload_digest=payload_digest, owner_id=decision.owner_id, topic=topic)
         ack_required = provider.provider_key == 'vk_messaging' and str(topic or '') == 'message_event'
@@ -221,11 +230,13 @@ class ProviderInboundWebhookService:
             provider_ack = {'required': False, 'ok': True}
         inbound_summary = summarize_provider_webhook_inbound_result(handoff=handoff, inbound_result=inbound_result)
         self.observability.record_webhook_inbound_handoff(tenant_id=str(tenant_id), provider_key=provider.provider_key, status=status, inbound_summary=inbound_summary)
-        return ProviderWebhookIngressResult(provider_key=provider.provider_key, event_key=event_key, accepted=decision.accepted, status=status, metadata={'decision': {'resolution': decision.resolution, **dict(decision.metadata)}, 'owner_id': decision.owner_id, 'topic': topic, 'audit_refs': refs, 'export_refs': export_refs, 'route': dict(route), 'messaging_handoff': handoff, 'messaging_inbound_result': inbound_result, 'messaging_inbound_summary': inbound_summary, 'provider_ack': provider_ack, 'customer': customer_result, 'message': message_result, 'commercial_lead': commercial_receipt, 'promotion_touch': promotion, 'incident': incident})
+        return ProviderWebhookIngressResult(provider_key=provider.provider_key, event_key=event_key, accepted=decision.accepted, status=status, metadata={'decision': {'resolution': decision.resolution, **dict(decision.metadata)}, 'owner_id': decision.owner_id, 'topic': topic, 'audit_refs': refs, 'export_refs': export_refs, 'route': dict(route), 'messaging_handoff': handoff if decision.accepted else {}, 'messaging_inbound_result': inbound_result, 'messaging_inbound_summary': inbound_summary, 'provider_ack': provider_ack, 'customer': customer_result, 'message': message_result, 'commercial_lead': commercial_receipt, 'promotion_touch': promotion, 'incident': incident})
 
     @staticmethod
     def transport_ack_safe(result: ProviderWebhookIngressResult) -> bool:
         metadata = dict(result.metadata or {})
+        if result.status == 'replayed' and dict(metadata.get('decision') or {}).get('resolution') != 'replay_completed':
+            return False
         provider_ack = dict(metadata.get('provider_ack') or {})
         if provider_ack.get('required') and not provider_ack.get('ok'):
             return False

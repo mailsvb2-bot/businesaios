@@ -26,7 +26,6 @@ _CMD_RE = re.compile(r"""["'](/[a-z][a-z0-9_]{1,40})["']""")
 KNOWN_ROUTE_GAPS: dict[str, tuple[str, str]] = {
     "/suggest": ("MISSING_REQUIRED_KEYS", "router payload has no business_id; it is expected to be enriched downstream"),
     "/apply_suggest": ("MISSING_REQUIRED_KEYS", "router payload has no business_id; it is expected to be enriched downstream"),
-    "/ceo": ("AttributeError", "REAL DEFECT: ai_ceo handler reads ctx.tenant_id / ctx.bot_username which TelegramCtx lacks"),
 }
 
 
@@ -35,6 +34,8 @@ class _State:
     tenant_id = "t1"
     product = {"product_id": "organization_platform", "domain": "organization_platform"}
     economy: dict = {}
+    session: dict = {}
+    user: dict = {}
 
 
 def _ctx(cmd: str, *, is_admin: bool) -> TelegramCtx:

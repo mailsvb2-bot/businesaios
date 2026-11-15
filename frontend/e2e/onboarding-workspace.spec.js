@@ -250,3 +250,28 @@ test(canonicalScenario.title, async ({ page }, testInfo) => {
   await expect(page.getByRole("button", { name: `Открыть бизнес ${secondBusinessName}`, exact: true })).toBeVisible();
   expect(await hasNoHorizontalOverflow(page)).toBe(true);
 });
+
+
+test("owner can create a protected workspace without selecting any integration", async ({ page }, testInfo) => {
+  const identity = projectIdentity(testInfo.project.name + "-without-provider");
+  await page.goto("/");
+  await page.getByLabel("Название бизнеса").fill(identity.businessName);
+  await page.getByLabel("Email владельца").fill(identity.email);
+  await page.getByRole("button", { name: /Продолжить/ }).click();
+  await page.getByRole("button", { name: /Больше клиентов/ }).click();
+  await page.getByRole("button", { name: /Продолжить/ }).click();
+  await expect(page.getByText(/Можно продолжить без источников/)).toBeVisible();
+  await page.getByRole("button", { name: /Продолжить/ }).click();
+  await page.getByRole("button", { name: /Советник/ }).click();
+  const created = page.waitForResponse((response) =>
+    response.url().includes("/api/public-site/cta/start") && response.request().method() === "POST");
+  await page.getByRole("button", { name: /Создать мой BusinessAIOS/ }).click();
+  const response = await created;
+  expect(response.status()).toBe(200);
+  const payload = await response.json();
+  expect(payload?.owner_session?.api_key).toBeTruthy();
+  expect(payload?.user_functionality?.selected_providers).toEqual([]);
+  expect(payload?.write_actions_enabled).toBe(false);
+  await expect(page.getByRole("heading", { name: identity.businessName, level: 1 })).toBeVisible();
+  await expect(page.getByText(/Следующий шаг: подключить выбранный источник/)).toBeVisible();
+});

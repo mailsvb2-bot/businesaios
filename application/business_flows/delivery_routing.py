@@ -161,8 +161,10 @@ def event_registration_messenger_target(connections: list[dict[str, Any]], chann
         return None
     eligible = _eligible(connections, platform)
     stored = [c for c in eligible if str(c["id"]) == str(channel.get("connection_id"))]  # type: ignore[union-attr]
-    pick = stored or (eligible if len(eligible) == 1 else [])
-    return EventTarget(platform, str(pick[0]["id"]), "external_subject", None, subject) if pick else None
+    # Never infer verification from a different, merely eligible connection.
+    if len(stored) != 1:
+        return None
+    return EventTarget(platform, str(stored[0]["id"]), "external_subject", None, subject)
 
 
 def event_messenger_target(connections: list[dict[str, Any]], *, platform: str, channel: dict[str, Any] | None,
@@ -171,14 +173,18 @@ def event_messenger_target(connections: list[dict[str, Any]], *, platform: str, 
     scoped = event_registration_messenger_target(connections, channel, platform)
     if scoped is not None:
         return scoped
-    live = {str(c["id"]) for c in connections if c.get("platform") == platform and c.get("status") == "active"}
+    # An explicit registration recipient must never be silently rerouted to a
+    # different identity or connection after revocation or disconnection.
+    if channel and channel.get("external_subject"):
+        return None
+    eligible = _eligible(connections, platform)
+    live = {str(c["id"]) for c in eligible}
     idents = [i for i in identities if i.get("platform") == platform and i.get("status", "active") == "active"]
     if last_sent and str(last_sent.get("connection_id")) in live:
         hit = next((i for i in idents if i["id"] == last_sent.get("customer_identity_id")), None)
         if hit is not None:
             subj = str(hit.get("external_subject") or "").strip()
             return EventTarget(platform, str(last_sent["connection_id"]), "customer_identity", hit["id"], subj) if subj else None
-    eligible = _eligible(connections, platform)
     if len(idents) != 1 or len(eligible) != 1:
         return None
     subj = str(idents[0].get("external_subject") or "").strip()

@@ -5,13 +5,14 @@ from kernel.world_state import WorldStateV1
 
 def extract_session_fields(state: WorldStateV1) -> dict[str, object]:
     session = dict(getattr(state, "session", {}) or {})
-    cbq_id = session.get("callback_query_id") if bool(session.get("is_callback")) else None
+    is_cb = bool(session.get("is_callback") or session.get("callback_data"))
+    cbq_id = session.get("callback_query_id") if is_cb else None
     callback_query_id = str(cbq_id) if cbq_id is not None else None
     return {
-        "text": str(session.get("text") or "").strip(),
+        "text": str(session.get("text") or getattr(state, "message_text", "") or "").strip(),
         "cmd": session.get("command"),
         "args": str(session.get("args") or ""),
-        "callback_data": str(session.get("callback_data") or "") if bool(session.get("is_callback")) else "",
+        "callback_data": str(session.get("callback_data") or "") if is_cb else "",
         "callback_query_id": callback_query_id,
     }
 

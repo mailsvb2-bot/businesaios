@@ -7,6 +7,7 @@ from typing import Any
 
 from application.business_autonomy.provider_admin_contract import ProviderDefinition
 from runtime.business_autonomy.provider_max_media_http import execute_max_media_message
+from runtime.business_autonomy.provider_transport_bindings import max_tls_ca_file
 from runtime.business_autonomy.provider_media import ProviderMediaPreparationCoordinator, public_provider_media_payload
 from runtime.business_autonomy.provider_payload_normalizers import ProviderPayloadNormalizers
 from runtime.business_autonomy.provider_response_parsers import ProviderResponseParsers
@@ -125,6 +126,7 @@ class VendorHttpLiveTransport:
             headers={str(k): str(v) for k, v in dict(prepared.get('headers') or {}).items()},
             body=raw,
             timeout_s=float(self.timeout_seconds),
+            **({"tls_ca_file": max_tls_ca_file(str(prepared["url"]))} if provider.provider_key == "max_messaging" else {}),
         )
         http_status = int(result.status or 599)
         payload_text = str(result.text or '')[:2000]

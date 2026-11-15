@@ -7,10 +7,12 @@ parse -> dedupe -> rate limit -> enrich -> worldstate -> decide -> execute
 from __future__ import annotations
 
 import time
+from dataclasses import replace
 from typing import Any
 
 from core.behavior.behavioral_state_builder import BehavioralStateBuilder
 from core.observability.perf import Span
+from core.safety.controls.action_budget.models import verified_inbound_reply_scope
 from interfaces.telegram.parsing.telegram_context import build_context
 from interfaces.telegram.pipeline.ingress_dedupe import is_duplicate
 from interfaces.telegram.pipeline.ingress_warning import emit_ingress_warning
@@ -124,14 +126,18 @@ class TelegramUpdateProcessor:
             return
 
         try:
-            run_decision_and_execution(
-                event_log=self._event_log,
-                ctx=ctx,
-                ws=ws,
-                button_key=button_key,
-                decide_fn=self._decide,
-                execute_fn=self._execute,
-            )
+            session = dict(ws.session or {})
+            session.update(messaging_update_id=ctx.update_id, messaging_chat_id=str(ctx.chat_id))
+            session.setdefault("source", "messaging")
+            ws = replace(ws, session=session)
+            with verified_inbound_reply_scope(
+                tenant_id=str(ws.tenant_id), channel="telegram", user_id=str(ws.user_id),
+                update_id=ctx.update_id, chat_id=str(ctx.chat_id),
+            ):
+                run_decision_and_execution(
+                    event_log=self._event_log, ctx=ctx, ws=ws, button_key=button_key,
+                    decide_fn=self._decide, execute_fn=self._execute,
+                )
         except Exception as exc:
             emit_ingress_warning(self._event_log, user_id=str(ctx.chat_id), reason="decision_execution_failed", error=exc)
             return

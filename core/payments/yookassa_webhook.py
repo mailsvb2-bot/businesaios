@@ -73,8 +73,6 @@ def verify_webhook(
     if mode == "none":
         return
     if mode == "basic":
-        if not basic_user or not basic_pass:
-            raise WebhookAuthError("missing_basic_credentials")
         auth = _get_header(headers, "Authorization") or ""
         if not auth.lower().startswith("basic "):
             raise WebhookAuthError("missing_basic_auth")
@@ -86,9 +84,9 @@ def verify_webhook(
         if ":" not in decoded:
             raise WebhookAuthError("bad_basic_auth")
         u, p = decoded.split(":", 1)
-        user_ok = hmac.compare_digest(u.encode("utf-8"), str(basic_user or "").encode("utf-8"))
-        password_ok = hmac.compare_digest(p.encode("utf-8"), str(basic_pass or "").encode("utf-8"))
-        if not (user_ok and password_ok):
+        if not basic_user or not basic_pass:
+            raise WebhookAuthError("missing_basic_credentials")
+        if not (hmac.compare_digest(u, str(basic_user)) & hmac.compare_digest(p, str(basic_pass))):
             raise WebhookAuthError("invalid_basic_credentials")
         return
     if mode == "hmac_sha256":

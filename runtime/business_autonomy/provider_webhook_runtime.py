@@ -20,6 +20,13 @@ from security.secret_vault import SecretVault
 CANON_PROVIDER_WEBHOOK_RUNTIME = True
 RAW_SIGNATURE_FIRST_PROVIDER_KEYS = frozenset({'line_messaging', 'viber_messaging'})
 
+def _secret_eq(expected: object, observed: object) -> bool:
+    """Compare untrusted webhook secrets without non-ASCII compare_digest errors."""
+    return bool(expected) and hmac.compare_digest(
+        str(expected).encode("utf-8"), str(observed or "").encode("utf-8")
+    )
+
+
 @dataclass(frozen=True)
 class ProviderWebhookRuntime:
     secret_vault: SecretVault
@@ -49,9 +56,9 @@ class ProviderWebhookRuntime:
         secret = self._read_secret(tenant_id=tenant_id, connector_id=provider.connector_id, business_id=business_id, secret_name=f"{provider.connector_id}.{contract.metadata.get('secret_field') or self._secret_field(provider)}")
         if contract.verification_kind == 'hmac_sha256_hex':
             if secret is not None:
-                return bool(secret) and hmac.compare_digest('sha256=' + hmac.new(secret.encode('utf-8'), bytes(body), hashlib.sha256).hexdigest(), normalized_headers.get('x-hub-signature-256', ''))
+                return bool(secret) and _secret_eq('sha256=' + hmac.new(secret.encode('utf-8'), bytes(body), hashlib.sha256).hexdigest(), normalized_headers.get('x-hub-signature-256', ''))
             secret = self._read_secret(tenant_id=tenant_id, connector_id=provider.connector_id, business_id=business_id, secret_name=f"{provider.connector_id}.{contract.metadata.get('fallback_secret_field')}") if contract.metadata.get('fallback_secret_field') else ''
-            return bool(secret) and any(candidate and hmac.compare_digest(secret, candidate) for candidate in (normalized_headers.get('authorization', '').removeprefix('Bearer ').strip(), normalized_headers.get('x-businessaios-webhook-secret', '')))
+            return bool(secret) and any(candidate and _secret_eq(secret, candidate) for candidate in (normalized_headers.get('authorization', '').removeprefix('Bearer ').strip(), normalized_headers.get('x-businessaios-webhook-secret', '')))
         if contract.verification_kind == 'discord_ed25519_or_shared_secret':
             signature, timestamp = normalized_headers.get('x-signature-ed25519', '').strip(), normalized_headers.get('x-signature-timestamp', '').strip()
             if signature or timestamp:
@@ -63,7 +70,7 @@ class ProviderWebhookRuntime:
                 except (InvalidSignature, ValueError):
                     return False
                 return True
-            return bool(secret) and any(candidate and hmac.compare_digest(secret, candidate) for candidate in (normalized_headers.get('authorization', '').removeprefix('Bearer ').strip(), normalized_headers.get('x-businessaios-webhook-secret', '')))
+            return bool(secret) and any(candidate and _secret_eq(secret, candidate) for candidate in (normalized_headers.get('authorization', '').removeprefix('Bearer ').strip(), normalized_headers.get('x-businessaios-webhook-secret', '')))
         if contract.verification_kind in {'line_hmac_sha256_base64_or_shared_secret', 'viber_hmac_sha256_hex_or_shared_secret'}:
             header_name = 'x-line-signature' if provider.provider_key == 'line_messaging' else 'x-viber-content-signature'
             if header_name in normalized_headers:
@@ -71,8 +78,8 @@ class ProviderWebhookRuntime:
                 if not signature or not native_secret:
                     return False
                 expected = base64.b64encode(hmac.new(native_secret.encode('utf-8'), bytes(body), hashlib.sha256).digest()).decode('ascii') if provider.provider_key == 'line_messaging' else hmac.new(native_secret.encode('utf-8'), bytes(body), hashlib.sha256).hexdigest()
-                return hmac.compare_digest(expected, signature)
-            return bool(secret) and any(candidate and hmac.compare_digest(secret, candidate) for candidate in (normalized_headers.get('authorization', '').removeprefix('Bearer ').strip(), normalized_headers.get('x-businessaios-webhook-secret', '')))
+                return _secret_eq(expected, signature)
+            return bool(secret) and any(candidate and _secret_eq(secret, candidate) for candidate in (normalized_headers.get('authorization', '').removeprefix('Bearer ').strip(), normalized_headers.get('x-businessaios-webhook-secret', '')))
         if not secret:
             return False
         if contract.verification_kind == 'slack_hmac_sha256_v0_or_shared_secret':
@@ -86,16 +93,16 @@ class ProviderWebhookRuntime:
                     signing_base = b'v0:' + timestamp.encode('ascii') + b':' + bytes(body)
                 except (OverflowError, ValueError, UnicodeEncodeError):
                     return False
-                return hmac.compare_digest('v0=' + hmac.new(secret.encode('utf-8'), signing_base, hashlib.sha256).hexdigest(), signature)
-            return any(candidate and hmac.compare_digest(secret, candidate) for candidate in (normalized_headers.get('authorization', '').removeprefix('Bearer ').strip(), normalized_headers.get('x-businessaios-webhook-secret', '')))
+                return _secret_eq('v0=' + hmac.new(secret.encode('utf-8'), signing_base, hashlib.sha256).hexdigest(), signature)
+            return any(candidate and _secret_eq(secret, candidate) for candidate in (normalized_headers.get('authorization', '').removeprefix('Bearer ').strip(), normalized_headers.get('x-businessaios-webhook-secret', '')))
         if contract.verification_kind == 'hmac_sha256_base64':
             expected = base64.b64encode(hmac.new(secret.encode('utf-8'), bytes(body), hashlib.sha256).digest()).decode('ascii')
-            return any(candidate and hmac.compare_digest(expected, candidate) for candidate in (normalized_headers.get(str(name).lower(), '') for name in contract.header_names))
+            return any(candidate and _secret_eq(expected, candidate) for candidate in (normalized_headers.get(str(name).lower(), '') for name in contract.header_names))
         if contract.verification_kind in {'bearer_or_shared_secret', 'shared_secret_header', 'shared_secret_body_or_header'}:
             candidates = [normalized_headers.get('authorization', '').removeprefix('Bearer ').strip()] + [normalized_headers.get(str(name).lower(), '') for name in contract.header_names if str(name).lower() != 'authorization']
             if contract.verification_kind == 'shared_secret_body_or_header':
                 candidates.append(str(ProviderPayloadNormalizers.parse_webhook_json(body).get('secret') or ''))
-            return any(candidate and hmac.compare_digest(secret, candidate) for candidate in candidates)
+            return any(candidate and _secret_eq(secret, candidate) for candidate in candidates)
         return False
 
     def response_body(self, *, provider: ProviderDefinition, tenant_id: str, business_id: str, body: bytes) -> str | None:
@@ -108,7 +115,7 @@ class ProviderWebhookRuntime:
         if provider.provider_key not in {'whatsapp_cloud', 'instagram_messaging', 'messenger_messaging'} or str(mode) != 'subscribe':
             return None
         expected = self._read_secret(tenant_id=tenant_id, connector_id=provider.connector_id, business_id=business_id, secret_name=f'{provider.connector_id}.verify_token')
-        return str(challenge) if expected and hmac.compare_digest(expected, str(verify_token)) else None
+        return str(challenge) if expected and _secret_eq(expected, str(verify_token)) else None
 
     def _secret_field(self, provider: ProviderDefinition) -> str:
         return next((field.secret_name for preferred_kind in ('signing_secret', 'token', 'api_key', 'password') for field in provider.secret_fields if field.secret_kind == preferred_kind), provider.secret_fields[0].secret_name if provider.secret_fields else 'secret')

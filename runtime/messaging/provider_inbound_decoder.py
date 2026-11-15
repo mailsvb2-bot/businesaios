@@ -1,12 +1,8 @@
-"""Canonical provider webhook/update decoder for every messaging channel.
-
-Provider payloads are nested and differ by transport. This module is the sole
-owner of extracting the stable messaging envelope fields used by bindings and
-WorldState ingress. Channel packages may delegate here but must not maintain
-parallel path tables.
-"""
+"""Single-owner provider webhook/update decoder: channel packages reuse these paths."""
 
 from __future__ import annotations
+
+import json
 
 from collections import deque
 from collections.abc import Mapping, Sequence
@@ -345,6 +341,40 @@ def _canonical_or_passthrough(channel: str) -> str:
         return raw or "unknown"
 
 
+def _vk_lookup_view(raw: dict[str, Any]) -> dict[str, Any]:
+    """Decode VK keyboard payloads for lookup without changing provider data."""
+    source = raw.get("object")
+    if not isinstance(source, Mapping):
+        return raw
+    view = dict(source)
+    for key in ("payload", "message"):
+        holder = view if key == "payload" else view.get("message")
+        if not isinstance(holder, Mapping):
+            continue
+        encoded = holder.get("payload")
+        if not isinstance(encoded, str) or len(encoded) > 16384:
+            continue
+        try:
+            parsed = json.loads(encoded)
+        except (ValueError, TypeError):
+            continue
+        if not isinstance(parsed, Mapping):
+            continue
+        decoded = dict(parsed)
+        if str(decoded.get("command") or "").strip().lower() == "start":
+            decoded["command"] = "/start"
+        view["message" if key == "message" else "payload"] = (
+            {**holder, "payload": decoded} if key == "message" else decoded
+        )
+    return {**raw, "object": view}
+
+
+def _provider_text(channel: str, raw: Mapping[str, Any], fallback: str) -> str:
+    if channel == "max" and raw.get("update_type") == "bot_started":
+        return ("/start " + _scalar_text(raw.get("payload"))).strip()
+    return fallback
+
+
 def decode_provider_inbound(
     *,
     channel: str,
@@ -352,13 +382,14 @@ def decode_provider_inbound(
 ) -> dict[str, Any]:
     canonical = _canonical_or_passthrough(channel)
     raw = dict(payload or {})
+    view = _vk_lookup_view(raw) if canonical == "vk" else raw
     paths = _PROVIDER_PATHS.get(canonical, {})
 
     def field_value(name: str) -> Any:
-        explicit = _first_path_value(raw, paths.get(name, ()))
+        explicit = _first_path_value(view, paths.get(name, ()))
         if explicit is not None:
             return explicit
-        return _deep_first_value(raw, _GENERIC_KEYS.get(name, ()))
+        return _deep_first_value(view, _GENERIC_KEYS.get(name, ()))
 
     def field_text(name: str) -> str:
         return _scalar_text(field_value(name))
@@ -386,7 +417,7 @@ def decode_provider_inbound(
         "channel": canonical,
         "user_id": user_id,
         "chat_id": chat_id,
-        "text": field_text("text"),
+        "text": _provider_text(canonical, raw, field_text("text")),
         "message_id": message_id,
         "external_user_ref": user_id or chat_id,
         "timestamp_ms": _timestamp_from_payload(raw, paths.get("timestamp", ())),

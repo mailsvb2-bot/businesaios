@@ -51,6 +51,33 @@ def provider_transport_binding_for_key(provider_key: str) -> dict[str, Any]:
     })
 
 
+
+def max_tls_ca_file(url: str) -> str | None:
+    """Add one verified root for the canonical MAX origin only."""
+    import hashlib
+    import os
+    import ssl
+    from pathlib import Path
+    from urllib.parse import urlsplit
+    path = os.environ.get("BUSINESAIOS_MAX_CA_FILE", "").strip()
+    if not path:
+        return None
+    actual, expected = urlsplit(url), urlsplit(provider_endpoint_url("max_messaging"))
+    if (actual.scheme, actual.hostname, actual.port) != (expected.scheme, expected.hostname, expected.port):
+        raise ValueError("max_tls_ca_origin_denied")
+    raw = Path(path).read_text(encoding="ascii") if Path(path).is_file() else None
+    if raw is None:
+        raise ValueError("max_tls_ca_file_missing")
+    if raw.count("-----BEGIN CERTIFICATE-----") != 1 or raw.count("-----END CERTIFICATE-----") != 1:
+        raise ValueError("max_tls_ca_single_root_required")
+    try:
+        digest = hashlib.sha256(ssl.PEM_cert_to_DER_cert(raw)).hexdigest()
+    except (ValueError, UnicodeError) as exc:
+        raise ValueError("max_tls_ca_invalid_pem") from exc
+    if digest != "d26d2d0231b7c39f92cc738512ba54103519e4405d68b5bd703e9788ca8ecf31":
+        raise ValueError("max_tls_ca_untrusted_fingerprint")
+    return path
+
 def provider_endpoint_url(provider_key: str, endpoint_key: str = 'base_url', *, default: str = 'vendor-configured') -> str:
     binding = provider_transport_binding_for_key(provider_key)
     value = str(binding.get(str(endpoint_key or 'base_url')) or '').strip()

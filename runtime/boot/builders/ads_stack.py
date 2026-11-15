@@ -38,8 +38,9 @@ def wire_ads_stack(*, tenant_id: str, repo_root: Path, event_store: Any, event_l
     except (ImportError, AttributeError, TypeError, ValueError):
         ads_apply_engine = None
 
-    llm_client = getattr(composer, "llm_client", None) if composer else None
-    campaign_builder = campaign_builder_builder.build_autopilot_campaign_builder(llm_client=llm_client)
+    # This builder has no per-request user/event identity. Never hand it the raw
+    # provider from composer: doing so bypasses the durable LLM budget gateway.
+    campaign_builder = campaign_builder_builder.build_autopilot_campaign_builder(llm_client=None)
 
     ads_autopilot_engine = None
     try:

@@ -12,6 +12,8 @@ PAYMENTS NOTE:
 
 from __future__ import annotations
 
+import hmac as _hmac
+
 from dataclasses import dataclass
 from typing import Any
 
@@ -231,7 +233,7 @@ def start_telegram_webhook_server_in_thread(
                 return
             if expected_secret:
                 observed = str(self.headers.get("X-Telegram-Bot-Api-Secret-Token", "")).strip()
-                if observed != expected_secret:
+                if not _hmac.compare_digest(observed.encode("utf-8"), str(expected_secret).encode("utf-8")):
                     self._send_json(401, {"ok": False, "code": "unauthorized"})
                     return
             size = int(self.headers.get("content-length") or 0)

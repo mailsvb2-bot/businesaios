@@ -13,14 +13,23 @@ CANON_PROVIDER_WEBHOOK_INBOUND_PROCESSOR = True
 @dataclass(frozen=True)
 class ProviderWebhookInboundProcessor:
     decision_core: object
+    executor: object | None = None
 
     def process(self, *, handoff: Mapping[str, Any]) -> dict[str, Any]:
         payload = dict(handoff or {}).get("inbound_message") or {}
         if not isinstance(payload, Mapping) or not payload:
             return {}
+        metadata = dict(payload.get("metadata") or {})
+        for identity in ("tenant_id", "channel", "user_id", "chat_id"):
+            if identity in metadata and str(metadata[identity]) != str(payload.get(identity) or ""):
+                raise RuntimeError("provider_inbound_identity_mismatch")
+        # Only the signed webhook service may supply the top-level business binding.
+        business_id = str(handoff.get("business_id") or "").strip()
+        if business_id and str(metadata.get("business_id") or "") != business_id:
+            raise RuntimeError("provider_inbound_business_scope_mismatch")
+        metadata.pop("business_id", None)  # Never promote arbitrary provider metadata.
         gateway = MessagingInboundDecisionGateway(
-            decision_core=self.decision_core,
-            caller='runtime.business_autonomy.provider_webhook_inbound_processor',
+            decision_core=self.decision_core, caller='runtime.business_autonomy.provider_webhook_inbound_processor',
         )
         message = InboundMessage(
             tenant_id=str(payload.get('tenant_id') or ''),
@@ -30,15 +39,21 @@ class ProviderWebhookInboundProcessor:
             correlation_id=str(payload.get('correlation_id') or ''),
             transport_message_id=str(payload.get('transport_message_id') or ''),
             external_user_ref=str(payload.get('external_user_ref') or payload.get('user_id') or ''),
-            metadata={'source': 'provider_webhook_handoff', 'chat_id': str(payload.get('chat_id') or ''), **dict(payload.get('metadata') or {})},
+            metadata={**metadata, 'source': 'provider_webhook_handoff', 'chat_id': str(payload.get('chat_id') or '')},
+            verified_business_id=business_id,
         )
-        # Provider webhook handoff must not issue decisions directly. The
-        # inbound gateway owns the canonical bridge to DecisionCore.
         envelope = process_inbound_gateway_message(gateway=gateway, message=message)
-        return {
-            'accepted': True,
-            'decision_envelope': envelope,
-        }
+        result = {'accepted': True, 'decision_envelope': envelope}
+        if self.executor is not None and envelope is not None:
+            from runtime.execution.execution_path_lock import execute_locked_decision, lock_execution_envelope
+            execution = execute_locked_decision(
+                executor=self.executor, locked_path=lock_execution_envelope(envelope=envelope),
+            )
+            confirmed = execution.get("ok") if isinstance(execution, Mapping) else getattr(execution, "ok", None)
+            if confirmed is not True:
+                raise RuntimeError("provider_inbound_execution_unconfirmed")
+            result['execution'] = execution
+        return result
 
 
 __all__ = ['CANON_PROVIDER_WEBHOOK_INBOUND_PROCESSOR', 'ProviderWebhookInboundProcessor']

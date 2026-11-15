@@ -1,3 +1,5 @@
+from types import SimpleNamespace
+
 from application.business_autonomy.provider_catalog import provider_map
 from reliability.idempotency_store import InMemoryIdempotencyStore
 from runtime.business_autonomy.provider_inbound_webhook_service import ProviderInboundWebhookService
@@ -7,7 +9,7 @@ from runtime.business_autonomy.provider_webhook_runtime import ProviderWebhookRu
 
 class _Processor:
     def process(self, *, handoff):
-        return {'accepted': True, 'decision_envelope': {'decision_id': 'd1'}}
+        return {'accepted': True, 'decision_envelope': SimpleNamespace(decision=SimpleNamespace(decision_id='d1'))}
 
 
 class _Obs:
@@ -39,3 +41,24 @@ def test_inbound_webhook_service_emits_inbound_summary_and_observability(monkeyp
     assert summary['decision_id'] == 'd1'
     assert obs.calls[0]['provider_key'] == 'telegram_bot'
     assert obs.calls[0]['inbound_summary']['channel'] == 'telegram'
+
+
+def test_inbound_summary_supports_canonical_envelope_and_malformed_diagnostics():
+    from runtime.business_autonomy.provider_webhook_inbound_result_summary import (
+        summarize_provider_webhook_inbound_result,
+    )
+
+    handoff = {'inbound_message': {'channel': 'telegram', 'user_id': '42'}}
+    canonical = SimpleNamespace(decision=SimpleNamespace(decision_id='canonical-d1'))
+    assert summarize_provider_webhook_inbound_result(
+        handoff=handoff, inbound_result={'accepted': True, 'decision_envelope': canonical},
+    )['decision_id'] == 'canonical-d1'
+    assert summarize_provider_webhook_inbound_result(
+        handoff=handoff, inbound_result={'accepted': True, 'decision_envelope': {'decision': {'decision_id': 'nested-d2'}}},
+    )['decision_id'] == 'nested-d2'
+    malformed = summarize_provider_webhook_inbound_result(
+        handoff=handoff, inbound_result={'accepted': True, 'decision_envelope': 'recorded'},
+    )
+    assert malformed['accepted'] is True
+    assert malformed['decision_id'] == ''
+    assert malformed['channel'] == 'telegram'

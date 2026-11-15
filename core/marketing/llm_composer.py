@@ -4,6 +4,7 @@ from dataclasses import dataclass, field
 from typing import Any
 
 from config.marketing_llm_policy import DEFAULT_MARKETING_LLM_POLICY, MarketingLLMPolicy
+from core.llm import AnthropicClient, GigaChatClient, OpenAICompatClient, YandexGPTClient
 from core.llm.budget import BudgetCaps
 from core.llm.circuit import CircuitConfig
 from core.llm.contracts import LLMClient
@@ -40,6 +41,11 @@ class MarketingLLMComposer:
     """DecisionCore decides, LLM composes."""
 
     def __init__(self, llm: LLMClient, cfg: LLMComposerConfig, *, event_store: Any = None) -> None:
+        # Real providers cannot use process-local accounting.
+        if str(cfg.budget_source or "").lower() == "memory" and isinstance(llm, (
+            OpenAICompatClient, AnthropicClient, GigaChatClient, YandexGPTClient,
+        )):
+            raise RuntimeError("LLM_BUDGET_EVENT_STORE_UNAVAILABLE")
         self._llm = llm
         self._cfg = cfg
         self._event_store = event_store
@@ -55,16 +61,13 @@ class MarketingLLMComposer:
         return self._llm
 
     async def compose(self, inp: MarketingLLMInputs) -> str | None:
-        return await self._compose_async(inp)
+        return await compose_marketing_text_async(self, inp)
 
     def compose_sync(self, inp: MarketingLLMInputs) -> str | None:
         gen_sync = getattr(self._llm, "generate_sync", None)
         if callable(gen_sync):
-            return self._compose_sync_via_generate_sync(inp)
-        return run_awaitable_sync(self._compose_async(inp))
-
-    async def _compose_async(self, inp: MarketingLLMInputs) -> str | None:
-        return await compose_marketing_text_async(self, inp)
+            return compose_marketing_text_sync(self, inp)
+        return run_awaitable_sync(compose_marketing_text_async(self, inp))
 
     async def _maybe_alert(self, inp: MarketingLLMInputs, *, reason: str) -> None:
         await maybe_emit_alert(
@@ -93,6 +96,3 @@ class MarketingLLMComposer:
             usage=None,
             error_code=f"guardrail:{reason}",
         )
-
-    def _compose_sync_via_generate_sync(self, inp: MarketingLLMInputs) -> str | None:
-        return compose_marketing_text_sync(self, inp)

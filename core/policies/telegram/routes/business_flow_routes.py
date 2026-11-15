@@ -223,6 +223,8 @@ def handle_business_flow_routes(ctx: TelegramCtx, *, user_id: str) -> ProposedAc
         return propose("bookings@v1", {"user_id": user_id, "op": "promo_open", "arg": args[:64]})
     if ctx.cmd == "/start" and args.startswith("ecv_"):  # booking messenger verification link
         return propose("bookings@v1", {"user_id": user_id, "op": "channel_verify", "arg": args[:200]})
+    if ctx.cmd == "/delete_my_data" and session.get("channel") not in (None, "", "telegram"):
+        return None  # External identities require verified account linkage before erasure.
     route = BUSINESS_FLOW_COMMANDS.get(str(ctx.cmd or ""))
     if route is None:
         return None

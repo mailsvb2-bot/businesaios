@@ -7,27 +7,27 @@ ci-bootstrap:
 
 .PHONY: ci-doctor
 ci-doctor:
-\tpython scripts/ci/cli.py --gate doctor
+\tpython -m scripts.ci.cli --gate doctor
 
 .PHONY: ci-fast
 ci-fast:
-\tpython scripts/ci/cli.py --gate fast
+\tpython -m scripts.ci.cli --gate fast
 
 .PHONY: ci-full
 ci-full:
-\tpython scripts/ci/cli.py --gate full
+\tpython -m scripts.ci.cli --gate full
 
 .PHONY: ci-release
 ci-release:
-\tpython scripts/ci/cli.py --gate release
+\tpython -m scripts.ci.cli --gate release
 
 .PHONY: ci-pre-push
 ci-pre-push:
-\tpython scripts/ci/cli.py --gate pre-push
+\tpython -m scripts.ci.cli --gate pre-push
 
 .PHONY: ci-pre-release
 ci-pre-release:
-\tpython scripts/ci/cli.py --gate pre-release
+\tpython -m scripts.ci.cli --gate pre-release
 
 .PHONY: ci-install-hooks
 ci-install-hooks:

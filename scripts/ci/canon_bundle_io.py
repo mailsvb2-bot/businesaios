@@ -24,7 +24,7 @@ def append_makefile_block_once(block: str, root: Path | None = None) -> None:
         raise FileNotFoundError(f"Makefile not found: {path}")
 
     content = path.read_text(encoding="utf-8")
-    marker = "python scripts/ci/cli.py --gate fast"
+    marker = "python -m scripts.ci.cli --gate fast"
     if marker in content:
         print("Makefile already contains canonical CI/CD targets.")
         return

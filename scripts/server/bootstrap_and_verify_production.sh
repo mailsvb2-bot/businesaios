@@ -293,7 +293,7 @@ for ((attempt=1; attempt<=60; attempt++)); do
   if [[ "$TELEGRAM_ENABLED" == "1" ]]; then
     telegram_ready=0
     if systemctl is-active --quiet "$TELEGRAM_SERVICE" \
-      && curl -fsS --max-time 2 "$LOCAL_TELEGRAM_READINESS_URL" >/dev/null; then
+      && curl -fsS --max-time 5 "$LOCAL_TELEGRAM_READINESS_URL" >/dev/null; then
       telegram_ready=1
     fi
   fi

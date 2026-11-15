@@ -18,6 +18,7 @@ class InboundMessage:
     transport_message_id: str = ""
     external_user_ref: str = ""
     metadata: dict | None = None
+    verified_business_id: str = ""
 
     def __post_init__(self) -> None:
         object.__setattr__(self, "tenant_id", require_tenant_id(self.tenant_id))
@@ -29,6 +30,7 @@ class InboundMessage:
         object.__setattr__(self, "transport_message_id", str(self.transport_message_id or ""))
         object.__setattr__(self, "external_user_ref", str(self.external_user_ref or self.user_id))
         object.__setattr__(self, "metadata", dict(self.metadata or {}))
+        object.__setattr__(self, "verified_business_id", str(self.verified_business_id or "").strip())
     @property
     def canonical_identity(self) -> MessageIdentity:
         message_id = self.transport_message_id or self.correlation_id

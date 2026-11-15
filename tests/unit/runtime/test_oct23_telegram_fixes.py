@@ -195,12 +195,26 @@ def test_unconfirmed_outcome_is_not_dropped_on_poll_and_recovers(db, monkeypatch
     assert recovered.pending_count() == 0
 
 def test_canonical_execution_returns_outcome(monkeypatch):
+    from contextlib import contextmanager
+
     outcome = SimpleNamespace(ok=False, decision_id="d-1")
-    monkeypatch.setattr(lp, "_world_state_from_update", lambda *a, **kw: object())
+    state = SimpleNamespace(tenant_id="tenant-a", user_id="user-a",
+                            session={"messaging_chat_id": "chat-a"})
+    scopes = []
+
+    @contextmanager
+    def record_verified_ingress(**identity):
+        scopes.append(identity)
+        yield
+
+    monkeypatch.setattr(lp, "_world_state_from_update", lambda *a, **kw: state)
+    monkeypatch.setattr(lp, "verified_inbound_reply_scope", record_verified_ingress)
     monkeypatch.setattr(lp, "execute_runtime_decision", lambda **kw: outcome)
     monkeypatch.setattr(lp, "_append_event", lambda *a, **kw: None)
     assert lp._execute_update(core=None, executor=None, event_log=None,
                               update={"update_id": 17}, transport="longpoll") is outcome
+    assert scopes == [{"tenant_id": "tenant-a", "channel": "telegram",
+                       "user_id": "user-a", "update_id": 17, "chat_id": "chat-a"}]
 
 
 def test_diagnostic_failure_does_not_abort_delivery():

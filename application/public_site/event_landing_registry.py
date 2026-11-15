@@ -1,5 +1,9 @@
 from __future__ import annotations
 
+import hashlib
+import hmac
+import os
+import re
 import time
 from typing import Any
 
@@ -10,78 +14,66 @@ from contracts.event_store import BUSINESS_FACT_EVENT_TYPE
 _CREATED="event_landing.created"; _DRAFT="event_landing.draft_saved"; _PUBLISHED="event_landing.published"; _UNPUBLISHED="event_landing.unpublished"
 _FACTS=frozenset({_CREATED,_DRAFT,_PUBLISHED,_UNPUBLISHED})
 _SOURCE="event_landing_registry"
-
-
 class EventLandingRegistry:
     def __init__(self, *, event_store: Any, idempotency_store) -> None:
         self._events=event_store
         self._writer=EventFactLifecycleWriter(event_store=event_store,idempotency_store=idempotency_store,namespace="event_landing",source=_SOURCE,id_prefix="event-landing")
-
     def _history(self, *, tenant_id: str, business_id: str, event_id: str) -> list[dict[str, object]]:
         # The canonical stores expose durable append_seq when this cursor is
         # requested. Ordinary iter_events reads may sort tied timestamps by
         # event_id, which is NOT lifecycle chronology.
         rows: list[dict[str, object]] = []
-        for event in self._events.iter_events(
-            tenant_id=tenant_id, start_ms=0,
-            event_type=BUSINESS_FACT_EVENT_TYPE, after_append_seq=0,
-        ):
+        for event in self._events.iter_events(tenant_id=tenant_id, start_ms=0, event_type=BUSINESS_FACT_EVENT_TYPE, after_append_seq=0):
             if event.get("source") != _SOURCE:
                 continue
             envelope = dict(event.get("payload") or {})
-            if (
-                envelope.get("business_id") != business_id
-                or envelope.get("entity_id") != event_id
-                or envelope.get("fact_type") not in _FACTS
-            ):
+            if envelope.get("business_id") != business_id or envelope.get("entity_id") != event_id or envelope.get("fact_type") not in _FACTS:
                 continue
             append_seq = event.get("append_seq")
             if type(append_seq) is not int or append_seq < 1:
                 raise RuntimeError("event_landing_durable_append_sequence_required")
-            rows.append({
-                "type": envelope["fact_type"],
-                "payload": dict(envelope.get("payload") or {}),
-                "sequence": append_seq,
-            })
+            rows.append({"type": envelope["fact_type"], "payload": dict(envelope.get("payload") or {}), "sequence": append_seq})
         rows.sort(key=lambda row: row["sequence"])
         if len({row["sequence"] for row in rows}) != len(rows):
             raise RuntimeError("event_landing_duplicate_append_sequence")
         return rows
-
     def _snapshot(self, *, tenant_id: str, business_id: str, event_id: str) -> tuple[EventLandingState, int]:
         rows = self._history(tenant_id=tenant_id, business_id=business_id, event_id=event_id)
         if not rows or rows[0]["type"] != _CREATED:
             raise KeyError("event_landing_not_found")
         initial = dict(rows[0]["payload"])
-        state = EventLandingState(
-            event_id=event_id,
-            draft=EventLandingContent.from_payload(initial["content"]),
-            draft_source=str(initial["source"]),
-            revision=1,
-        )
+        state = EventLandingState(event_id=event_id, draft=EventLandingContent.from_payload(initial["content"]), draft_source=str(initial["source"]), revision=1)
         for row in rows[1:]:
             if row["type"] == _CREATED:
                 raise RuntimeError("event_landing_duplicate_create_fact")
             payload = dict(row["payload"])
             expected = int(payload["expected_revision"])
             if row["type"] == _DRAFT:
-                state = state.save_draft(
-                    content=EventLandingContent.from_payload(payload["content"]),
-                    source=str(payload["source"]),
-                    expected_revision=expected,
-                )
+                state = state.save_draft(content=EventLandingContent.from_payload(payload["content"]), source=str(payload["source"]), expected_revision=expected)
             elif row["type"] == _PUBLISHED:
                 state = state.publish(expected_revision=expected)
             elif row["type"] == _UNPUBLISHED:
                 state = state.unpublish(expected_revision=expected)
         return state, len(rows)
-
     def get(self, *, tenant_id: str, business_id: str, event_id: str) -> EventLandingState:
         return self._snapshot(tenant_id=tenant_id, business_id=business_id, event_id=event_id)[0]
-
+    def list_pages(self, *, tenant_id: str, business_id: str, limit: int = 100) -> list[dict[str, object]]:
+        """List only current business pages using the existing canonical event store."""
+        if not tenant_id or not business_id or type(limit) is not int or not 1 <= limit <= 100:
+            raise ValueError("event_landing_list_scope_invalid")
+        event_ids = set()
+        for event in self._events.iter_events(tenant_id=tenant_id, start_ms=0, event_type=BUSINESS_FACT_EVENT_TYPE, after_append_seq=0):
+            fact = dict(event.get("payload") or {})
+            if event.get("source") == _SOURCE and fact.get("business_id") == business_id and fact.get("fact_type") == _CREATED:
+                entity_id = fact.get("entity_id")
+                if isinstance(entity_id, str) and entity_id: event_ids.add(entity_id)
+        pages = []
+        for event_id in sorted(event_ids)[:limit]:
+            state = self.get(tenant_id=tenant_id, business_id=business_id, event_id=event_id)
+            pages.append({"event_id": event_id, "title": state.draft.hero_title, "status": state.status.value, "revision": state.revision})
+        return pages
     @staticmethod
     def _now() -> int: return int(time.time()*1000)
-
     def create(self, *, tenant_id: str, business_id: str, event_id: str, content: EventLandingContent, source: str, idempotency_key: str, actor_id: str) -> EventLandingState:
         try: current=self.get(tenant_id=tenant_id,business_id=business_id,event_id=event_id)
         except KeyError: current=None
@@ -109,7 +101,6 @@ class EventLandingRegistry:
                 raise RuntimeError("event_landing_already_exists") from exc
             raise
         return self.get(tenant_id=tenant_id,business_id=business_id,event_id=event_id)
-
     def transition(self, *, tenant_id: str, business_id: str, event_id: str, action: str, expected_revision: int, idempotency_key: str, actor_id: str, content: EventLandingContent|None=None, source: str="manual") -> EventLandingState:
         if action=="save":
             if content is None: raise ValueError("content_required")
@@ -140,7 +131,65 @@ class EventLandingRegistry:
         token=f"{lifecycle_version}:{state.revision}:{state.status.value}:{state.published_revision or 0}"
         self._writer.append_transition_once(tenant_id=tenant_id,business_id=business_id,entity_id=event_id,expected_state_token=token,operation=action,idempotency_key=idempotency_key,fact_type=fact_type,payload=payload,occurred_at_ms=self._now(),event_metadata={"actor_id":actor_id})
         return self.get(tenant_id=tenant_id,business_id=business_id,event_id=event_id)
+    def _registration_facts(self, *, tenant_id: str, business_id: str, event_id: str):
+        for event in self._events.iter_events(tenant_id=tenant_id, start_ms=0, event_type=BUSINESS_FACT_EVENT_TYPE):
+            fact = dict(event.get("payload") or {})
+            if event.get("source") == _SOURCE and fact.get("business_id") == business_id and fact.get("fact_type") == "event_landing.registration" and (fact.get("payload") or {}).get("event_id") == event_id:
+                yield dict(fact["payload"])
+    def list_registration_receipts(self, *, tenant_id: str, business_id: str,
+                                   event_id: str) -> list[dict[str, str]]:
+        """Owner-only receipts. Never expose contact or fingerprint evidence."""
+        self.get(tenant_id=tenant_id, business_id=business_id, event_id=event_id)
+        receipts: dict[str, dict[str, str]] = {}
+        for row in self._registration_facts(
+            tenant_id=tenant_id, business_id=business_id, event_id=event_id,
+        ):
+            rid = row.get("registration_id")
+            if isinstance(rid, str) and rid:
+                receipts.setdefault(rid, {"registration_id": rid,
+                                          "consent_version": str(row.get("consent_version") or "")})
+        return sorted(receipts.values(), key=lambda r: r["registration_id"])
 
+    def registration_count(self, *, tenant_id: str, business_id: str, event_id: str) -> int:
+        return len(self.list_registration_receipts(tenant_id=tenant_id,
+                                                   business_id=business_id, event_id=event_id))
+
+    def register(self, *, tenant_id: str, business_id: str, event_id: str,
+                 email: str, consent: bool, idempotency_key: str) -> dict[str, object]:
+        """Scoped consent receipt; no plaintext contact is stored or outbound sent."""
+        from application.business_flows.public_events import CONSENT_VERSION
+        if not self.get(tenant_id=tenant_id, business_id=business_id, event_id=event_id).is_published:
+            raise ValueError("event_registration_closed")
+        if consent is not True:
+            raise ValueError("registration_consent_required")
+        normalized = str(email or "").strip().casefold()
+        if len(normalized) > 254 or not re.fullmatch(r"[^@\s]+@[^@\s]+\.[^@\s]+", normalized):
+            raise ValueError("registration_email_invalid")
+        pepper = os.getenv("API_CONTROL_PLANE_API_KEY_PEPPER", "").strip()
+        if len(pepper) < 20:
+            raise RuntimeError("registration_privacy_secret_not_configured")
+        material = "\0".join((tenant_id, business_id, event_id, normalized)).encode()
+        identifier = hmac.new(pepper.encode(), material, hashlib.sha256).hexdigest()
+        entity_id = f"registration:{identifier}"
+        if not idempotency_key or len(idempotency_key) > 200:
+            raise ValueError("registration_idempotency_key_required")
+        scope = dict(tenant_id=tenant_id, business_id=business_id, event_id=event_id)
+        def already_registered() -> bool:
+            return any(row["email_fingerprint"] == identifier for row in self._registration_facts(**scope))
+        if not already_registered():
+            payload = {"event_id": event_id, "email_fingerprint": identifier,
+                       "consent_version": CONSENT_VERSION, "registration_id": entity_id}
+            try:
+                self._writer.append_transition_once(
+                    tenant_id=tenant_id, business_id=business_id, entity_id=entity_id,
+                    expected_state_token="absent", operation="register", idempotency_key=idempotency_key,
+                    fact_type="event_landing.registration", payload=payload, occurred_at_ms=self._now(),
+                )
+            except RuntimeError as exc:
+                if not str(exc).startswith("ontology transition rejected:") or not already_registered():
+                    raise
+        return {"ok": True, "status": "received", "registration_id": entity_id, "delivery_enabled": False,
+                "payment_status": "not_requested"}
 
 def event_landing_payload(state: EventLandingState) -> dict[str,object]:
     return {"event_id":state.event_id,"revision":state.revision,"status":state.status.value,"draft_source":state.draft_source,"has_unpublished_changes":state.has_unpublished_changes,"draft":state.draft.to_payload(),"published":None if state.public_content() is None else state.public_content().to_payload(),"published_revision":state.published_revision}

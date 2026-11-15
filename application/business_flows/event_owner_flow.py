@@ -83,8 +83,10 @@ def create_draft(*, title: str, timezone_name: str, sessions: list[SessionSpec],
                  **kw: Any) -> list[dict[str, Any]]:
     if not sessions:
         raise ValueError("event must have at least one session")
-    specs = [_session(s) for s in sessions]
-    first = sessions[0]
+    # Keep the event's metadata aligned with the earliest chronological session.
+    ordered = sorted(sessions, key=lambda s: pe._dt(s.starts_at))
+    specs = [_session(s) for s in ordered]
+    first = ordered[0]
     created = _created(pe.create_event(title=title, starts_at=first.starts_at, timezone_name=timezone_name,
                                        join_url=first.join_url, provider=first.provider, now=now, **kw),
                        notify=notification_connection(connections, requested=notify_requested, enabled=notify))
@@ -137,10 +139,8 @@ def warmup_window(sessions: list[dict[str, Any]], *, timezone_name: str, now: da
     """Max warmup days = calendar days (event tz) until the first session."""
     if not sessions:
         raise ValueError("event sessions are required")
-    from zoneinfo import ZoneInfo
-
     z = ZoneInfo(timezone_name)
-    first = pe._dt(sessions[0]["starts_at"]).astimezone(z).date()
+    first = min(pe._dt(s["starts_at"]) for s in sessions).astimezone(z).date()
     return max((first - pe._dt(now).astimezone(z).date()).days, 0)
 
 

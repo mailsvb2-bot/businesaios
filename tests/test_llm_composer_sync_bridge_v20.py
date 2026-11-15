@@ -28,7 +28,7 @@ def _inp() -> MarketingLLMInputs:
 
 
 def test_compose_sync_works_inside_running_loop():
-    composer = MarketingLLMComposer(_FakeLLM(), LLMComposerConfig(model="test-model"))
+    composer = MarketingLLMComposer(_FakeLLM(), LLMComposerConfig(model="test-model", budget_source="memory"))
 
     async def _run() -> str | None:
         return composer.compose_sync(_inp())
