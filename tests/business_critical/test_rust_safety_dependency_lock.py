@@ -100,9 +100,17 @@ def test_pull_request_dependency_review_is_strict_and_sha_pinned() -> None:
     assert "fail-on-scopes: runtime, development, unknown" in workflow
     assert "warn-only: true" not in workflow
 
-def test_uvloop_release_dependency_is_excluded_on_windows() -> None:
+def test_release_lock_has_platform_specific_windows_dependencies() -> None:
     lock = (REPO_ROOT / "requirements.release.lock.txt").read_text(encoding="utf-8")
-    uvloop_lines = [line for line in lock.splitlines() if line.startswith("uvloop==")]
+    lines = lock.splitlines()
+    uvloop_lines = [line for line in lines if line.startswith("uvloop==")]
+    tzdata_lines = [line for line in lines if line.startswith("tzdata==")]
     assert len(uvloop_lines) == 1
     assert 'sys_platform != "win32"' in uvloop_lines[0]
+    assert len(tzdata_lines) == 1
+    assert 'sys_platform == "win32"' in tzdata_lines[0]
+    tzdata_index = lines.index(tzdata_lines[0])
+    tzdata_block = "\n".join(lines[tzdata_index:tzdata_index + 4])
+    assert "--hash=sha256:0a10eec6e13ef16b627fabed9a5f2ba61a62b1c67f327305f4e7e412a70b4aec" in tzdata_block
+    assert "--hash=sha256:85d2cd9c09f81f0bb29db27759fc83af4f1e620efb814f8c5bf8b4cc4feece6d" in tzdata_block
 
