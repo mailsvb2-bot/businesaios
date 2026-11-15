@@ -296,7 +296,7 @@ def test_sqlite_budget_reservations_are_shared_between_store_connections(tmp_pat
         ) is None
         EventLog(first_store, tenant=TenantScope("tenant")).emit(
             event_type=LLM_COMPLETED, source="telemetry", user_id="user",
-            payload={"total_tokens": 7, "request_id": "first"},
+            payload={"request_id": "first", "provider": "openai", "model": "gpt-4.1-mini", "prompt_tokens": 4, "completion_tokens": 3, "total_tokens": 7},
         )
         assert first.release(tenant_id="tenant", request_id="first", day=day)
         assert not second.can_spend(tenant_id="tenant", user_id="user", tokens=1027)
@@ -348,7 +348,7 @@ def test_postgres_budget_claim_is_atomic_across_independent_connections():
         ) is None
         EventLog(store, tenant=TenantScope(tenant)).emit(
             event_type=LLM_COMPLETED, source="telemetry", user_id="user",
-            payload={"request_id": f"request-{winner}", "total_tokens": 7},
+            payload={"request_id": f"request-{winner}", "provider": "openai", "model": "gpt-4.1-mini", "prompt_tokens": 4, "completion_tokens": 3, "total_tokens": 7},
         )
     with PostgresEventStore(dsn, enabled=True) as store:
         budget = EventStoreDailyTokenBudget(event_store=store, caps=caps)
@@ -432,7 +432,7 @@ def test_event_store_idempotency_claim_survives_budget_day_rollover(monkeypatch)
     ) == "2026-11-01"
     EventLog(store, tenant=TenantScope("tenant")).emit(
         event_type=LLM_COMPLETED, source="telemetry", user_id="user",
-        payload={"total_tokens": 7, "request_id": "same-inbound-event"},
+        payload={"request_id": "same-inbound-event", "provider": "openai", "model": "gpt-4.1-mini", "prompt_tokens": 4, "completion_tokens": 3, "total_tokens": 7},
     )
     assert budget.release(
         tenant_id="tenant", request_id="same-inbound-event", day="2026-11-01",
@@ -508,7 +508,7 @@ def test_completed_claim_reconciles_after_crash_but_uncompleted_claim_stays(comp
     assert day
     EventLog(store, tenant=TenantScope("t")).emit(
         event_type=LLM_COMPLETED, source="telemetry", user_id=completion_user,
-        payload={"request_id": "completed", "total_tokens": 20},
+        payload={"request_id": "completed", "provider": "openai", "model": "gpt-4.1-mini", "prompt_tokens": 8, "completion_tokens": 12, "total_tokens": 20},
     )
     recovered = budget.reserve(tenant_id="t", user_id="u", tokens=70, request_id="new")
     assert (recovered == day) is expected_recovery
