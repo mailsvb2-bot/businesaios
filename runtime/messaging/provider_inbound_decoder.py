@@ -396,8 +396,6 @@ def decode_provider_inbound(
 
     user_id = field_text("user_id")
     chat_id = field_text("chat_id")
-    if not user_id:
-        user_id = chat_id
 
     provider_message_id = _first_path_value(raw, paths.get("message_id", ()))
     if provider_message_id is None:
