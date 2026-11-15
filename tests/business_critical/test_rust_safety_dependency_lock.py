@@ -81,7 +81,7 @@ def test_workflow_dependency_installs_use_the_hashed_transitive_lock() -> None:
 def test_workflow_actions_are_pinned_to_full_commit_shas() -> None:
     for workflow in WORKFLOWS:
         text = workflow.read_text(encoding="utf-8")
-        matches = list(re.finditer(r"(?m)^[ \t]*-[ \t]+uses:[ \t]+(\S+)", text))
+        matches = list(re.finditer(r"(?m)^[ \\t]*(?:-[ \\t]+)?uses:[ \\t]+(\\S+)", text))
         assert "uses:" not in text or matches, f"{workflow.name}: action matcher must inspect YAML uses steps"
         for match in matches:
             ref = match.group(1)
