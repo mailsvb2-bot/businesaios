@@ -81,7 +81,7 @@ def test_max_official_webhook_secret_header_is_accepted() -> None:
     _put(vault, provider, 'webhook_secret', 'max-secret')
     runtime = ProviderWebhookRuntime(vault)
     assert 'X-Max-Bot-Api-Secret' in runtime.describe(provider).header_names
-    assert runtime.verify(provider=provider, tenant_id='tenant-a', business_id='business-a', headers={'X-Max-Bot-Api-Secret': 'max-secret'}, body=b'{}') is True
+    assert runtime.verify(provider=provider, tenant_id='tenant-a', business_id='business-a', headers={'X-Max-Bot-Api-Secret': 'max-secret'}, body=b'{"update_type":"bot_started","chat_id":700,"user":{"user_id":77}}') is True
 
 
 def test_vk_max_prepared_transports_remain_bound_when_vault_is_supplied() -> None:
@@ -147,6 +147,8 @@ def test_max_direct_webhook_message_requires_the_configured_bot_recipient() -> N
     assert runtime.verify(provider=provider, tenant_id='tenant-a', business_id='business-a', headers=headers, body=body) is True
     foreign = json.loads(body)
     foreign['message']['recipient']['user_id'] = 9002
+    assert runtime.verify(provider=provider, tenant_id='tenant-a', business_id='business-a', headers=headers, body=json.dumps(foreign).encode()) is False
+    del foreign['message']['recipient']['chat_id']
     assert runtime.verify(provider=provider, tenant_id='tenant-a', business_id='business-a', headers=headers, body=json.dumps(foreign).encode()) is False
 
 
