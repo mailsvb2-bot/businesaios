@@ -67,7 +67,7 @@ def test_generic_payload_adapter_preserves_zero_ids_and_field_priority() -> None
         tenant_id="tenant-2",
     )
     assert fallback.channel == "future_channel"
-    assert fallback.user_id == "future_channel_user"
+    assert fallback.user_id == ""
     assert fallback.chat_id == ""
     assert fallback.timestamp_ms == 0
     assert str(fallback.update_id).startswith("synthetic-future_channel-")
@@ -196,10 +196,10 @@ def test_world_state_adapter_is_normalization_only_and_preserves_decision_coordi
     state = ingress.messaging_event_to_world_state(event)
     assert state.schema_version == 1
     assert state.tenant_id == "default"
-    assert state.user_id == "messaging_user"
+    assert state.user_id == ""
     assert state.user == {
-        "id": "messaging_user",
-        "messaging_user_id": "messaging_user",
+        "id": "",
+        "messaging_user_id": "",
         "messaging_chat_id": "chat-1",
         "messaging_channel": "web_chat",
         "timezone": "Europe/Amsterdam",
@@ -229,7 +229,7 @@ def test_world_state_adapter_is_normalization_only_and_preserves_decision_coordi
     assert explicit.meta["supported_channel"] is False
 
     anonymous = ingress.messaging_event_to_world_state(ingress.MessagingIngressEvent(channel="sms", user_id=""))
-    assert anonymous.user_id == "messaging_user"
+    assert anonymous.user_id == ""
 
 
 def test_telegram_message_update_preserves_sender_chat_command_and_seconds_to_ms() -> None:
