@@ -17,6 +17,7 @@ from application.business_autonomy.provider_truth_matrix import provider_truth_m
 from application.public_site.cta_intake import CTALandingIntakeService, public_integration_marketplace
 from runtime.business_autonomy.provider_sync_runtime import ProviderSyncRuntimePlanner
 from runtime.business_autonomy.provider_webhook_messaging_bridge import resolve_provider_webhook_messaging_ingress
+from runtime.messaging.provider_inbound_decoder import decode_provider_inbound
 from runtime.business_autonomy.provider_webhook_runtime import ProviderWebhookRuntime
 from runtime.messaging import CHANNEL_SPECS
 from security.secret_contract import SecretRecord, SecretRef, SecretSource
@@ -150,3 +151,31 @@ def test_bridge_shared_secret_is_verified_fail_closed() -> None:
     body = json.dumps(SAMPLES['vk']).encode()
     assert runtime.verify(provider=provider, tenant_id='tenant-a', business_id='business-a', headers={'X-BusinessAIOS-Webhook-Secret': 'shared-secret'}, body=body) is True
     assert runtime.verify(provider=provider, tenant_id='tenant-a', business_id='business-a', headers={'X-BusinessAIOS-Webhook-Secret': 'wrong'}, body=body) is False
+
+
+def test_provider_decoder_never_promotes_chat_recipient_to_sender() -> None:
+    payload = {
+        'update_type': 'message_created',
+        'message': {
+            'recipient': {'chat_id': 9001, 'chat_type': 'chat'},
+            'body': {'mid': 'recipient-only', 'text': 'must not become a customer'},
+        },
+    }
+    decoded = decode_provider_inbound(channel='max', payload=payload)
+    assert decoded['user_id'] == ''
+    assert decoded['chat_id'] == '9001'
+    assert resolve_provider_webhook_messaging_ingress(
+        provider=provider_map()['max_messaging'],
+        normalized_payload=payload,
+    ) is None
+
+
+def test_web_chat_session_identity_is_explicit_not_recipient_fallback() -> None:
+    payload = {'session_id': 'session-1', 'chat_id': 'room-1', 'message': 'hello'}
+    ingress = resolve_provider_webhook_messaging_ingress(
+        provider=provider_map()['generic_website'],
+        normalized_payload=payload,
+    )
+    assert ingress is not None
+    assert ingress.user_id == 'session-1'
+    assert ingress.chat_id == 'room-1'
