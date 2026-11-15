@@ -24,8 +24,8 @@ class ActionBudgetLedger(Protocol):
 class InMemoryActionBudgetLedger:
     cost_by_tenant: dict[str, float] = field(default_factory=dict)
     actions_by_tenant: dict[str, int] = field(default_factory=dict)
-    idempotency_actions: dict[tuple[str, str], str] = field(default_factory=dict)
     _lock: RLock = field(default_factory=RLock)
+    idempotency_actions: dict[tuple[str, str], str] = field(default_factory=dict)
 
     def snapshot(self, tenant_id: str) -> tuple[float, int]:
         with self._lock:
