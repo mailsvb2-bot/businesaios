@@ -26,6 +26,8 @@ _PROVIDER_PATHS: dict[str, dict[str, tuple[FieldPath, ...]]] = {
             ("message", "chat", "id"),
             ("callback_query", "message", "chat", "id"),
             ("edited_message", "chat", "id"),
+            ("channel_post", "chat", "id"),
+            ("edited_channel_post", "chat", "id"),
         ),
         "text": (
             ("message", "text"),
@@ -35,16 +37,24 @@ _PROVIDER_PATHS: dict[str, dict[str, tuple[FieldPath, ...]]] = {
             ("callback_query", "message", "caption"),
             ("edited_message", "text"),
             ("edited_message", "caption"),
+            ("channel_post", "text"),
+            ("channel_post", "caption"),
+            ("edited_channel_post", "text"),
+            ("edited_channel_post", "caption"),
         ),
         "message_id": (
             ("message", "message_id"),
             ("callback_query", "id"),
             ("update_id",),
+            ("channel_post", "message_id"),
+            ("edited_channel_post", "message_id"),
         ),
         "timestamp": (
             ("message", "date"),
             ("callback_query", "message", "date"),
             ("edited_message", "date"),
+            ("channel_post", "date"),
+            ("edited_channel_post", "date"),
         ),
         "name": (
             ("message", "from", "username"),
