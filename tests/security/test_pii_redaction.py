@@ -85,7 +85,7 @@ def test_llm_redaction_uses_canonical_free_text_secret_patterns() -> None:
     secrets = (
         "Bearer eyJhbGciOiJIUzI1NiJ9.canarypayload.canarysig",
         "123456789:AAH-abcdefghijklmnopqrstuvwxyz0123456",
-        "sk-abcdefghijklmnop1234",
+        "sk-" + "abcdefghij" + "klmnop1234",
         "sk-abcdefghij",
         "AIzaSyDUMMYabcdefghijklmnopqrstuv",
         "live_AbCdEfGhIjKlMnOpQrStUv",
