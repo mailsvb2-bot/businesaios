@@ -159,3 +159,18 @@ def test_max_direct_webhook_message_fails_closed_without_bot_identity() -> None:
     runtime = ProviderWebhookRuntime(vault)
     body = b'{"update_type":"message_created","message":{"sender":{"user_id":77},"recipient":{"chat_id":700,"chat_type":"dialog","user_id":9001},"body":{"mid":"max-mid","text":"hello"}}}'
     assert runtime.verify(provider=provider, tenant_id='tenant-a', business_id='business-a', headers={'X-Max-Bot-Api-Secret': 'max-secret'}, body=body) is False
+
+
+def test_max_group_message_uses_scoped_subscription_and_explicit_chat_recipient() -> None:
+    provider = provider_map()['max_messaging']
+    vault = InMemorySecretVault()
+    _put(vault, provider, 'webhook_secret', 'max-secret')
+    runtime = ProviderWebhookRuntime(vault)
+    body = json.dumps({'update_type': 'message_created', 'message': {
+        'sender': {'user_id': 77, 'is_bot': False},
+        'recipient': {'chat_id': 700, 'chat_type': 'chat'},
+        'body': {'mid': 'max-group-mid', 'text': 'hello'},
+    }}).encode()
+    headers = {'X-Max-Bot-Api-Secret': 'max-secret'}
+    assert runtime.verify(provider=provider, tenant_id='tenant-a', business_id='business-a', headers=headers, body=body) is True
+    assert runtime.verify(provider=provider, tenant_id='tenant-a', business_id='business-a', headers=headers, body=b'{}') is False
