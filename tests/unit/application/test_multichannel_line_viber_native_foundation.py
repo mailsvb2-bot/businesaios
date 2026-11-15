@@ -149,6 +149,7 @@ def test_line_viber_webhook_identity_uses_vendor_event_ids_for_canonical_idempot
     # LINE groupId/roomId identify the conversation, not the human sender.
     # Missing source.userId must therefore not become a customer identity.
     assert tuple(row['messaging_ingress'] for row in batch_routes[1:]) == ({}, {})
+    assert tuple(row['external_user_ref'] for row in batch_routes[1:]) == (None, None)
     group_with_sender = json.dumps({
         'events': [{
             'type': 'message', 'webhookEventId': 'evt-line-group-sender',
@@ -161,6 +162,7 @@ def test_line_viber_webhook_identity_uses_vendor_event_ids_for_canonical_idempot
     )[0]
     assert group_route['messaging_ingress']['user_id'] == 'U2'
     assert group_route['messaging_ingress']['chat_id'] == 'G2'
+    assert group_route['external_user_ref'] == 'U2'
     assert routes.extract(providers['viber_messaging'], {'X-Request-Id': 'callback-2'}, viber_body)['event_key'] == '991'
 
 
