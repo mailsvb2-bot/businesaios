@@ -110,7 +110,7 @@ def test_gateway_missing_or_invalid_provider_usage_never_fabricates_spend(usage)
 def test_boot_marketing_agent_reuses_the_composer_accounted_gateway(monkeypatch):
     store, client = MemoryEventStore(), Provider()
     gateway = AccountedSyncGateway(client, event_store=store, provider="openai_compat")
-    composer = SimpleNamespace(llm_client=client, accounted_gateway=gateway)
+    composer = SimpleNamespace(accounted_gateway=gateway)
     monkeypatch.setattr(builder, "build_marketing_llm_composer", lambda **kw: composer)
     monkeypatch.setattr(builder, "_provider_settings",
                         lambda settings: ("openai_compat", "", "", "mock", None))
