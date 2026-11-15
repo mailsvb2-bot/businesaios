@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import hashlib
+import hmac
 import json
 import pytest
 from types import SimpleNamespace
@@ -272,3 +274,128 @@ def test_authenticated_tls_context_uses_default_trust_and_hostname_verification(
     assert observed['file'] == '/secure/max/root.pem'
     assert any(getattr(handler, '_context', None) is not None for handler in observed['handlers'])
     assert result.error_kind == 'transport_error'
+
+def _signed_hub_headers(secret: str, body: bytes) -> dict[str, str]:
+    signature = hmac.new(secret.encode('utf-8'), body, hashlib.sha256).hexdigest()
+    return {'X-Hub-Signature-256': f'sha256={signature}'}
+
+
+def test_whatsapp_webhook_requires_the_configured_phone_number_id() -> None:
+    provider = provider_map()['whatsapp_cloud']
+    vault = InMemorySecretVault()
+    _put(vault, provider, 'biz-wa', 'app_secret', 'meta-app-secret')
+    _put(vault, provider, 'biz-wa', 'phone_number_id', 'phone-123')
+    runtime = ProviderWebhookRuntime(vault)
+
+    def body_for(phone_number_id: str) -> bytes:
+        return json.dumps({
+            'object': 'whatsapp_business_account',
+            'entry': [{
+                'id': 'waba-1',
+                'changes': [{
+                    'field': 'messages',
+                    'value': {
+                        'metadata': {'phone_number_id': phone_number_id, 'display_phone_number': '+15550001111'},
+                        'messages': [{'from': '15550002222', 'id': 'wamid-1', 'text': {'body': 'hello'}}],
+                    },
+                }],
+            }],
+        }).encode()
+
+    valid = body_for('phone-123')
+    wrong_recipient = body_for('phone-999')
+    assert runtime.verify(
+        provider=provider, tenant_id='tenant-a', business_id='biz-wa',
+        headers=_signed_hub_headers('meta-app-secret', valid), body=valid,
+    ) is True
+    assert runtime.verify(
+        provider=provider, tenant_id='tenant-a', business_id='biz-wa',
+        headers=_signed_hub_headers('meta-app-secret', wrong_recipient), body=wrong_recipient,
+    ) is False
+
+
+@pytest.mark.parametrize(
+    ('provider_key', 'recipient_secret', 'account_id'),
+    (
+        ('instagram_messaging', 'ig_user_id', 'ig-account-123'),
+        ('messenger_messaging', 'page_id', 'page-123'),
+    ),
+)
+def test_meta_messaging_webhook_requires_the_configured_account_id(
+    provider_key: str, recipient_secret: str, account_id: str,
+) -> None:
+    provider = provider_map()[provider_key]
+    vault = InMemorySecretVault()
+    _put(vault, provider, 'biz-meta', 'app_secret', 'meta-app-secret')
+    _put(vault, provider, 'biz-meta', recipient_secret, account_id)
+    runtime = ProviderWebhookRuntime(vault)
+
+    def body_for(observed_id: str) -> bytes:
+        return json.dumps({
+            'object': 'page',
+            'entry': [{
+                'id': observed_id,
+                'time': 1710000000,
+                'messaging': [{
+                    'sender': {'id': 'customer-1'},
+                    'recipient': {'id': observed_id},
+                    'message': {'mid': 'message-1', 'text': 'hello'},
+                }],
+            }],
+        }).encode()
+
+    valid = body_for(account_id)
+    wrong_recipient = body_for('other-account')
+    assert runtime.verify(
+        provider=provider, tenant_id='tenant-a', business_id='biz-meta',
+        headers=_signed_hub_headers('meta-app-secret', valid), body=valid,
+    ) is True
+    assert runtime.verify(
+        provider=provider, tenant_id='tenant-a', business_id='biz-meta',
+        headers=_signed_hub_headers('meta-app-secret', wrong_recipient), body=wrong_recipient,
+    ) is False
+
+
+def test_vk_webhook_requires_the_configured_group_id_and_business_scope() -> None:
+    provider = provider_map()['vk_messaging']
+    vault = InMemorySecretVault()
+    _put(vault, provider, 'biz-vk', 'webhook_secret', 'vk-hook-secret')
+    _put(vault, provider, 'biz-vk', 'group_id', '42')
+    runtime = ProviderWebhookRuntime(vault)
+    body = json.dumps({
+        'type': 'message_new',
+        'group_id': 42,
+        'event_id': 'vk-event-1',
+        'object': {'message': {'from_id': 7, 'peer_id': 7, 'text': 'hello'}},
+    }).encode()
+    headers = {'X-BusinessAIOS-Webhook-Secret': 'vk-hook-secret'}
+    assert runtime.verify(
+        provider=provider, tenant_id='tenant-a', business_id='biz-vk',
+        headers=headers, body=body,
+    ) is True
+    wrong_group = json.dumps({'type': 'message_new', 'group_id': 99, 'event_id': 'vk-event-2'}).encode()
+    assert runtime.verify(
+        provider=provider, tenant_id='tenant-a', business_id='biz-vk',
+        headers={'X-BusinessAIOS-Webhook-Secret': 'vk-hook-secret'}, body=wrong_group,
+    ) is False
+    assert runtime.verify(
+        provider=provider, tenant_id='tenant-b', business_id='biz-vk',
+        headers=headers, body=body,
+    ) is False
+    assert runtime.verify(
+        provider=provider, tenant_id='tenant-a', business_id='other-business',
+        headers=headers, body=body,
+    ) is False
+
+
+def test_vk_webhook_fails_closed_when_group_binding_is_missing() -> None:
+    provider = provider_map()['vk_messaging']
+    vault = InMemorySecretVault()
+    _put(vault, provider, 'biz-vk', 'webhook_secret', 'vk-hook-secret')
+    runtime = ProviderWebhookRuntime(vault)
+    body = json.dumps({'type': 'message_new', 'group_id': 42, 'event_id': 'vk-event-1'}).encode()
+    assert runtime.verify(
+        provider=provider, tenant_id='tenant-a', business_id='biz-vk',
+        headers={'X-BusinessAIOS-Webhook-Secret': 'vk-hook-secret'}, body=body,
+    ) is False
+
