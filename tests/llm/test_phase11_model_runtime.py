@@ -15,9 +15,9 @@ from core.llm import (
     ModelRouter,
     ModelRouteRequest,
 )
+from core.telemetry.event_types import LLM_COMPLETED
 from runtime.llm import RoutedLLMClient
 from runtime.platform.event_store.memory_event_store import MemoryEventStore
-from core.telemetry.event_types import LLM_COMPLETED
 
 
 def _profile(
