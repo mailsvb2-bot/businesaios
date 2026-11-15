@@ -156,7 +156,7 @@ class ProviderWebhookRuntime:
             observed = [str(entry.get('id') or '').strip() for entry in entries if isinstance(entry, Mapping)]
             return bool(observed) and len(observed) == len(entries) and all(value == expected for value in observed)
         if key == 'max_messaging':
-            message, = (payload.get('message'),)
+            message = payload.get('message')
             if not isinstance(message, Mapping):
                 return True
             recipient, sender = message.get('recipient'), message.get('sender')
