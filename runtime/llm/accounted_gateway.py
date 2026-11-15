@@ -111,7 +111,7 @@ class AccountedSyncGateway:
             self._budget.cancel_unstarted_reservation(
                 tenant_id=tenant, request_id=request_id, day=day,
             )
-            raise RuntimeError("LLM_ACCOUNTING_UNAVAILABLE") from exc
+            raise RuntimeError("LLM_ACCOUNTING_REQUEST_WRITE_FAILED") from exc
 
         started = time.monotonic()
         response = self._provider_call(self._client, request)
@@ -138,9 +138,9 @@ class AccountedSyncGateway:
                 },
             )
         except Exception as exc:
-            raise RuntimeError("LLM_ACCOUNTING_UNAVAILABLE") from exc
+            raise RuntimeError("LLM_ACCOUNTING_COMPLETION_WRITE_FAILED") from exc
         if not self._budget.release(tenant_id=tenant, request_id=request_id, day=day):
-            raise RuntimeError("LLM_ACCOUNTING_UNAVAILABLE")
+            raise RuntimeError("LLM_ACCOUNTING_RESERVATION_RELEASE_FAILED")
         return response
 
     async def generate(self, request: Any) -> Any:
