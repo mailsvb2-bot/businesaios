@@ -118,8 +118,9 @@ def test_max_provision_and_secret_header() -> None:
     vault, mx = InMemorySecretVault(), provider_map()["max_messaging"]
     persist_route_secrets(vault, platform="max", **SC, webhook_secret=nc.webhook_secret(KEY, rid))
     rt = ProviderWebhookRuntime(secret_vault=vault)
-    assert not rt.verify(provider=mx, **SC, headers={"X-Max-Bot-Api-Secret": "no"}, body=b"{}")
-    assert rt.verify(provider=mx, **SC, headers={"X-Max-Bot-Api-Secret": nc.webhook_secret(KEY, rid)}, body=b"{}")
+    body = b'{"update_type":"bot_started","chat_id":700,"user":{"user_id":42}}'
+    assert not rt.verify(provider=mx, **SC, headers={"X-Max-Bot-Api-Secret": "no"}, body=body)
+    assert rt.verify(provider=mx, **SC, headers={"X-Max-Bot-Api-Secret": nc.webhook_secret(KEY, rid)}, body=body)
 
 
 def test_open_channel_promotion() -> None:
