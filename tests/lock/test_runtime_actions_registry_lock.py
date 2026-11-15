@@ -81,3 +81,34 @@ def test_idempotency_requirement_is_explicit_and_consistent():
             assert spec.requires_idempotency_key is False
         else:
             assert spec.requires_idempotency_key is True
+
+@pytest.mark.lock
+def test_yookassa_webhook_server_has_one_canonical_owner():
+    """The legacy Effects monolith must not expose a weaker webhook ingress."""
+    root = pathlib.Path(__file__).resolve().parents[2]
+    legacy = root / "runtime" / "_internal" / "_effects_impl.py"
+    legacy_source = legacy.read_text(encoding="utf-8")
+    assert "def start_yookassa_webhook_server_in_thread" not in legacy_source
+    assert '"start_yookassa_webhook_server_in_thread"' not in legacy_source
+
+    canonical = root / "runtime" / "_internal" / "effects_clients" / "yookassa_webhook_server.py"
+    action = root / "runtime" / "_internal" / "effects_actions" / "payments" / "yookassa.py"
+    assert "def start_yookassa_webhook_server_in_thread" in canonical.read_text(encoding="utf-8")
+    assert "effects_clients.yookassa_webhook_server" in action.read_text(encoding="utf-8")
+
+    allowed = {
+        "runtime/_internal/effects_clients/yookassa_webhook_server.py",
+        "runtime/_internal/effects_actions/payments/yookassa.py",
+    }
+    references = set()
+    for source in root.rglob("*.py"):
+        if "tests" in source.parts:
+            continue
+        try:
+            text = source.read_text(encoding="utf-8")
+        except OSError:
+            continue
+        if "start_yookassa_webhook_server_in_thread" in text:
+            references.add(source.relative_to(root).as_posix())
+    assert references == allowed, f"alternate YooKassa webhook owner/reference: {sorted(references ^ allowed)}"
+
