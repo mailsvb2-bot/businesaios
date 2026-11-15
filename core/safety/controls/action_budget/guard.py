@@ -7,6 +7,7 @@ from .ledger import ActionBudgetLedger
 from .models import (
     ActionBudget, is_budget_free_text_message, is_routine_reply,
     is_budget_free_read_projection, verified_telegram_idempotency_key,
+    telegram_action_fingerprint,
 )
 
 
@@ -20,12 +21,13 @@ class ActionBudgetGuard:
 
     def evaluate(self, ctx: SafetyActionContext) -> ControlDecision:
         payload = dict(ctx.payload)
-        idempotency_key = verified_telegram_idempotency_key(ctx.action, payload)
+        idempotency_key = verified_telegram_idempotency_key(payload)
         if idempotency_key:
             lookup = getattr(self._ledger, "recorded_action", None)
             previous = lookup(ctx.tenant_id, idempotency_key) if callable(lookup) else None
             if previous is not None:
-                same_action = str(previous) == str(ctx.action)
+                expected = (str(ctx.action), telegram_action_fingerprint(ctx.action, payload))
+                same_action = tuple(previous) == expected
                 return ControlDecision(
                     self.control_name,
                     ControlStatus.ALLOW if same_action else ControlStatus.BLOCK,
