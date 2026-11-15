@@ -44,6 +44,14 @@ def generate_hypotheses(llm: Any, *, tenant_id: str, user_id: str, correlation_i
                 partner_seen = True
             out.append(h)
         return tuple(out[: int(n)])
+    except RuntimeError as exc:
+        # Budget and durable-accounting failures are safety stops, not provider
+        # availability failures. Never turn an unaccounted paid call into a
+        # deterministic fallback that looks like a successful generation.
+        if str(exc).startswith(("LLM_ACCOUNTING_", "LLM_BUDGET_")):
+            raise
+        swallow(__name__, "core/growth/strategy/llm_generator.py")
+        return ()
     except Exception:
         swallow(__name__, "core/growth/strategy/llm_generator.py")
         return ()
