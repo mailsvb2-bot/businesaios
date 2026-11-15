@@ -160,8 +160,10 @@ def test_sealed_effect_journal_failure_is_fail_closed(monkeypatch, failed_event,
     assert _invoke(store)["ok"] is False
     assert client.calls == expected_calls
     if failed_event == LLM_REQUESTED:
-        day = EventStoreDailyTokenBudget(event_store=store, caps=BudgetCaps())._day()
-        assert store.get_setting(tenant_id="tenant", key=f"llm:pending:v1:{day}") == {"pending": {}}
+        state = store.get_setting(tenant_id="tenant", key="llm:pending:v2")
+        assert isinstance(state, dict)
+        assert type(state.get("revision")) is int and state["revision"] >= 2
+        assert state.get("pending") == {}
     else:
         assert _invoke(store)["ok"] is False
         assert client.calls == 1
