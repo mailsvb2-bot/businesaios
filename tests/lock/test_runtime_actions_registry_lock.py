@@ -103,14 +103,20 @@ def test_yookassa_webhook_server_has_one_canonical_owner():
         "runtime/_internal/effects_actions/payments/yookassa.py",
     }
     references = set()
-    for source in root.rglob("*.py"):
-        if "tests" in source.parts:
+    for package in (
+        "application", "canon", "config", "contracts", "core",
+        "crm", "integration_observations", "interfaces", "market_intelligence",
+        "runtime", "scripts",
+    ):
+        package_root = root / package
+        if not package_root.is_dir():
             continue
-        try:
-            text = source.read_text(encoding="utf-8")
-        except OSError:
-            continue
-        if "start_yookassa_webhook_server_in_thread" in text:
-            references.add(source.relative_to(root).as_posix())
+        for source in package_root.rglob("*.py"):
+            try:
+                text = source.read_text(encoding="utf-8")
+            except OSError:
+                continue
+            if "start_yookassa_webhook_server_in_thread" in text:
+                references.add(source.relative_to(root).as_posix())
     assert references == allowed, f"alternate YooKassa webhook owner/reference: {sorted(references ^ allowed)}"
 
