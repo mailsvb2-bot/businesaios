@@ -133,7 +133,7 @@ def test_every_concrete_provider_adapter_uses_the_provider_sender_contract() -> 
         payload, expected_chat = fixtures[expected_channel]
         event = adapter(payload, tenant_id="tenant", product_name="Product", timezone="UTC")
         assert event.channel == expected_channel
-        assert event.user_id == "user" if expected_channel != "vk" else "7"
+        assert event.user_id == ("7" if expected_channel == "vk" else "user")
         assert event.chat_id == expected_chat
         assert event.text == "hello"
         assert event.update_id == "id-1"
@@ -196,7 +196,7 @@ def test_world_state_adapter_is_normalization_only_and_preserves_decision_coordi
     state = ingress.messaging_event_to_world_state(event)
     assert state.schema_version == 1
     assert state.tenant_id == "default"
-    assert state.user_id == "chat-1"
+    assert state.user_id == "messaging_user"
     assert state.user == {
         "id": "messaging_user",
         "messaging_user_id": "messaging_user",
