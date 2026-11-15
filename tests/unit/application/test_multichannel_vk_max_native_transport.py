@@ -11,6 +11,7 @@ from runtime.business_autonomy.provider_vendor_transports import build_provider_
 from runtime.business_autonomy.provider_webhook_runtime import ProviderWebhookRuntime
 from runtime.messaging.bootstrap import _NativeProviderQueueAdapter
 from runtime.messaging.outbound_message import OutboundMessage
+from runtime.messaging.provider_inbound_decoder import decode_provider_inbound
 from security.secret_contract import SecretRecord, SecretRef, SecretSource
 from security.secret_vault import InMemorySecretVault
 
@@ -174,3 +175,34 @@ def test_max_group_message_uses_scoped_subscription_and_explicit_chat_recipient(
     headers = {'X-Max-Bot-Api-Secret': 'max-secret'}
     assert runtime.verify(provider=provider, tenant_id='tenant-a', business_id='business-a', headers=headers, body=body) is True
     assert runtime.verify(provider=provider, tenant_id='tenant-a', business_id='business-a', headers=headers, body=b'{}') is False
+
+
+def test_telegram_vk_and_max_never_promote_recipient_or_bot_identity_to_customer() -> None:
+    telegram_channel_post = decode_provider_inbound(
+        channel='telegram',
+        payload={'channel_post': {'chat': {'id': -100123}, 'text': 'channel announcement', 'message_id': 10}},
+    )
+    assert telegram_channel_post['user_id'] == ''
+    assert telegram_channel_post['chat_id'] == '-100123'
+    assert telegram_channel_post['external_user_ref'] is None
+
+    vk_group_sender = decode_provider_inbound(
+        channel='vk',
+        payload={'type': 'message_new', 'object': {'message': {
+            'id': 9, 'from_id': -123, 'peer_id': 2000000001, 'text': 'group-originated',
+        }}},
+    )
+    assert vk_group_sender['user_id'] == ''
+    assert vk_group_sender['chat_id'] == '2000000001'
+    assert vk_group_sender['external_user_ref'] is None
+
+    max_recipient_only = decode_provider_inbound(
+        channel='max',
+        payload={'update_type': 'message_created', 'message': {
+            'recipient': {'chat_id': 700, 'chat_type': 'dialog', 'user_id': 9001},
+            'body': {'mid': 'max-recipient-only', 'text': 'no sender'},
+        }},
+    )
+    assert max_recipient_only['user_id'] == ''
+    assert max_recipient_only['chat_id'] == '700'
+    assert max_recipient_only['external_user_ref'] is None
