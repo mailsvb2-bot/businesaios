@@ -193,8 +193,13 @@ class EventStoreDailyTokenBudget:
         current = self._es.get_setting(tenant_id=str(tenant_id), key=_PENDING_STATE_KEY)
         legacy, snapshots = self._legacy_pending(tenant_id=tenant_id, day=day)
         if current is None:
-            return None, {"pending": legacy}, snapshots
-        if not isinstance(current, dict) or not isinstance(current.get("pending"), dict):
+            return None, {"revision": 0, "pending": legacy}, snapshots
+        if (
+            not isinstance(current, dict)
+            or type(current.get("revision")) is not int
+            or current["revision"] < 0
+            or not isinstance(current.get("pending"), dict)
+        ):
             raise RuntimeError("LLM_BUDGET_CORRUPT_RESERVATION")
         for request_id, row in legacy.items():
             stored = current["pending"].get(request_id)
@@ -254,7 +259,11 @@ class EventStoreDailyTokenBudget:
         expected_state: Any = _UNSET, legacy_states: Mapping[str, dict[str, Any]] | None = None,
     ) -> bool:
         it = getattr(self._es, "iter_events", None)
-        if not callable(it) or not isinstance(current, dict) or not isinstance(current.get("pending"), dict) or not current["pending"]:
+        if (
+            not callable(it) or not isinstance(current, dict)
+            or type(current.get("revision")) is not int or current["revision"] < 0
+            or not isinstance(current.get("pending"), dict) or not current["pending"]
+        ):
             return False
         try:
             today = date.fromisoformat(day)
@@ -298,7 +307,7 @@ class EventStoreDailyTokenBudget:
         expected = current if expected_state is _UNSET else expected_state
         if not self._es.compare_and_set_setting(
             tenant_id=str(tenant_id), key=_PENDING_STATE_KEY,
-            expected=expected, value={"pending": remaining},
+            expected=expected, value={"revision": current["revision"] + 1, "pending": remaining},
         ):
             return False
         self._clear_legacy(tenant_id=tenant_id, snapshots=legacy_states or {})
@@ -314,9 +323,9 @@ class EventStoreDailyTokenBudget:
         day = self._day()
         try:
             _expected, state, _legacy = self._pending_state(tenant_id=tenant_id, day=day)
-            return self._periods_allow(tenant_id=tenant_id, user_id=user_id, tokens=tokens, day=day, state=state)
         except RuntimeError:
             return False
+        return self._periods_allow(tenant_id=tenant_id, user_id=user_id, tokens=tokens, day=day, state=state)
 
     def spend(self, *, tenant_id: str, user_id: str, tokens: int) -> None:
         return None  # Durable completion events are authoritative.
@@ -344,7 +353,7 @@ class EventStoreDailyTokenBudget:
                     return None
             except RuntimeError:
                 return None
-            state = {"pending": {**pending, request_id: {"user_id": user_id, "tokens": tokens, "day": day}}}
+            state = {"revision": current["revision"] + 1, "pending": {**pending, request_id: {"user_id": user_id, "tokens": tokens, "day": day}}}
             if cas(tenant_id=str(tenant_id), key=_PENDING_STATE_KEY, expected=expected, value=state):
                 try:
                     self._clear_legacy(tenant_id=tenant_id, snapshots=legacy)
@@ -381,9 +390,14 @@ class EventStoreDailyTokenBudget:
                 pending = current["pending"]
                 if request_id not in pending:
                     break
+                value = {"pending": {rid: row for rid, row in pending.items() if rid != request_id}}
+                if key == _PENDING_STATE_KEY:
+                    revision = current.get("revision")
+                    if type(revision) is not int or revision < 0:
+                        return False
+                    value["revision"] = revision + 1
                 if self._es.compare_and_set_setting(
-                    tenant_id=str(tenant_id), key=key, expected=current,
-                    value={"pending": {rid: row for rid, row in pending.items() if rid != request_id}},
+                    tenant_id=str(tenant_id), key=key, expected=current, value=value,
                 ):
                     return True
         return False
