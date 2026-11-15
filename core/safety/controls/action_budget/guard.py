@@ -4,7 +4,10 @@ from ..action_catalog import ActionSafetyCatalog, build_default_action_catalog
 from ..action_context import SafetyActionContext
 from ..control_result import ControlDecision, ControlStatus
 from .ledger import ActionBudgetLedger
-from .models import ActionBudget, is_budget_free_text_message, is_routine_reply, is_budget_free_read_projection
+from .models import (
+    ActionBudget, is_budget_free_text_message, is_routine_reply,
+    is_budget_free_read_projection, verified_telegram_idempotency_key,
+)
 
 
 class ActionBudgetGuard:
@@ -17,6 +20,18 @@ class ActionBudgetGuard:
 
     def evaluate(self, ctx: SafetyActionContext) -> ControlDecision:
         payload = dict(ctx.payload)
+        idempotency_key = verified_telegram_idempotency_key(payload)
+        if idempotency_key:
+            lookup = getattr(self._ledger, "recorded_action", None)
+            previous = lookup(ctx.tenant_id, idempotency_key) if callable(lookup) else None
+            if previous is not None:
+                same_action = str(previous) == str(ctx.action)
+                return ControlDecision(
+                    self.control_name,
+                    ControlStatus.ALLOW if same_action else ControlStatus.BLOCK,
+                    "action_budget_replay_already_accounted" if same_action else "action_budget_idempotency_conflict",
+                    {"idempotent_replay": same_action},
+                )
         if str(payload.get("tenant_id") or "") == str(ctx.tenant_id):
             for predicate, reason, budget_class in (
                 (is_budget_free_text_message, "text_delivery_budget_not_applicable", "text_delivery"),
