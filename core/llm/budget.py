@@ -74,7 +74,7 @@ def validated_llm_completion_event(event: Any) -> tuple[str, str, tuple[int, int
 
 
 def has_durable_budget_store(event_store: Any) -> bool:
-    return all(callable(getattr(event_store, name, None)) for name in ("sum_event_payload_int", "iter_events", "get_setting", "compare_and_set_setting", "append_event"))
+    return all(callable(getattr(event_store, name, None)) for name in ("iter_events", "get_setting", "compare_and_set_setting", "append_event"))
 
 
 class EventStoreDailyTokenBudget:
