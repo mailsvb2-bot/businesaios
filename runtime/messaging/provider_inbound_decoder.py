@@ -396,6 +396,8 @@ def decode_provider_inbound(
 
     user_id = field_text("user_id")
     chat_id = field_text("chat_id")
+    if canonical == "vk" and user_id.startswith("-"):
+        user_id = ""  # VK negative sender IDs are communities, not human customers.
 
     provider_message_id = _first_path_value(raw, paths.get("message_id", ()))
     if provider_message_id is None:
