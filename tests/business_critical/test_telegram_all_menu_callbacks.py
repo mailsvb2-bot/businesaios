@@ -356,11 +356,96 @@ def test_readonly_accounting_never_exempts_writes_or_financial_markers(action, o
     assert result.reason == "action_budget_exceeded"
 
 
-def test_read_projection_audit_reason_is_distinct_from_text_delivery(monkeypatch):
+@pytest.mark.parametrize(("callback", "action", "operation", "argument"), [
+    ("cp:section:sales", "sales_pipeline@v1", "list", ""),
+    ("cp:section:ad-channels", "bookings@v1", "ad_channels", ""),
+])
+def test_owner_read_projection_callback_payload_matches_closed_decision_schema(
+    monkeypatch, callback, action, operation, argument,
+):
+    from core.actions.catalog import build_schema_registry
+
+    monkeypatch.setattr(
+        "runtime.entrypoints.telegram_longpoll._configured_telegram_tenant_id",
+        lambda: "tenant-live",
+    )
+    proposal = UnifiedTelegramPolicyV3(admin_user_ids=("4001",)).propose(
+        _callback_state(callback)
+    )
+    assert proposal.action == action
+    assert proposal.payload["op"] == operation
+    assert proposal.payload["arg"] == argument
+    assert proposal.payload["callback_query_id"] == "callback-12"
+
+    # These are transport/DecisionCore metadata, not permission to widen the
+    # action contract. The exact action remains closed to arbitrary extra keys.
+    payload = {
+        "tenant_id": "tenant-live",
+        **proposal.payload,
+        "goal_id": "owner-goal",
+        "autonomy_tier": "supervised",
+        "meta": {"world_model_meta": {"source": "canonical"}},
+    }
+    schemas = build_schema_registry()
+    schemas.validate(action, payload)
+    with pytest.raises(ValueError, match="UNKNOWN_PAYLOAD_KEYS"):
+        schemas.validate(action, {**payload, "untrusted_extra": "reject"})
+
+
+@pytest.mark.parametrize(("action", "operation", "argument"), [
+    ("business_ops_summary@v1", "cockpit", "cpm:menu"),
+    ("sales_pipeline@v1", "list", ""),
+    ("bookings@v1", "ad_channels", ""),
+])
+def test_read_projection_accounting_does_not_double_charge_with_telegram_metadata(
+    monkeypatch, action, operation, argument,
+):
     from types import SimpleNamespace
+
+    from core.safety.controls.action_budget.guard import ActionBudgetGuard
+    from core.safety.controls.action_budget.ledger import InMemoryActionBudgetLedger
+    from core.safety.controls.action_budget.models import ActionBudget
+    from core.safety.controls.action_context import SafetyActionContext
+    from core.safety.controls.control_result import ControlStatus
     import runtime.safety_controls as safety
+
+    ledger = InMemoryActionBudgetLedger()
+    ledger.record("tenant-live", estimated_cost=5000)
+    guard = ActionBudgetGuard(ledger, ActionBudget(max_cost=5000, max_actions=1))
+    payload = {
+        "tenant_id": "tenant-live",
+        "user_id": "4001",
+        "op": operation,
+        "arg": argument,
+        "callback_query_id": "callback-12",
+        "goal_id": "owner-goal",
+        "autonomy_tier": "supervised",
+        "meta": {"world_model_meta": {"source": "canonical"}},
+    }
+    before = ledger.snapshot("tenant-live")
+    decision = guard.evaluate(
+        SafetyActionContext(action, "tenant-live", "4001", payload)
+    )
+    assert decision.status == ControlStatus.ALLOW
+    assert decision.reason == "read_projection_budget_not_applicable"
+    assert ledger.snapshot("tenant-live") == before
+
     events = []
-    monkeypatch.setattr(safety, "build_safety_control_runtime", lambda: SimpleNamespace(profile=SimpleNamespace(action_catalog=SimpleNamespace(resolve=lambda action: SimpleNamespace(default_estimated_cost=0)))))
-    monkeypatch.setattr(safety, "_record_safety_event", lambda **kwargs: events.append(kwargs))
-    safety.record_allowed_action(action="business_ops_summary@v1", payload={"tenant_id": "t", "user_id": "u", "op": "cockpit", "arg": "cpm:menu"})
-    assert events[0]["reason"] == "read_projection_not_charged"
+    profile = SimpleNamespace(
+        action_catalog=SimpleNamespace(
+            resolve=lambda name: SimpleNamespace(default_estimated_cost=0)
+        ),
+        action_budget_ledger=ledger,
+    )
+    monkeypatch.setattr(
+        safety, "build_safety_control_runtime",
+        lambda: SimpleNamespace(profile=profile),
+    )
+    monkeypatch.setattr(
+        safety, "_record_safety_event",
+        lambda **kwargs: events.append(kwargs),
+    )
+    safety.record_allowed_action(action=action, payload=payload)
+
+    assert ledger.snapshot("tenant-live") == before
+    assert events[-1]["reason"] == "read_projection_not_charged"
