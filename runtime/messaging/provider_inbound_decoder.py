@@ -397,7 +397,7 @@ def decode_provider_inbound(
 
     def field_value(name: str) -> Any:
         explicit = _first_path_value(view, paths.get(name, ()))
-        if explicit is not None:
+        if explicit is not None or (name == "user_id" and canonical in _PROVIDER_PATHS):
             return explicit
         return _deep_first_value(view, _GENERIC_KEYS.get(name, ()))
 
