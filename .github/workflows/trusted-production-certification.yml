@@ -97,7 +97,7 @@ jobs:
           $actual = (git rev-parse HEAD).Trim()
           if ($actual -ne $env:BAIOS_CI_TARGET_SHA) { throw "exact checkout mismatch: $actual != $env:BAIOS_CI_TARGET_SHA" }
       - name: Install locked dependencies
-        run: python -m pip install --upgrade pip && python -m pip install -r requirements.lock.txt
+        run: python -m pip install --upgrade pip && python -m pip install --require-hashes -r requirements.release.lock.txt
       - name: Prime canonical Rust toolchain and locked cache
         shell: pwsh
         run: |

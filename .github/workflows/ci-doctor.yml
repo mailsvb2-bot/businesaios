@@ -43,7 +43,7 @@ jobs:
           python-version: ${{ matrix.python-version }}
       - run: python scripts/ci/check_requirements_lock.py
       - run: python -m pip install --upgrade pip
-      - run: python -m pip install -r requirements.lock.txt
+      - run: python -m pip install --require-hashes -r requirements.release.lock.txt
       - name: Run health gate
         env:
           GATE_A: do
