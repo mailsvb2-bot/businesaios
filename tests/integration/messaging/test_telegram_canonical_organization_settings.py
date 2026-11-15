@@ -7,7 +7,7 @@ from application.organization import OrganizationRegistry
 from contracts.event_store import BUSINESS_FACT_EVENT_TYPE
 from core.policies.telegram.routes.settings_routes import handle_settings_routes
 from reliability.idempotency_store import InMemoryIdempotencyStore
-from runtime.handler_impl.domains.organization_settings_ops import organization_card
+from runtime.handler_impl.domains.business_catalog_ops import organization_card
 
 
 class Events:

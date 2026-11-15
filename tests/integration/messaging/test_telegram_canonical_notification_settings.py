@@ -5,7 +5,7 @@ from types import SimpleNamespace
 
 from core.policies.telegram.routes.settings_routes import handle_settings_routes
 from interfaces.web.settings.common.eventstore_settings_gateway import EventStoreSettingsGateway
-from runtime.handler_impl.domains.notification_settings_ops import notification_preferences
+from runtime.handler_impl.domains.business_catalog_ops import notification_preferences
 from runtime.messaging_policy_alert_subscriptions.settings_key import SETTING_KEY
 from runtime.settings.event_store_gateway import build_event_store_settings_gateway
 

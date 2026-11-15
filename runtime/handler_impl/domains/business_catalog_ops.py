@@ -3,6 +3,10 @@
 from __future__ import annotations
 
 from application.business_flows.projection import flow_payloads, flow_rows
+from application.organization.registry import OrganizationRegistry
+from contracts.organization import OrganizationStatus
+from runtime.messaging_policy_alert_subscriptions.settings_key import SETTING_KEY
+from runtime.messaging_policy_alert_subscriptions.settings_value_builder import canonical_alert_subscriptions_value
 
 CATALOG_OPS = frozenset(
     {
@@ -748,3 +752,137 @@ def _commerce(done, body, st, op, arg, *, tenant_id, event_store):
             return done("📨 Запрос на расширение уже зарегистрирован; оператор свяжется в боте.")
         return done("📨 Запрос на расширение тарифа зарегистрирован (обращение billing).\n" + ch["title"], ch)
     return done(ad.commerce_text(overview))
+
+
+def _organization_settings(*, event_store, idempotency_path, body, tenant_id, op, arg, decision_id):
+    """Use the existing organization registry, not a second Telegram-owned store."""
+    from pathlib import Path
+    from reliability.idempotency_store import JsonlIdempotencyStore
+
+    if not idempotency_path or not str(body.get("business_id") or "").strip():
+        return "🏢 Выберите бизнес; реестр недоступен без подтверждённого контекста.", None
+    try:
+        registry = OrganizationRegistry(
+            event_store=event_store,
+            idempotency_store=JsonlIdempotencyStore(Path(idempotency_path)),
+        )
+        return organization_card(
+            registry=registry, tenant_id=tenant_id,
+            business_id=str(body["business_id"]),
+            user_id=str(body["user_id"]), operation=op,
+            arg=arg, decision_id=decision_id,
+        )
+    except (RuntimeError, ValueError, LookupError, OSError):
+        return ("🏢 Не удалось открыть или сохранить карточку. Проверьте формат команды и доступ к реестру.",
+                {"inline_keyboard": [[{"text": "⬅️ Настройки", "callback_data": "settings:menu"}]]})
+
+
+def organization_card(*, registry: OrganizationRegistry, tenant_id: str, business_id: str,
+                      user_id: str, operation: str, arg: str, decision_id: str) -> tuple[str, dict]:
+    if operation not in {"organization_show", "organization_create", "organization_name", "organization_type"}:
+        raise ValueError("unsupported_organization_operation")
+    organizations = registry.list_for_business(tenant_id=tenant_id, business_id=business_id)
+    active = [item for item in organizations if item.status is OrganizationStatus.ACTIVE]
+    preferred = next((item for item in active if item.organization_id == business_id), None)
+    if preferred is None and len(active) == 1:
+        preferred = active[0]
+    if len(active) > 1 and preferred is None:
+        raise ValueError("multiple_organizations_require_explicit_selection")
+    if operation != "organization_show" and not arg:
+        raise ValueError("organization_value_required")
+
+    identity = {"tenant_id": tenant_id, "business_id": business_id}
+    audit = {"actor_id": user_id, "decision_id": decision_id}
+    if operation == "organization_create":
+        if preferred is not None:
+            raise ValueError("organization_already_exists")
+        name, divider, kind = arg.partition("|")
+        if not name.strip():
+            raise ValueError("organization_name_required")
+        preferred = registry.create(
+            **identity, organization_id=business_id, idempotency_key=decision_id,
+            name=name.strip(), organization_type=kind.strip() if divider else None,
+            event_metadata=audit,
+        )
+    elif operation in {"organization_name", "organization_type"}:
+        if preferred is None:
+            raise ValueError("organization_not_created")
+        value = arg.strip()
+        if operation == "organization_name" and preferred.name != value:
+            preferred = registry.update(**identity, organization_id=preferred.organization_id,
+                                        idempotency_key=decision_id, name=value, event_metadata=audit)
+        if operation == "organization_type" and preferred.organization_type != value:
+            preferred = registry.update(**identity, organization_id=preferred.organization_id,
+                                        idempotency_key=decision_id, organization_type=value, event_metadata=audit)
+
+    # Always read back from the existing registry after a mutation; no UI cache.
+    if preferred is not None:
+        preferred = registry.get(**identity, organization_id=preferred.organization_id)
+        text = (f"🏢 Организация\n\nНазвание: {preferred.name or 'не указано'}\n"
+                f"Тип: {preferred.organization_type or 'не указан'}\n"
+                f"Статус: {preferred.status.value}\n"
+                f"ID: {preferred.organization_id}\n\n"
+                "Изменить название: /org_name Новое название\n"
+                "Изменить тип: /org_type Новый тип")
+    else:
+        text = ("🏢 Организация\n\nКарточка ещё не создана.\n"
+                "Создать: /org_create Название организации | тип")
+    markup = {"inline_keyboard": [
+        [{"text": "🔄 Обновить карточку", "callback_data": "cp:settings:organization"}],
+        [{"text": "⬅️ Настройки", "callback_data": "settings:menu"}],
+    ]}
+    return text, markup
+
+
+def notification_preferences(*, settings_gateway, tenant_id: str, user_id: str, operation: str) -> tuple[str, dict]:
+    if operation not in {"notifications_show", "notifications_toggle", "notifications_level"}:
+        raise ValueError("unsupported notification operation")
+    gateway = settings_gateway
+    if gateway is None:
+        raise RuntimeError("canonical_notification_settings_gateway_missing")
+    level_order = ("info", "warn", "critical")
+
+    def selected(value):
+        entries = canonical_alert_subscriptions_value(value, tenant_id=tenant_id)
+        own = next((item for item in entries if item["recipient_user_id"] == user_id
+                    and item["channel"] == "telegram" and not item["business_id"]), None)
+        return entries, own
+
+    if operation != "notifications_show":
+        for _ in range(3):
+            before = gateway.get_value(tenant_id=tenant_id, key=SETTING_KEY)
+            entries, own = selected(before)
+            current = own or {"recipient_user_id": user_id, "channel": "telegram",
+                              "business_id": "", "enabled": False, "min_level": "warn",
+                              "code_filters": [], "user_scope": []}
+            updated = dict(current)
+            if operation == "notifications_toggle":
+                updated["enabled"] = not bool(current["enabled"])
+            else:
+                level = str(current["min_level"])
+                updated["min_level"] = level_order[(level_order.index(level) + 1) % len(level_order)]
+            entries = [item for item in entries if not (
+                item["recipient_user_id"] == user_id and item["channel"] == "telegram"
+                and not item["business_id"])]
+            entries.append(updated)
+            if gateway.compare_and_set_value(tenant_id=tenant_id, key=SETTING_KEY,
+                                             expected=before, value=entries):
+                break
+        else:
+            raise RuntimeError("notification_preferences_concurrent_change")
+    after = gateway.get_value(tenant_id=tenant_id, key=SETTING_KEY)
+    _, own = selected(after)
+    enabled = bool(own and own["enabled"])
+    level = own["min_level"] if own else "warn"
+    text = ("🔔 Системные уведомления\n\n"
+            f"Получатель: ваш Telegram-аккаунт\n"
+            f"Оповещения: {'включены' if enabled else 'выключены'}\n"
+            f"Минимальная важность: {level}\n\n"
+            "Настройки относятся к служебным оповещениям, а не к рекламным рассылкам.")
+    markup = {"inline_keyboard": [
+        [{"text": "🔕 Отключить" if enabled else "🔔 Включить",
+          "callback_data": "cp:settings:notifications:toggle"}],
+        [{"text": "⚙️ Изменить важность", "callback_data": "cp:settings:notifications:level"}],
+        [{"text": "⬅️ Настройки", "callback_data": "settings:menu"}],
+    ]}
+    return text, markup
