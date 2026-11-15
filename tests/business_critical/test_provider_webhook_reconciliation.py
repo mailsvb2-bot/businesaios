@@ -39,22 +39,27 @@ def _response(payload, status: int = 200):
 def test_provider_webhook_never_promotes_untrusted_session_id_to_sender() -> None:
     registry = ProviderWebhookRouteRegistry()
     whatsapp = provider_map()['whatsapp_cloud']
-    route = registry.extract(
-        whatsapp,
-        {},
-        json.dumps({
-            'session_id': 'attacker-controlled-session',
-            'message': 'hello',
-            'entry': [{
-                'changes': [{
-                    'value': {
-                        'metadata': {'phone_number_id': 'phone-123'},
-                        'messages': [{'id': 'message-1', 'text': {'body': 'hello'}}],
-                    },
-                }],
+    vault = InMemorySecretVault()
+    _put(vault, whatsapp, 'biz-wa', 'app_secret', 'meta-app-secret')
+    _put(vault, whatsapp, 'biz-wa', 'phone_number_id', 'phone-123')
+    body = json.dumps({
+        'session_id': 'attacker-controlled-session',
+        'message': 'hello',
+        'entry': [{
+            'changes': [{
+                'value': {
+                    'metadata': {'phone_number_id': 'phone-123'},
+                    'messages': [{'id': 'message-1', 'text': {'body': 'hello'}}],
+                },
             }],
-        }).encode(),
-    )
+        }],
+    }).encode()
+    runtime = ProviderWebhookRuntime(vault)
+    assert runtime.verify(
+        provider=whatsapp, tenant_id='tenant-a', business_id='biz-wa',
+        headers=_signed_hub_headers('meta-app-secret', body), body=body,
+    ) is True
+    route = registry.extract(whatsapp, {}, body)
     assert route['messaging_ingress'] == {}
     assert route['external_user_ref'] is None
 
