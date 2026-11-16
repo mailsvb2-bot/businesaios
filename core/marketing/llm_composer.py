@@ -5,7 +5,6 @@ from dataclasses import dataclass, field
 from typing import Any
 
 from config.marketing_llm_policy import DEFAULT_MARKETING_LLM_POLICY, MarketingLLMPolicy
-from core.llm import MockLLMClient
 from core.llm.budget import BudgetCaps, EventStoreDailyTokenBudget
 from core.llm.circuit import CircuitConfig
 from core.llm.contracts import LLMClient
@@ -32,7 +31,7 @@ class LLMComposerConfig:
     tenant_rps: float = field(default_factory=lambda: DEFAULT_MARKETING_LLM_POLICY.tenant_rps)
     tenant_burst: int = field(default_factory=lambda: DEFAULT_MARKETING_LLM_POLICY.tenant_burst)
     budget: BudgetCaps = field(default_factory=BudgetCaps)
-    budget_source: str = field(default_factory=lambda: DEFAULT_MARKETING_LLM_POLICY.budget_source)
+    budget_source: str = "event_store"
     circuit: CircuitConfig = field(default_factory=lambda: DEFAULT_MARKETING_LLM_POLICY.circuit)
     debug_sampling: DebugSampling = field(default_factory=lambda: DEFAULT_MARKETING_LLM_POLICY.debug_sampling)
     forbid: tuple = field(default_factory=lambda: DEFAULT_MARKETING_LLM_POLICY.forbid)
@@ -42,24 +41,13 @@ class MarketingLLMComposer:
     """DecisionCore decides, LLM composes."""
 
     def __init__(self, llm: LLMClient, cfg: LLMComposerConfig, *, event_store: Any = None, accounted_gateway_factory: Callable[..., Any] | None = None) -> None:
-        # Only the explicit deterministic mock may use process-local accounting.
-        # Every other injected client must pass through the durable accounted gateway.
-        if str(cfg.budget_source or "").lower() == "memory" and not isinstance(llm, MockLLMClient):
-            raise RuntimeError("LLM_BUDGET_EVENT_STORE_UNAVAILABLE")
-        self._llm = llm
-        self._cfg = cfg
-        self._event_store = event_store
+        if not callable(accounted_gateway_factory):
+            raise RuntimeError("LLM_ACCOUNTED_GATEWAY_REQUIRED")
+        self._llm, self._cfg, self._event_store = llm, cfg, event_store
         self._runtime = build_composer_runtime(cfg=cfg, event_store=event_store)
-        self._accounted_gateway = None
-        if isinstance(self._runtime.budget, EventStoreDailyTokenBudget):
-            if not callable(accounted_gateway_factory):
-                raise RuntimeError("LLM_ACCOUNTED_GATEWAY_REQUIRED")
-            self._accounted_gateway = accounted_gateway_factory(
-                llm,
-                event_store=event_store,
-                provider=cfg.provider,
-                budget=self._runtime.budget,
-            )
+        self._accounted_gateway = accounted_gateway_factory(
+            llm, event_store=event_store, provider=cfg.provider, budget=self._runtime.budget,
+        )
 
     @property
     def accounted_gateway(self) -> Any:
@@ -78,28 +66,15 @@ class MarketingLLMComposer:
 
     async def _maybe_alert(self, inp: MarketingLLMInputs, *, reason: str) -> None:
         await maybe_emit_alert(
-            event_store=self._event_store,
-            inp=inp,
-            metrics=self._runtime.metrics,
-            provider=self._cfg.provider,
-            model=self._cfg.model,
-            reason=reason,
+            event_store=self._event_store, inp=inp, metrics=self._runtime.metrics,
+            provider=self._cfg.provider, model=self._cfg.model, reason=reason,
         )
 
     async def _emit_guardrail_fail(self, inp: MarketingLLMInputs, request_id: str, prompt_version: str, prompt_hash: str, reason: str) -> None:
         await emit_trace_async(
-            event_store=self._event_store,
-            debug_sampling=self._cfg.debug_sampling,
-            inp=inp,
-            model=self._cfg.model,
-            provider=self._cfg.provider,
-            request_id=request_id,
-            prompt_version=prompt_version,
-            prompt_hash=prompt_hash,
-            ok=False,
-            cache_hit=False,
-            latency_ms=0,
-            finish_reason="guardrail",
-            usage=None,
-            error_code=f"guardrail:{reason}",
+            event_store=self._event_store, debug_sampling=self._cfg.debug_sampling,
+            inp=inp, model=self._cfg.model, provider=self._cfg.provider,
+            request_id=request_id, prompt_version=prompt_version, prompt_hash=prompt_hash,
+            ok=False, cache_hit=False, latency_ms=0, finish_reason="guardrail",
+            usage=None, error_code=f"guardrail:{reason}",
         )
