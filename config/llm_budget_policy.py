@@ -21,16 +21,9 @@ class LLMBudgetPolicy:
                 raise ValueError(f"{name} must be a non-negative integer")
         if self.cache_ttl_seconds <= 0:
             raise ValueError("cache_ttl_seconds must be positive")
-        for name, daily_name, multiplier in (
-            ("tenant_tokens_per_week", "tenant_tokens_per_day", 7),
-            ("user_tokens_per_week", "user_tokens_per_day", 7),
-            ("tenant_tokens_per_month", "tenant_tokens_per_day", 30),
-            ("user_tokens_per_month", "user_tokens_per_day", 30),
-        ):
+        for name in ("tenant_tokens_per_week", "user_tokens_per_week", "tenant_tokens_per_month", "user_tokens_per_month"):
             value = getattr(self, name)
-            if value is None:
-                object.__setattr__(self, name, getattr(self, daily_name) * multiplier)
-            elif type(value) is not int or value < 0:
+            if value is not None and (type(value) is not int or value < 0):
                 raise ValueError(f"{name} must be a non-negative integer")
 
 
