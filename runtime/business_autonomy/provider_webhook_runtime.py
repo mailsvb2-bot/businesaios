@@ -19,7 +19,7 @@ from security.secret_contract import SecretRef
 from security.secret_vault import SecretVault
 
 CANON_PROVIDER_WEBHOOK_RUNTIME = True
-RAW_SIGNATURE_FIRST_PROVIDER_KEYS = frozenset({'line_messaging', 'viber_messaging'})
+RAW_SIGNATURE_FIRST_PROVIDER_KEYS = frozenset({'line_messaging', 'viber_messaging', 'telegram_bot'})
 
 def _secret_eq(expected: object, observed: object) -> bool:
     """Compare untrusted webhook secrets without non-ASCII compare_digest errors."""
