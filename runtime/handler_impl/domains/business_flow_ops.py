@@ -25,6 +25,8 @@ from runtime.handler_impl.domains.business_catalog_ops import (
     PROMO_OPS,
     XP_OPS,
     _ads,
+    _organization_settings,
+    notification_preferences,
     _catalog,
     _commerce,
     _event_channels,
@@ -106,71 +108,39 @@ def handle_bookings(payload, effects, env, *, event_store, now_ms: int | None = 
     mine = bk.upcoming(slots, now_ms=now, customer_id=user_id)
     if op == "dispatch":
         return _dispatch_reminders(body, effects, env, bk, slots, facts, now)
-    if op in PROMO_OPS:
-        try:
-            return _promotions(
-                lambda t, ch: send_tracked(
-                    body, effects, env, text=t, event_type="bookings@v1" if ch else None, event_payload=ch
-                ),
-                bk,
-                op,
-                arg,
-                now,
-                slots,
-                facts,
-                user_id=user_id,
-                tenant_id=tenant_id,
-                event_store=event_store,
-            )
-        except ValueError as exc:
-            return send_tracked(
-                body, effects, env, text=f"📣 Не получилось: {exc}", event_type=None, event_payload=None
-            )
-    if op in CHANNEL_OPS:
-        try:
-            return _event_channels(
-                lambda t, ch: send_tracked(
-                    body, effects, env, text=t, event_type="bookings@v1" if ch else None, event_payload=ch
-                ),
-                bk,
-                op,
-                arg,
-                now,
-                slots,
-                facts,
-                user_id=user_id,
-                platform=str(body.get("platform") or "telegram"),
-            )
-        except ValueError as exc:
-            return send_tracked(
-                body, effects, env, text=f"🔗 Не получилось: {exc}", event_type=None, event_payload=None
-            )
-    if op in PANEL_OPS:  # read-only owner panels
-        say = partial(send_tracked, body, effects, env, event_type=None, event_payload=None)
-        return _panels(
-            lambda t, _ch: say(text=t), bk, op, arg, now, slots, facts, tenant_id=tenant_id, event_store=event_store
+    def done(text, change=None):
+        return send_tracked(
+            body, effects, env, text=text,
+            event_type="bookings@v1" if change else None, event_payload=change,
         )
-    if op in EVENT_OPS:
+
+    if op in PROMO_OPS | CHANNEL_OPS | PANEL_OPS | EVENT_OPS:
         try:
+            if op in PROMO_OPS:
+                return _promotions(
+                    done, bk, op, arg, now, slots, facts,
+                    user_id=user_id, tenant_id=tenant_id, event_store=event_store,
+                )
+            if op in CHANNEL_OPS:
+                return _event_channels(
+                    done, bk, op, arg, now, slots, facts,
+                    user_id=user_id, platform=str(body.get("platform") or "telegram"),
+                )
+            if op in PANEL_OPS:
+                return _panels(
+                    lambda text, _ch: done(text), bk, op, arg, now, slots, facts,
+                    tenant_id=tenant_id, event_store=event_store,
+                )
             return _events(
-                lambda t, ch: send_tracked(
-                    body, effects, env, text=t, event_type="bookings@v1" if ch else None, event_payload=ch
+                done,
+                lambda text, uid: send_tracked(
+                    body, effects, env, text=text, event_type=None, event_payload=None, to_user_id=uid,
                 ),
-                lambda t, uid: send_tracked(
-                    body, effects, env, text=t, event_type=None, event_payload=None, to_user_id=uid
-                ),
-                bk,
-                op,
-                arg,
-                now,
-                slots,
-                tenant_id=tenant_id,
-                event_store=event_store,
+                bk, op, arg, now, slots, tenant_id=tenant_id, event_store=event_store,
             )
         except ValueError as exc:
-            return send_tracked(
-                body, effects, env, text=f"📅 Не получилось: {exc}", event_type=None, event_payload=None
-            )
+            marker = "📣" if op in PROMO_OPS else "🔗" if op in CHANNEL_OPS else "📅"
+            return done(f"{marker} Не получилось: {exc}")
     pick = {"book": open_slots, "cancel": mine}.get(op, [])
     chosen = pick[int(arg) - 1] if arg.isdigit() and 0 < int(arg) <= len(pick) else None
     try:
@@ -205,9 +175,7 @@ def handle_bookings(payload, effects, env, *, event_store, now_ms: int | None = 
         slot, minutes, label = due[0]
         text = f"⏰ Напоминание ({label}): {bk.fmt(slot)}\n\n" + text
         change = {"step": "reminder_sent", "slot_id": slot.slot_id, "minutes": minutes, "revision": slot.revision}
-    return send_tracked(
-        body, effects, env, text=text, event_type="bookings@v1" if change else None, event_payload=change
-    )
+    return done(text, change)
 
 
 def _dispatch_reminders(body, effects, env, bk, slots, facts, now):
@@ -384,79 +352,46 @@ def _cockpit(body, effects, env, future, steps, facts, now, team=None, timed=Non
         connections=_messenger_connections(facts("business_admin@v1")),
     )
     parsed = cp.parse(str(body.get("arg") or "cpm:menu"))
-    if parsed.action == "sales-ev":
-        try:
+    change = None
+    event_type = None
+    after, screen, prefix = snap, parsed, ""
+    try:
+        if parsed.action == "sales-ev":
             change = cs.mutation(parsed.args, snap.sales)
-        except ValueError as exc:
-            return send_tracked(body, effects, env, text=f"⚠️ Не получилось: {exc}", event_type=None, event_payload=None)
-        lead_screen = cp.Parsed("sales-lead", (change["lead_id"],))
-        after = replace(snap, sales=sl.replay([*facts("sales_pipeline@v1"), change]))
-        text, rows = cp.render(lead_screen, after, is_owner=True)
-        return send_tracked(
-            body,
-            effects,
-            env,
-            text=cs.result_text(change, after.sales) + "\n\n" + text,
-            event_type="sales_pipeline@v1",
-            event_payload=change,
-            reply_markup=cp.markup(rows),
-        )
-    if parsed.action in ce.MUTATIONS:
-        try:
+            after = replace(snap, sales=sl.replay([*facts("sales_pipeline@v1"), change]))
+            screen = cp.Parsed("sales-lead", (change["lead_id"],))
+            prefix = cs.result_text(change, after.sales) + "\n\n"
+            event_type = "sales_pipeline@v1"
+        elif parsed.action in ce.MUTATIONS:
             note, change = ce.mutation(parsed.action, parsed.args, snap)
-        except ValueError as exc:
-            return send_tracked(body, effects, env, text=f"⚠️ Не получилось: {exc}", event_type=None, event_payload=None)
-        after = replace(snap, series=es.replay([*facts("event_series@v1"), *([change] if change else [])]))
-        text, rows = cp.render(cp.Parsed("ev-conduct"), after, is_owner=True)
-        return send_tracked(
-            body,
-            effects,
-            env,
-            text=note + "\n\n" + text,
-            event_type="event_series@v1" if change else None,
-            event_payload=change or None,
-            reply_markup=cp.markup(rows),
-        )
-    if parsed.action in cm.MUTATIONS:
-        try:
+            after = replace(snap, series=es.replay([*facts("event_series@v1"), *([change] if change else [])]))
+            screen, prefix = cp.Parsed("ev-conduct"), note + "\n\n"
+            event_type = "event_series@v1" if change else None
+        elif parsed.action in cm.MUTATIONS:
             note, change = cm.mutation(parsed.action, parsed.args, snap)
-        except ValueError as exc:
-            return send_tracked(body, effects, env, text=f"⚠️ Не получилось: {exc}", event_type=None, event_payload=None)
-        after = replace(snap, admin=ad.replay([*facts("business_admin@v1"), *([change] if change else [])]))
-        text, rows = cp.render(cp.Parsed("payments", ("0",)), after, is_owner=True)
-        return send_tracked(
-            body,
-            effects,
-            env,
-            text=note + "\n\n" + text,
-            event_type="business_admin@v1" if change else None,
-            event_payload=change,
-            reply_markup=cp.markup(rows),
-        )
-    if parsed.action in cb.MUTATIONS:
-        try:
+            after = replace(snap, admin=ad.replay([*facts("business_admin@v1"), *([change] if change else [])]))
+            screen, prefix = cp.Parsed("payments", ("0",)), note + "\n\n"
+            event_type = "business_admin@v1" if change else None
+        elif parsed.action in cb.MUTATIONS:
             change = cb.mutation(parsed.args, snap.admin, now_ms=now)
-        except ValueError as exc:
-            return send_tracked(body, effects, env, text=f"⚠️ Не получилось: {exc}", event_type=None, event_payload=None)
-        if change["slot_id"] in bk.replay(facts("bookings@v1")):
-            return send_tracked(
-                body, effects, env, text="Это время уже добавлено.", event_type=None, event_payload=None
-            )
-        text, rows = cp.render(cp.Parsed("bookings", ("0",)), snap, is_owner=True)
+            if change["slot_id"] in bk.replay(facts("bookings@v1")):
+                return send_tracked(
+                    body, effects, env, text="Это время уже добавлено.", event_type=None, event_payload=None
+                )
+            screen = cp.Parsed("bookings", ("0",))
+            event_type = "bookings@v1"
+    except ValueError as exc:
         return send_tracked(
-            body,
-            effects,
-            env,
-            text=cb.result_text(change) + "\n\nДобавить ещё: кнопка ниже.",
-            event_type="bookings@v1",
-            event_payload=change,
-            reply_markup=cp.markup(rows),
+            body, effects, env, text=f"⚠️ Не получилось: {exc}", event_type=None, event_payload=None
         )
-    text, rows = cp.render(parsed, snap, is_owner=True)
+    text, rows = cp.render(screen, after, is_owner=True)
+    if parsed.action in cb.MUTATIONS:
+        text = cb.result_text(change) + "\n\nДобавить ещё: кнопка ниже."
     return send_tracked(
-        body, effects, env, text=text, event_type=None, event_payload=None, reply_markup=cp.markup(rows)
+        body, effects, env, text=prefix + text,
+        event_type=event_type, event_payload=change,
+        reply_markup=cp.markup(rows),
     )
-
 
 def handle_business_ops_summary(payload, effects, env, *, event_store, now_ms: int | None = None):
     """Owner operations summary over the business-flow projections (read-only)."""
@@ -509,7 +444,7 @@ def handle_business_ops_summary(payload, effects, env, *, event_store, now_ms: i
     return send_tracked(body, effects, env, text=text, event_type=None, event_payload=None)
 
 
-def handle_business_admin(payload, effects, env, *, event_store, now_ms: int | None = None):
+def handle_business_admin(payload, effects, env, *, event_store, settings_gateway=None, organization_idempotency_path=None, now_ms: int | None = None):
     """Owner admin ops (settings, autopilot, prices, recorded payments/refunds, approvals)."""
     from application.business_flows import admin as ad
 
@@ -523,6 +458,23 @@ def handle_business_admin(payload, effects, env, *, event_store, now_ms: int | N
             body, effects, env, text=text, event_type="business_admin@v1" if change else None, event_payload=change
         )
 
+    if op in {"organization_show", "organization_create", "organization_name", "organization_type"}:
+        text, markup = _organization_settings(
+            event_store=event_store, idempotency_path=organization_idempotency_path,
+            body=body, tenant_id=tenant_id, op=op, arg=arg,
+            decision_id=env.decision.decision_id,
+        )
+        return send_tracked(body, effects, env, text=text, event_type=None, event_payload=None, reply_markup=markup)
+    if op in {"notifications_show", "notifications_toggle", "notifications_level"}:
+        try:
+            text, markup = notification_preferences(
+                settings_gateway=settings_gateway, tenant_id=tenant_id,
+                user_id=required_str(body, "user_id"), operation=op,
+            )
+        except (RuntimeError, ValueError):
+            text, markup = "🔔 Настройки не сохранены. Попробуйте ещё раз.", None
+        return send_tracked(body, effects, env, text=text, event_type=None,
+                            event_payload=None, reply_markup=markup)
     if op in XP_OPS:
         try:
             facts_ = flow_payloads(event_store, tenant_id=tenant_id, event_type="business_admin@v1")
@@ -768,13 +720,8 @@ def handle_event_series(payload, effects, env, *, event_store, now_ms: int | Non
             ch = wz.draft(user_id, arg)
             text, rows, _ = wz.step(ch["title"], "", now_ms=now)
             return send_tracked(
-                body,
-                effects,
-                env,
-                text=text,
-                event_type="event_series@v1",
-                event_payload=ch,
-                reply_markup=_markup(rows),
+                body, effects, env, text=text, event_type="event_series@v1",
+                event_payload=ch, reply_markup=_markup(rows),
             )
         if op == "wizard":
             from application.business_flows import event_wizard as wz
@@ -783,55 +730,23 @@ def handle_event_series(payload, effects, env, *, event_store, now_ms: int | Non
             text, rows, result = wz.step(title, arg, now_ms=now)
             if result is None:
                 return send_tracked(
-                    body, effects, env, text=text, event_type=None, event_payload=None, reply_markup=_markup(rows)
+                    body, effects, env, text=text, event_type=None,
+                    event_payload=None, reply_markup=_markup(rows),
                 )
-            slot = result["slot"]
             if result["warmup"]:
-                send_tracked(
-                    body,
-                    effects,
-                    env,
-                    text="🔥 Прогрев: за " + ", ".join(map(str, result["warmup"]["days"])) + " дн.",
-                    event_type="event_series@v1",
-                    event_payload=result["warmup"],
-                )
-            send_tracked(
-                body,
-                effects,
-                env,
-                text="🧭 Мастер завершён",
-                event_type="event_series@v1",
-                event_payload={"step": "wizard_done", "user_id": user_id},
-            )
-            send_tracked(
-                body,
-                effects,
-                env,
-                text="📌 Формат: " + wz.MODES[result["mode"]["mode"]],
-                event_type="event_series@v1",
-                event_payload=result["mode"],
-            )
+                done("🔥 Прогрев: за " + ", ".join(map(str, result["warmup"]["days"])) + " дн.", result["warmup"])
+            done("🧭 Мастер завершён", {"step": "wizard_done", "user_id": user_id})
+            done("📌 Формат: " + wz.MODES[result["mode"]["mode"]], result["mode"])
             sent = None
             for slot in result["slots"]:
+                message = ("✅ Слот открыт: "
+                           + bk.fmt(bk.Slot(slot["slot_id"], slot["title"], slot["starts_at_ms"], slot["duration_min"]))
+                           + f", {slot['duration_min']} мин")
                 sent = send_tracked(
-                    body,
-                    effects,
-                    env,
-                    text="✅ Слот открыт: "
-                    + bk.fmt(bk.Slot(slot["slot_id"], slot["title"], slot["starts_at_ms"], slot["duration_min"]))
-                    + f", {slot['duration_min']} мин",
-                    event_type="bookings@v1",
-                    event_payload=slot,
+                    body, effects, env, text=message, event_type="bookings@v1", event_payload=slot,
                 )
             hint = "ссылку на комнату (https://…)" if result["mode"]["mode"] == "on" else "адрес площадки"
-            send_tracked(
-                body,
-                effects,
-                env,
-                text=f"Дальше: /event_place {slot['title']} | {hint}",
-                event_type=None,
-                event_payload=None,
-            )
+            done(f"Дальше: /event_place {slot['title']} | {hint}")
             return sent
         if op == "followups":
             st = es.replay(facts("event_series@v1"))

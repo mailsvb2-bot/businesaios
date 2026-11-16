@@ -3,6 +3,12 @@
 from __future__ import annotations
 
 from application.business_flows.projection import flow_payloads, flow_rows
+from application.business_flows import admin as ad, catalog as cg, event_channels as ec, event_notifications as en, owner_panels as op_, promotions as pm, sales as sl
+from runtime.platform.config.env_flags import env_str
+from application.organization.registry import OrganizationRegistry
+from contracts.organization import OrganizationStatus
+from runtime.messaging_policy_alert_subscriptions.settings_key import SETTING_KEY
+from runtime.messaging_policy_alert_subscriptions.settings_value_builder import canonical_alert_subscriptions_value
 
 CATALOG_OPS = frozenset(
     {
@@ -34,7 +40,6 @@ COMMERCE_OPS = frozenset({"commerce", "commerce_check", "commerce_expand"})
 
 def _catalog(done, op, arg, facts_, now=None):
     """Directions / offerings / formats; archive keeps history (catalog.py)."""
-    from application.business_flows import catalog as cg
 
     c = cg.replay(facts_)
     if op == "offering_process":
@@ -97,7 +102,6 @@ def _ads(body, done, st, op, arg, facts_, sl_replay=None):
     """Governed ad proposals: drafts, exact-cap consent via approvals, publish gated by connector truth."""
     from application.business_flows import ad_proposals as ap
     from interfaces.ads.registry import CONNECTORS
-    from runtime.platform.config.env_flags import env_str
 
     drafts = ap.replay(facts_)
     if op == "ad_draft":
@@ -157,7 +161,6 @@ def _creatives_text(arg):
 
 def _retention(done, st, op, arg, now, *, tenant_id, event_store):
     """/retention cohorts and /reactivate -> sales lead; never sends (retention.py)."""
-    from application.business_flows import admin as ad
     from application.business_flows import bookings as bk
     from application.business_flows import retention as rt
 
@@ -178,7 +181,6 @@ def _retention(done, st, op, arg, now, *, tenant_id, event_store):
 
 def _slot_with_offering(bk, arg, now, *, tenant_id, event_store):
     """/add_slot in the business timezone; ``#N`` binds the slot to catalog offering N."""
-    from application.business_flows import catalog as cg
 
     c = cg.replay(flow_payloads(event_store, tenant_id=tenant_id, event_type="business_admin@v1"))
     change = bk.parse_slot(arg, now_ms=now, tz=c.timezone)
@@ -191,7 +193,6 @@ def _slot_with_offering(bk, arg, now, *, tenant_id, event_store):
 
 def _sales_inbound(done, body, env, *, tenant_id, event_store):
     """Customer free text -> one lead_inbound fact (sales_intelligence); reply is the policy's text."""
-    from application.business_flows import admin as ad
     from application.business_flows import sales_inbound as si
 
     reply = str(body.get("reply") or "Спасибо, сообщение получено.")[:1000]
@@ -219,8 +220,6 @@ FOLLOWUP_OPS = frozenset({"followup", "followup_plan", "followup_cancel", "optou
 def _followups(done, push, st, op, arg, now, *, tenant_id, event_store):
     """Per-lead follow-ups (sales_followups.py); delivery only via ``push`` to the lead's Telegram id."""
     from application.business_flows import automation_policy as ap
-    from application.business_flows import catalog as cg
-    from application.business_flows import sales as sl
     from application.business_flows import sales_followups as sf
 
     tz = cg.replay(flow_payloads(event_store, tenant_id=tenant_id, event_type="business_admin@v1")).timezone
@@ -258,9 +257,7 @@ PROMO_OPS = frozenset({"promote", "promotions", "promo_open", "promo_book"})
 def _destination(camp, *, tenant_id, event_store):
     """Acquisition destination for a campaign over the replayed bot + native channel connections."""
     from application.business_flows import bot_provisioning as botprov
-    from application.business_flows import promotions as pm
     from runtime.handler_impl.domains.business_flow_ops import _messenger_connections
-    from runtime.platform.config.env_flags import env_str
 
     bots = list(botprov.replay(flow_payloads(event_store, tenant_id=tenant_id, event_type="bot_provisioning@v1")).values())
     conns = _messenger_connections(flow_payloads(event_store, tenant_id=tenant_id, event_type="business_admin@v1"))
@@ -271,8 +268,6 @@ def _promotions(done, bk, op, arg, now, slots, facts, *, user_id, tenant_id, eve
     """Slot promotions (donor ``promotions``): owner creates/refreshes, customer opens/books with attribution."""
     import secrets
 
-    from application.business_flows import catalog as cg
-    from application.business_flows import promotions as pm
 
     camps = pm.replay(facts)
     c = cg.replay(flow_payloads(event_store, tenant_id=tenant_id, event_type="business_admin@v1"))
@@ -339,8 +334,6 @@ EVENT_OPS = frozenset({"add_sessions", "edit_slot", "event_schedule", "reschedul
 
 def _events(done, push, bk, op, arg, now, slots, *, tenant_id, event_store):
     """Owner event editing over sessions (donor events + event_notifications reschedule)."""
-    from application.business_flows import catalog as cg
-    from application.business_flows import event_notifications as en
 
     tz = cg.replay(flow_payloads(event_store, tenant_id=tenant_id, event_type="business_admin@v1")).timezone
     live = [s for s in bk.upcoming(slots, now_ms=now) if s.status != "closed"]
@@ -360,11 +353,10 @@ def _events(done, push, bk, op, arg, now, slots, *, tenant_id, event_store):
     slot = live[int(n) - 1] if n.isdigit() and 0 < int(n) <= len(live) else None
     if op == "event_schedule":
         from application.business_flows import event_schedule_edit as ese
-        from application.business_flows.owner_panels import series_of
 
         if slot is None:
             raise ValueError("slot_not_found: /event_schedule N")
-        series = series_of(slot, slots)
+        series = op_.series_of(slot, slots)
         if not rest.strip():
             return done(ese.edit_message(series, tz=tz) + f"\n\nОтвет: /event_schedule {n} и строки ниже", None)
         text, ch, moved = ese.edit_result(series, rest, now_ms=now, tz=tz)
@@ -391,7 +383,6 @@ CHANNEL_OPS = frozenset({"link_channels", "channel_verify"})
 
 def _event_channels(done, bk, op, arg, now, slots, facts, *, user_id, platform="telegram"):
     """Booking messenger verification (donor event_registration_channels)."""
-    from application.business_flows import event_channels as ec
 
     if op == "channel_verify":
         ch = ec.consume(
@@ -414,11 +405,7 @@ PANEL_OPS = frozenset({"announce", "event_promo", "attention", "ad_channels", "a
 
 
 def _owner_journey(bk, slots, *, tenant_id, event_store):
-    from application.business_flows import admin as ad
     from application.business_flows import event_series as es
-    from application.business_flows import owner_panels as op_
-    from application.business_flows import promotions as pr
-    from application.business_flows import sales as sl
 
     def facts(t):
         return flow_payloads(event_store, tenant_id=tenant_id, event_type=t)
@@ -430,7 +417,7 @@ def _owner_journey(bk, slots, *, tenant_id, event_store):
         slots=slots,
         attendance=es.replay(facts("event_series@v1")).attendance,
         payments=list(ad.replay(facts("business_admin@v1")).payments.values()),
-        camps=pr.replay(facts("bookings@v1")),
+        camps=pm.replay(facts("bookings@v1")),
         reactivated=sum(1 for x in leads if x.source.startswith("reactivation:") and x.customer_id in booked),
     )
 
@@ -444,8 +431,6 @@ def _panels(done, *a, **kw):
 
 
 def _panel(done, bk, op, arg, now, slots, facts, *, tenant_id, event_store):
-    from application.business_flows import owner_panels as op_
-    from application.business_flows import promotions as pr
     from runtime.ads.connector_wiring import ad_connections_enabled, yandex_direct_configured
 
     ready = ad_connections_enabled() and yandex_direct_configured()
@@ -464,7 +449,7 @@ def _panel(done, bk, op, arg, now, slots, facts, *, tenant_id, event_store):
     n, _, rest = arg.partition(" ")
     if not (n.isdigit() and 0 < int(n) <= len(live)):
         raise ValueError("укажите номер из /schedule")
-    slot, camps = live[int(n) - 1], pr.replay(facts)
+    slot, camps = live[int(n) - 1], pm.replay(facts)
     if op == "announce":
         return done(op_.announcement(slot, slots, camps, description=rest), None)
     return done(op_.promotion_text(op_.promotion_snapshot(slot, slots, camps)), None)
@@ -542,8 +527,6 @@ def channel_reminder_copies(effects, env, body, facts, bk, slot, minutes, label)
     native provider queue; returns the reminder text (channel vk/max -> _NativeProviderQueueAdapter; MAX paced by ProviderPacingCoordinator)."""
     import hashlib
 
-    from application.business_flows import event_channels as ec
-    from application.business_flows import event_notifications as en
 
     text = f"⏰ Напоминание ({label}): {bk.fmt(slot)}\n" + en.reminder_text(slot, minutes)
     tenant_id = str(body.get("tenant_id") or "")
@@ -613,7 +596,6 @@ def _trials(op, arg, facts):
 
 def _revenue_text(op, arg, now, event_store, tenant_id):
     """Owner read-only attribution/outcome screens (promotions attribution spine; no spend input)."""
-    from application.business_flows import promotions as pm
 
     adm = flow_rows(event_store, tenant_id=tenant_id, event_type="business_admin@v1")
     bkg = flow_rows(event_store, tenant_id=tenant_id, event_type="bookings@v1")
@@ -644,7 +626,6 @@ def _visual(body, effects, env, facts, arg, done):
     """/visual Название [| стиль [| формат]] or /visual Название | style x: YandexART via executor."""
     from application.business_flows import event_landing as el
     from application.business_flows import visual_creatives as vc
-    from runtime.platform.config.env_flags import env_str
 
     title, cmd, val = vc.parse_command(arg)
     st = vc.replay(facts("event_series@v1"))
@@ -682,12 +663,9 @@ def _visual(body, effects, env, facts, arg, done):
 
 def _sales_ai(send, body, effects, st, arg, *, decision, tenant_id, event_store):
     """/lead_ai N | текст клиента -> draft reply note + optional stage button (never sent to the customer)."""
-    from application.business_flows import admin as ad
     from application.business_flows import cockpit as cp
     from application.business_flows import cockpit_sales as cs
-    from application.business_flows import sales as sl
     from application.business_flows import sales_ai as sa
-    from runtime.platform.config.env_flags import env_str
 
     ref, _, text = (x.strip() for x in arg.partition("|"))
     lead = sl.pick(st, ref)
@@ -726,7 +704,6 @@ def _sales_ai(send, body, effects, st, arg, *, decision, tenant_id, event_store)
 
 def _commerce(done, body, st, op, arg, *, tenant_id, event_store):
     """Tariff usage/limits (ai_commerce port): usage from team roles + bookings customers; no private ledger."""
-    from application.business_flows import admin as ad
 
     usage = ad.commerce_usage(event_store, tenant_id, str(body.get("user_id") or ""), st.archived_customers)
     if op == "commerce_check":
@@ -748,3 +725,129 @@ def _commerce(done, body, st, op, arg, *, tenant_id, event_store):
             return done("📨 Запрос на расширение уже зарегистрирован; оператор свяжется в боте.")
         return done("📨 Запрос на расширение тарифа зарегистрирован (обращение billing).\n" + ch["title"], ch)
     return done(ad.commerce_text(overview))
+
+
+def _organization_settings(*, event_store, idempotency_path, body, tenant_id, op, arg, decision_id):
+    """Use the existing organization registry, not a second Telegram-owned store."""
+    from pathlib import Path
+    from reliability.idempotency_store import JsonlIdempotencyStore
+
+    if not idempotency_path or not str(body.get("business_id") or "").strip():
+        return "🏢 Выберите бизнес; реестр недоступен без подтверждённого контекста.", None
+    try:
+        registry = OrganizationRegistry(
+            event_store=event_store,
+            idempotency_store=JsonlIdempotencyStore(Path(idempotency_path)),
+        )
+        return organization_card(
+            registry=registry, tenant_id=tenant_id,
+            business_id=str(body["business_id"]),
+            user_id=str(body["user_id"]), operation=op,
+            arg=arg, decision_id=decision_id,
+        )
+    except (RuntimeError, ValueError, LookupError, OSError):
+        return ("🏢 Не удалось открыть или сохранить карточку. Проверьте формат команды и доступ к реестру.",
+                {"inline_keyboard": [[{"text": "⬅️ Настройки", "callback_data": "settings:menu"}]]})
+
+
+def organization_card(*, registry: OrganizationRegistry, tenant_id: str, business_id: str,
+                      user_id: str, operation: str, arg: str, decision_id: str) -> tuple[str, dict]:
+    if operation not in {"organization_show", "organization_create", "organization_name", "organization_type"}:
+        raise ValueError("unsupported_organization_operation")
+    active = [
+        item for item in registry.list_for_business(tenant_id=tenant_id, business_id=business_id)
+        if item.status is OrganizationStatus.ACTIVE
+    ]
+    preferred = next((item for item in active if item.organization_id == business_id), None)
+    if preferred is None:
+        if len(active) > 1:
+            raise ValueError("multiple_organizations_require_explicit_selection")
+        preferred = active[0] if active else None
+    if operation != "organization_show" and not arg:
+        raise ValueError("organization_value_required")
+    identity = {"tenant_id": tenant_id, "business_id": business_id}
+    audit = {"actor_id": user_id, "decision_id": decision_id}
+    if operation == "organization_create":
+        if preferred is not None:
+            raise ValueError("organization_already_exists")
+        name, divider, kind = arg.partition("|")
+        if not name.strip():
+            raise ValueError("organization_name_required")
+        preferred = registry.create(
+            **identity, organization_id=business_id, idempotency_key=decision_id,
+            name=name.strip(), organization_type=kind.strip() if divider else None,
+            event_metadata=audit,
+        )
+    elif operation in {"organization_name", "organization_type"}:
+        if preferred is None:
+            raise ValueError("organization_not_created")
+        field = "name" if operation == "organization_name" else "organization_type"
+        if getattr(preferred, field) != arg.strip():
+            preferred = registry.update(
+                **identity, organization_id=preferred.organization_id,
+                idempotency_key=decision_id, event_metadata=audit, **{field: arg.strip()},
+            )
+    if preferred is None:
+        text = ("🏢 Организация\n\nКарточка ещё не создана.\n"
+                "Создать: /org_create Название организации | тип")
+    else:
+        preferred = registry.get(**identity, organization_id=preferred.organization_id)
+        text = (f"🏢 Организация\n\nНазвание: {preferred.name or 'не указано'}\n"
+                f"Тип: {preferred.organization_type or 'не указан'}\n"
+                f"Статус: {preferred.status.value}\n"
+                f"ID: {preferred.organization_id}\n\n"
+                "Изменить название: /org_name Новое название\n"
+                "Изменить тип: /org_type Новый тип")
+    return text, {"inline_keyboard": [
+        [{"text": "🔄 Обновить карточку", "callback_data": "cp:settings:organization"}],
+        [{"text": "⬅️ Настройки", "callback_data": "settings:menu"}],
+    ]}
+
+
+def notification_preferences(*, settings_gateway, tenant_id: str, user_id: str, operation: str) -> tuple[str, dict]:
+    if operation not in {"notifications_show", "notifications_toggle", "notifications_level"}:
+        raise ValueError("unsupported notification operation")
+    if settings_gateway is None:
+        raise RuntimeError("canonical_notification_settings_gateway_missing")
+    levels = ("info", "warn", "critical")
+    key = SETTING_KEY
+
+    def own_entry(rows):
+        return next((item for item in rows if item["recipient_user_id"] == user_id
+                     and item["channel"] == "telegram" and not item["business_id"]), None)
+
+    if operation != "notifications_show":
+        for _ in range(3):
+            before = settings_gateway.get_value(tenant_id=tenant_id, key=key)
+            entries = canonical_alert_subscriptions_value(before, tenant_id=tenant_id)
+            current = own_entry(entries) or {
+                "recipient_user_id": user_id, "channel": "telegram", "business_id": "",
+                "enabled": False, "min_level": "warn", "code_filters": [], "user_scope": [],
+            }
+            updated = dict(current)
+            if operation == "notifications_toggle":
+                updated["enabled"] = not bool(current["enabled"])
+            else:
+                updated["min_level"] = levels[(levels.index(current["min_level"]) + 1) % len(levels)]
+            entries = [row for row in entries if not (row["recipient_user_id"] == user_id and row["channel"] == "telegram" and not row["business_id"])] + [updated]
+            if settings_gateway.compare_and_set_value(
+                tenant_id=tenant_id, key=key, expected=before, value=entries,
+            ):
+                break
+        else:
+            raise RuntimeError("notification_preferences_concurrent_change")
+    after = canonical_alert_subscriptions_value(
+        settings_gateway.get_value(tenant_id=tenant_id, key=key), tenant_id=tenant_id,
+    )
+    own = own_entry(after)
+    enabled, level = bool(own and own["enabled"]), own["min_level"] if own else "warn"
+    text = ("🔔 Системные уведомления\n\nПолучатель: ваш Telegram-аккаунт\n"
+            f"Оповещения: {'включены' if enabled else 'выключены'}\n"
+            f"Минимальная важность: {level}\n\n"
+            "Настройки относятся к служебным оповещениям, а не к рекламным рассылкам.")
+    return text, {"inline_keyboard": [
+        [{"text": "🔕 Отключить" if enabled else "🔔 Включить",
+          "callback_data": "cp:settings:notifications:toggle"}],
+        [{"text": "⚙️ Изменить важность", "callback_data": "cp:settings:notifications:level"}],
+        [{"text": "⬅️ Настройки", "callback_data": "settings:menu"}],
+    ]}
