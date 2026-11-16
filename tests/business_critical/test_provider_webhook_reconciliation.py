@@ -245,6 +245,8 @@ def test_max_http_200_application_rejection_fails_closed(monkeypatch) -> None:
 
     def fake_request(**kwargs):
         calls.append(kwargs)
+        if kwargs['url'].endswith('/me'):
+            return _response({'user_id': 77, 'is_bot': True})
         if kwargs['method'] == 'GET':
             return _response({'subscriptions': []})
         return _response({'success': False, 'message': 'rejected'})
