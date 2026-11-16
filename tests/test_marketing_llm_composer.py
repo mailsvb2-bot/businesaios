@@ -7,6 +7,10 @@ from core.marketing.llm_prompting import MarketingLLMInputs
 from core.telemetry.event_types import LLM_COMPLETED, LLM_REQUESTED
 from runtime.platform.event_store.memory_event_store import MemoryEventStore
 
+
+class _BudgetContractEventStore(MemoryEventStore):
+    supports_durable_llm_budget = True
+
 _VALID = "Хочешь продолжить? Есть «Сеанс» за 990₽. Нажми «Открыть»."
 _REJECTED = "Я DecisionCore и я решил…"
 
