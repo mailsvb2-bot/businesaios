@@ -49,14 +49,15 @@ class LLMEffectsMixin:
         except Exception:
             swallow(__name__, "runtime/_internal/_effects_impl.py")
             return {"ok": False, "error": "LLM_GENERATION_UNAVAILABLE"}
-        if not isinstance(out, dict) or not out.get("ok"):
+        if not isinstance(out, dict) or out.get("ok") is not True:
             error = str(out.get("error") or "") if isinstance(out, dict) else ""
             if error not in {"LLM_BUDGET_BLOCKED", "LLM_ACCOUNTING_UNAVAILABLE"}:
                 error = "LLM_GENERATION_UNAVAILABLE"
             return {"ok": False, "error": error}
-        text = str(out.get("text") or "").strip()
-        if not text:
+        generated_text = out.get("text")
+        if not isinstance(generated_text, str) or not generated_text.strip():
             return {"ok": False, "error": "LLM_GENERATION_UNAVAILABLE"}
+        text = generated_text.strip()
 
         return self.send_message(
             decision_id=str(decision_id), correlation_id=str(correlation_id), user_id=str(user_id),
