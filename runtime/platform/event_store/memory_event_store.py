@@ -10,14 +10,14 @@ class _MemoryStoredEvent(dict):
         super().__init__(event)
         self.append_seq = int(append_seq)
 class MemoryEventStore(list):
-    supports_durable_llm_budget = False
-
     """Append-only in-memory event store for dev/tests.
     Strict tenant contract:
     - caller must pass tenant_id explicitly
     - events are filtered by tenant_id
     - append sequences never move backwards after retention
     """
+    supports_durable_llm_budget = False
+
     def __init__(self, rows: Iterable[dict] = ()) -> None:
         super().__init__()
         self._next_append_seq = 0
