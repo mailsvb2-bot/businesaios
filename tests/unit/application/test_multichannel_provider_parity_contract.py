@@ -35,7 +35,7 @@ SAMPLES = {
     'viber': {'sender': {'id': 'v1'}, 'message': {'text': 'viber'}, 'message_token': 'v-mid'},
     'line': {'events': [{'source': {'userId': 'l1'}, 'message': {'text': 'line', 'id': 'l-mid'}, 'timestamp': 1}]},
     'wechat': {'FromUserName': 'w1', 'ToUserName': 'biz', 'Content': 'wechat', 'MsgId': 'w-mid'},
-    'kakaotalk': {'userRequest': {'user': {'id': 'k1'}, 'utterance': 'kakao', 'block': {'id': 'k-mid'}}},
+    'kakaotalk': {'userRequest': {'user': {'id': 'k1', 'properties': {'plusfriendUserKey': 'kakao-thread'}}, 'utterance': 'kakao', 'block': {'id': 'k-mid'}}},
     'sms': {'from': '+100', 'to': '+200', 'body': 'sms', 'message_id': 'sms-mid'},
     'email': {'from': 'a@example.com', 'to': 'b@example.com', 'text': 'email', 'message_id': 'mail-mid'},
     'web_chat': {'user_id': 'web1', 'text': 'web', 'message_id': 'web-mid'},

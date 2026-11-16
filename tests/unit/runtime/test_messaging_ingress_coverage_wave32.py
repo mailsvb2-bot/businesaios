@@ -106,7 +106,7 @@ def test_every_concrete_provider_adapter_uses_the_provider_sender_contract() -> 
             "message": {"text": "hello", "id": "id-1"},
         }]}, "thread"),
         "wechat": ({"FromUserName": "user", "ToUserName": "thread",
-                    "Content": "hello", "MsgId": "id-1"}, "thread"),
+                    "Content": "hello", "MsgId": "id-1"}, "user"),
         "kakaotalk": ({"userRequest": {
             "user": {"id": "user", "properties": {"plusfriendUserKey": "thread"}},
             "utterance": "hello", "block": {"id": "id-1"},

@@ -16,7 +16,7 @@ from runtime.business_autonomy.provider_webhook_inbound_processor import Provide
 from runtime.business_autonomy.provider_webhook_inbound_result_summary import summarize_provider_webhook_inbound_result
 from runtime.business_autonomy.provider_webhook_replay_guard import ProviderWebhookReplayGuard
 from runtime.business_autonomy.provider_webhook_route_registry import ProviderWebhookRouteRegistry
-from runtime.business_autonomy.provider_webhook_runtime import RAW_SIGNATURE_FIRST_PROVIDER_KEYS, ProviderWebhookRuntime
+from runtime.business_autonomy.provider_webhook_runtime import ProviderWebhookRuntime
 from runtime.safety import verified_inbound_reply_scope
 
 CANON_PROVIDER_INBOUND_WEBHOOK_SERVICE = True
@@ -55,8 +55,14 @@ class ProviderInboundWebhookService:
         requested_event_key = str(event_key or '').strip()
         route_registry = ProviderWebhookRouteRegistry()
         contract = self.webhook_runtime.describe(provider)
-        signature_first = provider.provider_key in RAW_SIGNATURE_FIRST_PROVIDER_KEYS
-        first_route = {'event_key': requested_event_key if requested_event_key and requested_event_key != 'payload-digest-fallback' else f'{provider.provider_key}:{raw_digest[:24]}', 'topic': str(topic or '').strip(), 'source_ref': '', 'resource_id': '', 'payload_digest': raw_digest, 'messaging_ingress': {}} if signature_first else route_registry.extract(provider, headers, body)
+        # Untrusted webhook data must not become a canonical route before its
+        # transport signature and configured recipient have been verified.
+        first_route = {
+            'event_key': requested_event_key if requested_event_key and requested_event_key != 'payload-digest-fallback'
+                         else f'{provider.provider_key}:{raw_digest[:24]}',
+            'topic': str(topic or '').strip(), 'source_ref': '', 'resource_id': '',
+            'payload_digest': raw_digest, 'messaging_ingress': {},
+        }
         route_event_key = str(first_route.get('event_key') or f'{provider.provider_key}:{raw_digest[:24]}')
         effective_event_key = route_event_key if provider.provider_key in {'line_messaging', 'viber_messaging'} else (requested_event_key if requested_event_key and requested_event_key != 'payload-digest-fallback' else route_event_key)
         effective_topic = str(topic or '').strip() or str(first_route.get('topic') or '')
@@ -101,9 +107,13 @@ class ProviderInboundWebhookService:
                 },
             )
         first_route = routes[0]
-        if signature_first:
-            effective_event_key = str(first_route.get('event_key') or f'{provider.provider_key}:{raw_digest[:24]}')
-            effective_topic = str(topic or '').strip() or str(first_route.get('topic') or '')
+        route_event_key = str(first_route.get('event_key') or f'{provider.provider_key}:{raw_digest[:24]}')
+        effective_event_key = (
+            route_event_key if provider.provider_key in {'line_messaging', 'viber_messaging'}
+            else requested_event_key if requested_event_key and requested_event_key != 'payload-digest-fallback'
+            else route_event_key
+        )
+        effective_topic = str(topic or '').strip() or str(first_route.get('topic') or '')
         if len(routes) == 1:
             return self._ingest_verified_route(provider=provider, tenant_id=tenant_id, business_id=business_id, route=first_route, event_key=effective_event_key, topic=effective_topic, owner_id=owner_id)
         results = tuple(self._ingest_verified_route(provider=provider, tenant_id=tenant_id, business_id=business_id, route=route, event_key=str(route.get('event_key') or ''), topic=str(route.get('topic') or ''), owner_id=owner_id) for route in routes)
