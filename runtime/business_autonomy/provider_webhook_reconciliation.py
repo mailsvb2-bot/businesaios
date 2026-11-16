@@ -396,10 +396,17 @@ class ProviderWebhookReconciler:
             for item in subscriptions
         ):
             raise RuntimeError('max_subscription_verification_failed')
+        bot = self._json_request(method='GET', url=f"{self._provider_base_url(provider)}/me", headers=headers)
+        bot_id = str(bot.get('user_id') or '').strip() if isinstance(bot, Mapping) else ''
+        if not isinstance(bot, Mapping) or bot.get('is_bot') is not True or not bot_id.isdecimal() or int(bot_id) <= 0:
+            raise RuntimeError('max_bot_identity_unavailable')
+        self._store_secret(provider, tenant_id, business_id, 'bot_id', bot_id)
         return {
             'provider_state_verified': True,
             'event_types': event_types,
             'subscription_visible': True,
+            'bot_id': bot_id,
+            'derived_secret_names': ('bot_id',),
         }
 
 
