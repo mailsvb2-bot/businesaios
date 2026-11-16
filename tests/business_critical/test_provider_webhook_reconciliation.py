@@ -73,6 +73,16 @@ def test_provider_webhook_never_promotes_untrusted_session_id_to_sender() -> Non
     assert web_chat_route['messaging_ingress']['channel'] == 'web_chat'
     assert web_chat_route['messaging_ingress']['user_id'] == 'trusted-web-session'
     assert web_chat_route['external_user_ref'] == 'trusted-web-session'
+    _put(vault, website, 'biz-site', 'webhook_secret', 'site-secret')
+    _put(vault, website, 'biz-site', 'site_domain', 'chat.example.com')
+    signed_body = json.dumps({'site_domain': 'https://chat.example.com', 'session_id': 'trusted-web-session', 'message': 'hello'}).encode()
+    signature = base64.b64encode(hmac.new(b'site-secret', signed_body, hashlib.sha256).digest()).decode('ascii')
+    headers = {'X-Signature': signature}
+    assert runtime.verify(provider=website, tenant_id='tenant-a', business_id='biz-site', headers=headers, body=signed_body) is True
+    foreign_body = json.dumps({'site_domain': 'https://attacker.example', 'session_id': 'foreign-session', 'message': 'hello'}).encode()
+    foreign_signature = base64.b64encode(hmac.new(b'site-secret', foreign_body, hashlib.sha256).digest()).decode('ascii')
+    assert runtime.verify(provider=website, tenant_id='tenant-a', business_id='biz-site', headers={'X-Signature': foreign_signature}, body=foreign_body) is False
+    assert runtime.verify(provider=website, tenant_id='tenant-b', business_id='biz-site', headers=headers, body=signed_body) is False
 
 
 def test_telegram_reconcile_generates_separate_webhook_secret(monkeypatch) -> None:
