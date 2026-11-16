@@ -224,6 +224,17 @@ def test_budget_caps_derive_period_limits_from_custom_daily_caps():
     )
     assert (explicit.tenant_tokens_per_week, explicit.user_tokens_per_week) == (500, 120)
 
+def test_policy_period_caps_remain_authoritative_when_daily_caps_are_overridden():
+    policy = LLMBudgetPolicy(
+        tenant_tokens_per_day=100, user_tokens_per_day=20,
+        tenant_tokens_per_week=500, user_tokens_per_week=120,
+        tenant_tokens_per_month=2000, user_tokens_per_month=500,
+    )
+    caps = BudgetCaps(policy=policy, tenant_tokens_per_day=50, user_tokens_per_day=10)
+    assert (caps.tenant_tokens_per_week, caps.user_tokens_per_week) == (500, 120)
+    assert (caps.tenant_tokens_per_month, caps.user_tokens_per_month) == (2000, 500)
+
+
 
 class _ConcurrentPeriodStore(_PeriodStore):
     def __init__(self, barrier):
