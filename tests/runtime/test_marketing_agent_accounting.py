@@ -23,7 +23,7 @@ class Provider:
 
     def generate_sync(self, request):
         self.calls += 1
-        return LLMResponse(content="safe text", usage=LLMUsage(prompt_tokens=13, completion_tokens=7, total_tokens=20))
+        return LLMResponse(content="safe text", usage=LLMUsage(prompt_tokens=13, completion_tokens=7, total_tokens=20), raw={"model": "provider-model-v2"})
 
 
 def request(**metadata):
@@ -40,6 +40,10 @@ def test_agent_gateway_records_actual_usage_once_and_isolates_tenants():
         gateway.generate_sync(request())
     assert client.calls == 1
     assert store.count_events(tenant_id="tenant", event_type=LLM_COMPLETED) == 1
+    completed = next(store.iter_events(tenant_id="tenant", event_type=LLM_COMPLETED))
+    assert completed["payload"]["requested_model"] == "mock"
+    assert completed["payload"]["provider_model"] == "provider-model-v2"
+    assert completed["payload"]["provider_model_reported"] is True
     assert store.sum_event_payload_int(tenant_id="tenant", event_type=LLM_COMPLETED,
                                        field="total_tokens", user_id="user") == 20
     assert gateway.generate_sync(request(tenant_id="other")).content == "safe text"
