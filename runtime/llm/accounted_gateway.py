@@ -51,6 +51,14 @@ class AccountedSyncGateway:
         return value.strip() if isinstance(value, str) and value.strip() else ""
 
     @staticmethod
+    def _provider_request_id(response: Any) -> str:
+        raw = getattr(response, "raw", None)
+        if not isinstance(raw, dict):
+            return ""
+        value = raw.get("id") or raw.get("request_id") or raw.get("requestId")
+        return value if isinstance(value, str) and re.fullmatch(r"[A-Za-z0-9_.:-]{1,128}", value) else ""
+
+    @staticmethod
     def _provider_call(client: Any, request: Any) -> Any:
         generate_sync = getattr(client, "generate_sync", None)
         if callable(generate_sync):
@@ -127,6 +135,7 @@ class AccountedSyncGateway:
         started = time.monotonic()
         response = self._provider_call(self._client, request)
         provider_model = self._provider_model(response)
+        provider_request_id = self._provider_request_id(response)
         usage = validated_llm_usage(getattr(response, "usage", None))
         if usage is None:
             raise RuntimeError("LLM_ACCOUNTING_UNAVAILABLE")
@@ -153,6 +162,8 @@ class AccountedSyncGateway:
                     "requested_model": model,
                     "provider_model": provider_model,
                     "provider_model_reported": bool(provider_model),
+                    "provider_request_id": provider_request_id,
+                    "provider_request_id_reported": bool(provider_request_id),
                     "prompt_tokens": prompt,
                     "completion_tokens": completion,
                     "total_tokens": total,
