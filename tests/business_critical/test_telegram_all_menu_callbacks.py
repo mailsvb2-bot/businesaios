@@ -356,11 +356,89 @@ def test_readonly_accounting_never_exempts_writes_or_financial_markers(action, o
     assert result.reason == "action_budget_exceeded"
 
 
-def test_read_projection_audit_reason_is_distinct_from_text_delivery(monkeypatch):
+@pytest.mark.parametrize("callback", [
+    "cp:section:customers",
+    "cp:section:sales",
+    "cpm:growth",
+    "cpm:growth-an:7",
+    "cpm:money",
+    "cp:section:ad-channels",
+])
+def test_owner_read_callbacks_survive_schema_gate_and_single_accounting_pass(
+    monkeypatch, callback,
+):
     from types import SimpleNamespace
+
+    from application.decision_runtime.flow import build_payload
+    from core.actions.catalog import build_schema_registry
+    from core.safety.controls.action_budget.guard import ActionBudgetGuard
+    from core.safety.controls.action_budget.ledger import InMemoryActionBudgetLedger
+    from core.safety.controls.action_budget.models import ActionBudget
+    from core.safety.controls.action_context import SafetyActionContext
+    from core.safety.controls.control_result import ControlStatus
     import runtime.safety_controls as safety
+
+    monkeypatch.setattr(
+        "runtime.entrypoints.telegram_longpoll._configured_telegram_tenant_id",
+        lambda: "tenant-live",
+    )
+    state = _callback_state(callback)
+    state = replace(
+        state,
+        meta={**state.meta, "goal_id": "owner-goal", "autonomy_tier": "supervised"},
+    )
+    proposal = UnifiedTelegramPolicyV3(admin_user_ids=("4001",)).propose(state)
+    _, payload = build_payload(
+        state=state,
+        out=proposal,
+        pinned_world_model_meta={"source": "telegram-callback-regression"},
+        tenant_id="tenant-live",
+        product_id=None,
+        domain=None,
+        product_version=None,
+        actor_id="4001",
+    )
+
+    schemas = build_schema_registry()
+    schemas.validate(proposal.action, payload)
+    with pytest.raises(ValueError, match="UNKNOWN_PAYLOAD_KEYS"):
+        schemas.validate(proposal.action, {**payload, "untrusted_extra": "reject"})
+    assert payload["goal_id"] == "owner-goal"
+    assert payload["autonomy_tier"] == "supervised"
+    assert payload["meta"]["canonical_goal_id"] == "owner-goal"
+    assert payload["meta"]["world_model_meta"]["source"] == "telegram-callback-regression"
+
+    # A full lifetime ledger must not block this exact read-only callback,
+    # and the post-gate accounting hook must not charge it a second time.
+    ledger = InMemoryActionBudgetLedger()
+    ledger.record("tenant-live", estimated_cost=5000)
+    before = ledger.snapshot("tenant-live")
+    guard = ActionBudgetGuard(ledger, ActionBudget(max_cost=5000, max_actions=1))
+    decision = guard.evaluate(
+        SafetyActionContext(proposal.action, "tenant-live", "4001", payload)
+    )
+    assert decision.status == ControlStatus.ALLOW, (
+        f"{callback}: action={proposal.action}, keys={sorted(payload)}, "
+        f"reason={decision.reason}"
+    )
+    assert decision.reason == "read_projection_budget_not_applicable"
+
     events = []
-    monkeypatch.setattr(safety, "build_safety_control_runtime", lambda: SimpleNamespace(profile=SimpleNamespace(action_catalog=SimpleNamespace(resolve=lambda action: SimpleNamespace(default_estimated_cost=0)))))
-    monkeypatch.setattr(safety, "_record_safety_event", lambda **kwargs: events.append(kwargs))
-    safety.record_allowed_action(action="business_ops_summary@v1", payload={"tenant_id": "t", "user_id": "u", "op": "cockpit", "arg": "cpm:menu"})
-    assert events[0]["reason"] == "read_projection_not_charged"
+    profile = SimpleNamespace(
+        action_catalog=SimpleNamespace(
+            resolve=lambda name: SimpleNamespace(default_estimated_cost=0)
+        ),
+        action_budget_ledger=ledger,
+    )
+    monkeypatch.setattr(
+        safety, "build_safety_control_runtime",
+        lambda: SimpleNamespace(profile=profile),
+    )
+    monkeypatch.setattr(
+        safety, "_record_safety_event",
+        lambda **kwargs: events.append(kwargs),
+    )
+    safety.record_allowed_action(action=proposal.action, payload=payload)
+
+    assert ledger.snapshot("tenant-live") == before
+    assert events[-1]["reason"] == "read_projection_not_charged"
