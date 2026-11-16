@@ -115,10 +115,9 @@ def test_boot_marketing_agent_reuses_the_composer_accounted_gateway(monkeypatch)
     store, client = MemoryEventStore(), Provider()
     gateway = AccountedSyncGateway(client, event_store=store, provider="openai_compat")
     composer = SimpleNamespace(accounted_gateway=gateway)
-    monkeypatch.setattr(builder, "build_marketing_llm_composer", lambda **kw: composer)
     monkeypatch.setattr(builder, "_provider_settings",
                         lambda settings: ("openai_compat", "", "", "mock", None))
-    agent = builder.build_marketing_llm_agent(settings=SimpleNamespace(), event_store=store, logger=None)
+    agent = builder.build_marketing_llm_agent(settings=SimpleNamespace(), composer=composer)
     assert agent._gateway is gateway
     ctx = LLMTaskContext(tenant_id="tenant", user_id="user", correlation_key="creative-1")
     assert agent.run_task(TaskType.ADS_CREATIVE_GENERATE, ctx).text == "safe text"
@@ -323,3 +322,21 @@ def test_anthropic_provider_usage_is_measured_and_cache_fail_closed(case):
     with pytest.raises(RuntimeError, match="LLM_BUDGET_BLOCKED"):
         gateway.generate_sync(request())
     assert len(calls) == 1
+
+
+def test_marketing_llm_components_build_one_composer_and_reuse_it(monkeypatch):
+    from bootstrap import system_builder_steps
+
+    composer, agent, calls = SimpleNamespace(accounted_gateway=object()), object(), []
+    monkeypatch.setattr(builder, "build_marketing_llm_composer",
+                        lambda **kw: calls.append(("composer", kw)) or composer)
+    monkeypatch.setattr(builder, "build_marketing_llm_agent",
+                        lambda **kw: calls.append(("agent", kw)) or agent)
+    result = system_builder_steps.build_marketing_llm_components(
+        settings=SimpleNamespace(), event_store=object(),
+        event_log=SimpleNamespace(logger=None),
+        logging_mod=SimpleNamespace(getLogger=lambda _name: None),
+    )
+    assert [name for name, _ in calls] == ["composer", "agent"]
+    assert calls[1][1]["composer"] is composer
+    assert result == {"marketing_llm_composer": composer, "marketing_llm": agent}
