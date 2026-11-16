@@ -55,11 +55,15 @@ def test_agent_gateway_fails_closed_without_scoped_identity(missing):
     assert client.calls == 0
 
 
-@pytest.mark.parametrize("failed_event, expected_calls", [(LLM_REQUESTED, 0), (LLM_COMPLETED, 1)])
-def test_agent_gateway_journal_failure_blocks_output_and_replay(failed_event, expected_calls):
+@pytest.mark.parametrize("failed_event", [LLM_REQUESTED, LLM_COMPLETED])
+def test_agent_gateway_journal_failure_blocks_output_and_replay(failed_event):
     class BrokenStore(MemoryEventStore):
+        def __init__(self):
+            super().__init__()
+            self.fail = True
+
         def append_event(self, event):
-            if event.get("event_type") == failed_event:
+            if self.fail and event.get("event_type") == failed_event:
                 raise OSError("journal unavailable")
             return super().append_event(event)
 
@@ -67,10 +71,16 @@ def test_agent_gateway_journal_failure_blocks_output_and_replay(failed_event, ex
     gateway = AccountedSyncGateway(client, event_store=store, provider="openai_compat")
     with pytest.raises(RuntimeError, match="LLM_ACCOUNTING_UNAVAILABLE"):
         gateway.generate_sync(request())
-    assert client.calls == expected_calls
-    with pytest.raises(RuntimeError, match="LLM_BUDGET_BLOCKED"):
-        gateway.generate_sync(request())
-    assert client.calls == expected_calls
+    assert client.calls == (0 if failed_event == LLM_REQUESTED else 1)
+    if failed_event == LLM_REQUESTED:
+        store.fail = False
+        assert gateway.generate_sync(request()).content == "safe text"
+        assert client.calls == 1
+        assert store.count_events(tenant_id="tenant", event_type=LLM_COMPLETED) == 1
+    else:
+        with pytest.raises(RuntimeError, match="LLM_BUDGET_BLOCKED"):
+            gateway.generate_sync(request())
+        assert client.calls == 1
 
 
 @pytest.mark.parametrize("usage", [None, LLMUsage(),
@@ -160,8 +170,10 @@ def test_sealed_effect_journal_failure_is_fail_closed(monkeypatch, failed_event,
     assert _invoke(store)["ok"] is False
     assert client.calls == expected_calls
     if failed_event == LLM_REQUESTED:
-        day = EventStoreDailyTokenBudget(event_store=store, caps=BudgetCaps())._day()
-        assert store.get_setting(tenant_id="tenant", key=f"llm:pending:v1:{day}") == {"pending": {}}
+        state = store.get_setting(tenant_id="tenant", key="llm:pending:v2")
+        assert isinstance(state, dict)
+        assert type(state.get("revision")) is int and state["revision"] >= 2
+        assert state.get("pending") == {}
     else:
         assert _invoke(store)["ok"] is False
         assert client.calls == 1
