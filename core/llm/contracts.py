@@ -29,6 +29,8 @@ class LLMRequest:
 
 @dataclass(frozen=True)
 class LLMUsage:
+    """Normalized provider usage; detail counts are subsets of prompt/completion."""
+
     prompt_tokens: int = 0
     completion_tokens: int = 0
     total_tokens: int = 0
