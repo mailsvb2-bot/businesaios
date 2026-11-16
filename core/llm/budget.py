@@ -3,7 +3,7 @@ from __future__ import annotations
 import time
 from datetime import date, datetime, timezone
 from dataclasses import dataclass, field
-from typing import Any, Protocol
+from typing import Any
 
 from config.llm_budget_policy import DEFAULT_LLM_BUDGET_POLICY, LLMBudgetPolicy
 from core.telemetry.event_types import LLM_COMPLETED
@@ -15,35 +15,6 @@ class BudgetCaps:
     policy: LLMBudgetPolicy = field(default_factory=lambda: DEFAULT_LLM_BUDGET_POLICY)
     tenant_tokens_per_day: int = field(default_factory=lambda: DEFAULT_LLM_BUDGET_POLICY.tenant_tokens_per_day)
     user_tokens_per_day: int = field(default_factory=lambda: DEFAULT_LLM_BUDGET_POLICY.user_tokens_per_day)
-
-
-class DailyTokenBudget:
-    """Single-process fallback. EventStoreDailyTokenBudget is authoritative across workers."""
-
-    def __init__(self, caps: BudgetCaps) -> None:
-        self._caps = caps
-        self._tenant: dict[tuple[str, str], int] = {}
-        self._user: dict[tuple[str, str, str], int] = {}
-
-    def _day(self) -> str:
-        return day_key_utc()
-
-    def can_spend(self, *, tenant_id: str, user_id: str, tokens: int) -> bool:
-        day = self._day()
-        tenant = self._tenant.get((day, str(tenant_id)), 0)
-        user = self._user.get((day, str(tenant_id), str(user_id)), 0)
-        return tenant + tokens <= self._caps.tenant_tokens_per_day and user + tokens <= self._caps.user_tokens_per_day
-
-    def spend(self, *, tenant_id: str, user_id: str, tokens: int) -> None:
-        day = self._day()
-        tkey, ukey = (day, str(tenant_id)), (day, str(tenant_id), str(user_id))
-        self._tenant[tkey] = self._tenant.get(tkey, 0) + int(tokens)
-        self._user[ukey] = self._user.get(ukey, 0) + int(tokens)
-
-
-class TokenBudget(Protocol):
-    def can_spend(self, *, tenant_id: str, user_id: str, tokens: int) -> bool: ...
-    def spend(self, *, tenant_id: str, user_id: str, tokens: int) -> None: ...
 
 
 def _utc_day_bounds_ms(ts_ms: int | None = None) -> tuple[int, int]:
@@ -65,13 +36,15 @@ def validated_llm_usage(usage: Any) -> tuple[int, int, int] | None:
 
 
 def has_durable_budget_store(event_store: Any) -> bool:
-    if getattr(event_store, "supports_durable_llm_budget", False) is not True:
-        return False
-    return all(callable(getattr(event_store, name, None)) for name in ("sum_event_payload_int", "iter_events", "get_setting", "compare_and_set_setting", "append_event"))
+    return getattr(event_store, "supports_durable_llm_budget", False) is True and all(
+        callable(getattr(event_store, name, None))
+        for name in ("sum_event_payload_int", "iter_events", "get_setting", "compare_and_set_setting", "append_event")
+    )
 
 
 class EventStoreDailyTokenBudget:
     """Durable daily spend plus atomic pending claims on the canonical event store."""
+
     def __init__(self, *, event_store: Any, caps: BudgetCaps, cache_ttl_s: float = DEFAULT_LLM_BUDGET_POLICY.cache_ttl_seconds) -> None:
         self._es, self._caps = event_store, caps
 
@@ -121,7 +94,7 @@ class EventStoreDailyTokenBudget:
                 payload = event.get("payload") or {}
                 tokens = payload.get("total_tokens")
                 if type(tokens) is not int or tokens <= 0:
-                    return False  # Never reclaim reservations on ambiguous provider spend.
+                    return False
                 completed.add((str(event.get("user_id") or ""), str(payload.get("request_id") or "")))
         except (TypeError, ValueError, AttributeError):
             return False
@@ -130,12 +103,10 @@ class EventStoreDailyTokenBudget:
 
     def reserve(self, *, tenant_id: str, user_id: str, tokens: int, request_id: str) -> str | None:
         """Atomic headroom reservation; cross-day claim prevents provider replay."""
-        get = getattr(self._es, "get_setting", None)
-        cas = getattr(self._es, "compare_and_set_setting", None)
+        get, cas = getattr(self._es, "get_setting", None), getattr(self._es, "compare_and_set_setting", None)
         if not callable(get) or not callable(cas) or not request_id or tokens <= 0:
             return None
-        day = self._day()
-        key = f"llm:pending:v1:{day}"
+        day, key = self._day(), f"llm:pending:v1:{self._day()}"
         for _ in range(16):
             current = get(tenant_id=str(tenant_id), key=key)
             if current is not None and not isinstance(current, dict):
@@ -151,7 +122,7 @@ class EventStoreDailyTokenBudget:
                 return None
             if self._day() != day:
                 return None
-            if (spent_tenant + reserved_tenant + tokens > self._caps.tenant_tokens_per_day or spent_user + reserved_user + tokens > self._caps.user_tokens_per_day):
+            if spent_tenant + reserved_tenant + tokens > self._caps.tenant_tokens_per_day or spent_user + reserved_user + tokens > self._caps.user_tokens_per_day:
                 if self._reconcile_completed(tenant_id=tenant_id, day=day, current=current):
                     continue
                 return None
