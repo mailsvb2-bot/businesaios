@@ -135,10 +135,38 @@ def test_durable_budget_contract_does_not_require_unused_fast_aggregate():
     from core.llm.budget import has_durable_budget_store
 
     store = Mock(
-        sum_event_payload_int=None,
+        supports_durable_llm_budget=True,
         iter_events=Mock(),
         get_setting=Mock(),
         compare_and_set_setting=Mock(),
         append_event=Mock(),
     )
     assert has_durable_budget_store(store)
+    assert not has_durable_budget_store(Mock(
+        iter_events=Mock(),
+        get_setting=Mock(),
+        compare_and_set_setting=Mock(),
+        append_event=Mock(),
+    ))
+
+
+def test_only_open_schema_verified_persistent_event_stores_support_llm_budgets(tmp_path):
+    from core.llm.budget import has_durable_budget_store
+    from runtime.platform.event_store.memory_event_store import MemoryEventStore
+    from runtime.platform.event_store.postgres_event_store import PostgresEventStore
+    from runtime.platform.event_store.sqlite_event_store import SqliteEventStore
+
+    postgres = PostgresEventStore("postgresql://unused", enabled=True)
+    sqlite = SqliteEventStore(str(tmp_path / "events.sqlite3"))
+    assert not has_durable_budget_store(postgres)
+    assert not has_durable_budget_store(sqlite)
+    assert not has_durable_budget_store(MemoryEventStore())
+
+    # Model the opened/verified lifecycle without opening external resources.
+    postgres._port = object()
+    postgres._schema_verified = True
+    sqlite._db = object()
+    sqlite._schema_verified = True
+    assert has_durable_budget_store(postgres)
+    assert has_durable_budget_store(sqlite)
+    assert not has_durable_budget_store(MemoryEventStore())
