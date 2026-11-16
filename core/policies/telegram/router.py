@@ -22,8 +22,8 @@ from core.policies.telegram.routes.marketing_routes import handle_marketing_rout
 from core.policies.telegram.routes.settings_routes import handle_settings_routes
 from core.users.roles import UserRoleInfo
 from core.ux.callbacks import CB_MENU_MAIN
-from core.ux.unified_messenger_menu import menu_text
 from core.ux.telegram_keyboards import kb_back_main, kb_main
+from core.ux.unified_messenger_menu import BUSINESS_ONBOARDING_URL, menu_text
 
 
 def handle(ctx: TelegramCtx, *, default_price_rub: int, bot_username: str = "", gift_ttl_sec: int = 7 * 24 * 3600) -> ProposedAction:
@@ -50,10 +50,28 @@ def handle(ctx: TelegramCtx, *, default_price_rub: int, bot_username: str = "", 
         if out is not None:
             return out
 
+    if ctx.callback_data == "cp:section:connect":
+        # The authenticated web workspace remains the sole owner of business
+        # registration; this cross-messenger callback only navigates.
+        return pm(
+            text=(
+                "➕ Подключить мой бизнес\n\n"
+                "Откройте рабочее пространство для авторизации и подключения: "
+                f"{BUSINESS_ONBOARDING_URL}\n\n"
+                "После входа выберите или создайте организацию и подключите каналы."
+            ),
+            reply_markup={
+                "inline_keyboard": [
+                    [{"text": "🌐 Открыть рабочее пространство", "url": BUSINESS_ONBOARDING_URL}],
+                    [{"text": "⬅️ Главное меню", "callback_data": CB_MENU_MAIN}],
+                ],
+            },
+        )
     if ctx.callback_data in {"cp:section:customers", "cp:section:sales", "cp:section:ad-channels"}:
         if not ctx.is_admin:
             return pm(text="Доступ к данным бизнеса запрещён.", reply_markup=kb_back_main())
         from dataclasses import replace
+
         from core.policies.telegram.routes.business_flow_routes import handle_business_flow_routes
         target = {"cp:section:customers": "cpm:customers",
                   "cp:section:sales": "/leads", "cp:section:ad-channels": "/ad_channels"}[ctx.callback_data]
