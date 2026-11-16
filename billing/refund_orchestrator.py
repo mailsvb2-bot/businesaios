@@ -6,6 +6,7 @@ from datetime import datetime
 from typing import Any
 from uuid import UUID, uuid4, uuid5
 
+from billing.commercial_cycle_contract import require_commercial_int
 from billing.invoice_lifecycle import CommercialInvoiceEnvelope, InvoiceLifecycleService
 from billing.ledger_event import LedgerEntry, LedgerPosting, utc_now
 from billing.ledger_store import LedgerStoreContract
@@ -45,8 +46,7 @@ class RefundRequest:
             raise ValueError('invoice_id is required')
         if not str(self.user_id or '').strip():
             raise ValueError('user_id is required')
-        if int(self.amount_minor) <= 0:
-            raise ValueError('amount_minor must be > 0')
+        require_commercial_int('amount_minor', self.amount_minor, minimum=1)
         if not str(self.currency or '').strip():
             raise ValueError('currency is required')
         if not str(self.reason or '').strip():
@@ -232,7 +232,7 @@ class RefundOrchestrator:
             tenant_id=invoice.tenant_id,
             invoice_id=invoice.invoice_id,
             user_id=str(user_id),
-            amount_minor=int(amount_minor),
+            amount_minor=amount_minor,
             currency=invoice.currency,
             reason=str(reason),
             provider_name=self._provider.provider_name(),
