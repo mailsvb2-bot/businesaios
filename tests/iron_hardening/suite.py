@@ -388,7 +388,7 @@ def test_iron_36_canonical_reconciliation_checks_tenant_before_reading_events(mo
 
     monkeypatch.setattr(reconciliation, "assert_called_from_executor", lambda: None)
 
-    def reject_foreign_tenant(*, event_log, tenant_id, operation):
+    def reject_foreign_tenant(event_log, *, tenant_id, operation):
         assert tenant_id == "tenant-foreign"
         assert operation == "reconcile_payments"
         raise RuntimeError("payment tenant scope rejected")
