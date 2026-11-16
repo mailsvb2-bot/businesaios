@@ -5,11 +5,11 @@ from types import SimpleNamespace
 
 import pytest
 
+from core.llm.providers.anthropic import _extract_usage as extract_anthropic_usage
+from core.llm.providers.openai_provider import _extract_usage as extract_openai_usage
 from runtime._internal import llm_transport
 from runtime.effects import llm_effects
 from runtime.llm import build_runtime_llm_client
-from core.llm.providers.anthropic import _extract_usage as extract_anthropic_usage
-from core.llm.providers.openai_provider import _extract_usage as extract_openai_usage
 
 
 def test_effect_facade_reaches_sealed_transport(monkeypatch):
@@ -64,7 +64,6 @@ def test_yandex_model_uri_and_metadata_not_sent(monkeypatch):
     assert "metadata" not in captured[0]
 
 
-
 def test_anthropic_cache_usage_is_normalized_without_dropping_tokens():
     usage = extract_anthropic_usage({
         "usage": {
@@ -75,7 +74,11 @@ def test_anthropic_cache_usage_is_normalized_without_dropping_tokens():
         }
     })
     assert usage is not None
-    assert (usage.prompt_tokens, usage.completion_tokens, usage.total_tokens) == (150, 20, 170)
+    assert (usage.prompt_tokens, usage.completion_tokens, usage.total_tokens) == (
+        150,
+        20,
+        170,
+    )
     assert usage.cached_input_tokens == 40
     assert usage.cache_write_input_tokens == 10
 
