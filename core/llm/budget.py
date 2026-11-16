@@ -360,7 +360,7 @@ class EventStoreDailyTokenBudget:
                     self._clear_legacy(tenant_id=tenant_id, snapshots=legacy)
                     self._pending_state(tenant_id=tenant_id, day=day)
                 except RuntimeError:
-                    self.cancel_unstarted_reservation(tenant_id=tenant_id, request_id=request_id, day=day)
+                    self.release(tenant_id=tenant_id, request_id=request_id, day=day)
                     return None
                 claimed = False
                 try:
@@ -372,12 +372,32 @@ class EventStoreDailyTokenBudget:
                     return day if claimed else None
                 finally:
                     if not claimed:
-                        self.cancel_unstarted_reservation(tenant_id=tenant_id, request_id=request_id, day=day)
+                        self.release(tenant_id=tenant_id, request_id=request_id, day=day)
         return None
 
     def cancel_unstarted_reservation(self, *, tenant_id: str, request_id: str, day: str) -> bool:
+        """Release a pre-provider reservation and only its one-shot claim."""
         try:
-            return self.release(tenant_id=tenant_id, request_id=request_id, day=day)
+            current = self._es.get_setting(
+                tenant_id=str(tenant_id), key=_PENDING_STATE_KEY,
+            )
+            pending = current.get("pending") if isinstance(current, dict) else None
+            row = pending.get(request_id) if isinstance(pending, dict) else None
+            user_id = row.get("user_id") if isinstance(row, dict) else None
+            if not isinstance(user_id, str) or not user_id.strip():
+                return False
+            if not self.release(tenant_id=tenant_id, request_id=request_id, day=day):
+                return False
+            claim_key = f"llm:claim:v2:{request_id}"
+            claim = self._es.get_setting(tenant_id=str(tenant_id), key=claim_key)
+            if claim is None:
+                return True
+            if claim != {"user_id": user_id}:
+                return False
+            return bool(self._es.compare_and_set_setting(
+                tenant_id=str(tenant_id), key=claim_key,
+                expected=claim, value=None,
+            ))
         except Exception:  # noqa: BLE001
             return False
 
