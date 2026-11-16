@@ -45,9 +45,13 @@ export function CommercialSalesWorkspace({
   const [leadContextError, setLeadContextError] = useState("");
   // Reuse the same key after an ambiguous network failure. No blind second order.
   const pendingRequest = useRef(null);
+  // Concurrent initial load and explicit refresh must not overwrite newer verified server data.
+  const refreshGeneration = useRef(0);
 
   const refresh = useCallback(async (signal) => {
     if (!apiKey) return;
+    const generation = ++refreshGeneration.current;
+    const isCurrent = () => !signal?.aborted && generation === refreshGeneration.current;
     setBusy(true);
     setError("");
     try {
@@ -56,7 +60,7 @@ export function CommercialSalesWorkspace({
         getJson(endpoint + "/leads", auth),
         getJson(apiBase.replace(/\/$/, "") + "/business-workspace/programs", auth),
       ]);
-      if (signal?.aborted) return;
+      if (!isCurrent()) return;
       if (!Array.isArray(data?.orders) || !data.orders.every(receiptIsOrder)) {
         throw new Error("Сервер вернул непроверенные суммы или счета");
       }
@@ -74,13 +78,13 @@ export function CommercialSalesWorkspace({
         item?.id && item.status === "active" && item.access_mode === "paid"));
       setLoaded(true);
     } catch (reason) {
-      if (!signal?.aborted) {
+      if (isCurrent()) {
         setError("Не удалось прочитать канонические данные: " +
           (reason?.message || "ошибка сети") + ". Повторите чтение перед новым действием.");
         setLoaded(false);
       }
     } finally {
-      if (!signal?.aborted) setBusy(false);
+      if (isCurrent()) setBusy(false);
     }
   }, [apiBase, apiKey, auth, endpoint, getJson]);
 
@@ -101,7 +105,10 @@ export function CommercialSalesWorkspace({
     setLoaded(false);
     pendingRequest.current = null;
     if (apiKey) void refresh(controller.signal);
-    return () => controller.abort();
+    return () => {
+      controller.abort();
+      ++refreshGeneration.current;
+    };
   }, [apiKey, refresh]);
 
   useEffect(() => {
