@@ -98,6 +98,11 @@ def _extract_usage(raw: dict[str, Any]) -> LLMUsage | None:
         return None
     input_tokens, output_tokens, cache_write, cached = values
     prompt_tokens = input_tokens + cache_write + cached
+    reported_total = usage.get("total_tokens")
+    if reported_total is not None and (
+        type(reported_total) is not int or reported_total != prompt_tokens + output_tokens
+    ):
+        return None
     return LLMUsage(
         prompt_tokens=prompt_tokens,
         completion_tokens=output_tokens,
