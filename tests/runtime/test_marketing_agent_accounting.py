@@ -332,7 +332,7 @@ def test_provider_transport_usage_is_not_synthesized_or_coerced(provider, usage_
 
 
 @pytest.mark.parametrize("case", ["valid", "missing_input", "missing_output", "bool_input",
-                                  "string_output", "cached_read", "cached_creation", "invalid_total"])
+                                  "string_output", "cached_read", "cached_creation", "invalid_total", "mismatched_total"])
 def test_anthropic_provider_usage_is_measured_and_cache_fail_closed(case):
     """Anthropic totals use measured components; unpriced cache classes block.
     The canonical accounting boundary cannot attribute cached-token costs yet.
@@ -354,6 +354,8 @@ def test_anthropic_provider_usage_is_measured_and_cache_fail_closed(case):
         usage["cache_creation_input_tokens"] = 50
     elif case == "invalid_total":
         usage["total_tokens"] = "10"
+    elif case == "mismatched_total":
+        usage["total_tokens"] = 11
     calls = []
 
     def transport(*args):
