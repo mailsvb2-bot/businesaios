@@ -24,6 +24,8 @@ def resolve_provider_webhook_messaging_ingress(*, provider: ProviderDefinition, 
     binding = describe_provider_messaging_binding(provider)
     if binding is None:
         return None
+    if binding.channel == "max" and normalized_payload.get("update_type") == "message_callback" and not isinstance(normalized_payload.get("message"), Mapping):
+        return None
     decoded = decode_provider_inbound(channel=binding.channel, payload=normalized_payload)
     user_id = str(decoded.get('user_id') or '').strip()
     if not user_id and binding.channel == 'web_chat':
