@@ -86,6 +86,8 @@ def _extract_text(raw: dict[str, Any]) -> str:
 def _extract_usage(raw: dict[str, Any]) -> LLMUsage | None:
     if not isinstance(usage := raw.get("usage"), dict):
         return None
+    if usage.get("cache_creation") not in (None, {}):
+        return None  # Unclassified cache-creation TTL breakdown is not billable yet.
     values = (
         usage.get("input_tokens"),
         usage.get("output_tokens"),
