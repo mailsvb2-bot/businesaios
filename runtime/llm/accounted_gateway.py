@@ -150,6 +150,11 @@ class AccountedSyncGateway:
         cached_input, cache_write_input, reasoning_output = usage_categories
         if cached_input + cache_write_input > prompt or reasoning_output > completion:
             raise RuntimeError("LLM_ACCOUNTING_UNAVAILABLE")
+        if self._provider == "anthropic" and (cached_input or cache_write_input):
+            # Anthropic cache-read and cache-write classes have distinct prices;
+            # until the tenant's versioned rate card can price both exactly,
+            # retain the reservation and do not expose an unpriced completion.
+            raise RuntimeError("LLM_ACCOUNTING_UNAVAILABLE")
         try:
             append_event_sync(
                 event_store=self._store,
