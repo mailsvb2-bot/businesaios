@@ -28,6 +28,10 @@ class SqliteEventStore(
 ):
     """Durable event store for dev/single-node."""
 
+    @property
+    def supports_durable_llm_budget(self) -> bool:
+        return self._db is not None and self._path not in {"", ":memory:"}
+
     def __init__(self, path: str):
         self._path = str(path)
         self._db: sqlite3.Connection | None = None
