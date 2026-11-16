@@ -125,6 +125,10 @@ def _where_clause(
         params.extend(types)
     return (" WHERE " + " AND ".join(clauses) if clauses else "", tuple(params))
 class PostgresEventStore:
+    @property
+    def supports_durable_llm_budget(self) -> bool:
+        return self._enabled and self._port is not None
+
     def __init__(self, dsn: str, *, enabled: bool = False) -> None:
         self._dsn = str(dsn)
         self._enabled = bool(enabled)

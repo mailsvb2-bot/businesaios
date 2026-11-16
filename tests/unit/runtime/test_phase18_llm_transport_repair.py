@@ -5,6 +5,7 @@ from types import SimpleNamespace
 
 import pytest
 
+from core.llm import LLMMessage, LLMRequest, build_anthropic_client, build_openai_compat
 from runtime._internal import llm_transport
 from runtime.effects import llm_effects
 from runtime.llm import build_runtime_llm_client
@@ -60,3 +61,50 @@ def test_yandex_model_uri_and_metadata_not_sent(monkeypatch):
     client.generate_sync(request)
     assert captured[0]["modelUri"] == "gpt://folder/yandexgpt-lite/latest"
     assert "metadata" not in captured[0]
+
+
+def test_anthropic_cache_usage_is_normalized_without_dropping_tokens():
+    raw = {"usage": {"input_tokens": 100, "output_tokens": 20,
+                     "cache_creation_input_tokens": 10, "cache_read_input_tokens": 40}}
+    client = build_anthropic_client(
+        base_url="https://example.invalid", api_key="test", default_model="claude",
+        transport=lambda *_args: raw,
+    )
+    usage = client.generate_sync(LLMRequest(
+        messages=[LLMMessage(role="user", content="hello")], model="claude",
+    )).usage
+    assert usage is not None
+    assert (usage.prompt_tokens, usage.completion_tokens, usage.total_tokens) == (150, 20, 170)
+    assert usage.cached_input_tokens == 40
+    assert usage.cache_write_input_tokens == 10
+
+
+def test_anthropic_unknown_cache_creation_breakdown_fails_closed():
+    raw = {"usage": {"input_tokens": 100, "output_tokens": 20,
+                     "cache_creation_input_tokens": 10, "cache_read_input_tokens": 40,
+                     "cache_creation": {"ephemeral_5m_input_tokens": 10}}}
+    client = build_anthropic_client(
+        base_url="https://example.invalid", api_key="test", default_model="claude",
+        transport=lambda *_args: raw,
+    )
+    assert client.generate_sync(LLMRequest(
+        messages=[LLMMessage(role="user", content="hello")], model="claude",
+    )).usage is None
+
+
+def test_openai_cached_and_reasoning_tokens_are_preserved():
+    raw = {"id": "resp-1", "model": "gpt-test", "usage": {
+        "prompt_tokens": 100, "completion_tokens": 20, "total_tokens": 120,
+        "prompt_tokens_details": {"cached_tokens": 40},
+        "completion_tokens_details": {"reasoning_tokens": 8},
+    }}
+    client = build_openai_compat(
+        base_url="https://example.invalid/v1", api_key="test", default_model="gpt-test",
+        transport=lambda *_args: raw,
+    )
+    usage = client.generate_sync(LLMRequest(
+        messages=[LLMMessage(role="user", content="hello")], model="gpt-test",
+    )).usage
+    assert usage is not None
+    assert usage.cached_input_tokens == 40
+    assert usage.reasoning_output_tokens == 8
