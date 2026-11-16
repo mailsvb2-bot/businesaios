@@ -189,3 +189,14 @@ def test_marketing_effect_sends_only_verified_generated_text():
     assert out == {"ok": True}
     assert len(fx.sent) == 1
     assert fx.sent[0]["text"] == "Approved customer-facing copy"
+
+def test_marketing_effect_rejects_malformed_success_and_non_string_text():
+    for result in (
+        {"ok": "true", "text": "unverified"},
+        {"ok": True, "text": 123},
+    ):
+        fx = _Marketing(result)
+        with executor_context():
+            out = fx.compose_marketing_message(**_marketing_message_kwargs())
+        assert out == {"ok": False, "error": "LLM_GENERATION_UNAVAILABLE"}
+        assert fx.sent == []
