@@ -20,7 +20,12 @@ def test_sqlite_action_budget_retry_is_atomic_and_preserves_existing_totals(tmp_
         ))
 
     assert sum(results) == 1
-    assert ledger.recorded_action("tenant-live", key) == "bookings@v1"
+    assert ledger.recorded_action("tenant-live", key) == ("bookings@v1", "payload-v1")
+    with pytest.raises(RuntimeError, match="action_budget_idempotency_conflict"):
+        ledger.record_once(
+            "tenant-live", idempotency_key=key,
+            action="bookings@v1", payload_hash="modified-payload", estimated_cost=3.5,
+        )
     assert ledger.snapshot("tenant-live") == (6.0, 2)
     with pytest.raises(RuntimeError, match="action_budget_idempotency_conflict"):
         ledger.record_once(

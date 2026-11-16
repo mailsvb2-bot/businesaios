@@ -11,7 +11,7 @@ import sqlite3
 import time
 from typing import Any
 
-from runtime.platform.delivery_state import _get_db_path, _open_connection, _ensure_db
+from runtime.platform.delivery_state import _ensure_db, _get_db_path, _open_connection
 
 DEFAULT_MAX_ATTEMPTS = 12
 

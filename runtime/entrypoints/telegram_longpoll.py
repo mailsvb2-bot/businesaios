@@ -18,7 +18,6 @@ from typing import Any
 
 from application.business_flows.bot_gateway import SESSION_SOURCE as CUSTOMER_SOURCE
 from core.ai.world_state import WorldStateV1
-from runtime.safety import verified_inbound_reply_scope
 from runtime.boot.env import (
     env_bool,
     env_int,
@@ -35,6 +34,7 @@ from runtime.messaging_ingress import (
     messaging_event_to_world_state,
     telegram_update_to_messaging_event,
 )
+from runtime.safety import verified_inbound_reply_scope
 
 CANON_RUNTIME_ENTRYPOINT_THIN_SHIM = True
 CANON_RUNTIME_ENTRYPOINT_BOOTSTRAP_DELEGATES_TO_SOVEREIGN_BOOTSTRAP = True

@@ -59,7 +59,7 @@ def test_nested_and_back_callbacks_never_fall_through(monkeypatch, callback):
 def _nested_buttons():
     from core.ux.keyboards.admin import kb_staff_menu
     from core.ux.keyboards.autopilot import kb_autopilot_menu, kb_growth_menu, kb_profit_sprint_lead_sources
-    from core.ux.keyboards.settings import kb_settings_menu, kb_state_menu, kb_mood_rate
+    from core.ux.keyboards.settings import kb_mood_rate, kb_settings_menu, kb_state_menu
     keyboards = (kb_staff_menu(), kb_autopilot_menu(), kb_growth_menu(),
                  kb_profit_sprint_lead_sources(), kb_settings_menu(), kb_state_menu(), kb_mood_rate())
     return tuple(sorted({button["callback_data"] for keyboard in keyboards
@@ -153,12 +153,14 @@ def test_clientplatform_owner_button_reads_durable_business_state(
     monkeypatch, tmp_path, callback, action, operation,
 ):
     """Real Telegram update -> policy -> canonical owner -> reopened event store."""
-    from types import SimpleNamespace
     from time import time_ns
+    from types import SimpleNamespace
     from uuid import uuid4
 
     from runtime.handler_impl.domains.business_flow_ops import (
-        handle_business_ops_summary, handle_sales_pipeline, handle_bookings,
+        handle_bookings,
+        handle_business_ops_summary,
+        handle_sales_pipeline,
     )
     from runtime.platform.event_store.sqlite_event_store import SqliteEventStore
 
@@ -375,6 +377,7 @@ def test_owner_read_callbacks_survive_schema_gate_and_single_accounting_pass(
 ):
     from types import SimpleNamespace
 
+    import runtime.safety_controls as safety
     from application.decision_runtime.flow import build_payload
     from core.actions.catalog import build_schema_registry
     from core.safety.controls.action_budget.guard import ActionBudgetGuard
@@ -382,7 +385,6 @@ def test_owner_read_callbacks_survive_schema_gate_and_single_accounting_pass(
     from core.safety.controls.action_budget.models import ActionBudget
     from core.safety.controls.action_context import SafetyActionContext
     from core.safety.controls.control_result import ControlStatus
-    import runtime.safety_controls as safety
 
     monkeypatch.setattr(
         "runtime.entrypoints.telegram_longpoll._configured_telegram_tenant_id",

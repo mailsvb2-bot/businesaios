@@ -5,7 +5,8 @@ from typing import Any
 
 from bootstrap.safety_control_boot import build_safety_control_runtime
 from core.safety.controls.action_budget.models import (
-    verified_telegram_idempotency_key, telegram_action_fingerprint,
+    telegram_action_fingerprint,
+    verified_telegram_idempotency_key,
 )
 from runtime.safety import (
     ControlDecision,
@@ -14,7 +15,8 @@ from runtime.safety import (
     SafetyEvent,
     canonical_action_id,
     canonical_breaker_key,
-    is_budget_free_text_message, is_budget_free_read_projection,
+    is_budget_free_read_projection,
+    is_budget_free_text_message,
     is_routine_reply,
 )
 
