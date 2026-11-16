@@ -1,104 +1,61 @@
-"""Offer outcome callback handler.
+"""Offer acceptance and rejection through one canonical, non-payment message.
 
-Why separate module:
-- Router stays readable (no "god router")
-- Single canonical place for multi-step offer accept/decline flow
-- Prevents accidental divergence ("two lines" for offer callbacks)
+The original composite execute_plan route was not executable under the
+single-envelope executor lock. A Telegram callback never establishes a trusted
+catalog price, product order or payment identity.
 """
-
 from __future__ import annotations
 
 from core.offers.offer_callbacks import outcome_event_type, parse_offer_callback
 from core.policies.telegram.context import TelegramCtx
-from core.policies.telegram.helpers import ProposedAction
+from core.policies.telegram.helpers import ProposedAction, propose_message
 from core.tenancy.normalization import normalize_tenant_id_or_unknown
 from core.ux.telegram_keyboards import kb_main
+from core.ux.unified_messenger_menu import BUSINESS_ONBOARDING_URL
 
 
 def handle_offer_outcome(
-    ctx: TelegramCtx,
-    *,
-    user_id: str,
-    default_price_rub: int,
+    ctx: TelegramCtx, *, user_id: str, default_price_rub: int,
 ) -> ProposedAction | None:
-    # Only handle our canonical prefix.
-    if not (isinstance(ctx.callback_data, str) and ctx.callback_data.startswith("offer:")):
+    del default_price_rub  # Prices belong to the verified server catalog.
+    cb = str(ctx.callback_data or "")
+    if not cb.startswith("offer:"):
         return None
-
-    ocb = parse_offer_callback(ctx.callback_data)
-    if ocb is None:
+    offer = parse_offer_callback(cb)
+    if offer is None:
         return None
 
     tenant_id = normalize_tenant_id_or_unknown(getattr(ctx.state, "tenant_id", None))
     product = getattr(ctx.state, "product", None) or {}
-    product_id = str(product.get("product_id") or product.get("id") or "organization_platform")
-    domain = str(product.get("domain") or "organization_platform")
-
-    steps = []
-
-    # Always stop Telegram button loader if possible.
-    if ctx.callback_query_id:
-        steps.append({"action": "answer_callback@v1", "callback_query_id": str(ctx.callback_query_id), "text": "Ок"})
-
-    # Tracking (pure).
-    steps.append(
-        {
-            "action": "track_event@v1",
-            "user_id": user_id,
-            "event_type": outcome_event_type(ocb.kind),
-            "payload": {
-                "offer_id": str(ocb.offer_id),
-                "kind": str(ocb.kind),
-                "tenant_id": tenant_id,
-                "product_id": product_id,
-                "domain": domain,
-            },
-        }
-    )
-
-    if str(ocb.kind) == "accept":
-        # Best-effort price resolution: callback.price_rub -> selected_tariff.price_rub -> default.
-        amount = None
-        try:
-            if isinstance(ocb.meta, dict) and ocb.meta.get("price_rub"):
-                amount = int(ocb.meta.get("price_rub") or 0) or None
-        except Exception:
-            amount = None
-        try:
-            if isinstance(ctx.selected_tariff, dict):
-                amount = int(ctx.selected_tariff.get("price_rub") or ctx.selected_tariff.get("price") or 0) or None
-        except Exception:
-            amount = None
-        if amount is None:
-            amount = int(default_price_rub)
-
-        steps.append(
-            {
-                "action": "create_payment_and_send_link@v1",
-                "user_id": user_id,
-                "amount": int(amount),
-                "currency": "RUB",
-                "metadata": {
-                    "offer_id": str(ocb.offer_id),
-                    "tenant_id": tenant_id,
-                    "product_id": product_id,
-                    "domain": domain,
-                    "grant_key": f"{tenant_id}:{str(ocb.offer_id)}",
-                },
-            }
+    product = product if isinstance(product, dict) else {}
+    tracked = {
+        "offer_id": str(offer.offer_id),
+        "kind": str(offer.kind),
+        "tenant_id": tenant_id,
+        "product_id": str(product.get("product_id") or product.get("id") or "organization_platform"),
+        "domain": str(product.get("domain") or "organization_platform"),
+        "payment_confirmed": False,
+    }
+    if offer.kind == "accept":
+        text = (
+            "✅ Интерес к предложению отмечен.\n\n"
+            "Для создания заказа и счёта откройте рабочее пространство. "
+            "Сумму и доступность предложения подтверждает только серверный каталог. "
+            "Нажатие здесь не создаёт платёж и не подтверждает оплату."
         )
-        return {"action": "execute_plan@v1", "user_id": user_id, "steps": steps}
+        keyboard = {"inline_keyboard": [
+            [{"text": "🌐 Перейти к оформлению", "url": BUSINESS_ONBOARDING_URL}],
+            [{"text": "⬅️ Главное меню", "callback_data": "menu:main"}],
+        ]}
+    else:
+        text = "Понял. Без давления. Вернёмся позже."
+        keyboard = kb_main(is_admin=ctx.is_admin)
 
-    # decline: send a gentle message (no payment).
-    steps.append(
-        {
-            "action": "send_message@v1",
-            "user_id": user_id,
-            "text": "Понял. Без давления. Вернёмся позже.",
-            "reply_markup": kb_main(is_admin=ctx.is_admin),
-            "priority": "low",
-            "best_effort": True,
-            "critical": False,
-        }
+    return propose_message(
+        user_id=str(user_id),
+        text=text,
+        reply_markup=keyboard,
+        callback_query_id=ctx.callback_query_id,
+        track_event_type=outcome_event_type(offer.kind),
+        track_payload=tracked,
     )
-    return {"action": "execute_plan@v1", "user_id": user_id, "steps": steps}

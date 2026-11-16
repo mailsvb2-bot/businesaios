@@ -3,7 +3,7 @@ from __future__ import annotations
 from typing import Any
 
 from core.ads.apply_flow_codec import PENDING_KEY, compute_plan_idempotency_key, plan_summary_text
-from core.ads.apply_gate import AdsApplyState, build_disable_ads_apply_plan, build_enable_ads_apply_plan
+from core.ads.apply_gate import AdsApplyState, build_ads_apply_toggle_action
 from core.policies.telegram.context import TelegramCtx
 from core.policies.telegram.helpers import ProposedAction, propose, propose_message
 from core.ux.callbacks import (
@@ -32,23 +32,19 @@ def handle_ads_apply(ctx: TelegramCtx, *, user_id: str) -> ProposedAction:
 
     # --- Flow actions ---
     if cb == CB_ADS_APPLY_CANCEL:
-        # Clear pending plan
+        # One signed canonical settings action. Nested execute_plan effects
+        # cannot be issued by one DecisionCore envelope.
         return propose(
-            "execute_plan@v1",
+            "set_user_setting@v1",
             {
                 "user_id": str(user_id),
-                "steps": [
-                    {"action": "set_user_setting@v1", "payload": {"user_id": str(user_id), "key": PENDING_KEY, "value": None}},
-                    {
-                        "action": "send_message@v1",
-                        "payload": {
-                            "user_id": str(user_id),
-                            "text": "🗑 План отменён. Ничего не применено.",
-                            "reply_markup": {"inline_keyboard": [[{"text": "⬅️ Назад", "callback_data": CB_ADS_APPLY_MENU}]]},
-                            "callback_query_id": ctx.callback_query_id,
-                        },
-                    },
-                ],
+                "key": PENDING_KEY,
+                "value": None,
+                "notify_text": "🗑 План отменён. Ничего не применено.",
+                "notify_reply_markup": {"inline_keyboard": [[
+                    {"text": "⬅️ Назад", "callback_data": CB_ADS_APPLY_MENU},
+                ]]},
+                "callback_query_id": ctx.callback_query_id,
             },
         )
 
@@ -82,10 +78,14 @@ def handle_ads_apply(ctx: TelegramCtx, *, user_id: str) -> ProposedAction:
 
     # --- Gate toggles ---
     if cb == CB_ADS_APPLY_ENABLE:
-        return propose("execute_plan@v1", build_enable_ads_apply_plan(user_id=str(user_id), callback_query_id=ctx.callback_query_id))
+        return propose("set_user_setting@v1", build_ads_apply_toggle_action(
+            user_id=str(user_id), enabled=True, callback_query_id=ctx.callback_query_id,
+        ))
 
     if cb == CB_ADS_APPLY_DISABLE:
-        return propose("execute_plan@v1", build_disable_ads_apply_plan(user_id=str(user_id), callback_query_id=ctx.callback_query_id))
+        return propose("set_user_setting@v1", build_ads_apply_toggle_action(
+            user_id=str(user_id), enabled=False, callback_query_id=ctx.callback_query_id,
+        ))
 
     # --- Menu (default) ---
     rm = {"inline_keyboard": []}

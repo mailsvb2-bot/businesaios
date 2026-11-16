@@ -5,7 +5,7 @@ Adds a user command /ceo to show a CEO plan, and callbacks to execute it.
 Routing contract:
 - /ceo -> ai_ceo_plan@v1
 - callback ceo:plan -> ai_ceo_plan@v1
-- callback ceo:run  -> execute_plan@v1 with CEO steps
+- callback ceo:run  -> explicit review; no unsigned multi-step execution
 """
 
 from __future__ import annotations
@@ -14,7 +14,7 @@ from typing import Any
 
 from core.ai_ceo import autonomy_from_env, build_plan, read_growth_snapshot, render_plan_text
 from core.policies.telegram.context import TelegramCtx
-from core.policies.telegram.helpers import ProposedAction, propose
+from core.policies.telegram.helpers import ProposedAction, propose, propose_message
 from core.ux.callbacks import CB_CEO_MENU, CB_CEO_PLAN, CB_CEO_RUN
 from core.ux.telegram_keyboards import kb_ai_ceo_menu
 
@@ -26,18 +26,24 @@ def handle_ai_ceo(ctx: TelegramCtx, *, user_id: str, event_store: Any | None = N
     if str(ctx.callback_data or "") in {CB_CEO_MENU, CB_CEO_PLAN}:
         return _propose_plan(ctx, user_id=user_id, event_store=event_store)
     if str(ctx.callback_data or "") == CB_CEO_RUN:
-        # Recompute plan (pure) and execute as composite action.
-        plan = _build(ctx, event_store=event_store)
-        steps = []
-        for s in plan.steps:
-            steps.append({"action": s.action, **dict(s.payload or {})})
-        return propose(
-            "execute_plan@v1",
-            {
-                "steps": steps,
-                "user_id": user_id,
-                "callback_query_id": ctx.callback_query_id,
-            },
+        # A multi-step CEO plan must be reissued as independently authorized,
+        # signed decisions. The builtin execute_plan only accepts noop steps;
+        # never claim a plan was executed when the canonical gate blocks it.
+        return propose_message(
+            user_id=user_id,
+            text=(
+                "🛡 Проверка запуска AI CEO\n\n"
+                "План подготовлен, но автоматическое выполнение нескольких "
+                "действий недоступно без отдельных подтверждённых решений "
+                "DecisionCore. Ничего не запущено и бюджет не расходован.\n\n"
+                "Откройте план для проверки и последующего согласования."
+            ),
+            reply_markup={"inline_keyboard": [[
+                {"text": "📋 Проверить план", "callback_data": CB_CEO_PLAN},
+            ], [
+                {"text": "⬅️ В меню", "callback_data": CB_CEO_MENU},
+            ]]},
+            callback_query_id=ctx.callback_query_id,
         )
     return None
 
