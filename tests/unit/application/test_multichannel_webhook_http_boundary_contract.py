@@ -234,7 +234,7 @@ def test_wrong_signed_whatsapp_recipient_is_rejected_before_replay_or_handoff(tm
 
 
 
-def test_message_webhook_without_reply_recipient_fails_closed_before_handoff():
+def test_message_webhook_without_reply_recipient_fails_closed_before_handoff(monkeypatch):
     import pytest
 
     from application.business_autonomy.provider_catalog import provider_map
@@ -242,6 +242,22 @@ def test_message_webhook_without_reply_recipient_fails_closed_before_handoff():
     from runtime.business_autonomy.provider_inbound_webhook_service import ProviderInboundWebhookService
     from runtime.business_autonomy.provider_webhook_replay_guard import ProviderWebhookReplayGuard
     from runtime.business_autonomy.provider_webhook_runtime import ProviderWebhookRuntime
+    from security.secret_contract import SecretRecord, SecretRef, SecretSource
+    from security.secret_vault import InMemorySecretVault
+
+    provider = provider_map()["telegram_bot"]
+    vault = InMemorySecretVault()
+    secret_ref = SecretRef(
+        tenant_id="tenant-a",
+        connector_id=provider.connector_id,
+        scope="business-a",
+        secret_name=f"{provider.connector_id}.webhook_secret",
+    )
+    vault.put(
+        SecretRecord(ref=secret_ref, ciphertext=b"pending", source=SecretSource.CONNECTOR),
+        plaintext=b"secret",
+    )
+    monkeypatch.setattr(ProviderWebhookRuntime, "verify", lambda self, **kwargs: True)
 
     class Processor:
         calls = 0
@@ -252,16 +268,16 @@ def test_message_webhook_without_reply_recipient_fails_closed_before_handoff():
 
     processor = Processor()
     service = ProviderInboundWebhookService(
-        webhook_runtime=ProviderWebhookRuntime(None),
+        webhook_runtime=ProviderWebhookRuntime(vault),
         replay_guard=ProviderWebhookReplayGuard(InMemoryIdempotencyStore()),
         inbound_processor=processor,
     )
     with pytest.raises(ValueError, match="PROVIDER_INBOUND_RECIPIENT_MISSING"):
         service.ingest(
-            provider=provider_map()["telegram_bot"],
+            provider=provider,
             tenant_id="tenant-a",
             business_id="business-a",
-            headers={},
+            headers={"x-telegram-bot-api-secret-token": "secret"},
             body=b'{"message":{"from":{"id":9001},"text":"hello"}}',
             event_key="missing-telegram-chat",
         )
