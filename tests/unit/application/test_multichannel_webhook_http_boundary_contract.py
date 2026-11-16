@@ -235,7 +235,6 @@ def test_wrong_signed_whatsapp_recipient_is_rejected_before_replay_or_handoff(tm
 
 
 def test_message_webhook_without_reply_recipient_fails_closed_before_handoff(monkeypatch):
-    import pytest
 
     from application.business_autonomy.provider_catalog import provider_map
     from reliability.idempotency_store import InMemoryIdempotencyStore
