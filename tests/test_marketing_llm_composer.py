@@ -8,7 +8,7 @@ from core.telemetry.event_types import LLM_COMPLETED
 from runtime.platform.event_store.memory_event_store import MemoryEventStore
 
 
-class _BudgetContractEventStore(_BudgetContractEventStore):
+class _BudgetContractEventStore(MemoryEventStore):
     """Test double for the durable atomic-CAS capability; the base store stays unmarked."""
 
     supports_durable_llm_budget = True
