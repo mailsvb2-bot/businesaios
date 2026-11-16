@@ -32,7 +32,9 @@ def resolve_provider_webhook_messaging_ingress(*, provider: ProviderDefinition, 
         user_id = str(normalized_payload.get('session_id') or '').strip()
     chat_id = str(decoded.get('chat_id') or '').strip()
     external_user_ref = str(decoded.get('external_user_ref') or user_id).strip()
-    text = str(decoded.get('text') or normalized_payload.get('message') or '').strip()
+    decoded_text = decoded.get('text')
+    fallback_text = normalized_payload.get('message')
+    text = str(decoded_text if decoded_text else (fallback_text if isinstance(fallback_text, str) else '')).strip()
     if not user_id or not text:
         return None
     if not chat_id and binding.channel == 'web_chat':
