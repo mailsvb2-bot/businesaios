@@ -159,6 +159,8 @@ def test_max_reconcile_rewrites_subscription_and_verifies(monkeypatch) -> None:
 
     def fake_request(**kwargs):
         calls.append(kwargs)
+        if kwargs['url'].endswith('/me'):
+            return _response({'user_id': 77, 'is_bot': True})
         if kwargs['method'] == 'POST':
             return _response({'success': True})
         get_count = sum(1 for call in calls if call['method'] == 'GET')
@@ -171,10 +173,18 @@ def test_max_reconcile_rewrites_subscription_and_verifies(monkeypatch) -> None:
         provider=provider, tenant_id='tenant-a', business_id='biz-max'
     )
     assert result.ready is True and result.metadata['subscription_visible'] is True
+    assert result.metadata['bot_id'] == '77'
+    assert sut.ProviderWebhookReconciler(vault)._secret(provider, 'tenant-a', 'biz-max', 'bot_id') == '77'
     post = next(call for call in calls if call['method'] == 'POST')
     body = json.loads(post['body'].decode())
     assert body['secret'] == 'max-hook'
     assert body['update_types'] == ['message_created', 'message_callback', 'bot_started']
+    runtime = ProviderWebhookRuntime(vault)
+    message = {'sender': {'user_id': 12, 'is_bot': False}, 'recipient': {'chat_type': 'dialog', 'chat_id': 12, 'user_id': 77}, 'body': {'text': 'hello', 'mid': 'max-mid'}}
+    payload = {'update_type': 'message_created', 'message': message}
+    assert runtime.verify(provider=provider, tenant_id='tenant-a', business_id='biz-max', headers={'X-Max-Bot-Api-Secret': 'max-hook'}, body=json.dumps(payload).encode()) is True
+    message['recipient']['user_id'] = 78
+    assert runtime.verify(provider=provider, tenant_id='tenant-a', business_id='biz-max', headers={'X-Max-Bot-Api-Secret': 'max-hook'}, body=json.dumps(payload).encode()) is False
 
 
 def test_reconcile_without_public_base_is_explicit_manual_required(monkeypatch) -> None:
