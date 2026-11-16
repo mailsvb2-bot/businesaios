@@ -51,6 +51,57 @@ def test_agent_gateway_records_actual_usage_once_and_isolates_tenants():
 
 
 @pytest.mark.parametrize("missing", ["tenant_id", "user_id", "correlation_key", "task_type"])
+def test_agent_gateway_persists_provider_token_categories():
+    class CategorizedProvider(Provider):
+        def generate_sync(self, request):
+            self.calls += 1
+            return LLMResponse(
+                content="safe text",
+                usage=LLMUsage(
+                    prompt_tokens=100,
+                    completion_tokens=20,
+                    total_tokens=120,
+                    cached_input_tokens=40,
+                    cache_write_input_tokens=10,
+                    reasoning_output_tokens=8,
+                ),
+            )
+
+    store, client = MemoryEventStore(), CategorizedProvider()
+    gateway = AccountedSyncGateway(client, event_store=store, provider="openai_compat")
+    assert gateway.generate_sync(request()).content == "safe text"
+    event = next(store.iter_events(tenant_id="tenant", event_type=LLM_COMPLETED))
+    payload = event["payload"]
+    assert payload["usage_schema_version"] == 2
+    assert payload["prompt_tokens"] == 100
+    assert payload["cached_input_tokens"] == 40
+    assert payload["cache_write_input_tokens"] == 10
+    assert payload["reasoning_output_tokens"] == 8
+
+
+def test_agent_gateway_rejects_inconsistent_provider_token_categories():
+    class InvalidCategoriesProvider(Provider):
+        def generate_sync(self, request):
+            self.calls += 1
+            return LLMResponse(
+                content="must not escape",
+                usage=LLMUsage(
+                    prompt_tokens=10,
+                    completion_tokens=5,
+                    total_tokens=15,
+                    cached_input_tokens=9,
+                    cache_write_input_tokens=2,
+                ),
+            )
+
+    store, client = MemoryEventStore(), InvalidCategoriesProvider()
+    gateway = AccountedSyncGateway(client, event_store=store, provider="openai_compat")
+    with pytest.raises(RuntimeError, match="LLM_ACCOUNTING_UNAVAILABLE"):
+        gateway.generate_sync(request())
+    assert store.count_events(tenant_id="tenant", event_type=LLM_COMPLETED) == 0
+    assert client.calls == 1
+
+
 def test_agent_gateway_fails_closed_without_scoped_identity(missing):
     store, client = MemoryEventStore(), Provider()
     gateway = AccountedSyncGateway(client, event_store=store, provider="openai_compat")
