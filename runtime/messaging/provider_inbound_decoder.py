@@ -26,6 +26,8 @@ _PROVIDER_PATHS: dict[str, dict[str, tuple[FieldPath, ...]]] = {
             ("message", "chat", "id"),
             ("callback_query", "message", "chat", "id"),
             ("edited_message", "chat", "id"),
+            ("channel_post", "chat", "id"),
+            ("edited_channel_post", "chat", "id"),
         ),
         "text": (
             ("message", "text"),
@@ -35,16 +37,24 @@ _PROVIDER_PATHS: dict[str, dict[str, tuple[FieldPath, ...]]] = {
             ("callback_query", "message", "caption"),
             ("edited_message", "text"),
             ("edited_message", "caption"),
+            ("channel_post", "text"),
+            ("channel_post", "caption"),
+            ("edited_channel_post", "text"),
+            ("edited_channel_post", "caption"),
         ),
         "message_id": (
             ("message", "message_id"),
             ("callback_query", "id"),
             ("update_id",),
+            ("channel_post", "message_id"),
+            ("edited_channel_post", "message_id"),
         ),
         "timestamp": (
             ("message", "date"),
             ("callback_query", "message", "date"),
             ("edited_message", "date"),
+            ("channel_post", "date"),
+            ("edited_channel_post", "date"),
         ),
         "name": (
             ("message", "from", "username"),
@@ -100,8 +110,8 @@ _PROVIDER_PATHS: dict[str, dict[str, tuple[FieldPath, ...]]] = {
     },
     "vk": {
         "user_id": (
-            ("object", "message", "from_id"),
             ("object", "message", "user_id"),
+            ("object", "message", "from_id"),
             ("object", "user_id"),
             ("object", "from_id"),
         ),
@@ -387,7 +397,7 @@ def decode_provider_inbound(
 
     def field_value(name: str) -> Any:
         explicit = _first_path_value(view, paths.get(name, ()))
-        if explicit is not None:
+        if explicit is not None or (name == "user_id" and canonical in _PROVIDER_PATHS):
             return explicit
         return _deep_first_value(view, _GENERIC_KEYS.get(name, ()))
 
@@ -396,8 +406,8 @@ def decode_provider_inbound(
 
     user_id = field_text("user_id")
     chat_id = field_text("chat_id")
-    if not user_id:
-        user_id = chat_id
+    if canonical == "vk" and user_id.startswith("-"):
+        user_id = ""  # VK negative sender IDs are communities, not human customers.
 
     provider_message_id = _first_path_value(raw, paths.get("message_id", ()))
     if provider_message_id is None:
@@ -419,7 +429,7 @@ def decode_provider_inbound(
         "chat_id": chat_id,
         "text": _provider_text(canonical, raw, field_text("text")),
         "message_id": message_id,
-        "external_user_ref": user_id or chat_id,
+        "external_user_ref": user_id or None,
         "timestamp_ms": _timestamp_from_payload(raw, paths.get("timestamp", ())),
         "locale": field_text("locale") or None,
         "subject": field_text("subject") or None,

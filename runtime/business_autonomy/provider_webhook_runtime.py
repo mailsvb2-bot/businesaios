@@ -6,6 +6,7 @@ import hmac
 import time
 from collections.abc import Mapping
 from dataclasses import dataclass
+from urllib.parse import urlsplit
 
 from cryptography.exceptions import InvalidSignature
 from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PublicKey
@@ -56,9 +57,11 @@ class ProviderWebhookRuntime:
         secret = self._read_secret(tenant_id=tenant_id, connector_id=provider.connector_id, business_id=business_id, secret_name=f"{provider.connector_id}.{contract.metadata.get('secret_field') or self._secret_field(provider)}")
         if contract.verification_kind == 'hmac_sha256_hex':
             if secret is not None:
-                return bool(secret) and _secret_eq('sha256=' + hmac.new(secret.encode('utf-8'), bytes(body), hashlib.sha256).hexdigest(), normalized_headers.get('x-hub-signature-256', ''))
-            secret = self._read_secret(tenant_id=tenant_id, connector_id=provider.connector_id, business_id=business_id, secret_name=f"{provider.connector_id}.{contract.metadata.get('fallback_secret_field')}") if contract.metadata.get('fallback_secret_field') else ''
-            return bool(secret) and any(candidate and _secret_eq(secret, candidate) for candidate in (normalized_headers.get('authorization', '').removeprefix('Bearer ').strip(), normalized_headers.get('x-businessaios-webhook-secret', '')))
+                signature_valid = bool(secret) and _secret_eq('sha256=' + hmac.new(secret.encode('utf-8'), bytes(body), hashlib.sha256).hexdigest(), normalized_headers.get('x-hub-signature-256', ''))
+            else:
+                secret = self._read_secret(tenant_id=tenant_id, connector_id=provider.connector_id, business_id=business_id, secret_name=f"{provider.connector_id}.{contract.metadata.get('fallback_secret_field')}") if contract.metadata.get('fallback_secret_field') else ''
+                signature_valid = bool(secret) and any(candidate and _secret_eq(secret, candidate) for candidate in (normalized_headers.get('authorization', '').removeprefix('Bearer ').strip(), normalized_headers.get('x-businessaios-webhook-secret', '')))
+            return signature_valid and self._recipient_matches(provider=provider, tenant_id=tenant_id, business_id=business_id, body=body)
         if contract.verification_kind == 'discord_ed25519_or_shared_secret':
             signature, timestamp = normalized_headers.get('x-signature-ed25519', '').strip(), normalized_headers.get('x-signature-timestamp', '').strip()
             if signature or timestamp:
@@ -69,8 +72,9 @@ class ProviderWebhookRuntime:
                     Ed25519PublicKey.from_public_bytes(bytes.fromhex(public_key)).verify(bytes.fromhex(signature), timestamp.encode('utf-8') + bytes(body))
                 except (InvalidSignature, ValueError):
                     return False
-                return True
-            return bool(secret) and any(candidate and _secret_eq(secret, candidate) for candidate in (normalized_headers.get('authorization', '').removeprefix('Bearer ').strip(), normalized_headers.get('x-businessaios-webhook-secret', '')))
+                return self._recipient_matches(provider=provider, tenant_id=tenant_id, business_id=business_id, body=body)
+            signature_valid = bool(secret) and any(candidate and _secret_eq(secret, candidate) for candidate in (normalized_headers.get('authorization', '').removeprefix('Bearer ').strip(), normalized_headers.get('x-businessaios-webhook-secret', '')))
+            return signature_valid and self._recipient_matches(provider=provider, tenant_id=tenant_id, business_id=business_id, body=body)
         if contract.verification_kind in {'line_hmac_sha256_base64_or_shared_secret', 'viber_hmac_sha256_hex_or_shared_secret'}:
             header_name = 'x-line-signature' if provider.provider_key == 'line_messaging' else 'x-viber-content-signature'
             if header_name in normalized_headers:
@@ -78,8 +82,9 @@ class ProviderWebhookRuntime:
                 if not signature or not native_secret:
                     return False
                 expected = base64.b64encode(hmac.new(native_secret.encode('utf-8'), bytes(body), hashlib.sha256).digest()).decode('ascii') if provider.provider_key == 'line_messaging' else hmac.new(native_secret.encode('utf-8'), bytes(body), hashlib.sha256).hexdigest()
-                return _secret_eq(expected, signature)
-            return bool(secret) and any(candidate and _secret_eq(secret, candidate) for candidate in (normalized_headers.get('authorization', '').removeprefix('Bearer ').strip(), normalized_headers.get('x-businessaios-webhook-secret', '')))
+                return _secret_eq(expected, signature) and self._recipient_matches(provider=provider, tenant_id=tenant_id, business_id=business_id, body=body)
+            signature_valid = bool(secret) and any(candidate and _secret_eq(secret, candidate) for candidate in (normalized_headers.get('authorization', '').removeprefix('Bearer ').strip(), normalized_headers.get('x-businessaios-webhook-secret', '')))
+            return signature_valid and self._recipient_matches(provider=provider, tenant_id=tenant_id, business_id=business_id, body=body)
         if not secret:
             return False
         if contract.verification_kind == 'slack_hmac_sha256_v0_or_shared_secret':
@@ -93,16 +98,20 @@ class ProviderWebhookRuntime:
                     signing_base = b'v0:' + timestamp.encode('ascii') + b':' + bytes(body)
                 except (OverflowError, ValueError, UnicodeEncodeError):
                     return False
-                return _secret_eq('v0=' + hmac.new(secret.encode('utf-8'), signing_base, hashlib.sha256).hexdigest(), signature)
-            return any(candidate and _secret_eq(secret, candidate) for candidate in (normalized_headers.get('authorization', '').removeprefix('Bearer ').strip(), normalized_headers.get('x-businessaios-webhook-secret', '')))
+                signature_valid = _secret_eq('v0=' + hmac.new(secret.encode('utf-8'), signing_base, hashlib.sha256).hexdigest(), signature)
+                return signature_valid and self._recipient_matches(provider=provider, tenant_id=tenant_id, business_id=business_id, body=body)
+            signature_valid = any(candidate and _secret_eq(secret, candidate) for candidate in (normalized_headers.get('authorization', '').removeprefix('Bearer ').strip(), normalized_headers.get('x-businessaios-webhook-secret', '')))
+            return signature_valid and self._recipient_matches(provider=provider, tenant_id=tenant_id, business_id=business_id, body=body)
         if contract.verification_kind == 'hmac_sha256_base64':
             expected = base64.b64encode(hmac.new(secret.encode('utf-8'), bytes(body), hashlib.sha256).digest()).decode('ascii')
-            return any(candidate and _secret_eq(expected, candidate) for candidate in (normalized_headers.get(str(name).lower(), '') for name in contract.header_names))
+            signature_valid = any(candidate and _secret_eq(expected, candidate) for candidate in (normalized_headers.get(str(name).lower(), '') for name in contract.header_names))
+            return signature_valid and self._recipient_matches(provider=provider, tenant_id=tenant_id, business_id=business_id, body=body)
         if contract.verification_kind in {'bearer_or_shared_secret', 'shared_secret_header', 'shared_secret_body_or_header'}:
             candidates = [normalized_headers.get('authorization', '').removeprefix('Bearer ').strip()] + [normalized_headers.get(str(name).lower(), '') for name in contract.header_names if str(name).lower() != 'authorization']
             if contract.verification_kind == 'shared_secret_body_or_header':
                 candidates.append(str(ProviderPayloadNormalizers.parse_webhook_json(body).get('secret') or ''))
-            return any(candidate and _secret_eq(secret, candidate) for candidate in candidates)
+            signature_valid = any(candidate and _secret_eq(secret, candidate) for candidate in candidates)
+            return signature_valid and self._recipient_matches(provider=provider, tenant_id=tenant_id, business_id=business_id, body=body)
         return False
 
     def response_body(self, *, provider: ProviderDefinition, tenant_id: str, business_id: str, body: bytes) -> str | None:
@@ -116,6 +125,101 @@ class ProviderWebhookRuntime:
             return None
         expected = self._read_secret(tenant_id=tenant_id, connector_id=provider.connector_id, business_id=business_id, secret_name=f'{provider.connector_id}.verify_token')
         return str(challenge) if expected and _secret_eq(expected, str(verify_token)) else None
+
+    @staticmethod
+    def _site_host(value: object) -> str:
+        raw = str(value or "").strip()
+        if not raw or any(character.isspace() for character in raw):
+            return ""
+        try:
+            parsed = urlsplit(raw if "://" in raw else f"https://{raw}")
+            if parsed.scheme.lower() != "https" or not parsed.hostname or parsed.username or parsed.password or parsed.port not in (None, 443) or parsed.path not in ("", "/") or parsed.query or parsed.fragment:
+                return ""
+        except ValueError:
+            return ""
+        return parsed.hostname.rstrip(".").lower()
+
+    def _recipient_matches(self, *, provider: ProviderDefinition, tenant_id: str, business_id: str, body: bytes) -> bool:
+        """Bind signed webhooks to the account or site configured for this tenant/business."""
+        key = str(provider.provider_key)
+        payload = ProviderPayloadNormalizers.parse_webhook_json(body)
+        if key == "generic_website":
+            expected = self._read_secret(tenant_id=tenant_id, connector_id=provider.connector_id, business_id=business_id, secret_name=f"{provider.connector_id}.site_domain")
+            return bool(expected and self._site_host(expected) and self._site_host(payload.get("site_domain")) == self._site_host(expected))
+        if key not in {'whatsapp_cloud', 'instagram_messaging', 'messenger_messaging', 'vk_messaging', 'max_messaging', 'slack_messaging', 'discord_messaging', 'line_messaging', 'viber_messaging', 'wechat_messaging', 'kakaotalk_messaging'}:
+            return True
+        if key == 'whatsapp_cloud':
+            expected = self._read_secret(tenant_id=tenant_id, connector_id=provider.connector_id, business_id=business_id, secret_name=f'{provider.connector_id}.phone_number_id')
+            entries = payload.get('entry')
+            if not expected or not isinstance(entries, list) or not entries:
+                return False
+            observed: list[str] = []
+            for entry in entries:
+                if not isinstance(entry, Mapping):
+                    return False
+                changes = entry.get('changes')
+                if not isinstance(changes, list) or not changes:
+                    return False
+                for change in changes:
+                    value = change.get('value') if isinstance(change, Mapping) else None
+                    metadata = value.get('metadata') if isinstance(value, Mapping) else None
+                    recipient = metadata.get('phone_number_id') if isinstance(metadata, Mapping) else None
+                    recipient_id = str(recipient or '').strip()
+                    if not recipient_id or recipient_id != expected:
+                        return False
+                    observed.append(recipient_id)
+            return bool(observed)
+        if key in {'instagram_messaging', 'messenger_messaging'}:
+            secret_name = 'ig_user_id' if key == 'instagram_messaging' else 'page_id'
+            expected = self._read_secret(tenant_id=tenant_id, connector_id=provider.connector_id, business_id=business_id, secret_name=f'{provider.connector_id}.{secret_name}')
+            entries = payload.get('entry')
+            if not expected or not isinstance(entries, list) or not entries:
+                return False
+            observed = [str(entry.get('id') or '').strip() for entry in entries if isinstance(entry, Mapping)]
+            return bool(observed) and len(observed) == len(entries) and all(value == expected for value in observed)
+        if key == 'slack_messaging':
+            expected_team = self._read_secret(tenant_id=tenant_id, connector_id=provider.connector_id, business_id=business_id, secret_name=f'{provider.connector_id}.team_id')
+            expected_app = self._read_secret(tenant_id=tenant_id, connector_id=provider.connector_id, business_id=business_id, secret_name=f'{provider.connector_id}.api_app_id')
+            return bool(expected_team and expected_app and str(payload.get('team_id') or '').strip() == expected_team and str(payload.get('api_app_id') or '').strip() == expected_app)
+        if key == 'discord_messaging':
+            expected = self._read_secret(tenant_id=tenant_id, connector_id=provider.connector_id, business_id=business_id, secret_name=f'{provider.connector_id}.application_id')
+            return bool(expected and str(payload.get('application_id') or '').strip() == expected)
+        if key == 'line_messaging':
+            expected = self._read_secret(tenant_id=tenant_id, connector_id=provider.connector_id, business_id=business_id, secret_name=f'{provider.connector_id}.bot_user_id')
+            return bool(expected and str(payload.get('destination') or '').strip() == expected)
+        if key == 'kakaotalk_messaging':
+            expected = self._read_secret(tenant_id=tenant_id, connector_id=provider.connector_id, business_id=business_id, secret_name=f'{provider.connector_id}.bot_id')
+            bot = payload.get('bot')
+            return bool(expected and isinstance(bot, Mapping) and str(bot.get('id') or '').strip() == expected)
+        if key == 'wechat_messaging':
+            expected = self._read_secret(tenant_id=tenant_id, connector_id=provider.connector_id, business_id=business_id, secret_name=f'{provider.connector_id}.to_user_name')
+            observed = payload.get('ToUserName') or payload.get('to_user_name')
+            return bool(expected and str(observed or '').strip() == expected)
+        if key == 'viber_messaging':
+            # Viber's native callback has no bot-recipient field; the verified
+            # X-Viber-Content-Signature uses this bot's account-specific auth token.
+            return True
+        if key == 'max_messaging':
+            event_type, message = str(payload.get('update_type') or '').strip(), payload.get('message')
+            if not event_type:
+                return False
+            if not isinstance(message, Mapping):
+                return event_type not in {'message_created', 'message_edited', 'message_callback', 'comment_created', 'comment_edited'}
+            recipient, sender = message.get('recipient'), message.get('sender')
+            if not isinstance(recipient, Mapping) or not isinstance(sender, Mapping):
+                return False
+            chat_type = str(recipient.get('chat_type') or '')
+            chat_id, sender_id = str(recipient.get('chat_id') or '').strip(), str(sender.get('user_id') or '').strip()
+            observed = str(recipient.get('user_id') or '').strip()
+            if chat_type not in {'dialog', 'chat', 'channel'} or not chat_id.isdecimal() or not sender_id.isdecimal() or sender.get('is_bot') is True:
+                return False
+            if chat_type == 'dialog' or observed:
+                expected = self._read_secret(tenant_id=tenant_id, connector_id=provider.connector_id, business_id=business_id, secret_name=f'{provider.connector_id}.bot_id')
+                return bool(expected and expected.isdecimal() and observed == expected)
+            return True
+        expected = self._read_secret(tenant_id=tenant_id, connector_id=provider.connector_id, business_id=business_id, secret_name=f'{provider.connector_id}.group_id')
+        observed = str(payload.get('group_id') or '').strip()
+        return bool(expected and observed and observed == expected)
 
     def _secret_field(self, provider: ProviderDefinition) -> str:
         return next((field.secret_name for preferred_kind in ('signing_secret', 'token', 'api_key', 'password') for field in provider.secret_fields if field.secret_kind == preferred_kind), provider.secret_fields[0].secret_name if provider.secret_fields else 'secret')

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import hashlib
+import hmac
 import json
 
 from application.business_autonomy.provider_catalog import provider_map
@@ -18,7 +19,9 @@ def test_lowercase_http_headers_and_legacy_fallback_use_signed_stable_multichann
     vault = InMemorySecretVault()
     ref = SecretRef(tenant_id='tenant-a', connector_id=provider.connector_id, scope='business-a', secret_name=f'{provider.connector_id}.webhook_secret')
     vault.put(SecretRecord(ref=ref, ciphertext=b'pending', source=SecretSource.CONNECTOR), plaintext=b'secret')
-    body = json.dumps({'object': {'message': {'from_id': 7, 'text': 'hello', 'id': 9}}}, sort_keys=True).encode()
+    group_ref = SecretRef(tenant_id='tenant-a', connector_id=provider.connector_id, scope='business-a', secret_name=f'{provider.connector_id}.group_id')
+    vault.put(SecretRecord(ref=group_ref, ciphertext=b'pending', source=SecretSource.CONNECTOR), plaintext=b'42')
+    body = json.dumps({'group_id': 42, 'object': {'message': {'from_id': 7, 'text': 'hello', 'id': 9}}}, sort_keys=True).encode()
     service = ProviderInboundWebhookService(webhook_runtime=ProviderWebhookRuntime(vault), replay_guard=ProviderWebhookReplayGuard(InMemoryIdempotencyStore()))
     result = service.ingest(provider=provider, tenant_id='tenant-a', business_id='business-a', headers={'x-businessaios-webhook-secret': 'secret'}, body=body, event_key='payload-digest-fallback')
     assert result.accepted is True
@@ -35,10 +38,11 @@ def test_vk_max_authenticated_ingress_scopes_signed_reply_to_real_event(tmp_path
     monkeypatch.chdir(tmp_path)
     monkeypatch.setenv("BUSINESAIOS_SAFETY_SIGNING_SECRET", "integration-test-only-strong-secret")
     bodies = {
-        "vk_messaging": {"type": "message_new", "object": {"message": {
+        "vk_messaging": {"type": "message_new", "group_id": 42, "object": {"message": {
             "id": 9, "from_id": 777, "peer_id": 777, "text": "hello"}}},
         "max_messaging": {"update_type": "message_created", "message": {
-            "sender": {"user_id": 777}, "recipient": {"chat_id": 777},
+            "sender": {"user_id": 777, "is_bot": False},
+            "recipient": {"chat_id": 777, "chat_type": "dialog", "user_id": 9001},
             "body": {"mid": "max-msg-9", "text": "hello"}}},
     }
     for provider_key, body_dict in bodies.items():
@@ -47,6 +51,12 @@ def test_vk_max_authenticated_ingress_scopes_signed_reply_to_real_event(tmp_path
         ref = SecretRef(tenant_id="tenant-a", connector_id=provider.connector_id,
                         scope="business-a", secret_name=f"{provider.connector_id}.webhook_secret")
         vault.seed_plaintext(ref=ref, plaintext="provider-secret")
+        if provider_key == "vk_messaging":
+            group_ref = SecretRef(tenant_id="tenant-a", connector_id=provider.connector_id, scope="business-a", secret_name=f"{provider.connector_id}.group_id")
+            vault.seed_plaintext(ref=group_ref, plaintext="42")
+        elif provider_key == "max_messaging":
+            bot_ref = SecretRef(tenant_id="tenant-a", connector_id=provider.connector_id, scope="business-a", secret_name=f"{provider.connector_id}.bot_id")
+            vault.seed_plaintext(ref=bot_ref, plaintext="9001")
         class Processor:
             calls = 0
             proof = None
@@ -162,3 +172,63 @@ def test_unsafe_discord_interaction_replay_cannot_bypass_http_503() -> None:
         )
     assert response.status_code == 503
     assert response.json()["detail"] == "provider_webhook_processing_incomplete"
+
+def test_wrong_signed_whatsapp_recipient_is_rejected_before_replay_or_handoff(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    provider = provider_map()["whatsapp_cloud"]
+    vault = InMemorySecretVault()
+    app_secret_ref = SecretRef(tenant_id="tenant-a", connector_id=provider.connector_id,
+                              scope="business-a", secret_name=f"{provider.connector_id}.app_secret")
+    phone_ref = SecretRef(tenant_id="tenant-a", connector_id=provider.connector_id,
+                          scope="business-a", secret_name=f"{provider.connector_id}.phone_number_id")
+    vault.seed_plaintext(ref=app_secret_ref, plaintext="meta-app-secret")
+    vault.seed_plaintext(ref=phone_ref, plaintext="phone-123")
+    body = json.dumps({
+        "object": "whatsapp_business_account",
+        "entry": [{
+            "id": "waba-1",
+            "changes": [{
+                "field": "messages",
+                "value": {
+                    "metadata": {"phone_number_id": "phone-999"},
+                    "messages": [{"from": "15550001", "id": "wamid-foreign", "text": {"body": "hello"}}],
+                },
+            }],
+        }],
+    }).encode()
+    signature = "sha256=" + hmac.new(b"meta-app-secret", body, hashlib.sha256).hexdigest()
+
+    class ReplayGuard:
+        calls = 0
+
+        def reserve_event(self, **kwargs):
+            self.calls += 1
+            raise AssertionError("recipient mismatch must be rejected before replay reservation")
+
+    class Processor:
+        calls = 0
+
+        def process(self, *, handoff):
+            self.calls += 1
+            raise AssertionError("recipient mismatch must never reach inbound processing")
+
+    replay_guard, processor = ReplayGuard(), Processor()
+    service = ProviderInboundWebhookService(
+        webhook_runtime=ProviderWebhookRuntime(vault),
+        replay_guard=replay_guard,
+        inbound_processor=processor,
+    )
+    result = service.ingest(
+        provider=provider,
+        tenant_id="tenant-a",
+        business_id="business-a",
+        headers={"X-Hub-Signature-256": signature},
+        body=body,
+        event_key="foreign-recipient-event",
+    )
+
+    assert result.accepted is False
+    assert result.status == "invalid_signature"
+    assert replay_guard.calls == 0
+    assert processor.calls == 0
+
