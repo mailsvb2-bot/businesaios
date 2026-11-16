@@ -47,10 +47,10 @@ class SqliteEventStore(
         return self
 
     def __exit__(self, exc_type, exc, tb):
-        if self._db:
-            self._db.close()
-            self._db = None
+        db, self._db = self._db, None
         self._schema_verified = False
+        if db is not None:
+            db.close()
 
     def ping(self) -> bool:
         try:
