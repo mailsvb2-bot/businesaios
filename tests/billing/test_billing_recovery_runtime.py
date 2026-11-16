@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, replace
 from datetime import UTC, datetime
+from decimal import Decimal
 
 import pytest
 
@@ -14,6 +15,7 @@ from billing.payment_provider_contract import PaymentCustomerProfile, PaymentPro
 from billing.payment_provider_health_registry import PaymentProviderHealthRegistry
 from billing.reconciliation_service import BillingReconciliationService
 from billing.refund_orchestrator import RefundOrchestrator
+from billing.recovery_contracts import ChargebackCase, RefundResult
 from contracts.event_store import canonical_business_event_contract
 from core.events.event_types import REFUND_CREATED
 from runtime.monetization import MonetizationService
@@ -320,3 +322,62 @@ def test_refund_replay_rejects_business_rebinding_from_durable_result() -> None:
     ))
     assert len(rows) == 1
     assert canonical_business_event_contract(rows[0])["business_id"] == "business-a"
+
+
+@pytest.mark.parametrize("amount_minor", [True, False, 1.0, 1.5, "1", Decimal("1")])
+def test_refund_orchestrator_rejects_coercible_minor_units_before_provider_call(amount_minor: object) -> None:
+    orchestrator = RefundOrchestrator(
+        provider=_MustNotRefundProvider(),
+        ledger_store=InMemoryLedgerStore(),
+        monetization_service=MonetizationService(),
+    )
+    with pytest.raises(ValueError, match="amount_minor"):
+        orchestrator.refund(
+            invoice=_paid_invoice(),
+            user_id="user-1",
+            amount_minor=amount_minor,
+            reason="invalid amount boundary",
+            idempotency_key="invalid-refund-amount",
+        )
+
+
+@pytest.mark.parametrize("amount_minor", [True, False, 1.0, 1.5, "1", Decimal("1")])
+def test_chargeback_orchestrator_rejects_coercible_minor_units_before_ledger_posting(amount_minor: object) -> None:
+    ledger = InMemoryLedgerStore()
+    orchestrator = ChargebackOrchestrator(
+        ledger_store=ledger,
+        monetization_service=MonetizationService(),
+    )
+    with pytest.raises(ValueError, match="amount_minor"):
+        orchestrator.open_case(
+            invoice=_paid_invoice(),
+            user_id="user-1",
+            amount_minor=amount_minor,
+            reason="invalid amount boundary",
+        )
+    assert ledger.list_postings(tenant_id="tenant-a") == ()
+
+
+@pytest.mark.parametrize("amount_minor", [True, False, 1.0, 1.5, "1", Decimal("1")])
+def test_canonical_recovery_contracts_reject_coercible_minor_units(amount_minor: object) -> None:
+    case = ChargebackCase(
+        tenant_id="tenant-a",
+        invoice_id="invoice-1",
+        user_id="user-1",
+        amount_minor=amount_minor,
+        currency="USD",
+        reason="dispute",
+    )
+    result = RefundResult(
+        tenant_id="tenant-a",
+        invoice_id="invoice-1",
+        refund_id="refund-1",
+        amount_minor=amount_minor,
+        currency="USD",
+        provider_name="provider",
+        external_reference="external-1",
+    )
+    with pytest.raises(ValueError, match="amount_minor"):
+        case.validate()
+    with pytest.raises(ValueError, match="amount_minor"):
+        result.validate()
