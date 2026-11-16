@@ -183,3 +183,51 @@ def test_already_paid_invoice_without_matching_psp_proof_cannot_be_laundered():
     assert env["invoices"].has_verified_psp_payment_evidence(
         **scope, invoice_id=order.invoice_id, evidence_id="verified-psp-evidence-1",
     ) is False
+
+
+def test_second_psp_evidence_cannot_replace_the_proof_that_paid_an_invoice():
+    env = build()
+    scope, order = env["scope"], env["order"]
+    first = env["reconciler"].reconcile(**scope, order_id=order.order_id)
+    env["authority"].proof = replace(env["authority"].proof, evidence_id="second-psp-evidence")
+
+    with pytest.raises(RuntimeError, match="commercial_settlement_paid_without_matching_proof"):
+        env["reconciler"].reconcile(**scope, order_id=order.order_id)
+
+    paid_events = [
+        event for event in env["events"]
+        if (event.get("payload") or {}).get("fact_type") == "invoice.payment_recorded"
+    ]
+    assert first.provider_verified is True
+    assert len(paid_events) == 1
+    assert env["invoices"].get(**scope, invoice_id=order.invoice_id).paid_minor == order.amount_minor
+
+
+def test_parallel_psp_confirms_post_exactly_once():
+    from threading import Thread
+
+    env = build()
+    scope, order = env["scope"], env["order"]
+    outcomes = []
+    errors = []
+
+    def reconcile():
+        try:
+            outcomes.append(env["reconciler"].reconcile(**scope, order_id=order.order_id))
+        except BaseException as exc:  # noqa: BLE001 - assert controlled failures below
+            errors.append(exc)
+
+    threads = [Thread(target=reconcile) for _ in range(8)]
+    for thread in threads:
+        thread.start()
+    for thread in threads:
+        thread.join()
+
+    paid_events = [
+        event for event in env["events"]
+        if (event.get("payload") or {}).get("fact_type") == "invoice.payment_recorded"
+    ]
+    assert len(outcomes) + len(errors) == len(threads)
+    assert all(isinstance(error, RuntimeError) for error in errors)
+    assert len(paid_events) == 1
+    assert env["invoices"].get(**scope, invoice_id=order.invoice_id).paid_minor == order.amount_minor
