@@ -8,6 +8,8 @@ import pytest
 from runtime._internal import llm_transport
 from runtime.effects import llm_effects
 from runtime.llm import build_runtime_llm_client
+from core.llm.providers.anthropic import _extract_usage as extract_anthropic_usage
+from core.llm.providers.openai_provider import _extract_usage as extract_openai_usage
 
 
 def test_effect_facade_reaches_sealed_transport(monkeypatch):
@@ -60,3 +62,46 @@ def test_yandex_model_uri_and_metadata_not_sent(monkeypatch):
     client.generate_sync(request)
     assert captured[0]["modelUri"] == "gpt://folder/yandexgpt-lite/latest"
     assert "metadata" not in captured[0]
+
+
+
+def test_anthropic_cache_usage_is_normalized_without_dropping_tokens():
+    usage = extract_anthropic_usage({
+        "usage": {
+            "input_tokens": 100,
+            "output_tokens": 20,
+            "cache_creation_input_tokens": 10,
+            "cache_read_input_tokens": 40,
+        }
+    })
+    assert usage is not None
+    assert (usage.prompt_tokens, usage.completion_tokens, usage.total_tokens) == (150, 20, 170)
+    assert usage.cached_input_tokens == 40
+    assert usage.cache_write_input_tokens == 10
+
+
+def test_anthropic_unknown_cache_creation_breakdown_fails_closed():
+    assert extract_anthropic_usage({
+        "usage": {
+            "input_tokens": 100,
+            "output_tokens": 20,
+            "cache_creation_input_tokens": 10,
+            "cache_read_input_tokens": 40,
+            "cache_creation": {"ephemeral_5m_input_tokens": 10},
+        }
+    }) is None
+
+
+def test_openai_cached_and_reasoning_tokens_are_preserved():
+    usage = extract_openai_usage({
+        "usage": {
+            "prompt_tokens": 100,
+            "completion_tokens": 20,
+            "total_tokens": 120,
+            "prompt_tokens_details": {"cached_tokens": 40},
+            "completion_tokens_details": {"reasoning_tokens": 8},
+        }
+    })
+    assert usage is not None
+    assert usage.cached_input_tokens == 40
+    assert usage.reasoning_output_tokens == 8
