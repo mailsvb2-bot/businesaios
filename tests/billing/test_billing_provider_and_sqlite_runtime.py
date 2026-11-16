@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import json
+import sqlite3
 from dataclasses import dataclass
 from decimal import Decimal
 from datetime import UTC, datetime
@@ -143,6 +145,49 @@ def test_sqlite_ledger_store_persists_balanced_postings(tmp_path: Path) -> None:
     assert reloaded.total_for_account(tenant_id='tenant-a', account_code='billing.accounts.revenue', side='credit') == 700
 
 
+def test_sqlite_ledger_store_rejects_fractional_minor_units_loaded_from_disk(tmp_path: Path) -> None:
+    database_path = tmp_path / "ledger.sqlite3"
+    ledger = SqliteLedgerStore(sqlite_path=str(database_path))
+    posting = LedgerPosting(
+        posting_id="legacy-fractional",
+        tenant_id="tenant-a",
+        reference_type="llm_usage",
+        reference_id="request-legacy",
+        entries=(
+            LedgerEntry(
+                tenant_id="tenant-a", entry_id="debit",
+                account_code="billing.accounts.llm_expense", side="debit",
+                amount_minor=1, currency="USD",
+                reference_type="llm_usage", reference_id="request-legacy",
+            ),
+            LedgerEntry(
+                tenant_id="tenant-a", entry_id="credit",
+                account_code="billing.accounts.payable", side="credit",
+                amount_minor=1, currency="USD",
+                reference_type="llm_usage", reference_id="request-legacy",
+            ),
+        ),
+    )
+    ledger.append(posting)
+
+    with sqlite3.connect(database_path) as connection:
+        row = connection.execute(
+            "SELECT payload_json FROM billing_ledger_postings WHERE tenant_id = ? AND posting_id = ?",
+            ("tenant-a", "legacy-fractional"),
+        ).fetchone()
+        assert row is not None
+        payload = json.loads(row[0])
+        for entry in payload["entries"]:
+            entry["amount_minor"] = 1.5
+        connection.execute(
+            "UPDATE billing_ledger_postings SET payload_json = ? WHERE tenant_id = ? AND posting_id = ?",
+            (json.dumps(payload, sort_keys=True), "tenant-a", "legacy-fractional"),
+        )
+
+    reloaded = SqliteLedgerStore(sqlite_path=str(database_path))
+    with pytest.raises(ValueError, match="amount_minor"):
+        reloaded.list_postings(tenant_id="tenant-a")
+
 
 def test_payment_provider_health_without_cooldown_is_not_available_when_unhealthy() -> None:
     health = PaymentProviderHealthRegistry()
@@ -162,7 +207,7 @@ def test_router_prefers_lower_failure_count_when_priority_ties() -> None:
     health = PaymentProviderHealthRegistry()
     health.mark_failure('flaky', reason='timeout', cooldown_seconds=0, now=datetime(2026, 4, 9, tzinfo=UTC))
     router = PaymentProviderRouter(registry=registry, health_registry=health)
-    selection = router.select(tenant_id='tenant-a', currency='USD', now=datetime(2026, 4, 9, tzinfo=UTC))
+    selection = router.select(tenant_id='tenant-a', currency='USD', now=datetime(2026, 4, 9, 0, 1, tzinfo=UTC))
     assert selection.provider_name == 'stable'
     assert selection.metadata['failure_count'] == 0
 
@@ -207,7 +252,6 @@ def test_sqlite_ledger_store_rejects_posting_id_collision_with_different_payload
         pass
     else:
         raise AssertionError('expected sqlite posting collision to fail')
-
 
 
 def test_provider_registry_normalizes_name_case_and_currency() -> None:
