@@ -126,6 +126,7 @@ PROVIDERS: tuple[ProviderDefinition, ...] = (
         description="Подключение сайта как web-business system с supervised/low-autonomy path.",
         secret_fields=(
             _token("Webhook Secret", "webhook_secret", placeholder="site-webhook-secret", kind="signing_secret"),
+            _token("Verified Chat Site Domain", "site_domain", placeholder="chat.example.com", kind="config", required=False),
             _token("Admin API Key", "admin_api_key", placeholder="optional-admin-key", kind="api_key"),
         ),
         default_non_ai_mode="supervised",
