@@ -141,3 +141,20 @@ def test_wechat_inbound_reply_targets_sender_not_business_account():
     assert ingress is not None
     assert ingress.user_id == "sender-openid"
     assert ingress.chat_id == "sender-openid"
+
+
+def test_wechat_inbound_never_turns_structured_message_into_customer_text():
+    from application.business_autonomy.provider_catalog import provider_map
+    from runtime.business_autonomy.provider_webhook_messaging_bridge import resolve_provider_webhook_messaging_ingress
+
+    provider = provider_map()["wechat_messaging"]
+    ingress = resolve_provider_webhook_messaging_ingress(
+        provider=provider,
+        normalized_payload={
+            "FromUserName": "sender-openid",
+            "ToUserName": "gh_business_account",
+            "MsgId": "wechat-message-2",
+            "message": {"internal": "do-not-send-as-customer-text"},
+        },
+    )
+    assert ingress is None
