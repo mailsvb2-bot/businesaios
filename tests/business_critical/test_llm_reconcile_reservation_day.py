@@ -11,7 +11,10 @@ class _Store:
         self.windows.append((start_ms, end_ms))
         completed_at = int(datetime(2026, 11, 8, 23, 59, tzinfo=timezone.utc).timestamp() * 1000)
         if start_ms <= completed_at < end_ms:
-            yield {"user_id": "user-1", "payload": {"request_id": "request-1", "total_tokens": 10}}
+            yield {"user_id": "user-1", "payload": {
+                "request_id": "request-1", "provider": "openai", "model": "test-model",
+                "prompt_tokens": 6, "completion_tokens": 4, "total_tokens": 10,
+            }}
 
     def compare_and_set_setting(self, *, tenant_id, key, expected, value):
         assert (tenant_id, key) == ("tenant-1", "llm:pending:v1:2026-11-08")
