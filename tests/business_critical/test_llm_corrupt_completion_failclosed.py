@@ -164,11 +164,21 @@ def test_only_open_schema_verified_persistent_event_stores_support_llm_budgets(t
     assert not has_durable_budget_store(memory)
 
     class _Port:
+        def fetchone(self, query):
+            assert "schema_migrations" in query and "information_schema.columns" in query
+            return (True, True, True)
+
+        def commit(self):
+            return None
+
         def __exit__(self, exc_type, exc, tb):
             return None
 
     postgres._port = _Port()
-    postgres._schema_verified = True
+    postgres._verify_schema()
+    # PostgresEventStore sets this capability only after __enter__ has verified
+    # the schema and retained an open port; simulate that completed lifecycle.
+    postgres.supports_durable_llm_budget = True
     assert has_durable_budget_store(postgres)
     with sqlite:
         assert has_durable_budget_store(sqlite)
@@ -184,7 +194,7 @@ def test_only_open_schema_verified_persistent_event_stores_support_llm_budgets(t
             raise OSError("sqlite close failed")
 
     postgres._port = _FailingPort()
-    postgres._schema_verified = True
+    postgres.supports_durable_llm_budget = True
     with pytest.raises(OSError, match="postgres close failed"):
         postgres.__exit__(None, None, None)
     assert not has_durable_budget_store(postgres)
