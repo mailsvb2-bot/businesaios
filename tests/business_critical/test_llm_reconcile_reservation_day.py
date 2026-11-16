@@ -351,3 +351,38 @@ def test_reservation_revision_prevents_aba_overspend_after_completed_release():
     state = store.get_setting(tenant_id="tenant-1", key="llm:pending:v2")
     assert state == {"revision": 2, "pending": {}}
     assert len(store.events) == 1
+
+def test_cancel_unstarted_reservation_releases_its_pending_claim():
+    store = _PeriodStore()
+    budget = _period_budget(store)
+    day = budget.reserve(
+        tenant_id="tenant-1", user_id="user-1", tokens=10, request_id="pre-provider-abort",
+    )
+    assert day == "2026-11-15"
+    claim_key = "llm:claim:v2:pre-provider-abort"
+    assert store.get_setting(tenant_id="tenant-1", key=claim_key) == {"user_id": "user-1"}
+
+    assert budget.cancel_unstarted_reservation(
+        tenant_id="tenant-1", request_id="pre-provider-abort", day=day,
+    )
+    assert store.get_setting(tenant_id="tenant-1", key="llm:pending:v2") == {
+        "revision": 2, "pending": {},
+    }
+    assert store.get_setting(tenant_id="tenant-1", key=claim_key) is None
+
+
+def test_failed_duplicate_reservation_does_not_delete_existing_claim():
+    claim_key = "llm:claim:v2:already-claimed"
+    store = _PeriodStore(settings={
+        ("tenant-1", claim_key): {"user_id": "user-1"},
+    })
+    budget = _period_budget(store)
+
+    assert budget.reserve(
+        tenant_id="tenant-1", user_id="user-1", tokens=10, request_id="already-claimed",
+    ) is None
+    assert store.get_setting(tenant_id="tenant-1", key=claim_key) == {"user_id": "user-1"}
+    assert store.get_setting(tenant_id="tenant-1", key="llm:pending:v2") == {
+        "revision": 2, "pending": {},
+    }
+
