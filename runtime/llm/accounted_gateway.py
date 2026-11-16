@@ -131,6 +131,15 @@ class AccountedSyncGateway:
         if usage is None:
             raise RuntimeError("LLM_ACCOUNTING_UNAVAILABLE")
         prompt, completion, total = usage
+        usage_categories = tuple(
+            getattr(response.usage, key, 0)
+            for key in ("cached_input_tokens", "cache_write_input_tokens", "reasoning_output_tokens")
+        )
+        if any(type(value) is not int or value < 0 for value in usage_categories):
+            raise RuntimeError("LLM_ACCOUNTING_UNAVAILABLE")
+        cached_input, cache_write_input, reasoning_output = usage_categories
+        if cached_input + cache_write_input > prompt or reasoning_output > completion:
+            raise RuntimeError("LLM_ACCOUNTING_UNAVAILABLE")
         try:
             append_event_sync(
                 event_store=self._store,
@@ -147,6 +156,10 @@ class AccountedSyncGateway:
                     "prompt_tokens": prompt,
                     "completion_tokens": completion,
                     "total_tokens": total,
+                    "usage_schema_version": 2,
+                    "cached_input_tokens": cached_input,
+                    "cache_write_input_tokens": cache_write_input,
+                    "reasoning_output_tokens": reasoning_output,
                     "latency_ms": max(0, int((time.monotonic() - started) * 1000)),
                     "finish_reason": str(getattr(response, "finish_reason", "") or ""),
                     "cache_hit": False,
