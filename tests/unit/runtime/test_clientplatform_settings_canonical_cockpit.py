@@ -7,16 +7,17 @@ from core.policies.telegram.routes.settings_routes import handle_settings_routes
 
 
 def _ctx(callback: str, *, admin: bool):
-    return SimpleNamespace(callback_data=callback, is_admin=admin, callback_query_id="cbq-1", cmd="")
+    return SimpleNamespace(callback_data=callback, is_admin=admin, callback_query_id="cbq-1", cmd="",
+                           state=SimpleNamespace(session={"selected_business_id": "business-123"}))
 
 
-def test_clientplatform_settings_use_existing_cockpit_action():
+def test_clientplatform_settings_use_existing_canonical_actions():
     expected = {
-        "cp:settings:organization": "cpm:manage",
-        "cp:settings:notifications": "cpm:automation",
-        "cp:settings:access": "cpm:team:0",
+        "cp:settings:organization": ("business_admin@v1", "organization_show", ""),
+        "cp:settings:notifications": ("business_admin@v1", "notifications_show", ""),
+        "cp:settings:access": ("business_ops_summary@v1", "cockpit", "cpm:team:0"),
     }
-    for callback, screen in expected.items():
+    for callback, (action, operation, arg) in expected.items():
         result = handle_settings_routes(
             _ctx(callback, admin=True),
             user_id="123",
@@ -24,10 +25,12 @@ def test_clientplatform_settings_use_existing_cockpit_action():
             pm=lambda **kwargs: (_ for _ in ()).throw(AssertionError("must route through canonical action")),
         )
         assert result is not None
-        assert result.action == "business_ops_summary@v1"
-        assert result.payload["op"] == "cockpit"
-        assert result.payload["arg"] == screen
+        assert result.action == action
+        assert result.payload["op"] == operation
+        assert result.payload["arg"] == arg
         assert result.payload["callback_query_id"] == "cbq-1"
+        if callback == "cp:settings:organization":
+            assert result.payload["business_id"] == "business-123"
 
 
 def test_clientplatform_settings_deny_non_admin():
@@ -41,7 +44,7 @@ def test_clientplatform_settings_deny_non_admin():
         )
         assert result is not None
         assert len(messages) == 1
-        assert "только администратору" in messages[0]["text"]
+        assert "администратору" in messages[0]["text"]
 
 
 def test_settings_menu_uses_real_newlines():

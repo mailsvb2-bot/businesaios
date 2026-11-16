@@ -7,7 +7,8 @@ from core.ux.keyboards.settings import kb_settings_menu
 
 
 def _route(callback: str = "", cmd: str | None = None):
-    ctx = SimpleNamespace(callback_data=callback, cmd=cmd, is_admin=True, callback_query_id=None)
+    ctx = SimpleNamespace(callback_data=callback, cmd=cmd, is_admin=True, callback_query_id=None,
+                          state=SimpleNamespace(session={"selected_business_id": "business-one"}), args="")
     return handle_settings_routes(ctx, user_id="u", bot_username="clientplatform_bot",
                                   pm=lambda **kw: kw)
 
@@ -35,9 +36,16 @@ def test_stale_therapy_callbacks_fail_closed():
 
 
 def test_business_settings_pages_render_without_therapy_content():
-    for callback in ("cp:settings:organization", "cp:settings:notifications", "cp:settings:access"):
+    for callback, action, op in (
+        ("cp:settings:organization", "business_admin@v1", "organization_show"),
+        ("cp:settings:notifications", "business_admin@v1", "notifications_show"),
+        ("cp:settings:access", "business_ops_summary@v1", "cockpit"),
+    ):
         result = _route(callback)
         assert result is not None
-        assert result.action == "business_ops_summary@v1"
-        assert result.payload["op"] == "cockpit"
-        assert result.payload["arg"].startswith("cpm:")
+        assert result.action == action
+        assert result.payload["op"] == op
+        if callback == "cp:settings:organization":
+            assert result.payload["business_id"] == "business-one"
+        if callback == "cp:settings:access":
+            assert result.payload["arg"] == "cpm:team:0"
