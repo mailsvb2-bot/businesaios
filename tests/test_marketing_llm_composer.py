@@ -45,7 +45,11 @@ class _UsageLLM:
 
 
 def test_composer_returns_text_and_caches():
-    composer = _composer(MockLLMClient(fixed_text=_VALID), LLMComposerConfig(model="mock", budget_source="memory"))
+    composer = _composer(
+        MockLLMClient(fixed_text=_VALID),
+        LLMComposerConfig(model="mock", budget_source="event_store"),
+        event_store=_BudgetContractEventStore(),
+    )
     inp = _input(tenant="t1", user="u1")
     first = composer.compose_sync(inp)
     assert first
