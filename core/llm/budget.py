@@ -26,29 +26,15 @@ class BudgetCaps:
     user_tokens_per_month: int | None = None
 
     def __post_init__(self) -> None:
-        tenant_day_overridden = self.tenant_tokens_per_day is not None
-        user_day_overridden = self.user_tokens_per_day is not None
         tenant_day = self.policy.tenant_tokens_per_day if self.tenant_tokens_per_day is None else self.tenant_tokens_per_day
         user_day = self.policy.user_tokens_per_day if self.user_tokens_per_day is None else self.user_tokens_per_day
         values = {
             "tenant_tokens_per_day": tenant_day,
             "user_tokens_per_day": user_day,
-            "tenant_tokens_per_week": (
-                self.policy.tenant_tokens_per_week if self.tenant_tokens_per_week is None and not tenant_day_overridden
-                else tenant_day * 7 if self.tenant_tokens_per_week is None else self.tenant_tokens_per_week
-            ),
-            "user_tokens_per_week": (
-                self.policy.user_tokens_per_week if self.user_tokens_per_week is None and not user_day_overridden
-                else user_day * 7 if self.user_tokens_per_week is None else self.user_tokens_per_week
-            ),
-            "tenant_tokens_per_month": (
-                self.policy.tenant_tokens_per_month if self.tenant_tokens_per_month is None and not tenant_day_overridden
-                else tenant_day * 30 if self.tenant_tokens_per_month is None else self.tenant_tokens_per_month
-            ),
-            "user_tokens_per_month": (
-                self.policy.user_tokens_per_month if self.user_tokens_per_month is None and not user_day_overridden
-                else user_day * 30 if self.user_tokens_per_month is None else self.user_tokens_per_month
-            ),
+            "tenant_tokens_per_week": self.tenant_tokens_per_week if self.tenant_tokens_per_week is not None else self.policy.tenant_tokens_per_week if self.policy.tenant_tokens_per_week is not None else tenant_day * 7,
+            "user_tokens_per_week": self.user_tokens_per_week if self.user_tokens_per_week is not None else self.policy.user_tokens_per_week if self.policy.user_tokens_per_week is not None else user_day * 7,
+            "tenant_tokens_per_month": self.tenant_tokens_per_month if self.tenant_tokens_per_month is not None else self.policy.tenant_tokens_per_month if self.policy.tenant_tokens_per_month is not None else tenant_day * 30,
+            "user_tokens_per_month": self.user_tokens_per_month if self.user_tokens_per_month is not None else self.policy.user_tokens_per_month if self.policy.user_tokens_per_month is not None else user_day * 30,
         }
         for name, value in values.items():
             if type(value) is not int or value < 0:
