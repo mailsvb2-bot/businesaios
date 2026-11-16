@@ -158,20 +158,24 @@ def test_only_open_schema_verified_persistent_event_stores_support_llm_budgets(t
 
     postgres = PostgresEventStore("postgresql://unused", enabled=True)
     sqlite = SqliteEventStore(str(tmp_path / "events.sqlite3"))
+    memory = MemoryEventStore()
     assert not has_durable_budget_store(postgres)
     assert not has_durable_budget_store(sqlite)
-    assert not has_durable_budget_store(MemoryEventStore())
-
-    # Model the opened/verified lifecycle without opening external resources.
-    postgres._port = object()
-    postgres._schema_verified = True
-    sqlite._db = object()
-    sqlite._schema_verified = True
-    assert has_durable_budget_store(postgres)
-    assert has_durable_budget_store(sqlite)
-    assert not has_durable_budget_store(MemoryEventStore())
+    assert not has_durable_budget_store(memory)
 
     class _Port:
+        def __exit__(self, exc_type, exc, tb):
+            return None
+
+    postgres._port = _Port()
+    postgres._schema_verified = True
+    assert has_durable_budget_store(postgres)
+    with sqlite:
+        assert has_durable_budget_store(sqlite)
+    assert not has_durable_budget_store(sqlite)
+    assert not has_durable_budget_store(memory)
+
+    class _FailingPort:
         def __exit__(self, exc_type, exc, tb):
             raise OSError("postgres close failed")
 
@@ -179,7 +183,7 @@ def test_only_open_schema_verified_persistent_event_stores_support_llm_budgets(t
         def close(self):
             raise OSError("sqlite close failed")
 
-    postgres._port = _Port()
+    postgres._port = _FailingPort()
     postgres._schema_verified = True
     with pytest.raises(OSError, match="postgres close failed"):
         postgres.__exit__(None, None, None)
