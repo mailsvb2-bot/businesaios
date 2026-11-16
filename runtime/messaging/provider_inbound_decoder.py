@@ -383,6 +383,9 @@ def _vk_lookup_view(raw: dict[str, Any]) -> dict[str, Any]:
 def _provider_text(channel: str, raw: Mapping[str, Any], fallback: str) -> str:
     if channel == "max" and raw.get("update_type") == "bot_started":
         return ("/start " + _scalar_text(raw.get("payload"))).strip()
+    if channel == "max" and raw.get("update_type") == "message_callback":
+        callback = raw.get("callback")
+        return _scalar_text(callback.get("payload")) if isinstance(callback, Mapping) else ""
     return fallback
 
 
