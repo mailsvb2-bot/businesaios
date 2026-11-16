@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 from dataclasses import replace
+
+from contracts.clientplatform_admin_analytics import ADMIN_ANALYTICS_ROUTES
 from core.policies.telegram.context import TelegramCtx
 from core.policies.telegram.handlers.admin.analytics_helpers import deny_if_not_admin, staff_reply
 from core.policies.telegram.helpers import ProposedAction, propose
@@ -8,8 +10,14 @@ from core.ux.telegram_keyboards import kb_back_main, kb_staff_menu
 
 
 def handle_analytics(ctx: TelegramCtx, *, user_id: str, pm) -> ProposedAction | None:
-    if ctx.callback_data in {"admin:segments", "admin:ab", "admin:giftshare", "admin:funnel2"} and not hasattr(ctx, "event_store"):
-        return pm(text="Аналитика событий сейчас недоступна в Telegram.", reply_markup=kb_staff_menu())
+    if ctx.callback_data in ADMIN_ANALYTICS_ROUTES:
+        if not ctx.is_admin:
+            return pm(text="Доступ запрещён.", reply_markup=kb_back_main())
+        return propose(
+            "business_ops_summary@v1",
+            {"user_id": user_id, "op": "admin_analytics", "arg": ctx.callback_data,
+             **({"callback_query_id": ctx.callback_query_id} if ctx.callback_query_id else {})},
+        )
     if ctx.callback_data in {"admin:demo:brief", "admin:demo:full"}:
         denied = deny_if_not_admin(ctx.is_admin, pm=pm)
         if denied is not None:
@@ -46,71 +54,6 @@ def handle_analytics(ctx: TelegramCtx, *, user_id: str, pm) -> ProposedAction | 
             return denied
         n = int((ctx.admin_metrics or {}).get("users_today") or 0)
         return pm(text=f"👥 Пользователи сегодня: {n}", reply_markup=kb_staff_menu())
-
-    if ctx.callback_data == "admin:segments":
-        denied = deny_if_not_admin(ctx.is_admin, pm=pm)
-        if denied is not None:
-            return denied
-        from core.admin.read_model import segments_summary
-
-        seg = segments_summary(ctx.event_store, days=30)
-        txt = (
-            "🧲 Сегменты (30д/7д)\n\n"
-            f"🆕 Новые сегодня: {seg['new_users']}\n"
-            f"🔥 Активные 7д: {seg['active_users_7d']}\n"
-            f"💳 Плательщики 30д: {seg['payers_30d']}\n"
-            f"✅ Доступ выдан 30д: {seg['granted_30d']}\n\n"
-            "Подсказка: сегменты считаются по событиям (event-store), без второго мозга."
-        )
-        return pm(text=txt, reply_markup=kb_staff_menu())
-
-    if ctx.callback_data == "admin:ab":
-        if not ctx.is_admin:
-            return pm(text="Доступ запрещён.", reply_markup=kb_back_main())
-        from core.admin.read_model import ab_offers_summary
-
-        ab = ab_offers_summary(ctx.event_store, days=30)
-        txt = (
-            "🧪 Тесты офферов (30д)\n\n"
-            f"🧾 Сгенерировано вариантов: {ab['variants_set']}\n"
-            f"✅ Выбрано вариантов: {ab['variants_chosen']}\n\n"
-            "Совет: используйте «🤖 ИИ-копирайтер», затем выберите лучший вариант — он сохранится как событие."
-        )
-        return pm(text=txt, reply_markup=kb_staff_menu())
-
-    if ctx.callback_data == "admin:giftshare":
-        if not ctx.is_admin:
-            return pm(text="Доступ запрещён.", reply_markup=kb_back_main())
-        from core.admin.read_model import giftshare_summary
-
-        gs = giftshare_summary(ctx.event_store, days=30)
-        txt = (
-            "🎁 Подарки и рекомендации (30д)\n\n"
-            f"🔗 Переходы по приглашениям: {gs['share_clicked']}\n"
-            f"🎁 Отправлено подарков: {gs['gift_sent']}\n\n"
-            "Подсказка: события фиксируются в ledger → event-store."
-        )
-        return pm(text=txt, reply_markup=kb_staff_menu())
-
-    if ctx.callback_data == "admin:funnel2":
-        if not ctx.is_admin:
-            return pm(text="Доступ запрещён.", reply_markup=kb_back_main())
-        from core.admin.read_model import funnel2_report
-
-        rep = funnel2_report(ctx.event_store, days=7)
-        c = rep["counts"]
-        r = rep["rates_pct_from_view"]
-        txt = (
-            "🧲 Воронка 2.0 (последние 7 дней)\n\n"
-            f"👀 Просмотр тарифов: {c.get('tariffs_viewed',0)} (100%)\n"
-            f"✅ Выбор тарифа: {c.get('tariff_selected',0)} ({r.get('tariff_selected',0)}%)\n"
-            f"🧾 Создание оплаты: {c.get('payment_created',0)} ({r.get('payment_created',0)}%)\n"
-            f"💳 Оплата успешна: {c.get('payment_captured',0)} ({r.get('payment_captured',0)}%)\n"
-            f"🔓 Доступ выдан: {c.get('access_granted',0)} ({r.get('access_granted',0)}%)\n"
-            f"📤 Первая отправка: {c.get('audio_sent',0)} ({r.get('audio_sent',0)}%)\n\n"
-            "Воронка считается из event-store (DB fast-path), без второго мозга."
-        )
-        return pm(text=txt, reply_markup=kb_staff_menu())
 
     if ctx.callback_data == "admin:funnel":
         if not ctx.is_admin:

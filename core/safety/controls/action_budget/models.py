@@ -12,6 +12,7 @@ from contextvars import ContextVar
 from dataclasses import dataclass
 from typing import Any
 
+from contracts.clientplatform_admin_analytics import ADMIN_ANALYTICS_ROUTES
 from contracts.messaging_channels import ALL_CHANNELS
 from core.safety.controls.key_registry import SafetyKeyRegistry
 
@@ -220,6 +221,7 @@ def is_budget_free_read_projection(action: str, payload: Mapping[str, Any]) -> b
     op, arg = payload.get("op"), str(payload.get("arg") or "")
     indexed_read = (arg.startswith(("cpm:customers:", "cpm:payments:", "cpm:team:")) and arg.rsplit(":", 1)[-1].isdecimal() and len(arg.rsplit(":", 1)[-1]) <= 7)
     allowed = ((action == "business_ops_summary@v1" and op == "cockpit" and (arg in _READ_COCKPIT or indexed_read)) or
+               (action == "business_ops_summary@v1" and op == "admin_analytics" and arg in ADMIN_ANALYTICS_ROUTES) or
                (action == "sales_pipeline@v1" and op == "list" and not arg) or
                (action == "bookings@v1" and op == "ad_channels" and not arg))
     if not allowed or any(not isinstance(payload.get(k), str) or not payload[k].strip() for k in ("tenant_id", "user_id")):

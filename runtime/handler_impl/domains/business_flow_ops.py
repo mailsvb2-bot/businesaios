@@ -25,14 +25,13 @@ from runtime.handler_impl.domains.business_catalog_ops import (
     PROMO_OPS,
     XP_OPS,
     _ads,
-    _organization_settings,
-    notification_preferences,
     _catalog,
     _commerce,
     _event_channels,
     _events,
     _external_products,
     _followups,
+    _organization_settings,
     _owner_journey,
     _panels,
     _partner_growth,
@@ -44,6 +43,7 @@ from runtime.handler_impl.domains.business_catalog_ops import (
     _slot_with_offering,
     _visual,
     channel_reminder_copies,
+    notification_preferences,
 )
 from runtime.handler_impl.domains.public_event_ops import MEDIA_OPS, PUB_OPS, _landing, media_op, public_event_op
 from runtime.handlers.delivery_contract import delivery_kwargs
@@ -401,6 +401,16 @@ def handle_business_ops_summary(payload, effects, env, *, event_store, now_ms: i
 
     body = require_mapping(payload or {})
     tenant_id, now = required_str(body, "tenant_id"), now_ms or _now_ms()
+    if str(body.get("op") or "") == "admin_analytics":
+        from runtime.handler_impl.domains.analytics_read_ops import render_admin_analytics
+
+        text = render_admin_analytics(
+            event_store=event_store, tenant_id=tenant_id,
+            route=str(body.get("arg") or ""), now_ms=now,
+        )
+        return send_tracked(
+            body, effects, env, text=text, event_type=None, event_payload=None,
+        )
 
     def facts(event_type: str) -> list[dict]:
         return flow_payloads(event_store, tenant_id=tenant_id, event_type=event_type)
