@@ -31,6 +31,11 @@ class SqliteEventStore(
     def __init__(self, path: str):
         self._path = str(path)
         self._db: sqlite3.Connection | None = None
+        self._schema_verified = False
+
+    @property
+    def supports_durable_llm_budget(self) -> bool:
+        return self._db is not None and self._schema_verified
 
     def __enter__(self):
         self._db = sqlite3.connect(self._path, timeout=5.0, check_same_thread=False)
@@ -38,12 +43,14 @@ class SqliteEventStore(
         self._db.execute("PRAGMA journal_mode=WAL;")
         init_schema(self._db)
         backfill_legacy_tenant_ids(self._db)
+        self._schema_verified = True
         return self
 
     def __exit__(self, exc_type, exc, tb):
         if self._db:
             self._db.close()
             self._db = None
+        self._schema_verified = False
 
     def ping(self) -> bool:
         try:
