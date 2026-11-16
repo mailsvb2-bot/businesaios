@@ -125,26 +125,27 @@ def build_marketing_llm_composer(*, settings: Any, event_store: Any, logger: Any
     cfg = LLMComposerConfig(model=model, provider=provider, budget_source="event_store",
         global_rps=env_float("LLM_GLOBAL_RPS", 15.0), global_burst=env_int("LLM_GLOBAL_BURST", 20),
         tenant_rps=env_float("LLM_TENANT_RPS", 4.0), tenant_burst=env_int("LLM_TENANT_BURST", 6))
-    return MarketingLLMComposer(llm, cfg, event_store=event_store)
+    return MarketingLLMComposer(
+        llm, cfg, event_store=event_store,
+        accounted_gateway_factory=AccountedSyncGateway,
+    )
 
 
-def build_marketing_llm_agent(*, settings: Any, event_store: Any, logger: Any) -> Any | None:
+def build_marketing_llm_agent(*, settings: Any, composer: Any) -> Any | None:
     """Build canonical LLMAgent facade (Variant B).
 
     We reuse the same underlying LLM client wiring as the composer to avoid
     divergence (no "two truths").
     """
 
-    composer = build_marketing_llm_composer(settings=settings, event_store=event_store, logger=logger)
     if composer is None:
         return None
 
-    llm_client = composer.llm_client
-    provider, _base_url, _api_key, agent_model, _anthropic_version = _provider_settings(settings)
+    _provider, _base_url, _api_key, agent_model, _anthropic_version = _provider_settings(settings)
     cfg = LLMAgentConfig(
         default_model=agent_model,
         temperature=env_float("LLM_TEMPERATURE", 0.4),
         max_tokens=env_int("LLM_MAX_TOKENS", 700),
         timeout_s=float(_runtime_timeout_s(settings)),
     )
-    return LLMAgent(AccountedSyncGateway(llm_client, event_store=event_store, provider=provider), cfg)
+    return LLMAgent(composer.accounted_gateway, cfg)

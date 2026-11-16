@@ -86,12 +86,30 @@ def _extract_text(raw: dict[str, Any]) -> str:
 def _extract_usage(raw: dict[str, Any]) -> LLMUsage | None:
     if not isinstance(usage := raw.get("usage"), dict):
         return None
-    values = (usage.get("input_tokens", usage.get("prompt_tokens")), usage.get("output_tokens", usage.get("completion_tokens")))
-    cached = (usage.get("cache_creation_input_tokens", 0), usage.get("cache_read_input_tokens", 0))
-    if any(type(v) is not int or v < 0 for v in values + cached) or any(cached) or usage.get("cache_creation"):
+    if usage.get("cache_creation") not in (None, {}):
+        return None  # Unclassified cache-creation TTL breakdown is not billable yet.
+    values = (
+        usage.get("input_tokens"),
+        usage.get("output_tokens"),
+        usage.get("cache_creation_input_tokens", 0),
+        usage.get("cache_read_input_tokens", 0),
+    )
+    if any(type(value) is not int or value < 0 for value in values):
         return None
-    return LLMUsage(*values, total_tokens=usage.get("total_tokens", sum(values)))
-
+    input_tokens, output_tokens, cache_write, cached = values
+    prompt_tokens = input_tokens + cache_write + cached
+    reported_total = usage.get("total_tokens")
+    if reported_total is not None and (
+        type(reported_total) is not int or reported_total != prompt_tokens + output_tokens
+    ):
+        return None
+    return LLMUsage(
+        prompt_tokens=prompt_tokens,
+        completion_tokens=output_tokens,
+        total_tokens=prompt_tokens + output_tokens,
+        cached_input_tokens=cached,
+        cache_write_input_tokens=cache_write,
+    )
 
 def _extract_finish(raw: dict[str, Any]) -> str:
     return str(raw.get("stop_reason") or raw.get("finish_reason") or DEFAULT_ANTHROPIC_PROVIDER_POLICY.default_stop_reason)

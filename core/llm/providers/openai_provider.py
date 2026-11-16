@@ -107,8 +107,24 @@ def _extract_usage(data: dict[str, Any]) -> LLMUsage | None:
     pt = u.get("prompt_tokens", u.get("input_tokens"))
     ct = u.get("completion_tokens", u.get("output_tokens"))
     tt = u.get("total_tokens", 0)
-    return LLMUsage(prompt_tokens=pt, completion_tokens=ct, total_tokens=tt) if pt is not None and ct is not None else None
-
+    prompt_details = u.get("prompt_tokens_details", u.get("input_tokens_details", {}))
+    completion_details = u.get("completion_tokens_details", {})
+    if not isinstance(prompt_details, dict) or not isinstance(completion_details, dict):
+        return None
+    cached = prompt_details.get("cached_tokens", 0)
+    cache_write = u.get("cache_creation_input_tokens", 0)
+    reasoning = completion_details.get("reasoning_tokens", 0)
+    values = (pt, ct, tt, cached, cache_write, reasoning)
+    if any(type(value) is not int or value < 0 for value in values):
+        return None
+    return LLMUsage(
+        prompt_tokens=pt,
+        completion_tokens=ct,
+        total_tokens=tt,
+        cached_input_tokens=cached,
+        cache_write_input_tokens=cache_write,
+        reasoning_output_tokens=reasoning,
+    )
 
 def _extract_finish(data: dict[str, Any]) -> str:
     if isinstance(data.get("finish_reason"), str):

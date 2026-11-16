@@ -1,11 +1,12 @@
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from typing import Any
 
 from config.marketing_llm_policy import DEFAULT_MARKETING_LLM_POLICY, MarketingLLMPolicy
-from core.llm import AnthropicClient, GigaChatClient, OpenAICompatClient, YandexGPTClient
-from core.llm.budget import BudgetCaps
+from core.llm import MockLLMClient
+from core.llm.budget import BudgetCaps, EventStoreDailyTokenBudget
 from core.llm.circuit import CircuitConfig
 from core.llm.contracts import LLMClient
 from core.llm.sampling import DebugSampling
@@ -40,25 +41,31 @@ class LLMComposerConfig:
 class MarketingLLMComposer:
     """DecisionCore decides, LLM composes."""
 
-    def __init__(self, llm: LLMClient, cfg: LLMComposerConfig, *, event_store: Any = None) -> None:
-        # Real providers cannot use process-local accounting.
-        if str(cfg.budget_source or "").lower() == "memory" and isinstance(llm, (
-            OpenAICompatClient, AnthropicClient, GigaChatClient, YandexGPTClient,
-        )):
+    def __init__(self, llm: LLMClient, cfg: LLMComposerConfig, *, event_store: Any = None, accounted_gateway_factory: Callable[..., Any] | None = None) -> None:
+        # Only the explicit deterministic mock may use process-local accounting.
+        # Every other injected client must pass through the durable accounted gateway.
+        if str(cfg.budget_source or "").lower() == "memory" and not isinstance(llm, MockLLMClient):
             raise RuntimeError("LLM_BUDGET_EVENT_STORE_UNAVAILABLE")
         self._llm = llm
         self._cfg = cfg
         self._event_store = event_store
         self._runtime = build_composer_runtime(cfg=cfg, event_store=event_store)
+        self._accounted_gateway = None
+        if isinstance(self._runtime.budget, EventStoreDailyTokenBudget):
+            if not callable(accounted_gateway_factory):
+                raise RuntimeError("LLM_ACCOUNTED_GATEWAY_REQUIRED")
+            self._accounted_gateway = accounted_gateway_factory(
+                llm,
+                event_store=event_store,
+                provider=cfg.provider,
+                budget=self._runtime.budget,
+            )
 
     @property
-    def llm_client(self) -> LLMClient:
-        """Canonical read-only access to the injected client.
-
-        Exposes the already-wired client without forcing callers to reach into
-        a private attribute. This keeps boot wiring on a single path.
-        """
-        return self._llm
+    def accounted_gateway(self) -> Any:
+        if self._accounted_gateway is None:
+            raise RuntimeError("LLM_ACCOUNTED_GATEWAY_REQUIRED")
+        return self._accounted_gateway
 
     async def compose(self, inp: MarketingLLMInputs) -> str | None:
         return await compose_marketing_text_async(self, inp)

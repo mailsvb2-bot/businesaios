@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import hashlib
+from dataclasses import replace
 
 from core.marketing.llm_guardrails import validate_marketing_text
 from core.marketing.llm_postprocess import normalize_generated_text
@@ -44,3 +45,24 @@ def idempotent_request_id(*, inp: MarketingLLMInputs, provider: str, model: str,
         str(inp.tenant_id), str(inp.user_id), str(inp.channel), source_id,
     )
     return "llm-" + hashlib.sha256("\0".join(parts).encode("utf-8")).hexdigest()[:32]
+
+def with_accounting_metadata(*, request, inp: MarketingLLMInputs, request_id: str, prompt_version: str, prompt_hash: str):
+    metadata = dict(request.metadata or {})
+    metadata.update({
+        "tenant_id": str(inp.tenant_id),
+        "user_id": str(inp.user_id),
+        "correlation_key": str(inp.correlation_id or inp.message_id or request_id),
+        "task_type": "marketing_message",
+        "request_id": str(request_id),
+        "channel": str(inp.channel),
+        "locale": str(inp.locale),
+        "kind": "marketing_message",
+        "message_id": str(inp.message_id or ""),
+        "offer_id": str((inp.offer or {}).get("id", "")),
+        "experiment": str(inp.experiment or ""),
+        "variant": str(inp.variant or ""),
+        "prompt_version": str(prompt_version),
+        "prompt_hash": str(prompt_hash),
+    })
+    return replace(request, metadata=metadata)
+
