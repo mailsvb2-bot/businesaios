@@ -65,6 +65,8 @@ def validated_llm_usage(usage: Any) -> tuple[int, int, int] | None:
 
 
 def has_durable_budget_store(event_store: Any) -> bool:
+    if getattr(event_store, "supports_durable_llm_budget", False) is not True:
+        return False
     return all(callable(getattr(event_store, name, None)) for name in ("sum_event_payload_int", "iter_events", "get_setting", "compare_and_set_setting", "append_event"))
 
 
