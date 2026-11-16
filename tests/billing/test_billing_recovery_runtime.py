@@ -6,7 +6,7 @@ from decimal import Decimal
 
 import pytest
 
-from billing.chargeback_orchestrator import ChargebackOrchestrator
+from billing.chargeback_orchestrator import ChargebackCase as OrchestratorChargebackCase, ChargebackOrchestrator
 from billing.dispute_policy import DisputePolicy
 from billing.invoice_lifecycle import CommercialInvoiceEnvelope, InvoiceLifecycleService
 from billing.ledger_event import LedgerEntry, LedgerPosting
@@ -381,3 +381,7 @@ def test_canonical_recovery_contracts_reject_coercible_minor_units(amount_minor:
         case.validate()
     with pytest.raises(ValueError, match="amount_minor"):
         result.validate()
+
+
+def test_chargeback_case_is_reexported_from_one_canonical_contract() -> None:
+    assert OrchestratorChargebackCase is ChargebackCase
