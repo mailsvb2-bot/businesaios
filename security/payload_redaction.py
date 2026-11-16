@@ -1,14 +1,13 @@
 from __future__ import annotations
 
-import re
 from dataclasses import asdict, is_dataclass
 from typing import Any, Mapping
 
+from core.llm.redaction import redact_free_text
 from security.pii_redaction_policy import PIIRedactionPolicy
 
 
 CANON_PAYLOAD_REDACTION = True
-_FREE_TEXT_SECRET = re.compile(r'(?i)\b(?:Bearer[ \t]+[A-Za-z0-9._~+/=-]+|\d{6,12}:[A-Za-z0-9_-]{20,}|sk-[A-Za-z0-9_-]{12,}|live_[A-Za-z0-9]{16,}|(?:password|passwd|api[_-]?key|token|authorization|cookie|set-cookie|client_secret|refresh_token|secret)["\']?[ \t]*[:=][ \t]*(?:"(?:\\.|[^"\\])*"|\'(?:\\.|[^\'\\])*\'|[^,\r\n]+))')
 
 
 class PayloadRedactor:
@@ -61,7 +60,7 @@ class PayloadRedactor:
         if key_hint and self._is_sensitive_key(key_hint):
             return self._secret_replacement
         if isinstance(value, str):
-            text = self._pii_policy.redact_text(_FREE_TEXT_SECRET.sub(self._secret_replacement, value))
+            text = self._pii_policy.redact_text(redact_free_text(value, self._secret_replacement))
             if len(text) > self._max_string_length:
                 return text[: self._max_string_length] + '…'
             return text

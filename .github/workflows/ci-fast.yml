@@ -44,7 +44,7 @@ jobs:
           python-version: ${{ matrix.python-version }}
       - run: python scripts/ci/check_requirements_lock.py
       - run: python -m pip install --upgrade pip
-      - run: python -m pip install -r requirements.lock.txt
+      - run: python -m pip install --require-hashes -r requirements.release.lock.txt
       - name: Verify fail-closed production bootstrap and post-deploy contracts
         run: >-
           python -m pytest -q

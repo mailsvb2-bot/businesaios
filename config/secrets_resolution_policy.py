@@ -11,7 +11,7 @@ CANON_COMPAT_SHIM = True
 CANON_SECRETS_RESOLUTION_POLICY = True
 
 _SECRET_REF_PREFIX = "secret://"
-_SENSITIVE_KEY_MARKERS = ("secret", "token", "password", "apikey", "api_key", "private_key", "credential")
+_SENSITIVE_KEY_MARKERS = ("secret", "token", "password", "apikey", "api_key", "private_key", "credential", "authorization", "cookie", "set-cookie")
 
 
 class SecretResolver(Protocol):
