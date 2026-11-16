@@ -9,6 +9,10 @@ from runtime.platform.event_store.memory_event_store import MemoryEventStore
 from runtime.llm import AccountedSyncGateway
 
 
+class _BudgetContractEventStore(MemoryEventStore):
+    supports_durable_llm_budget = True
+
+
 class _FakeLLM:
     async def generate(self, req):
         return LLMResponse(
@@ -30,7 +34,7 @@ def _inp() -> MarketingLLMInputs:
 
 
 def test_compose_sync_works_inside_running_loop():
-    composer = MarketingLLMComposer(_FakeLLM(), LLMComposerConfig(model="test-model", budget_source="event_store"), event_store=MemoryEventStore(), accounted_gateway_factory=AccountedSyncGateway)
+    composer = MarketingLLMComposer(_FakeLLM(), LLMComposerConfig(model="test-model", budget_source="event_store"), event_store=_BudgetContractEventStore(), accounted_gateway_factory=AccountedSyncGateway)
 
     async def _run() -> str | None:
         return composer.compose_sync(_inp())
