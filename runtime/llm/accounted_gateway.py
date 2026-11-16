@@ -11,11 +11,7 @@ from core.marketing.llm_telemetry import append_event_sync
 from core.telemetry.event_types import LLM_BUDGET_BLOCKED, LLM_COMPLETED, LLM_REQUESTED
 from core.telemetry.event_writer import TelemetryContext
 
-_METADATA_KEYS = (
-    "channel", "locale", "kind", "message_id", "offer_id", "experiment", "variant",
-    "prompt_version", "prompt_hash", "task_type", "model_profile_id", "model_version",
-    "model_policy_id", "model_policy_version", "model_fallback_from_profile_id",
-)
+_METADATA_KEYS = ("channel", "message_id", "prompt_version", "prompt_hash", "task_type")
 
 
 class AccountedSyncGateway:
@@ -119,9 +115,7 @@ class AccountedSyncGateway:
                 event_store=self._store, event_type=LLM_COMPLETED, ctx=ctx, required=True,
                 payload={
                     "request_id": request_id, "provider": self._provider, "model": model,
-                    "requested_model": model, "provider_model": provider_model,
-                    "provider_model_reported": bool(provider_model),
-                    "provider_request_id": provider_id, "provider_request_id_reported": bool(provider_id),
+                    "provider_model": provider_model, "provider_request_id": provider_id,
                     "prompt_tokens": prompt, "completion_tokens": completion, "total_tokens": total,
                     "usage_schema_version": 2, "cached_input_tokens": cached,
                     "cache_write_input_tokens": cache_write, "reasoning_output_tokens": reasoning,
