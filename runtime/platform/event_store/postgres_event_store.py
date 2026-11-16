@@ -144,10 +144,10 @@ class PostgresEventStore:
         self._schema_verified = True
         return self
     def __exit__(self, exc_type, exc, tb) -> None:
-        if self._port is not None:
-            self._port.__exit__(exc_type, exc, tb)
-            self._port = None
+        port, self._port = self._port, None
         self._schema_verified = False
+        if port is not None:
+            port.__exit__(exc_type, exc, tb)
     @property
     def _db(self) -> PostgresPort:
         if self._port is None:
