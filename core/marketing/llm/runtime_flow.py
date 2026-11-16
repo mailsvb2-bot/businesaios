@@ -3,7 +3,7 @@ from __future__ import annotations
 from typing import Any
 
 from core.marketing.llm_telemetry import append_event_sync, emit_trace_async, emit_trace_sync
-from core.telemetry.event_types import LLM_CACHE_HIT, LLM_CIRCUIT_OPEN, LLM_SKIPPED
+from core.telemetry.event_types import LLM_CIRCUIT_OPEN, LLM_SKIPPED
 from core.telemetry.event_writer import TelemetryContext, append_event
 
 
