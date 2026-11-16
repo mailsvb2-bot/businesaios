@@ -163,7 +163,7 @@ def test_max_reconcile_rewrites_subscription_and_verifies(monkeypatch) -> None:
             return _response({'user_id': 77, 'is_bot': True})
         if kwargs['method'] == 'POST':
             return _response({'success': True})
-        get_count = sum(1 for call in calls if call['method'] == 'GET')
+        get_count = sum(1 for call in calls if call['method'] == 'GET' and call['url'].endswith('/subscriptions'))
         if get_count == 1:
             return _response({'subscriptions': [{'url': 'https://stale.example/hook'}]})
         return _response({'subscriptions': [{'url': 'https://api.businessaios.ru/providers/webhook/tenant-a/biz-max/max_messaging'}]})
@@ -174,6 +174,8 @@ def test_max_reconcile_rewrites_subscription_and_verifies(monkeypatch) -> None:
     )
     assert result.ready is True and result.metadata['subscription_visible'] is True
     assert result.metadata['bot_id'] == '77'
+    assert calls[0]['url'].endswith('/me') and calls[0]['method'] == 'GET'
+    assert calls[1]['url'].endswith('/subscriptions') and calls[1]['method'] == 'GET'
     assert sut.ProviderWebhookReconciler(vault)._secret(provider, 'tenant-a', 'biz-max', 'bot_id') == '77'
     post = next(call for call in calls if call['method'] == 'POST')
     body = json.loads(post['body'].decode())
