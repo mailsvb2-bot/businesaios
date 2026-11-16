@@ -189,6 +189,26 @@ def test_max_reconcile_rewrites_subscription_and_verifies(monkeypatch) -> None:
     assert runtime.verify(provider=provider, tenant_id='tenant-a', business_id='biz-max', headers={'X-Max-Bot-Api-Secret': 'max-hook'}, body=json.dumps(payload).encode()) is False
 
 
+def test_max_reconcile_rejects_unverified_bot_before_subscription_write(monkeypatch) -> None:
+    provider = provider_map()['max_messaging']
+    vault = InMemorySecretVault()
+    _put(vault, provider, 'biz-max', 'access_token', 'max-token')
+    _put(vault, provider, 'biz-max', 'webhook_secret', 'max-hook')
+    monkeypatch.setenv('PUBLIC_BASE_URL', 'https://api.businessaios.ru')
+    calls = []
+
+    def fake_request(**kwargs):
+        calls.append(kwargs)
+        return _response({'user_id': 77, 'is_bot': False})
+
+    monkeypatch.setattr(sut, '_sync_request', fake_request)
+    with pytest.raises(RuntimeError, match='max_bot_identity_unavailable'):
+        sut.ProviderWebhookReconciler(vault).reconcile(
+            provider=provider, tenant_id='tenant-a', business_id='biz-max'
+        )
+    assert len(calls) == 1 and calls[0]['url'].endswith('/me')
+
+
 def test_reconcile_without_public_base_is_explicit_manual_required(monkeypatch) -> None:
     provider = provider_map()['max_messaging']
     vault = InMemorySecretVault()
