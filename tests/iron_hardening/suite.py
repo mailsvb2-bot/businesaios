@@ -1,4 +1,4 @@
-"""IRON hardening suite (50 tests).
+"""IRON hardening suite (51 tests).
 
 These tests are designed to be:
   - deterministic
@@ -500,3 +500,15 @@ def test_iron_50_no_private_event_store_access_from_executor():
     txt = _read(ROOT / "runtime" / "executor.py")
     assert "._store" not in txt
     assert "getattr(self._events, \"_store\"" not in txt
+
+def test_iron_51_billing_ledger_rejects_non_integer_minor_units():
+    from billing.ledger_event import LedgerEntry
+
+    LedgerEntry("tenant", "entry", "billing.accounts.expense", "debit", 1, "USD", "llm_usage", "request-1").validate()
+    for amount in (True, 1.5, "1"):
+        try:
+            LedgerEntry("tenant", "entry", "billing.accounts.expense", "debit", amount, "USD", "llm_usage", "request-1").validate()
+        except ValueError:
+            continue
+        raise AssertionError("non-integer ledger minor amount was accepted")
+
