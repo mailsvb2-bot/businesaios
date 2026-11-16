@@ -272,13 +272,16 @@ def test_message_webhook_without_reply_recipient_fails_closed_before_handoff(mon
         replay_guard=ProviderWebhookReplayGuard(InMemoryIdempotencyStore()),
         inbound_processor=processor,
     )
-    with pytest.raises(ValueError, match="PROVIDER_INBOUND_RECIPIENT_MISSING"):
-        service.ingest(
-            provider=provider,
-            tenant_id="tenant-a",
-            business_id="business-a",
-            headers={"x-telegram-bot-api-secret-token": "secret"},
-            body=b'{"message":{"from":{"id":9001},"text":"hello"}}',
-            event_key="missing-telegram-chat",
-        )
+    result = service.ingest(
+        provider=provider,
+        tenant_id="tenant-a",
+        business_id="business-a",
+        headers={"x-telegram-bot-api-secret-token": "secret"},
+        body=b'{"message":{"from":{"id":9001},"text":"hello"}}',
+        event_key="missing-telegram-chat",
+    )
+    assert result.accepted is False
+    assert result.status == "recipient_missing"
+    assert result.metadata["messaging_handoff"] == {}
+    assert result.metadata["messaging_inbound_result"] == {}
     assert processor.calls == 0
