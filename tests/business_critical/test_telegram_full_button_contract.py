@@ -12,6 +12,7 @@ from application.decision_runtime.flow import build_payload
 from core.actions.catalog import build_schema_registry
 from core.policies.telegram.unified_policy import UnifiedTelegramPolicyV3
 from core.ux.keyboards import admin, autopilot, payments, settings
+from core.ux.telegram_keyboards_ai_ceo import kb_ai_ceo_menu
 from core.ux.unified_messenger_menu import (
     BUSINESS_ONBOARDING_URL,
     plain_channel_menu,
@@ -32,6 +33,11 @@ def _keyboards():
         autopilot.kb_profit_sprint_lead_sources(),
         autopilot.kb_ads_apply_pending(),
         autopilot.kb_growth_menu(),
+        kb_ai_ceo_menu(can_run=True),
+        settings.kb_demo_kind(),
+        settings.kb_weather(),
+        settings.kb_state_menu(),
+        settings.kb_mood_rate(),
         settings.kb_settings_menu(),
         payments.kb_gift_menu(),
         payments.kb_pay_selected(),

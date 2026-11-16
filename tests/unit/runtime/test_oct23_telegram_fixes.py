@@ -7,13 +7,12 @@ from types import SimpleNamespace
 
 import pytest
 
-from runtime.entrypoints import telegram_longpoll as lp
-from runtime.platform.telegram_inbox import TelegramInbox
-
 from runtime._internal.effect_payloads import normalize_effect_payload
 from runtime._internal.effect_types import EffectActionType
 from runtime._internal.effects_clients.telegram_client import TelegramClient
+from runtime.entrypoints import telegram_longpoll as lp
 from runtime.platform.delivery_state import DeliveryState
+from runtime.platform.telegram_inbox import TelegramInbox
 
 
 class _Http:
@@ -214,7 +213,8 @@ def test_canonical_execution_returns_outcome(monkeypatch):
     assert lp._execute_update(core=None, executor=None, event_log=None,
                               update={"update_id": 17}, transport="longpoll") is outcome
     assert scopes == [{"tenant_id": "tenant-a", "channel": "telegram",
-                       "user_id": "user-a", "update_id": 17, "chat_id": "chat-a"}]
+                       "user_id": "user-a", "update_id": 17, "chat_id": "chat-a",
+                       "bot_id": "primary"}]
 
 
 def test_diagnostic_failure_does_not_abort_delivery():
