@@ -5,6 +5,10 @@ import time
 from pathlib import Path
 
 from contracts.event_store import canonical_business_event_contract
+from core.llm.budget import BudgetCaps, EventStoreDailyTokenBudget
+from core.llm.contracts import LLMUsage
+from runtime.llm import AccountedSyncGateway, LLMAgent, LLMAgentConfig
+from runtime.platform.event_store.memory_event_store import MemoryEventStore
 from core.growth.strategy import backlog_store as growth_backlog_store
 from core.growth.strategy.contracts import GROWTH_PARTNERSHIP_VISIBILITY_NOTE, GrowthGoalV1
 from core.growth.strategy.service import GrowthStrategyService
@@ -371,3 +375,129 @@ def test_growth_backlog_limit_is_applied_after_business_filter(tmp_path: Path) -
             item.hypothesis_id for item in plan_a.top_hypotheses[:3]
         }
 
+class _AccountedLLMResponse:
+    def __init__(self, content: str) -> None:
+        self.content = content
+        self.usage = LLMUsage(prompt_tokens=11, completion_tokens=19, total_tokens=30)
+        self.finish_reason = "stop"
+
+
+class _AccountedGrowthLLMClient:
+    def __init__(self) -> None:
+        self.requests = []
+
+    def generate_sync(self, request):
+        self.requests.append(request)
+        return _AccountedLLMResponse(
+            json.dumps(
+                [
+                    {
+                        "stage": "acquisition",
+                        "channel": "telegram",
+                        "title": "Accounted growth hypothesis",
+                        "mechanism": "Run a controlled message test and measure verified purchases.",
+                        "expected_impact": "+5% conversion in 14 days",
+                        "effort": "low",
+                        "risk": "low",
+                        "metric": "conversion_lead_to_purchase_pct",
+                        "horizon_days": 14,
+                        "action_hints": {},
+                    }
+                ]
+            )
+        )
+
+
+def test_growth_strategy_llm_uses_the_single_accounted_gateway_and_is_idempotent():
+    store = MemoryEventStore()
+    client = _AccountedGrowthLLMClient()
+    agent = LLMAgent(
+        AccountedSyncGateway(client, event_store=store, provider="test"),
+        LLMAgentConfig(default_model="test-model"),
+    )
+    service = GrowthStrategyService(event_store=store, llm=agent)
+
+    plan, completion_event_id = service.generate_backlog_with_proof(
+        tenant_id="t1",
+        business_id="business-a",
+        user_id="u1",
+        decision_id="growth-accounted-d1",
+        correlation_id="growth-accounted-c1",
+        goal=GrowthGoalV1(primary_stage="acquisition"),
+        n=1,
+    )
+
+    assert completion_event_id
+    assert client.requests and len(client.requests) == 1
+    request = client.requests[0]
+    assert request.metadata["tenant_id"] == "t1"
+    assert request.metadata["user_id"] == "u1"
+    assert request.metadata["correlation_key"] == "growth-accounted-c1"
+    assert request.metadata["task_type"] == "growth_strategy"
+    assert plan.top_hypotheses[0].title == "Accounted growth hypothesis"
+    assert "llm" in plan.notes
+
+    budget = EventStoreDailyTokenBudget(event_store=store, caps=BudgetCaps())
+    assert budget._sum(tenant_id="t1", user_id="u1") == (30, 30)
+    pending = store.get_setting(tenant_id="t1", key=f"llm:pending:v1:{budget._day()}")
+    assert pending == {"pending": {}}
+
+    replay = service.generate_backlog(
+        tenant_id="t1",
+        business_id="business-a",
+        user_id="u1",
+        decision_id="growth-accounted-d1",
+        correlation_id="growth-accounted-c1",
+        goal=GrowthGoalV1(primary_stage="acquisition"),
+        n=1,
+    )
+    assert replay.top_hypotheses[0].title == "Accounted growth hypothesis"
+    assert len(client.requests) == 1
+
+
+def test_growth_provider_failure_is_reported_as_deterministic_fallback(tmp_path: Path) -> None:
+    class _UnavailableProvider:
+        def generate_sync(self, _request):
+            raise ConnectionError("provider unavailable")
+
+    with SqliteEventStore(str(tmp_path / "provider-fallback.db")) as store:
+        service = GrowthStrategyService(event_store=store, llm=_UnavailableProvider())
+        plan = service.generate_backlog(
+            tenant_id="t1",
+            business_id="business-a",
+            user_id="u1",
+            decision_id="provider-fallback-d1",
+            correlation_id="provider-fallback-c1",
+            goal=GrowthGoalV1(primary_stage="acquisition"),
+            n=2,
+        )
+
+    assert plan.top_hypotheses
+    assert "llm_fallback" in plan.notes
+    assert "llm" not in plan.notes
+
+
+def test_growth_accounting_failures_never_fall_back_to_unaccounted_plan(tmp_path: Path) -> None:
+    import pytest
+
+    class _BlockedGateway:
+        def __init__(self, code: str) -> None:
+            self.code = code
+
+        def generate_sync(self, _request):
+            raise RuntimeError(self.code)
+
+    for code in ("LLM_ACCOUNTING_UNAVAILABLE", "LLM_BUDGET_BLOCKED"):
+        with SqliteEventStore(str(tmp_path / f"{code}.db")) as store:
+            service = GrowthStrategyService(event_store=store, llm=_BlockedGateway(code))
+            with pytest.raises(RuntimeError, match=code):
+                service.generate_backlog(
+                    tenant_id="t1",
+                    business_id="business-a",
+                    user_id="u1",
+                    decision_id=f"blocked-{code}",
+                    correlation_id=f"blocked-{code}-correlation",
+                    goal=GrowthGoalV1(primary_stage="acquisition"),
+                    n=2,
+                )
+            assert service.backlog(tenant_id="t1", business_id="business-a", limit=20) == ()

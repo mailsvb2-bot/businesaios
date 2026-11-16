@@ -108,6 +108,8 @@ def test_growth_channel_contract_covers_every_runtime_messenger() -> None:
 
     request = _build_request(
         tenant_id="business-a",
+        user_id="owner-1",
+        correlation_id="growth-contract-correlation",
         goal=GrowthGoalV1(),
         signals=GrowthSignalV1(
             tenant_id="business-a",
