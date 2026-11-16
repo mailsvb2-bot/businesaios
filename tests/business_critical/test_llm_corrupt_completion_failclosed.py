@@ -170,3 +170,23 @@ def test_only_open_schema_verified_persistent_event_stores_support_llm_budgets(t
     assert has_durable_budget_store(postgres)
     assert has_durable_budget_store(sqlite)
     assert not has_durable_budget_store(MemoryEventStore())
+
+    class _Port:
+        def __exit__(self, exc_type, exc, tb):
+            raise OSError("postgres close failed")
+
+    class _Connection:
+        def close(self):
+            raise OSError("sqlite close failed")
+
+    postgres._port = _Port()
+    postgres._schema_verified = True
+    with pytest.raises(OSError, match="postgres close failed"):
+        postgres.__exit__(None, None, None)
+    assert not has_durable_budget_store(postgres)
+
+    sqlite._db = _Connection()
+    sqlite._schema_verified = True
+    with pytest.raises(OSError, match="sqlite close failed"):
+        sqlite.__exit__(None, None, None)
+    assert not has_durable_budget_store(sqlite)
