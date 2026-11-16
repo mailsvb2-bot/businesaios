@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 from collections.abc import Callable, Mapping
 from dataclasses import replace
 from urllib.parse import urlsplit
@@ -169,10 +170,14 @@ class RoutedLLMClient:
         router: ModelRouter,
         clients_by_profile_id: Mapping[str, LLMClient],
         policy: ModelPolicy,
+        event_store: object,
     ) -> None:
+        if not has_durable_budget_store(event_store):
+            raise RuntimeError("LLM_ACCOUNTING_UNAVAILABLE")
         self._router = router
         self._clients = dict(clients_by_profile_id)
         self._policy = policy
+        self._event_store = event_store
 
     @staticmethod
     def _route_request(req: LLMRequest) -> ModelRouteRequest:
@@ -225,13 +230,17 @@ class RoutedLLMClient:
 
     def generate_sync(self, req: LLMRequest) -> LLMResponse:
         decision = self._router.route(self._route_request(req), policy=self._policy)
-        response = self._client_for(decision).generate_sync(self._request_for_profile(req, decision))
+        routed_request = self._request_for_profile(req, decision)
+        gateway = AccountedSyncGateway(
+            self._client_for(decision),
+            event_store=self._event_store,
+            provider=decision.profile.provider,
+        )
+        response = gateway.generate_sync(routed_request)
         return self._response_with_route(response, decision)
 
     async def generate(self, req: LLMRequest) -> LLMResponse:
-        decision = self._router.route(self._route_request(req), policy=self._policy)
-        response = await self._client_for(decision).generate(self._request_for_profile(req, decision))
-        return self._response_with_route(response, decision)
+        return await asyncio.to_thread(self.generate_sync, req)
 
 
 __all__ = [
