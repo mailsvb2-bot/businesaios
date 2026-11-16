@@ -63,10 +63,9 @@ def validated_llm_usage(usage: Any) -> tuple[int, int, int] | None:
 
 
 def validated_llm_completion_event(event: Any) -> tuple[str, str, tuple[int, int, int]] | None:
-    if not isinstance(event, dict):
+    if not isinstance(event, dict) or not isinstance(user := event.get("user_id"), str) or not user.strip():
         return None
-    user, payload = event.get("user_id"), event.get("payload")
-    if not isinstance(user, str) or not user.strip() or not isinstance(payload, dict):
+    if not isinstance(payload := event.get("payload"), dict):
         return None
     request_id, provider, model = (payload.get(key) for key in ("request_id", "provider", "model"))
     usage = validated_llm_usage(payload)
@@ -74,12 +73,9 @@ def validated_llm_completion_event(event: Any) -> tuple[str, str, tuple[int, int
 
 
 def has_durable_budget_store(event_store: Any) -> bool:
-    if getattr(event_store, "supports_durable_llm_budget", False) is not True:
-        return False
-    return all(
+    return getattr(event_store, "supports_durable_llm_budget", False) is True and all(
         callable(getattr(event_store, name, None))
-        for name in ("iter_events", "get_setting", "compare_and_set_setting", "append_event")
-    )
+        for name in ("iter_events", "get_setting", "compare_and_set_setting", "append_event"))
 
 
 class EventStoreDailyTokenBudget:
@@ -91,13 +87,11 @@ class EventStoreDailyTokenBudget:
 
     def _sum(self, *, tenant_id: str, user_id: str) -> tuple[int, int]:
         start_ms, end_ms = _utc_day_bounds_ms()
-        it = getattr(self._es, "iter_events", None)
-        if not callable(it):
+        if not callable(it := getattr(self._es, "iter_events", None)):
             raise RuntimeError("LLM_BUDGET_EVENT_AGGREGATOR_UNAVAILABLE")
         tenant = user = 0
         for event in it(tenant_id=str(tenant_id), start_ms=start_ms, end_ms=end_ms, event_type=LLM_COMPLETED):
-            fact = validated_llm_completion_event(event)
-            if fact is None:
+            if (fact := validated_llm_completion_event(event)) is None:
                 raise RuntimeError("LLM_BUDGET_CORRUPT_COMPLETION")
             tenant, user = tenant + fact[2][2], user + (fact[2][2] if fact[0] == str(user_id) else 0)
         return tenant, user
@@ -110,8 +104,7 @@ class EventStoreDailyTokenBudget:
         return None  # The durable completion is authoritative; no cross-worker cache.
 
     def _reconcile_completed(self, *, tenant_id: str, day: str, current: dict) -> bool:
-        it = getattr(self._es, "iter_events", None)
-        if not callable(it) or not isinstance(current, dict) or not isinstance(current.get("pending"), dict):
+        if not callable(it := getattr(self._es, "iter_events", None)) or not isinstance(current, dict) or not isinstance(current.get("pending"), dict):
             return False
         try:
             reservation_day = date.fromisoformat(day)
@@ -123,8 +116,7 @@ class EventStoreDailyTokenBudget:
         completed = set()
         try:
             for event in it(tenant_id=str(tenant_id), start_ms=start, end_ms=end, event_type=LLM_COMPLETED):
-                fact = validated_llm_completion_event(event)
-                if fact is None:
+                if (fact := validated_llm_completion_event(event)) is None:
                     return False
                 completed.add(fact[:2])
         except (TypeError, ValueError, AttributeError):
@@ -138,11 +130,9 @@ class EventStoreDailyTokenBudget:
             return None
         key = f"llm:pending:v1:{(day := self._day())}"
         for _ in range(16):
-            current = get(tenant_id=str(tenant_id), key=key)
-            if current is not None and not isinstance(current, dict):
+            if not isinstance(current := get(tenant_id=str(tenant_id), key=key), (dict, type(None))):
                 return None
-            pending = (current or {}).get("pending", {})
-            if not isinstance(pending, dict) or request_id in pending:
+            if not isinstance(pending := (current or {}).get("pending", {}), dict) or request_id in pending:
                 return None
             spent_tenant, spent_user = self._sum(tenant_id=tenant_id, user_id=user_id)
             reserved_tenant = reserved_user = 0
@@ -179,11 +169,9 @@ class EventStoreDailyTokenBudget:
     def release(self, *, tenant_id: str, request_id: str, day: str) -> bool:
         key = f"llm:pending:v1:{day}"
         for _ in range(16):
-            current = self._es.get_setting(tenant_id=str(tenant_id), key=key)
-            if not isinstance(current, dict):
+            if not isinstance(current := self._es.get_setting(tenant_id=str(tenant_id), key=key), dict):
                 return False
-            pending = current.get("pending", {})
-            if not isinstance(pending, dict) or request_id not in pending:
+            if not isinstance(pending := current.get("pending", {}), dict) or request_id not in pending:
                 return False
             remaining = {rid: row for rid, row in pending.items() if rid != request_id}
             if self._es.compare_and_set_setting(tenant_id=str(tenant_id), key=key, expected=current, value={"pending": remaining}):
