@@ -6,6 +6,7 @@ import hmac
 import time
 from collections.abc import Mapping
 from dataclasses import dataclass
+from urllib.parse import urlsplit
 
 from cryptography.exceptions import InvalidSignature
 from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PublicKey
@@ -103,7 +104,8 @@ class ProviderWebhookRuntime:
             return signature_valid and self._recipient_matches(provider=provider, tenant_id=tenant_id, business_id=business_id, body=body)
         if contract.verification_kind == 'hmac_sha256_base64':
             expected = base64.b64encode(hmac.new(secret.encode('utf-8'), bytes(body), hashlib.sha256).digest()).decode('ascii')
-            return any(candidate and _secret_eq(expected, candidate) for candidate in (normalized_headers.get(str(name).lower(), '') for name in contract.header_names))
+            signature_valid = any(candidate and _secret_eq(expected, candidate) for candidate in (normalized_headers.get(str(name).lower(), '') for name in contract.header_names))
+            return signature_valid and self._recipient_matches(provider=provider, tenant_id=tenant_id, business_id=business_id, body=body)
         if contract.verification_kind in {'bearer_or_shared_secret', 'shared_secret_header', 'shared_secret_body_or_header'}:
             candidates = [normalized_headers.get('authorization', '').removeprefix('Bearer ').strip()] + [normalized_headers.get(str(name).lower(), '') for name in contract.header_names if str(name).lower() != 'authorization']
             if contract.verification_kind == 'shared_secret_body_or_header':
@@ -124,12 +126,28 @@ class ProviderWebhookRuntime:
         expected = self._read_secret(tenant_id=tenant_id, connector_id=provider.connector_id, business_id=business_id, secret_name=f'{provider.connector_id}.verify_token')
         return str(challenge) if expected and _secret_eq(expected, str(verify_token)) else None
 
+    @staticmethod
+    def _site_host(value: object) -> str:
+        raw = str(value or "").strip()
+        if not raw or any(character.isspace() for character in raw):
+            return ""
+        try:
+            parsed = urlsplit(raw if "://" in raw else f"https://{raw}")
+            if parsed.scheme.lower() != "https" or not parsed.hostname or parsed.username or parsed.password or parsed.port not in (None, 443) or parsed.path not in ("", "/") or parsed.query or parsed.fragment:
+                return ""
+        except ValueError:
+            return ""
+        return parsed.hostname.rstrip(".").lower()
+
     def _recipient_matches(self, *, provider: ProviderDefinition, tenant_id: str, business_id: str, body: bytes) -> bool:
-        """Bind signed messaging webhooks to the account configured for this tenant/business."""
+        """Bind signed webhooks to the account or site configured for this tenant/business."""
         key = str(provider.provider_key)
+        payload = ProviderPayloadNormalizers.parse_webhook_json(body)
+        if key == "generic_website":
+            expected = self._read_secret(tenant_id=tenant_id, connector_id=provider.connector_id, business_id=business_id, secret_name=f"{provider.connector_id}.site_domain")
+            return bool(expected and self._site_host(expected) and self._site_host(payload.get("site_domain")) == self._site_host(expected))
         if key not in {'whatsapp_cloud', 'instagram_messaging', 'messenger_messaging', 'vk_messaging', 'max_messaging', 'slack_messaging', 'discord_messaging', 'line_messaging', 'viber_messaging', 'wechat_messaging', 'kakaotalk_messaging'}:
             return True
-        payload = ProviderPayloadNormalizers.parse_webhook_json(body)
         if key == 'whatsapp_cloud':
             expected = self._read_secret(tenant_id=tenant_id, connector_id=provider.connector_id, business_id=business_id, secret_name=f'{provider.connector_id}.phone_number_id')
             entries = payload.get('entry')
