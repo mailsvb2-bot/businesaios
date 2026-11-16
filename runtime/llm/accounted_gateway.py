@@ -136,12 +136,13 @@ class AccountedSyncGateway:
         response = self._provider_call(self._client, request)
         provider_model = self._provider_model(response)
         provider_request_id = self._provider_request_id(response)
-        usage = validated_llm_usage(getattr(response, "usage", None))
+        provider_usage = getattr(response, "usage", None)
+        usage = validated_llm_usage(provider_usage)
         if usage is None:
             raise RuntimeError("LLM_ACCOUNTING_UNAVAILABLE")
         prompt, completion, total = usage
         usage_categories = tuple(
-            getattr(response.usage, key, 0)
+            getattr(provider_usage, key, 0)
             for key in ("cached_input_tokens", "cache_write_input_tokens", "reasoning_output_tokens")
         )
         if any(type(value) is not int or value < 0 for value in usage_categories):
