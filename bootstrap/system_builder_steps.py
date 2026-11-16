@@ -56,17 +56,14 @@ def build_marketing_llm_components(*, settings: Any, event_store: Any, event_log
         llm_logger = None
 
     logger = llm_logger or getattr(event_log, "logger", LOGGER)
+    composer = build_marketing_llm_composer(
+        settings=settings,
+        event_store=event_store,
+        logger=logger,
+    )
     return {
-        "marketing_llm_composer": build_marketing_llm_composer(
-            settings=settings,
-            event_store=event_store,
-            logger=logger,
-        ),
-        "marketing_llm": build_marketing_llm_agent(
-            settings=settings,
-            event_store=event_store,
-            logger=logger,
-        ),
+        "marketing_llm_composer": composer,
+        "marketing_llm": build_marketing_llm_agent(settings=settings, composer=composer),
     }
 
 
