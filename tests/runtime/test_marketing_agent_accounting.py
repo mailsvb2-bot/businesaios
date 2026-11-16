@@ -52,7 +52,6 @@ def test_agent_gateway_records_actual_usage_once_and_isolates_tenants():
     assert client.calls == 2
 
 
-@pytest.mark.parametrize("missing", ["tenant_id", "user_id", "correlation_key", "task_type"])
 def test_agent_gateway_persists_provider_token_categories():
     class CategorizedProvider(Provider):
         def generate_sync(self, request):
@@ -104,6 +103,7 @@ def test_agent_gateway_rejects_inconsistent_provider_token_categories():
     assert client.calls == 1
 
 
+@pytest.mark.parametrize("missing", ["tenant_id", "user_id", "correlation_key", "task_type"])
 def test_agent_gateway_fails_closed_without_scoped_identity(missing):
     store, client = MemoryEventStore(), Provider()
     gateway = AccountedSyncGateway(client, event_store=store, provider="openai_compat")
