@@ -232,3 +232,37 @@ def test_wrong_signed_whatsapp_recipient_is_rejected_before_replay_or_handoff(tm
     assert replay_guard.calls == 0
     assert processor.calls == 0
 
+
+
+def test_message_webhook_without_reply_recipient_fails_closed_before_handoff():
+    import pytest
+
+    from application.business_autonomy.provider_catalog import provider_map
+    from reliability.idempotency_store import InMemoryIdempotencyStore
+    from runtime.business_autonomy.provider_inbound_webhook_service import ProviderInboundWebhookService
+    from runtime.business_autonomy.provider_webhook_replay_guard import ProviderWebhookReplayGuard
+    from runtime.business_autonomy.provider_webhook_runtime import ProviderWebhookRuntime
+
+    class Processor:
+        calls = 0
+
+        def process(self, *, handoff):
+            self.calls += 1
+            return {"accepted": True}
+
+    processor = Processor()
+    service = ProviderInboundWebhookService(
+        webhook_runtime=ProviderWebhookRuntime(None),
+        replay_guard=ProviderWebhookReplayGuard(InMemoryIdempotencyStore()),
+        inbound_processor=processor,
+    )
+    with pytest.raises(ValueError, match="PROVIDER_INBOUND_RECIPIENT_MISSING"):
+        service.ingest(
+            provider=provider_map()["telegram_bot"],
+            tenant_id="tenant-a",
+            business_id="business-a",
+            headers={},
+            body=b'{"message":{"from":{"id":9001},"text":"hello"}}',
+            event_key="missing-telegram-chat",
+        )
+    assert processor.calls == 0

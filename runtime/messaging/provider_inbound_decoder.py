@@ -198,7 +198,7 @@ _PROVIDER_PATHS: dict[str, dict[str, tuple[FieldPath, ...]]] = {
     },
     "wechat": {
         "user_id": (("FromUserName",), ("from_user_name",)),
-        "chat_id": (("ToUserName",), ("to_user_name",)),
+        "chat_id": (("FromUserName",), ("from_user_name",)),
         "text": (("Content",), ("content",)),
         "message_id": (("MsgId",), ("msg_id",)),
         "timestamp": (("CreateTime",), ("create_time",)),

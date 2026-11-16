@@ -33,6 +33,10 @@ def resolve_provider_webhook_messaging_ingress(*, provider: ProviderDefinition, 
     text = str(decoded.get('text') or normalized_payload.get('message') or '').strip()
     if not user_id or not text:
         return None
+    if not chat_id and binding.channel == 'web_chat':
+        chat_id = str(normalized_payload.get('session_id') or user_id).strip()
+    if not chat_id:
+        raise ValueError('PROVIDER_INBOUND_RECIPIENT_MISSING')
     transport_message_id = str(decoded.get('message_id') or '').strip()
     correlation_id = str(normalized_payload.get('correlation_id') or normalized_payload.get('update_id') or normalized_payload.get('event_id') or transport_message_id or user_id).strip()
     return ProviderWebhookMessagingIngress(channel=binding.channel, user_id=user_id, text=text, transport_message_id=transport_message_id, correlation_id=correlation_id, chat_id=chat_id, external_user_ref=external_user_ref)
