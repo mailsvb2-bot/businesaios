@@ -133,7 +133,8 @@ def test_every_concrete_provider_adapter_uses_the_provider_sender_contract() -> 
         payload, expected_chat = fixtures[expected_channel]
         event = adapter(payload, tenant_id="tenant", product_name="Product", timezone="UTC")
         assert event.channel == expected_channel
-        assert event.user_id == ("7" if expected_channel == "vk" else "user")
+        expected_sender = "7" if expected_channel == "vk" else "user@example.test" if expected_channel == "email" else "user"
+        assert event.user_id == expected_sender
         assert event.chat_id == expected_chat
         assert event.text == "hello"
         assert str(event.update_id) == ("1" if expected_channel == "vk" else "id-1")
