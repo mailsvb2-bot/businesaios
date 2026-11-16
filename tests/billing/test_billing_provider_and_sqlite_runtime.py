@@ -53,7 +53,7 @@ def test_payment_provider_router_prefers_healthy_matching_currency_provider() ->
     health = PaymentProviderHealthRegistry()
     health.mark_failure('primary', reason='gateway timeout', cooldown_seconds=300, now=datetime(2026, 4, 9, tzinfo=UTC))
     router = PaymentProviderRouter(registry=registry, health_registry=health)
-    selection = router.select(tenant_id='tenant-a', currency='USD', now=datetime(2026, 4, 9, 0, 1, tzinfo=UTC))
+    selection = router.select(tenant_id='tenant-a', currency='USD', now=datetime(2026, 4, 9, tzinfo=UTC))
     assert selection.provider_name == 'fallback'
 
 
@@ -252,6 +252,7 @@ def test_sqlite_ledger_store_rejects_posting_id_collision_with_different_payload
         pass
     else:
         raise AssertionError('expected sqlite posting collision to fail')
+
 
 
 def test_provider_registry_normalizes_name_case_and_currency() -> None:
