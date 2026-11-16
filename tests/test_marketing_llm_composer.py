@@ -7,6 +7,13 @@ from core.marketing.llm_prompting import MarketingLLMInputs
 from core.telemetry.event_types import LLM_COMPLETED
 from runtime.platform.event_store.memory_event_store import MemoryEventStore
 
+
+class _BudgetContractEventStore(_BudgetContractEventStore):
+    """Test double for the durable atomic-CAS capability; the base store stays unmarked."""
+
+    supports_durable_llm_budget = True
+
+
 _VALID = "Хочешь продолжить? Есть «Сеанс» за 990₽. Нажми «Открыть»."
 _REJECTED = "Я DecisionCore и я решил…"
 
@@ -70,7 +77,7 @@ async def test_provider_usage_is_charged_even_when_text_rejected(async_mode):
 ])
 @pytest.mark.asyncio
 async def test_unverified_provider_usage_never_fabricates_durable_spend_or_replays(async_mode, usage):
-    llm, store = _UsageLLM(), MemoryEventStore()
+    llm, store = _UsageLLM(), _BudgetContractEventStore()
     llm.usage = usage
     composer = MarketingLLMComposer(
         llm, LLMComposerConfig(model="mock", budget_source="event_store"), event_store=store,
@@ -92,7 +99,7 @@ def test_sync_entrypoint_with_async_only_provider_claims_once():
             self.calls += 1
             return LLMResponse(content=_VALID, usage=LLMUsage(prompt_tokens=3, completion_tokens=4, total_tokens=7))
 
-    llm, store = AsyncOnly(), MemoryEventStore()
+    llm, store = AsyncOnly(), _BudgetContractEventStore()
     composer = MarketingLLMComposer(
         llm, LLMComposerConfig(model="mock", budget_source="event_store"), event_store=store,
     )
@@ -102,7 +109,7 @@ def test_sync_entrypoint_with_async_only_provider_claims_once():
 
 
 def test_provider_split_usage_is_rejected_when_total_is_zero():
-    store, llm = MemoryEventStore(), _UsageLLM(text=_REJECTED, usage=LLMUsage(prompt_tokens=17, completion_tokens=9, total_tokens=0))
+    store, llm = _BudgetContractEventStore(), _UsageLLM(text=_REJECTED, usage=LLMUsage(prompt_tokens=17, completion_tokens=9, total_tokens=0))
     composer = MarketingLLMComposer(llm, LLMComposerConfig(model="mock", budget_source="event_store"), event_store=store)
     inp = _input(message_id="zero-total")
     assert composer.compose_sync(inp) is None
@@ -111,7 +118,7 @@ def test_provider_split_usage_is_rejected_when_total_is_zero():
 
 
 def test_event_store_budget_counts_one_provider_completion_after_rejected_text():
-    store = MemoryEventStore()
+    store = _BudgetContractEventStore()
     cfg = LLMComposerConfig(model="mock", budget_source="event_store")
     composer = MarketingLLMComposer(_UsageLLM(text=_REJECTED), cfg, event_store=store)
     assert composer.compose_sync(_input()) is None
@@ -129,7 +136,7 @@ def test_event_store_budget_counts_one_provider_completion_after_rejected_text()
 @pytest.mark.parametrize("async_mode", [False, True])
 @pytest.mark.asyncio
 async def test_event_store_accounting_failure_never_exposes_generated_content(async_mode):
-    class FailingAccountingStore(MemoryEventStore):
+    class FailingAccountingStore(_BudgetContractEventStore):
         def append_event(self, event):
             if event.get("event_type") == LLM_COMPLETED:
                 raise OSError("simulated durable accounting failure")
@@ -153,7 +160,7 @@ async def test_event_store_accounting_failure_never_exposes_generated_content(as
 async def test_event_store_request_write_failure_prevents_provider_call(async_mode):
     from core.telemetry.event_types import LLM_REQUESTED
 
-    class FailingRequestStore(MemoryEventStore):
+    class FailingRequestStore(_BudgetContractEventStore):
         def append_event(self, event):
             if event.get("event_type") == LLM_REQUESTED:
                 raise OSError("simulated request journal failure")
@@ -196,7 +203,7 @@ def test_marketing_cache_is_isolated_by_tenant_user_and_channel(different_scope)
 async def test_deduped_marketing_response_records_one_completion_per_provider_call(async_mode):
     from core.telemetry.event_types import LLM_SKIPPED
 
-    store = MemoryEventStore()
+    store = _BudgetContractEventStore()
     composer = MarketingLLMComposer(
         _UsageLLM(), LLMComposerConfig(model="mock", budget_source="event_store"),
         event_store=store,
@@ -235,7 +242,7 @@ def test_event_store_budget_reservation_blocks_concurrent_overspend():
                 usage=LLMUsage(prompt_tokens=3, completion_tokens=4, total_tokens=7),
             )
 
-    store = MemoryEventStore()
+    store = _BudgetContractEventStore()
     llm = BlockingLLM()
     cfg = LLMComposerConfig(model="mock", budget_source="event_store",
         budget=BudgetCaps(tenant_tokens_per_day=3000, user_tokens_per_day=3000))
@@ -263,7 +270,7 @@ def test_event_store_budget_reservation_blocks_concurrent_overspend():
 
 
 def test_missing_atomic_reservation_fails_closed_before_provider():
-    class NoCASStore(MemoryEventStore):
+    class NoCASStore(_BudgetContractEventStore):
         compare_and_set_setting = None
 
     llm = _UsageLLM()
@@ -358,7 +365,7 @@ def test_postgres_budget_claim_is_atomic_across_independent_connections():
 @pytest.mark.parametrize("async_mode", [False, True])
 @pytest.mark.asyncio
 async def test_replayed_message_id_does_not_recharge_or_reinvoke_provider(async_mode):
-    llm, store = _UsageLLM(), MemoryEventStore()
+    llm, store = _UsageLLM(), _BudgetContractEventStore()
     cfg = LLMComposerConfig(model="mock", budget_source="event_store")
     inp = _input(tenant="t-replay", user="u-replay", message_id="incoming-123")
     first = MarketingLLMComposer(llm, cfg, event_store=store)
@@ -380,7 +387,7 @@ async def test_replayed_message_id_does_not_recharge_or_reinvoke_provider(async_
 async def test_optional_debug_event_failure_does_not_strand_durable_spend():
     from core.llm.sampling import DebugSampling
 
-    class FailingDebugStore(MemoryEventStore):
+    class FailingDebugStore(_BudgetContractEventStore):
         def append_event(self, event):
             if event.get("event_type") == "llm_debug_sample":
                 raise OSError("debug telemetry unavailable")
@@ -420,7 +427,7 @@ def test_event_store_idempotency_claim_survives_budget_day_rollover(monkeypatch)
     from core.llm.budget import BudgetCaps, EventStoreDailyTokenBudget
     from core.tenancy.scope import TenantScope
 
-    store = MemoryEventStore()
+    store = _BudgetContractEventStore()
     budget = EventStoreDailyTokenBudget(
         event_store=store,
         caps=BudgetCaps(tenant_tokens_per_day=10000, user_tokens_per_day=10000),
@@ -451,7 +458,7 @@ def test_event_store_idempotency_claim_survives_budget_day_rollover(monkeypatch)
 def test_claim_write_error_releases_pending_headroom_without_replaying(claim_was_committed):
     from core.llm.budget import BudgetCaps, EventStoreDailyTokenBudget
 
-    class BrokenClaimStore(MemoryEventStore):
+    class BrokenClaimStore(_BudgetContractEventStore):
         def compare_and_set_setting(self, *, tenant_id, key, expected, value):
             if key.startswith("llm:claim:v2:") and not getattr(self, "_failed_once", False):
                 self._failed_once = True
@@ -502,7 +509,7 @@ def test_completed_claim_reconciles_after_crash_but_uncompleted_claim_stays(comp
     from core.llm.budget import BudgetCaps, EventStoreDailyTokenBudget
     from core.tenancy.scope import TenantScope
 
-    store = MemoryEventStore()
+    store = _BudgetContractEventStore()
     budget = EventStoreDailyTokenBudget(event_store=store, caps=BudgetCaps(tenant_tokens_per_day=100, user_tokens_per_day=100))
     day = budget.reserve(tenant_id="t", user_id="u", tokens=80, request_id="completed")
     assert day
@@ -539,7 +546,7 @@ def test_real_provider_transport_never_runs_without_durable_budget():
 def test_unknown_budget_source_cannot_fall_back_to_memory():
     with pytest.raises(RuntimeError, match="LLM_BUDGET_SOURCE_INVALID"):
         MarketingLLMComposer(_UsageLLM(), LLMComposerConfig(model="mock", budget_source="typo"),
-                             event_store=MemoryEventStore())
+                             event_store=_BudgetContractEventStore())
 
 
 def test_explicit_durable_budget_rejects_missing_store():
@@ -548,6 +555,9 @@ def test_explicit_durable_budget_rejects_missing_store():
     with pytest.raises(RuntimeError, match="LLM_BUDGET_EVENT_STORE_UNAVAILABLE"):
         MarketingLLMComposer(_UsageLLM(), LLMComposerConfig(model="mock", budget_source="event_store"),
                              event_store=object())
+    with pytest.raises(RuntimeError, match="LLM_BUDGET_EVENT_STORE_UNAVAILABLE"):
+        MarketingLLMComposer(_UsageLLM(), LLMComposerConfig(model="mock", budget_source="event_store"),
+                             event_store=MemoryEventStore())
 
 
 def test_boot_llm_cannot_fall_back_to_process_local_budget(monkeypatch):
@@ -568,7 +578,8 @@ def test_boot_llm_cannot_fall_back_to_process_local_budget(monkeypatch):
     settings = SimpleNamespace(LLM_ENABLED=True, LLM_BUDGET_SOURCE="memory")
     assert boot.build_marketing_llm_composer(settings=settings, event_store=None, logger=Logger()) is None
     assert boot.build_marketing_llm_composer(settings=settings, event_store=object(), logger=Logger()) is None
-    composer = boot.build_marketing_llm_composer(settings=settings, event_store=MemoryEventStore(), logger=Logger())
+    assert boot.build_marketing_llm_composer(settings=settings, event_store=MemoryEventStore(), logger=Logger()) is None
+    composer = boot.build_marketing_llm_composer(settings=settings, event_store=_BudgetContractEventStore(), logger=Logger())
     assert isinstance(composer._runtime.budget, EventStoreDailyTokenBudget)
     assert composer.compose_sync(_input(tenant="t-boot", user="u-boot", message_id="boot-1"))
 
