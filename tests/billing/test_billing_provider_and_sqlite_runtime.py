@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from decimal import Decimal
 from datetime import UTC, datetime
 from pathlib import Path
 
@@ -85,6 +86,41 @@ def test_sqlite_collection_store_persists_idempotent_results(tmp_path: Path) -> 
     reloaded = SqliteCollectionResultStore(sqlite_path=str(tmp_path / 'billing.sqlite3'))
     assert len(reloaded.list_for_invoice('inv-1', tenant_id='tenant-a')) == 1
     assert reloaded.get_by_idempotency(tenant_id='tenant-a', invoice_id='inv-1', idempotency_key='idem-1') == first_result
+
+
+@pytest.mark.parametrize("amount_minor", [True, False, 1.0, 1.5, "1", Decimal("1")])
+def test_ledger_entry_rejects_non_integer_minor_units(amount_minor: object) -> None:
+    entry = LedgerEntry(
+        tenant_id="tenant-a", entry_id="entry-invalid",
+        account_code="billing.accounts.llm_expense", side="debit",
+        amount_minor=amount_minor, currency="USD",
+        reference_type="llm_usage", reference_id="request-1",
+    )
+    with pytest.raises(ValueError, match="amount_minor"):
+        entry.validate()
+
+
+def test_ledger_posting_rejects_fractional_minor_units_before_balance_truncation() -> None:
+    posting = LedgerPosting(
+        posting_id="fractional-post", tenant_id="tenant-a",
+        reference_type="llm_usage", reference_id="request-1",
+        entries=(
+            LedgerEntry(
+                tenant_id="tenant-a", entry_id="debit",
+                account_code="billing.accounts.llm_expense", side="debit",
+                amount_minor=1.5, currency="USD",
+                reference_type="llm_usage", reference_id="request-1",
+            ),
+            LedgerEntry(
+                tenant_id="tenant-a", entry_id="credit",
+                account_code="billing.accounts.payable", side="credit",
+                amount_minor=1.5, currency="USD",
+                reference_type="llm_usage", reference_id="request-1",
+            ),
+        ),
+    )
+    with pytest.raises(ValueError, match="amount_minor"):
+        posting.validate()
 
 
 def test_sqlite_ledger_store_persists_balanced_postings(tmp_path: Path) -> None:
