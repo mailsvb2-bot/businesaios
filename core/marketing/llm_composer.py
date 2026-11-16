@@ -5,7 +5,7 @@ from dataclasses import dataclass, field
 from typing import Any
 
 from config.marketing_llm_policy import DEFAULT_MARKETING_LLM_POLICY, MarketingLLMPolicy
-from core.llm.budget import BudgetCaps, EventStoreDailyTokenBudget
+from core.llm.budget import BudgetCaps
 from core.llm.circuit import CircuitConfig
 from core.llm.contracts import LLMClient
 from core.llm.sampling import DebugSampling
@@ -41,10 +41,10 @@ class MarketingLLMComposer:
     """DecisionCore decides, LLM composes."""
 
     def __init__(self, llm: LLMClient, cfg: LLMComposerConfig, *, event_store: Any = None, accounted_gateway_factory: Callable[..., Any] | None = None) -> None:
-        if not callable(accounted_gateway_factory):
-            raise RuntimeError("LLM_ACCOUNTED_GATEWAY_REQUIRED")
         self._llm, self._cfg, self._event_store = llm, cfg, event_store
         self._runtime = build_composer_runtime(cfg=cfg, event_store=event_store)
+        if not callable(accounted_gateway_factory):
+            raise RuntimeError("LLM_ACCOUNTED_GATEWAY_REQUIRED")
         self._accounted_gateway = accounted_gateway_factory(
             llm, event_store=event_store, provider=cfg.provider, budget=self._runtime.budget,
         )
