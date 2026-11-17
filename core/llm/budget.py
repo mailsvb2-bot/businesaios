@@ -155,7 +155,7 @@ class EventStoreDailyTokenBudget:
             return None
         key = f"llm:pending:v1:{(day := self._day())}"
         for _ in range(16):
-            if not isinstance(current := get(tenant_id=str(tenant_id), key=key), (dict, type(None))):
+            if not isinstance(current := get(tenant_id=str(tenant_id), key=key), dict | type(None)):
                 return None
             if not isinstance(pending := (current or {}).get("pending", {}), dict) or request_id in pending:
                 return None
@@ -259,7 +259,7 @@ class EventStoreDailyTokenBudget:
         for _ in range(16):
             day = self._day()
             current = get(tenant_id=str(tenant_id), key=key)
-            if not isinstance(current, (dict, type(None))):
+            if not isinstance(current, dict | type(None)):
                 return None
             pending = (current or {}).get("pending", {})
             if not isinstance(pending, dict) or request_id in pending:
