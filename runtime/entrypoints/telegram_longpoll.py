@@ -152,6 +152,11 @@ def _world_state_from_update(
         **dict(state.meta or {}),
         "transport": str(transport or "telegram"),
     }
+    if customer_route is None:
+        from core.ux.unified_messenger_menu import validated_onboarding_url
+        meta["operator_links"] = {
+            "onboarding_url": validated_onboarding_url(env_str("CLIENT_ONBOARDING_URL", "")),
+        }
     managed = parse_managed_bot_update(update)
     if managed is not None:  # Bot API managed_bot update: the creator is the acting user, no chat text
         uid = managed["user_id"]

@@ -6,6 +6,7 @@ transparent informational route; no donor runtime, second decision owner or send
 from __future__ import annotations
 
 from dataclasses import dataclass
+from urllib.parse import urlsplit
 
 from core.ux.callbacks import CB_ADMIN_MENU, CB_ADS_APPLY_MENU, CB_AUTOPILOT_MENU, CB_MENU_MAIN, CB_SETTINGS_MENU
 
@@ -54,8 +55,7 @@ def menu_text(*, role: str, is_admin: bool = False) -> str:
 
 
 def telegram_menu(*, role: str, is_admin: bool = False) -> dict:
-    rows = [[{"text": item.label, "url": BUSINESS_ONBOARDING_URL}] if item.key == "connect"
-            else [{"text": item.label, "callback_data": item.callback}]
+    rows = [[{"text": item.label, "callback_data": item.callback}]
             for item in menu_items(role=role, is_admin=is_admin)]
     return {"inline_keyboard": rows}
 
@@ -73,6 +73,49 @@ def plain_channel_menu(*, channel: str, role: str, is_admin: bool = False) -> di
     return {"channel": channel, "text": menu_text(role=role, is_admin=is_admin),
             "actions": tuple({"key": x.key, "label": x.label, "callback": x.callback}
                              for x in menu_items(role=role, is_admin=is_admin))}
+
+
+DEFAULT_ONBOARDING_URL = BUSINESS_ONBOARDING_URL
+
+
+def validated_onboarding_url(raw: str) -> str:
+    """Constrain operator's public HTTPS destination; never forward identifiers."""
+    value = str(raw or "").strip()
+    if not value:
+        return DEFAULT_ONBOARDING_URL
+    if len(value) > 200 or any(c.isspace() for c in value):
+        return DEFAULT_ONBOARDING_URL
+    try:
+        parts = urlsplit(value)
+        if (parts.scheme != "https" or not parts.hostname or parts.username is not None
+                or parts.password is not None or parts.query or parts.fragment
+                or parts.port is not None):
+            return DEFAULT_ONBOARDING_URL
+        if not parts.hostname.replace(".", "").replace("-", "").isalnum():
+            return DEFAULT_ONBOARDING_URL
+    except ValueError:
+        return DEFAULT_ONBOARDING_URL
+    return value
+
+
+def connect_business_view(*, onboarding_url: str, bound_business_id: str,
+                          show_binding: bool = False) -> tuple[str, dict]:
+    """Canonical web onboarding handoff, never Telegram-side registration."""
+    url = validated_onboarding_url(onboarding_url)
+    message = (
+        f"➕ Подключение бизнеса\n\n"
+        f"Подключение выполняется в веб-кабинете {BRAND}.\n"
+        "1. Войдите в кабинет.\n"
+        "2. Создайте бизнес или выберите существующий.\n"
+        "3. Подтвердите выбор бизнеса в кабинете.\n\n"
+        "Личные данные Telegram через эту ссылку не передаются."
+    )
+    if show_binding:
+        message += f"\n\nПривязанный бизнес: {bound_business_id or 'не выбран'}."
+    return message, {"inline_keyboard": [
+        [{"text": "🌐 Открыть веб-кабинет", "url": url}],
+        [{"text": "⬅️ Главное меню", "callback_data": CB_MENU_MAIN}],
+    ]}
 
 
 def section_text(callback: str) -> str | None:

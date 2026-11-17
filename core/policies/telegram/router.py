@@ -23,7 +23,7 @@ from core.policies.telegram.routes.settings_routes import handle_settings_routes
 from core.users.roles import UserRoleInfo
 from core.ux.callbacks import CB_MENU_MAIN
 from core.ux.telegram_keyboards import kb_back_main, kb_main
-from core.ux.unified_messenger_menu import BUSINESS_ONBOARDING_URL, menu_text
+from core.ux.unified_messenger_menu import BUSINESS_ONBOARDING_URL, connect_business_view, menu_text
 
 
 def handle(ctx: TelegramCtx, *, default_price_rub: int, bot_username: str = "", gift_ttl_sec: int = 7 * 24 * 3600) -> ProposedAction:
@@ -67,6 +67,18 @@ def handle(ctx: TelegramCtx, *, default_price_rub: int, bot_username: str = "", 
                 ],
             },
         )
+    if ctx.callback_data == "cp:section:connect":
+        meta = getattr(ctx.state, "meta", None)
+        links = meta.get("operator_links", {}) if isinstance(meta, dict) else {}
+        url = links.get("onboarding_url", "") if isinstance(links, dict) else ""
+        product = getattr(ctx.state, "product", None)
+        business_id = product.get("business_id", "") if isinstance(product, dict) else ""
+        text, markup = connect_business_view(
+            onboarding_url=str(url), bound_business_id=str(business_id),
+            show_binding=bool(ctx.is_admin),
+        )
+        return pm(text=text, reply_markup=markup)
+
     if ctx.callback_data in {"cp:section:customers", "cp:section:sales", "cp:section:ad-channels"}:
         if not ctx.is_admin:
             return pm(text="Доступ к данным бизнеса запрещён.", reply_markup=kb_back_main())

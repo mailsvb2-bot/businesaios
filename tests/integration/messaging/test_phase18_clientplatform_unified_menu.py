@@ -19,7 +19,7 @@ def test_brand_and_owner_navigation_are_stable():
                     "results", "payments", "settings", "administration"]
     assert "ClientPlatform" in menu_text(role="owner", is_admin=True)
     menu = telegram_menu(role="owner", is_admin=True)["inline_keyboard"]
-    assert menu[0][0] == {"text": "➕ Подключить мой бизнес", "url": "https://app.businessaios.ru/"}
+    assert menu[0][0] == {"text": "➕ Подключить мой бизнес", "callback_data": "cp:section:connect"}
     callbacks = [row[0]["callback_data"] for row in menu[1:]]
     assert callbacks == [
         "cp:section:customers", "cp:section:sales", "cpm:growth",
