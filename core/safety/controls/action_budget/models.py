@@ -12,7 +12,7 @@ from contextvars import ContextVar
 from dataclasses import dataclass
 from typing import Any
 
-from contracts.clientplatform_admin_analytics import ADMIN_ANALYTICS_ROUTES
+from contracts.action_budget import ADMIN_ANALYTICS_ROUTES
 from contracts.messaging_channels import ALL_CHANNELS
 from core.safety.controls.key_registry import SafetyKeyRegistry
 
