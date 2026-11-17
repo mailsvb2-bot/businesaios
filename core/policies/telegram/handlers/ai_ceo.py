@@ -81,7 +81,7 @@ def _propose_plan(ctx: TelegramCtx, *, user_id: str, event_store: Any | None) ->
         {
             "user_id": user_id,
             "text": text,
-            "reply_markup": kb_ai_ceo_menu(),
+            "reply_markup": kb_ai_ceo_menu(can_run=has_permission(ctx, "business_manage")),
             "callback_query_id": ctx.callback_query_id,
             "track_event_type": "ai_ceo_plan_shown" + "@v1",
             "track_payload": {"plan_id": plan.plan_id},

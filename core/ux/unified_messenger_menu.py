@@ -29,7 +29,7 @@ _ITEMS = (
     NavigationItem("customers", "💬 Клиенты и обращения", SECTION_PREFIX + "customers", "customers"),
     NavigationItem("sales", "💰 Продажи", SECTION_PREFIX + "sales", "sales"),
     NavigationItem("marketing", "📣 Реклама и продвижение", "cpm:growth", "marketing"),
-    NavigationItem("ai", "🤖 ИИ и автопилот", CB_AUTOPILOT_MENU, "autopilot"),
+    NavigationItem("ai", "🤖 ИИ-директор и автопилот", CB_AUTOPILOT_MENU, "autopilot"),
     NavigationItem("ads_apply", "🧩 Ads Apply (prod)", CB_ADS_APPLY_MENU, "ads_apply"),
     NavigationItem("results", "📊 Результаты", "cpm:growth-an:7", "analytics"),
     NavigationItem("payments", "💳 Оплаты и тарифы", "cpm:money", "payments"),
