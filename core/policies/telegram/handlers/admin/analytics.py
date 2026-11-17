@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from dataclasses import replace
 
-from contracts.clientplatform_admin_analytics import ADMIN_ANALYTICS_ROUTES
+from core.admin.read_model import ADMIN_ANALYTICS_ROUTES
 from core.policies.telegram.context import TelegramCtx
 from core.policies.telegram.handlers.admin.analytics_helpers import deny_if_not_admin, staff_reply
 from core.policies.telegram.helpers import ProposedAction, propose
