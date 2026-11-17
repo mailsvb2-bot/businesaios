@@ -14,7 +14,7 @@ from typing import Any
 from application.business_flows import bot_provisioning as botprov
 from application.business_flows.projection import flow_payloads, flow_rows
 from runtime.handler_impl.core.payloads import require_mapping, required_str
-from runtime.handler_impl.domains.admin_ops import _card_outcome
+from runtime.handler_impl.domains.admin_ops import _card_outcome, render_admin_analytics
 from runtime.handler_impl.domains.business_catalog_ops import (
     CATALOG_OPS,
     CHANNEL_OPS,
@@ -402,7 +402,6 @@ def handle_business_ops_summary(payload, effects, env, *, event_store, now_ms: i
     body = require_mapping(payload or {})
     tenant_id, now = required_str(body, "tenant_id"), now_ms or _now_ms()
     if str(body.get("op") or "") == "admin_analytics":
-        from runtime.handler_impl.domains.analytics_read_ops import render_admin_analytics
 
         text = render_admin_analytics(
             event_store=event_store, tenant_id=tenant_id,
