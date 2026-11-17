@@ -119,3 +119,44 @@ def test_env_binding_is_off_when_unset_and_rejects_garbage(monkeypatch):
     monkeypatch.setenv("LLM_USER_TOKENS_PER_WEEK", "-5")
     with pytest.raises(ValueError):
         _optional_period_caps_from_env()
+
+def test_cross_midnight_unfinished_reservation_counts_against_week_and_month(monkeypatch):
+    from datetime import timedelta
+    clock = [datetime(2026, 11, 17, 23, 59, tzinfo=UTC)]
+    monkeypatch.setattr(budget_mod.time, "time", lambda: clock[0].timestamp())
+    monkeypatch.setattr(budget_mod, "day_key_utc", lambda: clock[0].date().isoformat())
+    store = _Store([])
+    budget = EventStoreDailyTokenBudget(event_store=store, caps=_caps(
+        tenant_tokens_per_week=100, tenant_tokens_per_month=100))
+    assert budget.reserve(tenant_id="t", user_id="u", tokens=80, request_id="old") == "2026-11-17"
+    clock[0] += timedelta(minutes=2)
+    assert budget.reserve(tenant_id="t", user_id="u", tokens=21, request_id="overflow") is None
+    assert budget.reserve(tenant_id="t", user_id="u", tokens=20, request_id="fits") == "2026-11-18"
+    assert budget.release(tenant_id="t", request_id="old", day="2026-11-17")
+    assert budget.reserve(tenant_id="t", user_id="u", tokens=80, request_id="after-release") == "2026-11-18"
+
+
+def test_legacy_pending_from_previous_day_is_counted(monkeypatch):
+    from datetime import timedelta
+    clock = [datetime(2026, 11, 17, 23, 59, tzinfo=UTC)]
+    monkeypatch.setattr(budget_mod.time, "time", lambda: clock[0].timestamp())
+    monkeypatch.setattr(budget_mod, "day_key_utc", lambda: clock[0].date().isoformat())
+    store = _Store([])
+    store.settings["llm:pending:v1:2026-11-17"] = {"pending": {"old": {"user_id": "u", "tokens": 95}}}
+    clock[0] += timedelta(minutes=2)
+    budget = EventStoreDailyTokenBudget(event_store=store, caps=_caps(tenant_tokens_per_week=100))
+    assert budget.reserve(tenant_id="t", user_id="u", tokens=6, request_id="blocked") is None
+    assert budget.reserve(tenant_id="t", user_id="u", tokens=5, request_id="fits") == "2026-11-18"
+
+
+def test_single_cas_key_coordinates_new_reservations_across_days(monkeypatch):
+    from datetime import timedelta
+    clock = [datetime(2026, 11, 17, 23, 59, tzinfo=UTC)]
+    monkeypatch.setattr(budget_mod.time, "time", lambda: clock[0].timestamp())
+    monkeypatch.setattr(budget_mod, "day_key_utc", lambda: clock[0].date().isoformat())
+    store = _Store([])
+    budget = EventStoreDailyTokenBudget(event_store=store, caps=_caps(tenant_tokens_per_week=100))
+    assert budget.reserve(tenant_id="t", user_id="u", tokens=75, request_id="tuesday")
+    clock[0] += timedelta(minutes=2)
+    assert budget.reserve(tenant_id="t", user_id="u", tokens=26, request_id="wednesday") is None
+    assert set(store.settings["llm:pending:v2"]["pending"]) == {"tuesday"}
