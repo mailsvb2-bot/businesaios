@@ -3,6 +3,7 @@ from __future__ import annotations
 from collections.abc import Mapping
 from typing import Any
 
+from contracts.action_budget import ADMIN_ANALYTICS_ROUTES
 from core.admin import read_model
 from runtime.handler_impl.core.payloads import optional_dict, optional_str, require_mapping, required_str
 from runtime.handlers.delivery_contract import delivery_kwargs
