@@ -105,3 +105,9 @@ def scoped_plan(ctx: Any, plan_id: int) -> dict[str, Any] | None:
         return None
     return next((row for row in scoped_active_plans(ctx)
                  if int(row.get("plan_id") or 0) == target), None)
+
+
+def operator_flag(ctx: Any, name: str) -> bool:
+    meta = getattr(getattr(ctx, "state", None), "meta", None)
+    flags = meta.get("operator_flags") if isinstance(meta, dict) else None
+    return isinstance(flags, dict) and flags.get(name) is True

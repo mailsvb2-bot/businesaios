@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from core.policies.telegram.context import TelegramCtx
+from core.policies.telegram.context import TelegramCtx, scoped_active_plans
 from core.policies.telegram.handlers.admin_handlers import handle_admin
 from core.policies.telegram.handlers.admin_pricing import handle_admin_pricing_session
 from core.policies.telegram.handlers.ads_apply import handle_ads_apply
@@ -106,7 +106,7 @@ def handle(ctx: TelegramCtx, *, default_price_rub: int, bot_username: str = "", 
         if ctx.full_access:
             return pm(text="Полный доступ уже активен ✅", reply_markup=kb_back_main())
         from core.policies.telegram.tariffs import propose_show_tariffs
-        return propose_show_tariffs(user_id=user_id, legacy_prices=legacy_prices, marketing_variants=ctx.marketing_variants, marketing_seed=ctx.marketing_seed, marketing_bandit=ctx.marketing_bandit, pricing_suggestions=getattr(ctx, 'pricing_suggestions', None))
+        return propose_show_tariffs(user_id=user_id, legacy_prices=legacy_prices, marketing_variants=ctx.marketing_variants, marketing_seed=ctx.marketing_seed, marketing_bandit=ctx.marketing_bandit, pricing_suggestions=getattr(ctx, 'pricing_suggestions', None), plans=scoped_active_plans(ctx))
 
     for grouped in (
         lambda: handle_settings_routes(ctx, user_id=user_id, bot_username=bot_username, pm=pm),

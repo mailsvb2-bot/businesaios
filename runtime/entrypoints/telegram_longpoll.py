@@ -181,8 +181,12 @@ def _world_state_from_update(
         }
     product = dict(state.product or {})
     managed = parse_managed_bot_update(update)
+    meta["operator_flags"] = {}
     if managed is None and customer_route is None:
         product = _operator_product_binding(product)
+        meta["operator_flags"] = {
+            "telegram_checkout": bool(env_bool("TELEGRAM_CHECKOUT_ENABLED", False)),
+        }
     if managed is not None:  # Bot API managed_bot update: the creator is the acting user, no chat text
         uid = managed["user_id"]
         user = {**user, "id": uid, "messaging_user_id": uid, "telegram_user_id": uid, "telegram_chat_id": uid}
