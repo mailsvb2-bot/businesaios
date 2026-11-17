@@ -20,8 +20,22 @@ def apply_reliability_gate(*, executor, env) -> ExecutionResult | None:
     except _ERRORS as exc:
         executor._logger.warning("reliability.reserve_failed", exc_info=exc)
         return _blocked(env, "reservation", exc)
-    if decision is None or decision.resolution in {IdempotencyResolution.ACCEPTED, IdempotencyResolution.REPLAY_COMPLETED}:
+    if decision is None or decision.resolution is IdempotencyResolution.ACCEPTED:
         return None
+    if decision.resolution is IdempotencyResolution.REPLAY_COMPLETED:
+        # The durable record proves that this exact scoped operation already
+        # finished. Never re-enter the executor or repeat external effects.
+        return ExecutionResult(
+            ok=True,
+            output={
+                "status": "already_completed",
+                "idempotency_resolution": decision.resolution.value,
+                "replay_result_ref": decision.replay_result_ref,
+            },
+            error=None,
+            decision_id=str(env.decision.decision_id),
+            correlation_id=str(env.decision.correlation_id),
+        )
     resolution = decision.resolution
     decision_id = str(env.decision.decision_id)
     status = "already_claimed" if resolution is IdempotencyResolution.REJECTED_IN_PROGRESS else "rejected"
