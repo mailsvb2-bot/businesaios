@@ -15,13 +15,7 @@ from application.business_flows import bot_provisioning as botprov
 from application.business_flows.projection import flow_payloads, flow_rows
 from runtime.handler_impl.core.payloads import require_mapping, required_str
 from runtime.handler_impl.domains.admin_ops import _card_outcome, render_admin_analytics
-from runtime.handler_impl.domains.business_catalog_ops import (
-    CATALOG_OPS,
-    CHANNEL_OPS,
-    COMMERCE_OPS,
-    EVENT_OPS,
-    FOLLOWUP_OPS,
-    PANEL_OPS,
+from runtime.handler_impl.domains.business_catalog_ops import ( CATALOG_OPS, CHANNEL_OPS, COMMERCE_OPS, EVENT_OPS, FOLLOWUP_OPS, PANEL_OPS,
     PROMO_OPS,
     XP_OPS,
     _ads,
@@ -49,15 +43,7 @@ from runtime.handler_impl.domains.public_event_ops import MEDIA_OPS, PUB_OPS, _l
 from runtime.handlers.delivery_contract import delivery_kwargs
 
 
-def send_tracked(
-    body,
-    effects,
-    env,
-    *,
-    text: str,
-    event_type: str | None,
-    event_payload: dict[str, Any] | None,
-    ok: bool = True,
+def send_tracked( body, effects, env, *, text: str, event_type: str | None, event_payload: dict[str, Any] | None, ok: bool = True,
     reason: str = "",
     to_user_id: str | None = None,
     reply_markup: dict[str, Any] | None = None,
@@ -69,10 +55,7 @@ def send_tracked(
     cbq = body.pop("callback_query_id", None) if isinstance(body, dict) else None
     if tracked is not None:
         tracked.update(tenant_id=tenant_id, user_id=user_id)
-    delivery = effects.send_message(
-        decision_id=env.decision.decision_id,
-        correlation_id=env.decision.correlation_id,
-        tenant_id=tenant_id,
+    delivery = effects.send_message( decision_id=env.decision.decision_id, correlation_id=env.decision.correlation_id, tenant_id=tenant_id,
         user_id=user_id,
         text=text,
         reply_markup=reply_markup,
@@ -109,31 +92,20 @@ def handle_bookings(payload, effects, env, *, event_store, now_ms: int | None = 
     if op == "dispatch":
         return _dispatch_reminders(body, effects, env, bk, slots, facts, now)
     def done(text, change=None):
-        return send_tracked(
-            body, effects, env, text=text,
-            event_type="bookings@v1" if change else None, event_payload=change,
-        )
+        return send_tracked( body, effects, env, text=text, event_type="bookings@v1" if change else None, event_payload=change, )
 
     if op in PROMO_OPS | CHANNEL_OPS | PANEL_OPS | EVENT_OPS:
         try:
             if op in PROMO_OPS:
-                return _promotions(
-                    done, bk, op, arg, now, slots, facts,
-                    user_id=user_id, tenant_id=tenant_id, event_store=event_store,
-                )
+                return _promotions( done, bk, op, arg, now, slots, facts, user_id=user_id, tenant_id=tenant_id, event_store=event_store, )
             if op in CHANNEL_OPS:
-                return _event_channels(
-                    done, bk, op, arg, now, slots, facts,
+                return _event_channels( done, bk, op, arg, now, slots, facts,
                     user_id=user_id, platform=str(body.get("platform") or "telegram"),
                 )
             if op in PANEL_OPS:
-                return _panels(
-                    lambda text, _ch: done(text), bk, op, arg, now, slots, facts,
-                    tenant_id=tenant_id, event_store=event_store,
+                return _panels( lambda text, _ch: done(text), bk, op, arg, now, slots, facts, tenant_id=tenant_id, event_store=event_store,
                 )
-            return _events(
-                done,
-                lambda text, uid: send_tracked(
+            return _events( done, lambda text, uid: send_tracked(
                     body, effects, env, text=text, event_type=None, event_payload=None, to_user_id=uid,
                 ),
                 bk, op, arg, now, slots, tenant_id=tenant_id, event_store=event_store,
@@ -156,8 +128,7 @@ def handle_bookings(payload, effects, env, *, event_store, now_ms: int | None = 
         elif op in ("home", "home_owner"):
             change = None
             nxt = f"Ближайшая запись: {bk.fmt(mine[0])}" if mine else "Записей пока нет."
-            text = (
-                f"🏠 Личный кабинет\n\n{nxt}\nСвободных слотов: {len(open_slots)}\n\n"
+            text = ( f"🏠 Личный кабинет\n\n{nxt}\nСвободных слотов: {len(open_slots)}\n\n"
                 "/slots — расписание · /book N — записаться\n/my_bookings — мои записи · /cancel_booking N — отменить\n"
                 "/export_data — мои данные · /delete_my_data — удалить данные"
             )
@@ -184,14 +155,7 @@ def _dispatch_reminders(body, effects, env, bk, slots, facts, now):
     delivered = 0
     for slot, minutes, label in due:
         rtext = channel_reminder_copies(effects, env, body, facts, bk, slot, minutes, label)
-        out = send_tracked(
-            body,
-            effects,
-            env,
-            text=rtext,
-            event_type="bookings@v1",
-            event_payload={
-                "step": "reminder_sent",
+        out = send_tracked( body, effects, env, text=rtext, event_type="bookings@v1", event_payload={ "step": "reminder_sent",
                 "slot_id": slot.slot_id,
                 "minutes": minutes,
                 "revision": slot.revision,
@@ -226,17 +190,11 @@ def handle_partners(payload, effects, env, *, event_store):
         return _partner_card(body, effects, env, pt, known, op, arg, event_store)
     terms = [t for t in arg.replace(",", " ").split() if t]
     fits = pt.rank(known, terms)
-    lines = [
-        f"{i}. {f.partner.name} — {f.total:.0f}/100" + (f" ({'; '.join(f.reasons)})" if f.reasons else "")
+    lines = [ f"{i}. {f.partner.name} — {f.total:.0f}/100" + (f" ({'; '.join(f.reasons)})" if f.reasons else "")
         for i, f in enumerate(fits, 1)
     ]
     head = f"🤝 Партнёры под цель «{' '.join(terms) or 'любая'}» (рекомендации, ничего не отправляется):"
-    return send_tracked(
-        body,
-        effects,
-        env,
-        text=head + "\n\n" + ("\n".join(lines) or "Список пуст: /partner_add"),
-        event_type=None,
+    return send_tracked( body, effects, env, text=head + "\n\n" + ("\n".join(lines) or "Список пуст: /partner_add"), event_type=None,
         event_payload=None,
     )
 
@@ -262,9 +220,7 @@ def _partner_card(body, effects, env, pt, known, op, arg, event_store):
             text = f"🔗 Реферальный код партнёра {partner.name}: ref_{pt.referral_token(tenant_id, partner.partner_id)}"
     except ValueError as exc:
         return send_tracked(body, effects, env, text=f"🤝 Не получилось: {exc}", event_type=None, event_payload=None)
-    return send_tracked(
-        body, effects, env, text=text, event_type="partners@v1" if change else None, event_payload=change
-    )
+    return send_tracked( body, effects, env, text=text, event_type="partners@v1" if change else None, event_payload=change )
 
 
 def handle_offer_ladder(payload, effects, env, *, event_store):
@@ -284,13 +240,10 @@ def handle_offer_ladder(payload, effects, env, *, event_store):
         eligible = ld.candidates(steps, evidence_score=score)
     except ValueError as exc:
         return send_tracked(body, effects, env, text=f"🪜 Не получилось: {exc}", event_type=None, event_payload=None)
-    lines = [
-        f"{s.position}. {ld.KINDS[s.kind]} — {s.title}" + (" · нужно ваше подтверждение" if s.requires_approval else "")
+    lines = [ f"{s.position}. {ld.KINDS[s.kind]} — {s.title}" + (" · нужно ваше подтверждение" if s.requires_approval else "")
         for s in eligible
     ]
-    text = f"🪜 Доступные предложения при оценке {max(0.0, min(score, 1.0)):.2f}:\n\n" + (
-        "\n".join(lines) or "Нет доступных ступеней."
-    )
+    text = f"🪜 Доступные предложения при оценке {max(0.0, min(score, 1.0)):.2f}:\n\n" + ( "\n".join(lines) or "Нет доступных ступеней." )
     return send_tracked(body, effects, env, text=text, event_type=None, event_payload=None)
 
 
@@ -303,11 +256,7 @@ def _messenger_connections(admin_facts: list[dict]) -> list[dict]:
     """Native VK/MAX routes as messenger_switching connection rows (ids/usernames only, no token refs)."""
     from application.business_flows import native_channels as nc
 
-    return [
-        {
-            "platform": r.platform,
-            "status": r.status,
-            "connection_type": "vk_community" if r.platform == "vk" else r.platform,
+    return [ { "platform": r.platform, "status": r.status, "connection_type": "vk_community" if r.platform == "vk" else r.platform,
             "external_account_id": r.external_id if r.platform == "vk" else (r.username or r.external_id),
         }
         for r in nc.replay(admin_facts).values()
@@ -333,10 +282,7 @@ def _cockpit(body, effects, env, future, steps, facts, now, team=None, timed=Non
     from application.business_flows import partners as pt
     from application.business_flows import sales as sl
 
-    snap = cp.Snapshot(
-        slots=future,
-        partners=list(pt.replay(facts("partners@v1")).values()),
-        steps=steps,
+    snap = cp.Snapshot( slots=future, partners=list(pt.replay(facts("partners@v1")).values()), steps=steps,
         bots=list(botprov.replay(facts("bot_provisioning@v1")).values()),
         fmt_slot=bk.fmt,
         admin=ad.replay(facts("business_admin@v1")),
@@ -375,22 +321,15 @@ def _cockpit(body, effects, env, future, steps, facts, now, team=None, timed=Non
         elif parsed.action in cb.MUTATIONS:
             change = cb.mutation(parsed.args, snap.admin, now_ms=now)
             if change["slot_id"] in bk.replay(facts("bookings@v1")):
-                return send_tracked(
-                    body, effects, env, text="Это время уже добавлено.", event_type=None, event_payload=None
-                )
+                return send_tracked( body, effects, env, text="Это время уже добавлено.", event_type=None, event_payload=None )
             screen = cp.Parsed("bookings", ("0",))
             event_type = "bookings@v1"
     except ValueError as exc:
-        return send_tracked(
-            body, effects, env, text=f"⚠️ Не получилось: {exc}", event_type=None, event_payload=None
-        )
+        return send_tracked( body, effects, env, text=f"⚠️ Не получилось: {exc}", event_type=None, event_payload=None )
     text, rows = cp.render(screen, after, is_owner=True)
     if parsed.action in cb.MUTATIONS:
         text = cb.result_text(change) + "\n\nДобавить ещё: кнопка ниже."
-    return send_tracked(
-        body, effects, env, text=prefix + text,
-        event_type=event_type, event_payload=change,
-        reply_markup=cp.markup(rows),
+    return send_tracked( body, effects, env, text=prefix + text, event_type=event_type, event_payload=change, reply_markup=cp.markup(rows),
     )
 
 def handle_business_ops_summary(payload, effects, env, *, event_store, now_ms: int | None = None):
@@ -403,13 +342,8 @@ def handle_business_ops_summary(payload, effects, env, *, event_store, now_ms: i
     tenant_id, now = required_str(body, "tenant_id"), now_ms or _now_ms()
     if str(body.get("op") or "") == "admin_analytics":
 
-        text = render_admin_analytics(
-            event_store=event_store, tenant_id=tenant_id,
-            route=str(body.get("arg") or ""), now_ms=now,
-        )
-        return send_tracked(
-            body, effects, env, text=text, event_type=None, event_payload=None,
-        )
+        text = render_admin_analytics( event_store=event_store, tenant_id=tenant_id, route=str(body.get("arg") or ""), now_ms=now, )
+        return send_tracked( body, effects, env, text=text, event_type=None, event_payload=None, )
 
     def facts(event_type: str) -> list[dict]:
         return flow_payloads(event_store, tenant_id=tenant_id, event_type=event_type)
@@ -421,19 +355,10 @@ def handle_business_ops_summary(payload, effects, env, *, event_store, now_ms: i
     if str(body.get("op") or "") == "cockpit":
         from core.admin import roles_read_model as rr
 
-        team = {
-            "roles": rr.team_roles_snapshot(event_store, tenant_id=tenant_id),
+        team = { "roles": rr.team_roles_snapshot(event_store, tenant_id=tenant_id),
             "perms": rr.team_perms_snapshot(event_store, tenant_id=tenant_id),
         }
-        return _cockpit(
-            body,
-            effects,
-            env,
-            future,
-            steps,
-            facts,
-            now,
-            team,
+        return _cockpit( body, effects, env, future, steps, facts, now, team,
             timed=lambda et: flow_rows(event_store, tenant_id=tenant_id, event_type=et),
         )
     if str(body.get("op") or "") in ("outcomes", "trace", "economics", "journey"):
@@ -441,9 +366,7 @@ def handle_business_ops_summary(payload, effects, env, *, event_store, now_ms: i
         return send_tracked(body, effects, env, text=text, event_type=None, event_payload=None)
     deletions = len(facts("privacy_deleted@v1"))
     bots = {p.get("username") for p in facts("bot_provisioning@v1") if p.get("username")}
-    text = (
-        "📊 Операционная сводка\n\n"
-        f"Слоты впереди: {len(future)} (занято {len(booked)}, свободно {len(future) - len(booked)})\n"
+    text = ( "📊 Операционная сводка\n\n" f"Слоты впереди: {len(future)} (занято {len(booked)}, свободно {len(future) - len(booked)})\n"
         + (f"Ближайшая встреча: {bk.fmt(booked[0])}\n" if booked else "")
         + f"Партнёров в базе: {len(pt.replay(facts('partners@v1')))}\n"
         f"Ступеней лестницы предложений: {len(steps)}\n"
@@ -463,27 +386,22 @@ def handle_business_admin(payload, effects, env, *, event_store, settings_gatewa
     st = ad.replay(flow_payloads(event_store, tenant_id=tenant_id, event_type="business_admin@v1"))
 
     def done(text, change=None):
-        return send_tracked(
-            body, effects, env, text=text, event_type="business_admin@v1" if change else None, event_payload=change
-        )
+        return send_tracked( body, effects, env, text=text, event_type="business_admin@v1" if change else None, event_payload=change )
 
     if op in {"organization_show", "organization_create", "organization_name", "organization_type"}:
-        text, markup = _organization_settings(
-            event_store=event_store, idempotency_path=organization_idempotency_path,
+        text, markup = _organization_settings( event_store=event_store, idempotency_path=organization_idempotency_path,
             body=body, tenant_id=tenant_id, op=op, arg=arg,
             decision_id=env.decision.decision_id,
         )
         return send_tracked(body, effects, env, text=text, event_type=None, event_payload=None, reply_markup=markup)
     if op in {"notifications_show", "notifications_toggle", "notifications_level"}:
         try:
-            text, markup = notification_preferences(
-                settings_gateway=settings_gateway, tenant_id=tenant_id,
+            text, markup = notification_preferences( settings_gateway=settings_gateway, tenant_id=tenant_id,
                 user_id=required_str(body, "user_id"), operation=op,
             )
         except (RuntimeError, ValueError):
             text, markup = "🔔 Настройки не сохранены. Попробуйте ещё раз.", None
-        return send_tracked(body, effects, env, text=text, event_type=None,
-                            event_payload=None, reply_markup=markup)
+        return send_tracked(body, effects, env, text=text, event_type=None, event_payload=None, reply_markup=markup)
     if op in XP_OPS:
         try:
             facts_ = flow_payloads(event_store, tenant_id=tenant_id, event_type="business_admin@v1")
@@ -506,11 +424,7 @@ def handle_business_admin(payload, effects, env, *, event_store, settings_gatewa
             if ch is None:
                 return done(f"👤 Клиент {cid[-6:]}: без изменений.")
             hidden = ch["step"] == "customer_archived"
-            return done(
-                f"👤 Клиент {cid[-6:]} "
-                + (
-                    "скрыт из списка (история сохранена). Вернуть: /customer_archive ID off"
-                    if hidden
+            return done( f"👤 Клиент {cid[-6:]} " + ( "скрыт из списка (история сохранена). Вернуть: /customer_archive ID off" if hidden
                     else "возвращён в список."
                 ),
                 ch,
@@ -533,9 +447,7 @@ def handle_business_admin(payload, effects, env, *, event_store, settings_gatewa
             return done(text, ch)
         if op == "refund":
             ch = ad.refund_payment(st, arg)
-            return done(
-                f"↩️ Возврат {ad.money(ch['amount_minor'], st.payments[ch['payment_id']].currency)} записан"
-                if ch
+            return done( f"↩️ Возврат {ad.money(ch['amount_minor'], st.payments[ch['payment_id']].currency)} записан" if ch
                 else "↩️ Этот возврат уже записан",
                 ch,
             )
@@ -578,12 +490,8 @@ def handle_business_admin(payload, effects, env, *, event_store, settings_gatewa
                 from application.business_flows import catalog as cg
 
                 tz = cg.replay(flow_payloads(event_store, tenant_id=tenant_id, event_type="business_admin@v1")).timezone
-                verdict, why = apol.check(
-                    pols, parts[0], channel=channel, amount_minor=amount, now_ms=now, timezone_name=tz
-                )
-                label = {"allow": "✅ Разрешено", "needs_approval": "🧾 Нужно подтверждение", "deny": "⛔ Запрещено"}[
-                    verdict
-                ]
+                verdict, why = apol.check( pols, parts[0], channel=channel, amount_minor=amount, now_ms=now, timezone_name=tz )
+                label = {"allow": "✅ Разрешено", "needs_approval": "🧾 Нужно подтверждение", "deny": "⛔ Запрещено"}[ verdict ]
                 ch = None
                 if verdict == "needs_approval":
                     eff = apol.effective(pols, now_ms=now)
@@ -599,33 +507,19 @@ def handle_business_admin(payload, effects, env, *, event_store, settings_gatewa
         if op.startswith("ad_"):
             from application.business_flows import sales as sl
 
-            return _ads(
-                body,
-                done,
-                st,
-                op,
-                arg,
-                flow_payloads(event_store, tenant_id=tenant_id, event_type="business_admin@v1"),
+            return _ads( body, done, st, op, arg, flow_payloads(event_store, tenant_id=tenant_id, event_type="business_admin@v1"),
                 lambda: sl.replay(flow_payloads(event_store, tenant_id=tenant_id, event_type="sales_pipeline@v1")),
             )
         if op == "audit":
             facts_ = flow_payloads(event_store, tenant_id=tenant_id, event_type="business_admin@v1")
-            return done(
-                "🧾 Журнал действий владельца\n"
-                + "\n".join(ad.audit_lines(facts_, limit=int(arg) if arg.isdigit() else 20))
-            )
+            return done( "🧾 Журнал действий владельца\n" + "\n".join(ad.audit_lines(facts_, limit=int(arg) if arg.isdigit() else 20)) )
         if op.startswith("post"):
             from application.business_flows import publications as pb
 
-            pubs, now = (
-                pb.replay(flow_payloads(event_store, tenant_id=tenant_id, event_type="business_admin@v1")),
-                now_ms or _now_ms(),
-            )
+            pubs, now = ( pb.replay(flow_payloads(event_store, tenant_id=tenant_id, event_type="business_admin@v1")), now_ms or _now_ms(), )
             if op == "posts":
                 due = pb.due(pubs, now_ms=now)
-                return done(
-                    "🗓 Календарь публикаций\n"
-                    + "\n".join(pb.calendar_lines(pubs))
+                return done( "🗓 Календарь публикаций\n" + "\n".join(pb.calendar_lines(pubs))
                     + (f"\n⏰ Пора опубликовать: {len(due)}" if due else "")
                 )
             if op == "post_add":
@@ -633,14 +527,9 @@ def handle_business_admin(payload, effects, env, *, event_store, settings_gatewa
                 return done("📝 Черновик сохранён" if ch else "📝 Такой черновик уже есть", ch)
             if op == "post_schedule":
                 ch = pb.schedule(pubs, arg, now_ms=now)
-                return done(
-                    "🗓 Запланировано на " + pb.fmt_ts(ch["at_ms"]) + " МСК (опубликуете вы сами — напомню в /posts)", ch
-                )
+                return done( "🗓 Запланировано на " + pb.fmt_ts(ch["at_ms"]) + " МСК (опубликуете вы сами — напомню в /posts)", ch )
             ch = pb.transition(pubs, op.removeprefix("post_"), arg, now_ms=now)
-            return done(
-                {
-                    "post_unschedule": "↩️ Снято с расписания",
-                    "post_publish": "✅ Отмечено как опубликованное",
+            return done( { "post_unschedule": "↩️ Снято с расписания", "post_publish": "✅ Отмечено как опубликованное",
                     "post_retire": "🗄 В архиве",
                 }[op]
                 if ch
@@ -677,9 +566,7 @@ def handle_event_series(payload, effects, env, *, event_store, now_ms: int | Non
     st, slots = es.replay(facts("event_series@v1")), bk.replay(facts("bookings@v1"))
 
     def done(text, change=None):
-        return send_tracked(
-            body, effects, env, text=text, event_type="event_series@v1" if change else None, event_payload=change
-        )
+        return send_tracked( body, effects, env, text=text, event_type="event_series@v1" if change else None, event_payload=change )
 
     try:
         if op in PUB_OPS:
@@ -692,11 +579,7 @@ def handle_event_series(payload, effects, env, *, event_store, now_ms: int | Non
             return _visual(body, effects, env, facts, arg, done)
         if op in ("offers_on", "offers_off"):
             on = op == "offers_on"
-            msg = (
-                "🔔 Буду присылать предложения после встреч."
-                if on
-                else "🔕 Предложения больше не придут. Вернуть: /offers_on"
-            )
+            msg = ( "🔔 Буду присылать предложения после встреч." if on else "🔕 Предложения больше не придут. Вернуть: /offers_on" )
             return done(msg, es.consent(user_id, on))
         if op == "warmup_days":
             ch = es.parse_warmup_days(arg)
@@ -708,18 +591,12 @@ def handle_event_series(payload, effects, env, *, event_store, now_ms: int | Non
             ch = es.reset_text(arg)
             return done(f"↩️ Текст {ch['kind']} {ch['segment']} {ch['stage']} — снова шаблон", ch)
         if op == "attendance":
-            past = sorted(
-                (s for s in slots.values() if s.status == "booked" and s.starts_at_ms <= now),
-                key=lambda s: -s.starts_at_ms,
-            )
+            past = sorted( (s for s in slots.values() if s.status == "booked" and s.starts_at_ms <= now), key=lambda s: -s.starts_at_ms, )
             if not arg:
-                rows = [
-                    f"{i}. {bk.fmt(s)} — {st.attendance.get((s.slot_id, s.customer_id), 'не отмечено')}"
+                rows = [ f"{i}. {bk.fmt(s)} — {st.attendance.get((s.slot_id, s.customer_id), 'не отмечено')}"
                     for i, s in enumerate(past[:10], 1)
                 ]
-                return done(
-                    "🧾 Прошедшие встречи (/attendance N attended|no_show)\n" + ("\n".join(rows) or "Пока нет.")
-                )
+                return done( "🧾 Прошедшие встречи (/attendance N attended|no_show)\n" + ("\n".join(rows) or "Пока нет.") )
             n, _, status = arg.partition(" ")
             slot = past[int(n) - 1] if n.isdigit() and 0 < int(n) <= len(past) else None
             return done("🧾 Отмечено: " + status.strip(), es.mark_attendance(slot, status.strip(), now_ms=now))
@@ -728,9 +605,7 @@ def handle_event_series(payload, effects, env, *, event_store, now_ms: int | Non
 
             ch = wz.draft(user_id, arg)
             text, rows, _ = wz.step(ch["title"], "", now_ms=now)
-            return send_tracked(
-                body, effects, env, text=text, event_type="event_series@v1",
-                event_payload=ch, reply_markup=_markup(rows),
+            return send_tracked( body, effects, env, text=text, event_type="event_series@v1", event_payload=ch, reply_markup=_markup(rows),
             )
         if op == "wizard":
             from application.business_flows import event_wizard as wz
@@ -738,22 +613,16 @@ def handle_event_series(payload, effects, env, *, event_store, now_ms: int | Non
             title = wz.draft_title(facts("event_series@v1"), user_id)
             text, rows, result = wz.step(title, arg, now_ms=now)
             if result is None:
-                return send_tracked(
-                    body, effects, env, text=text, event_type=None,
-                    event_payload=None, reply_markup=_markup(rows),
-                )
+                return send_tracked( body, effects, env, text=text, event_type=None, event_payload=None, reply_markup=_markup(rows), )
             if result["warmup"]:
                 done("🔥 Прогрев: за " + ", ".join(map(str, result["warmup"]["days"])) + " дн.", result["warmup"])
             done("🧭 Мастер завершён", {"step": "wizard_done", "user_id": user_id})
             done("📌 Формат: " + wz.MODES[result["mode"]["mode"]], result["mode"])
             sent = None
             for slot in result["slots"]:
-                message = ("✅ Слот открыт: "
-                           + bk.fmt(bk.Slot(slot["slot_id"], slot["title"], slot["starts_at_ms"], slot["duration_min"]))
+                message = ("✅ Слот открыт: " + bk.fmt(bk.Slot(slot["slot_id"], slot["title"], slot["starts_at_ms"], slot["duration_min"]))
                            + f", {slot['duration_min']} мин")
-                sent = send_tracked(
-                    body, effects, env, text=message, event_type="bookings@v1", event_payload=slot,
-                )
+                sent = send_tracked( body, effects, env, text=message, event_type="bookings@v1", event_payload=slot, )
             hint = "ссылку на комнату (https://…)" if result["mode"]["mode"] == "on" else "адрес площадки"
             done(f"Дальше: /event_place {slot['title']} | {hint}")
             return sent
@@ -777,12 +646,7 @@ def handle_event_series(payload, effects, env, *, event_store, now_ms: int | Non
             due = es.due_messages(st, slots, now_ms=now, offer_url=offer)
             sent = 0
             for m in due:
-                out = send_tracked(
-                    body,
-                    effects,
-                    env,
-                    text=m["text"],
-                    event_type="event_series@v1",
+                out = send_tracked( body, effects, env, text=m["text"], event_type="event_series@v1",
                     event_payload={"step": "series_sent", "key": m["key"], "kind": m["kind"]},
                     to_user_id=m["to"],
                 )
@@ -804,23 +668,14 @@ def handle_sales_pipeline(payload, effects, env, *, event_store, now_ms: int | N
     st = sl.replay(flow_payloads(event_store, tenant_id=tenant_id, event_type="sales_pipeline@v1"))
 
     def done(text, change=None):
-        return send_tracked(
-            body, effects, env, text=text, event_type="sales_pipeline@v1" if change else None, event_payload=change
-        )
+        return send_tracked( body, effects, env, text=text, event_type="sales_pipeline@v1" if change else None, event_payload=change )
 
     if op == "inbound":
         return _sales_inbound(done, body, env, tenant_id=tenant_id, event_store=event_store)
     if op in FOLLOWUP_OPS:
 
         def push(*, text, to_user_id, change):
-            out = send_tracked(
-                body,
-                effects,
-                env,
-                text=text,
-                event_type="sales_pipeline@v1",
-                event_payload=change,
-                to_user_id=to_user_id,
+            out = send_tracked( body, effects, env, text=text, event_type="sales_pipeline@v1", event_payload=change, to_user_id=to_user_id,
             )
             return (out or {}).get("ok", True)
 
@@ -875,26 +730,16 @@ def handle_sales_pipeline(payload, effects, env, *, event_store, now_ms: int | N
         if op == "card":
             lead = sl.pick(st, arg)
             notes = "\n".join(f"• {n}" for n in lead.notes) or "Заметок нет."
-            return done(
-                f"👤 {lead.name} ({lead.source or 'источник не указан'})\nСтадия: {sl.LABELS[lead.stage]}\n{notes}"
-            )
+            return done( f"👤 {lead.name} ({lead.source or 'источник не указан'})\nСтадия: {sl.LABELS[lead.stage]}\n{notes}" )
         if op == "due":
             due = sl.due_actions(st, now_ms=now)
-            return done(
-                "⏰ Пора сделать\n\n"
-                + ("\n".join(f"• {x.name}: {x.next_action}" for x in due) or "Ничего не просрочено.")
-            )
+            return done( "⏰ Пора сделать\n\n" + ("\n".join(f"• {x.name}: {x.next_action}" for x in due) or "Ничего не просрочено.") )
     except ValueError as exc:
         return done(f"⚠️ Не получилось: {exc}")
     return done(sl.render(st, now_ms=now))
 
 
-__all__ = [
-    "handle_bookings",
-    "handle_sales_pipeline",
-    "handle_event_series",
-    "handle_business_admin",
-    "handle_business_ops_summary",
+__all__ = [ "handle_bookings", "handle_sales_pipeline", "handle_event_series", "handle_business_admin", "handle_business_ops_summary",
     "handle_offer_ladder",
     "handle_partners",
     "send_tracked",
