@@ -70,9 +70,16 @@ def plain_channel_menu(*, channel: str, role: str, is_admin: bool = False) -> di
 
     if channel not in MESSAGING_CHANNEL_PROVIDER_KEYS:
         raise ValueError("unsupported_clientplatform_channel")
-    return {"channel": channel, "text": menu_text(role=role, is_admin=is_admin),
-            "actions": tuple({"key": x.key, "label": x.label, "callback": x.callback}
-                             for x in menu_items(role=role, is_admin=is_admin))}
+    actions = tuple({"key": x.key, "label": x.label, "callback": x.callback}
+                    for x in menu_items(role=role, is_admin=is_admin))
+    # P1-24: the same actions as the canonical inline keyboard; the existing VK/MAX
+    # egress (provider_payload_normalizers) turns it into native buttons and the
+    # inbound decoder returns the pressed callback as text. The numbered text
+    # stays as the fallback for clients without buttons.
+    return {"channel": channel, "text": menu_text(role=role, is_admin=is_admin), "actions": actions,
+            "reply_markup": {"inline_keyboard": [  # 2 per row: fits VK inline (≤6 rows, ≤10) and MAX
+                [{"text": a["label"], "callback_data": a["callback"]} for a in actions[i:i + 2]]
+                for i in range(0, len(actions), 2)]}}
 
 
 DEFAULT_ONBOARDING_URL = BUSINESS_ONBOARDING_URL

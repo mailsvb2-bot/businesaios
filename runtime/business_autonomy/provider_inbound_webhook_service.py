@@ -8,6 +8,7 @@ from application.business_autonomy.provider_admin_contract import ProviderDefini
 from application.business_autonomy.provider_runtime_contract import ProviderWebhookIngressResult
 from contracts.messaging_event_identity import MessageDirection, MessageIdentity
 from runtime.business_autonomy.provider_incident_registry import FileProviderIncidentRegistry
+from runtime.business_autonomy.provider_payload_normalizers import max_native_buttons_enabled
 from runtime.business_autonomy.provider_runtime_audit import ProviderRuntimeAuditRecorder
 from runtime.business_autonomy.provider_runtime_export_bridge import ProviderRuntimeExportBridge
 from runtime.business_autonomy.provider_runtime_observability import ProviderRuntimeObservability
@@ -209,7 +210,7 @@ class ProviderInboundWebhookService:
                 inbound_result = self.inbound_processor.process(handoff=handoff)
         if decision.accepted and (not handoff or inbound_result):
             self.complete(provider=provider, tenant_id=tenant_id, business_id=business_id, event_key=event_key, payload_digest=payload_digest, owner_id=decision.owner_id, topic=topic)
-        ack_required = provider.provider_key == 'vk_messaging' and str(topic or '') == 'message_event'
+        ack_required = (provider.provider_key == 'vk_messaging' and str(topic or '') == 'message_event') or (provider.provider_key == 'max_messaging' and str(topic or '') == 'message_callback' and max_native_buttons_enabled())
         ack_eligible = bool(handoff) and (bool(inbound_result) or decision.resolution == 'replay_completed')
         if ack_required and not ack_eligible:
             provider_ack = {'required': True, 'ok': False, 'reason': 'inbound_processing_incomplete'}

@@ -142,6 +142,7 @@ _PROVIDER_PATHS: dict[str, dict[str, tuple[FieldPath, ...]]] = {
             ("message", "body", "command"),
         ),
         "message_id": (
+            ("callback", "callback_id"),  # one identity per press; also the /answers key
             ("message", "body", "mid"),
             ("message", "body", "message_id"),
             ("update_id",),
