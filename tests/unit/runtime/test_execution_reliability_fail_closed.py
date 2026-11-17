@@ -470,3 +470,103 @@ def test_pre_effect_dispatch_wraps_readonly_lookup_failure_without_invoking_hand
     with pytest.raises(PreEffectDispatchError, match="pre_effect"):
         dispatch_effects(executor=Executor(), env=env, depth=0, enqueue=True)
     assert not called
+
+@pytest.mark.parametrize("proof", ["verified", "missing", "wrong_tenant", "unverified"])
+def test_terminal_telegram_failure_recovery_requires_original_verified_effect_proof(proof):
+    from core.safety.controls.action_budget.models import issue_verified_update_idempotency_key
+    from runtime.events import ACTION_EXECUTED
+    from runtime.safety import verified_inbound_reply_scope
+
+    class Terminal:
+        def reserve(self, env):
+            key = IdempotencyKey(
+                tenant_id="tenant-a", namespace="runtime", operation="execute",
+                key=env.decision.payload["idempotency_key"],
+            )
+            return IdempotencyDecision(
+                resolution=IdempotencyResolution.REJECTED_TERMINAL_FAILED,
+                record=IdempotencyRecord(
+                    idempotency_key=key,
+                    state=IdempotencyState.FAILED,
+                    metadata={"original_decision_id": "old-decision",
+                              "original_action": "send_message@v1"},
+                ),
+            )
+
+        def append_checkpoint(self, *args, **kwargs):
+            pass
+
+    class Store:
+        def iter_events(self, *, tenant_id, start_ms, event_type):
+            assert (tenant_id, start_ms, event_type) == ("tenant-a", 0, ACTION_EXECUTED)
+            if proof == "missing":
+                return []
+            return [{
+                "tenant_id": "other" if proof == "wrong_tenant" else "tenant-a",
+                "decision_id": "old-decision",
+                "payload": {
+                    "action": {"action_type": "send_message@v1"},
+                    "lifecycle": {
+                        "status": "executed",
+                        "verification_status": "failed" if proof == "unverified" else "verified",
+                    },
+                },
+            }]
+
+    class Guard:
+        verified = False
+
+        def verify(self, _env):
+            self.verified = True
+
+    executor = _Executor(Terminal())
+    executor._runtime_infra = SimpleNamespace(event_store=Store())
+    executor._guard = Guard()
+
+    with verified_inbound_reply_scope(tenant_id="tenant-a", channel="telegram",
+                                       user_id="4001", update_id=42, chat_id="4001"):
+        key = issue_verified_update_idempotency_key(
+            tenant_id="tenant-a", channel="telegram", user_id="4001",
+            update_id=42, chat_id="4001")
+        env = _Env(_Decision(payload={
+            "tenant_id": "tenant-a", "user_id": "4001", "idempotency_key": key,
+        }))
+        result = apply_reliability_gate(executor=executor, env=env)
+
+    assert result is not None
+    if proof == "verified":
+        assert result.ok is True
+        assert result.output["status"] == "already_completed"
+        assert result.output["replay_result_ref"] == "old-decision"
+        assert executor._guard.verified is True
+    else:
+        assert result.ok is False
+        assert result.output["idempotency_resolution"] == "rejected_terminal_failed"
+        assert executor._guard.verified is False
+
+@pytest.mark.parametrize("backend", ["memory", "sqlite"])
+def test_canonical_reliability_reservation_keeps_original_identity_after_terminal_failure(
+    tmp_path, backend
+):
+    from reliability.idempotency_sqlite_backend import SQLiteIdempotencyStore
+    from reliability.idempotency_store import InMemoryIdempotencyStore
+
+    store = (InMemoryIdempotencyStore() if backend == "memory"
+             else SQLiteIdempotencyStore(tmp_path / "proof.sqlite3"))
+    runtime = _runtime(idempotency_store=store)
+    first = _Env(_Decision(
+        decision_id="first-42",
+        action="send_message@v1",
+        payload={"tenant_id": "tenant-a", "idempotency_key": "stable-42"},
+    ))
+    assert runtime.reserve(first).resolution is IdempotencyResolution.ACCEPTED
+    runtime.mark_failed(first, reason="ambiguous_effect")
+    retry = _Env(_Decision(
+        decision_id="second-42",
+        action="send_message@v1",
+        payload={"tenant_id": "tenant-a", "idempotency_key": "stable-42"},
+    ))
+    blocked = runtime.reserve(retry)
+    assert blocked.resolution is IdempotencyResolution.REJECTED_TERMINAL_FAILED
+    assert blocked.record.metadata["original_decision_id"] == "first-42"
+    assert blocked.record.metadata["original_action"] == "send_message@v1"
