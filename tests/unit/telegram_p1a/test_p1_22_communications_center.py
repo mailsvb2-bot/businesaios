@@ -7,7 +7,7 @@ from types import SimpleNamespace
 
 import pytest
 
-from application.business_flows import communications_center as cc
+from application.business_flows import cockpit_sales as cc
 
 RECEIPT = {"mode": "live", "operation": "message_send", "accepted": True, "status": "live_executed",
            "parsed_response": {"resource_id": "4242"}, "recorded_at_utc": "2026-11-18T10:00:00Z", "queue_job_id": "j1"}
@@ -29,7 +29,7 @@ def test_states_come_only_from_provider_truth_and_queue():
             {"job_id": "q2", "state": "pending", "attempts": 2, "payload": {"operation": "message_send"}},
             {"job_id": "q3", "state": "succeeded", "attempts": 1, "payload": {"operation": "message_send"}},
             {"job_id": "q4", "state": "pending", "attempts": 0, "payload": {"operation": "health_probe"}}]
-    view = cc.build(messages=[_msg("m1", "inbound", 2), _msg("m2", "outbound", 3), _msg("m3", "inbound", 5)],
+    view = cc.communications_view(messages=[_msg("m1", "inbound", 2), _msg("m2", "outbound", 3), _msg("m3", "inbound", 5)],
                     providers={"vk_messaging": (history, jobs)})
     assert [r["message_id"] for r in view["inbound"]] == ["m3", "m1"]
     assert [r["receipt"] for r in view["outbound"]] == ["4242"]

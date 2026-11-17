@@ -5,7 +5,7 @@ from __future__ import annotations
 from functools import partial
 from types import SimpleNamespace
 
-from application.business_flows import sales_center
+from application.business_flows import cockpit_sales as sales_center
 from runtime.handler_impl.domains.business_flow_ops import handle_sales_pipeline
 
 DAY = 86_400_000

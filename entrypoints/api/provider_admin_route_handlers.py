@@ -104,7 +104,8 @@ class ProviderAdminRouteHandlers:
     def get_sales_sources(self, *, tenant_id: str, business_id: str, requested: str = '') -> dict[str, Any]:
         """Sales Center sources (read-only): channel pipeline + CRMs with confirmed live reads."""
         from application.business_autonomy.provider_truth_matrix import sales_source_provider_keys
-        from application.business_flows import sales, sales_center
+        from application.business_flows import cockpit_sales as sales_center
+        from application.business_flows import sales
         from application.business_flows.projection import flow_rows
         keys = sales_source_provider_keys()
         catalog = list(self.list_provider_catalog(tenant_id=tenant_id, business_id=business_id).get('providers') or [])
@@ -122,7 +123,7 @@ class ProviderAdminRouteHandlers:
         return {'tenant_id': tenant_id, 'business_id': business_id, **sales_center.choose(sources, str(requested or '').strip())}
     def _deal_funnel(self, *, tenant_id: str, business_id: str, provider_key: str, now_ms: int) -> dict[str, Any] | None:
         """CRM funnel over canonical Deal facts (DealRegistry projection) via the provider stage map."""
-        from application.business_flows import sales_center
+        from application.business_flows import cockpit_sales as sales_center
         from application.deal.registry import DealProjector
         if self.customer_event_store is None:
             return None
@@ -145,16 +146,16 @@ class ProviderAdminRouteHandlers:
     def get_communications(self, *, tenant_id: str, business_id: str) -> dict[str, Any]:
         """P1-22: web communications center over existing message/provider owners (read-only)."""
         from application.business_autonomy.provider_catalog import MESSAGING_GUARDED_WRITE_PROVIDER_KEYS
-        from application.business_flows import communications_center
+        from application.business_flows import cockpit_sales as communications_center
         from runtime.messaging.message_registry import MessageProjector
 
         service = self._service(business_id)
         connected = {str(row.get('provider_key')) for row in self.list_provider_catalog(tenant_id=tenant_id, business_id=business_id).get('providers', ()) if row.get('connected')}
-        providers = {key: (service.list_provider_sync_history(tenant_id=tenant_id, business_id=business_id, provider_key=key, limit=communications_center.LIMIT),
-                           service.list_provider_queue_jobs(tenant_id=tenant_id, business_id=business_id, provider_key=key, limit=communications_center.LIMIT))
+        providers = {key: (service.list_provider_sync_history(tenant_id=tenant_id, business_id=business_id, provider_key=key, limit=communications_center.COMMS_LIMIT),
+                           service.list_provider_queue_jobs(tenant_id=tenant_id, business_id=business_id, provider_key=key, limit=communications_center.COMMS_LIMIT))
                      for key in sorted(MESSAGING_GUARDED_WRITE_PROVIDER_KEYS & connected)}
         messages = MessageProjector(self.customer_event_store).list_for_business(tenant_id=tenant_id, business_id=business_id) if self.customer_event_store is not None else ()
-        return {'tenant_id': tenant_id, 'business_id': business_id, 'providers': sorted(providers), **communications_center.build(messages=messages, providers=providers)}
+        return {'tenant_id': tenant_id, 'business_id': business_id, 'providers': sorted(providers), **communications_center.communications_view(messages=messages, providers=providers)}
     def list_provider_secret_history(self, *, tenant_id: str, business_id: str, provider_key: str) -> dict[str, Any]:
         rows = self._service(business_id).list_provider_secret_history(tenant_id=tenant_id, business_id=business_id, provider_key=provider_key)
         return {'tenant_id': tenant_id, 'business_id': business_id, 'provider_key': provider_key, 'versions': list(rows)}

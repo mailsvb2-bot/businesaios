@@ -16,10 +16,10 @@ from core.policies.telegram.helpers import (
     choose_marketing_variant,
     propose_message,
 )
+from core.policies.telegram.routes.business_flow_routes import handle_sales_buttons
 from core.policies.telegram.routes.command_routes import handle_command_routes, handle_free_text
 from core.policies.telegram.routes.customer_bot_routes import handle_customer_bot, is_customer_session
 from core.policies.telegram.routes.marketing_routes import handle_marketing_routes
-from core.policies.telegram.routes.sales_buttons import handle_sales_buttons
 from core.policies.telegram.routes.settings_routes import handle_settings_routes
 from core.users.roles import effective_role, has_permission, required_permission
 from core.ux.callbacks import CB_MENU_MAIN

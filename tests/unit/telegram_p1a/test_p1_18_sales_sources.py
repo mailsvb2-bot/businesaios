@@ -8,7 +8,7 @@ from pathlib import Path
 import pytest
 
 from application.business_autonomy.provider_truth_matrix import sales_source_provider_keys
-from application.business_flows import sales_center
+from application.business_flows import cockpit_sales as sales_center
 from runtime.handler_impl.domains.business_flow_ops import handle_sales_pipeline
 
 LIVE = {"mode": "live", "accepted": True, "status": "live_executed"}
