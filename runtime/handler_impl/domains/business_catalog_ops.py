@@ -245,6 +245,16 @@ def _followups(done, push, st, op, arg, now, *, tenant_id, event_store):
     if ap.in_quiet_hours(now, tz):
         return done("🌙 Сейчас тихие часы (22:00–08:00), отправка отложена.")
     due = sf.due(st, now_ms=now)
+    if sf.confirmed_delivery_enabled():
+        # P1-21: customer message first (untracked); the fact follows the provider's answer.
+        sent = 0
+        for x in due:
+            fact = sf.delivery_fact(x, push(text=x.followup_text, to_user_id=x.customer_id, change=None))
+            sent += fact["step"] == "followup_sent"
+            done(f"✅ Напоминание доставлено: {x.name}" if fact["step"] == "followup_sent" else
+                 f"⚠️ Не доставлено: {x.name} (попытка {fact['attempt']} из {sf.MAX_ATTEMPTS}"
+                 + (", напоминание снято)" if fact["final"] else ", повтор при следующей отправке)"), fact)
+        return done(f"✉️ Напоминаний доставлено: {sent} из {len(due)}.")
     sent = sum(
         bool(
             push(
