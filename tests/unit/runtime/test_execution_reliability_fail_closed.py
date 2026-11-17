@@ -316,3 +316,24 @@ def test_completed_update_replay_skips_dispatch() -> None:
     assert result.output["status"] == "already_completed"
     assert result.output["idempotency_resolution"] == "replay_completed"
     assert result.output["replay_result_ref"] == "previous-execution"
+
+
+def test_live_idempotency_lease_does_not_ack_telegram_inbox() -> None:
+    key = IdempotencyKey(
+        tenant_id="tenant-a", namespace="runtime", operation="execute",
+        key="telegram:verified-update-42",
+    )
+    class AlreadyInProgress:
+        def reserve(self, env):
+            return IdempotencyDecision(
+                resolution=IdempotencyResolution.REJECTED_IN_PROGRESS,
+                record=IdempotencyRecord(idempotency_key=key, state=IdempotencyState.IN_PROGRESS),
+            )
+        def append_checkpoint(self, *_args, **_kwargs):
+            return None
+
+    result = apply_reliability_gate(executor=_Executor(AlreadyInProgress()), env=_env())
+    assert result is not None
+    assert result.ok is False
+    assert result.output["status"] == "already_claimed"
+    assert result.error == "idempotency_resolution:rejected_in_progress"
