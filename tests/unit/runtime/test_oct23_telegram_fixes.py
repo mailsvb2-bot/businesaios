@@ -84,9 +84,7 @@ def test_poison_update_is_retained_and_other_update_succeeds(monkeypatch, tmp_pa
         if len(polls) > 2:
             raise _Stop()
         updates = [{"update_id": 1, "poison": True}, {"update_id": 2}]
-        return SimpleNamespace(json={"ok": True, "result": [
-            update for update in updates if offset is None or update["update_id"] >= offset
-        ]})
+        return SimpleNamespace(json={"ok": True, "result": [ update for update in updates if offset is None or update["update_id"] >= offset ]})
 
     def fake_execute(*, update, **_):
         executed.append(update["update_id"])
@@ -122,8 +120,7 @@ def db(monkeypatch, tmp_path):
 
 def test_crash_recovery_and_scope_isolation(db):
     a = TelegramInbox("bot-A")
-    a.stage([{"update_id": 21, "message": {"text": "/start"}},
-             {"update_id": 22, "message": {"text": "hello"}}])
+    a.stage([{"update_id": 21, "message": {"text": "/start"}}, {"update_id": 22, "message": {"text": "hello"}}])
     assert a.cursor() == 23
     assert [u["update_id"] for u in TelegramInbox("bot-A").due()] == [21, 22]
     assert TelegramInbox("bot-B").due() == []
@@ -187,8 +184,7 @@ def test_unconfirmed_outcome_is_not_dropped_on_poll_and_recovers(db, monkeypatch
     # The original backoff has passed after the simulated clock moves.
     monkeypatch.setattr(mod.time, "time", lambda: 10**12)
     for update in recovered.due():
-        outcome = lp._execute_update(core=None, executor=None, event_log=None,
-                                     update=update, transport="longpoll")
+        outcome = lp._execute_update(core=None, executor=None, event_log=None, update=update, transport="longpoll")
         if outcome.ok:
             recovered.complete(update["update_id"])
     assert recovered.pending_count() == 0
@@ -197,8 +193,7 @@ def test_canonical_execution_returns_outcome(monkeypatch):
     from contextlib import contextmanager
 
     outcome = SimpleNamespace(ok=False, decision_id="d-1")
-    state = SimpleNamespace(tenant_id="tenant-a", user_id="user-a",
-                            session={"messaging_chat_id": "chat-a"})
+    state = SimpleNamespace(tenant_id="tenant-a", user_id="user-a", session={"messaging_chat_id": "chat-a"})
     scopes = []
 
     @contextmanager
@@ -210,11 +205,8 @@ def test_canonical_execution_returns_outcome(monkeypatch):
     monkeypatch.setattr(lp, "verified_inbound_reply_scope", record_verified_ingress)
     monkeypatch.setattr(lp, "execute_runtime_decision", lambda **kw: outcome)
     monkeypatch.setattr(lp, "_append_event", lambda *a, **kw: None)
-    assert lp._execute_update(core=None, executor=None, event_log=None,
-                              update={"update_id": 17}, transport="longpoll") is outcome
-    assert scopes == [{"tenant_id": "tenant-a", "channel": "telegram",
-                       "user_id": "user-a", "update_id": 17, "chat_id": "chat-a",
-                       "bot_id": "primary"}]
+    assert lp._execute_update(core=None, executor=None, event_log=None, update={"update_id": 17}, transport="longpoll") is outcome
+    assert scopes == [{"tenant_id": "tenant-a", "channel": "telegram", "user_id": "user-a", "update_id": 17, "chat_id": "chat-a", "bot_id": "primary"}]
 
 
 def test_diagnostic_failure_does_not_abort_delivery():
@@ -249,9 +241,7 @@ def test_production_guard_still_rejects_non_noop_inline_plan():
     from runtime.enforcement.action_contracts import validate_execute_plan_payload
 
     with pytest.raises(RuntimeError, match="EXECUTE_PLAN_STEP_REQUIRES_SEPARATE_DECISION_ENVELOPE"):
-        validate_execute_plan_payload(
-            action="execute_plan@v1",
-            payload={"steps": [{"action": "send_message@v1", "action_schema_version": 1}]},
+        validate_execute_plan_payload( action="execute_plan@v1", payload={"steps": [{"action": "send_message@v1", "action_schema_version": 1}]},
             schemas=object(),
         )
 
@@ -261,19 +251,11 @@ import sqlite3
 from runtime.platform.telegram_inbox import TelegramInbox
 
 
-def test_retry_limit_dead_letters_without_deleting_and_allows_explicit_requeue(
-    monkeypatch, tmp_path,
-):
+def test_retry_limit_dead_letters_without_deleting_and_allows_explicit_requeue( monkeypatch, tmp_path, ):
     db_path = tmp_path / "delivery_state.db"
     monkeypatch.setenv("DELIVERY_STATE_DB_PATH", str(db_path))
     inbox = TelegramInbox("test-token")
-    update = {
-        "update_id": 42,
-        "callback_query": {
-            "id": "callback-42",
-            "data": "cp:section:sales",
-        },
-    }
+    update = { "update_id": 42, "callback_query": { "id": "callback-42", "data": "cp:section:sales", }, }
 
     assert inbox.stage([update]) == 43
     assert inbox.backlog_counts() == {"pending": 1, "dead_letter": 0}
@@ -283,10 +265,7 @@ def test_retry_limit_dead_letters_without_deleting_and_allows_explicit_requeue(
     assert inbox.due() == []
 
     with sqlite3.connect(str(db_path)) as db:
-        row = db.execute(
-            "SELECT status,payload FROM telegram_ingress_inbox WHERE bot_scope=? AND update_id=?",
-            (inbox.scope, 42),
-        ).fetchone()
+        row = db.execute( "SELECT status,payload FROM telegram_ingress_inbox WHERE bot_scope=? AND update_id=?", (inbox.scope, 42), ).fetchone()
     assert row is not None
     assert row[0] == "dead_letter"
     assert json.loads(row[1]) == update
@@ -297,10 +276,7 @@ def test_retry_limit_dead_letters_without_deleting_and_allows_explicit_requeue(
     assert inbox.due() == [update]
     inbox.complete(42)
     with sqlite3.connect(str(db_path)) as db:
-        row = db.execute(
-            "SELECT status,payload FROM telegram_ingress_inbox WHERE bot_scope=? AND update_id=?",
-            (inbox.scope, 42),
-        ).fetchone()
+        row = db.execute( "SELECT status,payload FROM telegram_ingress_inbox WHERE bot_scope=? AND update_id=?", (inbox.scope, 42), ).fetchone()
     assert row is not None
     assert row[0] == "completed"
     assert json.loads(row[1]) == update
