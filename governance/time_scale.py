@@ -112,6 +112,7 @@ _RUNTIME_ACTIONS_EXTRA = {
     "log_mood@v1",
     "select_tariff@v1",
     "ads_autopilot_tick@v1",
+    "ads_apply_execute@v1",
     "deploy_policy@v1",
     "rollback_policy@v1",
 }
