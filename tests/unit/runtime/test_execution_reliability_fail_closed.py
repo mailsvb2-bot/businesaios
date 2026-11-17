@@ -297,12 +297,15 @@ def test_stable_telegram_update_key_recovers_only_before_dispatch(monkeypatch, t
 
 
 def test_completed_update_replay_skips_dispatch() -> None:
-    key = IdempotencyKey(
-        tenant_id="tenant-a", namespace="runtime", operation="execute",
-        key="telegram:verified-update-42",
-    )
+    from runtime.safety import verified_inbound_reply_scope
+    from core.safety.controls.action_budget.models import issue_verified_update_idempotency_key
+
     class AlreadyCompleted:
         def reserve(self, env):
+            key = IdempotencyKey(
+                tenant_id="tenant-a", namespace="runtime", operation="execute",
+                key=env.decision.payload["idempotency_key"],
+            )
             return IdempotencyDecision(
                 resolution=IdempotencyResolution.REPLAY_COMPLETED,
                 record=IdempotencyRecord(idempotency_key=key, state=IdempotencyState.COMPLETED),
@@ -310,13 +313,49 @@ def test_completed_update_replay_skips_dispatch() -> None:
                 replay_result_digest="previous-evidence",
             )
 
-    result = apply_reliability_gate(executor=_Executor(AlreadyCompleted()), env=_env())
+    class CheckedGuard:
+        verified = False
+        def verify(self, env):
+            self.verified = True
+
+    executor = _Executor(AlreadyCompleted())
+    executor._guard = CheckedGuard()
+    with verified_inbound_reply_scope(
+        tenant_id="tenant-a", channel="telegram", user_id="4001",
+        update_id=42, chat_id="4001",
+    ):
+        key = issue_verified_update_idempotency_key(
+            tenant_id="tenant-a", channel="telegram", user_id="4001",
+            update_id=42, chat_id="4001",
+        )
+        env = _Env(_Decision(payload={
+            "tenant_id": "tenant-a", "user_id": "4001",
+            "idempotency_key": key,
+        }))
+        result = apply_reliability_gate(executor=executor, env=env)
+    assert executor._guard.verified is True
     assert result is not None
     assert result.ok is True
     assert result.output["status"] == "already_completed"
     assert result.output["idempotency_resolution"] == "replay_completed"
     assert result.output["replay_result_ref"] == "previous-execution"
 
+
+def test_unverified_completed_replay_preserves_legacy_guard_path() -> None:
+    key = IdempotencyKey(
+        tenant_id="tenant-a", namespace="runtime", operation="execute",
+        key="decision-1",
+    )
+    class AlreadyCompleted:
+        def reserve(self, env):
+            return IdempotencyDecision(
+                resolution=IdempotencyResolution.REPLAY_COMPLETED,
+                record=IdempotencyRecord(idempotency_key=key, state=IdempotencyState.COMPLETED),
+            )
+
+    # Returning None lets the canonical guard enforce DUPLICATE_EXECUTION
+    # and allows independent-ledger replay to preserve its original output.
+    assert apply_reliability_gate(executor=_Executor(AlreadyCompleted()), env=_env()) is None
 
 def test_live_idempotency_lease_does_not_ack_telegram_inbox() -> None:
     key = IdempotencyKey(
