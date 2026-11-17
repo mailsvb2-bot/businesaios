@@ -81,9 +81,15 @@ def screen(action: str, args: tuple[str, ...], st: Any, *, now_ms: int) -> tuple
             + ("\nНужно Ваше личное участие" if lead.handoff_open else "")
         )
         rows = []
+        if lead.stage not in CLOSED and not lead.assignee:
+            rows.append([("✋ Взять в работу", f"sales:do:take:{lead.lead_id}")])
         main = _primary(lead)
         if main:
             rows.append([main])
+        if lead.stage not in CLOSED:  # «Продажи» input flow (same /lead_note, /lead_next, /lead_assign ops)
+            rows.append([("📝 Заметка", f"sales:in:note:{lead.lead_id}"),
+                         ("⏰ Следующий контакт", f"sales:in:next:{lead.lead_id}")])
+            rows.append([("👤 Назначить ответственного", f"sales:in:assign:{lead.lead_id}")])
         rows.append([("⋯ Ещё действия", f"cpm:sales-actions:{lead.lead_id}")])
         if lead.customer_id:
             rows.append([("👤 Карточка клиента", f"cpm:customer:{lead.customer_id[:40]}")])

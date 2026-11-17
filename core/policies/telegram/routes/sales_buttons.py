@@ -22,7 +22,7 @@ LIST_BUTTONS = {  # callback -> sales_pipeline op (same as the command)
     "sales:menu": "list", "sales:leads": "list", "sales:due": "due", "sales:followups": "followup",
     "sales:handoffs": "handoffs", "sales:closed": "closed",
 }
-LEAD_BUTTONS = {"claim": "claim", "card": "card"}  # sales:do:<op>:<lead_id>
+LEAD_BUTTONS = {"claim": "claim", "card": "card", "take": "assign"}  # sales:do:<op>:<lead_id>
 INPUT_PROMPTS = {  # sales:in:<op>[:<lead_id>] -> prompt
     "add": "➕ Новый лид. Отправьте одним сообщением: Имя | источник\nНапример: Анна | Instagram",
     "note": "📝 Напишите текст заметки к лиду.",
@@ -79,7 +79,9 @@ def handle_sales_buttons(ctx: TelegramCtx, *, user_id: str) -> ProposedAction | 
             return _op(ctx, user_id, LIST_BUTTONS[data])
         parts = data.split(":")
         if len(parts) == 4 and parts[1] == "do" and parts[2] in LEAD_BUTTONS and _LEAD_ID.fullmatch(parts[3]):
-            return _op(ctx, user_id, LEAD_BUTTONS[parts[2]], parts[3])
+            # «Взять в работу» = /lead_assign <lead> <me>; the executor checks team membership.
+            arg = f"{parts[3]} {user_id}" if parts[2] == "take" else parts[3]
+            return _op(ctx, user_id, LEAD_BUTTONS[parts[2]], arg)
         if parts[1:2] == ["in"] and len(parts) in (3, 4) and parts[2] in INPUT_PROMPTS:
             lead = parts[3] if len(parts) == 4 else ""
             if (parts[2] == "add") == bool(lead) or (lead and not _LEAD_ID.fullmatch(lead)):
