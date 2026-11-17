@@ -462,6 +462,18 @@ def provider_channel_live_readiness(*, event_store: Any, tenant_id: str, busines
     return result
 
 
+SALES_CRM_READS = ("contact_sync", "deal_sync")
+
+
+def sales_source_provider_keys() -> dict[str, tuple[str, ...]]:
+    """Providers that can feed the Sales Center: CRMs with contact+deal reads, messaging channels."""
+    rows = provider_truth_map()
+    crm = tuple(sorted(k for k, r in rows.items() if r.category == "crm" and r.read_only_supported
+                       and set(SALES_CRM_READS) <= set(r.read_capabilities)))
+    channels = tuple(sorted(k for k, r in rows.items() if r.category == "communications" and "message_read" in r.read_capabilities))
+    return {"crm": crm, "channels": channels}
+
+
 def summarize_provider_truth(rows: Iterable[ProviderTruthRow] | None = None) -> dict[str, Any]:
     selected = tuple(rows or build_provider_truth_matrix())
     return {
@@ -479,6 +491,6 @@ def summarize_provider_truth(rows: Iterable[ProviderTruthRow] | None = None) -> 
 
 __all__ = [
     "CANON_PROVIDER_TRUTH_MATRIX", "ProviderTruthRow", "ProviderTruthStatus", "build_provider_truth_matrix",
-    "LIVE_EVIDENCE_CHECKS", "live_evidence_payload", "provider_channel_live_readiness",
+    "LIVE_EVIDENCE_CHECKS", "SALES_CRM_READS", "live_evidence_payload", "provider_channel_live_readiness", "sales_source_provider_keys",
     "provider_truth_map", "provider_runtime_truth_map", "provider_runtime_metrics_truth_map", "provider_quota_truth_map", "list_provider_truth_payloads", "summarize_provider_truth",
 ]

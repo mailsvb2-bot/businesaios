@@ -334,6 +334,7 @@ function Workspace({ data, apiBase, businesses, onRestart, onRetryAccess, onSwit
   const approvalsUrl = `${baseApi}/control-plane/approvals/open?business_id=${encodeURIComponent(data.business_id)}`;
   const approvalResumeUrl = `${baseApi}/control-plane/provider-runtime/approval-resume`;
   const customersUrl = `${baseApi}/business-workspace/customers`;
+  const salesSourcesUrl = `${baseApi}/business-workspace/sales-sources`;
   const acquisitionUrl = `${baseApi}/business-workspace/acquisition-plan`;
   const analyticsUrl = `${baseApi}/analytics/dashboard/${encodeURIComponent(data.tenant_id)}?window_days=30`;
   const memorySummaryUrl = `${baseApi}/business-memory/summary`;
@@ -378,6 +379,7 @@ function Workspace({ data, apiBase, businesses, onRestart, onRetryAccess, onSwit
   const [selectedCustomerId, setSelectedCustomerId] = useState("");
   const [customerTimeline, setCustomerTimeline] = useState([]);
   const [customerSales, setCustomerSales] = useState(null);
+  const [salesSources, setSalesSources] = useState(null);
   const [customerBusy, setCustomerBusy] = useState(false);
   const [customerError, setCustomerError] = useState("");
   const [salesBusy, setSalesBusy] = useState(false);
@@ -445,6 +447,19 @@ function Workspace({ data, apiBase, businesses, onRestart, onRetryAccess, onSwit
     }
   };
 
+  const refreshSalesSources = async (source = "") => {
+    if (!apiKey) { setSalesSources(null); return null; }
+    try {
+      const payload = await getJson(`${salesSourcesUrl}${source ? `?source=${encodeURIComponent(source)}` : ""}`, authHeaders);
+      const view = Array.isArray(payload.sources) ? payload : null;
+      setSalesSources(view);
+      return view;
+    } catch {
+      setSalesSources(null); // feature off (404) or unavailable: the HubSpot-only view stays as before
+      return null;
+    }
+  };
+
   const loadCustomerTimeline = async (customerId) => {
     if (!apiKey || !customerId) { setCustomerTimeline([]); setCustomerSales(null); return []; }
     setCustomerBusy(true);
@@ -485,6 +500,7 @@ function Workspace({ data, apiBase, businesses, onRestart, onRetryAccess, onSwit
         await Promise.all(rows.filter((row) => row.connected).map((row) => loadHistory(row.provider_key)));
         await refreshOperations();
         await refreshCustomers();
+        await refreshSalesSources();
       })
       .catch(() => {
         if (!cancelled) setWorkspaceError("Не удалось открыть защищённый список подключений. Проверьте соединение и повторите попытку.");
@@ -523,6 +539,7 @@ function Workspace({ data, apiBase, businesses, onRestart, onRetryAccess, onSwit
     ? (activeLiveEvidence ? "Обновляем данные…" : "Получаем данные…")
     : (activeLiveEvidence ? "Обновить данные" : "Получить первые данные");
   const hubspotProvider = catalog.find((row) => row.provider_key === "hubspot") || null;
+  const selectedSalesSource = salesSources?.sources?.find((src) => src.key === salesSources.selected_source) || null;
   const hubspotHistory = historyByProvider.hubspot || [];
   const hubspotContactEvidence = latestSuccessfulOperationEvidence(hubspotHistory, "contact_sync");
   const hubspotDealEvidence = latestSuccessfulOperationEvidence(hubspotHistory, "deal_sync");
@@ -925,7 +942,7 @@ function Workspace({ data, apiBase, businesses, onRestart, onRetryAccess, onSwit
       await refreshCatalog();
     } catch {
       setSalesError("Не все данные продаж удалось обновить. Внешних изменений не выполнялось — проверьте доступ HubSpot и повторите чтение.");
-    } finally { await loadHistory("hubspot").catch(() => []); setSalesBusy(false); }
+    } finally { await loadHistory("hubspot").catch(() => []); await refreshSalesSources(salesSources?.selected_source || ""); setSalesBusy(false); }
   };
 
   const openCapabilityProvider = (providerKey) => {
@@ -1271,10 +1288,24 @@ function Workspace({ data, apiBase, businesses, onRestart, onRetryAccess, onSwit
       <section className="panel sales-panel" aria-labelledby="business-sales-title">
         <div className="panel-title-row">
           <div><p className="eyebrow">Центр продаж</p><h2 id="business-sales-title">Продажи</h2></div>
-          <span className="privacy-badge">HubSpot · только чтение</span>
+          <span className="privacy-badge">{selectedSalesSource ? `${selectedSalesSource.title} · только чтение` : "HubSpot · только чтение"}</span>
         </div>
         <p className="muted-text">Здесь BusinessAIOS показывает только подтверждённые чтением CRM-факты. Отдельную CRM-копию не создаём и неизвестные показатели не заменяем нулями.</p>
         {salesError ? <div className="error-box inline-error" role="alert">{salesError}</div> : null}
+        {salesSources ? (
+          <div className="sales-sources" aria-label="Источники продаж">
+            <p className="muted-text">{salesSources.canonical_source ? "Основной источник выбран автоматически: подключённая CRM с подтверждённым чтением контактов и сделок, иначе обращения из мессенджеров." : "Пока нет источника с подтверждёнными данными: подключите CRM или канал сообщений."}</p>
+            <div className="sales-metrics">
+              {salesSources.sources.map((src) => <article key={src.key} className={src.key === salesSources.selected_source ? "selected" : ""}>
+                <small>{src.kind === "crm" ? "CRM" : "Каналы"}{src.key === salesSources.canonical_source ? " · основной" : ""}</small>
+                <strong>{src.title}</strong>
+                <span>{src.read_confirmed ? `Контакты: ${src.contacts ?? "—"} · Сделки: ${src.deals ?? "—"}` : src.connected ? "Подключено, подтверждённых данных пока нет" : "Не подключено"}</span>
+                <em>{src.last_read_at ? `Подтверждено ${new Date(src.last_read_at).toLocaleString("ru-RU")}` : src.last_read_ms ? `Последнее событие ${new Date(src.last_read_ms).toLocaleString("ru-RU")}` : "—"}</em>
+                {salesSources.available.includes(src.key) && src.key !== salesSources.selected_source ? <button type="button" className="ghost small" onClick={() => void refreshSalesSources(src.key)}>Показать этот источник</button> : null}
+              </article>)}
+            </div>
+          </div>
+        ) : null}
         {!hubspotProvider ? (
           <div className="recovery-box"><p>HubSpot есть в архитектуре проекта, но текущий пользовательский реестр ещё не открыл его для безопасного подключения. Поэтому кнопки с фиктивными данными здесь нет.</p></div>
         ) : !hubspotProvider.connected ? (

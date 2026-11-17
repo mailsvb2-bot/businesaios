@@ -45,6 +45,13 @@ def register_business_workspace_provider_routes(*, router: APIRouter, auth_bundl
             return handlers.get_business_customers(tenant_id=tenant_id, business_id=business_id, customer_id=str(customer_id or '').strip())
         except KeyError as exc:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail='customer_not_found') from exc
+    @router.get('/business-workspace/sales-sources', tags=['business-workspace'])
+    async def sales_sources(request: Request, source: str = '') -> dict[str, Any]:
+        from config.env_flags import env_bool
+        _, tenant_id, business_id = _workspace_scope(request=request, auth_bundle=auth_bundle)
+        if not env_bool('BAI_SALES_CENTER_SOURCES_ENABLED', False):  # default OFF
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail='sales_sources_disabled')
+        return handlers.get_sales_sources(tenant_id=tenant_id, business_id=business_id, requested=str(source or '')[:64])
     @router.post('/business-workspace/providers', tags=['business-workspace'])
     async def provider_action(request: Request) -> dict[str, Any]:
         principal, tenant_id, business_id = _workspace_scope(request=request, auth_bundle=auth_bundle)

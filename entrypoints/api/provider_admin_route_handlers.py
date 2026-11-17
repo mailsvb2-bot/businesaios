@@ -101,6 +101,21 @@ class ProviderAdminRouteHandlers:
         if env_bool('BAI_CUSTOMER_CARD_SALES_ENABLED', False):  # default OFF: sales block on the customer card
             out['sales'] = self._customer_sales(tenant_id=tenant_id, customer=next(r for r in rows if str(r.get('customer_id') or '') == selected))
         return out
+    def get_sales_sources(self, *, tenant_id: str, business_id: str, requested: str = '') -> dict[str, Any]:
+        """Sales Center sources (read-only): channel pipeline + CRMs with confirmed live reads."""
+        from application.business_autonomy.provider_truth_matrix import sales_source_provider_keys
+        from application.business_flows import sales, sales_center
+        from application.business_flows.projection import flow_rows
+        keys = sales_source_provider_keys()
+        catalog = list(self.list_provider_catalog(tenant_id=tenant_id, business_id=business_id).get('providers') or [])
+        rows = [] if self.customer_event_store is None else flow_rows(self.customer_event_store, tenant_id=tenant_id, event_type='sales_pipeline@v1')
+        st = sales.replay([payload for _, payload in rows])
+        connected = [str(p.get('provider_key')) for p in catalog if p.get('connected') and p.get('provider_key') in keys['channels']]
+        sources = [sales_center.channel_source(leads=st.leads, last_fact_ms=rows[-1][0] if rows else None, connected_channels=connected)]
+        for provider in (p for p in catalog if p.get('provider_key') in keys['crm']):
+            history = list(self.list_provider_sync_history(tenant_id=tenant_id, business_id=business_id, provider_key=str(provider['provider_key']), limit=50).get('history') or []) if provider.get('connected') else []
+            sources.append(sales_center.crm_source(provider=provider, history=history))
+        return {'tenant_id': tenant_id, 'business_id': business_id, **sales_center.choose(sources, str(requested or '').strip())}
     def _customer_sales(self, *, tenant_id: str, customer: Mapping[str, Any]) -> dict[str, Any]:
         import time
 
