@@ -205,6 +205,7 @@ def test_clientplatform_telegram_entrypoint_gateway_persists_outcome( monkeypatc
 
     monkeypatch.setenv("ADMIN_USER_IDS", "4001")
     monkeypatch.setenv("TENANT_ID", "tenant-live")
+    monkeypatch.setenv("ADMIN_USER_IDS", "4001")  # executor RBAC re-check (same source as the policy)
     db = str(tmp_path / "button-outcome.sqlite3")
     with SqliteEventStore(db) as store:
         class Effects:
