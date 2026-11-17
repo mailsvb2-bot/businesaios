@@ -104,6 +104,7 @@ _GATED_CALLBACKS = (
     (("ads:apply",), "ads_apply"),
     (("ceo:run",), "business_manage"),  # executing the AI-director plan is an owner decision
     (("ceo:", "growth:"), "analytics"),
+    (("sales:",), "sales"),
 )
 _GATED_COMMANDS = {
     "/autopilot": "autopilot", "/ceo": "analytics",

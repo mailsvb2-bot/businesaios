@@ -109,6 +109,18 @@ def screen(action: str, args: tuple[str, ...], st: Any, *, now_ms: int) -> tuple
     raise ValueError(action)
 
 
+def hub_markup() -> dict[str, Any]:
+    """«Продажи» buttons: the same sales_pipeline ops as /leads, /lead_add, /leads_due ..."""
+    rows = [
+        [("📋 Все лиды", "sales:leads"), ("➕ Новый лид", "sales:in:add")],
+        [("💬 Карточки и этапы", "cpm:sales")],
+        [("⏰ Просроченные шаги", "sales:due"), ("🔁 Follow-up", "sales:followups")],
+        [("🙋 Ждут человека", "sales:handoffs"), ("🗂 Закрытые", "sales:closed")],
+        [("⬅️ Главное меню", "menu:main")],
+    ]
+    return {"inline_keyboard": [[{"text": t, "callback_data": c} for t, c in row] for row in rows]}
+
+
 def mutation(args: tuple[str, ...], st: Any) -> dict[str, Any]:
     """Donor _sales_mutation_message: a stage button -> the same lead_event fact as /lead."""
     if len(args) != 2 or args[1] not in sl.EVENTS:
@@ -127,4 +139,4 @@ def result_text(change: dict[str, Any], st: Any) -> str:
     return f"✅ {_lead(st, change['lead_id']).name}: {sl.LABELS[S(change['stage'])]}"
 
 
-__all__ = ["CANON_COCKPIT_SALES", "PARENTS", "SCREENS", "mutation", "result_text", "screen"]
+__all__ = ["CANON_COCKPIT_SALES", "PARENTS", "SCREENS", "hub_markup", "mutation", "result_text", "screen"]

@@ -714,6 +714,9 @@ def handle_sales_pipeline(payload, effects, env, *, event_store, now_ms: int | N
     tenant_id = required_str(body, "tenant_id")
     op, arg, now = str(body.get("op") or "list"), str(body.get("arg") or "").strip(), now_ms or _now_ms()
     st = sl.replay(flow_payloads(event_store, tenant_id=tenant_id, event_type="sales_pipeline@v1"))
+    if body.pop("input_session", None) is True:  # one-shot «Продажи» button input: consumed by this decision
+        effects.set_user_setting(decision_id=env.decision.decision_id, correlation_id=env.decision.correlation_id,
+                                 tenant_id=tenant_id, user_id=required_str(body, "user_id"), key="sales:input", value={})
 
     def done(text, change=None):
         return send_tracked( body, effects, env, text=text, event_type="sales_pipeline@v1" if change else None, event_payload=change )
@@ -784,7 +787,9 @@ def handle_sales_pipeline(payload, effects, env, *, event_store, now_ms: int | N
             return done( "⏰ Пора сделать\n\n" + ("\n".join(f"• {x.name}: {x.next_action}" for x in due) or "Ничего не просрочено.") )
     except ValueError as exc:
         return done(f"⚠️ Не получилось: {exc}")
-    return done(sl.render(st, now_ms=now))
+    from application.business_flows.cockpit_sales import hub_markup
+
+    return _sales_send(body, effects, env, sl.render(st, now_ms=now), None, hub_markup())
 
 
 __all__ = [ "handle_bookings", "handle_sales_pipeline", "handle_event_series", "handle_business_admin", "handle_business_ops_summary",

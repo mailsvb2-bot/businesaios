@@ -19,6 +19,7 @@ from core.policies.telegram.helpers import (
 from core.policies.telegram.routes.command_routes import handle_command_routes, handle_free_text
 from core.policies.telegram.routes.customer_bot_routes import handle_customer_bot, is_customer_session
 from core.policies.telegram.routes.marketing_routes import handle_marketing_routes
+from core.policies.telegram.routes.sales_buttons import handle_sales_buttons
 from core.policies.telegram.routes.settings_routes import handle_settings_routes
 from core.users.roles import effective_role, has_permission, required_permission
 from core.ux.callbacks import CB_MENU_MAIN
@@ -47,6 +48,7 @@ def handle(ctx: TelegramCtx, *, default_price_rub: int, bot_username: str = "", 
         lambda: handle_autopilot(ctx, user_id=user_id, default_price_rub=default_price_rub),
         lambda: handle_ai_ceo(ctx, user_id=user_id),
         lambda: handle_growth_strategy(ctx, user_id=user_id),
+        lambda: handle_sales_buttons(ctx, user_id=str(user_id)),
         lambda: handle_gift(ctx, user_id=user_id, bot_username=bot_username, gift_ttl_sec=gift_ttl_sec, pm=pm),
         lambda: handle_admin_pricing_session(ctx, user_id=user_id, pm=lambda text, reply_markup=None, track_event_type=None, track_payload=None: pm(text=text, reply_markup=reply_markup, track_event_type=track_event_type, track_payload=track_payload)),
     ):

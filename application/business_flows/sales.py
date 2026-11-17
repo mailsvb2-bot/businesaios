@@ -155,6 +155,9 @@ def ordered(st: State) -> list[Lead]:
 
 
 def pick(st: State, ref: str) -> Lead:
+    ref = str(ref or "").strip()
+    if ref.startswith("lead_") and ref in st.leads:  # buttons address a lead by its stable id
+        return st.leads[ref]
     leads = ordered(st)
     if not ref.isdigit() or not 0 < int(ref) <= len(leads):
         raise ValueError("lead_number_unknown: /leads")
