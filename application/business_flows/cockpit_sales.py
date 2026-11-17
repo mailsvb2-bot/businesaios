@@ -77,13 +77,16 @@ def screen(action: str, args: tuple[str, ...], st: Any, *, now_ms: int) -> tuple
         nxt = lead.next_action or "не задан (/lead_next)"
         text = (
             f"💬 {lead.name}\n\nСтадия: {sl.LABELS[lead.stage]}\nИсточник: {lead.source or 'не указан'}\n"
-            f"Следующий шаг: {nxt}" + ("\nНужно Ваше личное участие" if lead.handoff_open else "")
+            f"Следующий шаг: {nxt}\nОтветственный: {lead.assignee or 'не назначен'}"
+            + ("\nНужно Ваше личное участие" if lead.handoff_open else "")
         )
         rows = []
         main = _primary(lead)
         if main:
             rows.append([main])
         rows.append([("⋯ Ещё действия", f"cpm:sales-actions:{lead.lead_id}")])
+        if lead.customer_id:
+            rows.append([("👤 Карточка клиента", f"cpm:customer:{lead.customer_id[:40]}")])
         return text, rows
     if action == "sales-actions":
         lead = _lead(st, args[0] if args else "")
@@ -107,6 +110,49 @@ def screen(action: str, args: tuple[str, ...], st: Any, *, now_ms: int) -> tuple
         rows = [[(f"✅ Готово {i}", f"cpm:sales-ev:{x.lead_id}:resume")] for i, x in enumerate(items, 1)]
         return "🙋 Нужно подключиться лично\n\n" + "\n".join(lines), rows
     raise ValueError(action)
+
+
+def customer_leads(st: Any, customer_id: str) -> list[sl.Lead]:
+    """Leads (inquiries/deals) bound to one customer, open first."""
+    return [x for x in (sl.ordered(st) if st is not None else []) if customer_id and x.customer_id == customer_id]
+
+
+def customer_sales_lines(leads: list[sl.Lead], *, now_ms: int) -> str:
+    """Customer card block: inquiries, deal stage, owner, next action, confirmed result."""
+    if not leads:
+        return ""
+    lines = []
+    for x in leads[:4]:
+        who = f" · ведёт {x.assignee}" if x.assignee else " · ответственный не назначен"
+        lines.append(f"• {x.name} ({x.source or 'канал не указан'}): {sl.LABELS[x.stage]}" + ("" if x.stage in CLOSED else who))
+        if x.stage == S.WON:
+            lines.append("  ✅ Подтверждённый результат: оплата получена")
+        elif x.stage not in CLOSED:
+            late = " — просрочен" if x.due_ms and x.due_ms <= now_ms else ""
+            lines.append(f"  ▶️ Следующий шаг: {x.next_action}{late}" if x.next_action else "  ▶️ Следующий шаг не задан")
+        if x.notes:
+            lines.append(f"  📝 {x.notes[-1][:80]}")
+    return "\n\n💬 Обращения и сделки\n" + "\n".join(lines)
+
+
+def customer_sales_view(st: Any, identities: list[Any], *, now_ms: int) -> list[dict[str, Any]]:
+    """Web customer card: leads bound to one of the customer's verified identities (channel + subject)."""
+    keys = {(str(i.get("channel") or "").strip().lower(), str(i.get("external_subject") or "").strip())
+            for i in identities if isinstance(i, dict)}
+    out = []
+    for x in (sl.ordered(st) if st is not None else []):
+        if not x.customer_id or (x.source.strip().lower(), x.customer_id) not in keys:
+            continue
+        out.append({
+            "lead_id": x.lead_id, "name": x.name, "channel": x.source, "stage": x.stage.value,
+            "stage_label": sl.LABELS[x.stage], "closed": x.stage in CLOSED, "owner": x.assignee,
+            "next_action": x.next_action, "next_due_ms": x.due_ms or None,
+            "overdue": bool(x.due_ms and x.due_ms <= now_ms and x.stage not in CLOSED),
+            "handoff_open": x.handoff_open, "notes": list(x.notes[-5:]),
+            "followup_planned_ms": x.followup_due_ms or None,
+            "confirmed_result": "paid" if x.stage == S.WON else ("lost" if x.stage == S.LOST else None),
+        })
+    return out
 
 
 def hub_markup() -> dict[str, Any]:
@@ -139,4 +185,4 @@ def result_text(change: dict[str, Any], st: Any) -> str:
     return f"✅ {_lead(st, change['lead_id']).name}: {sl.LABELS[S(change['stage'])]}"
 
 
-__all__ = ["CANON_COCKPIT_SALES", "PARENTS", "SCREENS", "hub_markup", "mutation", "result_text", "screen"]
+__all__ = ["CANON_COCKPIT_SALES", "PARENTS", "SCREENS", "customer_leads", "customer_sales_lines", "customer_sales_view", "hub_markup", "mutation", "result_text", "screen"]

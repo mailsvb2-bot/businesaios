@@ -96,7 +96,22 @@ class ProviderAdminRouteHandlers:
             timeline = CustomerTimelineProjector(self.customer_event_store).get(tenant_id=tenant_id, business_id=business_id, customer_id=selected)
         except CustomerNotFound as exc:
             raise KeyError('customer_not_found') from exc
-        return {**result, 'timeline': {'available': True, 'entries': [asdict(item) for item in timeline.entries]}}
+        out = {**result, 'timeline': {'available': True, 'entries': [asdict(item) for item in timeline.entries]}}
+        from config.env_flags import env_bool
+        if env_bool('BAI_CUSTOMER_CARD_SALES_ENABLED', False):  # default OFF: sales block on the customer card
+            out['sales'] = self._customer_sales(tenant_id=tenant_id, customer=next(r for r in rows if str(r.get('customer_id') or '') == selected))
+        return out
+    def _customer_sales(self, *, tenant_id: str, customer: Mapping[str, Any]) -> dict[str, Any]:
+        import time
+
+        from application.business_flows import cockpit_sales, sales
+        from application.business_flows.projection import flow_payloads
+        try:
+            st = sales.replay(flow_payloads(self.customer_event_store, tenant_id=tenant_id, event_type='sales_pipeline@v1'))
+        except Exception:
+            return {'available': False, 'leads': []}
+        leads = cockpit_sales.customer_sales_view(st, list(customer.get('identities') or []), now_ms=int(time.time() * 1000))
+        return {'available': True, 'leads': leads, 'source': 'sales_pipeline@v1'}
     def list_provider_secret_history(self, *, tenant_id: str, business_id: str, provider_key: str) -> dict[str, Any]:
         rows = self._service(business_id).list_provider_secret_history(tenant_id=tenant_id, business_id=business_id, provider_key=provider_key)
         return {'tenant_id': tenant_id, 'business_id': business_id, 'provider_key': provider_key, 'versions': list(rows)}

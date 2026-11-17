@@ -377,6 +377,7 @@ function Workspace({ data, apiBase, businesses, onRestart, onRetryAccess, onSwit
   const [customers, setCustomers] = useState([]);
   const [selectedCustomerId, setSelectedCustomerId] = useState("");
   const [customerTimeline, setCustomerTimeline] = useState([]);
+  const [customerSales, setCustomerSales] = useState(null);
   const [customerBusy, setCustomerBusy] = useState(false);
   const [customerError, setCustomerError] = useState("");
   const [salesBusy, setSalesBusy] = useState(false);
@@ -445,16 +446,18 @@ function Workspace({ data, apiBase, businesses, onRestart, onRetryAccess, onSwit
   };
 
   const loadCustomerTimeline = async (customerId) => {
-    if (!apiKey || !customerId) { setCustomerTimeline([]); return []; }
+    if (!apiKey || !customerId) { setCustomerTimeline([]); setCustomerSales(null); return []; }
     setCustomerBusy(true);
     setCustomerError("");
     try {
       const payload = await getJson(`${customersUrl}?customer_id=${encodeURIComponent(customerId)}`, authHeaders);
       const rows = Array.isArray(payload.timeline?.entries) ? payload.timeline.entries : [];
       setCustomerTimeline(rows);
+      setCustomerSales(payload.sales?.available && Array.isArray(payload.sales.leads) ? payload.sales.leads : null);
       return rows;
     } catch {
       setCustomerTimeline([]);
+      setCustomerSales(null);
       setCustomerError("Не удалось открыть историю клиента.");
       return [];
     } finally {
@@ -560,7 +563,7 @@ function Workspace({ data, apiBase, businesses, onRestart, onRetryAccess, onSwit
 
   useEffect(() => {
     if (selectedCustomerId) void loadCustomerTimeline(selectedCustomerId);
-    else setCustomerTimeline([]);
+    else { setCustomerTimeline([]); setCustomerSales(null); }
   }, [selectedCustomerId, apiKey]);
 
   const prepareForCustomer = (identity) => {
@@ -1332,6 +1335,16 @@ function Workspace({ data, apiBase, businesses, onRestart, onRetryAccess, onSwit
                     {readyIdentityProvider(identity) ? <button type="button" className="ghost small" onClick={() => prepareForCustomer(identity)}>Написать</button> : <small>Отправка по каналу пока не готова</small>}
                   </article>)}
                 </div>
+                {customerSales ? <>
+                  <h3>Обращения и сделки</h3>
+                  <div className="timeline-list" aria-label="Обращения и сделки клиента">
+                    {customerSales.length ? customerSales.map((lead) => <article className="timeline-row" key={lead.lead_id}>
+                      <strong>{lead.name} · {lead.stage_label}</strong>
+                      <span>{lead.closed ? (lead.confirmed_result === "paid" ? "Подтверждённый результат: оплата получена" : "Сделка закрыта без покупки") : `Следующий шаг: ${lead.next_action || "не задан"}${lead.overdue ? " (просрочен)" : ""}`}</span>
+                      <small>{lead.channel || "канал не указан"} · {lead.owner ? `ведёт ${lead.owner}` : "ответственный не назначен"}{lead.handoff_open ? " · нужен человек" : ""}{lead.notes?.length ? ` · заметка: ${lead.notes[lead.notes.length - 1]}` : ""}</small>
+                    </article>) : <p className="empty-state">Обращений и сделок по этому клиенту пока нет.</p>}
+                  </div>
+                </> : null}
                 <h3>История</h3>
                 <div className="timeline-list">
                   {customerTimeline.length ? customerTimeline.slice().reverse().map((entry) => <article className="timeline-row" key={entry.source_id}>
