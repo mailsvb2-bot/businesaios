@@ -75,6 +75,9 @@ RUNTIME_ACTIONS = {
     "business_admin@v1",
     "admin_set_role@v1",
     "admin_set_perm@v1",
+    "request_pricing_change@v1",
+    "apply_pricing_change@v1",
+    "reject_pricing_change@v1",
 
     # --- Payments / Entitlements ---
     "grant_entitlement@v1",

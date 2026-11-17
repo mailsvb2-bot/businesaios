@@ -8,16 +8,19 @@ from interfaces.telegram.read_models.components.profile import load_user_profile
 from runtime.platform.config.feature_flags import FeatureFlags
 
 
-def load_user_bundle(*, event_store: Any, tenant_id: str, user_id: str, event_warning: Any) -> dict[str, Any]:
+def load_user_bundle(*, event_store: Any, tenant_id: str, user_id: str, event_warning: Any,
+                     product_id: str | None = None) -> dict[str, Any]:
     try:
         from core.entitlements.read_model import compute_entitlements
-        entitlements = compute_entitlements(event_store=event_store, tenant_id=str(tenant_id), user_id=str(user_id))
+        entitlements = compute_entitlements(event_store=event_store, tenant_id=str(tenant_id), user_id=str(user_id),
+                                            product_id=product_id)
     except Exception:
         entitlements = {"full_access": False, "reason": "read_error"}
 
     try:
         from core.payments.read_model import latest_payment_status
-        payments = latest_payment_status(event_store=event_store, tenant_id=str(tenant_id), user_id=str(user_id))
+        payments = latest_payment_status(event_store=event_store, tenant_id=str(tenant_id), user_id=str(user_id),
+                                         product_id=product_id)
     except Exception:
         payments = {"status": "unknown", "reason": "read_error"}
 
@@ -94,3 +97,45 @@ def load_user_bundle(*, event_store: Any, tenant_id: str, user_id: str, event_wa
         "behavior": behavior,
         "autopilot_dashboard": autopilot_dashboard,
     }
+
+
+_HYDRATED_USER_KEYS = (
+    "settings", "city", "selected_tariff", "mood_last", "roles", "perms", "pricing_suggestions",
+    "realtime_state", "autopilot_dashboard", "marketing_variants", "marketing_bandit",
+)
+
+
+def hydrate_world_state_user(state: Any, *, event_store: Any) -> Any:
+    """Authoritative tenant/product-scoped user projection for platform bot.
+
+    Never promote an aggregate payment or entitlement to product access.
+    """
+    from dataclasses import replace
+
+    tenant_id = str(getattr(state, "tenant_id", "") or "")
+    user_id = str(getattr(state, "user_id", "") or "")
+    product = getattr(state, "product", None)
+    product_id = str((product if isinstance(product, dict) else {}).get("product_id") or "").strip()
+    if not tenant_id or not user_id or event_store is None:
+        return state
+    try:
+        bundle = load_user_bundle(
+            event_store=event_store, tenant_id=tenant_id, user_id=user_id,
+            event_warning=lambda reason, error: None, product_id=product_id or None,
+        )
+    except Exception:
+        return state
+    user = {**dict(getattr(state, "user", None) or {}),
+            **{key: bundle[key] for key in _HYDRATED_USER_KEYS}}
+    try:
+        from interfaces.telegram.read_models.admin_access import is_superadmin, load_admin_metrics
+
+        if is_superadmin(user_id) or "admin" in {str(role) for role in bundle["roles"]}:
+            user["admin_metrics"] = load_admin_metrics(event_store=event_store, tenant_id=tenant_id)
+    except Exception:
+        user.pop("admin_metrics", None)
+    payments = bundle["payments"] if product_id else {"status": "none", "reason": "unscoped"}
+    entitlements = bundle["entitlements"] if product_id else {"full_access": False, "reason": "unscoped"}
+    economy = {**dict(getattr(state, "economy", None) or {}),
+               "payments": payments, "entitlements": entitlements}
+    return replace(state, user=user, economy=economy)

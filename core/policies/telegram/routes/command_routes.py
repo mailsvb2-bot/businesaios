@@ -7,6 +7,39 @@ from core.policies.telegram.helpers import ProposedAction, propose
 from core.policies.telegram.routes.business_flow_routes import handle_business_flow_routes
 from core.ux.telegram_keyboards import kb_back_main
 
+_PAID = {"succeeded", "captured", "paid"}
+_PENDING = {"pending", "created", "waiting_for_capture", "processing"}
+_FAILED = {"failed", "canceled", "cancelled", "rejected", "expired"}
+
+
+def status_text(ctx: TelegramCtx) -> str:
+    """Show product-scoped canonical payment and access projections."""
+    product = getattr(ctx.state, "product", None)
+    product_id = str((product if isinstance(product, dict) else {}).get("product_id") or "").strip()
+    if not product_id:
+        return "ℹ️ Статус оплаты недоступен: бот не привязан к продукту. Обратитесь к администратору."
+    status = str(ctx.pay_status or "none").strip().lower()
+    tariff = ctx.selected_tariff if isinstance(ctx.selected_tariff, dict) else {}
+    title = str(tariff.get("title") or tariff.get("plan_code") or "").strip()
+    lines = ["📋 Статус оплаты и доступа", ""]
+    if title:
+        lines.append(f"Выбранный тариф: {title}")
+    if status in _PAID:
+        lines.append("Оплата: ✅ получена")
+    elif status in _PENDING:
+        lines.append("Оплата: ⏳ ожидает подтверждения от платёжной системы")
+    elif status in _FAILED:
+        lines.append("Оплата: ❌ не прошла — можно оплатить заново через «Оплаты и тарифы»")
+    else:
+        lines.append("Оплата: платежей пока нет")
+    if ctx.full_access:
+        lines.append("Доступ: ✅ активирован")
+    elif status in _PAID:
+        lines.append("Доступ: ⏳ выдаётся автоматически после подтверждения платежа")
+    else:
+        lines.append("Доступ: не активирован")
+    return "\n".join(lines)
+
 
 def handle_command_routes(ctx: TelegramCtx, *, user_id: str, pm) -> ProposedAction | None:
     flow = handle_business_flow_routes(ctx, user_id=user_id)
@@ -23,6 +56,8 @@ def handle_command_routes(ctx: TelegramCtx, *, user_id: str, pm) -> ProposedActi
             ),
             reply_markup=kb_back_main(),
         )
+    if ctx.cmd == "/status":
+        return pm(text=status_text(ctx), reply_markup=kb_back_main())
     if ctx.cmd == "/privacy":
         return pm(text="🔐 Персональные данные\n\n• /export_data — показать, какие данные о вас хранятся", reply_markup=kb_back_main())
     if ctx.cmd == "/export_data":
