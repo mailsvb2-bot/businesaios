@@ -6,9 +6,7 @@ auditable and to avoid a single read-model god module.
 
 from __future__ import annotations
 
-ADMIN_ANALYTICS_ROUTES = frozenset({
-    "admin:segments", "admin:ab", "admin:giftshare", "admin:funnel2",
-})
+from contracts.action_budget import ADMIN_ANALYTICS_ROUTES
 
 from core.admin.read_models import (
     ab_offers_summary,
