@@ -186,6 +186,7 @@ def _world_state_from_update(
         product = _operator_product_binding(product)
         meta["operator_flags"] = {
             "telegram_checkout": bool(env_bool("TELEGRAM_CHECKOUT_ENABLED", False)),
+            "autopilot_execute": bool(env_bool("TELEGRAM_AUTOPILOT_EXECUTE_ENABLED", False)),
         }
     if managed is not None:  # Bot API managed_bot update: the creator is the acting user, no chat text
         uid = managed["user_id"]

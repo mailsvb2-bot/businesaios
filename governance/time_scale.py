@@ -111,6 +111,7 @@ _RUNTIME_ACTIONS_EXTRA = {
     "suggest_offer_patch@v1",
     "log_mood@v1",
     "select_tariff@v1",
+    "ads_autopilot_tick@v1",
     "deploy_policy@v1",
     "rollback_policy@v1",
 }
