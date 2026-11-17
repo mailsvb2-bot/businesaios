@@ -8,7 +8,7 @@ from types import SimpleNamespace
 import pytest
 
 from application.decision_runtime.flow import build_payload
-from contracts.clientplatform_admin_analytics import ADMIN_ANALYTICS_ROUTES
+from core.admin.read_model import ADMIN_ANALYTICS_ROUTES
 from core.actions.catalog import build_schema_registry
 from core.policies.telegram.unified_policy import UnifiedTelegramPolicyV3
 from core.safety.controls.action_budget.guard import ActionBudgetGuard
@@ -84,7 +84,7 @@ def test_verified_callback_uses_persistent_scoped_canonical_analytics( monkeypat
 
 
 def test_unknown_analytics_route_never_queries_arbitrary_data(tmp_path):
-    from runtime.handler_impl.domains.analytics_read_ops import render_admin_analytics
+    from runtime.handler_impl.domains.admin_ops import render_admin_analytics
 
     with SqliteEventStore(str(tmp_path / "events.sqlite3")) as store:
         with pytest.raises(ValueError, match="unsupported_admin_analytics_route"):
