@@ -212,3 +212,83 @@ def test_reliability_checkpoint_failure_blocks_already_claimed_success() -> None
     assert result.ok is False
     assert result.error == "reliability_checkpoint_failed:RuntimeError"
     assert result.output["status"] == "blocked"
+
+
+@pytest.mark.parametrize("dispatch_started", [False, True])
+def test_stable_telegram_update_key_recovers_only_before_dispatch(monkeypatch, dispatch_started) -> None:
+    """Never poison a pre-effect update; never replay ambiguous effects blindly."""
+    from contextlib import nullcontext
+    from datetime import datetime, timedelta, timezone
+
+    from reliability.idempotency_store import InMemoryIdempotencyStore
+    from runtime.execution import executor_trace_runtime as trace_runtime
+
+    now = datetime(2026, 11, 17, tzinfo=timezone.utc)
+    store = InMemoryIdempotencyStore()
+    key = IdempotencyKey(
+        tenant_id="tenant-a", namespace="runtime", operation="execute",
+        key="telegram:verified-update-42",
+    )
+    assert store.reserve(key=key, owner_id="runtime-executor", now=now).resolution is IdempotencyResolution.ACCEPTED
+
+    class Reliability:
+        marked_failed = False
+
+        def mark_failed(self, _env, *, reason):
+            self.marked_failed = True
+            store.mark_failed(key=key, owner_id="runtime-executor", reason=reason, now=now)
+
+        def append_checkpoint(self, *_args, **_kwargs):
+            pass
+
+    class Executor:
+        _reliability = Reliability()
+        _events = None
+        _execution_trace_store = None
+
+        @staticmethod
+        def _safe_dict(value):
+            return dict(value or {})
+
+        @staticmethod
+        def _tenant_runtime_context(**_kwargs):
+            return nullcontext()
+
+        @staticmethod
+        def _apply_reliability_gate(_env):
+            return None
+
+        @staticmethod
+        def _enforce_runtime_budget_and_blast_radius(_env):
+            return None
+
+        @staticmethod
+        def _dispatch(_env, *, depth, enqueue):
+            raise OSError("temporary transport interruption")
+
+    monkeypatch.setattr(trace_runtime, "execution_span", lambda **_kwargs: nullcontext())
+    monkeypatch.setattr(trace_runtime, "record_execution_outcome", lambda **_kwargs: None)
+    env = _Env(_Decision(payload={
+        "tenant_id": "tenant-a", "user_id": "4001", "idempotency_key": key.key,
+    }))
+
+    def preflight_fn(**_kwargs):
+        if not dispatch_started:
+            raise OSError("temporary preflight interruption")
+
+    with pytest.raises(OSError, match="temporary"):
+        trace_runtime.execute_core_flow(
+            executor=Executor(), env=env, depth=0,
+            timescale=SimpleNamespace(value="instant"), preflight_fn=preflight_fn,
+        )
+
+    assert Executor._reliability.marked_failed is dispatch_started
+    if dispatch_started:
+        assert store.get(key=key).state is IdempotencyState.FAILED
+        assert store.reserve(key=key, owner_id="runtime-executor", now=now + timedelta(seconds=301)).resolution is IdempotencyResolution.REJECTED_TERMINAL_FAILED
+    else:
+        assert store.get(key=key).state is IdempotencyState.IN_PROGRESS
+        assert store.reserve(key=key, owner_id="runtime-executor", now=now + timedelta(seconds=1)).resolution is IdempotencyResolution.REJECTED_IN_PROGRESS
+        recovered = store.reserve(key=key, owner_id="runtime-executor", now=now + timedelta(seconds=301))
+        assert recovered.resolution is IdempotencyResolution.ACCEPTED
+        assert recovered.record.attempt_count == 2
