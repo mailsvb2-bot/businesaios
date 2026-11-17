@@ -337,6 +337,7 @@ function Workspace({ data, apiBase, businesses, onRestart, onRetryAccess, onSwit
   const approvalResumeUrl = `${baseApi}/control-plane/provider-runtime/approval-resume`;
   const customersUrl = `${baseApi}/business-workspace/customers`;
   const salesSourcesUrl = `${baseApi}/business-workspace/sales-sources`;
+  const communicationsUrl = `${baseApi}/business-workspace/communications`;
   const acquisitionUrl = `${baseApi}/business-workspace/acquisition-plan`;
   const analyticsUrl = `${baseApi}/analytics/dashboard/${encodeURIComponent(data.tenant_id)}?window_days=30`;
   const memorySummaryUrl = `${baseApi}/business-memory/summary`;
@@ -382,6 +383,7 @@ function Workspace({ data, apiBase, businesses, onRestart, onRetryAccess, onSwit
   const [customerTimeline, setCustomerTimeline] = useState([]);
   const [customerSales, setCustomerSales] = useState(null);
   const [salesSources, setSalesSources] = useState(null);
+  const [communications, setCommunications] = useState(null);
   const [customerBusy, setCustomerBusy] = useState(false);
   const [customerError, setCustomerError] = useState("");
   const [salesBusy, setSalesBusy] = useState(false);
@@ -462,6 +464,19 @@ function Workspace({ data, apiBase, businesses, onRestart, onRetryAccess, onSwit
     }
   };
 
+  const refreshCommunications = async () => {
+    if (!apiKey) { setCommunications(null); return null; }
+    try {
+      const payload = await getJson(communicationsUrl, authHeaders);
+      const view = payload && payload.counts ? payload : null;
+      setCommunications(view);
+      return view;
+    } catch {
+      setCommunications(null); // feature off (404) or unavailable: section hidden
+      return null;
+    }
+  };
+
   const loadCustomerTimeline = async (customerId) => {
     if (!apiKey || !customerId) { setCustomerTimeline([]); setCustomerSales(null); return []; }
     setCustomerBusy(true);
@@ -503,6 +518,7 @@ function Workspace({ data, apiBase, businesses, onRestart, onRetryAccess, onSwit
         await refreshOperations();
         await refreshCustomers();
         await refreshSalesSources();
+        await refreshCommunications();
       })
       .catch(() => {
         if (!cancelled) setWorkspaceError("Не удалось открыть защищённый список подключений. Проверьте соединение и повторите попытку.");
@@ -1286,6 +1302,34 @@ function Workspace({ data, apiBase, businesses, onRestart, onRetryAccess, onSwit
           </div>
         </article>
       </section>
+
+      {communications ? (
+        <section className="panel communications-panel" aria-labelledby="business-communications-title">
+          <div className="panel-title-row">
+            <div><p className="eyebrow">Коммуникации</p><h2 id="business-communications-title">Центр сообщений</h2></div>
+            <button type="button" className="ghost small" onClick={() => void refreshCommunications()}>Обновить</button>
+          </div>
+          <p className="muted-text">Входящие — из журнала сообщений клиентов. «Доставлено» и «Ошибка» — только по ответу провайдера; без квитанции сообщение остаётся «Без подтверждения». Отсюда ничего не отправляется.</p>
+          <div className="sales-metrics">
+            <article><small>Входящие</small><strong>{communications.counts.inbound}</strong><span>последние обращения клиентов</span></article>
+            <article><small>Доставлено</small><strong>{communications.counts.outbound}</strong><span>с квитанцией провайдера</span></article>
+            <article><small>Ждут подтверждения</small><strong>{pendingApprovals.length}</strong><span>{pendingApprovals.length ? "решение — в разделе действий ниже" : "очередь подтверждений пуста"}</span></article>
+            <article><small>В очереди</small><strong>{communications.counts.queued}</strong><span>ждут отправки провайдеру</span></article>
+            <article><small>Повторы</small><strong>{communications.counts.retries}</strong><span>отправка повторяется после сбоя</span></article>
+            <article><small>Ошибки</small><strong>{communications.counts.failed}</strong><span>{communications.counts.unconfirmed ? `ещё без подтверждения: ${communications.counts.unconfirmed}` : "провайдер отказал в доставке"}</span></article>
+          </div>
+          <div className="timeline-list" aria-label="Сообщения">
+            {[...communications.failed.map((row) => ({ ...row, label: "Ошибка" })), ...communications.retries.map((row) => ({ ...row, label: `Повтор (попыток: ${row.attempts})`, at: row.run_at })), ...communications.outbound.map((row) => ({ ...row, label: "Доставлено" }))].slice(0, 20).map((row, index) => <article className="timeline-row" key={`${row.provider_key}-${row.queue_job_id || row.job_id || index}`}>
+              <strong>{row.label} · {row.provider_key}</strong>
+              <span>{row.receipt ? `квитанция ${row.receipt}` : row.reason || ""}{row.at ? ` · ${row.at}` : ""}</span>
+            </article>)}
+            {communications.inbound.slice(0, 10).map((row) => <article className="timeline-row" key={row.message_id}>
+              <strong>Входящее · {row.channel}</strong>
+              <span>{row.customer_id ? `клиент ${row.customer_id}` : "клиент не определён"}{row.at_ms ? ` · ${new Date(row.at_ms).toLocaleString("ru-RU")}` : ""}</span>
+            </article>)}
+          </div>
+        </section>
+      ) : null}
 
       <section className="panel sales-panel" aria-labelledby="business-sales-title">
         <div className="panel-title-row">

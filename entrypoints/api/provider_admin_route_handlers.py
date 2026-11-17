@@ -142,6 +142,19 @@ class ProviderAdminRouteHandlers:
             return {'available': False, 'leads': []}
         leads = cockpit_sales.customer_sales_view(st, list(customer.get('identities') or []), now_ms=int(time.time() * 1000))
         return {'available': True, 'leads': leads, 'source': 'sales_pipeline@v1'}
+    def get_communications(self, *, tenant_id: str, business_id: str) -> dict[str, Any]:
+        """P1-22: web communications center over existing message/provider owners (read-only)."""
+        from application.business_autonomy.provider_catalog import MESSAGING_GUARDED_WRITE_PROVIDER_KEYS
+        from application.business_flows import communications_center
+        from runtime.messaging.message_registry import MessageProjector
+
+        service = self._service(business_id)
+        connected = {str(row.get('provider_key')) for row in self.list_provider_catalog(tenant_id=tenant_id, business_id=business_id).get('providers', ()) if row.get('connected')}
+        providers = {key: (service.list_provider_sync_history(tenant_id=tenant_id, business_id=business_id, provider_key=key, limit=communications_center.LIMIT),
+                           service.list_provider_queue_jobs(tenant_id=tenant_id, business_id=business_id, provider_key=key, limit=communications_center.LIMIT))
+                     for key in sorted(MESSAGING_GUARDED_WRITE_PROVIDER_KEYS & connected)}
+        messages = MessageProjector(self.customer_event_store).list_for_business(tenant_id=tenant_id, business_id=business_id) if self.customer_event_store is not None else ()
+        return {'tenant_id': tenant_id, 'business_id': business_id, 'providers': sorted(providers), **communications_center.build(messages=messages, providers=providers)}
     def list_provider_secret_history(self, *, tenant_id: str, business_id: str, provider_key: str) -> dict[str, Any]:
         rows = self._service(business_id).list_provider_secret_history(tenant_id=tenant_id, business_id=business_id, provider_key=provider_key)
         return {'tenant_id': tenant_id, 'business_id': business_id, 'provider_key': provider_key, 'versions': list(rows)}

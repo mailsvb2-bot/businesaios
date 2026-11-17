@@ -52,6 +52,13 @@ def register_business_workspace_provider_routes(*, router: APIRouter, auth_bundl
         if not env_bool('BAI_SALES_CENTER_SOURCES_ENABLED', False):  # default OFF
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail='sales_sources_disabled')
         return handlers.get_sales_sources(tenant_id=tenant_id, business_id=business_id, requested=str(source or '')[:64])
+    @router.get('/business-workspace/communications', tags=['business-workspace'])
+    async def communications(request: Request) -> dict[str, Any]:
+        from config.env_flags import env_bool
+        _, tenant_id, business_id = _workspace_scope(request=request, auth_bundle=auth_bundle)
+        if not env_bool('BAI_COMMUNICATIONS_CENTER_ENABLED', False):  # default OFF
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail='communications_center_disabled')
+        return handlers.get_communications(tenant_id=tenant_id, business_id=business_id)
     @router.post('/business-workspace/providers', tags=['business-workspace'])
     async def provider_action(request: Request) -> dict[str, Any]:
         principal, tenant_id, business_id = _workspace_scope(request=request, auth_bundle=auth_bundle)
