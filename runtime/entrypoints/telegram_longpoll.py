@@ -301,7 +301,7 @@ def _run_longpoll(
         env_int("TELEGRAM_REQUEST_TIMEOUT_S", poll_timeout_s + 5),
     )
     idle_sleep_s = max(0, env_int("TELEGRAM_IDLE_SLEEP_MS", 250)) / 1000.0
-    from runtime.platform.telegram_inbox import TelegramInbox
+    from runtime.platform.telegram_inbox import TelegramInbox, TelegramTerminalOutcome
     inbox = TelegramInbox(token)
     offset = inbox.cursor()
 
@@ -312,6 +312,11 @@ def _run_longpoll(
                 outcome = _execute_update(core=core, executor=executor, event_log=event_log,
                                           update=update, transport="longpoll")
                 if not bool(getattr(outcome, "ok", False)):
+                    output = getattr(outcome, "output", None)
+                    if isinstance(output, dict) and output.get("idempotency_resolution") == "rejected_terminal_failed":
+                        # The old effect might have executed. Do not waste 12
+                        # automatic retries or falsely acknowledge delivery.
+                        raise TelegramTerminalOutcome("telegram_ambiguous_effect_requires_reconciliation")
                     raise RuntimeError("telegram_update_outcome_unconfirmed")
                 inbox.complete(update_id)
             except Exception as exc:

@@ -1,9 +1,9 @@
 """Oct 23: repeat /start and repeat button taps must deliver; poison updates must not block polling."""
 from __future__ import annotations
 
+import ast
 import json
 import sqlite3
-import ast
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -279,3 +279,45 @@ def test_retry_limit_dead_letters_without_deleting_and_allows_explicit_requeue( 
     assert row is not None
     assert row[0] == "completed"
     assert json.loads(row[1]) == update
+
+def test_terminal_ambiguous_effect_is_dead_lettered_immediately_without_dropping_payload(db):
+    from runtime.platform.telegram_inbox import TelegramTerminalOutcome
+
+    inbox = TelegramInbox("bot")
+    update = {"update_id": 101, "callback_query": {"id": "cb", "data": "cp:section:sales"}}
+    inbox.stage([update])
+    assert inbox.failed(101, TelegramTerminalOutcome("reconciliation_required")) == "dead_letter"
+    assert inbox.backlog_counts() == {"pending": 0, "dead_letter": 1}
+    with sqlite3.connect(str(db)) as conn:
+        row = conn.execute(
+            "SELECT payload,last_error,attempts FROM telegram_ingress_inbox WHERE bot_scope=? AND update_id=?",
+            (inbox.scope, 101),
+        ).fetchone()
+    assert json.loads(row[0]) == update
+    assert row[1] == "TelegramTerminalOutcome"
+    assert row[2] == 1
+    assert inbox.requeue_dead_letter(101) is True
+    assert inbox.due() == [update]
+
+
+def test_terminal_executor_rejection_is_reconciled_not_retried_indefinitely(db, monkeypatch):
+    monkeypatch.setattr(lp, "_validate_startup", lambda token: None)
+    monkeypatch.setattr(lp, "_start_health_if_enabled", lambda log: None)
+    monkeypatch.setattr(lp, "_append_event", lambda *args, **kwargs: None)
+    monkeypatch.setattr(lp.time, "sleep", lambda delay: None)
+    monkeypatch.setattr(lp, "_execute_update", lambda **kwargs: SimpleNamespace(
+        ok=False, output={"idempotency_resolution": "rejected_terminal_failed"}
+    ))
+    polls = []
+
+    def poll(method, url, payload=None, *, timeout_s=30):
+        polls.append(dict(payload or {}))
+        if len(polls) > 1:
+            raise StopPolling()
+        return SimpleNamespace(json={"ok": True, "result": [{"update_id": 102}]})
+
+    monkeypatch.setattr(lp, "_http_json", poll)
+    with pytest.raises(StopPolling):
+        lp._run_longpoll(token="bot", core=None, executor=None, event_log=None)
+    inbox = TelegramInbox("bot")
+    assert inbox.backlog_counts() == {"pending": 0, "dead_letter": 1}

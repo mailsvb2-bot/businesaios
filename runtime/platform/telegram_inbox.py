@@ -16,6 +16,15 @@ from runtime.platform.delivery_state import _ensure_db, _get_db_path, _open_conn
 DEFAULT_MAX_ATTEMPTS = 12
 
 
+
+class TelegramTerminalOutcome(RuntimeError):
+    """A verified update has an ambiguous terminal effect outcome.
+
+    Never automatically retry: the external effect might already have occurred.
+    Keep the payload in dead-letter for verified reconciliation/operator review.
+    """
+
+
 class TelegramInbox:
     def __init__(self, token: str) -> None:
         # Never persist an API credential.
@@ -96,7 +105,7 @@ class TelegramInbox:
             if row is None:
                 raise RuntimeError("telegram_inbox_missing_pending_update")
             attempts = int(row[0]) + 1
-            status = "dead_letter" if attempts >= max_attempts else "pending"
+            status = "dead_letter" if isinstance(exc, TelegramTerminalOutcome) or attempts >= max_attempts else "pending"
             delay = min(max_delay, 2 ** min(attempts - 1, 12))
             db.execute("""UPDATE telegram_ingress_inbox
                           SET status=?,attempts=?,retry_at=?,last_error=?
