@@ -292,3 +292,25 @@ def test_stable_telegram_update_key_recovers_only_before_dispatch(monkeypatch, d
         recovered = store.reserve(key=key, owner_id="runtime-executor", now=now + timedelta(seconds=301))
         assert recovered.resolution is IdempotencyResolution.ACCEPTED
         assert recovered.record.attempt_count == 2
+
+
+def test_completed_update_replay_skips_dispatch() -> None:
+    key = IdempotencyKey(
+        tenant_id="tenant-a", namespace="runtime", operation="execute",
+        key="telegram:verified-update-42",
+    )
+    class AlreadyCompleted:
+        def reserve(self, env):
+            return IdempotencyDecision(
+                resolution=IdempotencyResolution.REPLAY_COMPLETED,
+                record=IdempotencyRecord(idempotency_key=key, state=IdempotencyState.COMPLETED),
+                replay_result_ref="previous-execution",
+                replay_result_digest="previous-evidence",
+            )
+
+    result = apply_reliability_gate(executor=_Executor(AlreadyCompleted()), env=_env())
+    assert result is not None
+    assert result.ok is True
+    assert result.output["status"] == "already_completed"
+    assert result.output["idempotency_resolution"] == "replay_completed"
+    assert result.output["replay_result_ref"] == "previous-execution"
