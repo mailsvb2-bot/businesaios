@@ -45,4 +45,7 @@ def apply_reliability_gate(*, executor, env) -> ExecutionResult | None:
     except _ERRORS as exc:
         executor._logger.warning("reliability.append_checkpoint_failed", exc_info=exc)
         return _blocked(env, "checkpoint", exc)
-    return ExecutionResult(ok=status == "already_claimed", output={"status": status, "idempotency_resolution": resolution.value}, error=None if status == "already_claimed" else f"idempotency_resolution:{resolution.value}", decision_id=decision_id, correlation_id=str(env.decision.correlation_id))
+    # A concurrent/leased operation is not a verified delivery. The durable
+    # Telegram inbox must retain this update until the owner finishes or its
+    # lease expires; reporting ok=True would silently drop it.
+    return ExecutionResult(ok=False, output={"status": status, "idempotency_resolution": resolution.value}, error=f"idempotency_resolution:{resolution.value}", decision_id=decision_id, correlation_id=str(env.decision.correlation_id))
