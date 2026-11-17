@@ -219,7 +219,13 @@ def execute_core_flow(*, executor, env: DecisionEnvelope, depth: int, timescale,
                 )
         if reliability is not None:
             try:
-                reliability.mark_failed(env, reason=f'runtime_execute:{type(exc).__name__}')
+                # A pre-dispatch failure cannot have invoked an external effect.
+                # Preserve its active lease for the canonical expiry/re-reserve
+                # transition instead of poisoning the stable inbox update key
+                # with a terminal FAILED record. Once dispatch has started,
+                # the outcome can be ambiguous and remains fail-closed.
+                if dispatch_started:
+                    reliability.mark_failed(env, reason=f'runtime_execute:{type(exc).__name__}')
                 reliability.append_checkpoint(
                     env,
                     stage='failed',
