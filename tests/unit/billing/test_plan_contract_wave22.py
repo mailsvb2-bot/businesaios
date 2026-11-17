@@ -92,6 +92,16 @@ def test_quota_normalizes_deeply_and_rejects_coercion() -> None:
             item.validate()
 
 
+def test_rate_card_preserves_sub_minor_charge_precision_until_ledger_boundary() -> None:
+    from decimal import Decimal
+
+    rate = _rate(unit_price=0.00015, included_units=2)
+    assert rate.charge_decimal_for(3) == Decimal("0.00015")
+    # The legacy public charge remains currency-rounded; LLM accounting must
+    # aggregate the exact Decimal value before converting to minor units.
+    assert rate.charge_for(3) == 0.0
+
+
 def test_rate_card_calculates_and_rejects_non_finite_or_coercible_values() -> None:
     source = _rate()
     normalized = source.normalized_copy()

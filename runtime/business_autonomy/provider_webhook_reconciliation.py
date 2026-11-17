@@ -364,8 +364,13 @@ class ProviderWebhookReconciler:
         webhook_secret = self._secret(provider, tenant_id, business_id, 'webhook_secret')
         if not access_token or not webhook_secret:
             raise RuntimeError('max_webhook_credentials_missing')
-        url = f"{self._provider_base_url(provider)}/subscriptions"
         headers = {'Authorization': access_token}
+        bot = self._json_request(method='GET', url=f"{self._provider_base_url(provider)}/me", headers=headers)
+        bot_id = str(bot.get('user_id') or '').strip() if isinstance(bot, Mapping) else ''
+        if not isinstance(bot, Mapping) or bot.get('is_bot') is not True or not bot_id.isdecimal() or int(bot_id) <= 0:
+            raise RuntimeError('max_bot_identity_unavailable')
+        self._store_secret(provider, tenant_id, business_id, 'bot_id', bot_id)
+        url = f"{self._provider_base_url(provider)}/subscriptions"
         existing = self._json_request(method='GET', url=url, headers=headers)
         if not isinstance(existing, Mapping):
             raise RuntimeError('max_subscription_list_invalid')
@@ -400,6 +405,8 @@ class ProviderWebhookReconciler:
             'provider_state_verified': True,
             'event_types': event_types,
             'subscription_visible': True,
+            'bot_id': bot_id,
+            'derived_secret_names': ('bot_id',),
         }
 
 
