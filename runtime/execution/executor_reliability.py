@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from reliability.idempotency_contract import IdempotencyResolution
+from runtime.safety import verified_telegram_idempotency_key
 from runtime.execution.executor_result import ExecutionResult
 
 _ERRORS = (OSError, RuntimeError, TypeError, ValueError, LookupError)
@@ -23,8 +24,12 @@ def apply_reliability_gate(*, executor, env) -> ExecutionResult | None:
     if decision is None or decision.resolution is IdempotencyResolution.ACCEPTED:
         return None
     if decision.resolution is IdempotencyResolution.REPLAY_COMPLETED:
-        # The durable record proves that this exact scoped operation already
-        # finished. Never re-enter the executor or repeat external effects.
+        # Only the verified update-bound Telegram ingress may receive a
+        # completed replay receipt. All other envelopes pass the old guard.
+        payload = getattr(env.decision, "payload", None)
+        if not verified_telegram_idempotency_key(payload):
+            return None
+        executor._guard.verify(env)
         return ExecutionResult(
             ok=True,
             output={
