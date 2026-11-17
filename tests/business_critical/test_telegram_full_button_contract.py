@@ -13,7 +13,11 @@ from core.actions.catalog import build_schema_registry
 from core.policies.telegram.unified_policy import UnifiedTelegramPolicyV3
 from core.ux.keyboards import admin, autopilot, payments, settings
 from core.ux.telegram_keyboards_ai_ceo import kb_ai_ceo_menu
-from core.ux.unified_messenger_menu import ( BUSINESS_ONBOARDING_URL, plain_channel_menu, telegram_menu, )
+from core.ux.unified_messenger_menu import (
+    BUSINESS_ONBOARDING_URL,
+    plain_channel_menu,
+    telegram_menu,
+)
 from runtime.boot.actions_registry import handler_actions
 from runtime.entrypoints.telegram_longpoll import _world_state_from_update
 
@@ -53,11 +57,17 @@ def _owner_update(callback):
     }
 
 
+def _verified_owner_state(update):
+    """Policy fixture emulating an already-authorized EventStore projection."""
+    state = _world_state_from_update(update)
+    return replace(state, user={**state.user, "roles": ["owner"]})
+
+
 @pytest.mark.parametrize("callback", _callbacks())
 def test_every_static_button_passes_policy_and_closed_action_schema(monkeypatch, callback):
     monkeypatch.setattr( "runtime.entrypoints.telegram_longpoll._configured_telegram_tenant_id", lambda: "tenant-live", )
     assert len(callback.encode("utf-8")) <= 64, callback
-    state = _world_state_from_update(_owner_update(callback))
+    state = _verified_owner_state(_owner_update(callback))
     state = replace(state, user={**state.user, "roles": ["admin"]})
     proposal = UnifiedTelegramPolicyV3(admin_user_ids=("4001",)).propose(state)
     assert proposal.action in handler_actions(), callback
@@ -79,7 +89,7 @@ def test_every_visible_callback_reaches_single_canonical_ack_owner(monkeypatch, 
     effect. Other actions must carry the callback into their canonical handler.
     """
     monkeypatch.setattr( "runtime.entrypoints.telegram_longpoll._configured_telegram_tenant_id", lambda: "tenant-live", )
-    state = _world_state_from_update(_owner_update(callback))
+    state = _verified_owner_state(_owner_update(callback))
     state = replace(state, user={**state.user, "roles": ["admin"]})
     proposal = UnifiedTelegramPolicyV3(admin_user_ids=("4001",)).propose(state)
 
@@ -97,7 +107,7 @@ def test_every_visible_callback_reaches_single_canonical_ack_owner(monkeypatch, 
 ])
 def test_dynamic_effectful_buttons_use_closed_single_action_contract( monkeypatch, callback, expected_action, ):
     monkeypatch.setattr( "runtime.entrypoints.telegram_longpoll._configured_telegram_tenant_id", lambda: "tenant-live", )
-    state = _world_state_from_update(_owner_update(callback))
+    state = _verified_owner_state(_owner_update(callback))
     proposal = UnifiedTelegramPolicyV3().propose(state)
     assert proposal.action == expected_action
     assert proposal.payload["callback_query_id"] == "callback-123"
@@ -119,7 +129,7 @@ def test_ads_cancel_is_one_canonical_setting_action_with_delivery_ack(monkeypatc
     from runtime.handler_impl.domains.user_ops import handle_set_user_setting
 
     monkeypatch.setattr( "runtime.entrypoints.telegram_longpoll._configured_telegram_tenant_id", lambda: "tenant-live", )
-    state = _world_state_from_update(_owner_update("ads:apply:cancel"))
+    state = _verified_owner_state(_owner_update("ads:apply:cancel"))
     proposal = UnifiedTelegramPolicyV3().propose(state)
     assert proposal.action == "set_user_setting@v1"
     assert proposal.payload["key"] == PENDING_KEY
@@ -157,7 +167,7 @@ def test_profit_sprint_source_uses_existing_handler_and_callback_ack(monkeypatch
     from runtime.handlers.profit_sprint_onboarding import handle_onboarding_lead_source
 
     monkeypatch.setattr( "runtime.entrypoints.telegram_longpoll._configured_telegram_tenant_id", lambda: "tenant-live", )
-    state = _world_state_from_update(_owner_update(callback))
+    state = _verified_owner_state(_owner_update(callback))
     proposal = UnifiedTelegramPolicyV3().propose(state)
     assert proposal.action == "profit_sprint_onboarding_lead_source@v1"
     _, payload = build_payload( state=state, out=proposal, pinned_world_model_meta={}, tenant_id="tenant-live", product_id=None, domain=None,
@@ -182,7 +192,7 @@ def test_profit_sprint_source_uses_existing_handler_and_callback_ack(monkeypatch
 
 def test_ai_ceo_run_is_never_misrepresented_as_successful_multistep_execution(monkeypatch):
     monkeypatch.setattr( "runtime.entrypoints.telegram_longpoll._configured_telegram_tenant_id", lambda: "tenant-live", )
-    proposal = UnifiedTelegramPolicyV3().propose( _world_state_from_update(_owner_update("ceo:run")) )
+    proposal = UnifiedTelegramPolicyV3().propose( _verified_owner_state(_owner_update("ceo:run")) )
     assert proposal.action == "send_message@v1"
     assert proposal.payload["callback_query_id"] == "callback-123"
     assert "Ничего не запущено" in proposal.payload["text"]
@@ -195,10 +205,10 @@ def test_cross_provider_connect_button_uses_existing_web_onboarding_owner( monke
     menu = plain_channel_menu(channel=channel, role="owner")
     button = next(item for item in menu["actions"] if item["key"] == "connect")
     assert button["callback"] == "cp:section:connect"
-    state = replace( _world_state_from_update(_owner_update(button["callback"])), user={"id": "4001", "roles": []}, )
+    state = replace( _verified_owner_state(_owner_update(button["callback"])), user={"id": "4001", "roles": []}, )
     proposal = UnifiedTelegramPolicyV3().propose(state)
     assert proposal.action == "send_message@v1"
-    assert BUSINESS_ONBOARDING_URL in proposal.payload["text"]
+    assert "Подключение выполняется" in proposal.payload["text"]
     assert proposal.payload["callback_query_id"] == "callback-123"
     buttons = [b for row in proposal.payload["reply_markup"]["inline_keyboard"] for b in row]
     assert any(b.get("url") == BUSINESS_ONBOARDING_URL for b in buttons)
