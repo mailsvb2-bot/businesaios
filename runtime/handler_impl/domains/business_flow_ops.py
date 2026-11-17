@@ -15,7 +15,13 @@ from application.business_flows import bot_provisioning as botprov
 from application.business_flows.projection import flow_payloads, flow_rows
 from runtime.handler_impl.core.payloads import require_mapping, required_str
 from runtime.handler_impl.domains.admin_ops import _card_outcome, render_admin_analytics
-from runtime.handler_impl.domains.business_catalog_ops import ( CATALOG_OPS, CHANNEL_OPS, COMMERCE_OPS, EVENT_OPS, FOLLOWUP_OPS, PANEL_OPS,
+from runtime.handler_impl.domains.business_catalog_ops import (
+    CATALOG_OPS,
+    CHANNEL_OPS,
+    COMMERCE_OPS,
+    EVENT_OPS,
+    FOLLOWUP_OPS,
+    PANEL_OPS,
     PROMO_OPS,
     XP_OPS,
     _ads,
@@ -341,9 +347,29 @@ def handle_business_ops_summary(payload, effects, env, *, event_store, now_ms: i
     body = require_mapping(payload or {})
     tenant_id, now = required_str(body, "tenant_id"), now_ms or _now_ms()
     if str(body.get("op") or "") == "admin_analytics":
+        # The UI admin flag cannot authorize a handler. Recheck the actor using
+        # canonical event-sourced roles or the explicit platform admin IDs.
+        from contracts.action_budget import ADMIN_ANALYTICS_ROUTES
+        from core.admin.roles_read_model import roles_for_user
+        from runtime.platform.config.env_flags import env_csv
 
-        text = render_admin_analytics( event_store=event_store, tenant_id=tenant_id, route=str(body.get("arg") or ""), now_ms=now, )
-        return send_tracked( body, effects, env, text=text, event_type=None, event_payload=None, )
+        actor = str(body.get("user_id") or "").strip()
+        route = str(body.get("arg") or "").strip()
+        try:
+            platform_admins = set(env_csv("ADMIN_USER_IDS")) | set(env_csv("ADMIN_IDS"))
+            authorized = bool(actor) and (
+                actor in platform_admins
+                or "admin" in roles_for_user(event_store, tenant_id=tenant_id, user_id=actor)
+            )
+        except (AttributeError, TypeError, ValueError, RuntimeError, OSError):
+            authorized = False
+        if not authorized or route not in ADMIN_ANALYTICS_ROUTES:
+            return send_tracked(
+                body, effects, env, text="Доступ к аналитике запрещён.",
+                event_type=None, event_payload=None, ok=False, reason="forbidden",
+            )
+        text = render_admin_analytics(event_store=event_store, tenant_id=tenant_id, route=route, now_ms=now)
+        return send_tracked(body, effects, env, text=text, event_type=None, event_payload=None)
 
     def facts(event_type: str) -> list[dict]:
         return flow_payloads(event_store, tenant_id=tenant_id, event_type=event_type)
