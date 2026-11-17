@@ -8,7 +8,7 @@ from types import SimpleNamespace
 import pytest
 
 from application.decision_runtime.flow import build_payload
-from core.admin.read_model import ADMIN_ANALYTICS_ROUTES
+from contracts.action_budget import ADMIN_ANALYTICS_ROUTES
 from core.actions.catalog import build_schema_registry
 from core.policies.telegram.unified_policy import UnifiedTelegramPolicyV3
 from core.safety.controls.action_budget.guard import ActionBudgetGuard
