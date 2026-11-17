@@ -102,6 +102,7 @@ def cockpit_permission(callback: str) -> str:
 _GATED_CALLBACKS = (
     (("autopilot:", "profit_sprint:"), "autopilot"),
     (("ads:apply",), "ads_apply"),
+    (("ceo:run",), "business_manage"),  # executing the AI-director plan is an owner decision
     (("ceo:", "growth:"), "analytics"),
 )
 _GATED_COMMANDS = {

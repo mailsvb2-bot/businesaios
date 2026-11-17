@@ -48,12 +48,26 @@ def handle_ai_ceo(ctx: TelegramCtx, *, user_id: str, event_store: Any | None = N
     return None
 
 
+def _has_kpi(ctx: TelegramCtx, event_store: Any | None) -> bool:
+    dash = ctx.autopilot_dashboard if isinstance(ctx.autopilot_dashboard, dict) else {}
+    return event_store is not None or isinstance(dash.get("growth"), dict)
+
+
 def _build(ctx: TelegramCtx, *, event_store: Any | None) -> Any:
     tenant_id = str(getattr(ctx.state, "tenant_id", "") or "")
     autonomy = autonomy_from_env()
-    snapshot = read_growth_snapshot(event_store, tenant_id=tenant_id) if event_store is not None else None
+    from core.ai_ceo.ledger import GrowthSnapshotV1
+    if event_store is not None:
+        snapshot = read_growth_snapshot(event_store, tenant_id=tenant_id)
+    else:  # canonical read model hydrated into the policy context (user_bundle.autopilot_dashboard.growth)
+        dash = ctx.autopilot_dashboard if isinstance(ctx.autopilot_dashboard, dict) else {}
+        growth = dash.get("growth") if isinstance(dash.get("growth"), dict) else None
+        keys = ("leads", "spend_minor", "revenue_minor", "profit_minor")
+        try:
+            snapshot = GrowthSnapshotV1(**{k: int(growth.get(k) or 0) for k in keys}) if growth else None
+        except (TypeError, ValueError):
+            snapshot = None
     if snapshot is None:
-        from core.ai_ceo.ledger import GrowthSnapshotV1
         snapshot = GrowthSnapshotV1()
     product = getattr(ctx.state, "product", {}) or {}
     return build_plan(state=ctx.state, snapshot=snapshot, autonomy=autonomy, bot_username=str(product.get("bot_username") or "") if isinstance(product, dict) else "")
@@ -61,7 +75,7 @@ def _build(ctx: TelegramCtx, *, event_store: Any | None) -> Any:
 
 def _propose_plan(ctx: TelegramCtx, *, user_id: str, event_store: Any | None) -> ProposedAction:
     plan = _build(ctx, event_store=event_store)
-    text = render_plan_text(plan)
+    text = render_plan_text(plan, has_kpi=_has_kpi(ctx, event_store))
     return propose(
         "ai_ceo_plan@v1",
         {

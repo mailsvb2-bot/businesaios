@@ -80,6 +80,13 @@ def load_user_bundle(*, event_store: Any, tenant_id: str, user_id: str, event_wa
         }
     except Exception:
         autopilot_dashboard = {}
+    try:  # AI-director KPI: the same canonical today growth ledger, never an empty stand-in
+        from core.growth.today_ledger import build_today_kpi
+        kpi = build_today_kpi(event_store, tenant_id=str(tenant_id))
+        autopilot_dashboard["growth"] = {"leads": int(kpi.leads), "spend_minor": int(kpi.spend_minor),
+                                         "revenue_minor": int(kpi.revenue_minor), "profit_minor": int(kpi.profit_minor)}
+    except Exception:
+        pass
 
     return {
         "entitlements": entitlements,
