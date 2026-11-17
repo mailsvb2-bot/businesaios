@@ -269,7 +269,20 @@ def provider_runtime_truth_map(*, event_store: Any, tenant_id: str, business_id:
                 latest[provider_key] = candidate
             elif version == int(current["provider_version"]) and candidate != current:
                 raise RuntimeError("PROVIDER_ACTIVATION_EVENT_CONFLICT")
+    if latest:
+        # Read-only administrative visibility on the canonical tenant/business
+        # provider projection. No global live write promotion occurs.
+        from time import time
+
+        evidence = provider_channel_live_readiness(
+            event_store=event_store, tenant_id=tenant, business_id=business,
+            now_ms=int(time() * 1000),
+        )
+        for provider_key, record in latest.items():
+            if provider_key in evidence:
+                record["channel_live_readiness"] = evidence[provider_key]
     return latest
+
 
 def _provider_history_timestamp(value: object) -> datetime | None:
     text = str(value or "").strip()

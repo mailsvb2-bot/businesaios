@@ -11,8 +11,8 @@ from application.business_autonomy.provider_truth_matrix import (
 from runtime.business_autonomy.distributed_state import FileDistributedDocumentStore
 from runtime.business_autonomy.provider_activation_store import FileProviderActivationStore
 from runtime.business_autonomy.provider_sync_runtime import ProviderSyncRuntimePlanner
-from runtime.platform.event_store.memory_event_store import MemoryEventStore
 from runtime.business_autonomy.provider_transport_bindings import ProviderTransportBindings
+from runtime.platform.event_store.memory_event_store import MemoryEventStore
 
 
 def test_provider_truth_matrix_covers_every_catalog_provider() -> None:
@@ -171,3 +171,7 @@ def test_provider_runtime_truth_reads_latest_scoped_event_spine_state(tmp_path) 
     assert truth["telegram_bot"]["connected"] is True
     assert truth["telegram_bot"]["health_probe"]["status"] == "probe_live_ok"
     assert truth["telegram_bot"]["source"] == "event_spine.provider_activation"
+    assert truth["telegram_bot"]["channel_live_readiness"]["live_ready"] is False
+    assert truth["telegram_bot"]["channel_live_readiness"]["scope"] == {
+        "tenant_id": "tenant-1", "business_id": "business-1",
+    }
