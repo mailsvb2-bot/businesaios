@@ -1,6 +1,8 @@
 """Oct 23: repeat /start and repeat button taps must deliver; poison updates must not block polling."""
 from __future__ import annotations
 
+import json
+import sqlite3
 import ast
 from pathlib import Path
 from types import SimpleNamespace
@@ -246,9 +248,6 @@ def test_production_guard_still_rejects_non_noop_inline_plan():
         )
 
 
-import json
-import sqlite3
-from runtime.platform.telegram_inbox import TelegramInbox
 
 
 def test_retry_limit_dead_letters_without_deleting_and_allows_explicit_requeue( monkeypatch, tmp_path, ):
