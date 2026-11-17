@@ -16,11 +16,11 @@ from core.policies.telegram.helpers import (
     choose_marketing_variant,
     propose_message,
 )
-from core.policies.telegram.routes.command_routes import handle_command_routes
+from core.policies.telegram.routes.command_routes import handle_command_routes, handle_free_text
 from core.policies.telegram.routes.customer_bot_routes import handle_customer_bot, is_customer_session
 from core.policies.telegram.routes.marketing_routes import handle_marketing_routes
 from core.policies.telegram.routes.settings_routes import handle_settings_routes
-from core.users.roles import cockpit_permission, effective_role, has_permission
+from core.users.roles import effective_role, has_permission, required_permission
 from core.ux.callbacks import CB_MENU_MAIN
 from core.ux.telegram_keyboards import kb_back_main, kb_main
 from core.ux.unified_messenger_menu import connect_business_view, menu_text
@@ -113,34 +113,23 @@ def handle(ctx: TelegramCtx, *, default_price_rub: int, bot_username: str = "", 
     msg = ("Рабочее пространство подключено. Выберите раздел меню или опишите бизнес-задачу."
            if ctx.full_access else
            "Опишите задачу бизнеса или выберите раздел в меню. Доступные тарифы — в разделе «Оплаты и тарифы».")
-    if not ctx.is_admin and not ctx.cmd and str(ctx.text or "").strip():
-        from core.policies.telegram.helpers import propose
-
-        # customer free text is sales evidence (sales_intelligence); handler replies with msg
-        return propose("sales_pipeline@v1", {"user_id": user_id, "op": "inbound", "arg": str(ctx.text)[:4000], "reply": msg})
+    result = handle_free_text(
+        ctx, user_id=str(user_id), msg=msg,
+        rerun=lambda updated: handle(
+            updated, default_price_rub=default_price_rub, bot_username=bot_username,
+            gift_ttl_sec=gift_ttl_sec,
+        ),
+    )
+    if result is not None:
+        return result
     return pm(text=msg, reply_markup=kb_main(is_admin=ctx.is_admin, role=user_role))
 
 
 
-_GATED_CALLBACKS = (
-    (("autopilot:", "profit_sprint:"), "autopilot"),
-    (("ads:apply",), "ads_apply"),
-    (("ceo:", "growth:"), "analytics"),
-)
-_GATED_COMMANDS = {
-    "/autopilot": "autopilot", "/ceo": "analytics",
-    "/growth": "analytics", "/ads_apply": "ads_apply",
-}
-
-
 def _rbac_denial(ctx: TelegramCtx) -> str | None:
-    data = str(ctx.callback_data or "")
-    permission = next((required for prefixes, required in _GATED_CALLBACKS
-                       if data.startswith(prefixes)), None)
-    if permission is None and data.startswith("cpm:"):
-        permission = cockpit_permission(data)
-    if permission is None:
-        permission = _GATED_COMMANDS.get(str(ctx.cmd or ""))
+    permission = required_permission(
+        callback_data=str(ctx.callback_data or ""), cmd=str(ctx.cmd or ""),
+    )
     if permission is None or has_permission(ctx, permission):
         return None
     return "Для этого раздела требуется подтверждённая роль владельца или сотрудника."

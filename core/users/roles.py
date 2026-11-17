@@ -81,7 +81,7 @@ _COCKPIT_PERMISSIONS = (
     (("menu",), "business_read"),
     (("customers", "customer", "cust-"), "customers"),
     (("sales", "work"), "sales"),
-    (("growth-an", "growth-report"), "analytics"),
+    (("growth-an", "growth-report", "growth-now"), "analytics"),
     (("growth", "ladder"), "marketing"),
     (("money", "payments", "pay-", "prices"), "payments"),
     (("bookings", "bk-", "calendar", "today", "events", "ev-"), "operations"),
@@ -97,3 +97,23 @@ def cockpit_permission(callback: str) -> str:
     if screen.startswith("sales-"):
         return "sales"
     return "business_manage"
+
+
+_GATED_CALLBACKS = (
+    (("autopilot:", "profit_sprint:"), "autopilot"),
+    (("ads:apply",), "ads_apply"),
+    (("ceo:", "growth:"), "analytics"),
+)
+_GATED_COMMANDS = {
+    "/autopilot": "autopilot", "/ceo": "analytics",
+    "/growth": "analytics", "/ads_apply": "ads_apply",
+}
+
+
+def required_permission(*, callback_data: str = "", cmd: str = "") -> str | None:
+    value = str(callback_data or "")
+    permission = next((perm for prefixes, perm in _GATED_CALLBACKS
+                       if value.startswith(prefixes)), None)
+    if permission is None and value.startswith("cpm:"):
+        permission = cockpit_permission(value)
+    return permission if permission is not None else _GATED_COMMANDS.get(str(cmd or ""))

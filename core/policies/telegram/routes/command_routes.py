@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import re
+from dataclasses import replace
 from datetime import UTC, datetime, timedelta
 
 from core.policies.telegram.context import TelegramCtx
@@ -160,4 +162,53 @@ def handle_command_routes(ctx: TelegramCtx, *, user_id: str, pm) -> ProposedActi
                 "callback_query_id": ctx.callback_query_id,
             },
         )
+    return None
+
+
+_OWNER_WORDS = {
+    "меню": "/menu", "главное меню": "/menu", "статус": "/status",
+    "статус оплаты": "/status", "помощь": "/help",
+    "help": "/help", "menu": "/menu", "status": "/status",
+}
+_GOAL_VERB = re.compile(r"(хочу|хотим|нужн|надо|как\s|помоги|увелич|вырас|рост|подн|больше|снизить|улучш|привлеч)", re.I)
+_GOAL_OBJECT = re.compile(r"(продаж|выручк|клиент|заказ|прибыл|конверс|лид|заявк|реклам|маркетинг|средн\w*\s+чек|бизнес|доход)", re.I)
+_LEAD_SIGNAL = re.compile(
+    r"(\+?\d[\d\s()-]{8,}\d|[\w.+-]+@[\w-]+\.[\w.]+|купить|куплю|цена|стоимост|"
+    r"сколько стоит|тариф|подключ|заказать|записаться|оформить)", re.I,
+)
+
+
+def _norm(text: object) -> str:
+    return " ".join(str(text or "").strip().lower().strip(".!?").split())
+
+
+def classify_free_text(ctx: TelegramCtx) -> str:
+    """Never confuse a verified staff request with a customer lead."""
+    from core.users.roles import effective_role, has_permission
+
+    content = str(ctx.text or "").strip()
+    if ctx.cmd or ctx.callback_data or not content:
+        return "none"
+    if _norm(content) in _OWNER_WORDS:
+        return "owner_command"
+    if effective_role(is_platform_admin=bool(ctx.is_admin), roles=ctx.roles) != "guest":
+        is_goal = bool(_GOAL_VERB.search(content) and _GOAL_OBJECT.search(content))
+        return "business_goal" if is_goal and has_permission(ctx, "analytics") else "none"
+    return "lead" if _LEAD_SIGNAL.search(content) else "customer_message"
+
+
+def handle_free_text(ctx: TelegramCtx, *, user_id: str, msg: str, rerun) -> ProposedAction | None:
+    kind = classify_free_text(ctx)
+    if kind == "owner_command":
+        return rerun(replace(ctx, cmd=_OWNER_WORDS[_norm(ctx.text)], args="", text=""))
+    if kind == "business_goal":
+        return propose("business_ops_summary@v1", {
+            "user_id": user_id, "op": "cockpit", "arg": "cpm:growth-now",
+        })
+    if kind in {"customer_message", "lead"} and str(user_id or "").strip():
+        reply = msg + ("\n\nЗаявка получена — с вами свяжутся." if kind == "lead" else "")
+        return propose("sales_pipeline@v1", {
+            "user_id": user_id, "op": "inbound",
+            "arg": str(ctx.text)[:4000], "reply": reply,
+        })
     return None
