@@ -360,6 +360,12 @@ def _run_longpoll(
                         # The old effect might have executed. Do not waste 12
                         # automatic retries or falsely acknowledge delivery.
                         raise TelegramTerminalOutcome("telegram_ambiguous_effect_requires_reconciliation")
+                    error = str(getattr(outcome, "error", "") or "")
+                    from runtime.platform.telegram_inbox import is_terminal_failure
+
+                    refusal = RuntimeError(error)
+                    if is_terminal_failure(refusal):
+                        raise refusal
                     raise RuntimeError("telegram_update_outcome_unconfirmed")
                 inbox.complete(update_id)
             except Exception as exc:

@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import re
 import sqlite3
 import time
 from typing import Any
@@ -14,6 +15,28 @@ from typing import Any
 from runtime.platform.delivery_state import _ensure_db, _get_db_path, _open_connection
 
 DEFAULT_MAX_ATTEMPTS = 12
+MAX_RETRY_DELAY_S = 300
+_TERMINAL_PREFIXES = (
+    "DECISION_BLOCKED:",
+    "idempotency_resolution:rejected_terminal_failed",
+    "idempotency_resolution:rejected_scope_mismatch",
+)
+_TRANSIENT_CODES = frozenset({"DECISION_BLOCKED:action_safety_gate_error"})
+_SAFE_CODE = re.compile(r"[A-Za-z0-9_.:-]{1,120}")
+
+
+def failure_code(exc: BaseException) -> str:
+    value = str(exc).strip()
+    if value.startswith((*_TERMINAL_PREFIXES, "telegram_update_")) and _SAFE_CODE.fullmatch(value):
+        return value
+    return type(exc).__name__
+
+
+def is_terminal_failure(exc: BaseException) -> bool:
+    code = failure_code(exc)
+    return code.startswith(_TERMINAL_PREFIXES) and code not in _TRANSIENT_CODES
+
+
 
 
 
@@ -94,7 +117,12 @@ class TelegramInbox:
             db.execute("""UPDATE telegram_ingress_inbox SET status='completed',last_error=NULL
                           WHERE bot_scope=? AND update_id=?""", (self.scope, update_id))
 
-    def failed(self, update_id: int, exc: Exception, *, max_delay: int = 300,
+    @staticmethod
+    def retry_horizon_s(max_attempts: int = DEFAULT_MAX_ATTEMPTS, max_delay: int = MAX_RETRY_DELAY_S) -> int:
+        return sum(min(max_delay, 2 ** min(n - 1, 12))
+                   for n in range(1, max(1, int(max_attempts))))
+
+    def failed(self, update_id: int, exc: Exception, *, max_delay: int = MAX_RETRY_DELAY_S,
                max_attempts: int = DEFAULT_MAX_ATTEMPTS) -> str:
         max_attempts, max_delay = max(1, int(max_attempts)), max(1, int(max_delay))
         with self._db() as db:
@@ -105,13 +133,14 @@ class TelegramInbox:
             if row is None:
                 raise RuntimeError("telegram_inbox_missing_pending_update")
             attempts = int(row[0]) + 1
-            status = "dead_letter" if isinstance(exc, TelegramTerminalOutcome) or attempts >= max_attempts else "pending"
+            status = ("dead_letter" if isinstance(exc, TelegramTerminalOutcome)
+                      or is_terminal_failure(exc) or attempts >= max_attempts else "pending")
             delay = min(max_delay, 2 ** min(attempts - 1, 12))
             db.execute("""UPDATE telegram_ingress_inbox
                           SET status=?,attempts=?,retry_at=?,last_error=?
                           WHERE bot_scope=? AND update_id=? AND status='pending'""",
                        (status, attempts, 0 if status == "dead_letter" else time.time() + delay,
-                        type(exc).__name__, self.scope, update_id))
+                        failure_code(exc), self.scope, update_id))
         return status
 
     def dead_letter_count(self) -> int:
