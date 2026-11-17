@@ -142,6 +142,7 @@ def test_clientplatform_owner_button_reads_durable_business_state( monkeypatch, 
     from runtime.handler_impl.domains.business_flow_ops import ( handle_bookings, handle_business_ops_summary, handle_sales_pipeline, )
     from runtime.platform.event_store.sqlite_event_store import SqliteEventStore
 
+    monkeypatch.setenv("ADMIN_USER_IDS", "4001")
     monkeypatch.setattr( "runtime.entrypoints.telegram_longpoll._configured_telegram_tenant_id", lambda: "tenant-live", )
     event_path = str(tmp_path / "clientplatform.sqlite3")
     with SqliteEventStore(event_path) as store:
@@ -202,6 +203,7 @@ def test_clientplatform_telegram_entrypoint_gateway_persists_outcome( monkeypatc
     from runtime.handler_impl.domains.business_flow_ops import handle_business_ops_summary, handle_sales_pipeline
     from runtime.platform.event_store.sqlite_event_store import SqliteEventStore
 
+    monkeypatch.setenv("ADMIN_USER_IDS", "4001")
     monkeypatch.setenv("TENANT_ID", "tenant-live")
     db = str(tmp_path / "button-outcome.sqlite3")
     with SqliteEventStore(db) as store:

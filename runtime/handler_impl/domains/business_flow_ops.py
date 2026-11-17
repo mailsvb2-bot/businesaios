@@ -338,6 +338,25 @@ def _cockpit(body, effects, env, future, steps, facts, now, team=None, timed=Non
     return send_tracked( body, effects, env, text=prefix + text, event_type=event_type, event_payload=change, reply_markup=cp.markup(rows),
     )
 
+def _actor_permits(body: dict, *, event_store, tenant_id: str, permission: str) -> bool:
+    """Re-check a signed request against durable roles; ignore client UX roles."""
+    from core.admin.roles_read_model import roles_for_user
+    from core.users.roles import permissions_for
+    from runtime.platform.config.env_flags import env_csv
+
+    actor = str(body.get("user_id") or "").strip()
+    if not actor or not tenant_id:
+        return False
+    try:
+        platform_admin = actor in set(env_csv("ADMIN_USER_IDS")) | set(env_csv("ADMIN_IDS"))
+        roles = roles_for_user(event_store, tenant_id=tenant_id, user_id=actor)
+        return permission in permissions_for(
+            is_platform_admin=platform_admin, roles=roles,
+        )
+    except (AttributeError, TypeError, ValueError, RuntimeError, OSError):
+        return False
+
+
 def handle_business_ops_summary(payload, effects, env, *, event_store, now_ms: int | None = None):
     """Owner operations summary over the business-flow projections (read-only)."""
     from application.business_flows import bookings as bk
@@ -347,22 +366,13 @@ def handle_business_ops_summary(payload, effects, env, *, event_store, now_ms: i
     body = require_mapping(payload or {})
     tenant_id, now = required_str(body, "tenant_id"), now_ms or _now_ms()
     if str(body.get("op") or "") == "admin_analytics":
-        # The UI admin flag cannot authorize a handler. Recheck the actor using
-        # canonical event-sourced roles or the explicit platform admin IDs.
         from contracts.action_budget import ADMIN_ANALYTICS_ROUTES
-        from core.admin.roles_read_model import roles_for_user
-        from runtime.platform.config.env_flags import env_csv
 
-        actor = str(body.get("user_id") or "").strip()
         route = str(body.get("arg") or "").strip()
-        try:
-            platform_admins = set(env_csv("ADMIN_USER_IDS")) | set(env_csv("ADMIN_IDS"))
-            authorized = bool(actor) and (
-                actor in platform_admins
-                or "admin" in roles_for_user(event_store, tenant_id=tenant_id, user_id=actor)
-            )
-        except (AttributeError, TypeError, ValueError, RuntimeError, OSError):
-            authorized = False
+        authorized = _actor_permits(
+            body, event_store=event_store, tenant_id=tenant_id,
+            permission="administration",
+        )
         if not authorized or route not in ADMIN_ANALYTICS_ROUTES:
             return send_tracked(
                 body, effects, env, text="Доступ к аналитике запрещён.",
@@ -379,6 +389,15 @@ def handle_business_ops_summary(payload, effects, env, *, event_store, now_ms: i
     booked = [s for s in future if s.status == "booked"]
     steps, _ = ld.replay(facts("offer_ladder@v1"))
     if str(body.get("op") or "") == "cockpit":
+        from core.users.roles import cockpit_permission
+
+        permission = cockpit_permission(str(body.get("arg") or "cpm:menu"))
+        if not _actor_permits(body, event_store=event_store, tenant_id=tenant_id,
+                              permission=permission):
+            return send_tracked(
+                body, effects, env, text="Доступ к этому разделу запрещён.",
+                event_type=None, event_payload=None, ok=False, reason="forbidden",
+            )
         from core.admin import roles_read_model as rr
 
         team = { "roles": rr.team_roles_snapshot(event_store, tenant_id=tenant_id),

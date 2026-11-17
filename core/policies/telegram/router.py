@@ -20,21 +20,25 @@ from core.policies.telegram.routes.command_routes import handle_command_routes
 from core.policies.telegram.routes.customer_bot_routes import handle_customer_bot, is_customer_session
 from core.policies.telegram.routes.marketing_routes import handle_marketing_routes
 from core.policies.telegram.routes.settings_routes import handle_settings_routes
-from core.users.roles import UserRoleInfo
+from core.users.roles import cockpit_permission, effective_role, has_permission
 from core.ux.callbacks import CB_MENU_MAIN
 from core.ux.telegram_keyboards import kb_back_main, kb_main
-from core.ux.unified_messenger_menu import BUSINESS_ONBOARDING_URL, connect_business_view, menu_text
+from core.ux.unified_messenger_menu import connect_business_view, menu_text
 
 
 def handle(ctx: TelegramCtx, *, default_price_rub: int, bot_username: str = "", gift_ttl_sec: int = 7 * 24 * 3600) -> ProposedAction:
     user_id = ctx.state.user_id or "anonymous"
     if is_customer_session(getattr(ctx.state, "session", None)):  # tenant's own bot: customer routes only
         return handle_customer_bot(ctx, user_id=str(user_id))
-    user_role = UserRoleInfo.from_settings(ctx.settings if isinstance(ctx.settings, dict) else {})
+    user_role = effective_role(is_platform_admin=bool(ctx.is_admin), roles=ctx.roles)
     legacy_prices = build_legacy_prices(default_price_rub=default_price_rub)
 
     def pm(*, text: str, reply_markup: dict | None = None, track_event_type: str | None = None, track_payload: dict | None = None) -> ProposedAction:
         return propose_message(user_id=user_id, text=text, reply_markup=reply_markup, callback_query_id=ctx.callback_query_id, track_event_type=track_event_type, track_payload=track_payload)
+
+    denied = _rbac_denial(ctx)
+    if denied is not None:
+        return pm(text=denied, reply_markup=kb_back_main())
 
     for handler in (
         lambda: handle_offer_outcome(ctx, user_id=user_id, default_price_rub=default_price_rub),
@@ -51,23 +55,6 @@ def handle(ctx: TelegramCtx, *, default_price_rub: int, bot_username: str = "", 
             return out
 
     if ctx.callback_data == "cp:section:connect":
-        # The authenticated web workspace remains the sole owner of business
-        # registration; this cross-messenger callback only navigates.
-        return pm(
-            text=(
-                "➕ Подключить мой бизнес\n\n"
-                "Откройте рабочее пространство для авторизации и подключения: "
-                f"{BUSINESS_ONBOARDING_URL}\n\n"
-                "После входа выберите или создайте организацию и подключите каналы."
-            ),
-            reply_markup={
-                "inline_keyboard": [
-                    [{"text": "🌐 Открыть рабочее пространство", "url": BUSINESS_ONBOARDING_URL}],
-                    [{"text": "⬅️ Главное меню", "callback_data": CB_MENU_MAIN}],
-                ],
-            },
-        )
-    if ctx.callback_data == "cp:section:connect":
         meta = getattr(ctx.state, "meta", None)
         links = meta.get("operator_links", {}) if isinstance(meta, dict) else {}
         url = links.get("onboarding_url", "") if isinstance(links, dict) else ""
@@ -80,7 +67,9 @@ def handle(ctx: TelegramCtx, *, default_price_rub: int, bot_username: str = "", 
         return pm(text=text, reply_markup=markup)
 
     if ctx.callback_data in {"cp:section:customers", "cp:section:sales", "cp:section:ad-channels"}:
-        if not ctx.is_admin:
+        permission = {"cp:section:customers": "customers", "cp:section:sales": "sales",
+                      "cp:section:ad-channels": "marketing"}[ctx.callback_data]
+        if not has_permission(ctx, permission):
             return pm(text="Доступ к данным бизнеса запрещён.", reply_markup=kb_back_main())
         from dataclasses import replace
 
@@ -99,7 +88,7 @@ def handle(ctx: TelegramCtx, *, default_price_rub: int, bot_username: str = "", 
         return handle_business_flow_routes(ctx, user_id=str(user_id))
     if ctx.cmd in {"/start", "/menu"} or ctx.callback_data in {CB_MENU_MAIN, "menu_main"}:
         variant = choose_marketing_variant(user_id=str(user_id), step_key="menu_main", seed=str(ctx.marketing_seed or "1"), bandit=(ctx.marketing_bandit or {}).get("menu_main"))
-        msg = menu_text(role=user_role.role, is_admin=ctx.is_admin)
+        msg = menu_text(role=user_role, is_admin=ctx.is_admin)
         return pm(text=msg, reply_markup=kb_main(is_admin=ctx.is_admin, role=user_role), track_event_type="marketing_copy_chosen", track_payload={"step_key": "menu_main", "variant": variant})
 
     if ctx.callback_data == "full":
@@ -130,3 +119,28 @@ def handle(ctx: TelegramCtx, *, default_price_rub: int, bot_username: str = "", 
         # customer free text is sales evidence (sales_intelligence); handler replies with msg
         return propose("sales_pipeline@v1", {"user_id": user_id, "op": "inbound", "arg": str(ctx.text)[:4000], "reply": msg})
     return pm(text=msg, reply_markup=kb_main(is_admin=ctx.is_admin, role=user_role))
+
+
+
+_GATED_CALLBACKS = (
+    (("autopilot:", "profit_sprint:"), "autopilot"),
+    (("ads:apply",), "ads_apply"),
+    (("ceo:", "growth:"), "analytics"),
+)
+_GATED_COMMANDS = {
+    "/autopilot": "autopilot", "/ceo": "analytics",
+    "/growth": "analytics", "/ads_apply": "ads_apply",
+}
+
+
+def _rbac_denial(ctx: TelegramCtx) -> str | None:
+    data = str(ctx.callback_data or "")
+    permission = next((required for prefixes, required in _GATED_CALLBACKS
+                       if data.startswith(prefixes)), None)
+    if permission is None and data.startswith("cpm:"):
+        permission = cockpit_permission(data)
+    if permission is None:
+        permission = _GATED_COMMANDS.get(str(ctx.cmd or ""))
+    if permission is None or has_permission(ctx, permission):
+        return None
+    return "Для этого раздела требуется подтверждённая роль владельца или сотрудника."

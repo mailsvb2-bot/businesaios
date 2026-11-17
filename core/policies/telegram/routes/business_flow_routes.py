@@ -10,6 +10,7 @@ import re
 
 from core.policies.telegram.context import TelegramCtx
 from core.policies.telegram.helpers import ProposedAction, propose
+from core.users.roles import cockpit_permission, has_permission
 
 # cmd -> (action, op, owner_only)
 BUSINESS_FLOW_COMMANDS: dict[str, tuple[str, str, bool]] = {
@@ -208,12 +209,12 @@ def handle_business_flow_routes(ctx: TelegramCtx, *, user_id: str) -> ProposedAc
     data = str(getattr(ctx, "callback_data", "") or "")
     cbq = str(getattr(ctx, "callback_query_id", "") or "").strip()
     ack = {"callback_query_id": cbq} if cbq else {}  # stop the Telegram button spinner
-    if data.startswith("cpm:") and ctx.is_admin:
+    if data.startswith("cpm:") and has_permission(ctx, cockpit_permission(data)):
         return propose("business_ops_summary@v1", {"user_id": user_id, "op": "cockpit", "arg": data[:120], **ack})
-    if data.startswith("cpe:") and ctx.is_admin:
+    if data.startswith("cpe:") and has_permission(ctx, "operations"):
         return propose("event_series@v1", {"user_id": user_id, "op": "wizard", "arg": data[:64], **ack})
     args = str(ctx.args or "").strip()
-    if ctx.cmd == "/customers" and ctx.is_admin:  # donor search_customers: id-fragment search screen
+    if ctx.cmd == "/customers" and has_permission(ctx, "customers"):  # donor search_customers: id-fragment search screen
         q = re.sub(r"[^0-9A-Za-z_-]", "", args)[:40]
         return propose(
             "business_ops_summary@v1",
@@ -229,9 +230,9 @@ def handle_business_flow_routes(ctx: TelegramCtx, *, user_id: str) -> ProposedAc
     if route is None:
         return None
     action, op, owner_only = route
-    if op == "home" and ctx.is_admin:
+    if op == "home" and has_permission(ctx, "business_read"):
         op = "home_owner"  # owner /me also shows the client journey
-    if owner_only and not ctx.is_admin:
+    if owner_only and not has_permission(ctx, "business_manage"):
         return None
     cap = 1200 if op == "event_schedule" else 200  # one line per session (up to 31)
     return propose(action, {"user_id": user_id, "op": op, "arg": str(ctx.args or "").strip()[:cap]})

@@ -21,32 +21,32 @@ class NavigationItem:
     key: str
     label: str
     callback: str
-    roles: frozenset[str]
+    permission: str
 
 
 _ITEMS = (
-    NavigationItem("connect", "➕ Подключить мой бизнес", SECTION_PREFIX + "connect", frozenset({"owner", "admin", "operator", "marketer"})),
-    NavigationItem("customers", "💬 Клиенты и обращения", SECTION_PREFIX + "customers", frozenset({"owner", "admin", "operator"})),
-    NavigationItem("sales", "💰 Продажи", SECTION_PREFIX + "sales", frozenset({"owner", "admin", "operator", "marketer"})),
-    NavigationItem("marketing", "📣 Реклама и продвижение", "cpm:growth", frozenset({"owner", "admin", "marketer"})),
-    NavigationItem("ai", "🤖 ИИ и автопилот", CB_AUTOPILOT_MENU, frozenset({"owner", "admin", "operator", "marketer"})),
-    NavigationItem("ads_apply", "🧩 Ads Apply (prod)", CB_ADS_APPLY_MENU, frozenset({"marketer", "operator"})),
-    NavigationItem("results", "📊 Результаты", "cpm:growth-an:7", frozenset({"owner", "admin", "operator", "marketer"})),
-    NavigationItem("payments", "💳 Оплаты и тарифы", "cpm:money", frozenset({"owner", "admin"})),
-    NavigationItem("settings", "⚙️ Настройки", CB_SETTINGS_MENU, frozenset({"owner", "admin"})),
-    NavigationItem("administration", "🛠 Администрирование", CB_ADMIN_MENU, frozenset({"admin"})),
+    NavigationItem("connect", "➕ Подключить мой бизнес", SECTION_PREFIX + "connect", "connect"),
+    NavigationItem("customers", "💬 Клиенты и обращения", SECTION_PREFIX + "customers", "customers"),
+    NavigationItem("sales", "💰 Продажи", SECTION_PREFIX + "sales", "sales"),
+    NavigationItem("marketing", "📣 Реклама и продвижение", "cpm:growth", "marketing"),
+    NavigationItem("ai", "🤖 ИИ и автопилот", CB_AUTOPILOT_MENU, "autopilot"),
+    NavigationItem("ads_apply", "🧩 Ads Apply (prod)", CB_ADS_APPLY_MENU, "ads_apply"),
+    NavigationItem("results", "📊 Результаты", "cpm:growth-an:7", "analytics"),
+    NavigationItem("payments", "💳 Оплаты и тарифы", "cpm:money", "payments"),
+    NavigationItem("settings", "⚙️ Настройки", CB_SETTINGS_MENU, "business_manage"),
+    NavigationItem("administration", "🛠 Администрирование", CB_ADMIN_MENU, "administration"),
 )
 
 
 def menu_items(*, role: str, is_admin: bool = False) -> tuple[NavigationItem, ...]:
-    normalized = str(role or "").strip().lower()
-    if normalized not in {"owner", "admin", "operator", "marketer"}:
-        normalized = "operator"
-    roles = {normalized}
-    if is_admin:
-        roles.add("admin")
-    return tuple(item for item in _ITEMS if item.roles.intersection(roles)
-                 and (is_admin or item.key not in {"customers", "sales", "marketing", "results", "payments"}))
+    from core.users.roles import ROLE_PERMISSIONS, permissions_for
+
+    role = str(role or "").strip().lower()
+    if role not in ROLE_PERMISSIONS:
+        role = "guest"
+    permissions = permissions_for(is_platform_admin=is_admin, roles=(role,))
+    return tuple(item for item in _ITEMS if item.permission in permissions and not
+                 ((is_admin or role in {"admin", "platform_admin"}) and item.key == "ads_apply"))
 
 
 def menu_text(*, role: str, is_admin: bool = False) -> str:

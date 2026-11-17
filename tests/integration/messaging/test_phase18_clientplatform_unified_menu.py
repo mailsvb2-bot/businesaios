@@ -26,7 +26,7 @@ def test_brand_and_owner_navigation_are_stable():
         CB_AUTOPILOT_MENU, "cpm:growth-an:7", "cpm:money",
         CB_SETTINGS_MENU, CB_ADMIN_MENU,
     ]
-    assert kb_main() == telegram_menu(role="owner")
+    assert kb_main() == telegram_menu(role="guest")
 
 def test_role_visibility_cannot_expose_admin_or_payments_to_operator():
     operator = menu_items(role="operator")
@@ -36,7 +36,8 @@ def test_role_visibility_cannot_expose_admin_or_payments_to_operator():
     assert "customers" not in [x.key for x in operator]
     assert "sales" not in [x.key for x in operator]
     assert not {"marketing", "results", "payments"} & {x.key for x in operator}
-    assert not {"marketing", "results", "payments"} & {x.key for x in menu_items(role="marketer")}
+    assert {"marketing", "results", "ads_apply"} <= {x.key for x in menu_items(role="marketer")}
+    assert "payments" not in {x.key for x in menu_items(role="marketer")}
     admin = menu_items(role="owner", is_admin=True)
     assert admin[-1].callback == CB_ADMIN_MENU
 
@@ -74,14 +75,13 @@ def test_every_registered_messaging_channel_has_text_navigation():
         assert page["actions"]
 
 
-def test_canonical_user_role_from_settings_controls_unified_keyboard():
-    from core.users.roles import UserRoleInfo
+def test_verified_role_not_self_claimed_settings_controls_unified_keyboard():
+    from core.users.roles import effective_role
 
-    marketer = UserRoleInfo.from_settings({"user:role": "marketer"})
-    owner = UserRoleInfo.from_settings({"user:role": "owner"})
+    assert [item.key for item in menu_items(role="guest")] == ["connect"]
+    assert [item.key for item in menu_items(role="unknown")] == ["connect"]
+    assert effective_role(is_platform_admin=False, roles=[]) == "guest"
+    assert effective_role(is_platform_admin=False, roles=["owner"]) == "owner"
     assert "🧩 Ads Apply (prod)" in [
-        button["text"] for row in kb_main(role=marketer)["inline_keyboard"] for button in row
-    ]
-    assert "🧩 Ads Apply (prod)" not in [
-        button["text"] for row in kb_main(role=owner)["inline_keyboard"] for button in row
+        button["text"] for row in kb_main(role="marketer")["inline_keyboard"] for button in row
     ]
