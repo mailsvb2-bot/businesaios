@@ -98,6 +98,7 @@ BUSINESS_FLOW_COMMANDS: dict[str, tuple[str, str, bool]] = {
     "/event_live": ("event_series@v1", "pub_live", True),
     "/event_verify": ("event_series@v1", "pub_verify", False),
     "/visual": ("event_series@v1", "visual", True),
+    "/visual_publish": ("event_series@v1", "visual_publish", True),
     "/event_asset": ("event_series@v1", "asset_set", True),
     "/event_asset_show": ("event_series@v1", "asset_show", True),
     "/event_asset_send": ("event_series@v1", "asset_send", True),

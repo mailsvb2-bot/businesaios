@@ -2,13 +2,20 @@
 
 from __future__ import annotations
 
+from application.business_flows import ad_media as _ad_media
+from application.business_flows import admin as ad
+from application.business_flows import catalog as cg
+from application.business_flows import event_channels as ec
+from application.business_flows import event_notifications as en
+from application.business_flows import owner_panels as op_
+from application.business_flows import promotions as pm
+from application.business_flows import sales as sl
 from application.business_flows.projection import flow_payloads, flow_rows
-from application.business_flows import admin as ad, catalog as cg, event_channels as ec, event_notifications as en, owner_panels as op_, promotions as pm, sales as sl
-from runtime.platform.config.env_flags import env_str
 from application.organization.registry import OrganizationRegistry
 from contracts.organization import OrganizationStatus
 from runtime.messaging_policy_alert_subscriptions.settings_key import SETTING_KEY
 from runtime.messaging_policy_alert_subscriptions.settings_value_builder import canonical_alert_subscriptions_value
+from runtime.platform.config.env_flags import env_str
 
 CATALOG_OPS = frozenset(
     {
@@ -622,7 +629,7 @@ def _revenue_text(op, arg, now, event_store, tenant_id):
             f"Из контакта в оплату: {j['touched_then_paid']}")
 
 
-def _visual(body, effects, env, facts, arg, done):
+def _visual(body, effects, env, facts, arg, done, *, now_ms: int = 0, event_store=None):
     """/visual Название [| стиль [| формат]] or /visual Название | style x: YandexART via executor."""
     from application.business_flows import event_landing as el
     from application.business_flows import visual_creatives as vc
@@ -639,6 +646,14 @@ def _visual(body, effects, env, facts, arg, done):
     fmt = cmd if cmd in vc.FORMATS else (val or "post")
     ld = el.replay(facts("event_series@v1")).get(el.key_for(title))
     brief = vc.build_brief(title, context=(ld.sections.get("about", "") if ld else ""), style=style, fmt=fmt)
+    knobs = _ad_media.media_gen_operator_env(env_str)
+    if _ad_media.media_gen_enabled(knobs):
+        text, fact = _ad_media.generate_budgeted(
+            facts=facts("event_series@v1"), brief=brief, env=knobs,
+            now_ms=now_ms, event_store=event_store, tenant_id=str(body.get("tenant_id") or ""),
+            call=lambda adapter: adapter(effects, env, body, brief),
+        )
+        return done(text, fact)
     if brief.payload_key in st.generated:
         g = st.generated[brief.payload_key]
         return done(f"🖼 Такое изображение уже создано: {g['path']} ({g['size']} байт). Повтор не тратит бюджет.")
@@ -659,6 +674,54 @@ def _visual(body, effects, env, facts, arg, done):
     fact = vc.generated_fact(brief, path=str(out.get("path") or ""), size=int(out.get("size") or 0))
     label = f"{vc.STYLE_LABELS[brief.style]}, {brief.width_ratio}:{brief.height_ratio}"
     return done(f"🖼 Изображение готово ({label}): {fact['path']}", fact)
+
+
+def _yandexart_media_adapter(effects, env, body, brief):
+    folder = env_str("YANDEX_ART_FOLDER_ID", env_str("YANDEXGPT_FOLDER_ID",
+                     env_str("YANDEX_FOLDER_ID", ""))).strip()
+    generator = getattr(effects, "marketing_image_generate", None)
+    if not folder or not callable(generator):
+        return {"ok": False}
+    return generator(
+        decision_id=str(env.decision.decision_id),
+        correlation_id=str(env.decision.correlation_id),
+        admin_id=str(body.get("user_id") or ""),
+        brief=brief.to_mapping(), payload_key=brief.payload_key,
+    )
+
+
+_ad_media.register_media_provider("yandexart", _yandexart_media_adapter)
+
+
+def _visual_publish(body, facts, arg, done):
+    """Separate explicit owner confirmation, never a side effect of generation."""
+    from application.business_flows import event_series as es
+    from application.business_flows import visual_creatives as vc
+
+    if not _ad_media.media_gen_enabled(_ad_media.media_gen_operator_env(env_str)):
+        return done("🔒 Публикация сгенерированных изображений выключена оператором.")
+    try:
+        key, event_id, stage, slot, confirmed = _ad_media.parse_media_publish(arg)
+    except ValueError as exc:
+        return done(str(exc))
+    generated = vc.replay(facts("event_series@v1")).generated.get(key)
+    if not generated:
+        return done("Изображение с этим ключом не найдено. Создайте его через /visual.")
+    if not confirmed:
+        return done(f"Предпросмотр: {generated['path']} → {event_id} / {stage} / {slot}.\n"
+                    f"Для подтверждения: /visual_publish {key} | {event_id} | {stage} | {slot} | да")
+    state = es.replay(es.expand(facts("event_series@v1")))
+    try:
+        asset, events = es.store_generated_asset(
+            state, event_id=event_id, stage=stage, slot_key=slot, kind="image",
+            stored_reference=str(generated["path"]), source_ref=key,
+        )
+    except (ValueError, RuntimeError) as exc:
+        return done(f"⚠️ Не удалось привязать изображение: {type(exc).__name__}")
+    change = events[0] if len(events) == 1 else (
+        {"step": "batch", "facts": events} if events else None
+    )
+    return done(f"✅ Изображение привязано к событию, ревизия {asset['revision']}.", change)
 
 
 def _sales_ai(send, body, effects, st, arg, *, decision, tenant_id, event_store):
@@ -730,6 +793,7 @@ def _commerce(done, body, st, op, arg, *, tenant_id, event_store):
 def _organization_settings(*, event_store, idempotency_path, body, tenant_id, op, arg, decision_id):
     """Use the existing organization registry, not a second Telegram-owned store."""
     from pathlib import Path
+
     from reliability.idempotency_store import JsonlIdempotencyStore
 
     if not idempotency_path or not str(body.get("business_id") or "").strip():

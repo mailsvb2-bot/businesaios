@@ -42,6 +42,7 @@ from runtime.handler_impl.domains.business_catalog_ops import (
     _sales_inbound,
     _slot_with_offering,
     _visual,
+    _visual_publish,
     channel_reminder_copies,
     notification_preferences,
 )
@@ -620,8 +621,10 @@ def handle_event_series(payload, effects, env, *, event_store, now_ms: int | Non
             return media_op(op, arg, body=body, effects=effects, env=env, facts=facts, done=done, now_ms=now)
         if op == "landing":
             return _landing(body, effects, env, facts, slots, arg, done)
+        if op == "visual_publish":
+            return _visual_publish(body, facts, arg, done)
         if op == "visual":
-            return _visual(body, effects, env, facts, arg, done)
+            return _visual(body, effects, env, facts, arg, done, now_ms=now, event_store=event_store)
         if op in ("offers_on", "offers_off"):
             on = op == "offers_on"
             msg = ( "🔔 Буду присылать предложения после встреч." if on else "🔕 Предложения больше не придут. Вернуть: /offers_on" )
