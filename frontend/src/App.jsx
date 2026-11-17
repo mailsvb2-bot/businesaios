@@ -304,6 +304,8 @@ function latestSuccessfulOperationEvidence(rows, operation) {
     .sort((left, right) => String(right?.recorded_at_utc || "").localeCompare(String(left?.recorded_at_utc || "")))[0] || null;
 }
 
+const FUNNEL_STAGE_LABELS = { discovered: "Новый", engaged: "На связи", need_known: "Потребность ясна", qualified: "Подходит", offer_presented: "Предложение", checkout: "Оплата", won: "Купил" };
+
 function evidenceResourceCount(row) {
   const value = row?.parsed_response?.resource_count ?? row?.transport_response?.resource_count;
   return value === null || value === undefined || !Number.isFinite(Number(value)) ? null : Number(value);
@@ -1304,6 +1306,24 @@ function Workspace({ data, apiBase, businesses, onRestart, onRetryAccess, onSwit
                 {salesSources.available.includes(src.key) && src.key !== salesSources.selected_source ? <button type="button" className="ghost small" onClick={() => void refreshSalesSources(src.key)}>Показать этот источник</button> : null}
               </article>)}
             </div>
+            {selectedSalesSource?.funnel ? (
+              <div className="sales-funnel" aria-label="Воронка продаж">
+                <h3>Воронка: {selectedSalesSource.title}</h3>
+                <div className="sales-metrics">
+                  <article><small>Выиграно</small><strong>{selectedSalesSource.funnel.won}</strong><span>{selectedSalesSource.funnel.win_rate === null ? "закрытых сделок пока нет" : `доля выигрыша ${Math.round(selectedSalesSource.funnel.win_rate * 100)}%`}</span></article>
+                  <article><small>Проиграно</small><strong>{selectedSalesSource.funnel.lost}</strong><span>отказ или проигранная сделка</span></article>
+                  <article><small>Зависло</small><strong>{selectedSalesSource.funnel.stale}</strong><span>{`открыты и без движения дольше ${selectedSalesSource.funnel.stale_after_days} дн. (из ${selectedSalesSource.funnel.open} открытых)`}</span></article>
+                </div>
+                <div className="timeline-list">
+                  {selectedSalesSource.funnel.stage_conversion.map((row) => <article className="timeline-row" key={`${row.from}-${row.to}`}>
+                    <strong>{FUNNEL_STAGE_LABELS[row.from] || row.from} → {FUNNEL_STAGE_LABELS[row.to] || row.to}</strong>
+                    <span>{row.rate === null ? "нет данных" : `${Math.round(row.rate * 100)}% (${row.reached} из ${row.base})`}</span>
+                  </article>)}
+                </div>
+                {selectedSalesSource.funnel.unmapped ? <small className="sales-note">{`Сделок с неизвестной стадией: ${selectedSalesSource.funnel.unmapped} — в воронку не включены, нули не подставляются.`}</small> : null}
+                <small className="sales-note">{selectedSalesSource.funnel.basis === "current_stage" ? "CRM: учитывается текущая стадия каждой сделки." : "Мессенджеры: учитывается самая дальняя стадия, которой достиг каждый лид."}</small>
+              </div>
+            ) : selectedSalesSource ? <p className="empty-state">Для воронки этого источника пока нет подтверждённых сделок со стадиями.</p> : null}
           </div>
         ) : null}
         {!hubspotProvider ? (

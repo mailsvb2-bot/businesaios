@@ -71,4 +71,101 @@ def choose(sources: list[dict[str, Any]], requested: str = "") -> dict[str, Any]
     }
 
 
-__all__ = ["CANON_SALES_CENTER_VIEW", "channel_source", "choose", "crm_source", "latest_read", "resource_count"]
+# --- Funnel (P1-19): one normalized stage ladder over every source ------------
+STAGES = ("discovered", "engaged", "need_known", "qualified", "offer_presented", "checkout", "won")
+STALE_AFTER_MS = 14 * 86_400_000
+# Per-provider stage read model: provider stage key -> normalized stage (or "lost").
+STAGE_MAPS: dict[str, dict[str, str]] = {
+    "channels": {**{s: s for s in STAGES}, "lost": "lost"},
+    "hubspot": {  # HubSpot default sales pipeline stage ids
+        "appointmentscheduled": "engaged", "qualifiedtobuy": "qualified", "presentationscheduled": "offer_presented",
+        "decisionmakerboughtin": "offer_presented", "contractsent": "checkout",
+        "closedwon": "won", "closedlost": "lost",
+    },
+}
+
+
+def normalize_stage(provider_key: str, stage_key: object) -> str | None:
+    return STAGE_MAPS.get(provider_key, {}).get(str(stage_key or "").strip().lower())
+
+
+def _funnel(reached: dict[str, int], *, won: int, lost: int, stale: int, open_: int, unmapped: int, basis: str) -> dict[str, Any]:
+    conv = []
+    for prev, cur in zip(STAGES, STAGES[1:]):
+        base = reached.get(prev, 0)
+        conv.append({"from": prev, "to": cur, "reached": reached.get(cur, 0), "base": base,
+                     "rate": round(reached.get(cur, 0) / base, 4) if base else None})
+    closed = won + lost
+    return {"won": won, "lost": lost, "stale": stale, "open": open_, "unmapped": unmapped,
+            "win_rate": round(won / closed, 4) if closed else None, "stage_conversion": conv,
+            "reached": {s: reached.get(s, 0) for s in STAGES}, "basis": basis,
+            "stale_after_days": STALE_AFTER_MS // 86_400_000}
+
+
+def pipeline_funnel(rows: list[tuple[int, Mapping[str, Any]]], *, now_ms: int) -> dict[str, Any] | None:
+    """Channel pipeline funnel from sales_pipeline@v1 facts: the highest stage each lead really reached."""
+    rank = {s: i for i, s in enumerate(STAGES)}
+    best: dict[str, int] = {}
+    final: dict[str, str] = {}
+    last: dict[str, int] = {}
+    for ts, p in rows:
+        lid, step = str(p.get("lead_id") or ""), p.get("step")
+        if not lid:
+            continue
+        if step in ("lead_added", "lead_inbound"):
+            best.setdefault(lid, rank["engaged"] if step == "lead_inbound" else 0)
+            final.setdefault(lid, "open")
+        if lid not in best:
+            continue
+        last[lid] = max(last.get(lid, 0), int(ts))
+        if step == "lead_inbound":
+            best[lid] = max(best[lid], rank["engaged"])
+        elif step == "lead_event":
+            stage = str(p.get("stage") or "")
+            if stage == "lost":
+                final[lid] = "lost"
+            elif stage in rank:
+                best[lid] = max(best[lid], rank[stage])
+                final[lid] = "won" if stage == "won" else "open"
+        elif step == "lead_reopened":
+            final[lid] = "open"
+    if not best:
+        return None
+    reached = {s: sum(1 for b in best.values() if b >= i) for i, s in enumerate(STAGES)}
+    open_ids = [lid for lid, f in final.items() if f == "open"]
+    return _funnel(reached, won=sum(f == "won" for f in final.values()), lost=sum(f == "lost" for f in final.values()),
+                   stale=sum(1 for lid in open_ids if now_ms - last.get(lid, 0) > STALE_AFTER_MS),
+                   open_=len(open_ids), unmapped=0, basis="highest_stage_reached")
+
+
+def deal_funnel(deals: list[Any], *, provider_key: str, now_ms: int) -> dict[str, Any] | None:
+    """CRM funnel from canonical Deal records (DealRegistry) through the provider stage map.
+
+    Only the current stage is known, so a deal counts as having reached every stage up to it;
+    lost deals count in «lost» but not in stage conversion; unmapped stages are reported, not guessed.
+    """
+    active = [d for d in deals if str(getattr(d, "lifecycle_status", "active")) == "active"]
+    if not active:
+        return None
+    rank = {s: i for i, s in enumerate(STAGES)}
+    reached = dict.fromkeys(STAGES, 0)
+    won = lost = stale = open_ = unmapped = 0
+    for d in active:
+        stage = normalize_stage(provider_key, getattr(d, "stage_key", None))
+        if stage is None:
+            unmapped += 1
+            continue
+        if stage == "lost":
+            lost += 1
+            continue
+        for s in STAGES[: rank[stage] + 1]:
+            reached[s] += 1
+        if stage == "won":
+            won += 1
+        else:
+            open_ += 1
+            stale += int(now_ms - int(getattr(d, "updated_at_ms", 0) or 0) > STALE_AFTER_MS)
+    return _funnel(reached, won=won, lost=lost, stale=stale, open_=open_, unmapped=unmapped, basis="current_stage")
+
+
+__all__ = ["CANON_SALES_CENTER_VIEW", "STAGE_MAPS", "deal_funnel", "normalize_stage", "pipeline_funnel", "channel_source", "choose", "crm_source", "latest_read", "resource_count"]

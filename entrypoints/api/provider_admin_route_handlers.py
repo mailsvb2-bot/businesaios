@@ -111,11 +111,26 @@ class ProviderAdminRouteHandlers:
         rows = [] if self.customer_event_store is None else flow_rows(self.customer_event_store, tenant_id=tenant_id, event_type='sales_pipeline@v1')
         st = sales.replay([payload for _, payload in rows])
         connected = [str(p.get('provider_key')) for p in catalog if p.get('connected') and p.get('provider_key') in keys['channels']]
-        sources = [sales_center.channel_source(leads=st.leads, last_fact_ms=rows[-1][0] if rows else None, connected_channels=connected)]
+        import time
+        now = int(time.time() * 1000)
+        sources = [{**sales_center.channel_source(leads=st.leads, last_fact_ms=rows[-1][0] if rows else None, connected_channels=connected),
+                    'funnel': sales_center.pipeline_funnel(rows, now_ms=now)}]
         for provider in (p for p in catalog if p.get('provider_key') in keys['crm']):
             history = list(self.list_provider_sync_history(tenant_id=tenant_id, business_id=business_id, provider_key=str(provider['provider_key']), limit=50).get('history') or []) if provider.get('connected') else []
-            sources.append(sales_center.crm_source(provider=provider, history=history))
+            sources.append({**sales_center.crm_source(provider=provider, history=history),
+                            'funnel': self._deal_funnel(tenant_id=tenant_id, business_id=business_id, provider_key=str(provider['provider_key']), now_ms=now) if provider.get('connected') else None})
         return {'tenant_id': tenant_id, 'business_id': business_id, **sales_center.choose(sources, str(requested or '').strip())}
+    def _deal_funnel(self, *, tenant_id: str, business_id: str, provider_key: str, now_ms: int) -> dict[str, Any] | None:
+        """CRM funnel over canonical Deal facts (DealRegistry projection) via the provider stage map."""
+        from application.business_flows import sales_center
+        from application.deal.registry import DealProjector
+        if self.customer_event_store is None:
+            return None
+        try:
+            deals = list(DealProjector(self.customer_event_store).list_for_business(tenant_id=tenant_id, business_id=business_id))
+        except Exception:
+            return None
+        return sales_center.deal_funnel(deals, provider_key=provider_key, now_ms=now_ms)
     def _customer_sales(self, *, tenant_id: str, customer: Mapping[str, Any]) -> dict[str, Any]:
         import time
 
