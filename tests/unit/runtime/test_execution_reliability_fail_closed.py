@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass
+from datetime import UTC
 from types import SimpleNamespace
 
 import pytest
@@ -219,13 +220,13 @@ def test_reliability_checkpoint_failure_blocks_already_claimed_success() -> None
 def test_stable_telegram_update_key_recovers_only_before_dispatch(monkeypatch, tmp_path, backend, dispatch_started) -> None:
     """Never poison a pre-effect update; never replay ambiguous effects blindly."""
     from contextlib import nullcontext
-    from datetime import datetime, timedelta, timezone
+    from datetime import datetime, timedelta
 
-    from reliability.idempotency_store import InMemoryIdempotencyStore
     from reliability.idempotency_sqlite_backend import SQLiteIdempotencyStore
+    from reliability.idempotency_store import InMemoryIdempotencyStore
     from runtime.execution import executor_trace_runtime as trace_runtime
 
-    now = datetime(2026, 11, 17, tzinfo=timezone.utc)
+    now = datetime(2026, 11, 17, tzinfo=UTC)
     store = InMemoryIdempotencyStore() if backend == "memory" else SQLiteIdempotencyStore(tmp_path / "inbox-reliability.sqlite3")
     key = IdempotencyKey(
         tenant_id="tenant-a", namespace="runtime", operation="execute",
@@ -297,8 +298,8 @@ def test_stable_telegram_update_key_recovers_only_before_dispatch(monkeypatch, t
 
 
 def test_completed_update_replay_skips_dispatch() -> None:
-    from runtime.safety import verified_inbound_reply_scope
     from core.safety.controls.action_budget.models import issue_verified_update_idempotency_key
+    from runtime.safety import verified_inbound_reply_scope
 
     class AlreadyCompleted:
         def reserve(self, env):
@@ -382,14 +383,14 @@ def test_pre_effect_dispatch_failure_can_retry_after_lease_without_double_effect
     monkeypatch, tmp_path, backend
 ):
     from contextlib import nullcontext
-    from datetime import datetime, timedelta, timezone
+    from datetime import datetime, timedelta
 
-    from reliability.idempotency_store import InMemoryIdempotencyStore
     from reliability.idempotency_sqlite_backend import SQLiteIdempotencyStore
+    from reliability.idempotency_store import InMemoryIdempotencyStore
     from runtime.execution import executor_trace_runtime as trace_runtime
     from runtime.execution.executor_stages import PreEffectDispatchError
 
-    now = datetime(2026, 11, 17, tzinfo=timezone.utc)
+    now = datetime(2026, 11, 17, tzinfo=UTC)
     store = (InMemoryIdempotencyStore() if backend == "memory"
              else SQLiteIdempotencyStore(tmp_path / "pre-effect.sqlite3"))
     key = IdempotencyKey(tenant_id="tenant-a", namespace="runtime",
