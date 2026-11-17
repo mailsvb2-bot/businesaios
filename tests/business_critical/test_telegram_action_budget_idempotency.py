@@ -1,3 +1,7 @@
+from concurrent.futures import ThreadPoolExecutor
+import pytest
+from runtime.platform.safety_action_budget_ledger import PlatformSqliteActionBudgetLedger
+
 from types import SimpleNamespace
 
 import runtime.safety_controls as safety
@@ -88,9 +92,6 @@ def test_financial_action_remains_blocked_when_budget_is_exhausted():
     assert result.reason == "action_budget_exceeded"
 
 
-from concurrent.futures import ThreadPoolExecutor
-import pytest
-from runtime.platform.safety_action_budget_ledger import PlatformSqliteActionBudgetLedger
 
 
 def test_sqlite_action_budget_retry_is_atomic_and_preserves_existing_totals(tmp_path):
