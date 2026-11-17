@@ -11,7 +11,7 @@ from runtime.decision import DecisionEnvelope
 from runtime.execution.context import executor_context
 from runtime.execution.executor_entrypoint_bundle import build_executor_entrypoint_bundle
 from runtime.execution.executor_result import ExecutionResult
-from runtime.execution.executor_stages import preflight_and_verify
+from runtime.execution.executor_stages import PreEffectDispatchError, preflight_and_verify
 from runtime.execution.governance_runtime import GovernanceExecutionBlocked
 from runtime.execution.operational_budget_runtime import OperationalBudgetBlocked
 from runtime.experiments.hooks import (
@@ -224,7 +224,7 @@ def execute_core_flow(*, executor, env: DecisionEnvelope, depth: int, timescale,
                 # transition instead of poisoning the stable inbox update key
                 # with a terminal FAILED record. Once dispatch has started,
                 # the outcome can be ambiguous and remains fail-closed.
-                if dispatch_started:
+                if dispatch_started and not isinstance(exc, PreEffectDispatchError):
                     reliability.mark_failed(env, reason=f'runtime_execute:{type(exc).__name__}')
                 reliability.append_checkpoint(
                     env,

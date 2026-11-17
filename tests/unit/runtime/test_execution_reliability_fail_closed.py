@@ -376,3 +376,96 @@ def test_live_idempotency_lease_does_not_ack_telegram_inbox() -> None:
     assert result.ok is False
     assert result.output["status"] == "already_claimed"
     assert result.error == "idempotency_resolution:rejected_in_progress"
+
+@pytest.mark.parametrize("backend", ["memory", "sqlite"])
+def test_pre_effect_dispatch_failure_can_retry_after_lease_without_double_effect(
+    monkeypatch, tmp_path, backend
+):
+    from contextlib import nullcontext
+    from datetime import datetime, timedelta, timezone
+
+    from reliability.idempotency_store import InMemoryIdempotencyStore
+    from reliability.idempotency_sqlite_backend import SQLiteIdempotencyStore
+    from runtime.execution import executor_trace_runtime as trace_runtime
+    from runtime.execution.executor_stages import PreEffectDispatchError
+
+    now = datetime(2026, 11, 17, tzinfo=timezone.utc)
+    store = (InMemoryIdempotencyStore() if backend == "memory"
+             else SQLiteIdempotencyStore(tmp_path / "pre-effect.sqlite3"))
+    key = IdempotencyKey(tenant_id="tenant-a", namespace="runtime",
+                         operation="execute", key="telegram:verified-update-43")
+    assert store.reserve(key=key, owner_id="runtime-executor", now=now).resolution is IdempotencyResolution.ACCEPTED
+
+    class Reliability:
+        def mark_failed(self, *_args, **_kwargs):
+            raise AssertionError("no effect was entered; never mark terminal FAILED")
+
+        def append_checkpoint(self, *_args, **_kwargs):
+            pass
+
+    class Executor:
+        _reliability = Reliability()
+        _events = None
+        _execution_trace_store = None
+
+        @staticmethod
+        def _safe_dict(value):
+            return dict(value or {})
+
+        @staticmethod
+        def _tenant_runtime_context(**kwargs):
+            return nullcontext()
+
+        @staticmethod
+        def _apply_reliability_gate(_env):
+            return None
+
+        @staticmethod
+        def _enforce_runtime_budget_and_blast_radius(_env):
+            return None
+
+        @staticmethod
+        def _dispatch(_env, *, depth, enqueue):
+            raise PreEffectDispatchError("pre_effect_dispatch_failed")
+
+    monkeypatch.setattr(trace_runtime, "execution_span", lambda **kwargs: nullcontext())
+    monkeypatch.setattr(trace_runtime, "record_execution_outcome", lambda **kwargs: None)
+    env = _Env(_Decision(payload={"tenant_id": "tenant-a", "user_id": "4001",
+                                   "idempotency_key": key.key}))
+
+    with pytest.raises(PreEffectDispatchError, match="pre_effect"):
+        trace_runtime.execute_core_flow(
+            executor=Executor(), env=env, depth=0, timescale=SimpleNamespace(value="instant"),
+            preflight_fn=lambda **kwargs: None,
+        )
+
+    assert store.get(key=key).state is IdempotencyState.IN_PROGRESS
+    assert store.reserve(key=key, owner_id="runtime-executor", now=now + timedelta(seconds=1)).resolution is IdempotencyResolution.REJECTED_IN_PROGRESS
+    assert store.reserve(key=key, owner_id="runtime-executor", now=now + timedelta(seconds=301)).resolution is IdempotencyResolution.ACCEPTED
+
+
+def test_pre_effect_dispatch_wraps_readonly_lookup_failure_without_invoking_handler():
+    from runtime.execution.executor_stages import PreEffectDispatchError, dispatch_effects
+
+    called = []
+
+    class Executor:
+        _outbox = None
+
+        @staticmethod
+        def _extract_ck(_snapshot_id):
+            raise OSError("pre-handler world projection unavailable")
+
+        class _Handlers:
+            @staticmethod
+            def dispatch(*args):
+                called.append(args)
+                raise AssertionError("must never execute")
+
+        _handlers = _Handlers()
+
+    env = _Env(_Decision(payload={"tenant_id": "tenant-a"}))
+    env.decision.snapshot_id = "world-1"
+    with pytest.raises(PreEffectDispatchError, match="pre_effect"):
+        dispatch_effects(executor=Executor(), env=env, depth=0, enqueue=True)
+    assert not called

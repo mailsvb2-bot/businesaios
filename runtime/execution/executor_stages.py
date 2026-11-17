@@ -158,8 +158,21 @@ def _review_product_capability(*, executor: Any, env: Any) -> None:
 
 
 
+class PreEffectDispatchError(RuntimeError):
+    """Execution never entered the handler/effect boundary; lease can expire.
+
+    Never use this for an exception raised by an effect: its outcome may be
+    ambiguous, and automatic replay could duplicate a real-world action.
+    """
+
+
 def dispatch_effects(*, executor: Any, env: Any, depth: int, enqueue: bool):
-    ck = executor._extract_ck(str(env.decision.snapshot_id))
+    # No queue mutation or external effect has occurred at this point.
+    # Retrying is safe only if this initial read-only lookup fails.
+    try:
+        ck = executor._extract_ck(str(env.decision.snapshot_id))
+    except Exception as exc:
+        raise PreEffectDispatchError("pre_effect_dispatch_failed") from exc
     queue_metadata: dict[str, Any] = {}
     if enqueue:
         enqueue_once(executor._outbox, decision=env.decision)
