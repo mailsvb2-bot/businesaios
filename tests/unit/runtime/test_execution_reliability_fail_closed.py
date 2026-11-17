@@ -215,16 +215,18 @@ def test_reliability_checkpoint_failure_blocks_already_claimed_success() -> None
 
 
 @pytest.mark.parametrize("dispatch_started", [False, True])
-def test_stable_telegram_update_key_recovers_only_before_dispatch(monkeypatch, dispatch_started) -> None:
+@pytest.mark.parametrize("backend", ["memory", "sqlite"])
+def test_stable_telegram_update_key_recovers_only_before_dispatch(monkeypatch, tmp_path, backend, dispatch_started) -> None:
     """Never poison a pre-effect update; never replay ambiguous effects blindly."""
     from contextlib import nullcontext
     from datetime import datetime, timedelta, timezone
 
     from reliability.idempotency_store import InMemoryIdempotencyStore
+    from reliability.idempotency_sqlite_backend import SQLiteIdempotencyStore
     from runtime.execution import executor_trace_runtime as trace_runtime
 
     now = datetime(2026, 11, 17, tzinfo=timezone.utc)
-    store = InMemoryIdempotencyStore()
+    store = InMemoryIdempotencyStore() if backend == "memory" else SQLiteIdempotencyStore(tmp_path / "inbox-reliability.sqlite3")
     key = IdempotencyKey(
         tenant_id="tenant-a", namespace="runtime", operation="execute",
         key="telegram:verified-update-42",
