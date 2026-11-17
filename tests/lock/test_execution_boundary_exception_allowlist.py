@@ -18,7 +18,7 @@ ALLOWED = {
     ('runtime/execution/executor_trace_runtime.py', 59): 'best_effort_runtime_trace',
     ('runtime/execution/executor_trace_runtime.py', 136): 'fail_closed_executor_exception_reraise',
     ('runtime/execution/executor_trace_runtime.py', 212): 'fail_closed_core_flow_reraise',
-    ('runtime/execution/executor_trace_runtime.py', 229): 'best_effort_secondary_checkpoint',
+    ('runtime/execution/executor_trace_runtime.py', 235): 'best_effort_secondary_checkpoint',
     ('runtime/execution/world_model_pin_runtime.py', 42): 'best_effort_pin_check_event',
     ('execution/evidence_persistence_reliability.py', 127): 'best_effort_secondary_failure_marker',
     ('execution/evidence_persistence_reliability.py', 245): 'fail_closed_persistence_reraise',
