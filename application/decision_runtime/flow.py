@@ -7,11 +7,7 @@ from typing import Any
 from application.decision_runtime.envelope_builder import bind_product_metadata, build_decision_envelope
 from application.decision_state.world_model_metadata import attach_world_model_metadata
 from core.ai.action_ranking import OBJECTIVE_DIMENSIONS
-from core.safety.controls.action_budget.models import (
-    is_routine_reply,
-    issue_verified_reply,
-    issue_verified_update_idempotency_key,
-)
+from core.safety.controls.action_budget.models import ( is_routine_reply, issue_verified_reply, issue_verified_update_idempotency_key, )
 
 
 def _mapping(value: object) -> dict[str, Any]:
@@ -45,24 +41,15 @@ def _finite_number(value: object) -> float | None:
 
 
 def _world_model_meta_from_payload(payload: Mapping[str, Any]) -> dict[str, Any]:
-    return _mapping(payload.get("world_model_meta")) or _mapping(
-        _mapping(payload.get("meta")).get("world_model_meta")
-    )
+    return _mapping(payload.get("world_model_meta")) or _mapping( _mapping(payload.get("meta")).get("world_model_meta") )
 
 
-def _decision_contract_v2_seed(
-    *,
-    state: Any,
-    out: Any,
-    payload: Mapping[str, Any],
-    policy_id: str,
-) -> dict[str, Any]:
+def _decision_contract_v2_seed( *, state: Any, out: Any, payload: Mapping[str, Any], policy_id: str, ) -> dict[str, Any]:
     state_meta = _state_meta(state)
     ranking = _mapping(getattr(out, "ranking", {}) or {})
     decision_context = _mapping(getattr(out, "_decision_context", {}) or {})
     alternatives_raw = decision_context.get("alternatives", ranking.get("_decision_alternatives"))
-    alternatives = (
-        tuple(dict(item) for item in alternatives_raw if isinstance(item, Mapping))
+    alternatives = ( tuple(dict(item) for item in alternatives_raw if isinstance(item, Mapping))
         if isinstance(alternatives_raw, list | tuple)
         else None
     )
@@ -73,10 +60,7 @@ def _decision_contract_v2_seed(
     world_model_meta = _world_model_meta_from_payload(payload)
     confidence = _finite_number(payload.get("confidence"))
     expected_value = _finite_number(payload.get("expected_value"))
-    objective_projection = {
-        dimension: _finite_number(ranking.get(f"objective:{dimension}"))
-        for dimension in OBJECTIVE_DIMENSIONS
-    }
+    objective_projection = { dimension: _finite_number(ranking.get(f"objective:{dimension}")) for dimension in OBJECTIVE_DIMENSIONS }
     if any(value is None for value in objective_projection.values()):
         objective_projection = None
     risk: Any = payload.get("risk")
@@ -84,17 +68,14 @@ def _decision_contract_v2_seed(
         risk = {"risk_penalty": risk_penalty}
 
     baseline = state_meta.get("do_nothing_baseline")
-    uncertainties = [
-        f"{name}:UNKNOWN" for name, value in (
-            ("alternatives", alternatives), ("confidence", confidence),
+    uncertainties = [ f"{name}:UNKNOWN" for name, value in ( ("alternatives", alternatives), ("confidence", confidence),
             ("expected_value", expected_value), ("objective_vector", objective_projection),
             ("risk", risk), ("do_nothing_baseline", baseline),
         ) if value is None
     ]
 
     product = _mapping(state.get("product") if isinstance(state, Mapping) else getattr(state, "product", {}))
-    business_id = str(
-        payload.get("business_id") or product.get("business_id") or state_meta.get("business_id") or "UNKNOWN"
+    business_id = str( payload.get("business_id") or product.get("business_id") or state_meta.get("business_id") or "UNKNOWN"
     ).strip() or "UNKNOWN"
     goal_id = str(payload.get("goal_id") or _mapping(payload.get("meta")).get("canonical_goal_id") or "").strip() or None
     model_profile_raw = state_meta.get("model_profile")
@@ -106,20 +87,14 @@ def _decision_contract_v2_seed(
         constraint_view = canonical_goal_context.get("constraints")
     deadline = canonical_goal.get("deadline_at_ms")
 
-    return {
-        "business_id": business_id,
-        "goal_id": goal_id,
+    return { "business_id": business_id, "goal_id": goal_id,
         "world_state_version": str(world_model_meta.get("semantic_state_id") or "UNKNOWN"),
         "agent_id": "PENDING_ISSUER_BINDING",
         "model_profile": model_profile,
         "decision_strategy": str(policy_id or "UNKNOWN"),
         "alternatives": alternatives,
         "selected_option": selection,
-        "rationale": {
-            "evidence": list(world_model_meta.get("evidence_refs") or ()),
-            "constraints": constraint_view,
-            "alternatives": (
-                None
+        "rationale": { "evidence": list(world_model_meta.get("evidence_refs") or ()), "constraints": constraint_view, "alternatives": ( None
                 if alternatives is None
                 else [str(item.get("option_id") or "") for item in alternatives]
             ),
@@ -138,20 +113,11 @@ def _decision_contract_v2_seed(
     }
 
 
-def build_payload(
-    *,
-    state,
-    out,
-    pinned_world_model_meta: dict,
-    tenant_id: str | None,
-    product_id: str | None,
-    domain: str | None,
+def build_payload( *, state, out, pinned_world_model_meta: dict, tenant_id: str | None, product_id: str | None, domain: str | None,
     product_version: str | None,
     actor_id: str | None = None,
 ):
-    tagged = bind_product_metadata(
-        payload=dict(out.payload) if isinstance(out.payload, dict) else {},
-        tenant_id=tenant_id,
+    tagged = bind_product_metadata( payload=dict(out.payload) if isinstance(out.payload, dict) else {}, tenant_id=tenant_id,
         product_id=product_id,
         domain=domain,
         product_version=product_version,
@@ -174,8 +140,7 @@ def build_payload(
     chat_id = str(session.get("chat_id") or session.get("messaging_chat_id") or session.get("telegram_chat_id") or "")
     # Preserve existing verified reply sealing. For unverified messages never
     # silently fall through to the Telegram transport on a non-Telegram ingress.
-    if (getattr(out, "action", "") == "send_message@v1"
-            and session.get("source") in {"messaging", "customer_bot"} and channel):
+    if (getattr(out, "action", "") == "send_message@v1" and session.get("source") in {"messaging", "customer_bot"} and channel):
         if payload.get("channel") not in (None, "", channel):
             raise RuntimeError("DECISION_CHANNEL_MISMATCH")
         payload["channel"] = channel
@@ -184,11 +149,9 @@ def build_payload(
             raise RuntimeError("DECISION_CHAT_ID_MISMATCH")
         if chat.lstrip("-").isdigit():
             payload["chat_id"] = int(chat)
-    if (getattr(out, "action", "") == "send_message@v1"
-            and session.get("source") in {"messaging", "customer_bot"}
+    if (getattr(out, "action", "") == "send_message@v1" and session.get("source") in {"messaging", "customer_bot"}
             and state_user is not None and state_tenant is not None):
-        proof = issue_verified_reply(
-            tenant_id=str(state_tenant), channel=channel, user_id=str(state_user),
+        proof = issue_verified_reply( tenant_id=str(state_tenant), channel=channel, user_id=str(state_user),
             update_id=event_id, chat_id=chat_id, text=str(payload.get("text") or ""),
             bot_id=bot_id,
         )
@@ -230,8 +193,7 @@ def build_payload(
     if meta_block:
         payload["meta"] = meta_block
     if channel == "telegram" and state_user is not None and state_tenant is not None and type(event_id) is int:
-        idempotency_key = issue_verified_update_idempotency_key(
-            tenant_id=str(state_tenant), channel=channel, user_id=str(state_user),
+        idempotency_key = issue_verified_update_idempotency_key( tenant_id=str(state_tenant), channel=channel, user_id=str(state_user),
             update_id=event_id, chat_id=chat_id, bot_id=bot_id,
         )
         if idempotency_key:
@@ -240,22 +202,11 @@ def build_payload(
 
 
 def build_envelope(*, state, out, payload: dict, policy_id: str, keyring, issuer_id: str, ttl_ms: int, action_schema_version: int, envelope_version: int):
-    contract_v2 = (
-        None
-        if int(envelope_version) < 2
-        else _decision_contract_v2_seed(
-            state=state,
-            out=out,
-            payload=payload,
+    contract_v2 = ( None if int(envelope_version) < 2 else _decision_contract_v2_seed( state=state, out=out, payload=payload,
             policy_id=policy_id,
         )
     )
-    return build_decision_envelope(
-        state=state,
-        action=out.action,
-        payload=payload,
-        policy_id=policy_id,
-        keyring=keyring,
+    return build_decision_envelope( state=state, action=out.action, payload=payload, policy_id=policy_id, keyring=keyring,
         issuer_id=issuer_id,
         ttl_ms=ttl_ms,
         action_schema_version=int(action_schema_version),
