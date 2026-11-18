@@ -47,4 +47,4 @@ def test_clientplatform_partner_menu_is_real_command_owner():
     assert BUSINESS_FLOW_COMMANDS["/partners"][:2] == ("partners@v1", "rank")
     assert BUSINESS_FLOW_COMMANDS["/partner_quotes"][:2] == ("partners@v1", "quotes")
     buttons = telegram_menu(role="owner", is_admin=True)["inline_keyboard"]
-    assert any(button["callback_data"] == "cp:section:partners" for row in buttons for button in row)
+    assert any(button.get("callback_data") == "cp:section:partners" for row in buttons for button in row)
