@@ -32,7 +32,7 @@ def load_user_bundle(*, event_store: Any, tenant_id: str, user_id: str, event_wa
         except Exception:
             realtime_state = {}
 
-    pricing_suggestions = load_pricing_suggestions(event_store, tenant_id=str(tenant_id))
+    pricing_suggestions = load_pricing_suggestions(event_store, tenant_id=str(tenant_id), product_id=product_id)
     settings, city, tariff, moods = load_user_profile(event_store, tenant_id=str(tenant_id), user_id=str(user_id))
 
     try:
