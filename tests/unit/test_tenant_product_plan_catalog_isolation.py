@@ -24,13 +24,12 @@ def test_plan_catalog_is_explicitly_scoped_and_fails_closed(tmp_path, monkeypatc
     }), encoding="utf-8")
     monkeypatch.setenv("TENANT_ID", "tenant_one")
     monkeypatch.setenv("PRODUCT_ID", "organization_platform")
-    assert catalog.plan_by_id(2)["plan_code"] == "workspace_month"
-    assert catalog.plan_by_id(1) is None
-    monkeypatch.setenv("TENANT_ID", "tenant_two")
     assert catalog.active_plans() == []
-    monkeypatch.setenv("TENANT_ID", "tenant_one")
-    monkeypatch.setenv("PRODUCT_ID", "metrotherapy")
-    assert catalog.active_plans() == []
+    scope = {"tenant_id": "tenant_one", "product_id": "organization_platform"}
+    assert catalog.plan_by_id(2, **scope)["plan_code"] == "workspace_month"
+    assert catalog.plan_by_id(1, **scope) is None
+    assert catalog.active_plans(tenant_id="tenant_two", product_id="organization_platform") == []
+    assert catalog.active_plans(tenant_id="tenant_one", product_id="metrotherapy") == []
 
 
 def test_catalog_rejects_mismatched_ownership(tmp_path, monkeypatch):
@@ -41,7 +40,7 @@ def test_catalog_rejects_mismatched_ownership(tmp_path, monkeypatch):
     scoped.parent.mkdir(parents=True)
     scoped.write_text(json.dumps({"tenant_id": "tenant_other", "product_id": "organization_platform",
                                   "plans": [{"plan_id": 1}]}), encoding="utf-8")
-    assert catalog.load_plans() == []
+    assert catalog.load_plans(tenant_id="tenant_one", product_id="organization_platform") == []
 
 
 def test_legacy_therapy_keyboard_never_offers_therapy_checkout():
