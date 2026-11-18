@@ -497,7 +497,16 @@ def _order_status(purchases, tenant, business, order_id, *, checkout=None):
                 tenant_id=tenant, business_id=business, invoice_id=invoice.invoice_id,
                 provider_name=saved.provider_name, external_reference=saved.external_reference,
             )
+    from config.env_flags import env_bool
+    story = {}
+    if env_bool("BAI_ORDER_PAYMENT_STORY_ENABLED", False):
+        opened = checkout is not None and checkout._saved(
+            tenant_id=tenant, business_id=business, order_id=order_id) is not None
+        story = {"story": _order_story(order_status=order.lifecycle_status.value, invoice_status=invoice.status.value,
+                                       amount_minor=invoice.total_minor, paid_minor=invoice.paid_minor,
+                                       checkout_opened=opened, provider_verified=verified)}
     return {
+        **story,
         "order_id": order_id, "status": order.lifecycle_status.value,
         "invoice_id": invoice.invoice_id, "invoice_status": invoice.status.value,
         "amount_minor": invoice.total_minor, "paid_minor": invoice.paid_minor,
@@ -506,5 +515,33 @@ def _order_status(purchases, tenant, business, order_id, *, checkout=None):
         "program_id": link["program_id"],
         "provider_verified": verified,
     }
+
+def _order_story(*, order_status: str, invoice_status: str, amount_minor: int, paid_minor: int,
+                 checkout_opened: bool, provider_verified: bool) -> dict:
+    """Read-only canonical order+invoice+PSP history; unverified paid invoices are not revenue."""
+    issued = invoice_status in {"issued", "partially_paid", "paid", "void", "credited", "uncollectible"}
+    steps = [
+        ("inquiry", True), ("order_created", True), ("invoice_issued", issued),
+        ("checkout_opened", bool(checkout_opened)), ("payment_received", paid_minor > 0),
+        ("paid_in_full", invoice_status == "paid" and paid_minor == amount_minor),
+        ("provider_verified", bool(provider_verified)),
+    ]
+    verified_full = bool(provider_verified) and invoice_status == "paid" and amount_minor > 0 and paid_minor == amount_minor
+    if invoice_status in {"void", "credited", "uncollectible"} or order_status not in {"active", "fulfilled"}:
+        state = "closed_without_revenue" if not provider_verified else "reversed"
+    elif verified_full:
+        state = "revenue_confirmed"
+    elif invoice_status == "paid":
+        state = "needs_reconciliation"
+    elif paid_minor > 0:
+        state = "partially_paid"
+    elif checkout_opened:
+        state = "awaiting_payment"
+    else:
+        state = "awaiting_checkout" if issued else "draft"
+    return {"state": state, "steps": [{"step": name, "done": done} for name, done in steps],
+            "counts_as_revenue": bool(provider_verified) and state == "revenue_confirmed",
+            "ledger_source": "billing.invoice_registry"}
+
 
 __all__ = ["register_business_workspace_commercial_routes", "CANON_PHASE18_COMMERCIAL_OWNER_API"]
