@@ -225,6 +225,51 @@ def handle_partners(payload, effects, env, *, event_store):
         [{"text": "🧾 Коммерческие предложения", "callback_data": "cp:partner:quotes"}],
         [{"text": "⬅️ Главное меню", "callback_data": "menu_main"}],
     ]}
+    if op == "ai_draft":
+        # Owner-initiated draft only; no partner send, no price acceptance.
+        from application.business_flows import admin as admin_flows
+        from application.business_flows import sales_ai as sales_ai_policy
+        from config.env import env_str
+
+        ref, sep, incoming = arg.partition("|")
+        ref, incoming = ref.strip(), incoming.strip()
+        if ref not in known or not sep or not incoming:
+            return send_tracked(body, effects, env,
+                                text="Формат: /partner_ai ID | сообщение партнёра",
+                                event_type=None, event_payload=None, reply_markup=partner_markup)
+        settings = admin_flows.replay(flow_payloads(
+            event_store, tenant_id=tenant_id, event_type="business_admin@v1"
+        )).settings
+        provider = env_str("MARKETING_LLM_PROVIDER", env_str("LLM_PROVIDER", "")).strip().casefold()
+        try:
+            mode = sales_ai_policy.egress_permit(settings, provider)
+            clean, redacted = sales_ai_policy.prepare_text(incoming, mode=mode)
+        except PermissionError as exc:
+            return send_tracked(body, effects, env, text=f"🔒 {exc}",
+                                event_type=None, event_payload=None, reply_markup=partner_markup)
+        candidate = known[ref]
+        system = (
+            "Ты помощник владельца бизнеса по партнёрствам. Подготовь один краткий "
+            "вежливый черновик ответа на русском языке. Никогда не обещай деньги, "
+            "процент, скидку, публикацию или заключение сделки. Не утверждай, "
+            "что цена одобрена. Если спрашивают о цене, запроси точные условия "
+            "и скажи, что решение принимает владелец. Не выдумывай факты."
+        )
+        result = effects.marketing_llm_complete(
+            decision_id=str(env.decision.decision_id),
+            correlation_id=str(env.decision.correlation_id),
+            admin_id=str(body.get("user_id") or "owner"),
+            system=system,
+            user=f"Кандидат: {candidate.name[:120]}\\nВходящее сообщение: {clean[:1000]}",
+        )
+        if not isinstance(result, dict) or not result.get("ok"):
+            message = "⚠️ ИИ-провайдер недоступен. Письмо не отправлено."
+        else:
+            draft_text = str(result.get("text") or "").strip()[:2500]
+            message = ("🤖 Черновик ответа партнёру (НЕ отправлен):\\n\\n" + draft_text
+                       + ("\\n\\nКонтакты скрыты перед ИИ." if redacted else "")) if draft_text else "⚠️ ИИ не вернул текст."
+        return send_tracked(body, effects, env, text=message,
+                            event_type=None, event_payload=None, reply_markup=partner_markup)
     if op in {"quote", "quotes", "approve_quote", "reject_quote"}:
         from application.partner import commercial_terms as ct
         try:
