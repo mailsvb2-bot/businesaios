@@ -189,6 +189,7 @@ def register_public_api_routes(
             if challenge is None:
                 raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail='provider_webhook_challenge_denied')
             return Response(content=challenge, media_type='text/plain')
+    event_store = None
     event_landing_registry = None
     if dependency_container is not None and getattr(dependency_container, 'api_idempotency_store', None) is not None:
         event_store = dependency_container.canonical_business_event_store()
