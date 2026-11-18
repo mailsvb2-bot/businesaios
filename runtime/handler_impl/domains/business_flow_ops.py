@@ -220,6 +220,11 @@ def handle_partners(payload, effects, env, *, event_store):
             return send_tracked(body, effects, env, text=text, event_type="partners@v1", event_payload=change)
     except ValueError as exc:
         return send_tracked(body, effects, env, text=f"🤝 Не получилось: {exc}", event_type=None, event_payload=None)
+    partner_markup = {"inline_keyboard": [
+        [{"text": "🤝 Список партнёров", "callback_data": "cp:partner:rank"}],
+        [{"text": "🧾 Коммерческие предложения", "callback_data": "cp:partner:quotes"}],
+        [{"text": "⬅️ Главное меню", "callback_data": "menu_main"}],
+    ]}
     if op in {"quote", "quotes", "approve_quote", "reject_quote"}:
         from application.partner import commercial_terms as ct
         try:
@@ -250,10 +255,11 @@ def handle_partners(payload, effects, env, *, event_store):
                         "оплата и договор не оформлены." if op == "approve_quote"
                         else "🚫 Предложение отклонено.") if change else "ℹ️ Решение уже учтено."
             return send_tracked(body, effects, env, text=text,
-                                event_type="partners@v1" if change else None, event_payload=change)
+                                event_type="partners@v1" if change else None, event_payload=change,
+                                reply_markup=partner_markup)
         except (ValueError, LookupError) as exc:
             return send_tracked(body, effects, env, text=f"🤝 Не получилось: {exc}",
-                                event_type=None, event_payload=None)
+                                event_type=None, event_payload=None, reply_markup=partner_markup)
     if op in {"campaign", "ref_result"}:
         text, ch = _partner_growth(pt, op, arg, tenant_id, known, flow_payloads(event_store, tenant_id=tenant_id, event_type="partners@v1"))
         return send_tracked(body, effects, env, text=text, event_type="partners@v1" if ch else None, event_payload=ch)
@@ -273,6 +279,7 @@ def handle_partners(payload, effects, env, *, event_store):
         text=head + "\n\n" + ("\n".join(lines) or "Список пуст: /partner_add") + "\n\n🧾 Цены: /partner_quotes · новый черновик: /partner_quote ID | копейки | RUB | условия",
         event_type=None,
         event_payload=None,
+        reply_markup=partner_markup,
     )
 
 

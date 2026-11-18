@@ -37,3 +37,14 @@ def test_quote_flow_is_event_sourced_and_never_sends_to_partner(flow):
     assert "уже учтено" in repeat
     _, rank = flow.run(handle_partners, op="rank")
     assert pid in rank
+
+
+def test_clientplatform_partner_menu_is_real_command_owner():
+    from core.ux.unified_messenger_menu import menu_items, telegram_menu
+    from core.policies.telegram.routes.business_flow_routes import BUSINESS_FLOW_COMMANDS
+    entries = {item.key: item.callback for item in menu_items(role="owner", is_admin=True)}
+    assert entries["partners"] == "cp:section:partners"
+    assert BUSINESS_FLOW_COMMANDS["/partners"][:2] == ("partners@v1", "rank")
+    assert BUSINESS_FLOW_COMMANDS["/partner_quotes"][:2] == ("partners@v1", "quotes")
+    buttons = telegram_menu(role="owner", is_admin=True)["inline_keyboard"]
+    assert any(button["callback_data"] == "cp:section:partners" for row in buttons for button in row)
