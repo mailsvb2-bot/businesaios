@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from pathlib import Path
+
 import pytest
 
 from runtime.boot.actions_catalog import EFFECT_ONLY_ACTIONS
@@ -81,3 +83,53 @@ def test_idempotency_requirement_is_explicit_and_consistent():
             assert spec.requires_idempotency_key is False
         else:
             assert spec.requires_idempotency_key is True
+
+@pytest.mark.lock
+def test_yookassa_webhook_server_has_one_canonical_owner():
+    """Only the sealed client module may own the HTTP server implementation."""
+    root = Path(__file__).resolve().parents[2]
+    canonical = root / "runtime" / "_internal" / "effects_clients" / "yookassa_webhook_server.py"
+    legacy = root / "runtime" / "_internal" / "_effects_impl.py"
+    canonical_source = canonical.read_text(encoding="utf-8")
+    assert "def start_yookassa_webhook_server_in_thread" in canonical_source
+    assert "payment_outbox.enqueue_once" in canonical_source
+    assert "HTTPServer((" in canonical_source
+    legacy_source = legacy.read_text(encoding="utf-8")
+    assert "def start_yookassa_webhook_server_in_thread" not in legacy_source
+
+    allowed_references = {
+        "runtime/_internal/effects_clients/yookassa_webhook_server.py",
+        "runtime/_internal/effects_actions/payments/yookassa.py",
+        "runtime/_internal/effects_actions/payments_actions.py",
+        "runtime/_internal/effects_servers.py",
+        "runtime/boot_impl/telegram_runner.py",
+        "runtime/effects/__init__.py",
+    }
+    references = set()
+    implementation_owners = set()
+    for package in (
+        "application", "canon", "config", "contracts", "core",
+        "crm", "integration_observations", "interfaces", "market_intelligence",
+        "runtime", "scripts",
+    ):
+        package_root = root / package
+        if not package_root.is_dir():
+            continue
+        for source in package_root.rglob("*.py"):
+            try:
+                text = source.read_text(encoding="utf-8")
+            except OSError:
+                continue
+            if "start_yookassa_webhook_server_in_thread" in text:
+                relative = source.relative_to(root).as_posix()
+                references.add(relative)
+                if "payment_outbox.enqueue_once" in text and "HTTPServer((" in text:
+                    implementation_owners.add(relative)
+    assert references == allowed_references, f"unexpected YooKassa server reference: {sorted(references ^ allowed_references)}"
+    assert implementation_owners == {"runtime/_internal/effects_clients/yookassa_webhook_server.py"}
+
+    assert "effects_clients.yookassa_webhook_server" in (root / "runtime/_internal/effects_servers.py").read_text(encoding="utf-8")
+    assert "effects_clients.yookassa_webhook_server" in (root / "runtime/_internal/effects_actions/payments/yookassa.py").read_text(encoding="utf-8")
+    assert "start_webhook_server" in (root / "runtime/_internal/effects_actions/payments_actions.py").read_text(encoding="utf-8")
+    assert "from runtime.effects import start_yookassa_webhook_server_in_thread" in (root / "runtime/boot_impl/telegram_runner.py").read_text(encoding="utf-8")
+    assert "_start_yookassa_webhook_server_in_thread" in (root / "runtime/effects/__init__.py").read_text(encoding="utf-8")
