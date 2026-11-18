@@ -134,10 +134,7 @@ class PlanRateCardItem:
     def billable_units(self, quantity: float) -> float:
         normalized = self.normalized_copy()
         requested = _require_decimal_number("quantity", quantity)
-        included = _require_decimal_number(
-            "included_units",
-            normalized.included_units,
-        )
+        included = _require_decimal_number("included_units", normalized.included_units)
         billable = max(quantity_decimal(0), requested - included)
         return legacy_float(billable, name="billable_units")
 
@@ -145,10 +142,7 @@ class PlanRateCardItem:
         """Return exact sub-minor-unit charge; round only at the ledger boundary."""
         normalized = self.normalized_copy()
         requested = _require_decimal_number("quantity", quantity)
-        included = _require_decimal_number(
-            "included_units",
-            normalized.included_units,
-        )
+        included = _require_decimal_number("included_units", normalized.included_units)
         billable = max(quantity_decimal(0), requested - included)
         unit_price = rate_decimal(normalized.unit_price, name="unit_price")
         return billable * unit_price
