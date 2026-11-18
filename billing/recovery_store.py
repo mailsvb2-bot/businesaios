@@ -9,8 +9,7 @@ from runtime.platform.billing_recovery_store import (
 )
 
 if TYPE_CHECKING:
-    from billing.chargeback_orchestrator import ChargebackCase
-    from billing.recovery_contracts import RefundResult
+    from billing.recovery_contracts import ChargebackCase, RefundResult
 
 
 CANON_BILLING_RECOVERY_STORE = True
@@ -51,7 +50,7 @@ class SqliteChargebackStore(PlatformSqliteChargebackStore):
     """
 
     def __init__(self, *, sqlite_path: str) -> None:
-        from billing.chargeback_orchestrator import ChargebackCase
+        from billing.recovery_contracts import ChargebackCase
 
         super().__init__(sqlite_path=sqlite_path, case_cls=ChargebackCase)
 

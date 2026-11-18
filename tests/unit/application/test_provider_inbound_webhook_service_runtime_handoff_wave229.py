@@ -26,7 +26,7 @@ def test_provider_inbound_webhook_service_runs_inbound_processor_for_accepted_me
         replay_guard=ProviderWebhookReplayGuard(InMemoryIdempotencyStore()),
         inbound_processor=processor,
     )
-    body = b'{"message":{"from":{"id":42},"text":"hello","message_id":9},"update_id":123}'
+    body = b'{"message":{"from":{"id":42},"chat":{"id":42},"text":"hello","message_id":9},"update_id":123}'
     out = service.ingest(provider=provider, tenant_id='t1', business_id='b1', headers={}, body=body, event_key='evt-1', topic='telegram_update', owner_id='provider_admin')
 
     inbound = out.metadata['messaging_inbound_result']
@@ -41,7 +41,7 @@ def test_provider_inbound_webhook_service_does_not_complete_unprocessed_handoff(
     provider = provider_map()['telegram_bot']
     monkeypatch.setattr(ProviderWebhookRuntime, 'verify', lambda self, **kwargs: True)
     service = ProviderInboundWebhookService(webhook_runtime=ProviderWebhookRuntime(None), replay_guard=ProviderWebhookReplayGuard(InMemoryIdempotencyStore()))
-    body = b'{"message":{"from":{"id":42},"text":"hello","message_id":9},"update_id":123}'
+    body = b'{"message":{"from":{"id":42},"chat":{"id":42},"text":"hello","message_id":9},"update_id":123}'
     first = service.ingest(provider=provider, tenant_id='t1', business_id='b1', headers={}, body=body, event_key='evt-unprocessed', topic='telegram_update', owner_id='provider_admin')
     retry = service.ingest(provider=provider, tenant_id='t1', business_id='b1', headers={}, body=body, event_key='evt-unprocessed', topic='telegram_update', owner_id='provider_admin')
     assert first.status == 'accepted' and first.metadata['messaging_handoff'] and not first.metadata['messaging_inbound_result']
@@ -79,7 +79,7 @@ def test_provider_inbound_webhook_projects_one_customer_before_decision_handoff(
         customer_registry=registry,
         conversation_registry=conversations,
     )
-    body = b'{"message":{"from":{"id":42,"username":"anna"},"text":"hello","message_id":9},"update_id":123}'
+    body = b'{"message":{"from":{"id":42,"username":"anna"},"chat":{"id":42},"text":"hello","message_id":9},"update_id":123}'
     first = service.ingest(provider=provider, tenant_id='t1', business_id='b1', headers={}, body=body, event_key='evt-customer', topic='telegram_update', owner_id='provider_admin')
     replay = service.ingest(provider=provider, tenant_id='t1', business_id='b1', headers={}, body=body, event_key='evt-customer', topic='telegram_update', owner_id='provider_admin')
 
@@ -116,7 +116,7 @@ def test_invalid_signature_never_projects_customer(monkeypatch):
         customer_registry=registry,
         conversation_registry=conversations,
     )
-    body = b'{"message":{"from":{"id":42},"text":"hello","message_id":9},"update_id":123}'
+    body = b'{"message":{"from":{"id":42},"chat":{"id":42},"text":"hello","message_id":9},"update_id":123}'
     out = service.ingest(provider=provider, tenant_id='t1', business_id='b1', headers={}, body=body, event_key='evt-invalid', topic='telegram_update', owner_id='provider_admin')
     assert out.status == 'invalid_signature'
     assert list(events.iter_events(tenant_id='t1', start_ms=0)) == []

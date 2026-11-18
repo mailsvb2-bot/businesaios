@@ -60,6 +60,7 @@ def test_line_native_signature_uses_raw_body_and_cannot_downgrade_to_bridge() ->
     provider, vault = provider_map()['line_messaging'], InMemorySecretVault()
     _put(vault, provider, 'webhook_secret', 'bridge-secret')
     _put(vault, provider, 'channel_secret', 'line-channel-secret')
+    _put(vault, provider, 'bot_user_id', 'U1')
     runtime = ProviderWebhookRuntime(vault)
     body = b'{"destination":"U1","events":[{"type":"message","webhookEventId":"evt-line-1","source":{"userId":"U2"},"message":{"id":"m1","type":"text","text":"hello"}}]}'
     signature = base64.b64encode(hmac.new(b'line-channel-secret', body, hashlib.sha256).digest()).decode('ascii')
@@ -68,7 +69,7 @@ def test_line_native_signature_uses_raw_body_and_cannot_downgrade_to_bridge() ->
     assert runtime.verify(provider=provider, tenant_id='tenant-a', business_id='business-a', headers={'X-Line-Signature': signature}, body=body + b' ') is False
     assert runtime.verify(provider=provider, tenant_id='tenant-a', business_id='business-a', headers={'X-BusinessAIOS-Webhook-Secret': 'bridge-secret'}, body=body) is True
     assert runtime.verify(provider=provider, tenant_id='tenant-a', business_id='business-a', headers={'X-Line-Signature': '   ', 'X-BusinessAIOS-Webhook-Secret': 'bridge-secret'}, body=body) is False
-    missing_native = InMemorySecretVault(); _put(missing_native, provider, 'webhook_secret', 'bridge-secret')
+    missing_native = InMemorySecretVault(); _put(missing_native, provider, 'webhook_secret', 'bridge-secret'); _put(missing_native, provider, 'bot_user_id', 'U1')
     assert ProviderWebhookRuntime(missing_native).verify(provider=provider, tenant_id='tenant-a', business_id='business-a', headers={'X-Line-Signature': signature, 'X-BusinessAIOS-Webhook-Secret': 'bridge-secret'}, body=body) is False
 
 
@@ -114,7 +115,7 @@ def test_line_invalid_signature_is_rejected_before_batch_expansion(tmp_path, mon
 def test_line_batch_processes_every_event_and_rebatch_replays_safely(tmp_path, monkeypatch) -> None:
     monkeypatch.setenv('DATA_DIR', str(tmp_path / 'data'))
     provider, vault, processor = provider_map()['line_messaging'], InMemorySecretVault(), _CaptureInboundProcessor()
-    _put(vault, provider, 'webhook_secret', 'bridge-secret'); _put(vault, provider, 'channel_secret', 'line-channel-secret')
+    _put(vault, provider, 'webhook_secret', 'bridge-secret'); _put(vault, provider, 'channel_secret', 'line-channel-secret'); _put(vault, provider, 'bot_user_id', 'BOT')
     service = ProviderInboundWebhookService(webhook_runtime=ProviderWebhookRuntime(vault), replay_guard=ProviderWebhookReplayGuard(InMemoryIdempotencyStore()), inbound_processor=processor, incident_registry=_MemoryIncidents())
     events = [
         {'type': 'message', 'webhookEventId': 'evt-line-1', 'deliveryContext': {'isRedelivery': False}, 'source': {'userId': 'U1'}, 'message': {'id': 'm1', 'type': 'text', 'text': 'one'}},
@@ -144,7 +145,24 @@ def test_line_viber_webhook_identity_uses_vendor_event_ids_for_canonical_idempot
     assert viber == {'topic': 'message', 'source_ref': 'V1', 'resource_id': '991', 'event_key_hint': '991'}
     assert routes.extract(providers['line_messaging'], {}, line_body)['event_key'] == 'evt-line-1'
     batch = json.dumps({'events': [json.loads(line_body)['events'][0], {'type': 'message', 'webhookEventId': 'evt-line-2', 'source': {'groupId': 'G2'}, 'message': {'id': 'm2', 'text': 'two'}}, {'type': 'message', 'webhookEventId': 'evt-line-3', 'source': {'roomId': 'R3'}, 'message': {'id': 'm3', 'text': 'three'}}]}).encode(); batch_routes = routes.extract_many(providers['line_messaging'], {'X-Request-Id': 'callback-1'}, batch)
-    assert tuple(row['event_key'] for row in batch_routes) == ('evt-line-1', 'evt-line-2', 'evt-line-3') and tuple(row['messaging_ingress']['user_id'] for row in batch_routes[1:]) == ('G2', 'R3')
+    assert tuple(row['event_key'] for row in batch_routes) == ('evt-line-1', 'evt-line-2', 'evt-line-3')
+    # LINE groupId/roomId identify the conversation, not the human sender.
+    # Missing source.userId must therefore not become a customer identity.
+    assert tuple(row['messaging_ingress'] for row in batch_routes[1:]) == ({}, {})
+    assert tuple(row['external_user_ref'] for row in batch_routes[1:]) == (None, None)
+    group_with_sender = json.dumps({
+        'events': [{
+            'type': 'message', 'webhookEventId': 'evt-line-group-sender',
+            'source': {'groupId': 'G2', 'userId': 'U2'},
+            'message': {'id': 'm-group', 'text': 'from a member'},
+        }]
+    }).encode()
+    group_route = routes.extract_many(
+        providers['line_messaging'], {}, group_with_sender
+    )[0]
+    assert group_route['messaging_ingress']['user_id'] == 'U2'
+    assert group_route['messaging_ingress']['chat_id'] == 'G2'
+    assert group_route['external_user_ref'] == 'U2'
     assert routes.extract(providers['viber_messaging'], {'X-Request-Id': 'callback-2'}, viber_body)['event_key'] == '991'
 
 

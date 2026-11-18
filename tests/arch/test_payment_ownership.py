@@ -147,3 +147,11 @@ def test_legacy_latest_status_remains_compatibility_read_not_projector_truth() -
     assert "if schema is None:" in text
     assert "Explicitly legacy/non-authoritative chronology" in text
     assert "class PaymentProjector:" in text
+
+
+def test_payment_reconciliation_has_no_unowned_core_execution_path() -> None:
+    # Runtime payment effects are the sole reconciliation writer. These old
+    # pure modules were unused and implemented a second, weaker settlement path.
+    assert not (ROOT / "core/payments/reconcile.py").exists()
+    assert not (ROOT / "core/payments/reconcile_fsm.py").exists()
+    assert (ROOT / "runtime/_internal/effects_actions/payments/reconciliation.py").is_file()
