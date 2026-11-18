@@ -6,7 +6,7 @@ transparent informational route; no donor runtime, second decision owner or send
 from __future__ import annotations
 
 from dataclasses import dataclass
-from urllib.parse import urlsplit
+from urllib import parse
 
 from core.ux.callbacks import CB_ADMIN_MENU, CB_ADS_APPLY_MENU, CB_AUTOPILOT_MENU, CB_MENU_MAIN, CB_SETTINGS_MENU
 
@@ -86,7 +86,7 @@ def validated_onboarding_url(raw: str) -> str:
     if len(value) > 200 or any(c.isspace() for c in value):
         return DEFAULT_ONBOARDING_URL
     try:
-        parts = urlsplit(value)
+        parts = parse.urlsplit(value)
         if (parts.scheme != "https" or not parts.hostname or parts.username is not None
                 or parts.password is not None or parts.query or parts.fragment
                 or parts.port is not None):

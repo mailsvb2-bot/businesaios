@@ -171,7 +171,7 @@ def dispatch_effects(*, executor: Any, env: Any, depth: int, enqueue: bool):
     # Retrying is safe only if this initial read-only lookup fails.
     try:
         ck = executor._extract_ck(str(env.decision.snapshot_id))
-    except Exception as exc:
+    except (OSError, RuntimeError, TypeError, ValueError, LookupError) as exc:
         raise PreEffectDispatchError("pre_effect_dispatch_failed") from exc
     queue_metadata: dict[str, Any] = {}
     if enqueue:
