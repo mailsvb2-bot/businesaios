@@ -462,6 +462,46 @@ def provider_channel_live_readiness(*, event_store: Any, tenant_id: str, busines
     return result
 
 
+def unified_integration_statuses(*, provider_rows: list[dict[str, Any]], channel_readiness: dict[str, dict[str, Any]],
+                                 ad_connectors: dict[str, dict[str, Any]]) -> list[dict[str, Any]]:
+    """Read-only status vocabulary; only scoped executor evidence promotes messaging to live."""
+    out: list[dict[str, Any]] = []
+    for raw in provider_rows:
+        key = str(raw.get("provider_key") or "").strip()
+        if not key:
+            continue
+        connected, truth = bool(raw.get("connected")), str(raw.get("truth_status") or "")
+        if truth == "not_implemented":
+            state, reason = "not_implemented", "provider_not_implemented"
+        elif not connected:
+            state, reason = "not_connected", "connect_required"
+        elif raw.get("read_supported"):
+            state, reason = "read_ready", "read_only"
+        else:
+            state, reason = "connected_unverified", "provider_not_read_ready"
+        out.append({"key": key, "kind": "data_source", "status": state, "reason": reason,
+                    "missing": [], "source": "provider_catalog"})
+    for key, row in sorted(channel_readiness.items()):
+        if row.get("live_ready"):
+            state, reason = "live_ready", "live_evidence_fresh"
+        elif row.get("endpoint_ok"):
+            state, reason = "connected_unverified", "live_evidence_missing"
+        else:
+            state, reason = "not_connected", "endpoint_not_configured"
+        out.append({"key": key, "kind": "messaging", "status": state, "reason": reason,
+                    "missing": list(row.get("missing") or []), "source": "event_spine.provider_live_evidence"})
+    for key, row in sorted(ad_connectors.items()):
+        if row.get("production_ready") and row.get("write") and row.get("verify"):
+            state, reason = "live_ready", "production_ready"
+        elif row.get("write") or row.get("verify"):
+            state, reason = "connected_unverified", "connector_not_production_ready"
+        else:
+            state, reason = "not_implemented", "connector_not_implemented"
+        out.append({"key": key, "kind": "ads", "status": state, "reason": reason,
+                    "missing": [], "source": "interfaces.ads.registry"})
+    return out
+
+
 SALES_CRM_READS = ("contact_sync", "deal_sync")
 
 
@@ -491,6 +531,6 @@ def summarize_provider_truth(rows: Iterable[ProviderTruthRow] | None = None) -> 
 
 __all__ = [
     "CANON_PROVIDER_TRUTH_MATRIX", "ProviderTruthRow", "ProviderTruthStatus", "build_provider_truth_matrix",
-    "LIVE_EVIDENCE_CHECKS", "SALES_CRM_READS", "live_evidence_payload", "provider_channel_live_readiness", "sales_source_provider_keys",
+    "LIVE_EVIDENCE_CHECKS", "SALES_CRM_READS", "live_evidence_payload", "provider_channel_live_readiness", "unified_integration_statuses", "sales_source_provider_keys",
     "provider_truth_map", "provider_runtime_truth_map", "provider_runtime_metrics_truth_map", "provider_quota_truth_map", "list_provider_truth_payloads", "summarize_provider_truth",
 ]

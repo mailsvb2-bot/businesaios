@@ -20,7 +20,17 @@ function renderFields(fields, form, update, disabled, valid) {
   ));
 }
 
-export function AcquisitionPlanner({ enabled, onEvaluate }) {
+const PROMOTION_LAUNCH_ENABLED = String(import.meta.env.VITE_BAI_PROMOTION_LAUNCH || "").toLowerCase() === "true";
+const LAUNCH_CHECKS = {
+  plan_feasible: "Цель достижима", economics_sustainable: "Экономика устойчива",
+  budget_cap_positive: "Недельный лимит положительный", provider_known: "Рекламный кабинет известен",
+  provider_write_capability: "Можно создавать кампании", provider_verification_capability: "Можно проверить результат",
+  provider_production_ready: "Боевой доступ проверен"
+};
+
+export function AcquisitionPlanner({ enabled, onEvaluate, onLaunch }) {
+  const [launch, setLaunch] = useState(null);
+  const [lastPayload, setLastPayload] = useState(null);
   const [form, setForm] = useState(ACQUISITION_DEFAULTS);
   const [showAdvanced, setShowAdvanced] = useState(false);
   const [result, setResult] = useState(null);
@@ -31,6 +41,8 @@ export function AcquisitionPlanner({ enabled, onEvaluate }) {
   const update = (key) => (event) => {
     setForm((previous) => ({ ...previous, [key]: event.target.value }));
     setResult(null);
+    setLaunch(null);
+    setLastPayload(null);
     setError("");
   };
 
@@ -51,9 +63,28 @@ export function AcquisitionPlanner({ enabled, onEvaluate }) {
         target_days: form.target_days,
         daily_budget: Number(form.target_days) > 0 ? Number(form.total_budget) / Number(form.target_days) : 0
       };
-      setResult(await onEvaluate(acquisitionPayload(effectiveForm)));
+      const payload = acquisitionPayload(effectiveForm);
+      setLastPayload(payload);
+      setLaunch(null);
+      setResult(await onEvaluate(payload));
     } catch {
       setError("Не удалось посчитать сценарий. Проверьте соединение и повторите попытку.");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const dryRunLaunch = async () => {
+    if (!PROMOTION_LAUNCH_ENABLED || !onLaunch || !lastPayload || busy) return;
+    setBusy(true); setError("");
+    try {
+      const preview = await onLaunch({ plan_input: lastPayload, mode: "dry_run", provider: "yandex_direct" });
+      if (preview.mode !== "dry_run" || preview.spend_authorized !== false || !Array.isArray(preview.checks)) {
+        throw new Error("unsafe");
+      }
+      setLaunch(preview);
+    } catch {
+      setError("Не удалось проверить запуск продвижения.");
     } finally {
       setBusy(false);
     }
@@ -93,6 +124,15 @@ export function AcquisitionPlanner({ enabled, onEvaluate }) {
           <div className="planner-metrics"><div><small>Достижимо клиентов</small><strong>{fmt(plan.achievable_customers, 0)}</strong></div><div><small>Нужный бюджет</small><strong>{fmt(plan.required_budget)}</strong></div><div><small>Бюджет в день</small><strong>{fmt(plan.recommended_daily_budget)}</strong></div><div><small>Оценочный срок</small><strong>{plan.estimated_days === null ? "—" : `${fmt(plan.estimated_days, 1)} дн.`}</strong></div><div><small>Дефицит клиентов</small><strong>{fmt(plan.customer_gap, 0)}</strong></div><div><small>Дефицит бюджета</small><strong>{fmt(plan.budget_gap)}</strong></div></div>
           {economics ? <div className="planner-economics"><span>Стоимость клиента <strong>{fmt(economics.blended_cac)}</strong></span><span>Ценность / стоимость <strong>{fmt(economics.ltv_to_cac_ratio, 2)}</strong></span><span>Окупаемость <strong>{fmt(economics.payback_months, 1)} мес.</strong></span><span>Экономика <strong>{economics.sustainable ? "устойчивая" : "требует правки"}</strong></span></div> : null}
           {Array.isArray(plan.recommendations) && plan.recommendations.length ? <div className="planner-recommendations"><h4>Что изменить</h4>{plan.recommendations.slice(0, 3).map((item) => <div key={`${item.kind}-${item.priority}`}><strong>{item.title}</strong><p>{item.description}</p></div>)}</div> : null}
+          {PROMOTION_LAUNCH_ENABLED ? <div className="planner-launch">
+            <button type="button" className="primary" onClick={dryRunLaunch} disabled={!enabled || busy || !onLaunch}>Проверить запуск продвижения</button>
+            {launch ? <div role="status">
+              <p>Пробная проверка без расходов. Недельный предел: {fmt(launch.weekly_cap_minor / 100)} ₽.</p>
+              <ul>{launch.checks.map((item) => <li key={item.check}>{item.passed ? "✓" : "✗"} {LAUNCH_CHECKS[item.check] || item.check}</li>)}</ul>
+              <p>{launch.apply_possible ? "Технические проверки пройдены. Для реального запуска требуется отдельное согласование владельца."
+                : "Запуск пока невозможен: устраните отмеченные ограничения."}</p>
+            </div> : null}
+          </div> : null}
           <p className="planner-disclaimer">Источник цифр в этом блоке — введённые вами предположения. Это не подтверждённые показатели бизнеса и не обещание результата.</p>
         </div> : null}
       </article>

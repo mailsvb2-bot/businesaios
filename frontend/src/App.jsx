@@ -11,6 +11,13 @@ import { CommercialSalesWorkspace } from "./CommercialSalesWorkspace.jsx";
 import { DiscoverBuildMeasurePanel } from "./DiscoverBuildMeasurePanel.jsx";
 
 const DEFAULT_API = import.meta.env.VITE_API_BASE || "https://api.businessaios.ru";
+const UNIFIED_INTEGRATION_STATUS = String(import.meta.env.VITE_BAI_UNIFIED_INTEGRATION_STATUS || "").trim().toLowerCase() === "true";
+const INTEGRATION_STATUS_LABELS = {
+  live_ready: "Работает, проверено", read_ready: "Чтение данных готово",
+  connected_unverified: "Подключено, не проверено", not_connected: "Не подключено",
+  not_implemented: "Пока не поддерживается"
+};
+const INTEGRATION_KIND_LABELS = { data_source: "Источник", messaging: "Мессенджер", ads: "Реклама" };
 
 const GOALS = [
   { value: "growth", title: "Больше клиентов", text: "Найти потери в воронке и точки роста продаж." },
@@ -350,6 +357,7 @@ function Workspace({ data, apiBase, businesses, onRestart, onRetryAccess, onSwit
   const discoveryUrl = `${baseApi}/business-workspace/discovery`;
   const authHeaders = useMemo(() => (apiKey ? { "X-API-Key": apiKey } : {}), [apiKey]);
   const selectedKeys = useMemo(() => new Set(integrations.map((item) => item.provider_key)), [integrations]);
+  const [integrationStatuses, setIntegrationStatuses] = useState([]);
   const [catalog, setCatalog] = useState([]);
   const [capabilities, setCapabilities] = useState([]);
   const [activeKey, setActiveKey] = useState("");
@@ -397,6 +405,7 @@ function Workspace({ data, apiBase, businesses, onRestart, onRetryAccess, onSwit
     const payload = await getJson(workspaceUrl, authHeaders);
     const rows = Array.isArray(payload.providers) ? payload.providers : [];
     setCatalog(rows);
+    setIntegrationStatuses(UNIFIED_INTEGRATION_STATUS && Array.isArray(payload.integration_statuses) ? payload.integration_statuses : []);
     setCapabilities(Array.isArray(payload.capabilities) ? payload.capabilities : []);
     setActiveKey((current) => {
       if (current && rows.some((row) => row.provider_key === current)) return current;
@@ -1163,6 +1172,15 @@ function Workspace({ data, apiBase, businesses, onRestart, onRetryAccess, onSwit
         <article className="summary-card"><span className="summary-icon">⌁</span><div><small>Источники</small><strong>{providers.filter((row) => row.connected).length} подключено / {integrations.length} выбрано</strong></div></article>
         <article className="summary-card"><span className="summary-icon">◇</span><div><small>Режим</small><strong>{data.user_functionality?.autonomy_mode_label || "Советник"}</strong></div></article>
       </section>
+      {UNIFIED_INTEGRATION_STATUS && integrationStatuses.length ? <section className="panel unified-integration-status" aria-labelledby="unified-integration-status-title">
+        <h2 id="unified-integration-status-title">Статус подключений</h2>
+        <p className="muted-text">Статус мессенджера подтверждается отдельными фактами отправки, получения квитанции, повтора и восстановления.</p>
+        <table><thead><tr><th>Подключение</th><th>Тип</th><th>Статус</th><th>Не хватает</th></tr></thead>
+          <tbody>{integrationStatuses.map((row) => <tr key={`${row.kind}:${row.key}`} data-status={row.status}>
+            <td>{row.key}</td><td>{INTEGRATION_KIND_LABELS[row.kind] || row.kind}</td>
+            <td>{INTEGRATION_STATUS_LABELS[row.status] || row.status}</td><td>{(row.missing || []).join(", ") || "—"}</td>
+          </tr>)}</tbody></table>
+      </section> : null}
 
       <BusinessDiscoveryPanel
         key={`discovery-${data.business_id}`}
@@ -1545,7 +1563,8 @@ function Workspace({ data, apiBase, businesses, onRestart, onRetryAccess, onSwit
 
       <AdvertisingStudioWorkspace key={`ads:${data.tenant_id}:${data.business_id}`} apiBase={baseApi} apiKey={apiKey} postJson={postJson} />
 
-      <AcquisitionPlanner enabled={Boolean(apiKey)} onEvaluate={(payload) => postJson(acquisitionUrl, payload, authHeaders)} />
+      <AcquisitionPlanner enabled={Boolean(apiKey)} onEvaluate={(payload) => postJson(acquisitionUrl, payload, authHeaders)}
+        onLaunch={(payload) => postJson(acquisitionUrl + "/launch", payload, authHeaders)} />
 
       <section className="panel business-card">
         <div><p className="eyebrow">Профиль</p><h2>{businessName || "Бизнес"}</h2></div>

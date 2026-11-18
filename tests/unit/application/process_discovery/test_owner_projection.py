@@ -63,3 +63,23 @@ def test_owner_cards_keep_money_as_minor_units_and_expose_safety_state() -> None
     assert blueprint_payload["executable"] is False
     assert blueprint_payload["initial_stage"] == "observe"
     assert roi_payload["causal_claim_allowed"] is False
+
+
+def test_p2_41_roi_is_comparable_without_causal_overclaim() -> None:
+    service = DiscoverBuildMeasureService(DiscoveryPolicy(min_observations=5, min_window_days=5, min_confidence=0.2))
+    opportunity = service.discover(observations(start_day=0, manual_minutes=90)).opportunities[0]
+    blueprint = service.build(opportunity, BuildRequest(owner_goal="Ускорить отчёт"))
+    report = service.measure(
+        blueprint=blueprint, baseline=opportunity.baseline,
+        intervention=InterventionProof(tenant_id="t1", business_id="b1", blueprint_id=blueprint.blueprint_id,
+                                       intervention_id="int-report", started_at=datetime(2026, 8, 15, tzinfo=UTC),
+                                       server_validated=True, execution_verified=True, evidence_refs=("exec-report",)),
+        after_observations=observations(start_day=20, manual_minutes=15),
+        spend=InterventionSpend(ai_runtime_cost_minor=2_000, currency="RUB"),
+    )
+    card = roi_card(report)
+    assert card["baseline"]["observations"] == card["after"]["observations"] == 6
+    assert card["comparison_period"]["baseline_end"] < card["comparison_period"]["after_start"]
+    assert card["measured_effect"]["manual_minutes_per_30d_before"] > card["measured_effect"]["manual_minutes_per_30d_after"]
+    assert card["confidence"]["score"] > 0
+    assert card["causal_claim_allowed"] is False

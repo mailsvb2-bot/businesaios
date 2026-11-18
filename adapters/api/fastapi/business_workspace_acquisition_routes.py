@@ -19,7 +19,7 @@ def _json_safe(value: Any) -> Any:
         return None
     if isinstance(value, dict):
         return {key: _json_safe(item) for key, item in value.items()}
-    if isinstance(value, (list, tuple)):
+    if isinstance(value, list | tuple):
         return [_json_safe(item) for item in value]
     return value
 
@@ -51,6 +51,34 @@ def register_business_workspace_acquisition_routes(*, router: APIRouter, auth_bu
                 'sustainable': result.cac.sustainable,
             },
         })
+
+
+    @router.post('/business-workspace/acquisition-plan/launch', tags=['business-workspace'])
+    async def acquisition_launch(request: Request) -> dict[str, Any]:
+        from config.env_flags import env_bool
+        from headless.acquisition_execution import promotion_launch_preview
+
+        if not env_bool('BAI_PROMOTION_LAUNCH_ENABLED', False):
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail='promotion_launch_disabled')
+        _, tenant_id, business_id = business_owner_scope(request=request, auth_bundle=auth_bundle)
+        body = await json_body(request)
+        if not isinstance(body, dict) or not isinstance(body.get('plan_input'), dict):
+            raise HTTPException(status_code=422, detail='promotion_launch_plan_input_required')
+        mode, provider = body.get('mode', 'dry_run'), str(body.get('provider') or 'yandex_direct')
+        if mode not in {'dry_run', 'apply'} or set(body) - {'plan_input', 'mode', 'provider'}:
+            raise HTTPException(status_code=422, detail='promotion_launch_fields_invalid')
+        try:
+            result = evaluate_acquisition_payload(body['plan_input'])
+            view = build_acquisition_view_model(result)
+        except (TypeError, ValueError, OverflowError) as exc:
+            raise HTTPException(status_code=422, detail=str(exc)) from exc
+        preview = promotion_launch_preview(plan=asdict(view), sustainable=bool(result.cac.sustainable),
+                                           provider=provider, connectors=CONNECTORS)
+        if mode == 'apply':
+            raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail={
+                'error': 'promotion_apply_blocked' if preview['blockers'] else 'promotion_apply_requires_governed_approval',
+                'blockers': preview['blockers']})
+        return _json_safe({'ok': True, 'tenant_id': tenant_id, 'business_id': business_id, **preview})
 
 
 __all__ = ['CANON_BUSINESS_WORKSPACE_ACQUISITION_ROUTES', 'register_business_workspace_acquisition_routes']

@@ -268,6 +268,12 @@ export function DiscoverBuildMeasurePanel({ enabled, onRecordObservation, onDisc
             <div><small>Стоимость автоматизации / 30 дней</small><strong>{money(roi.intervention_cost_per_30d)}</strong></div>
             <div><small>Чистый эффект / 30 дней</small><strong>{money(roi.net_benefit_per_30d)}</strong></div>
           </div>
+          {roi.baseline && roi.comparison_period ? <div className="dbm-metrics dbm-before-after" aria-label="База и период сравнения">
+            <div><small>База до действия</small><strong>{roi.baseline.manual_minutes_per_30d ?? "—"} мин / 30 дней</strong><span>{roi.baseline.observations} фактов · {String(roi.comparison_period.baseline_start).slice(0, 10)} — {String(roi.comparison_period.baseline_end).slice(0, 10)}</span></div>
+            <div><small>После действия</small><strong>{roi.after?.manual_minutes_per_30d ?? "—"} мин / 30 дней</strong><span>{roi.after?.observations ?? 0} фактов · {String(roi.comparison_period.after_start).slice(0, 10)} — {String(roi.comparison_period.after_end).slice(0, 10)}</span></div>
+            <div><small>Измеренный эффект</small><strong>{roi.measured_effect?.manual_minutes_saved_per_30d ?? "—"} мин</strong><span>Чистая экономия: {money(roi.measured_effect?.net_benefit_per_30d)}</span></div>
+            <div><small>Уверенность</small><strong>{roi.confidence?.score ?? "—"}</strong><span>{roi.confidence?.evidence_grade} · {roi.confidence?.comparison_design}</span></div>
+          </div> : null}
           <div className="dbm-proof">
             <strong>Доказательность: {roi.evidence_grade}</strong>
             <span>{roi.copy?.causal_note || "—"}</span>
