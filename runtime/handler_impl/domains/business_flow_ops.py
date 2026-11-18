@@ -211,7 +211,8 @@ def handle_partners(payload, effects, env, *, event_store):
     body = require_mapping(payload or {})
     tenant_id = required_str(body, "tenant_id")
     op, arg = str(body.get("op") or "rank"), str(body.get("arg") or "").strip()
-    known = pt.replay(flow_payloads(event_store, tenant_id=tenant_id, event_type="partners@v1"))
+    facts = flow_payloads(event_store, tenant_id=tenant_id, event_type="partners@v1")
+    known = pt.replay(facts)
     try:
         if op == "add":
             change = pt.parse_partner(arg)
@@ -219,6 +220,40 @@ def handle_partners(payload, effects, env, *, event_store):
             return send_tracked(body, effects, env, text=text, event_type="partners@v1", event_payload=change)
     except ValueError as exc:
         return send_tracked(body, effects, env, text=f"🤝 Не получилось: {exc}", event_type=None, event_payload=None)
+    if op in {"quote", "quotes", "approve_quote", "reject_quote"}:
+        from application.partner import commercial_terms as ct
+        try:
+            if op == "quote":
+                # /partner_quote partner_id | amount_in_kopecks | RUB | deliverables
+                items = [item.strip() for item in arg.split("|", 3)]
+                if len(items) != 4:
+                    raise ValueError("format: /partner_quote ID | копейки | RUB | условия")
+                if items[0] not in known:
+                    raise LookupError("partner_not_found")
+                change = ct.create_quote(*items)
+                if change["quote_id"] in ct.quote_states(facts):
+                    change = None
+                    text = "ℹ️ Это предложение уже зарегистрировано. /partner_quotes"
+                else:
+                    text = ("🧾 Черновик цены сохранён. Это не договор и не разрешение платежа. "
+                            "Для внутреннего одобрения: /partner_approve " + change["quote_id"])
+            elif op == "quotes":
+                quotes = ct.quote_states(facts)
+                change = None
+                text = "🧾 Коммерческие предложения:\n" + (
+                    "\n".join(ct.format_quote(q) for q in list(quotes.values())[-10:])
+                    if quotes else "Пока нет. /partner_quote ID | копейки | RUB | условия"
+                )
+            else:
+                change = ct.decision(facts, arg, approve=op == "approve_quote")
+                text = ("✅ Внутреннее согласование записано. Контрагенту не отправлено; "
+                        "оплата и договор не оформлены." if op == "approve_quote"
+                        else "🚫 Предложение отклонено.") if change else "ℹ️ Решение уже учтено."
+            return send_tracked(body, effects, env, text=text,
+                                event_type="partners@v1" if change else None, event_payload=change)
+        except (ValueError, LookupError) as exc:
+            return send_tracked(body, effects, env, text=f"🤝 Не получилось: {exc}",
+                                event_type=None, event_payload=None)
     if op in {"campaign", "ref_result"}:
         text, ch = _partner_growth(pt, op, arg, tenant_id, known, flow_payloads(event_store, tenant_id=tenant_id, event_type="partners@v1"))
         return send_tracked(body, effects, env, text=text, event_type="partners@v1" if ch else None, event_payload=ch)
@@ -227,7 +262,7 @@ def handle_partners(payload, effects, env, *, event_store):
     terms = [t for t in arg.replace(",", " ").split() if t]
     fits = pt.rank(known, terms)
     lines = [
-        f"{i}. {f.partner.name} — {f.total:.0f}/100" + (f" ({'; '.join(f.reasons)})" if f.reasons else "")
+        f"{i}. {f.partner.name} [{f.partner.partner_id}] — {f.total:.0f}/100" + (f" ({'; '.join(f.reasons)})" if f.reasons else "")
         for i, f in enumerate(fits, 1)
     ]
     head = f"🤝 Партнёры под цель «{' '.join(terms) or 'любая'}» (рекомендации, ничего не отправляется):"
@@ -235,7 +270,7 @@ def handle_partners(payload, effects, env, *, event_store):
         body,
         effects,
         env,
-        text=head + "\n\n" + ("\n".join(lines) or "Список пуст: /partner_add"),
+        text=head + "\n\n" + ("\n".join(lines) or "Список пуст: /partner_add") + "\n\n🧾 Цены: /partner_quotes · новый черновик: /partner_quote ID | копейки | RUB | условия",
         event_type=None,
         event_payload=None,
     )
@@ -246,7 +281,7 @@ def _partner_card(body, effects, env, pt, known, op, arg, event_store):
     facts = flow_payloads(event_store, tenant_id=tenant_id, event_type="partners@v1")
     ordered = sorted(known.values(), key=lambda p: p.name)
     head, _, rest = arg.partition(" ")
-    partner = ordered[int(head) - 1] if head.isdigit() and 0 < int(head) <= len(ordered) else None
+    partner = known.get(head) if head in known else (ordered[int(head) - 1] if head.isdigit() and 0 < int(head) <= len(ordered) else None)
     change = None
     try:
         if partner is None:

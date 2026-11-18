@@ -26,6 +26,7 @@ _ITEMS = (
     NavigationItem("connect", "➕ Подключить мой бизнес", SECTION_PREFIX + "connect", frozenset({"owner", "admin", "operator", "marketer"})),
     NavigationItem("customers", "💬 Клиенты и обращения", SECTION_PREFIX + "customers", frozenset({"owner", "admin", "operator"})),
     NavigationItem("sales", "💰 Продажи", SECTION_PREFIX + "sales", frozenset({"owner", "admin", "operator", "marketer"})),
+    NavigationItem("partners", "🤝 Партнёры", SECTION_PREFIX + "partners", frozenset({"owner", "admin"})),
     NavigationItem("marketing", "📣 Реклама и продвижение", "cpm:growth", frozenset({"owner", "admin", "marketer"})),
     NavigationItem("ai", "🤖 ИИ и автопилот", CB_AUTOPILOT_MENU, frozenset({"owner", "admin", "operator", "marketer"})),
     NavigationItem("ads_apply", "🧩 Ads Apply (prod)", CB_ADS_APPLY_MENU, frozenset({"marketer", "operator"})),
@@ -44,7 +45,7 @@ def menu_items(*, role: str, is_admin: bool = False) -> tuple[NavigationItem, ..
     if is_admin:
         roles.add("admin")
     return tuple(item for item in _ITEMS if item.roles.intersection(roles)
-                 and (is_admin or item.key not in {"customers", "sales", "marketing", "results", "payments"}))
+                 and (is_admin or item.key not in {"customers", "sales", "partners", "marketing", "results", "payments"}))
 
 
 def menu_text(*, role: str, is_admin: bool = False) -> str:
