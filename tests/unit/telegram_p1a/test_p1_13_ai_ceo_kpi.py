@@ -48,7 +48,8 @@ def test_ceo_plan_without_read_model_is_honest_not_zero():
 def test_ceo_run_requires_owner_not_marketer():
     marketer = make_ctx(user_id="2002", callback_data="ceo:run", roles=["marketer"])
     out = handle(marketer, default_price_rub=990)
-    assert out.action == "send_message@v1" and "владельцу" in out.payload["text"]
+    assert out.action == "send_message@v1" and "подтверждённая роль" in out.payload["text"]
     owner = make_ctx(user_id="1001", callback_data="ceo:run", roles=["owner"])
     action, _ = decide(handle(owner, default_price_rub=990), owner)
-    assert action == "execute_plan@v1"
+    # The canonical runtime cannot execute unapproved multi-step plans.
+    assert action == "send_message@v1"

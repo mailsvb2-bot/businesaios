@@ -726,9 +726,13 @@ def handle_sales_pipeline(payload, effects, env, *, event_store, now_ms: int | N
     if op in FOLLOWUP_OPS:
 
         def push(*, text, to_user_id, change):
-            out = send_tracked( body, effects, env, text=text, event_type="sales_pipeline@v1", event_payload=change, to_user_id=to_user_id,
+            out = send_tracked( body, effects, env, text=text, event_type="sales_pipeline@v1" if change else None, event_payload=change, to_user_id=to_user_id,
             )
-            return (out or {}).get("ok", True)
+            # The delivery-confirmed flow needs the full verified provider
+            # receipt; legacy flow historically only consumed a boolean.
+            from application.business_flows import sales_followups as sf
+
+            return out if sf.confirmed_delivery_enabled() else (out or {}).get("ok", True)
 
         return _followups(done, push, st, op, arg, now, tenant_id=tenant_id, event_store=event_store)
     try:

@@ -7,7 +7,7 @@ def kb_ai_ceo_menu(*, can_run: bool) -> dict:
     btns = [[{"text": "🔄 Обновить план", "callback_data": CB_CEO_PLAN}]]
     if can_run:
         btns.append([{"text": "🛡 Проверить готовность запуска", "callback_data": CB_CEO_RUN}])
-    btns.append([{"text": "⬅️ В меню", "callback_data": CB_MENU_MAIN}])
+    btns.append([{"text": "⬅️ ИИ и автопилот", "callback_data": CB_AUTOPILOT_MENU}])
     return {"inline_keyboard": btns}
 
 

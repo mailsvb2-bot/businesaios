@@ -34,10 +34,10 @@ def delivery_fact(lead: sl.Lead, delivery: Any) -> dict[str, Any]:
     """``followup_sent`` only on a confirmed provider delivery, else ``followup_failed`` (retry, then drop)."""
     out = delivery if isinstance(delivery, dict) else {}
     base = {"lead_id": lead.lead_id, "followup_id": lead.followup_id}
-    if out.get("ok") is True:
-        evidence = out.get("evidence") or out.get("router_evidence") or {}
-        ref = str((evidence if isinstance(evidence, dict) else {}).get("message_id") or "")
-        return {"step": "followup_sent", **base, **({"delivery_ref": ref} if ref else {})}
+    evidence = out.get("evidence") or out.get("router_evidence") or {}
+    ref = str((evidence if isinstance(evidence, dict) else {}).get("message_id") or "")
+    if out.get("ok") is True and ref:
+        return {"step": "followup_sent", **base, "delivery_ref": ref}
     attempt = lead.followup_attempts + 1
     meta = out.get("meta") if isinstance(out.get("meta"), dict) else {}
     reason = str(meta.get("reason") or out.get("reason") or "provider_not_confirmed")[:80]

@@ -48,13 +48,14 @@ def test_unbound_business_and_guest_are_refused():
                        product={"product_id": "organization_platform"})
     assert "выбери бизнес" in handle(unbound, default_price_rub=990).payload["text"]
     guest = handle(make_ctx(user_id="3003", callback_data="growth:generate"), default_price_rub=990)
-    assert guest.action == "send_message@v1" and "владельцу" in guest.payload["text"]
+    assert guest.action == "send_message@v1" and "подтверждённая роль" in guest.payload["text"]
 
 
 def test_backlog_renders_decided_items_without_buttons_and_empty_state():
     from runtime.handlers.growth_strategy_backlog import _render_backlog
 
-    h = lambda i: SimpleNamespace(hypothesis_id=f"h{i}", title=f"T{i}", stage="s", channel="c", metric="m", horizon_days=7)
+    def h(i):
+        return SimpleNamespace(hypothesis_id=f"h{i}", title=f"T{i}", stage="s", channel="c", metric="m", horizon_days=7)
     text, markup = _render_backlog([(h(1), None, "new"), (h(2), None, "accepted")])
     cbs = _callbacks(markup)
     assert "growth:accept:h1" in cbs and "growth:accept:h2" not in cbs

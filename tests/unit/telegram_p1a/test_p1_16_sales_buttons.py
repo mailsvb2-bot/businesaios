@@ -40,7 +40,7 @@ def test_section_sales_button_is_schema_valid_with_callback_ack():
 def test_staff_without_sales_rights_get_no_sales_data(role):
     ctx = make_ctx(user_id="2002", callback_data="sales:leads", roles=[role] if role else [])
     out = handle(ctx, default_price_rub=990)
-    assert out.action == "send_message@v1" and "владельцу" in out.payload["text"]
+    assert out.action == "send_message@v1" and "подтверждённая роль" in out.payload["text"]
 
 
 def _session(op, lead="", expires=NOW + 60_000):
