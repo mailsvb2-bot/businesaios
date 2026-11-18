@@ -87,7 +87,7 @@ test(canonicalScenario.title, async ({ page }, testInfo) => {
   const ctaResponsePromise = page.waitForResponse((response) => response.url().includes("/api/public-site/cta/start") && response.request().method() === "POST");
   const workspaceResponsePromise = page.waitForResponse((response) => response.url().includes("/api/business-workspace/providers") && response.request().method() === "GET");
   const discoveryResponsePromise = page.waitForResponse((response) => response.url().includes("/api/business-workspace/discovery") && response.request().method() === "GET");
-  await page.getByRole("button", { name: /Создать мой (?:BusinessAIOS|ClientPlatform)/ }).click();
+  await page.getByRole("button", { name: /Создать мой BusinessAIOS/ }).click();
 
   const ctaResponse = await ctaResponsePromise;
   expect(ctaResponse.status()).toBe(200);
@@ -202,7 +202,7 @@ test(canonicalScenario.title, async ({ page }, testInfo) => {
   await page.getByRole("button", { name: /Продолжить/ }).click();
   await page.getByRole("button", { name: /Советник/ }).click();
   const secondCtaPromise = page.waitForResponse((response) => response.url().includes("/api/public-site/cta/start") && response.request().method() === "POST");
-  await page.getByRole("button", { name: /Создать мой (?:BusinessAIOS|ClientPlatform)/ }).click();
+  await page.getByRole("button", { name: /Создать мой BusinessAIOS/ }).click();
   const secondCtaResponse = await secondCtaPromise;
   expect(secondCtaResponse.status()).toBe(200);
   const secondCta = await secondCtaResponse.json();
@@ -265,7 +265,7 @@ test("owner can create a protected workspace without selecting any integration",
   await page.getByRole("button", { name: /Советник/ }).click();
   const created = page.waitForResponse((response) =>
     response.url().includes("/api/public-site/cta/start") && response.request().method() === "POST");
-  await page.getByRole("button", { name: /Создать мой (?:BusinessAIOS|ClientPlatform)/ }).click();
+  await page.getByRole("button", { name: /Создать мой BusinessAIOS/ }).click();
   const response = await created;
   expect(response.status()).toBe(200);
   const payload = await response.json();

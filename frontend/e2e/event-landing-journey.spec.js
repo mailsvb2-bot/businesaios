@@ -25,7 +25,7 @@ test("event landing owner journey: draft stays private, publish becomes public, 
 
   const registration = page.waitForResponse((response) =>
     response.url().includes("/api/public-site/cta/start") && response.request().method() === "POST");
-  await page.getByRole("button", { name: /Создать мой (?:BusinessAIOS|ClientPlatform)/ }).click();
+  await page.getByRole("button", { name: /Создать мой BusinessAIOS/ }).click();
   const response = await registration;
   expect(response.status()).toBe(200);
   const account = await response.json();

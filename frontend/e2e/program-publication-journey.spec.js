@@ -23,7 +23,7 @@ test("owner creates and publishes a multi-lesson program through the canonical c
   const registration = page.waitForResponse((response) =>
     response.url().includes("/api/public-site/cta/start") &&
     response.request().method() === "POST");
-  await page.getByRole("button", { name: /Создать мой (?:BusinessAIOS|ClientPlatform)/ }).click();
+  await page.getByRole("button", { name: /Создать мой BusinessAIOS/ }).click();
   const result = await registration;
   expect(result.status()).toBe(200);
   const account = await result.json();
