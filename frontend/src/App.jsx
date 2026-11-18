@@ -1309,17 +1309,18 @@ function Workspace({ data, apiBase, businesses, onRestart, onRetryAccess, onSwit
             <div><p className="eyebrow">Коммуникации</p><h2 id="business-communications-title">Центр сообщений</h2></div>
             <button type="button" className="ghost small" onClick={() => void refreshCommunications()}>Обновить</button>
           </div>
-          <p className="muted-text">Входящие — из журнала сообщений клиентов. «Доставлено» и «Ошибка» — только по ответу провайдера; без квитанции сообщение остаётся «Без подтверждения». Отсюда ничего не отправляется.</p>
+          <p className="muted-text">Входящие — из журнала сообщений клиентов. «Доставлено» означает подтверждённую доставку. Принятие сообщения провайдером не доказывает получение клиентом; такие сообщения остаются «Без подтверждения». Отсюда ничего не отправляется.</p>
           <div className="sales-metrics">
             <article><small>Входящие</small><strong>{communications.counts.inbound}</strong><span>последние обращения клиентов</span></article>
-            <article><small>Доставлено</small><strong>{communications.counts.outbound}</strong><span>с квитанцией провайдера</span></article>
+            <article><small>Доставлено</small><strong>{communications.counts.outbound}</strong><span>подтверждено получателем через провайдера</span></article>
             <article><small>Ждут подтверждения</small><strong>{pendingApprovals.length}</strong><span>{pendingApprovals.length ? "решение — в разделе действий ниже" : "очередь подтверждений пуста"}</span></article>
             <article><small>В очереди</small><strong>{communications.counts.queued}</strong><span>ждут отправки провайдеру</span></article>
             <article><small>Повторы</small><strong>{communications.counts.retries}</strong><span>отправка повторяется после сбоя</span></article>
-            <article><small>Ошибки</small><strong>{communications.counts.failed}</strong><span>{communications.counts.unconfirmed ? `ещё без подтверждения: ${communications.counts.unconfirmed}` : "провайдер отказал в доставке"}</span></article>
+            <article><small>Без подтверждения</small><strong>{communications.counts.unconfirmed}</strong><span>принято провайдером или ожидается исход</span></article>
+            <article><small>Ошибки</small><strong>{communications.counts.failed}</strong><span>отказ провайдера</span></article>
           </div>
           <div className="timeline-list" aria-label="Сообщения">
-            {[...communications.failed.map((row) => ({ ...row, label: "Ошибка" })), ...communications.retries.map((row) => ({ ...row, label: `Повтор (попыток: ${row.attempts})`, at: row.run_at })), ...communications.outbound.map((row) => ({ ...row, label: "Доставлено" }))].slice(0, 20).map((row, index) => <article className="timeline-row" key={`${row.provider_key}-${row.queue_job_id || row.job_id || index}`}>
+            {[...communications.failed.map((row) => ({ ...row, label: "Ошибка" })), ...communications.unconfirmed.map((row) => ({ ...row, label: "Без подтверждения" })), ...communications.retries.map((row) => ({ ...row, label: `Повтор (попыток: ${row.attempts})`, at: row.run_at })), ...communications.outbound.map((row) => ({ ...row, label: "Доставлено" }))].slice(0, 20).map((row, index) => <article className="timeline-row" key={`${row.provider_key}-${row.queue_job_id || row.job_id || index}`}>
               <strong>{row.label} · {row.provider_key}</strong>
               <span>{row.receipt ? `квитанция ${row.receipt}` : row.reason || ""}{row.at ? ` · ${row.at}` : ""}</span>
             </article>)}

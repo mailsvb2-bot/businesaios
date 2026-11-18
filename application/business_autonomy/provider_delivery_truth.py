@@ -15,15 +15,15 @@ def provider_approval_completion_truth(*, provider_key: str, result: Mapping[str
         and status == "live_executed"
         and bool(str(parsed.get("resource_id") or "").strip())
     )
-    delivered = accepted_with_receipt
-    accepted_without_delivery_proof = False
-    if str(provider_key) == "whatsapp_cloud" and accepted_with_receipt:
-        delivered = False
-        accepted_without_delivery_proof = True
-    if str(provider_key) == "email_connector" and accepted_with_receipt:
-        smtp = dict(dict(result.get("transport_response") or {}).get("smtp") or {})
-        delivered = smtp.get("delivered") is True
-        accepted_without_delivery_proof = not delivered
+    # A message ID proves provider acceptance, not recipient delivery.
+    # Only a verified delivery-state event (or confirmed SMTP transport result)
+    # may advance the owner-facing status to delivered.
+    smtp = dict(dict(result.get("transport_response") or {}).get("smtp") or {})
+    delivered = accepted_with_receipt and (
+        parsed.get("delivery_state") == "delivered"
+        or (provider_key == "email_connector" and smtp.get("delivered") is True)
+    )
+    accepted_without_delivery_proof = accepted_with_receipt and not delivered
     ambiguous = (
         accepted_without_delivery_proof
         or status in {"", "ambiguous_delivery", "in_progress"}

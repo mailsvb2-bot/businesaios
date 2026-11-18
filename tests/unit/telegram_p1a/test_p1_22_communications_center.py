@@ -19,7 +19,8 @@ def _msg(mid, direction, at):
 
 
 def test_states_come_only_from_provider_truth_and_queue():
-    history = [RECEIPT,
+    history = [{**RECEIPT, "parsed_response": {"resource_id": "4242", "delivery_state": "delivered"}},
+               RECEIPT,
                {**RECEIPT, "parsed_response": {}, "recorded_at_utc": "2026-11-18T10:01:00Z"},  # no receipt
                {**RECEIPT, "accepted": False, "status": "rejected_provider_write_guard", "parsed_response": {},
                 "error": {"category": "approval_required"}},
@@ -33,7 +34,8 @@ def test_states_come_only_from_provider_truth_and_queue():
                     providers={"vk_messaging": (history, jobs)})
     assert [r["message_id"] for r in view["inbound"]] == ["m3", "m1"]
     assert [r["receipt"] for r in view["outbound"]] == ["4242"]
-    assert view["counts"] == {"inbound": 2, "outbound": 1, "unconfirmed": 1, "failed": 1, "queued": 1, "retries": 1}
+    assert view["counts"] == {"inbound": 2, "outbound": 1, "unconfirmed": 2, "failed": 1, "queued": 1, "retries": 1}
+    assert [r["state"] for r in view["unconfirmed"]] == ["unconfirmed", "unconfirmed"]
     assert view["failed"][0]["reason"] == "approval_required"
     assert view["retries"][0]["job_id"] == "q2" and view["pending_approval_source"] == "/control-plane/approvals/open"
 
@@ -63,7 +65,7 @@ def test_handler_reads_only_connected_messaging_providers(flow):
 
     out = H(customer_event_store=flow.store).get_communications(tenant_id="t1", business_id="b1")
     assert out["providers"] == ["vk_messaging"] and {k for _, k in calls} == {"vk_messaging"}
-    assert out["counts"]["outbound"] == 1 and out["inbound"] == []
+    assert out["counts"]["outbound"] == 0 and out["counts"]["unconfirmed"] == 1 and out["inbound"] == []
 
 
 @pytest.mark.parametrize("flag,code", [(None, 404), ("1", 200)])
