@@ -33,9 +33,11 @@ from .telegram_effects import classify_startup  # noqa: F401
 
 with allow_internal_import():
     from runtime._internal.effects_clients import (
-        start_yookassa_webhook_server_in_thread as _start_yookassa_webhook_server_in_thread,
         telegram_method_url as _telegram_method_url,
+        yookassa_webhook_server as _yookassa_server,
     )
+
+_start_yookassa_webhook_server_in_thread = _yookassa_server.start_yookassa_webhook_server_in_thread
 
 CANON_RUNTIME_EFFECTS_IMPORT_SURFACE = True
 

@@ -127,8 +127,8 @@ def test_effects_boundary_has_one_explicit_guarded_internal_import() -> None:
     assert len(internal_imports) == 1
     assert internal_imports[0].module == "runtime._internal.effects_clients"
     assert {alias.name for alias in internal_imports[0].names} == {
-        "start_yookassa_webhook_server_in_thread",
         "telegram_method_url",
+        "yookassa_webhook_server",
     }
 
     guarded = False
