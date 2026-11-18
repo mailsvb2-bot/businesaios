@@ -481,13 +481,16 @@ def unified_integration_statuses(*, provider_rows: list[dict[str, Any]], channel
             state, reason = "connected_unverified", "provider_not_read_ready"
         out.append({"key": key, "kind": "data_source", "status": state, "reason": reason,
                     "missing": [], "source": "provider_catalog"})
+    connected_keys = {str(row.get("provider_key") or "") for row in provider_rows if row.get("connected")}
     for key, row in sorted(channel_readiness.items()):
-        if row.get("live_ready"):
+        if key not in connected_keys:
+            state, reason = "not_connected", "provider_activation_missing"
+        elif row.get("live_ready"):
             state, reason = "live_ready", "live_evidence_fresh"
         elif row.get("endpoint_ok"):
             state, reason = "connected_unverified", "live_evidence_missing"
         else:
-            state, reason = "not_connected", "endpoint_not_configured"
+            state, reason = "connected_unverified", "endpoint_not_configured"
         out.append({"key": key, "kind": "messaging", "status": state, "reason": reason,
                     "missing": list(row.get("missing") or []), "source": "event_spine.provider_live_evidence"})
     for key, row in sorted(ad_connectors.items()):

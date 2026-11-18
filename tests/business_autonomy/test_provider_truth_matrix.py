@@ -199,8 +199,21 @@ def test_p2_unified_integration_statuses_refuse_unproven_messaging():
 def test_p2_messaging_live_only_from_scoped_evidence():
     from application.business_autonomy.provider_truth_matrix import unified_integration_statuses
     rows = unified_integration_statuses(
-        provider_rows=[], ad_connectors={},
+        provider_rows=[{"provider_key": "vk", "connected": True}, {"provider_key": "max", "connected": True}],
+        ad_connectors={},
         channel_readiness={"vk": {"live_ready": True, "missing": [], "endpoint_ok": True},
                            "max": {"live_ready": False, "missing": ["recovery"], "endpoint_ok": True}},
     )
-    assert [(r["key"], r["status"]) for r in rows] == [("max", "connected_unverified"), ("vk", "live_ready")]
+    assert [(r["key"], r["status"]) for r in rows if r["kind"] == "messaging"] == [("max", "connected_unverified"), ("vk", "live_ready")]
+
+
+def test_p2_live_evidence_never_overrides_disconnected_business_provider():
+    from application.business_autonomy.provider_truth_matrix import unified_integration_statuses
+
+    rows = unified_integration_statuses(
+        provider_rows=[{"provider_key": "vk_messaging", "connected": False}],
+        channel_readiness={"vk_messaging": {"live_ready": True, "endpoint_ok": True, "missing": []}},
+        ad_connectors={},
+    )
+    status = next(row for row in rows if row["kind"] == "messaging")
+    assert (status["status"], status["reason"]) == ("not_connected", "provider_activation_missing")
