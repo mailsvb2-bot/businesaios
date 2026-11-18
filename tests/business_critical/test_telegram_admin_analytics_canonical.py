@@ -37,7 +37,7 @@ def _callback(route):
 def test_verified_callback_uses_persistent_scoped_canonical_analytics( monkeypatch, tmp_path, route, event_type, expected, ):
     monkeypatch.setattr( "runtime.entrypoints.telegram_longpoll._configured_telegram_tenant_id", lambda: "tenant-live", )
     state = _world_state_from_update(_callback(route))
-    state = replace(state, user={**state.user, "roles": ["admin"]})
+    monkeypatch.setenv("ADMIN_USER_IDS", "4001")
     proposal = UnifiedTelegramPolicyV3(admin_user_ids=("4001",)).propose(state)
     assert proposal.action == "business_ops_summary@v1"
     assert proposal.payload["op"] == "admin_analytics"
