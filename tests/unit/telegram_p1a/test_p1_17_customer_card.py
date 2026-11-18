@@ -82,3 +82,22 @@ def test_app_renders_the_sales_block_only_when_the_api_provides_it():
     app = (Path(__file__).resolve().parents[3] / "frontend" / "src" / "App.jsx").read_text(encoding="utf-8")
     assert "payload.sales?.available" in app and "Обращения и сделки" in app
     assert "Подтверждённый результат: оплата получена" in app
+
+
+def test_scoped_owner_cockpit_never_exposes_other_business_sales(flow):
+    from types import SimpleNamespace
+
+    def run(user, business, index):
+        env = SimpleNamespace(decision=SimpleNamespace(decision_id=f"d{index}", correlation_id=f"c{index}"))
+        handle_sales_pipeline({"tenant_id": "t1", "user_id": user, "business_id": business,
+                               "op": "inbound", "arg": "Нужна консультация", "reply": "ok"},
+                              flow.effects, env, event_store=flow.store, now_ms=NOW)
+
+    run("cust-a", "b1", 1)
+    run("cust-b", "b2", 2)
+    _, text_a = flow.run(partial(handle_business_ops_summary, now_ms=NOW), op="cockpit",
+                         arg="cpm:customers", business_id="b1")
+    _, text_b = flow.run(partial(handle_business_ops_summary, now_ms=NOW), op="cockpit",
+                         arg="cpm:customers", business_id="b2")
+    assert "cust-a" in text_a and "cust-b" not in text_a
+    assert "cust-b" in text_b and "cust-a" not in text_b

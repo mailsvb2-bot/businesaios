@@ -388,8 +388,11 @@ def handle_business_ops_summary(payload, effects, env, *, event_store, now_ms: i
         text = render_admin_analytics(event_store=event_store, tenant_id=tenant_id, route=route, now_ms=now)
         return send_tracked(body, effects, env, text=text, event_type=None, event_payload=None)
 
+    sales_scope = str(body.get("business_id") or "").strip() or None
+
     def facts(event_type: str) -> list[dict]:
-        return flow_payloads(event_store, tenant_id=tenant_id, event_type=event_type)
+        return flow_payloads(event_store, tenant_id=tenant_id, event_type=event_type,
+                             business_id=sales_scope if event_type == "sales_pipeline@v1" else None)
 
     slots = bk.replay(facts("bookings@v1"))
     future = bk.upcoming(slots, now_ms=now)
@@ -411,7 +414,8 @@ def handle_business_ops_summary(payload, effects, env, *, event_store, now_ms: i
             "perms": rr.team_perms_snapshot(event_store, tenant_id=tenant_id),
         }
         return _cockpit( body, effects, env, future, steps, facts, now, team,
-            timed=lambda et: flow_rows(event_store, tenant_id=tenant_id, event_type=et),
+            timed=lambda et: flow_rows(event_store, tenant_id=tenant_id, event_type=et,
+                                      business_id=sales_scope if et == "sales_pipeline@v1" else None),
         )
     if str(body.get("op") or "") in ("outcomes", "trace", "economics", "journey"):
         text = _revenue_text(str(body.get("op")), str(body.get("arg") or "").strip(), now, event_store, tenant_id)
@@ -560,7 +564,9 @@ def handle_business_admin(payload, effects, env, *, event_store, settings_gatewa
             from application.business_flows import sales as sl
 
             return _ads( body, done, st, op, arg, flow_payloads(event_store, tenant_id=tenant_id, event_type="business_admin@v1"),
-                lambda: sl.replay(flow_payloads(event_store, tenant_id=tenant_id, event_type="sales_pipeline@v1")),
+                lambda: sl.replay(flow_payloads(event_store, tenant_id=tenant_id,
+                                               business_id=str(body.get("business_id") or "").strip() or None,
+                                               event_type="sales_pipeline@v1")),
             )
         if op == "audit":
             facts_ = flow_payloads(event_store, tenant_id=tenant_id, event_type="business_admin@v1")
