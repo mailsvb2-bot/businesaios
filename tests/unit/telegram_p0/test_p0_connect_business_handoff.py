@@ -19,6 +19,11 @@ def test_link_validation_rejects_credential_and_query_injection() -> None:
                 "https://example.org\\n.evil", "https://example.org:8080/"):
         assert validated_onboarding_url(bad) == "https://app.businessaios.ru/"
     assert validated_onboarding_url("https://example.org/start") == "https://example.org/start"
+    for bad in ("https://example.org.evil@other.org/", "https://a..b/path",
+                "https://-bad.org/", "https://example.org\\evil",
+                "https://example.org/?next=https://bad.org",
+                "https://example.org/%0a\n", "https://exämple.org/"):
+        assert validated_onboarding_url(bad) == "https://app.businessaios.ru/"
 
 
 def test_handoff_does_not_disclose_internal_binding_to_user() -> None:

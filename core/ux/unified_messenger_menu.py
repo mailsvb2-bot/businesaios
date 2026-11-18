@@ -5,8 +5,8 @@ transparent informational route; no donor runtime, second decision owner or send
 """
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass
-from urllib import parse
 
 from core.ux.callbacks import CB_ADMIN_MENU, CB_ADS_APPLY_MENU, CB_AUTOPILOT_MENU, CB_MENU_MAIN, CB_SETTINGS_MENU
 
@@ -87,20 +87,26 @@ DEFAULT_ONBOARDING_URL = BUSINESS_ONBOARDING_URL
 
 def validated_onboarding_url(raw: str) -> str:
     """Constrain operator's public HTTPS destination; never forward identifiers."""
-    value = str(raw or "").strip()
+    value = str(raw or "")
+    if value != value.strip():
+        return DEFAULT_ONBOARDING_URL
     if not value:
         return DEFAULT_ONBOARDING_URL
     if len(value) > 200 or any(c.isspace() for c in value):
         return DEFAULT_ONBOARDING_URL
-    try:
-        parts = parse.urlsplit(value)
-        if (parts.scheme != "https" or not parts.hostname or parts.username is not None
-                or parts.password is not None or parts.query or parts.fragment
-                or parts.port is not None):
-            return DEFAULT_ONBOARDING_URL
-        if not parts.hostname.replace(".", "").replace("-", "").isalnum():
-            return DEFAULT_ONBOARDING_URL
-    except ValueError:
+    # Pure URL validation: no network/transport SDK enters the presentation core.
+    # Restrict the destination to an HTTPS DNS hostname and an optional safe path.
+    if not value.startswith("https://"):
+        return DEFAULT_ONBOARDING_URL
+    host, sep, path = value[8:].partition("/")
+    labels = host.split(".")
+    if not 1 <= len(labels) <= 20 or any(
+        not 1 <= len(label) <= 63
+        or re.fullmatch(r"[A-Za-z0-9](?:[A-Za-z0-9-]*[A-Za-z0-9])?", label) is None
+        for label in labels
+    ):
+        return DEFAULT_ONBOARDING_URL
+    if sep and re.fullmatch(r"[A-Za-z0-9._~!$&'()*+,;=:@%/-]*", path) is None:
         return DEFAULT_ONBOARDING_URL
     return value
 

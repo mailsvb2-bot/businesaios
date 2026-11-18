@@ -48,7 +48,7 @@ def make_ctx(*, user_id="1001", text="", cmd=None, args="", callback_data="", ca
     )
 
 
-def decide(proposal, ctx):
+def validate_proposal_binding(proposal, ctx):
     """DecisionCore binding + closed schema validation; returns the signed-to-be payload."""
     action = normalize_proposed_action(proposal)
     product = ctx.state.product if isinstance(ctx.state.product, dict) else {}

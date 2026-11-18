@@ -6,7 +6,7 @@ from functools import partial
 
 from core.policies.telegram.router import handle
 from runtime.handler_impl.domains.business_flow_ops import handle_business_ops_summary, handle_sales_pipeline
-from tests.unit.telegram_p1a._support import decide, make_ctx
+from tests.unit.telegram_p1a._support import make_ctx, validate_proposal_binding
 
 NOW = 1_800_000_000_000
 
@@ -22,7 +22,7 @@ def _press(flow, callback, *, settings=None, text=""):
     """Policy (as owner 'u1') -> DecisionCore binding -> executor, like the live path."""
     ctx = make_ctx(user_id="u1", callback_data=callback, text=text, roles=["owner"], settings=settings,
                    timestamp_ms=NOW)
-    action, payload = decide(handle(ctx, default_price_rub=990), ctx)
+    action, payload = validate_proposal_binding(handle(ctx, default_price_rub=990), ctx)
     if action == "set_user_setting@v1":
         return action, payload
     assert action == "sales_pipeline@v1"
@@ -59,7 +59,7 @@ def test_lead_card_buttons_take_note_next_contact_and_stage(flow):
 
 def test_take_cannot_assign_someone_else_and_closed_lead_has_no_work_buttons(flow):
     ctx = make_ctx(user_id="u1", callback_data="sales:do:take:lead_0123456789abcdef", roles=["owner"])
-    _, payload = decide(handle(ctx, default_price_rub=990), ctx)
+    _, payload = validate_proposal_binding(handle(ctx, default_price_rub=990), ctx)
     assert payload["arg"] == "lead_0123456789abcdef u1"  # always the pressing user
     flow.run(partial(handle_sales_pipeline, now_ms=NOW), op="add", arg="Борис | звонок")
     lead_id = flow.store.events[-1]["payload"]["lead_id"]

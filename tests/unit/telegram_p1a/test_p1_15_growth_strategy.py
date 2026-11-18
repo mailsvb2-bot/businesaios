@@ -7,7 +7,7 @@ from types import SimpleNamespace
 import pytest
 
 from core.policies.telegram.router import handle
-from tests.unit.telegram_p1a._support import BUSINESS, TENANT, decide, make_ctx
+from tests.unit.telegram_p1a._support import BUSINESS, TENANT, make_ctx, validate_proposal_binding
 
 
 def _callbacks(markup):
@@ -30,7 +30,7 @@ def test_ai_section_leads_to_growth_strategy():
 ])
 def test_growth_buttons_use_canonical_business_scope_without_snapshot(callback, action):
     ctx = make_ctx(user_id="1001", callback_data=callback, callback_query_id="cb-9", roles=["owner"])
-    got, payload = decide(handle(ctx, default_price_rub=990), ctx)
+    got, payload = validate_proposal_binding(handle(ctx, default_price_rub=990), ctx)
     assert got == action
     assert payload["tenant_id"] == TENANT and payload["business_id"] == BUSINESS
 

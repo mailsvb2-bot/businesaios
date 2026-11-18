@@ -85,8 +85,10 @@ def load_user_bundle(*, event_store: Any, tenant_id: str, user_id: str, event_wa
         kpi = build_today_kpi(event_store, tenant_id=str(tenant_id))
         autopilot_dashboard["growth"] = {"leads": int(kpi.leads), "spend_minor": int(kpi.spend_minor),
                                          "revenue_minor": int(kpi.revenue_minor), "profit_minor": int(kpi.profit_minor)}
-    except Exception:
-        pass
+    except Exception as exc:
+        # This projection is optional but its failure is never silent.
+        # Do not fabricate zero KPIs; the UI must show data unavailable.
+        event_warning(reason="ai_director_growth_kpi_unavailable", error=type(exc).__name__)
 
     return {
         "entitlements": entitlements,

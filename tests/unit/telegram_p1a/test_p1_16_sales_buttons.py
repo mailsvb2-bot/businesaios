@@ -9,7 +9,7 @@ import pytest
 from core.policies.telegram.router import handle
 from runtime.handler_impl.domains.business_flow_ops import handle_sales_pipeline
 from tests.unit.business_flows.conftest import FlowEffects, FlowStore
-from tests.unit.telegram_p1a._support import TENANT, decide, make_ctx
+from tests.unit.telegram_p1a._support import TENANT, make_ctx, validate_proposal_binding
 
 NOW = 1_700_000_000_000
 
@@ -24,16 +24,16 @@ def _cbs(markup):
 ])
 def test_list_buttons_propose_the_command_op(callback, op):
     ctx = make_ctx(user_id="1001", callback_data=callback, callback_query_id="cb-1", roles=["owner"])
-    action, payload = decide(handle(ctx, default_price_rub=990), ctx)
+    action, payload = validate_proposal_binding(handle(ctx, default_price_rub=990), ctx)
     assert action == "sales_pipeline@v1" and payload["op"] == op and payload["tenant_id"] == TENANT
 
 
 def test_section_sales_button_is_schema_valid_with_callback_ack():
     ctx = make_ctx(user_id="1001", callback_data="cp:section:sales", callback_query_id="cb-7", roles=["owner"])
-    action, payload = decide(handle(ctx, default_price_rub=990), ctx)
+    action, payload = validate_proposal_binding(handle(ctx, default_price_rub=990), ctx)
     assert action == "sales_pipeline@v1" and payload["callback_query_id"] == "cb-7"
     ctx = make_ctx(user_id="1001", callback_data="cp:section:ad-channels", callback_query_id="cb-8", roles=["owner"])
-    assert decide(handle(ctx, default_price_rub=990), ctx)[0] == "bookings@v1"
+    assert validate_proposal_binding(handle(ctx, default_price_rub=990), ctx)[0] == "bookings@v1"
 
 
 @pytest.mark.parametrize("role", ["operator", "marketer", None])
@@ -50,14 +50,14 @@ def _session(op, lead="", expires=NOW + 60_000):
 def test_add_lead_button_then_text_becomes_lead_add():
     ctx = make_ctx(user_id="1001", callback_data="sales:in:add", callback_query_id="cb-2", roles=["owner"],
                    timestamp_ms=NOW)
-    action, payload = decide(handle(ctx, default_price_rub=990), ctx)
+    action, payload = validate_proposal_binding(handle(ctx, default_price_rub=990), ctx)
     assert action == "set_user_setting@v1" and payload["key"] == "sales:input"
     assert payload["value"]["op"] == "add" and payload["value"]["expires_ms"] == NOW + 600_000
     assert "sales:cancel" in _cbs(payload["notify_reply_markup"])
 
     typed = make_ctx(user_id="1001", text="Анна | Instagram", roles=["owner"], settings=payload["value"] and
                      {"sales:input": payload["value"]}, timestamp_ms=NOW + 1000)
-    action, payload = decide(handle(typed, default_price_rub=990), typed)
+    action, payload = validate_proposal_binding(handle(typed, default_price_rub=990), typed)
     assert action == "sales_pipeline@v1"
     assert payload["op"] == "add" and payload["arg"] == "Анна | Instagram" and payload["input_session"] is True
 
@@ -70,7 +70,7 @@ def test_add_lead_button_then_text_becomes_lead_add():
 def test_lead_input_session_builds_the_command_argument(op, text, arg):
     ctx = make_ctx(user_id="1001", text=text, roles=["owner"], settings=_session(op, "lead_0123456789abcdef"),
                    timestamp_ms=NOW)
-    action, payload = decide(handle(ctx, default_price_rub=990), ctx)
+    action, payload = validate_proposal_binding(handle(ctx, default_price_rub=990), ctx)
     assert (action, payload["op"], payload["arg"]) == ("sales_pipeline@v1", op, arg)
 
 
@@ -87,7 +87,7 @@ def test_expired_forged_or_foreign_session_is_ignored():
 
 def test_cancel_clears_the_session():
     ctx = make_ctx(user_id="1001", text="отмена", roles=["owner"], settings=_session("add"), timestamp_ms=NOW)
-    action, payload = decide(handle(ctx, default_price_rub=990), ctx)
+    action, payload = validate_proposal_binding(handle(ctx, default_price_rub=990), ctx)
     assert action == "set_user_setting@v1" and payload["value"] == {}
 
 

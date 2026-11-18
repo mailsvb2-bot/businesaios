@@ -37,7 +37,8 @@ def test_pipeline_funnel_counts_highest_stage_reached_won_lost_and_stale():
 
 
 def test_deal_funnel_maps_provider_stages_and_reports_unmapped():
-    d = lambda stage, upd=NOW, status="active": SimpleNamespace(stage_key=stage, updated_at_ms=upd, lifecycle_status=status)
+    def d(stage, upd=NOW, status="active"):
+        return SimpleNamespace(stage_key=stage, updated_at_ms=upd, lifecycle_status=status)
     deals = [d("appointmentscheduled", NOW - 30 * DAY), d("contractsent"), d("closedwon"), d("closedlost"),
              d("custom_stage_42"), d("closedwon", status="archived")]
     f = sales_center.deal_funnel(deals, provider_key="hubspot", now_ms=NOW)
