@@ -229,7 +229,7 @@ def handle_partners(payload, effects, env, *, event_store):
         # Owner-initiated draft only; no partner send, no price acceptance.
         from application.business_flows import admin as admin_flows
         from application.business_flows import sales_ai as sales_ai_policy
-        from config.env import env_str
+        from runtime.platform.config.env_flags import env_str
 
         ref, sep, incoming = arg.partition("|")
         ref, incoming = ref.strip(), incoming.strip()
@@ -260,7 +260,7 @@ def handle_partners(payload, effects, env, *, event_store):
             correlation_id=str(env.decision.correlation_id),
             admin_id=str(body.get("user_id") or "owner"),
             system=system,
-            user=f"Кандидат: {candidate.name[:120]}\\nВходящее сообщение: {clean[:1000]}",
+            user=f"Кандидат: {candidate.name[:120]}\nВходящее сообщение: {clean[:1000]}",
         )
         if not isinstance(result, dict) or not result.get("ok"):
             message = "⚠️ ИИ-провайдер недоступен. Письмо не отправлено."
