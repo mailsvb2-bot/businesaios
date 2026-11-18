@@ -99,7 +99,7 @@ class ProviderAdminRouteHandlers:
         out = {**result, 'timeline': {'available': True, 'entries': [asdict(item) for item in timeline.entries]}}
         from config.env_flags import env_bool
         if env_bool('BAI_CUSTOMER_CARD_SALES_ENABLED', False):  # default OFF: sales block on the customer card
-            out['sales'] = self._customer_sales(tenant_id=tenant_id, customer=next(r for r in rows if str(r.get('customer_id') or '') == selected))
+            out['sales'] = self._customer_sales(tenant_id=tenant_id, business_id=business_id, customer=next(r for r in rows if str(r.get('customer_id') or '') == selected))
         return out
     def get_sales_sources(self, *, tenant_id: str, business_id: str, requested: str = '') -> dict[str, Any]:
         """Sales Center sources (read-only): channel pipeline + CRMs with confirmed live reads."""
@@ -109,7 +109,7 @@ class ProviderAdminRouteHandlers:
         from application.business_flows.projection import flow_rows
         keys = sales_source_provider_keys()
         catalog = list(self.list_provider_catalog(tenant_id=tenant_id, business_id=business_id).get('providers') or [])
-        rows = [] if self.customer_event_store is None else flow_rows(self.customer_event_store, tenant_id=tenant_id, event_type='sales_pipeline@v1')
+        rows = [] if self.customer_event_store is None else flow_rows(self.customer_event_store, tenant_id=tenant_id, business_id=business_id, event_type='sales_pipeline@v1')
         st = sales.replay([payload for _, payload in rows])
         connected = [str(p.get('provider_key')) for p in catalog if p.get('connected') and p.get('provider_key') in keys['channels']]
         import time
@@ -132,13 +132,13 @@ class ProviderAdminRouteHandlers:
         except Exception:
             return None
         return sales_center.deal_funnel(deals, provider_key=provider_key, now_ms=now_ms)
-    def _customer_sales(self, *, tenant_id: str, customer: Mapping[str, Any]) -> dict[str, Any]:
+    def _customer_sales(self, *, tenant_id: str, business_id: str, customer: Mapping[str, Any]) -> dict[str, Any]:
         import time
 
         from application.business_flows import cockpit_sales, sales
         from application.business_flows.projection import flow_payloads
         try:
-            st = sales.replay(flow_payloads(self.customer_event_store, tenant_id=tenant_id, event_type='sales_pipeline@v1'))
+            st = sales.replay(flow_payloads(self.customer_event_store, tenant_id=tenant_id, business_id=business_id, event_type='sales_pipeline@v1'))
         except Exception:
             return {'available': False, 'leads': []}
         leads = cockpit_sales.customer_sales_view(st, list(customer.get('identities') or []), now_ms=int(time.time() * 1000))

@@ -16,6 +16,7 @@ def flow_rows(
     tenant_id: str,
     event_type: str,
     user_id: str | None = None,
+    business_id: str | None = None,
 ) -> list[tuple[int, dict[str, Any]]]:
     """Tracked flow payloads oldest-first with their recorded ``timestamp_ms``."""
     events = best_effort_iter_events(
@@ -27,7 +28,10 @@ def flow_rows(
         end_ms=None,
         user_id=user_id,
     )
-    rows = [ev for ev in events if str(ev.get("event_type") or ev.get("type")) == event_type]
+    rows = [ev for ev in events if str(ev.get("event_type") or ev.get("type")) == event_type
+            and (business_id is None or (str(business_id).strip()
+                 and isinstance(ev.get("payload"), dict)
+                 and str(ev["payload"].get("business_id") or "") == str(business_id).strip()))]
     rows.sort(key=lambda ev: int(ev.get("timestamp_ms") or 0))
     return [(int(ev.get("timestamp_ms") or 0), dict(ev["payload"])) for ev in rows if isinstance(ev.get("payload"), dict)]
 
@@ -38,9 +42,10 @@ def flow_payloads(
     tenant_id: str,
     event_type: str,
     user_id: str | None = None,
+    business_id: str | None = None,
 ) -> list[dict[str, Any]]:
     """Return tracked flow payloads oldest-first (tenant-wide when user_id is None)."""
-    return [p for _, p in flow_rows(event_store, tenant_id=tenant_id, event_type=event_type, user_id=user_id)]
+    return [p for _, p in flow_rows(event_store, tenant_id=tenant_id, event_type=event_type, user_id=user_id, business_id=business_id)]
 
 
 def stable_id(prefix: str, *parts: object) -> str:

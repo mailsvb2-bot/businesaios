@@ -42,8 +42,8 @@ def test_web_customer_sales_is_identity_bound_and_flagged(flow, monkeypatch):
     import entrypoints.api.provider_admin_route_handlers as mod
 
     run = partial(flow.run, partial(handle_sales_pipeline, now_ms=NOW))
-    run(op="inbound", arg="Добрый день", reply="ok", user_id="cust7")
-    run(op="inbound", arg="Добрый день", reply="ok", user_id="stranger")
+    run(op="inbound", arg="Добрый день", reply="ok", user_id="cust7", business_id="b1")
+    run(op="inbound", arg="Добрый день", reply="ok", user_id="stranger", business_id="b2")
 
     class Registry:
         def list_customers(self, *, tenant_id, business_id):
@@ -68,11 +68,13 @@ def test_web_customer_sales_is_identity_bound_and_flagged(flow, monkeypatch):
     monkeypatch.setenv("BAI_CUSTOMER_CARD_SALES_ENABLED", "1")
     out = handlers.get_business_customers(tenant_id="t1", business_id="b1", customer_id="c-1")
     assert out["sales"] == {"available": True, "leads": [], "source": "sales_pipeline@v1"}  # no identities -> nothing
-    view = handlers._customer_sales(tenant_id="t1", customer={"identities": [
+    view = handlers._customer_sales(tenant_id="t1", business_id="b1", customer={"identities": [
         {"channel": "telegram", "external_subject": "cust7"}]})
     (lead,) = view["leads"]
     assert lead["stage_label"] == "на связи" and lead["owner"] == "" and lead["confirmed_result"] is None
-    assert handlers._customer_sales(tenant_id="other", customer={"identities": [
+    assert handlers._customer_sales(tenant_id="other", business_id="b1", customer={"identities": [
+        {"channel": "telegram", "external_subject": "cust7"}]})["leads"] == []
+    assert handlers._customer_sales(tenant_id="t1", business_id="b2", customer={"identities": [
         {"channel": "telegram", "external_subject": "cust7"}]})["leads"] == []
 
 

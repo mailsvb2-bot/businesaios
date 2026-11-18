@@ -62,6 +62,12 @@ def send_tracked( body, effects, env, *, text: str, event_type: str | None, even
     cbq = body.pop("callback_query_id", None) if isinstance(body, dict) else None
     if tracked is not None:
         tracked.update(tenant_id=tenant_id, user_id=user_id)
+        if event_type == "sales_pipeline@v1":
+            # Business-scoped facts are required for multi-business web views.
+            # Legacy tenant-wide facts never silently migrate into another business.
+            business_id = str(body.get("business_id") or "").strip()
+            if business_id:
+                tracked["business_id"] = business_id
     delivery = effects.send_message( decision_id=env.decision.decision_id, correlation_id=env.decision.correlation_id, tenant_id=tenant_id,
         user_id=user_id,
         text=text,
@@ -713,7 +719,8 @@ def handle_sales_pipeline(payload, effects, env, *, event_store, now_ms: int | N
     body = require_mapping(payload or {})
     tenant_id = required_str(body, "tenant_id")
     op, arg, now = str(body.get("op") or "list"), str(body.get("arg") or "").strip(), now_ms or _now_ms()
-    st = sl.replay(flow_payloads(event_store, tenant_id=tenant_id, event_type="sales_pipeline@v1"))
+    business_id = str(body.get("business_id") or "").strip() or None
+    st = sl.replay(flow_payloads(event_store, tenant_id=tenant_id, business_id=business_id, event_type="sales_pipeline@v1"))
     if body.pop("input_session", None) is True:  # one-shot «Продажи» button input: consumed by this decision
         effects.set_user_setting(decision_id=env.decision.decision_id, correlation_id=env.decision.correlation_id,
                                  tenant_id=tenant_id, user_id=required_str(body, "user_id"), key="sales:input", value={})

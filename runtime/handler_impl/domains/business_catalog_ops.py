@@ -207,7 +207,8 @@ def _sales_inbound(done, body, env, *, tenant_id, event_store):
     ai = settings.get("sales_ai", "off").strip().casefold() in ("on", "1", "true")
     try:
         fact = si.record_message(
-            flow_payloads(event_store, tenant_id=tenant_id, event_type="sales_pipeline@v1"),
+            flow_payloads(event_store, tenant_id=tenant_id, event_type="sales_pipeline@v1",
+                          business_id=str(body.get("business_id") or "").strip() or None),
             channel="telegram",
             subject=str(body.get("user_id") or ""),
             name=str(body.get("name") or ""),

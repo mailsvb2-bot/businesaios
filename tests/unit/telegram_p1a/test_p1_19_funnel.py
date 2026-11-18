@@ -53,10 +53,10 @@ def test_sources_carry_the_funnel_from_the_real_pipeline(flow):
     import entrypoints.api.provider_admin_route_handlers as mod
 
     run = partial(flow.run, partial(handle_sales_pipeline, now_ms=NOW))
-    run(op="add", arg="Анна | сайт")
+    run(op="add", arg="Анна | сайт", business_id="b1")
     lead_id = flow.store.events[-1]["payload"]["lead_id"]
-    run(op="event", arg="1 contact")
-    run(op="event", arg="1 paid")
+    run(op="event", arg="1 contact", business_id="b1")
+    run(op="event", arg="1 paid", business_id="b1")
 
     class H(mod.ProviderAdminRouteHandlers):
         def list_provider_catalog(self, **_):

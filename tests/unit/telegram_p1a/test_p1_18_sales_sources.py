@@ -47,7 +47,7 @@ def test_handler_reads_the_canonical_pipeline_and_connected_providers(flow):
     import entrypoints.api.provider_admin_route_handlers as mod
 
     partial(flow.run, partial(handle_sales_pipeline, now_ms=1_800_000_000_000))(
-        op="inbound", arg="Здравствуйте", reply="ok", user_id="cust7")
+        op="inbound", arg="Здравствуйте", reply="ok", user_id="cust7", business_id="b1")
 
     class H(mod.ProviderAdminRouteHandlers):
         def list_provider_catalog(self, *, tenant_id, business_id):
@@ -93,3 +93,35 @@ def test_route_is_default_off(monkeypatch, flag, code):
 def test_app_falls_back_to_the_hubspot_view_when_off():
     app = (Path(__file__).resolve().parents[3] / "frontend" / "src" / "App.jsx").read_text(encoding="utf-8")
     assert "business-workspace/sales-sources" in app and "setSalesSources(null); // feature off" in app
+
+
+def test_sales_sources_are_isolated_across_businesses_in_one_tenant(flow):
+    from types import SimpleNamespace
+
+    import entrypoints.api.provider_admin_route_handlers as mod
+
+    for index, (user, business) in enumerate((("a", "b1"), ("b", "b2"), ("legacy", ""))):
+        env = SimpleNamespace(decision=SimpleNamespace(decision_id=f"decision-{index}",
+                                                       correlation_id=f"message-{index}"))
+        handle_sales_pipeline({"tenant_id": "t1", "user_id": user, "business_id": business,
+                               "op": "inbound", "arg": "Здравствуйте", "reply": "ok"},
+                              flow.effects, env, event_store=flow.store, now_ms=1_800_000_000_000)
+
+    class H(mod.ProviderAdminRouteHandlers):
+        def list_provider_catalog(self, *, tenant_id, business_id):
+            return {"providers": [{"provider_key": "telegram_bot", "connected": True}]}
+
+    service = H(customer_event_store=flow.store)
+    left = service.get_sales_sources(tenant_id="t1", business_id="b1")["sources"][0]
+    right = service.get_sales_sources(tenant_id="t1", business_id="b2")["sources"][0]
+    assert left["contacts"] == right["contacts"] == 1
+    assert left["deals"] == right["deals"] == 1
+    assert all(row["payload"].get("business_id") in ("b1", "b2", None) for row in flow.store.events)
+
+
+def test_legacy_sales_facts_without_business_are_not_visible_in_web_projection(flow):
+    from application.business_flows.projection import flow_rows
+    run = partial(flow.run, partial(handle_sales_pipeline, now_ms=1_800_000_000_000))
+    run(op="inbound", arg="legacy", reply="ok", user_id="legacy")
+    assert flow_rows(flow.store, tenant_id="t1", event_type="sales_pipeline@v1")
+    assert flow_rows(flow.store, tenant_id="t1", business_id="b1", event_type="sales_pipeline@v1") == []
