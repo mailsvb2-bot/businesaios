@@ -17,7 +17,7 @@ from runtime.business_autonomy.provider_webhook_inbound_processor import Provide
 from runtime.business_autonomy.provider_webhook_inbound_result_summary import summarize_provider_webhook_inbound_result
 from runtime.business_autonomy.provider_webhook_replay_guard import ProviderWebhookReplayGuard
 from runtime.business_autonomy.provider_webhook_route_registry import ProviderWebhookRouteRegistry
-from runtime.business_autonomy.provider_webhook_runtime import RAW_SIGNATURE_FIRST_PROVIDER_KEYS, ProviderWebhookRuntime
+from runtime.business_autonomy.provider_webhook_runtime import ProviderWebhookRuntime
 from runtime.safety import verified_inbound_reply_scope
 
 CANON_PROVIDER_INBOUND_WEBHOOK_SERVICE = True
@@ -56,8 +56,14 @@ class ProviderInboundWebhookService:
         requested_event_key = str(event_key or '').strip()
         route_registry = ProviderWebhookRouteRegistry()
         contract = self.webhook_runtime.describe(provider)
-        signature_first = provider.provider_key in RAW_SIGNATURE_FIRST_PROVIDER_KEYS
-        first_route = {'event_key': requested_event_key if requested_event_key and requested_event_key != 'payload-digest-fallback' else f'{provider.provider_key}:{raw_digest[:24]}', 'topic': str(topic or '').strip(), 'source_ref': '', 'resource_id': '', 'payload_digest': raw_digest, 'messaging_ingress': {}} if signature_first else route_registry.extract(provider, headers, body)
+        # Untrusted webhook data must not become a canonical route before its
+        # transport signature and configured recipient have been verified.
+        first_route = {
+            'event_key': requested_event_key if requested_event_key and requested_event_key != 'payload-digest-fallback'
+                         else f'{provider.provider_key}:{raw_digest[:24]}',
+            'topic': str(topic or '').strip(), 'source_ref': '', 'resource_id': '',
+            'payload_digest': raw_digest, 'messaging_ingress': {},
+        }
         route_event_key = str(first_route.get('event_key') or f'{provider.provider_key}:{raw_digest[:24]}')
         effective_event_key = route_event_key if provider.provider_key in {'line_messaging', 'viber_messaging'} else (requested_event_key if requested_event_key and requested_event_key != 'payload-digest-fallback' else route_event_key)
         effective_topic = str(topic or '').strip() or str(first_route.get('topic') or '')
@@ -67,11 +73,48 @@ class ProviderInboundWebhookService:
             self.observability.record_webhook(tenant_id=str(tenant_id), provider_key=provider.provider_key, status='invalid_signature', accepted=False, topic=effective_topic)
             incident = self.incident_registry.append({'tenant_id': str(tenant_id), 'business_id': str(business_id), 'provider_key': provider.provider_key, 'kind': 'webhook', 'status': 'invalid_signature', 'severity': 'major', 'category': 'webhook_signature', 'message': 'invalid webhook signature', 'metadata': {'topic': effective_topic}})
             return ProviderWebhookIngressResult(provider_key=provider.provider_key, event_key=effective_event_key, accepted=False, status='invalid_signature', metadata={'topic': effective_topic, 'audit_refs': refs, 'export_refs': export_refs, 'route': first_route, 'messaging_handoff': {}, 'messaging_inbound_result': {}, 'incident': incident})
-        routes = route_registry.extract_many(provider, headers, body)
+        try:
+            routes = route_registry.extract_many(provider, headers, body)
+        except ValueError as exc:
+            if str(exc) != 'PROVIDER_INBOUND_RECIPIENT_MISSING':
+                raise
+            refs = self.audit_recorder.record_webhook_event(
+                tenant_id=tenant_id, business_id=business_id, provider_key=provider.provider_key,
+                event_key=effective_event_key, status='recipient_missing', accepted=False,
+                metadata={'topic': effective_topic, 'reason': str(exc)},
+            )
+            export_refs = self.export_bridge.export_runtime_event(
+                tenant_id=str(tenant_id), business_id=str(business_id), provider_key=provider.provider_key,
+                event_kind='webhook', payload={'status': 'recipient_missing', 'accepted': False, 'topic': effective_topic},
+            )
+            self.observability.record_webhook(
+                tenant_id=str(tenant_id), provider_key=provider.provider_key,
+                status='recipient_missing', accepted=False, topic=effective_topic,
+            )
+            incident = self.incident_registry.append({
+                'tenant_id': str(tenant_id), 'business_id': str(business_id),
+                'provider_key': provider.provider_key, 'kind': 'webhook',
+                'status': 'recipient_missing', 'severity': 'major',
+                'category': 'webhook_recipient',
+                'message': 'inbound message has no verified reply recipient',
+                'metadata': {'topic': effective_topic, 'reason': str(exc)},
+            })
+            return ProviderWebhookIngressResult(
+                provider_key=provider.provider_key, event_key=effective_event_key,
+                accepted=False, status='recipient_missing',
+                metadata={
+                    'topic': effective_topic, 'audit_refs': refs, 'export_refs': export_refs,
+                    'messaging_handoff': {}, 'messaging_inbound_result': {}, 'incident': incident,
+                },
+            )
         first_route = routes[0]
-        if signature_first:
-            effective_event_key = str(first_route.get('event_key') or f'{provider.provider_key}:{raw_digest[:24]}')
-            effective_topic = str(topic or '').strip() or str(first_route.get('topic') or '')
+        route_event_key = str(first_route.get('event_key') or f'{provider.provider_key}:{raw_digest[:24]}')
+        effective_event_key = (
+            route_event_key if provider.provider_key in {'line_messaging', 'viber_messaging'}
+            else requested_event_key if requested_event_key and requested_event_key != 'payload-digest-fallback'
+            else route_event_key
+        )
+        effective_topic = str(topic or '').strip() or str(first_route.get('topic') or '')
         if len(routes) == 1:
             return self._ingest_verified_route(provider=provider, tenant_id=tenant_id, business_id=business_id, route=first_route, event_key=effective_event_key, topic=effective_topic, owner_id=owner_id)
         results = tuple(self._ingest_verified_route(provider=provider, tenant_id=tenant_id, business_id=business_id, route=route, event_key=str(route.get('event_key') or ''), topic=str(route.get('topic') or ''), owner_id=owner_id) for route in routes)
@@ -235,6 +278,8 @@ class ProviderInboundWebhookService:
 
     @staticmethod
     def transport_ack_safe(result: ProviderWebhookIngressResult) -> bool:
+        if result.status == 'recipient_missing':
+            return False
         metadata = dict(result.metadata or {})
         if result.status == 'replayed' and dict(metadata.get('decision') or {}).get('resolution') != 'replay_completed':
             return False

@@ -34,7 +34,8 @@ T, B, SECRET = "tenant-a", "biz-a", "bridge-secret-0123456789"
 
 def _vault(provider_key: str) -> InMemorySecretVault:
     vault, provider = InMemorySecretVault(), provider_map()[provider_key]
-    for name, value in (("webhook_secret", SECRET), ("access_token", "provider-token")):
+    for name, value in (("webhook_secret", SECRET), ("access_token", "provider-token"),
+                        ("group_id", "1"), ("bot_id", "100100")):
         ref = SecretRef(tenant_id=T, connector_id=provider.connector_id, scope=B,
                         secret_name=f"{provider.connector_id}.{name}")
         vault.put(SecretRecord(ref=ref, ciphertext=b"pending", source=SecretSource.CONNECTOR), plaintext=value.encode())
@@ -104,7 +105,8 @@ CASES = {
     "max_messaging": dict(
         channel="max", topic="message_created", headers=lambda secret: {"X-Max-Bot-Api-Secret": secret},
         body=lambda secret: {"update_type": "message_created", "timestamp": 1787259600000,
-                             "message": {"sender": {"user_id": 778899, "name": "Анна"}, "recipient": {"user_id": 778899},
+                             "message": {"sender": {"user_id": 778899, "name": "Анна"},
+                                         "recipient": {"user_id": 100100, "chat_id": 778899, "chat_type": "dialog"},
                                          "body": {"mid": "mid.in.1", "text": "Сколько стоит?"}}},
         answer={"message": {"recipient": {"user_id": 778899}, "timestamp": 1,
                             "body": {"mid": "mid.out.1", "seq": 1, "text": "ok"}}},
@@ -165,3 +167,20 @@ def test_provider_retry_does_not_decide_twice(provider_key):
     again = _ingest(service, provider_key, SECRET)
     assert first.status == "accepted" and again.status == "replayed"
     assert len(decision.handoffs) == 1 and service.transport_ack_safe(again)
+
+
+@pytest.mark.parametrize("provider_key", sorted(CASES))
+def test_signed_foreign_recipient_does_not_reach_decision(provider_key):
+    service, decision, _, events = _wired(provider_key)
+    case = CASES[provider_key]
+    payload = case["body"](SECRET)
+    if provider_key == "vk_messaging":
+        payload["group_id"] = 99999
+    else:
+        payload["message"]["recipient"]["user_id"] = 99999
+    headers = case["headers"](SECRET) if callable(case["headers"]) else case["headers"]
+    result = service.ingest(provider=provider_map()[provider_key], tenant_id=T, business_id=B,
+                            headers=headers, body=json.dumps(payload).encode(), event_key="",
+                            topic=case["topic"], owner_id="provider_admin")
+    assert result.status == "invalid_signature" and not result.accepted
+    assert not decision.handoffs and not list(events)

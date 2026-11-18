@@ -70,7 +70,7 @@ class GrowthStrategyService:
         if manifest is not None:
             plan = manifest[0]
         else:
-            plan = self._build_plan(tenant_id=tenant, business_id=business, decision_id=decision, goal=goal or GrowthGoalV1(), n=n, model=model)
+            plan = self._build_plan(tenant_id=tenant, business_id=business, user_id=user, decision_id=decision, correlation_id=correlation, goal=goal or GrowthGoalV1(), n=n, model=model)
             persist_plan_manifest(self._event_store, tenant_id=tenant, business_id=business, user_id=user, decision_id=decision, correlation_id=correlation, plan=plan)
 
         self._persist_plan_details(plan=plan, tenant_id=tenant, business_id=business, user_id=user, decision_id=decision, correlation_id=correlation)
@@ -92,13 +92,14 @@ class GrowthStrategyService:
             return (normalized[0], durable[1]) if normalized is not None else durable
         return plan, completion_event_id
 
-    def _build_plan(self, *, tenant_id: str, business_id: str, decision_id: str, goal: GrowthGoalV1, n: int | None, model: str) -> StrategyPlanV1:
+    def _build_plan(self, *, tenant_id: str, business_id: str, user_id: str, decision_id: str, correlation_id: str, goal: GrowthGoalV1, n: int | None, model: str) -> StrategyPlanV1:
         signals = build_signals(self._event_store, tenant_id=tenant_id, business_id=business_id)
         hypothesis_count = self._policy.default_hypothesis_count if n is None else int(n)
         hypotheses: tuple[GrowthHypothesisV1, ...] = ()
         if self._llm is not None:
             excluded_channels = ("partnerships",) if self._policy.partnership_constraints_exclude(goal.constraints) else ()
-            hypotheses = tuple(generate_hypotheses(self._llm, tenant_id=tenant_id, goal=goal, signals=signals, n=hypothesis_count, model=str(model or ""), excluded_channels=excluded_channels))
+            hypotheses = tuple(generate_hypotheses(self._llm, tenant_id=tenant_id, user_id=user_id, correlation_id=correlation_id, goal=goal, signals=signals, n=hypothesis_count, model=str(model or ""), excluded_channels=excluded_channels))
+            llm_succeeded = bool(hypotheses)
         if not hypotheses:
             hypotheses = _fallback_hypotheses(tenant_id=tenant_id, business_id=business_id, decision_id=decision_id, signals=signals, goal=goal)
         hypotheses = _ensure_canonical_partnership_hypothesis(hypotheses, goal=goal, policy=self._policy)
@@ -114,7 +115,7 @@ class GrowthStrategyService:
             goal=goal,
             signals=signals,
             top_hypotheses=ranked,
-            notes=("llm" if self._llm is not None else "no_llm", "advisory_ranking_only", "decision_idempotent", "manifest_sealed", *visibility_notes),
+            notes=(("llm" if llm_succeeded else "llm_fallback") if self._llm is not None else "no_llm", "advisory_ranking_only", "decision_idempotent", "manifest_sealed", *visibility_notes),
         )
 
     def _persist_plan_details(self, *, plan: StrategyPlanV1, tenant_id: str, business_id: str, user_id: str, decision_id: str, correlation_id: str) -> None:
