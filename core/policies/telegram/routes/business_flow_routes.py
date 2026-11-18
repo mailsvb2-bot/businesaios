@@ -114,6 +114,7 @@ BUSINESS_FLOW_COMMANDS: dict[str, tuple[str, str, bool]] = {
     "/ad_spend_launch": ("event_series@v1", "spend_launch", True),
     "/ad_spend_stop": ("event_series@v1", "spend_stop", True),
     "/ad_spend_status": ("event_series@v1", "spend_status", True),
+    "/ad_spend_sync": ("event_series@v1", "spend_sync", True),
     "/ad_spend_process": ("event_series@v1", "spend_process", True),
     "/ad_goal_preview": ("event_series@v1", "goal_preview", True),
     "/business_retire": ("event_series@v1", "retire", True),
@@ -194,6 +195,7 @@ BUSINESS_FLOW_COMMANDS: dict[str, tuple[str, str, bool]] = {
     "/lead_optout": ("sales_pipeline@v1", "optout", True),
     "/send_followups": ("sales_pipeline@v1", "followup_dispatch", True),
     "/sales_business": ("sales_pipeline@v1", "business_pick", True),
+    "/sales_legacy_claim": ("sales_pipeline@v1", "legacy_attribute", True),
 }
 
 

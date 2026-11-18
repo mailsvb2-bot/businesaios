@@ -80,6 +80,98 @@ def settle_failed_oauth_completion(*, oauth_store: Any, digest: str, reusable: b
         oauth_store.consume(digest, "failed")
 
 
+def per_connection_readiness_enabled(env: Mapping[str, str] | None = None) -> bool:
+    return str((env or os.environ).get("BAI_ADS_PER_CONNECTION_READINESS_ENABLED", "0")).lower() in {
+        "1", "true", "yes"
+    }
+
+
+def direct_connection_key(*, business_id: str, account_id: str) -> str:
+    for label, value in (("business", business_id), ("account", account_id)):
+        if (not isinstance(value, str) or not value.strip() or value != value.strip()
+                or "::" in value or len(value) > 160):
+            raise ValueError(f"direct_connection_{label}_invalid")
+    return f"{business_id}::{account_id}"
+
+
+def _token_key(*, business_id: str | None, account_id: str) -> str:
+    if per_connection_readiness_enabled():
+        if not business_id:
+            raise PermissionError("direct_connection_business_scope_required")
+        return direct_connection_key(business_id=business_id, account_id=account_id)
+    return account_id
+
+
+DIRECT_LIVE_CAMPAIGN_STATES = frozenset({"ON", "OFF", "SUSPENDED"})
+
+
+def prepare_direct_rights_requests(*, campaign_id: int, ad_group_id: int):
+    """Official read-only Direct v5 get envelopes; no writes or made-up identifiers."""
+    for label, identifier in (("campaign_id", campaign_id), ("ad_group_id", ad_group_id)):
+        if type(identifier) is not int or not 0 < identifier < 2**63:
+            raise ValueError(f"direct_{label}_invalid")
+    return (
+        ("clients", {"method": "get", "params": {"FieldNames": ["Login", "Grants"]}}),
+        ("campaigns", {"method": "get", "params": {"SelectionCriteria": {"Ids": [campaign_id]},
+                                                  "FieldNames": ["Id", "State", "Status"]}}),
+        ("adgroups", {"method": "get", "params": {"SelectionCriteria": {"Ids": [ad_group_id]},
+                                                 "FieldNames": ["Id", "CampaignId", "Status"]}}),
+    )
+
+
+def _required_direct_row(response: object, key: str):
+    if not isinstance(response, Mapping) or response.get("error") is not None:
+        raise ValueError("direct_provider_read_failed")
+    result = response.get("result")
+    rows = result.get(key) if isinstance(result, Mapping) else None
+    if not isinstance(rows, list) or len(rows) != 1 or not isinstance(rows[0], Mapping):
+        raise ValueError("direct_provider_read_ambiguous")
+    return rows[0]
+
+
+async def direct_connection_readiness(
+    *, tenant_id: str, business_id: str, account_id: str,
+    campaign_id: int, ad_group_id: int, token_store: Any, read: Any, writes_enabled: bool,
+) -> dict[str, Any]:
+    """Prove one scoped connection, grants and campaign ownership via sealed reads."""
+    key = direct_connection_key(business_id=business_id, account_id=account_id)
+    token = await token_store.get(
+        tenant_id=tenant_id, platform=AdsPlatform.YANDEX_DIRECT, account_id=key,
+    )
+    checks = [("business_bound_token", bool(token))]
+    if token:
+        try:
+            received = {}
+            for endpoint, request in prepare_direct_rights_requests(
+                campaign_id=campaign_id, ad_group_id=ad_group_id,
+            ):
+                received[endpoint] = await read(account_id=account_id, service=endpoint, request=request)
+            rights = _required_direct_row(received["clients"], "Clients").get("Grants")
+            checks.append(("edit_campaigns_grant", isinstance(rights, list) and any(
+                isinstance(item, Mapping) and item.get("Privilege") == "EDIT_CAMPAIGNS"
+                and item.get("Value") == "YES" for item in rights
+            )))
+            campaign = _required_direct_row(received["campaigns"], "Campaigns")
+            checks.append(("campaign_live", campaign.get("Id") == campaign_id
+                           and campaign.get("State") in DIRECT_LIVE_CAMPAIGN_STATES
+                           and campaign.get("Status") != "REJECTED"))
+            group = _required_direct_row(received["adgroups"], "AdGroups")
+            checks.append(("ad_group_in_campaign", group.get("Id") == ad_group_id
+                           and group.get("CampaignId") == campaign_id))
+        except Exception:
+            checks.append(("readback_unverified", False))
+    truth = CONNECTORS["yandex_direct"]
+    checks.append(("execution_capability", bool(
+        truth["implemented"] and truth["write"] and truth["verify"] and writes_enabled
+    )))
+    failed = [name for name, passed in checks if not passed]
+    return {"ready": not failed, "reason": failed[0] if failed else "",
+            "scope": {"tenant_id": tenant_id, "business_id": business_id, "account_id": account_id},
+            "checks": [{"check": name, "passed": bool(passed)} for name, passed in checks],
+            "campaign_id": campaign_id, "ad_group_id": ad_group_id,
+            "global_production_ready": bool(truth["production_ready"])}
+
+
 def ad_connections_enabled(env: Mapping[str, str] | None = None) -> bool:
     return str((env or os.environ).get("BUSINESAIOS_AD_CONNECTIONS", "0")).strip().lower() in {"1", "true", "yes"}
 
@@ -116,6 +208,7 @@ async def complete_yandex_direct_oauth(
     env: Mapping[str, str] | None = None,
     now: float | None = None,
     oauth_store: Any = None,
+    business_id: str | None = None,
 ) -> dict[str, Any]:
     """Validate state (tenant + age), exchange the code, store the token; returns no token material.
 
@@ -124,6 +217,7 @@ async def complete_yandex_direct_oauth(
     """
     e = env or os.environ
     _checked_state(tenant_id, state, now)
+    token_key = _token_key(business_id=business_id, account_id=account_id)
     digest = oauth_state_digest(state)
     if oauth_store is not None and not oauth_store.reserve(digest):
         raise PermissionError("oauth_state_consumed")
@@ -145,17 +239,22 @@ async def complete_yandex_direct_oauth(
         "refresh_token": result.refresh_token,
         "expires_in": result.expires_in,
     }
-    await token_store.put(tenant_id=tenant_id, platform=AdsPlatform.YANDEX_DIRECT, account_id=account_id, token=token)
+    await token_store.put(tenant_id=tenant_id, platform=AdsPlatform.YANDEX_DIRECT,
+                          account_id=token_key, token=token)
     if oauth_store is not None:
         oauth_store.consume(digest, "completed")
-    return {"platform": "yandex_direct", "account_id": account_id, "connected": True}
+    result = {"platform": "yandex_direct", "account_id": account_id, "connected": True}
+    return {**result, "business_id": business_id} if token_key != account_id else result
 
 
-async def disconnect_ad_connection(*, tenant_id: str, account_id: str, token_store: Any) -> None:
-    await token_store.delete(tenant_id=tenant_id, platform=AdsPlatform.YANDEX_DIRECT, account_id=account_id)
+async def disconnect_ad_connection(*, tenant_id: str, account_id: str, token_store: Any,
+                                   business_id: str | None = None) -> None:
+    await token_store.delete(tenant_id=tenant_id, platform=AdsPlatform.YANDEX_DIRECT,
+                             account_id=_token_key(business_id=business_id, account_id=account_id))
 
 
-async def list_ad_connections(*, tenant_id: str, account_ids: list[str], token_store: Any) -> list[dict[str, object]]:
+async def list_ad_connections(*, tenant_id: str, account_ids: list[str], token_store: Any,
+                              business_id: str | None = None) -> list[dict[str, object]]:
     """Connection status from registry truth + token presence; never returns token material.
 
     Registry ownership stays in bootstrap/ads_wiring.py; a governed Yandex Direct
@@ -164,7 +263,8 @@ async def list_ad_connections(*, tenant_id: str, account_ids: list[str], token_s
     truth = CONNECTORS["yandex_direct"]
     rows: list[dict[str, object]] = []
     for account_id in account_ids:
-        token = await token_store.get(tenant_id=tenant_id, platform=AdsPlatform.YANDEX_DIRECT, account_id=account_id)
+        token = await token_store.get(tenant_id=tenant_id, platform=AdsPlatform.YANDEX_DIRECT,
+                                      account_id=_token_key(business_id=business_id, account_id=account_id))
         rows.append(
             {
                 "platform": "yandex_direct",

@@ -1224,6 +1224,15 @@ function Workspace({ data, apiBase, businesses, onRestart, onRetryAccess, onSwit
         onRunGoal={runAdvisoryGoal}
         onPrepareAction={prepareDecisionAction}
         onOpenSurface={openWorkspaceSection}
+        onLoadAdCabinet={() => getJson(baseApi + "/business-workspace/commercial/ad-cabinet", authHeaders)}
+        onSyncAdCabinet={() => {
+          const key = crypto.randomUUID();
+          return postJson(actionExecuteUrl, {
+            action_type: "event_series@v1", payload: {
+              user_id: data.user_id, business_id: data.business_id, op: "spend_sync", arg: ""
+            }
+          }, { ...authHeaders, "X-Idempotency-Key": key, "X-Action-ID": key });
+        }}
       />
 
       <DiscoverBuildMeasurePanel

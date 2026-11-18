@@ -75,6 +75,46 @@ def register_business_workspace_commercial_routes(*, router: APIRouter, auth_bun
             if lead.customer_id and lead.conversation_id and lead.channel
         ]}
 
+    @router.get("/business-workspace/commercial/ad-cabinet", tags=["business-workspace"])
+    async def read_ad_cabinet(request: Request):
+        from application.business_flows import ad_spend_guard as sg
+        from application.business_flows import event_series as es
+        from application.business_flows.projection import flow_payloads
+
+        store = getattr(provider_handlers, "customer_event_store", None)
+        if not sg.cabinet_refresh_enabled() or store is None:
+            raise HTTPException(status_code=404, detail="ad_cabinet_refresh_disabled")
+        tenant, business = scope(request)
+        facts = es.expand(flow_payloads(store, tenant_id=tenant, event_type="event_series@v1"))
+        return {"tenant_id": tenant, "business_id": business,
+                "cabinet": sg.cabinet_view(facts, business_id=business),
+                "sync_action": {"endpoint": "/actions/execute", "action_type": "event_series@v1",
+                                "op": "spend_sync", "business_id": business},
+                "mutations_allowed": False}
+
+    @router.get("/business-workspace/sales/legacy-quarantine", tags=["business-workspace"])
+    async def read_legacy_sales_quarantine(request: Request):
+        from application.business_flows.projection import (
+            flow_payloads,
+            legacy_quarantine,
+            legacy_quarantine_enabled,
+        )
+
+        store = getattr(provider_handlers, "customer_event_store", None)
+        if not legacy_quarantine_enabled() or store is None:
+            raise HTTPException(status_code=404, detail="sales_legacy_quarantine_disabled")
+        tenant, business = scope(request)
+        facts = flow_payloads(store, tenant_id=tenant, event_type="sales_pipeline@v1")
+        # Legacy records have no trustworthy business identity. Never leak
+        # their opaque lead IDs into a business-specific owner workspace.
+        pending = legacy_quarantine(facts)
+        return {"tenant_id": tenant, "business_id": business,
+                "quarantined_count": len(pending),
+                "quarantined": [],
+                "action_type": "sales_pipeline@v1", "op": "legacy_attribute",
+                "migration_requires_tenant_admin_review": True,
+                "reason": "legacy_sales_business_ownership_unverified"}
+
     @router.post("/business-workspace/commercial/partner-opportunities/prepare", tags=["business-workspace"])
     async def prepare_partner_campaign_proposal(request: Request):
         """Generate an owner-reviewable proposal, never dispatch partner outreach."""

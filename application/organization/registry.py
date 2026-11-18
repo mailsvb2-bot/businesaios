@@ -127,6 +127,14 @@ class OrganizationRegistry:
         return self._projector.list_for_business(tenant_id=tenant_id, business_id=business_id)
 
 
+def business_organization(registry: OrganizationRegistry, *, tenant_id: str, business_id: str) -> Organization | None:
+    """Read canonical business organization (business ID is its stable identity)."""
+    try:
+        return registry.get(tenant_id=tenant_id, business_id=business_id, organization_id=business_id)
+    except LookupError:
+        return None
+
+
 def active_businesses(event_store: Any, *, tenant_id: str) -> dict[str, str]:
     """Canonical active Organizations provide the allowed business-picker options."""
     projector = OrganizationProjector(event_store)
@@ -140,4 +148,4 @@ def active_businesses(event_store: Any, *, tenant_id: str) -> dict[str, str]:
     return found
 
 
-__all__ = ["CANON_ORGANIZATION_LIFECYCLE_OWNER", "OrganizationRegistry", "active_businesses"]
+__all__ = ["CANON_ORGANIZATION_LIFECYCLE_OWNER", "OrganizationRegistry", "active_businesses", "business_organization"]

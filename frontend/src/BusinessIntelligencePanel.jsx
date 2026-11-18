@@ -3,6 +3,7 @@ import "./BusinessIntelligencePanel.css";
 import { buildIntelligenceNextSteps } from "./intelligenceNextSteps.js";
 
 const PUBLIC_BRAND = import.meta.env.VITE_BAI_PUBLIC_BRAND_CLIENTPLATFORM === "true" ? "ClientPlatform" : "BusinessAIOS";
+const AD_CABINET_REFRESH_ENABLED = import.meta.env.VITE_BAI_AD_CABINET_REFRESH === "true";
 const REASON_COPY = {
   low_offer_ctr: "Мало переходов после показа предложения",
   low_retention: "Мало клиентов возвращается повторно",
@@ -65,7 +66,7 @@ function PatternList({ title, items, empty }) {
   return <div className="intelligence-list"><strong>{title}</strong>{items?.length ? <ul>{items.slice(0, 5).map((item) => <li key={String(item)}>{humanText(item)}</li>)}</ul> : <small>{empty}</small>}</div>;
 }
 
-export function BusinessIntelligencePanel({ enabled, initialGoal, onLoad, onRunGoal, onPrepareAction, onOpenSurface }) {
+export function BusinessIntelligencePanel({ enabled, initialGoal, onLoad, onRunGoal, onPrepareAction, onOpenSurface, onLoadAdCabinet, onSyncAdCabinet }) {
   const [snapshot, setSnapshot] = useState({ analytics: null, memory: null, recentRuns: [], errors: [] });
   const [loading, setLoading] = useState(Boolean(enabled));
   const [loadError, setLoadError] = useState("");
@@ -75,6 +76,27 @@ export function BusinessIntelligencePanel({ enabled, initialGoal, onLoad, onRunG
   const [goalResult, setGoalResult] = useState(null);
   const [handoffBusy, setHandoffBusy] = useState(false);
   const [handoffError, setHandoffError] = useState("");
+  const [adCabinet, setAdCabinet] = useState(null);
+  const [adBusy, setAdBusy] = useState(false);
+  const [adError, setAdError] = useState("");
+  const refreshAdCabinet = async () => {
+    if (!enabled || !onSyncAdCabinet || !onLoadAdCabinet || adBusy) return;
+    setAdBusy(true);
+    setAdError("");
+    try {
+      const proof = await onSyncAdCabinet();
+      const state = String(proof?.status || "").toLowerCase();
+      if (state !== "ok" && state !== "completed") throw new Error("action_not_confirmed");
+      const response = await onLoadAdCabinet();
+      if (!response?.cabinet || !Array.isArray(response.cabinet.campaigns)) throw new Error("readback_missing");
+      setAdCabinet(response.cabinet);
+    } catch {
+      setAdError("Чтение рекламного кабинета не подтверждено. Ничего не опубликовано и не потрачено.");
+    } finally {
+      setAdBusy(false);
+    }
+  };
+
 
   const refresh = useCallback(async () => {
     if (!enabled || !onLoad) return;
@@ -197,6 +219,19 @@ export function BusinessIntelligencePanel({ enabled, initialGoal, onLoad, onRunG
         </div>)}</div>
       </article> : null}
 
+      {AD_CABINET_REFRESH_ENABLED && onLoadAdCabinet ? <section className="intelligence-card" aria-labelledby="ad-cabinet-title">
+        <h3 id="ad-cabinet-title">Яндекс Директ · чтение кабинета</h3>
+        <p>Только чтение через существующий исполнитель. Публикация и расход средств запрещены.</p>
+        <button type="button" disabled={!enabled || adBusy} className="ghost small"
+          onClick={refreshAdCabinet}>{adBusy ? "Чтение…" : "Обновить из кабинета"}</button>
+        {adError ? <p role="alert" className="error-box">{adError}</p> : null}
+        {adCabinet ? <div role="status">
+          <small>{adCabinet.status === "synced" ? "Последнее чтение: " + adCabinet.synced_at :
+            adCabinet.status === "access_error" ? adCabinet.error : "Кабинет ещё не синхронизирован."}</small>
+          {adCabinet.campaigns.map((row) => <p key={row.campaign_id}>
+            {row.name || row.campaign_id} · {row.state} · {row.status}</p>)}
+        </div> : null}
+      </section> : null}
       <div className="intelligence-columns">
         <article className="intelligence-card">
           <h3>Что видно по фактам</h3>

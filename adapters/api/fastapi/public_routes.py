@@ -197,10 +197,17 @@ def register_public_api_routes(
                 event_store=event_store,
                 idempotency_store=dependency_container.api_idempotency_store,
             )
+    organization_registry = None
+    if event_store is not None and dependency_container is not None:
+        from application.organization.registry import OrganizationRegistry
+
+        organization_registry = OrganizationRegistry(
+            event_store=event_store, idempotency_store=dependency_container.api_idempotency_store,
+        )
     register_public_site_routes(
         router=router, enforce_public_security=enforce_public_security,
         auth_bundle=auth_bundle, tenant_registry=tenant_registry,
-        event_landing_registry=event_landing_registry,
+        event_landing_registry=event_landing_registry, organization_registry=organization_registry,
     )
     if auth_bundle is not None:
         if business_discovery_workspace is not None:

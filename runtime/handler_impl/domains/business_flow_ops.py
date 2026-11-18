@@ -728,6 +728,42 @@ def handle_sales_pipeline(payload, effects, env, *, event_store, now_ms: int | N
     business_id = str(body.get("business_id") or "").strip() or None
     from config.env_flags import env_bool
 
+    if op == "legacy_attribute":
+        from application.business_flows.projection import (
+            LEGACY_ATTRIBUTED,
+            legacy_attribution,
+            legacy_quarantine,
+            legacy_quarantine_enabled,
+        )
+        from application.business_flows.projection import (
+            flow_payloads as sales_payloads,
+        )
+        from application.organization.registry import active_businesses
+
+        if not legacy_quarantine_enabled() or not business_id:
+            return send_tracked(body, effects, env, text="Миграция лидов отключена или бизнес не выбран.",
+                                event_type=None, event_payload=None)
+        if business_id not in active_businesses(event_store, tenant_id=tenant_id):
+            return send_tracked(body, effects, env, text="Недоступный бизнес.",
+                                event_type=None, event_payload=None)
+        lead = arg.removeprefix("claim:") if arg.startswith("claim:") else ""
+        raw = sales_payloads(event_store, tenant_id=tenant_id, event_type="sales_pipeline@v1")
+        attributions = legacy_attribution(raw)
+        if lead in attributions:
+            return send_tracked(body, effects, env,
+                                text="Лид уже привязан к бизнесу; повторная миграция не выполняется.",
+                                event_type=None, event_payload=None)
+        candidates = {row["lead_id"] for row in legacy_quarantine(raw)}
+        if not lead or lead not in candidates:
+            return send_tracked(body, effects, env, text="Нет такого непривязанного лида.",
+                                event_type=None, event_payload=None)
+        # Existing signed decision/executor event is the migration authority.
+        # Never rewrite or duplicate old events.
+        fact = {"step": LEGACY_ATTRIBUTED, "lead_id": lead, "business_id": business_id,
+                "actor_id": str(body.get("user_id") or "")}
+        return send_tracked(body, effects, env, text="✅ Лид привязан к выбранному бизнесу.",
+                            event_type="sales_pipeline@v1", event_payload=fact)
+
     if env_bool("BAI_SALES_BUSINESS_SCOPE_REQUIRED", False):
         from application.organization.registry import active_businesses
 
