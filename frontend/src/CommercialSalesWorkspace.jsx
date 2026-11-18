@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
+const PUBLIC_BRAND = import.meta.env.VITE_BAI_PUBLIC_BRAND_CLIENTPLATFORM === "true" ? "ClientPlatform" : "BusinessAIOS";
 const commercialPath = "/business-workspace/commercial";
 const ORDER_PAYMENT_STORY = import.meta.env.VITE_BAI_ORDER_PAYMENT_STORY === "true";
 const STORY_STEPS = {
@@ -230,7 +231,7 @@ export function CommercialSalesWorkspace({
       }
       pendingRequest.current = null;
       setSelectedId(persisted.order_id);
-      setNotice("Заказ и счёт сохранены в BusinessAIOS. Оплата ещё не подтверждена.");
+      setNotice("Заказ и счёт сохранены в " + PUBLIC_BRAND + ". Оплата ещё не подтверждена.");
       await refresh();
     } catch (reason) {
       setError("Создание счёта не завершено: " + (reason?.message || "ошибка сети") +

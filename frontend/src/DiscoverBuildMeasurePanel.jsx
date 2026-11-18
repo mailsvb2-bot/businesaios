@@ -1,6 +1,7 @@
 import { useMemo, useState } from "react";
 import "./DiscoverBuildMeasurePanel.css";
 
+const PUBLIC_BRAND = import.meta.env.VITE_BAI_PUBLIC_BRAND_CLIENTPLATFORM === "true" ? "ClientPlatform" : "BusinessAIOS";
 function money(value) {
   if (!value || !Number.isSafeInteger(Number(value.amount_minor)) || !value.currency) return "—";
   try {
@@ -180,7 +181,7 @@ export function DiscoverBuildMeasurePanel({ enabled, onRecordObservation, onDisc
 
       <details className="dbm-evidence-entry">
         <summary>Добавить реальный факт о повторяющемся процессе</summary>
-        <p>Введите одно фактическое выполнение процесса. BusinessAIOS выдаст evidence ID на сервере; браузер не задаёт доверие, tenant или business.</p>
+        <p>Введите одно фактическое выполнение процесса. {PUBLIC_BRAND} выдаст evidence ID на сервере; браузер не задаёт доверие, tenant или business.</p>
         <div className="dbm-form-grid">
           <label><span>Процесс</span><input value={observation.process_key} onChange={(e) => setObservation({ ...observation, process_key: e.target.value })} placeholder="например, follow_up_клиента" /></label>
           <label><span>Когда произошло</span><input type="datetime-local" value={observation.occurred_at} onChange={(e) => setObservation({ ...observation, occurred_at: e.target.value })} /></label>

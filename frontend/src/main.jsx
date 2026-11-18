@@ -14,3 +14,5 @@ createRoot(document.getElementById("root")).render(
     {supportConsole ? <SupportOperatorConsole apiBase={apiBase} /> : publicEvent ? <PublicEventLanding apiBase={apiBase} identity={publicEvent} /> : <App />}
   </React.StrictMode>
 );
+
+if (import.meta.env.VITE_BAI_PUBLIC_BRAND_CLIENTPLATFORM === "true") document.title = "ClientPlatform";

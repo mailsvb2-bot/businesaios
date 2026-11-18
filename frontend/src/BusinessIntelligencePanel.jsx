@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import "./BusinessIntelligencePanel.css";
 import { buildIntelligenceNextSteps } from "./intelligenceNextSteps.js";
 
+const PUBLIC_BRAND = import.meta.env.VITE_BAI_PUBLIC_BRAND_CLIENTPLATFORM === "true" ? "ClientPlatform" : "BusinessAIOS";
 const REASON_COPY = {
   low_offer_ctr: "Мало переходов после показа предложения",
   low_retention: "Мало клиентов возвращается повторно",
@@ -102,11 +103,11 @@ export function BusinessIntelligencePanel({ enabled, initialGoal, onLoad, onRunG
   const revenueWindowDays = Number.isFinite(Number(business.window_days)) ? Number(business.window_days) : 30;
   const revenueAmountReady = Boolean(snapshot.analytics && Number.isSafeInteger(revenueSuccessCount) && revenueSuccessCount > 0 && revenueMoneyStatus === "verified_minor_units" && revenueCurrency && Number.isSafeInteger(revenueMinorTotal));
   const revenueTruth = !snapshot.analytics
-    ? "Финансовая аналитика сейчас недоступна. BusinessAIOS не подставляет вместо неё нули."
+    ? "Финансовая аналитика сейчас недоступна. " + PUBLIC_BRAND + " не подставляет вместо неё нули."
     : !Number.isFinite(revenueSuccessCount) || revenueSuccessCount <= 0
       ? "За это окно событий успешной покупки нет. Это не доказывает нулевую выручку вне подключённых событий."
       : revenueMoneyStatus === "mixed_currency"
-        ? "В подтверждённых событиях покупки несколько валют. BusinessAIOS не складывает их в одну фиктивную сумму."
+        ? "В подтверждённых событиях покупки несколько валют. " + PUBLIC_BRAND + " не складывает их в одну фиктивную сумму."
         : !revenueAmountReady
           ? "События покупки есть, но у них нет полного строгого контракта amount_minor + currency. Сумма и средний чек скрыты, чтобы не перепутать рубли с копейками или разные денежные единицы."
           : `Все денежные события этого окна имеют строгую сумму в minor units и одну валюту: ${revenueCurrency}.`;
@@ -158,7 +159,7 @@ export function BusinessIntelligencePanel({ enabled, initialGoal, onLoad, onRunG
         <div><p className="eyebrow">Анализ и память</p><h2 id="business-intelligence-title">Что происходит и что делать дальше</h2></div>
         <button type="button" className="ghost small" disabled={!enabled || loading} onClick={refresh}>{loading ? "Обновляем…" : "Обновить факты"}</button>
       </div>
-      <p className="muted-text">Здесь используются существующие Analytics, Business Memory и DecisionCore BusinessAIOS. Отдельной памяти, второй аналитики или обходного исполнителя кабинет не создаёт.</p>
+      <p className="muted-text">Здесь используются существующие Analytics, Business Memory и DecisionCore {PUBLIC_BRAND}. Отдельной памяти, второй аналитики или обходного исполнителя кабинет не создаёт.</p>
 
       {loadError ? <div className="error-box inline-error" role="alert">{loadError}</div> : null}
       {snapshot.errors.length ? <div className="intelligence-warning" role="status">Часть данных сейчас недоступна: {snapshot.errors.join(", ")}. Доступные факты показаны ниже.</div> : null}
@@ -204,7 +205,7 @@ export function BusinessIntelligencePanel({ enabled, initialGoal, onLoad, onRunG
         </article>
 
         <article className="intelligence-card">
-          <h3>Что BusinessAIOS помнит</h3>
+          <h3>Что {PUBLIC_BRAND} помнит</h3>
           <div className="memory-summary"><span><strong>{metric(memory.total_runs)}</strong><small>запусков</small></span><span><strong>{metric(memory.completed_runs)}</strong><small>завершено</small></span><span><strong>{metric(memory.failed_runs)}</strong><small>неудачных</small></span></div>
           <PatternList title="Повторяющиеся успехи" items={memory.recurring_wins || []} empty="Устойчивые успешные шаблоны ещё не накоплены." />
           <PatternList title="Повторяющиеся проблемы" items={memory.recurring_failures || []} empty="Повторяющиеся проблемы пока не обнаружены." />
@@ -213,11 +214,11 @@ export function BusinessIntelligencePanel({ enabled, initialGoal, onLoad, onRunG
       </div>
 
       <article className="intelligence-goal-card">
-        <div><p className="eyebrow">DecisionCore</p><h3>Дайте системе цель обычными словами</h3><p>BusinessAIOS разберёт один следующий шаг в режиме анализа и плана. Эта кнопка не выполняет внешние действия.</p></div>
+        <div><p className="eyebrow">DecisionCore</p><h3>Дайте системе цель обычными словами</h3><p>{PUBLIC_BRAND} разберёт один следующий шаг в режиме анализа и плана. Эта кнопка не выполняет внешние действия.</p></div>
         <label>Что вы хотите улучшить?<textarea value={goal} onChange={(event) => setGoal(event.target.value)} placeholder="Например: увеличить повторные продажи без роста рекламного бюджета" /></label>
         <div className="navigation-row"><button type="button" className="primary" disabled={!enabled || goalBusy || !goal.trim()} onClick={runGoal}>{goalBusy ? "Разбираем цель…" : "Разобрать цель"}</button><small className="helper-text">Эта кнопка не выполняет внешние действия.</small></div>
         {goalError ? <div className="error-box inline-error" role="alert">{goalError}</div> : null}
-        {outcome ? <div className={`goal-outcome ${outcome.kind}`} role="status"><strong>{outcome.title}</strong><p>{outcome.text}</p>{goalStep?.action ? <small>Следующий шаг: {humanText(goalStep.action)}</small> : null}{handoffEligible ? <div className="goal-handoff"><button type="button" className="primary small" disabled={handoffBusy || !onPrepareAction} onClick={prepareGoalAction}>{handoffBusy ? "Проверяем решение…" : "Передать как черновик в Центр действий"}</button><small>BusinessAIOS сначала сверит run/decision/action с серверным ledger. Отправки и approval на этом шаге нет.</small></div> : null}{handoffError ? <div className="error-box inline-error" role="alert">{handoffError}</div> : null}<details><summary>Техническое доказательство решения</summary><pre>{JSON.stringify(goalResult, null, 2)}</pre></details></div> : null}
+        {outcome ? <div className={`goal-outcome ${outcome.kind}`} role="status"><strong>{outcome.title}</strong><p>{outcome.text}</p>{goalStep?.action ? <small>Следующий шаг: {humanText(goalStep.action)}</small> : null}{handoffEligible ? <div className="goal-handoff"><button type="button" className="primary small" disabled={handoffBusy || !onPrepareAction} onClick={prepareGoalAction}>{handoffBusy ? "Проверяем решение…" : "Передать как черновик в Центр действий"}</button><small>{PUBLIC_BRAND} сначала сверит run/decision/action с серверным ledger. Отправки и approval на этом шаге нет.</small></div> : null}{handoffError ? <div className="error-box inline-error" role="alert">{handoffError}</div> : null}<details><summary>Техническое доказательство решения</summary><pre>{JSON.stringify(goalResult, null, 2)}</pre></details></div> : null}
       </article>
     </section>
   );

@@ -10,6 +10,7 @@ import {
 } from "./acquisitionPlannerModel.js";
 import "./AcquisitionPlanner.css";
 
+const PUBLIC_BRAND = import.meta.env.VITE_BAI_PUBLIC_BRAND_CLIENTPLATFORM === "true" ? "ClientPlatform" : "BusinessAIOS";
 function renderFields(fields, form, update, disabled, valid) {
   return fields.map(([key, label, hint, min, max, step]) => (
     <label key={key}>
@@ -111,7 +112,7 @@ export function AcquisitionPlanner({ enabled, onEvaluate, onLaunch }) {
         </button>
         {showAdvanced ? (
           <div className="planner-advanced-block">
-            <p>Эти параметры необязательны для быстрого сценария. После подключения реальных данных BusinessAIOS сможет опираться на фактические показатели бизнеса.</p>
+            <p>Эти параметры необязательны для быстрого сценария. После подключения реальных данных {PUBLIC_BRAND} сможет опираться на фактические показатели бизнеса.</p>
             <div className="planner-form planner-advanced-form">{renderFields(ACQUISITION_ADVANCED_FIELDS, form, update, !enabled || busy, valid)}</div>
           </div>
         ) : null}
