@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from core.policies.telegram.context import TelegramCtx, scoped_active_plans
+from core.policies.telegram.context import TelegramCtx, policy_scope, scoped_active_plans
 from core.policies.telegram.handlers.admin_handlers import handle_admin
 from core.policies.telegram.handlers.admin_pricing import handle_admin_pricing_session
 from core.policies.telegram.handlers.ads_apply import handle_ads_apply
@@ -32,7 +32,8 @@ def handle(ctx: TelegramCtx, *, default_price_rub: int, bot_username: str = "", 
     if is_customer_session(getattr(ctx.state, "session", None)):  # tenant's own bot: customer routes only
         return handle_customer_bot(ctx, user_id=str(user_id))
     user_role = effective_role(is_platform_admin=bool(ctx.is_admin), roles=ctx.roles)
-    legacy_prices = build_legacy_prices(default_price_rub=default_price_rub)
+    scope = policy_scope(ctx)
+    legacy_prices = build_legacy_prices(default_price_rub=default_price_rub, tenant_id=scope.tenant_id, product_id=scope.product_id if scope.has_product else '')
 
     def pm(*, text: str, reply_markup: dict | None = None, track_event_type: str | None = None, track_payload: dict | None = None) -> ProposedAction:
         return propose_message(user_id=user_id, text=text, reply_markup=reply_markup, callback_query_id=ctx.callback_query_id, track_event_type=track_event_type, track_payload=track_payload)
