@@ -726,6 +726,37 @@ def handle_sales_pipeline(payload, effects, env, *, event_store, now_ms: int | N
     tenant_id = required_str(body, "tenant_id")
     op, arg, now = str(body.get("op") or "list"), str(body.get("arg") or "").strip(), now_ms or _now_ms()
     business_id = str(body.get("business_id") or "").strip() or None
+    from config.env_flags import env_bool
+
+    if env_bool("BAI_SALES_BUSINESS_SCOPE_REQUIRED", False):
+        from application.organization.registry import active_businesses
+
+        choices = active_businesses(event_store, tenant_id=tenant_id)
+        def pick(message: str):
+            buttons = [[{"text": f"🏢 {name}"[:60], "callback_data": f"sales:biz:{bid}"}]
+                       for bid, name in list(choices.items())[:20]]
+            return send_tracked(body, effects, env, text=message if buttons else
+                                "Нет доступных бизнесов. Создайте бизнес в веб-кабинете.",
+                                event_type=None, event_payload=None,
+                                reply_markup={"inline_keyboard": buttons} if buttons else None)
+        if op == "business_pick":
+            return pick("Выберите бизнес для продаж:")
+        if op == "business_select":
+            if arg not in choices:
+                return pick("Этот бизнес недоступен. Выберите бизнес:")
+            effects.set_user_setting(
+                decision_id=env.decision.decision_id, correlation_id=env.decision.correlation_id,
+                tenant_id=tenant_id, user_id=required_str(body, "user_id"),
+                key="sales:business", value={"business_id": arg})
+            return send_tracked(body, effects, env, text=f"✅ Выбран бизнес «{choices[arg]}».",
+                                event_type=None, event_payload=None)
+        if not business_id and op != "inbound" and len(choices) == 1:
+            business_id = next(iter(choices))
+            body["business_id"] = business_id
+        if business_id not in choices:
+            return pick("Выберите бизнес для продаж:") if op != "inbound" else send_tracked(
+                body, effects, env, text=str(body.get("reply") or "Спасибо, сообщение получено.")[:1000],
+                event_type=None, event_payload=None)
     st = sl.replay(flow_payloads(event_store, tenant_id=tenant_id, business_id=business_id, event_type="sales_pipeline@v1"))
     if body.pop("input_session", None) is True:  # one-shot «Продажи» button input: consumed by this decision
         effects.set_user_setting(decision_id=env.decision.decision_id, correlation_id=env.decision.correlation_id,

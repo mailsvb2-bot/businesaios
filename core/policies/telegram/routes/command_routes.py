@@ -207,8 +207,11 @@ def handle_free_text(ctx: TelegramCtx, *, user_id: str, msg: str, rerun) -> Prop
         })
     if kind in {"customer_message", "lead"} and str(user_id or "").strip():
         reply = msg + ("\n\nЗаявка получена — с вами свяжутся." if kind == "lead" else "")
+        from core.policies.telegram.context import trusted_sales_business_scope
+
         return propose("sales_pipeline@v1", {
             "user_id": user_id, "op": "inbound",
             "arg": str(ctx.text)[:4000], "reply": reply,
+            **trusted_sales_business_scope(ctx, owner=False),
         })
     return None

@@ -84,6 +84,13 @@ class OrganizationProjector:
                 )
         return organization
 
+    def business_ids(self, *, tenant_id: str) -> tuple[str, ...]:
+        """Read-only list from canonical Organization facts, never request input."""
+        found = {str(dict(ev.get("payload") or {}).get("business_id") or "")
+                 for ev in self._events.iter_events(tenant_id=str(tenant_id), start_ms=0, event_type=BUSINESS_FACT_EVENT_TYPE)
+                 if str(dict(ev.get("payload") or {}).get("fact_type") or "") in ORGANIZATION_FACT_TYPES}
+        return tuple(sorted(found - {""}))
+
     def list_for_business(self, *, tenant_id: str, business_id: str) -> tuple[Organization, ...]:
         ids = sorted({row["entity_id"] for row in self._facts(tenant_id=tenant_id, business_id=business_id)})
         return tuple(self.get(tenant_id=tenant_id, business_id=business_id, organization_id=value) for value in ids)

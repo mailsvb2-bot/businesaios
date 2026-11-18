@@ -111,3 +111,12 @@ def operator_flag(ctx: Any, name: str) -> bool:
     meta = getattr(getattr(ctx, "state", None), "meta", None)
     flags = meta.get("operator_flags") if isinstance(meta, dict) else None
     return isinstance(flags, dict) and flags.get(name) is True
+
+
+def trusted_sales_business_scope(ctx: TelegramCtx, *, owner: bool = True) -> dict[str, str]:
+    """Verified ingress takes priority; owner choice is executor-validated state."""
+    business_id = policy_scope(ctx).business_id
+    chosen = ctx.settings.get("sales:business") if owner and not business_id and isinstance(ctx.settings, dict) else None
+    if not business_id and isinstance(chosen, dict):
+        business_id = _scope_id(chosen.get("business_id"))
+    return {"business_id": business_id} if business_id else {}

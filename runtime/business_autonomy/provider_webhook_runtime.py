@@ -213,13 +213,28 @@ class ProviderWebhookRuntime:
             observed = str(recipient.get('user_id') or '').strip()
             if chat_type not in {'dialog', 'chat', 'channel'} or not chat_id.isdecimal() or not sender_id.isdecimal() or sender.get('is_bot') is True:
                 return False
-            if chat_type == 'dialog' or observed:
+            strict = webhook_recipient_binding_strict()
+            if chat_type == 'dialog' or observed or strict:
                 expected = self._read_secret(tenant_id=tenant_id, connector_id=provider.connector_id, business_id=business_id, secret_name=f'{provider.connector_id}.bot_id')
-                return bool(expected and expected.isdecimal() and observed == expected)
+                if not expected or not expected.isdecimal() or (strict and sender_id == expected):
+                    return False
+                if chat_type == 'dialog' or observed:
+                    return observed == expected
+                allowed = self._read_secret(tenant_id=tenant_id, connector_id=provider.connector_id,
+                                            business_id=business_id, secret_name=f'{provider.connector_id}.chat_ids')
+                return chat_id in {item.strip() for item in str(allowed or '').split(',') if item.strip()}
             return True
         expected = self._read_secret(tenant_id=tenant_id, connector_id=provider.connector_id, business_id=business_id, secret_name=f'{provider.connector_id}.group_id')
         observed = str(payload.get('group_id') or '').strip()
-        return bool(expected and observed and observed == expected)
+        if not expected or not observed or observed != expected:
+            return False
+        if webhook_recipient_binding_strict():
+            obj = payload.get('object') if isinstance(payload.get('object'), Mapping) else {}
+            message = obj.get('message') if isinstance(obj.get('message'), Mapping) else None
+            if message is not None:
+                sender = str(message.get('from_id') or '').strip()
+                return sender.isdecimal() and sender != expected
+        return True
 
     def _secret_field(self, provider: ProviderDefinition) -> str:
         return next((field.secret_name for preferred_kind in ('signing_secret', 'token', 'api_key', 'password') for field in provider.secret_fields if field.secret_kind == preferred_kind), provider.secret_fields[0].secret_name if provider.secret_fields else 'secret')
@@ -232,4 +247,11 @@ class ProviderWebhookRuntime:
         except Exception:
             return ''
 
-__all__ = ['CANON_PROVIDER_WEBHOOK_RUNTIME', 'ProviderWebhookRuntime', 'RAW_SIGNATURE_FIRST_PROVIDER_KEYS']
+def webhook_recipient_binding_strict() -> bool:
+    """Opt-in: reject inactive/unbound recipients, including MAX group chats."""
+    from config.env_flags import env_bool
+
+    return env_bool('BAI_WEBHOOK_RECIPIENT_BINDING_STRICT', False)
+
+
+__all__ = ['CANON_PROVIDER_WEBHOOK_RUNTIME', 'ProviderWebhookRuntime', 'RAW_SIGNATURE_FIRST_PROVIDER_KEYS', 'webhook_recipient_binding_strict']

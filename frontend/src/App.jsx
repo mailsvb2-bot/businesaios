@@ -359,6 +359,7 @@ function Workspace({ data, apiBase, businesses, onRestart, onRetryAccess, onSwit
   const authHeaders = useMemo(() => (apiKey ? { "X-API-Key": apiKey } : {}), [apiKey]);
   const selectedKeys = useMemo(() => new Set(integrations.map((item) => item.provider_key)), [integrations]);
   const [integrationStatuses, setIntegrationStatuses] = useState([]);
+  const [webChatDelivery, setWebChatDelivery] = useState(null);
   const [catalog, setCatalog] = useState([]);
   const [capabilities, setCapabilities] = useState([]);
   const [activeKey, setActiveKey] = useState("");
@@ -406,6 +407,7 @@ function Workspace({ data, apiBase, businesses, onRestart, onRetryAccess, onSwit
     const payload = await getJson(workspaceUrl, authHeaders);
     const rows = Array.isArray(payload.providers) ? payload.providers : [];
     setCatalog(rows);
+    setWebChatDelivery(payload.web_chat_delivery && typeof payload.web_chat_delivery === "object" ? payload.web_chat_delivery : null);
     setIntegrationStatuses(UNIFIED_INTEGRATION_STATUS && Array.isArray(payload.integration_statuses) ? payload.integration_statuses : []);
     setCapabilities(Array.isArray(payload.capabilities) ? payload.capabilities : []);
     setActiveKey((current) => {
@@ -1173,6 +1175,7 @@ function Workspace({ data, apiBase, businesses, onRestart, onRetryAccess, onSwit
         <article className="summary-card"><span className="summary-icon">⌁</span><div><small>Источники</small><strong>{providers.filter((row) => row.connected).length} подключено / {integrations.length} выбрано</strong></div></article>
         <article className="summary-card"><span className="summary-icon">◇</span><div><small>Режим</small><strong>{data.user_functionality?.autonomy_mode_label || "Советник"}</strong></div></article>
       </section>
+      {webChatDelivery && webChatDelivery.delivery_enabled === false ? <p role="status" className="error-box inline-error" data-mode={webChatDelivery.mode}>{webChatDelivery.label}</p> : null}
       {UNIFIED_INTEGRATION_STATUS && integrationStatuses.length ? <section className="panel unified-integration-status" aria-labelledby="unified-integration-status-title">
         <h2 id="unified-integration-status-title">Статус подключений</h2>
         <p className="muted-text">Статус мессенджера подтверждается отдельными фактами отправки, получения квитанции, повтора и восстановления.</p>
@@ -1328,6 +1331,7 @@ function Workspace({ data, apiBase, businesses, onRestart, onRetryAccess, onSwit
             <div><p className="eyebrow">Коммуникации</p><h2 id="business-communications-title">Центр сообщений</h2></div>
             <button type="button" className="ghost small" onClick={() => void refreshCommunications()}>Обновить</button>
           </div>
+          {communications.web_chat?.delivery_enabled === false ? <p role="status" className="error-box inline-error">{communications.web_chat.label}</p> : null}
           <p className="muted-text">Входящие — из журнала сообщений клиентов. «Доставлено» означает подтверждённую доставку. Принятие сообщения провайдером не доказывает получение клиентом; такие сообщения остаются «Без подтверждения». Отсюда ничего не отправляется.</p>
           <div className="sales-metrics">
             <article><small>Входящие</small><strong>{communications.counts.inbound}</strong><span>последние обращения клиентов</span></article>

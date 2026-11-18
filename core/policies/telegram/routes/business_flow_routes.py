@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import re
 
-from core.policies.telegram.context import TelegramCtx
+from core.policies.telegram.context import TelegramCtx, trusted_sales_business_scope
 from core.policies.telegram.helpers import ProposedAction, propose
 from core.users.roles import cockpit_permission, has_permission
 
@@ -193,6 +193,7 @@ BUSINESS_FLOW_COMMANDS: dict[str, tuple[str, str, bool]] = {
     "/lead_followup_cancel": ("sales_pipeline@v1", "followup_cancel", True),
     "/lead_optout": ("sales_pipeline@v1", "optout", True),
     "/send_followups": ("sales_pipeline@v1", "followup_dispatch", True),
+    "/sales_business": ("sales_pipeline@v1", "business_pick", True),
 }
 
 
@@ -236,7 +237,9 @@ def handle_business_flow_routes(ctx: TelegramCtx, *, user_id: str) -> ProposedAc
     if owner_only and not has_permission(ctx, "business_manage"):
         return None
     cap = 1200 if op == "event_schedule" else 200  # one line per session (up to 31)
-    return propose(action, {"user_id": user_id, "op": op, "arg": str(ctx.args or "").strip()[:cap]})
+    scope = trusted_sales_business_scope(ctx) if action == "sales_pipeline@v1" else {}
+    return propose(action, {"user_id": user_id, "op": op,
+                            "arg": str(ctx.args or "").strip()[:cap], **scope})
 
 
 # --- «Продажи» as buttons (P1-16/20) ---
@@ -269,7 +272,8 @@ def _allowed(ctx: TelegramCtx) -> bool:  # same RBAC as the owner-only /lead* co
 
 
 def _op(ctx: TelegramCtx, user_id: str, op: str, arg: str = "", **extra) -> ProposedAction:
-    return propose("sales_pipeline@v1", {"user_id": user_id, "op": op, "arg": arg[:200], **extra})
+    return propose("sales_pipeline@v1", {"user_id": user_id, "op": op, "arg": arg[:200],
+                                        **extra, **trusted_sales_business_scope(ctx)})
 
 
 def _setting(ctx: TelegramCtx, user_id: str, value: dict, text: str, markup: dict | None = None) -> ProposedAction:
@@ -311,6 +315,12 @@ def handle_sales_buttons(ctx: TelegramCtx, *, user_id: str) -> ProposedAction | 
         if data in LIST_BUTTONS:
             return _op(ctx, user_id, LIST_BUTTONS[data])
         parts = data.split(":")
+        if parts[1:2] == ["biz"]:
+            if len(parts) == 2:
+                return _op(ctx, user_id, "business_pick")
+            if len(parts) == 3 and re.fullmatch(r"[a-zA-Z0-9_-]{1,40}", parts[2]):
+                return _op(ctx, user_id, "business_select", parts[2])
+            return None
         if len(parts) == 4 and parts[1] == "do" and parts[2] in LEAD_BUTTONS and _LEAD_ID.fullmatch(parts[3]):
             # «Взять в работу» = /lead_assign <lead> <me>; the executor checks team membership.
             arg = f"{parts[3]} {user_id}" if parts[2] == "take" else parts[3]

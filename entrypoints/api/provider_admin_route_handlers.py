@@ -155,7 +155,10 @@ class ProviderAdminRouteHandlers:
                            service.list_provider_queue_jobs(tenant_id=tenant_id, business_id=business_id, provider_key=key, limit=communications_center.COMMS_LIMIT))
                      for key in sorted(MESSAGING_GUARDED_WRITE_PROVIDER_KEYS & connected)}
         messages = MessageProjector(self.customer_event_store).list_for_business(tenant_id=tenant_id, business_id=business_id) if self.customer_event_store is not None else ()
-        return {'tenant_id': tenant_id, 'business_id': business_id, 'providers': sorted(providers), **communications_center.communications_view(messages=messages, providers=providers)}
+        from interfaces.web.chat_widget.runner_components import web_chat_delivery_status
+
+        return {'tenant_id': tenant_id, 'business_id': business_id, 'providers': sorted(providers),
+                'web_chat': web_chat_delivery_status(), **communications_center.communications_view(messages=messages, providers=providers)}
     def list_provider_secret_history(self, *, tenant_id: str, business_id: str, provider_key: str) -> dict[str, Any]:
         rows = self._service(business_id).list_provider_secret_history(tenant_id=tenant_id, business_id=business_id, provider_key=provider_key)
         return {'tenant_id': tenant_id, 'business_id': business_id, 'provider_key': provider_key, 'versions': list(rows)}

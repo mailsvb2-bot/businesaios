@@ -127,4 +127,17 @@ class OrganizationRegistry:
         return self._projector.list_for_business(tenant_id=tenant_id, business_id=business_id)
 
 
-__all__ = ["CANON_ORGANIZATION_LIFECYCLE_OWNER", "OrganizationRegistry"]
+def active_businesses(event_store: Any, *, tenant_id: str) -> dict[str, str]:
+    """Canonical active Organizations provide the allowed business-picker options."""
+    projector = OrganizationProjector(event_store)
+    found: dict[str, str] = {}
+    for business_id in projector.business_ids(tenant_id=tenant_id):
+        active = [item for item in projector.list_for_business(tenant_id=tenant_id, business_id=business_id)
+                  if item.status is OrganizationStatus.ACTIVE]
+        if active:
+            own = next((item for item in active if item.organization_id == business_id), active[0])
+            found[business_id] = str(own.name or business_id)
+    return found
+
+
+__all__ = ["CANON_ORGANIZATION_LIFECYCLE_OWNER", "OrganizationRegistry", "active_businesses"]

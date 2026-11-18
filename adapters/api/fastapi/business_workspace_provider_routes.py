@@ -57,6 +57,8 @@ def register_business_workspace_provider_routes(*, router: APIRouter, auth_bundl
             )
             unified = {'integration_statuses': unified_integration_statuses(
                 provider_rows=rows, channel_readiness=channels, ad_connectors=CONNECTORS)}
+        from interfaces.web.chat_widget.runner_components import web_chat_delivery_status
+        unified['web_chat_delivery'] = web_chat_delivery_status()
         return {**payload, **unified, 'providers': rows, 'capabilities': list_integration_capability_payloads(active_provider_keys=tuple(str(raw.get('provider_key') or '').strip() for raw in rows if raw.get('connected'))), 'capabilities_source': 'application.business_autonomy.integration_capability_catalog', 'capabilities_schema_version': CAPABILITY_SCHEMA_VERSION, 'write_actions_enabled': False, 'scope_source': 'authenticated_owner_session'}
     @router.get('/business-workspace/customers', tags=['business-workspace'])
     async def customer_workspace(request: Request, customer_id: str = '') -> dict[str, Any]:
