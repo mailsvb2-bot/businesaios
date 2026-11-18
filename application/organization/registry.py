@@ -47,9 +47,7 @@ class OrganizationRegistry:
             self._writer.repair_existing(**scope)
         else:
             self._writer.append_once(**scope, occurred_at_ms=when)
-        return self._projector.get(
-            tenant_id=tenant_id, business_id=business_id, organization_id=organization_id,
-        )
+        return self._projector.get(tenant_id=tenant_id, business_id=business_id, organization_id=organization_id)
 
     def create(
         self, *, tenant_id: str, business_id: str, organization_id: str,
@@ -64,9 +62,7 @@ class OrganizationRegistry:
             created_at_ms=when, updated_at_ms=when,
         )
         try:
-            current = self._projector.get(
-                tenant_id=tenant_id, business_id=business_id, organization_id=organization_id,
-            )
+            current = self._projector.get(tenant_id=tenant_id, business_id=business_id, organization_id=organization_id)
         except LookupError:
             current = None
         payload = {"name": candidate.name, "organization_type": candidate.organization_type}
@@ -86,9 +82,7 @@ class OrganizationRegistry:
         organization_type: str | None = None, occurred_at_ms: int | None = None,
         event_metadata: dict[str, object] | None = None,
     ) -> Organization:
-        current = self._projector.get(
-            tenant_id=tenant_id, business_id=business_id, organization_id=organization_id,
-        )
+        current = self._projector.get(tenant_id=tenant_id, business_id=business_id, organization_id=organization_id)
         if current.status is OrganizationStatus.ARCHIVED:
             raise ValueError("archived organization cannot be updated")
         candidate = replace(
@@ -109,9 +103,7 @@ class OrganizationRegistry:
         idempotency_key: str, occurred_at_ms: int | None = None,
         event_metadata: dict[str, object] | None = None,
     ) -> Organization:
-        current = self._projector.get(
-            tenant_id=tenant_id, business_id=business_id, organization_id=organization_id,
-        )
+        current = self._projector.get(tenant_id=tenant_id, business_id=business_id, organization_id=organization_id)
         return self._persist(
             tenant_id=tenant_id, business_id=business_id, organization_id=organization_id,
             idempotency_key=idempotency_key, operation="archive", fact_type=ORGANIZATION_ARCHIVED,
