@@ -75,7 +75,6 @@ def plain_channel_menu(*, channel: str, role: str, is_admin: bool = False) -> di
     # P1-24: the same actions as the canonical inline keyboard; the existing VK/MAX
     # egress (provider_payload_normalizers) turns it into native buttons and the
     # inbound decoder returns the pressed callback as text. The numbered text
-    # stays as the fallback for clients without buttons.
     return {"channel": channel, "text": menu_text(role=role, is_admin=is_admin), "actions": actions,
             "reply_markup": {"inline_keyboard": [  # 2 per row: fits VK inline (≤6 rows, ≤10) and MAX
                 [{"text": a["label"], "callback_data": a["callback"]} for a in actions[i:i + 2]]
@@ -88,23 +87,16 @@ DEFAULT_ONBOARDING_URL = BUSINESS_ONBOARDING_URL
 def validated_onboarding_url(raw: str) -> str:
     """Constrain operator's public HTTPS destination; never forward identifiers."""
     value = str(raw or "")
-    if value != value.strip():
-        return DEFAULT_ONBOARDING_URL
-    if not value:
-        return DEFAULT_ONBOARDING_URL
-    if len(value) > 200 or any(c.isspace() for c in value):
-        return DEFAULT_ONBOARDING_URL
-    # Pure URL validation: no network/transport SDK enters the presentation core.
-    # Restrict the destination to an HTTPS DNS hostname and an optional safe path.
-    if not value.startswith("https://"):
+    # Pure HTTPS DNS validation; the presentation core never imports transports.
+    if (value != value.strip() or len(value) > 200 or any(c.isspace() for c in value)
+            or not value.startswith("https://")):
         return DEFAULT_ONBOARDING_URL
     host, sep, path = value[8:].partition("/")
     labels = host.split(".")
     if not 1 <= len(labels) <= 20 or any(
-        not 1 <= len(label) <= 63
-        or re.fullmatch(r"[A-Za-z0-9](?:[A-Za-z0-9-]*[A-Za-z0-9])?", label) is None
-        for label in labels
-    ):
+        not 1 <= len(label) <= 63 or
+        re.fullmatch(r"[A-Za-z0-9](?:[A-Za-z0-9-]*[A-Za-z0-9])?", label) is None
+        for label in labels):
         return DEFAULT_ONBOARDING_URL
     if sep and re.fullmatch(r"[A-Za-z0-9._~!$&'()*+,;=:@%/-]*", path) is None:
         return DEFAULT_ONBOARDING_URL
