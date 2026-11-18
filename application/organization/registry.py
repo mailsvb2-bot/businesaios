@@ -123,14 +123,14 @@ class OrganizationRegistry:
     def get(self, *, tenant_id: str, business_id: str, organization_id: str) -> Organization:
         return self._projector.get(tenant_id=tenant_id, business_id=business_id, organization_id=organization_id)
 
-    def list_for_business(self, *, tenant_id: str, business_id: str) -> tuple[Organization, ...]:
+    def get_business_organization(self, *, tenant_id: str, business_id: str) -> Organization:\n        """Resolve the business organization via the canonical registry owner."""\n        return self.get(tenant_id=tenant_id, business_id=business_id, organization_id=business_id)\n\n    def list_for_business(self, *, tenant_id: str, business_id: str) -> tuple[Organization, ...]:
         return self._projector.list_for_business(tenant_id=tenant_id, business_id=business_id)
 
 
 def business_organization(registry: OrganizationRegistry, *, tenant_id: str, business_id: str) -> Organization | None:
     """Read canonical business organization (business ID is its stable identity)."""
     try:
-        return registry.get(tenant_id=tenant_id, business_id=business_id, organization_id=business_id)
+        return registry.get_business_organization(tenant_id=tenant_id, business_id=business_id)
     except LookupError:
         return None
 

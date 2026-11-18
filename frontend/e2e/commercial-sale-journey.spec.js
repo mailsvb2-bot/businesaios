@@ -18,7 +18,7 @@ test("owner can quote, create and recover a canonical sale without inventing pay
   const registration = page.waitForResponse((response) =>
     response.url().includes("/api/public-site/cta/start") &&
     response.request().method() === "POST");
-  await page.getByRole("button", { name: /Создать мой BusinessAIOS/ }).click();
+  await page.getByRole("button", { name: /Создать мой (?:BusinessAIOS|ClientPlatform)/ }).click();
   const result = await registration;
   expect(result.status()).toBe(200);
   const owner = await result.json();
