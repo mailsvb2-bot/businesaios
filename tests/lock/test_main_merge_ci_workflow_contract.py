@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+import re
 
 ROOT = Path(__file__).resolve().parents[2]
 MANDATORY = (
@@ -40,7 +41,7 @@ def test_self_hosted_mandatory_ci_rejects_fork_pr_heads() -> None:
         assert runner_count >= 1
         # Enforce the same-repository guard for each self-hosted job and for
         # the isolated hosted full-tree job, without depending on runner counts.
-        for job in text.split("\n  "):
+        for job in re.split(r"(?m)^  (?=[a-z][a-z0-9_-]*:$)", text):
             if SELF_HOSTED_RUNNER in job or "runs-on: ubuntu-24.04" in job:
                 assert SAME_REPO_PR_GUARD in job
 
