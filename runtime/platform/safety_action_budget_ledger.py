@@ -103,19 +103,24 @@ class PlatformSqliteActionBudgetLedger:
             self._record_total(conn, key, float(estimated_cost))
 
     def recorded_action(self, tenant_id: str, idempotency_key: str) -> tuple[str, str] | None:
+        tenant, key = str(tenant_id).strip(), str(idempotency_key).strip()
+        if not tenant or not key:
+            raise ValueError("tenant_id and idempotency_key are required")
         with self._connect() as conn:
             row = conn.execute(
                 "SELECT action,payload_hash FROM safety_action_budget_ledger_idempotency WHERE tenant_id=? AND idempotency_key=?",
-                (str(tenant_id).strip() or "unknown", str(idempotency_key)),
+                (tenant, key),
             ).fetchone()
         return (str(row[0]), str(row[1])) if row else None
 
     def record_once(self, tenant_id: str, *, idempotency_key: str,
                     action: str, payload_hash: str, estimated_cost: float) -> bool:
         tenant, key, action_name, fingerprint = (
-            str(tenant_id).strip() or "unknown", str(idempotency_key),
+            str(tenant_id).strip(), str(idempotency_key).strip(),
             str(action), str(payload_hash),
         )
+        if not tenant or not key:
+            raise ValueError("tenant_id and idempotency_key are required")
         with self._connect() as conn:
             conn.execute("BEGIN IMMEDIATE")
             row = conn.execute(
