@@ -7,9 +7,9 @@ basis (opted-in or existing relationship), public contacts only prepare a propos
 
 from __future__ import annotations
 
-import math
 import hashlib
 import json
+import math
 import re
 from dataclasses import dataclass
 from typing import Any
