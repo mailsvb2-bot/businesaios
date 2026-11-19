@@ -211,7 +211,8 @@ def handle_partners(payload, effects, env, *, event_store):
     body = require_mapping(payload or {})
     tenant_id = required_str(body, "tenant_id")
     op, arg = str(body.get("op") or "rank"), str(body.get("arg") or "").strip()
-    known = pt.replay(flow_payloads(event_store, tenant_id=tenant_id, event_type="partners@v1"))
+    facts = flow_payloads(event_store, tenant_id=tenant_id, event_type="partners@v1")
+    known = pt.replay(facts)
     try:
         if op == "add":
             change = pt.parse_partner(arg)
@@ -219,6 +220,100 @@ def handle_partners(payload, effects, env, *, event_store):
             return send_tracked(body, effects, env, text=text, event_type="partners@v1", event_payload=change)
     except ValueError as exc:
         return send_tracked(body, effects, env, text=f"🤝 Не получилось: {exc}", event_type=None, event_payload=None)
+    partner_markup = {"inline_keyboard": [
+        [{"text": "🤝 Список партнёров", "callback_data": "cp:partner:rank"}],
+        [{"text": "🧾 Коммерческие предложения", "callback_data": "cp:partner:quotes"}],
+        [{"text": "⬅️ Главное меню", "callback_data": "menu_main"}],
+    ]}
+    if op == "ai_draft":
+        # Owner-initiated draft only; no partner send, no price acceptance.
+        from application.business_flows import admin as admin_flows
+        from application.business_flows import sales_ai as sales_ai_policy
+        from runtime.platform.config.env_flags import env_str
+
+        ref, sep, incoming = arg.partition("|")
+        ref, incoming = ref.strip(), incoming.strip()
+        if ref not in known or not sep or not incoming:
+            return send_tracked(body, effects, env,
+                                text="Формат: /partner_ai ID | сообщение партнёра",
+                                event_type=None, event_payload=None, reply_markup=partner_markup)
+        settings = admin_flows.replay(flow_payloads(
+            event_store, tenant_id=tenant_id, event_type="business_admin@v1"
+        )).settings
+        provider = env_str("MARKETING_LLM_PROVIDER", env_str("LLM_PROVIDER", "")).strip().casefold()
+        try:
+            mode = sales_ai_policy.egress_permit(settings, provider)
+            clean, redacted = sales_ai_policy.prepare_text(incoming, mode=mode)
+        except PermissionError as exc:
+            return send_tracked(body, effects, env, text=f"🔒 {exc}",
+                                event_type=None, event_payload=None, reply_markup=partner_markup)
+        candidate = known[ref]
+        system = (
+            "Ты помощник владельца бизнеса по партнёрствам. Подготовь один краткий "
+            "вежливый черновик ответа на русском языке. Никогда не обещай деньги, "
+            "процент, скидку, публикацию или заключение сделки. Не утверждай, "
+            "что цена одобрена. Если спрашивают о цене, запроси точные условия "
+            "и скажи, что решение принимает владелец. Не выдумывай факты."
+        )
+        result = effects.marketing_llm_complete(
+            decision_id=str(env.decision.decision_id),
+            correlation_id=str(env.decision.correlation_id),
+            admin_id=str(body.get("user_id") or "owner"),
+            system=system,
+            user=f"Кандидат: {candidate.name[:120]}\nВходящее сообщение: {clean[:1000]}",
+        )
+        if not isinstance(result, dict) or not result.get("ok"):
+            message = "⚠️ ИИ-провайдер недоступен. Письмо не отправлено."
+        else:
+            draft_text = str(result.get("text") or "").strip()[:2500]
+            message = ("🤖 Черновик ответа партнёру (НЕ отправлен):\\n\\n" + draft_text
+                       + ("\\n\\nКонтакты скрыты перед ИИ." if redacted else "")) if draft_text else "⚠️ ИИ не вернул текст."
+        return send_tracked(body, effects, env, text=message,
+                            event_type=None, event_payload=None, reply_markup=partner_markup)
+    if op in {"quote", "quotes", "approve_quote", "reject_quote"}:
+        from application.business_flows import partners as ct
+        try:
+            if op == "quote":
+                # /partner_quote partner_id | amount_in_kopecks | RUB | deliverables
+                items = [item.strip() for item in arg.split("|", 3)]
+                if len(items) != 4:
+                    raise ValueError("format: /partner_quote ID | копейки | RUB | условия")
+                if items[0] not in known:
+                    raise LookupError("partner_not_found")
+                change = ct.create_quote(*items)
+                if change["quote_id"] in ct.quote_states(facts):
+                    change = None
+                    text = "ℹ️ Это предложение уже зарегистрировано. /partner_quotes"
+                else:
+                    text = ("🧾 Черновик цены сохранён. Это не договор и не разрешение платежа. "
+                            "Для внутреннего одобрения: /partner_approve " + change["quote_id"])
+            elif op == "quotes":
+                quotes = ct.quote_states(facts)
+                change = None
+                if arg and (not arg.isascii() or not arg.isdecimal() or len(arg) > 8):
+                    raise ValueError("partner_quotes_page_invalid")
+                offset = max(0, int(arg or "1") - 1)
+                rendered = [ct.format_quote(q) for q in reversed(tuple(quotes.values()))]
+                lines = []
+                for item in rendered[offset:]:
+                    if len("\n".join(lines + [item])) > 3400:
+                        break
+                    lines.append(item)
+                next_page = offset + len(lines) + 1
+                text = "🧾 Коммерческие предложения:\n" + ("\n".join(lines) or "Пока нет. /partner_quote ID | копейки | RUB | условия")
+                if next_page <= len(rendered):
+                    text += f"\nСледующая страница: /partner_quotes {next_page}"
+            else:
+                change = ct.decision(facts, arg, approve=op == "approve_quote")
+                text = ("✅ Внутреннее согласование записано. Контрагенту не отправлено; "
+                        "оплата и договор не оформлены." if op == "approve_quote"
+                        else "🚫 Предложение отклонено.") if change else "ℹ️ Решение уже учтено."
+            return send_tracked(body, effects, env, text=text,
+                                event_type="partners@v1" if change else None, event_payload=change,
+                                reply_markup=partner_markup)
+        except (ValueError, LookupError) as exc:
+            return send_tracked(body, effects, env, text=f"🤝 Не получилось: {exc}",
+                                event_type=None, event_payload=None, reply_markup=partner_markup)
     if op in {"campaign", "ref_result"}:
         text, ch = _partner_growth(pt, op, arg, tenant_id, known, flow_payloads(event_store, tenant_id=tenant_id, event_type="partners@v1"))
         return send_tracked(body, effects, env, text=text, event_type="partners@v1" if ch else None, event_payload=ch)
@@ -227,7 +322,7 @@ def handle_partners(payload, effects, env, *, event_store):
     terms = [t for t in arg.replace(",", " ").split() if t]
     fits = pt.rank(known, terms)
     lines = [
-        f"{i}. {f.partner.name} — {f.total:.0f}/100" + (f" ({'; '.join(f.reasons)})" if f.reasons else "")
+        f"{i}. {f.partner.name} [{f.partner.partner_id}] — {f.total:.0f}/100" + (f" ({'; '.join(f.reasons)})" if f.reasons else "")
         for i, f in enumerate(fits, 1)
     ]
     head = f"🤝 Партнёры под цель «{' '.join(terms) or 'любая'}» (рекомендации, ничего не отправляется):"
@@ -235,9 +330,10 @@ def handle_partners(payload, effects, env, *, event_store):
         body,
         effects,
         env,
-        text=head + "\n\n" + ("\n".join(lines) or "Список пуст: /partner_add"),
+        text=head + "\n\n" + ("\n".join(lines) or "Список пуст: /partner_add") + "\n\n🧾 Цены: /partner_quotes · новый черновик: /partner_quote ID | копейки | RUB | условия",
         event_type=None,
         event_payload=None,
+        reply_markup=partner_markup,
     )
 
 
@@ -246,7 +342,7 @@ def _partner_card(body, effects, env, pt, known, op, arg, event_store):
     facts = flow_payloads(event_store, tenant_id=tenant_id, event_type="partners@v1")
     ordered = sorted(known.values(), key=lambda p: p.name)
     head, _, rest = arg.partition(" ")
-    partner = ordered[int(head) - 1] if head.isdigit() and 0 < int(head) <= len(ordered) else None
+    partner = known.get(head) if head in known else (ordered[int(head) - 1] if head.isdigit() and 0 < int(head) <= len(ordered) else None)
     change = None
     try:
         if partner is None:

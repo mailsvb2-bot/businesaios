@@ -15,14 +15,14 @@ from core.ux.keyboards.main import kb_main
 def test_brand_and_owner_navigation_are_stable():
     assert BRAND == "ClientPlatform"
     keys = [x.key for x in menu_items(role="owner", is_admin=True)]
-    assert keys == ["connect", "customers", "sales", "marketing", "ai",
+    assert keys == ["connect", "customers", "sales", "partners", "marketing", "ai",
                     "results", "payments", "settings", "administration"]
     assert "ClientPlatform" in menu_text(role="owner", is_admin=True)
     menu = telegram_menu(role="owner", is_admin=True)["inline_keyboard"]
     assert menu[0][0] == {"text": "➕ Подключить мой бизнес", "url": "https://app.businessaios.ru/"}
     callbacks = [row[0]["callback_data"] for row in menu[1:]]
     assert callbacks == [
-        "cp:section:customers", "cp:section:sales", "cpm:growth",
+        "cp:section:customers", "cp:section:sales", "cp:section:partners", "cpm:growth",
         CB_AUTOPILOT_MENU, "cpm:growth-an:7", "cpm:money",
         CB_SETTINGS_MENU, CB_ADMIN_MENU,
     ]
