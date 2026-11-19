@@ -194,7 +194,7 @@ jobs:
       github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
     name: complete pytest tree (3.12)
     needs: test
-    runs-on: [self-hosted, Linux, X64, businesaios]
+    runs-on: ubuntu-24.04
     env:
       PYTHONDONTWRITEBYTECODE: "1"
       BUSINESAIOS_DEEP_TEST_CLEANUP: "1"
