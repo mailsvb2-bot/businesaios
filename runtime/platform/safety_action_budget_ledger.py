@@ -108,25 +108,19 @@ class PlatformSqliteActionBudgetLedger:
             raise ValueError("tenant_id and idempotency_key are required")
         with self._connect() as conn:
             row = conn.execute(
-                "SELECT action,payload_hash FROM safety_action_budget_ledger_idempotency WHERE tenant_id=? AND idempotency_key=?",
-                (tenant, key),
-            ).fetchone()
+                "SELECT action,payload_hash FROM safety_action_budget_ledger_idempotency WHERE tenant_id=? AND idempotency_key=?", (tenant, key)).fetchone()
         return (str(row[0]), str(row[1])) if row else None
 
     def record_once(self, tenant_id: str, *, idempotency_key: str,
                     action: str, payload_hash: str, estimated_cost: float) -> bool:
         tenant, key, action_name, fingerprint = (
-            str(tenant_id).strip(), str(idempotency_key).strip(),
-            str(action), str(payload_hash),
-        )
+            str(tenant_id).strip(), str(idempotency_key).strip(), str(action), str(payload_hash))
         if not tenant or not key:
             raise ValueError("tenant_id and idempotency_key are required")
         with self._connect() as conn:
             conn.execute("BEGIN IMMEDIATE")
             row = conn.execute(
-                "SELECT action,payload_hash FROM safety_action_budget_ledger_idempotency WHERE tenant_id=? AND idempotency_key=?",
-                (tenant, key),
-            ).fetchone()
+                "SELECT action,payload_hash FROM safety_action_budget_ledger_idempotency WHERE tenant_id=? AND idempotency_key=?", (tenant, key)).fetchone()
             if row:
                 if (str(row[0]), str(row[1])) != (action_name, fingerprint):
                     raise RuntimeError("action_budget_idempotency_conflict")
