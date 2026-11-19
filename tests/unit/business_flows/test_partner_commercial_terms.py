@@ -39,6 +39,22 @@ def test_quote_flow_is_event_sourced_and_never_sends_to_partner(flow):
     assert pid in rank
 
 
+def test_quote_listing_escapes_html_and_pages_within_telegram_limit(flow):
+    flow.run(handle_partners, op="add", arg="Студия | wellness | 100 | existing | @studio")
+    pid = pt.parse_partner("Студия | wellness | 100 | existing | @studio")["partner_id"]
+    for i in range(10):
+        scope = f"<draft> & {i} " + ("<" * 470)
+        flow.run(handle_partners, op="quote", arg=f"{pid} | {1500000 + i} | RUB | {scope}")
+    _, page = flow.run(handle_partners, op="quotes")
+    assert len(page) <= 4096
+    assert "&lt;draft&gt; &amp;" in page
+    assert "Следующая страница: /partner_quotes " in page
+    next_offset = page.rsplit("/partner_quotes ", 1)[1].strip()
+    _, second = flow.run(handle_partners, op="quotes", arg=next_offset)
+    assert len(second) <= 4096
+    assert second != page
+
+
 def test_clientplatform_partner_menu_is_real_command_owner():
     from core.ux.unified_messenger_menu import menu_items, telegram_menu
     from core.policies.telegram.routes.business_flow_routes import BUSINESS_FLOW_COMMANDS

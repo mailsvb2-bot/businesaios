@@ -8,6 +8,7 @@ basis (opted-in or existing relationship), public contacts only prepare a propos
 from __future__ import annotations
 
 import hashlib
+from html import escape
 import json
 import math
 import re
@@ -412,4 +413,4 @@ def _conflict() -> None:
 def format_quote(quote: dict[str, Any]) -> str:
     amount = int(quote["amount_minor"])
     return (f"{quote['quote_id']} · {amount // 100},{amount % 100:02d} {quote['currency']}"
-            f" · {quote['status']}\nУсловия: {quote['scope']}")
+            f" · {quote['status']}\nУсловия: {escape(str(quote['scope']), quote=False)}")

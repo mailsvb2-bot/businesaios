@@ -290,10 +290,19 @@ def handle_partners(payload, effects, env, *, event_store):
             elif op == "quotes":
                 quotes = ct.quote_states(facts)
                 change = None
-                text = "🧾 Коммерческие предложения:\n" + (
-                    "\n".join(ct.format_quote(q) for q in list(quotes.values())[-10:])
-                    if quotes else "Пока нет. /partner_quote ID | копейки | RUB | условия"
-                )
+                if arg and (not arg.isascii() or not arg.isdecimal() or len(arg) > 8):
+                    raise ValueError("partner_quotes_page_invalid")
+                offset = max(0, int(arg or "1") - 1)
+                rendered = [ct.format_quote(q) for q in reversed(tuple(quotes.values()))]
+                lines = []
+                for item in rendered[offset:]:
+                    if len("\n".join(lines + [item])) > 3400:
+                        break
+                    lines.append(item)
+                next_page = offset + len(lines) + 1
+                text = "🧾 Коммерческие предложения:\n" + ("\n".join(lines) or "Пока нет. /partner_quote ID | копейки | RUB | условия")
+                if next_page <= len(rendered):
+                    text += f"\nСледующая страница: /partner_quotes {next_page}"
             else:
                 change = ct.decision(facts, arg, approve=op == "approve_quote")
                 text = ("✅ Внутреннее согласование записано. Контрагенту не отправлено; "
