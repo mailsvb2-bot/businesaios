@@ -66,12 +66,33 @@ def test_partner_telegram_owner_to_partner_delivery_uses_canonical_effect(flow):
     assert flow.effects.sent[-1]["text"] == "Добрый день!"
     assert flow.effects.sent[-1]["track_event_type"] == "partners@v1"
     assert flow.effects.sent[-1]["track_payload"]["step"] == "partner_message_out"
+    _, stopped = flow.run(handle_partners, op="stop", user_id="12345", source_chat_id="12345")
+    assert "Переписка отключена" in stopped
+    _, blocked = flow.run(handle_partners, op="send", arg=f"{pid} | После отказа")
+    assert "partner_not_bound" in blocked
+    assert partners.bound_contacts([e["payload"] for e in flow.store.events]) == {}
 
 
 def test_partner_routes_keep_single_decision_owner():
     from core.policies.telegram.routes.business_flow_routes import BUSINESS_FLOW_COMMANDS
     for cmd in ("/partner_invite", "/partner_join", "/partner_message",
-                "/partner_send", "/partner_inbox"):
+                "/partner_send", "/partner_inbox", "/partner_stop"):
         assert BUSINESS_FLOW_COMMANDS[cmd][0] == "partners@v1"
     assert BUSINESS_FLOW_COMMANDS["/partner_join"][2] is False
     assert BUSINESS_FLOW_COMMANDS["/partner_send"][2] is True
+
+
+def test_partner_route_enforces_owner_and_forwards_verified_chat():
+    from types import SimpleNamespace
+    from core.policies.telegram.routes.business_flow_routes import handle_business_flow_routes
+
+    state = SimpleNamespace(session={"channel": "telegram", "telegram_chat_id": "12345",
+                                     "telegram_update_id": 302})
+    def ctx(cmd, admin):
+        return SimpleNamespace(state=state, callback_data="", callback_query_id=None,
+                               cmd=cmd, args="Привет", is_admin=admin)
+    assert handle_business_flow_routes(ctx("/partner_send", False), user_id="12345") is None
+    message = handle_business_flow_routes(ctx("/partner_message", False), user_id="12345")
+    assert message.action_type == "partners@v1" if hasattr(message, "action_type") else message is not None
+    assert message.payload["source_chat_id"] == "12345"
+    assert message.payload["source_message_key"] == "302"

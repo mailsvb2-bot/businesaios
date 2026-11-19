@@ -437,6 +437,10 @@ def bound_contacts(payloads: list[dict[str, Any]]) -> dict[str, str]:
             user_id = str(fact.get("telegram_user_id") or "")
             if partner_id and user_id.isascii() and user_id.isdecimal() and int(user_id) > 0:
                 contacts[partner_id] = user_id
+        elif fact.get("step") == "partner_unsubscribed":
+            partner_id = str(fact.get("partner_id") or "")
+            if contacts.get(partner_id) == str(fact.get("telegram_user_id") or ""):
+                del contacts[partner_id]
     return contacts
 
 
@@ -452,7 +456,9 @@ def claim_invitation(payloads: list[dict[str, Any]], token: str, user_id: str, *
     prior = [p for p in payloads if p.get("step") == "partner_joined" and p.get("token_hash") == digest]
     if prior:
         if str(prior[0]["telegram_user_id"]) == user_id:
-            return None
+            if bound_contacts(payloads).get(partner_id) == user_id:
+                return None
+            raise ValueError("partner_invitation_no_longer_active")
         raise ValueError("partner_invitation_already_claimed")
     if partner_id not in replay(payloads):
         raise ValueError("partner_not_found")
@@ -496,3 +502,11 @@ def outbound_message(payloads: list[dict[str, Any]], partner_id: str, text: str,
         raise ValueError("partner_message_key_invalid")
     return {"step": "partner_message_out", "partner_id": partner_id, "text": content,
             "message_key": message_key, "channel": "telegram"}
+
+
+def unsubscribe(payloads: list[dict[str, Any]], user_id: str) -> dict[str, Any] | None:
+    partner_id = next((pid for pid, uid in bound_contacts(payloads).items() if uid == user_id), "")
+    if not partner_id:
+        return None
+    return {"step": "partner_unsubscribed", "partner_id": partner_id,
+            "telegram_user_id": user_id, "channel": "telegram"}

@@ -220,7 +220,7 @@ def handle_partners(payload, effects, env, *, event_store):
             return send_tracked(body, effects, env, text=text, event_type="partners@v1", event_payload=change)
     except ValueError as exc:
         return send_tracked(body, effects, env, text=f"🤝 Не получилось: {exc}", event_type=None, event_payload=None)
-    if op in {"invite", "join", "message_in", "send", "inbox"}:
+    if op in {"invite", "join", "message_in", "stop", "send", "inbox"}:
         import secrets
         import time
         from application.business_flows import partners as dialogue
@@ -234,7 +234,7 @@ def handle_partners(payload, effects, env, *, event_store):
             if channel != "telegram":
                 raise ValueError("partner_dialogue_telegram_only")
             chat_id = str(body.get("source_chat_id") or "")
-            if op in {"join", "message_in"} and chat_id != user_id:
+            if op in {"join", "message_in", "stop"} and chat_id != user_id:
                 raise ValueError("partner_private_chat_required")
             if op == "invite":
                 if arg not in known:
@@ -246,8 +246,12 @@ def handle_partners(payload, effects, env, *, event_store):
                              "\nТокен одноразовый, действует 7 дней.", fact)
             if op == "join":
                 fact = dialogue.claim_invitation(facts, arg, user_id, now=int(time.time()))
-                return reply("✅ Контакт подтверждён. Напишите: /partner_message Ваш текст" if fact
+                return reply("✅ Контакт подтверждён. Напишите: /partner_message Ваш текст. Отключить: /partner_stop" if fact
                              else "✅ Контакт уже подтверждён.", fact)
+            if op == "stop":
+                fact = dialogue.unsubscribe(facts, user_id)
+                return reply("🚫 Переписка отключена. Новые сообщения вам не отправляются." if fact
+                             else "ℹ️ Активная переписка не найдена.", fact)
             if op == "message_in":
                 source_key = str(body.get("source_message_key") or
                                  env.decision.correlation_id or env.decision.decision_id)
