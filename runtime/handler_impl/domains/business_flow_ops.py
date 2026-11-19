@@ -31,6 +31,7 @@ from runtime.handler_impl.domains.business_catalog_ops import (
     _events,
     _external_products,
     _followups,
+    _messenger_connections,
     _organization_settings,
     _owner_journey,
     _panels,
@@ -44,6 +45,8 @@ from runtime.handler_impl.domains.business_catalog_ops import (
     _visual,
     channel_reminder_copies,
     notification_preferences,
+    partner_card,
+    partner_quote_flow,
 )
 from runtime.handler_impl.domains.public_event_ops import MEDIA_OPS, PUB_OPS, _landing, media_op, public_event_op
 from runtime.handlers.delivery_contract import delivery_kwargs
@@ -339,54 +342,25 @@ def handle_partners(payload, effects, env, *, event_store):
         return send_tracked(body, effects, env, text=message,
                             event_type=None, event_payload=None, reply_markup=partner_markup)
     if op in {"quote", "quotes", "approve_quote", "reject_quote"}:
-        from application.business_flows import partners as ct
-        try:
-            if op == "quote":
-                # /partner_quote partner_id | amount_in_kopecks | RUB | deliverables
-                items = [item.strip() for item in arg.split("|", 3)]
-                if len(items) != 4:
-                    raise ValueError("format: /partner_quote ID | копейки | RUB | условия")
-                if items[0] not in known:
-                    raise LookupError("partner_not_found")
-                change = ct.create_quote(*items)
-                if change["quote_id"] in ct.quote_states(facts):
-                    change = None
-                    text = "ℹ️ Это предложение уже зарегистрировано. /partner_quotes"
-                else:
-                    text = ("🧾 Черновик цены сохранён. Это не договор и не разрешение платежа. "
-                            "Для внутреннего одобрения: /partner_approve " + change["quote_id"])
-            elif op == "quotes":
-                quotes = ct.quote_states(facts)
-                change = None
-                if arg and (not arg.isascii() or not arg.isdecimal() or len(arg) > 8):
-                    raise ValueError("partner_quotes_page_invalid")
-                offset = max(0, int(arg or "1") - 1)
-                rendered = [ct.format_quote(q) for q in reversed(tuple(quotes.values()))]
-                lines = []
-                for item in rendered[offset:]:
-                    if len("\n".join(lines + [item])) > 3400:
-                        break
-                    lines.append(item)
-                next_page = offset + len(lines) + 1
-                text = "🧾 Коммерческие предложения:\n" + ("\n".join(lines) or "Пока нет. /partner_quote ID | копейки | RUB | условия")
-                if next_page <= len(rendered):
-                    text += f"\nСледующая страница: /partner_quotes {next_page}"
-            else:
-                change = ct.decision(facts, arg, approve=op == "approve_quote")
-                text = ("✅ Внутреннее согласование записано. Контрагенту не отправлено; "
-                        "оплата и договор не оформлены." if op == "approve_quote"
-                        else "🚫 Предложение отклонено.") if change else "ℹ️ Решение уже учтено."
-            return send_tracked(body, effects, env, text=text,
-                                event_type="partners@v1" if change else None, event_payload=change,
-                                reply_markup=partner_markup)
-        except (ValueError, LookupError) as exc:
-            return send_tracked(body, effects, env, text=f"🤝 Не получилось: {exc}",
-                                event_type=None, event_payload=None, reply_markup=partner_markup)
+        return partner_quote_flow(
+            op, arg, facts, known, partner_markup, tenant_id=tenant_id,
+            event_store=event_store, user_id=required_str(body, "user_id"),
+            done=lambda text, change, markup: send_tracked(
+                body, effects, env, text=text, event_type="partners@v1" if change else None,
+                event_payload=change, reply_markup=markup,
+            ),
+        )
     if op in {"campaign", "ref_result"}:
         text, ch = _partner_growth(pt, op, arg, tenant_id, known, flow_payloads(event_store, tenant_id=tenant_id, event_type="partners@v1"))
         return send_tracked(body, effects, env, text=text, event_type="partners@v1" if ch else None, event_payload=ch)
     if op in {"status", "pitch", "ref"}:
-        return _partner_card(body, effects, env, pt, known, op, arg, event_store)
+        return partner_card(
+            pt, known, op, arg, tenant_id, facts,
+            done=lambda text, change: send_tracked(
+                body, effects, env, text=text, event_type="partners@v1" if change else None,
+                event_payload=change,
+            ),
+        )
     terms = [t for t in arg.replace(",", " ").split() if t]
     fits = pt.rank(known, terms)
     lines = [
@@ -406,31 +380,6 @@ def handle_partners(payload, effects, env, *, event_store):
         reply_markup=partner_markup,
     )
 
-
-def _partner_card(body, effects, env, pt, known, op, arg, event_store):
-    tenant_id = required_str(body, "tenant_id")
-    facts = flow_payloads(event_store, tenant_id=tenant_id, event_type="partners@v1")
-    ordered = sorted(known.values(), key=lambda p: p.name)
-    head, _, rest = arg.partition(" ")
-    partner = known.get(head) if head in known else (ordered[int(head) - 1] if head.isdigit() and 0 < int(head) <= len(ordered) else None)
-    change = None
-    try:
-        if partner is None:
-            raise ValueError("partner_not_found: номер партнёра по алфавиту")
-        if op == "status":
-            change = pt.set_status(partner, pt.statuses(facts).get(partner.partner_id, "new"), rest.strip())
-            text = f"🤝 {partner.name}: {pt.STATUSES[change['status']]}"
-        elif op == "pitch":
-            business, _, offer = rest.partition("|")
-            pack = pt.pitch(partner, business=business.strip() or "наш проект", offer=offer.strip())
-            text = f"✉️ {pack['subject']}\n\n{pack['outreach']}\n\n{pack['cta']}\n\nНапоминание: {pack['followup']}\n(Отправляете вы сами.)"
-        else:
-            text = f"🔗 Реферальный код партнёра {partner.name}: ref_{pt.referral_token(tenant_id, partner.partner_id)}"
-    except ValueError as exc:
-        return send_tracked(body, effects, env, text=f"🤝 Не получилось: {exc}", event_type=None, event_payload=None)
-    return send_tracked(
-        body, effects, env, text=text, event_type="partners@v1" if change else None, event_payload=change
-    )
 
 
 def handle_offer_ladder(payload, effects, env, *, event_store):
@@ -463,21 +412,6 @@ def handle_offer_ladder(payload, effects, env, *, event_store):
 def _viewer_id(body) -> int:
     raw = str(body.get("user_id") or "")
     return int(raw) if raw.isdigit() and len(raw) <= 19 else 0
-
-
-def _messenger_connections(admin_facts: list[dict]) -> list[dict]:
-    """Native VK/MAX routes as messenger_switching connection rows (ids/usernames only, no token refs)."""
-    from application.business_flows import native_channels as nc
-
-    return [
-        {
-            "platform": r.platform,
-            "status": r.status,
-            "connection_type": "vk_community" if r.platform == "vk" else r.platform,
-            "external_account_id": r.external_id if r.platform == "vk" else (r.username or r.external_id),
-        }
-        for r in nc.replay(admin_facts).values()
-    ]
 
 
 def _cat_replay(rows):
