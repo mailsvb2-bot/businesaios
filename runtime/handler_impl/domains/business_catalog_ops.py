@@ -2,13 +2,19 @@
 
 from __future__ import annotations
 
+from application.business_flows import admin as ad
+from application.business_flows import catalog as cg
+from application.business_flows import event_channels as ec
+from application.business_flows import event_notifications as en
+from application.business_flows import owner_panels as op_
+from application.business_flows import promotions as pm
+from application.business_flows import sales as sl
 from application.business_flows.projection import flow_payloads, flow_rows
-from application.business_flows import admin as ad, catalog as cg, event_channels as ec, event_notifications as en, owner_panels as op_, promotions as pm, sales as sl
-from runtime.platform.config.env_flags import env_str
 from application.organization.registry import OrganizationRegistry
 from contracts.organization import OrganizationStatus
 from runtime.messaging_policy_alert_subscriptions.settings_key import SETTING_KEY
 from runtime.messaging_policy_alert_subscriptions.settings_value_builder import canonical_alert_subscriptions_value
+from runtime.platform.config.env_flags import env_str
 
 CATALOG_OPS = frozenset(
     {
@@ -730,6 +736,7 @@ def _commerce(done, body, st, op, arg, *, tenant_id, event_store):
 def _organization_settings(*, event_store, idempotency_path, body, tenant_id, op, arg, decision_id):
     """Use the existing organization registry, not a second Telegram-owned store."""
     from pathlib import Path
+
     from reliability.idempotency_store import JsonlIdempotencyStore
 
     if not idempotency_path or not str(body.get("business_id") or "").strip():
@@ -851,3 +858,80 @@ def notification_preferences(*, settings_gateway, tenant_id: str, user_id: str, 
         [{"text": "⚙️ Изменить важность", "callback_data": "cp:settings:notifications:level"}],
         [{"text": "⬅️ Настройки", "callback_data": "settings:menu"}],
     ]}
+
+
+def partner_quote_flow(op, arg, facts, known, partner_markup, *, tenant_id, event_store, user_id, done):
+    if op in {"quote", "quotes", "approve_quote", "reject_quote"}:
+        from application.business_flows import partners as ct
+        try:
+            if op == "quote":
+                # /partner_quote partner_id | amount_in_kopecks | RUB | deliverables
+                items = [item.strip() for item in arg.split("|", 3)]
+                if len(items) != 4:
+                    raise ValueError("format: /partner_quote ID | копейки | RUB | условия")
+                if items[0] not in known:
+                    raise LookupError("partner_not_found")
+                change = ct.create_quote(*items)
+                if change["quote_id"] in ct.quote_states(facts):
+                    change = None
+                    text = "ℹ️ Это предложение уже зарегистрировано. /partner_quotes"
+                else:
+                    text = ("🧾 Черновик цены сохранён. Это не договор и не разрешение платежа. "
+                            "Для внутреннего одобрения: /partner_approve " + change["quote_id"])
+            elif op == "quotes":
+                quotes = ct.quote_states(facts)
+                change = None
+                if arg and (not arg.isascii() or not arg.isdecimal() or len(arg) > 8):
+                    raise ValueError("partner_quotes_page_invalid")
+                offset = max(0, int(arg or "1") - 1)
+                rendered = [ct.format_quote(q) for q in reversed(tuple(quotes.values()))]
+                lines = []
+                for item in rendered[offset:]:
+                    if len("\n".join(lines + [item])) > 3400:
+                        break
+                    lines.append(item)
+                next_page = offset + len(lines) + 1
+                visible_quotes = list(reversed(tuple(quotes.values())))[offset: offset + len(lines)]
+                pending_ids = [q["quote_id"] for q in visible_quotes
+                               if q["status"] == "pending_owner_approval"][:3]
+                if pending_ids:
+                    partner_markup = {"inline_keyboard": [
+                        [{"text": "✅ Утвердить " + qid[3:11],
+                          "callback_data": "cp:partner:approve:" + qid},
+                         {"text": "❌ Отклонить " + qid[3:11],
+                          "callback_data": "cp:partner:reject:" + qid}]
+                        for qid in pending_ids
+                    ] + partner_markup["inline_keyboard"]}
+                text = ("🧾 Коммерческие предложения:\n"
+                        + ("\n".join(lines) or "Пока нет. /partner_quote ID | копейки | RUB | условия")
+                        + "\nЛимит одобрений: /setting partner_budget_limit_minor.rub = СУММА_В_КОПЕЙКАХ")
+                if next_page <= len(rendered):
+                    text += f"\nСледующая страница: /partner_quotes {next_page}"
+            else:
+                # Approval is for the exact immutable quote revision (quote_id).
+                # Only the canonical owner action records the decision; callback
+                # presentation never authorizes it. Enforce the internal budget
+                # before accepting a new approval.
+                budget_evidence = {}
+                if op == "approve_quote":
+                    current = ct.quote_states(facts).get(arg)
+                    if current is None:
+                        raise LookupError("partner_quote_not_found")
+                    if current["status"] == "pending_owner_approval":
+                        from application.business_flows import admin as admin_flows
+
+                        settings = admin_flows.replay(flow_payloads(
+                            event_store, tenant_id=tenant_id, event_type="business_admin@v1"
+                        )).settings
+                        budget_evidence = ct.budget_check(facts, settings, arg)
+                change = ct.decision(facts, arg, approve=op == "approve_quote")
+                if change and budget_evidence:
+                    change = {**change, **budget_evidence,
+                              "approved_by": user_id,
+                              "quote_revision": arg}
+                text = ("✅ Внутреннее согласование записано. Контрагенту не отправлено; "
+                        "оплата и договор не оформлены." if op == "approve_quote"
+                        else "🚫 Предложение отклонено.") if change else "ℹ️ Решение уже учтено."
+            return done(text, change, partner_markup)
+        except (ValueError, LookupError, PermissionError) as exc:
+            return done(f"🤝 Не получилось: {exc}", None, partner_markup)
