@@ -2,8 +2,8 @@ from __future__ import annotations
 
 import pytest
 
-from application.business_flows import partners as terms
 from application.business_flows import partners as pt
+from application.business_flows import partners as terms
 from runtime.handler_impl.domains.business_flow_ops import handle_partners
 
 
@@ -31,6 +31,11 @@ def test_quote_flow_is_event_sourced_and_never_sends_to_partner(flow):
     _, listed = flow.run(handle_partners, op="quotes")
     assert "15000,00 RUB" in listed
     quote_id = terms.create_quote(pid, "1500000", "RUB", "Пост")["quote_id"]
+    # Owner configures the internal partner quote ceiling through existing business settings.
+    flow.store.events.append({"tenant_id": "t1", "user_id": "u1", "event_type": "business_admin@v1",
+                              "timestamp_ms": len(flow.store.events),
+                              "payload": {"step": "setting_set",
+                                          "key": "partner_budget_limit_minor.rub", "value": "3000000"}})
     _, approved = flow.run(handle_partners, op="approve_quote", arg=quote_id)
     assert "Контрагенту не отправлено" in approved
     _, repeat = flow.run(handle_partners, op="approve_quote", arg=quote_id)
@@ -56,8 +61,8 @@ def test_quote_listing_escapes_html_and_pages_within_telegram_limit(flow):
 
 
 def test_clientplatform_partner_menu_is_real_command_owner():
-    from core.ux.unified_messenger_menu import menu_items, telegram_menu
     from core.policies.telegram.routes.business_flow_routes import BUSINESS_FLOW_COMMANDS
+    from core.ux.unified_messenger_menu import menu_items, telegram_menu
     entries = {item.key: item.callback for item in menu_items(role="owner", is_admin=True)}
     assert entries["partners"] == "cp:section:partners"
     assert BUSINESS_FLOW_COMMANDS["/partners"][:2] == ("partners@v1", "rank")

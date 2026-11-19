@@ -25,14 +25,13 @@ from runtime.handler_impl.domains.business_catalog_ops import (
     PROMO_OPS,
     XP_OPS,
     _ads,
-    _organization_settings,
-    notification_preferences,
     _catalog,
     _commerce,
     _event_channels,
     _events,
     _external_products,
     _followups,
+    _organization_settings,
     _owner_journey,
     _panels,
     _partner_growth,
@@ -44,6 +43,7 @@ from runtime.handler_impl.domains.business_catalog_ops import (
     _slot_with_offering,
     _visual,
     channel_reminder_copies,
+    notification_preferences,
 )
 from runtime.handler_impl.domains.public_event_ops import MEDIA_OPS, PUB_OPS, _landing, media_op, public_event_op
 from runtime.handlers.delivery_contract import delivery_kwargs
@@ -300,18 +300,50 @@ def handle_partners(payload, effects, env, *, event_store):
                         break
                     lines.append(item)
                 next_page = offset + len(lines) + 1
-                text = "🧾 Коммерческие предложения:\n" + ("\n".join(lines) or "Пока нет. /partner_quote ID | копейки | RUB | условия")
+                pending_ids = [q["quote_id"] for q in reversed(tuple(quotes.values()))
+                               if q["status"] == "pending_owner_approval"][:3]
+                if pending_ids:
+                    partner_markup = {"inline_keyboard": [
+                        [{"text": "✅ Утвердить " + qid[3:11],
+                          "callback_data": "cp:partner:approve:" + qid},
+                         {"text": "❌ Отклонить " + qid[3:11],
+                          "callback_data": "cp:partner:reject:" + qid}]
+                        for qid in pending_ids
+                    ] + partner_markup["inline_keyboard"]}
+                text = ("🧾 Коммерческие предложения:\n"
+                        + ("\n".join(lines) or "Пока нет. /partner_quote ID | копейки | RUB | условия")
+                        + "\nЛимит одобрений: /setting partner_budget_limit_minor.rub = СУММА_В_КОПЕЙКАХ")
                 if next_page <= len(rendered):
                     text += f"\nСледующая страница: /partner_quotes {next_page}"
             else:
+                # Approval is for the exact immutable quote revision (quote_id).
+                # Only the canonical owner action records the decision; callback
+                # presentation never authorizes it. Enforce the internal budget
+                # before accepting a new approval.
+                budget_evidence = {}
+                if op == "approve_quote":
+                    current = ct.quote_states(facts).get(arg)
+                    if current is None:
+                        raise LookupError("partner_quote_not_found")
+                    if current["status"] == "pending_owner_approval":
+                        from application.business_flows import admin as admin_flows
+
+                        settings = admin_flows.replay(flow_payloads(
+                            event_store, tenant_id=tenant_id, event_type="business_admin@v1"
+                        )).settings
+                        budget_evidence = ct.budget_check(facts, settings, arg)
                 change = ct.decision(facts, arg, approve=op == "approve_quote")
+                if change and budget_evidence:
+                    change = {**change, **budget_evidence,
+                              "approved_by": str(body.get("user_id") or ""),
+                              "quote_revision": arg}
                 text = ("✅ Внутреннее согласование записано. Контрагенту не отправлено; "
                         "оплата и договор не оформлены." if op == "approve_quote"
                         else "🚫 Предложение отклонено.") if change else "ℹ️ Решение уже учтено."
             return send_tracked(body, effects, env, text=text,
                                 event_type="partners@v1" if change else None, event_payload=change,
                                 reply_markup=partner_markup)
-        except (ValueError, LookupError) as exc:
+        except (ValueError, LookupError, PermissionError) as exc:
             return send_tracked(body, effects, env, text=f"🤝 Не получилось: {exc}",
                                 event_type=None, event_payload=None, reply_markup=partner_markup)
     if op in {"campaign", "ref_result"}:
