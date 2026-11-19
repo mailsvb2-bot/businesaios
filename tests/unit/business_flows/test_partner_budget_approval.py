@@ -104,3 +104,8 @@ def test_approval_callback_requires_owner_and_reuses_partners_action():
     assert allowed.payload["op"] == "approve_quote"
     assert allowed.payload["arg"] == "pq_" + "a" * 24
     assert allowed.payload["callback_query_id"] == "callback-77"
+    from core.actions.catalog import build_schema_registry
+
+    build_schema_registry().validate(allowed.action, {
+        "tenant_id": "t1", **allowed.payload,
+    })
