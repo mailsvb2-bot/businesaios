@@ -233,6 +233,9 @@ def handle_partners(payload, effects, env, *, event_store):
         try:
             if channel != "telegram":
                 raise ValueError("partner_dialogue_telegram_only")
+            chat_id = str(body.get("source_chat_id") or "")
+            if op in {"join", "message_in"} and chat_id and chat_id != user_id:
+                raise ValueError("partner_private_chat_required")
             if op == "invite":
                 if arg not in known:
                     raise ValueError("partner_not_found")

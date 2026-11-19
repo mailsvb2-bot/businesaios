@@ -83,11 +83,11 @@ def send_message_effect(
         track_business_event(
             self,
             user_id=msg.user_id,
-        decision_id=msg.decision_id,
-        correlation_id=msg.correlation_id,
-        track_event_type=msg.track_event_type,
-        track_payload=msg.track_payload,
-    )
+            decision_id=msg.decision_id,
+            correlation_id=msg.correlation_id,
+            track_event_type=msg.track_event_type,
+            track_payload=msg.track_payload,
+        )
     evidence_action_type = (
         str(EffectActionType.TELEGRAM_SEND_MESSAGE)
         if msg.channel == "telegram"
