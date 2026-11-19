@@ -77,9 +77,12 @@ def send_message_effect(
         ok=bool(ok),
         meta=meta,
     )
-    track_business_event(
-        self,
-        user_id=msg.user_id,
+    # A delivery receipt is required before committing a business transition.
+    # Never record a partner reply (or any tracked action) for failed transport.
+    if ok:
+        track_business_event(
+            self,
+            user_id=msg.user_id,
         decision_id=msg.decision_id,
         correlation_id=msg.correlation_id,
         track_event_type=msg.track_event_type,
