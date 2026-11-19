@@ -129,17 +129,21 @@ class PostgresEventStore:
         self._dsn = str(dsn)
         self._enabled = bool(enabled)
         self._port: PostgresPort | None = None
+        self.supports_durable_llm_budget = False
+
     def __enter__(self) -> PostgresEventStore:
         if not self._enabled:
             raise_if_used()
         _ensure_psycopg_available()
         self._port = PostgresPort(self._dsn, application_name="businesaios-event-store").__enter__()
         self._verify_schema()
+        self.supports_durable_llm_budget = True
         return self
     def __exit__(self, exc_type, exc, tb) -> None:
-        if self._port is not None:
-            self._port.__exit__(exc_type, exc, tb)
-            self._port = None
+        port, self._port = self._port, None
+        self.supports_durable_llm_budget = False
+        if port is not None:
+            port.__exit__(exc_type, exc, tb)
     @property
     def _db(self) -> PostgresPort:
         if self._port is None:
