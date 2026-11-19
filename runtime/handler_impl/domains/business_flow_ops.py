@@ -271,7 +271,7 @@ def handle_partners(payload, effects, env, *, event_store):
         return send_tracked(body, effects, env, text=message,
                             event_type=None, event_payload=None, reply_markup=partner_markup)
     if op in {"quote", "quotes", "approve_quote", "reject_quote"}:
-        from application.partner import commercial_terms as ct
+        from application.business_flows import partners as ct
         try:
             if op == "quote":
                 # /partner_quote partner_id | amount_in_kopecks | RUB | deliverables

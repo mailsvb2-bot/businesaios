@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import pytest
 
-from application.partner import commercial_terms as terms
+from application.business_flows import partners as terms
 from application.business_flows import partners as pt
 from runtime.handler_impl.domains.business_flow_ops import handle_partners
 
