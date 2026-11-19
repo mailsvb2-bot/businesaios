@@ -84,6 +84,7 @@ def test_partner_routes_keep_single_decision_owner():
 
 def test_partner_route_enforces_owner_and_forwards_verified_chat():
     from types import SimpleNamespace
+
     from core.policies.telegram.routes.business_flow_routes import handle_business_flow_routes
 
     state = SimpleNamespace(session={"channel": "telegram", "telegram_chat_id": "12345",

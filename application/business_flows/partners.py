@@ -386,9 +386,9 @@ def quote_states(payloads: list[dict[str, Any]]) -> dict[str, dict[str, Any]]:
         quote_id = str(fact.get("quote_id") or "")
         if step == "partner_quote_drafted" and quote_id:
             states.setdefault(quote_id, dict(fact))
-        elif step in {"partner_quote_approved", "partner_quote_rejected"} and quote_id in states:
-            if states[quote_id]["status"] == "pending_owner_approval":
-                states[quote_id]["status"] = "owner_approved" if step.endswith("approved") else "rejected"
+        elif (step in {"partner_quote_approved", "partner_quote_rejected"}
+              and quote_id in states and states[quote_id]["status"] == "pending_owner_approval"):
+            states[quote_id]["status"] = "owner_approved" if step.endswith("approved") else "rejected"
     return states
 
 

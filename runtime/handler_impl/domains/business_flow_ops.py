@@ -25,14 +25,13 @@ from runtime.handler_impl.domains.business_catalog_ops import (
     PROMO_OPS,
     XP_OPS,
     _ads,
-    _organization_settings,
-    notification_preferences,
     _catalog,
     _commerce,
     _event_channels,
     _events,
     _external_products,
     _followups,
+    _organization_settings,
     _owner_journey,
     _panels,
     _partner_growth,
@@ -44,6 +43,7 @@ from runtime.handler_impl.domains.business_catalog_ops import (
     _slot_with_offering,
     _visual,
     channel_reminder_copies,
+    notification_preferences,
 )
 from runtime.handler_impl.domains.public_event_ops import MEDIA_OPS, PUB_OPS, _landing, media_op, public_event_op
 from runtime.handlers.delivery_contract import delivery_kwargs
@@ -223,6 +223,7 @@ def handle_partners(payload, effects, env, *, event_store):
     if op in {"invite", "join", "message_in", "stop", "send", "inbox"}:
         import secrets
         import time
+
         from application.business_flows import partners as dialogue
 
         user_id = required_str(body, "user_id")
