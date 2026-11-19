@@ -249,7 +249,7 @@ def handle_business_flow_routes(ctx: TelegramCtx, *, user_id: str) -> ProposedAc
                             **({"channel": str(session.get("channel") or "telegram"),
                                 "source_message_key": str(session.get("transport_message_id") or session.get("telegram_update_id") or "")[:120],
                                 "source_chat_id": str(session.get("messaging_chat_id") or session.get("telegram_chat_id") or session.get("chat_id") or "")[:120]}
-                               if op in {"join", "message_in", "stop", "send", "invite", "inbox"} else {})})
+                               if action == "partners@v1" and op in {"join", "message_in", "stop", "send", "invite", "inbox"} else {})})
 
 
 __all__ = ["BUSINESS_FLOW_COMMANDS", "handle_business_flow_routes"]
