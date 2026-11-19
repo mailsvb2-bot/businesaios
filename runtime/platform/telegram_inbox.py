@@ -36,10 +36,6 @@ def is_terminal_failure(exc: BaseException) -> bool:
     code = failure_code(exc)
     return code.startswith(_TERMINAL_PREFIXES) and code not in _TRANSIENT_CODES
 
-
-
-
-
 class TelegramTerminalOutcome(RuntimeError):
     """A verified update has an ambiguous terminal effect outcome.
 

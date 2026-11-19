@@ -38,7 +38,11 @@ def test_self_hosted_mandatory_ci_rejects_fork_pr_heads() -> None:
         text = (ROOT / relative).read_text(encoding="utf-8")
         runner_count = text.count(SELF_HOSTED_RUNNER)
         assert runner_count >= 1
-        assert text.count(SAME_REPO_PR_GUARD) == runner_count
+        # Enforce the same-repository guard for each self-hosted job and for
+        # the isolated hosted full-tree job, without depending on runner counts.
+        for job in text.split("\n  "):
+            if SELF_HOSTED_RUNNER in job or "runs-on: ubuntu-24.04" in job:
+                assert SAME_REPO_PR_GUARD in job
 
 
 def test_mandatory_ci_concurrency_is_scoped_to_push_sha_or_pr_ref() -> None:
