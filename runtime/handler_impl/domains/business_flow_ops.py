@@ -300,7 +300,8 @@ def handle_partners(payload, effects, env, *, event_store):
                         break
                     lines.append(item)
                 next_page = offset + len(lines) + 1
-                pending_ids = [q["quote_id"] for q in reversed(tuple(quotes.values()))
+                visible_quotes = list(reversed(tuple(quotes.values())))[offset: offset + len(lines)]
+                pending_ids = [q["quote_id"] for q in visible_quotes
                                if q["status"] == "pending_owner_approval"][:3]
                 if pending_ids:
                     partner_markup = {"inline_keyboard": [

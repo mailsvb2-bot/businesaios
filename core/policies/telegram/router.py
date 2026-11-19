@@ -60,7 +60,9 @@ def handle(ctx: TelegramCtx, *, default_price_rub: int, bot_username: str = "", 
         if not ctx.is_admin:
             return pm(text="Доступ к согласованию партнёрства запрещён.", reply_markup=kb_back_main())
         action_name, _, quote_id = str(ctx.callback_data).removeprefix("cp:partner:").partition(":")
-        if action_name not in {"approve", "reject"} or not quote_id.startswith("pq_") or len(quote_id) != 27:
+        if (action_name not in {"approve", "reject"} or len(quote_id) != 27
+                or not quote_id.startswith("pq_")
+                or any(ch not in "0123456789abcdef" for ch in quote_id[3:])):
             return pm(text="Некорректное предложение.", reply_markup=kb_back_main())
         target = "/partner_approve" if action_name == "approve" else "/partner_reject"
         route_ctx = replace(ctx, cmd=target, args=quote_id, callback_data="")
