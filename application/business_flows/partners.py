@@ -8,11 +8,11 @@ basis (opted-in or existing relationship), public contacts only prepare a propos
 from __future__ import annotations
 
 import hashlib
-from html import escape
 import json
 import math
 import re
 from dataclasses import dataclass
+from html import escape
 from typing import Any
 
 from application.business_flows.projection import stable_id
