@@ -56,7 +56,7 @@ def test_partner_telegram_owner_to_partner_delivery_uses_canonical_effect(flow):
     _, reply = flow.run(handle_partners, op="join", arg=token, user_id="12345", source_chat_id="12345")
     assert "Контакт подтверждён" in reply
     _, accepted = flow.run(handle_partners, op="message_in", arg="Здравствуйте", user_id="12345",
-                           source_message_key="update-19")
+                           source_message_key="update-19", source_chat_id="12345")
     assert "Сообщение принято" in accepted
     _, inbox = flow.run(handle_partners, op="inbox")
     assert "Здравствуйте" in inbox

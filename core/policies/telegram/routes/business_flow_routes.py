@@ -246,8 +246,8 @@ def handle_business_flow_routes(ctx: TelegramCtx, *, user_id: str) -> ProposedAc
     cap = 2400 if op in {"message_in", "send"} else (1200 if op in {"event_schedule", "quote", "ai_draft"} else 200)  # one line per session (up to 31)
     return propose(action, {"user_id": user_id, "op": op, "arg": str(ctx.args or "").strip()[:cap],
                             **({"channel": str(session.get("channel") or "telegram"),
-                                "source_message_key": str(session.get("transport_message_id") or "")[:120],
-                                "source_chat_id": str(session.get("chat_id") or "")[:120]}
+                                "source_message_key": str(session.get("transport_message_id") or session.get("telegram_update_id") or "")[:120],
+                                "source_chat_id": str(session.get("messaging_chat_id") or session.get("telegram_chat_id") or session.get("chat_id") or "")[:120]}
                                if op in {"join", "message_in", "send", "invite", "inbox"} else {})})
 
 
