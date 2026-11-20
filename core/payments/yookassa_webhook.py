@@ -78,7 +78,7 @@ def verify_webhook(
             raise WebhookAuthError("missing_basic_auth")
         token = auth.split(" ", 1)[1].strip()
         try:
-            decoded = base64.b64decode(token).decode("utf-8")
+            decoded = base64.b64decode(token, validate=True).decode("utf-8")
         except Exception:
             raise WebhookAuthError("bad_basic_auth")
         if ":" not in decoded:
@@ -86,7 +86,7 @@ def verify_webhook(
         u, p = decoded.split(":", 1)
         if not basic_user or not basic_pass:
             raise WebhookAuthError("missing_basic_credentials")
-        if not (hmac.compare_digest(u, str(basic_user)) & hmac.compare_digest(p, str(basic_pass))):
+        if not (hmac.compare_digest(u.encode("utf-8"), str(basic_user).encode("utf-8")) & hmac.compare_digest(p.encode("utf-8"), str(basic_pass).encode("utf-8"))):
             raise WebhookAuthError("invalid_basic_credentials")
         return
     if mode == "hmac_sha256":
@@ -97,7 +97,7 @@ def verify_webhook(
             raise WebhookAuthError("missing_hmac_secret")
         mac = hmac.new(str(hmac_secret).encode("utf-8"), msg=bytes(body_bytes), digestmod=hashlib.sha256)
         expected = mac.hexdigest()
-        if not hmac.compare_digest(str(sig).strip().lower(), str(expected).strip().lower()):
+        if not hmac.compare_digest(str(sig).strip().lower().encode("utf-8"), expected.encode("ascii")):
             raise WebhookAuthError("bad_signature")
         return
     raise WebhookAuthError(f"unknown_auth_mode:{mode}")

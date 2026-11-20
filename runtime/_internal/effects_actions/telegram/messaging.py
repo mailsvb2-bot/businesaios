@@ -11,7 +11,7 @@ from runtime._internal.effects_actions.telegram.messaging_parts import (
     track_business_event,
     track_delivery,
 )
-from runtime.execution.context import current_execution_business_id
+from runtime.execution.context import assert_called_from_executor, current_execution_business_id
 
 
 def _resolve_business_scope(explicit_business_id: str) -> str:
@@ -42,6 +42,7 @@ def send_message_effect(
     channel_policy: dict | None = None,
     transport_guard: Any = None,
 ) -> Any:
+    assert_called_from_executor()
     resolved_business_id = _resolve_business_scope(business_id)
     msg = build_outbound_message(
         decision_id=decision_id,
@@ -76,14 +77,17 @@ def send_message_effect(
         ok=bool(ok),
         meta=meta,
     )
-    track_business_event(
-        self,
-        user_id=msg.user_id,
-        decision_id=msg.decision_id,
-        correlation_id=msg.correlation_id,
-        track_event_type=msg.track_event_type,
-        track_payload=msg.track_payload,
-    )
+    # A delivery receipt is required before committing a business transition.
+    # Never record a partner reply (or any tracked action) for failed transport.
+    if ok:
+        track_business_event(
+            self,
+            user_id=msg.user_id,
+            decision_id=msg.decision_id,
+            correlation_id=msg.correlation_id,
+            track_event_type=msg.track_event_type,
+            track_payload=msg.track_payload,
+        )
     evidence_action_type = (
         str(EffectActionType.TELEGRAM_SEND_MESSAGE)
         if msg.channel == "telegram"

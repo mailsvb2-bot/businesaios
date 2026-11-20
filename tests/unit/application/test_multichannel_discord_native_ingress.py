@@ -21,7 +21,8 @@ def _native_fixture() -> tuple[ProviderWebhookRuntime, bytes, dict[str, str]]:
     public_key = private_key.public_key().public_bytes(encoding=serialization.Encoding.Raw, format=serialization.PublicFormat.Raw).hex()
     _put(vault, name='webhook_secret', value='bridge-secret')
     _put(vault, name='application_public_key', value=public_key)
-    body = b'{"type":1,"id":"interaction-1"}'
+    _put(vault, name='application_id', value='123456789')
+    body = b'{"type":1,"application_id":"123456789","id":"interaction-1"}'
     timestamp = '1787945000'
     signature = private_key.sign(timestamp.encode() + body).hex()
     return ProviderWebhookRuntime(vault), body, {'X-Signature-Timestamp': timestamp, 'X-Signature-Ed25519': signature}
@@ -45,6 +46,7 @@ def test_discord_native_signature_rejects_malformed_key_and_signature() -> None:
     assert runtime.verify(provider=provider, tenant_id='tenant-a', business_id='business-a', headers=broken, body=body) is False
     vault = InMemorySecretVault()
     _put(vault, name='webhook_secret', value='bridge-secret')
+    _put(vault, name='application_id', value='123456789')
     _put(vault, name='application_public_key', value='00')
     assert ProviderWebhookRuntime(vault).verify(provider=provider, tenant_id='tenant-a', business_id='business-a', headers=headers, body=body) is False
 
@@ -53,9 +55,11 @@ def test_discord_bridge_shared_secret_fallback_remains_supported() -> None:
     provider = provider_map()['discord_messaging']
     vault = InMemorySecretVault()
     _put(vault, name='webhook_secret', value='bridge-secret')
+    _put(vault, name='application_id', value='123456789')
     runtime = ProviderWebhookRuntime(vault)
-    assert runtime.verify(provider=provider, tenant_id='tenant-a', business_id='business-a', headers={'X-BusinessAIOS-Webhook-Secret': 'bridge-secret'}, body=b'{}') is True
-    assert runtime.verify(provider=provider, tenant_id='tenant-a', business_id='business-a', headers={'X-BusinessAIOS-Webhook-Secret': 'wrong'}, body=b'{}') is False
+    body = b'{"application_id":"123456789"}'
+    assert runtime.verify(provider=provider, tenant_id='tenant-a', business_id='business-a', headers={'X-BusinessAIOS-Webhook-Secret': 'bridge-secret'}, body=body) is True
+    assert runtime.verify(provider=provider, tenant_id='tenant-a', business_id='business-a', headers={'X-BusinessAIOS-Webhook-Secret': 'wrong'}, body=body) is False
 
 
 def test_discord_catalog_exposes_separate_optional_application_public_key() -> None:

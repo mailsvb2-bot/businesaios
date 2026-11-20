@@ -75,6 +75,9 @@ RUNTIME_ACTIONS = {
     "business_admin@v1",
     "admin_set_role@v1",
     "admin_set_perm@v1",
+    "request_pricing_change@v1",
+    "apply_pricing_change@v1",
+    "reject_pricing_change@v1",
 
     # --- Payments / Entitlements ---
     "grant_entitlement@v1",
@@ -108,6 +111,8 @@ _RUNTIME_ACTIONS_EXTRA = {
     "suggest_offer_patch@v1",
     "log_mood@v1",
     "select_tariff@v1",
+    "ads_autopilot_tick@v1",
+    "ads_apply_execute@v1",
     "deploy_policy@v1",
     "rollback_policy@v1",
 }

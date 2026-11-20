@@ -3,6 +3,7 @@ from __future__ import annotations
 
 from core.policies.telegram.context import TelegramCtx
 from core.policies.telegram.helpers import ProposedAction, propose
+from core.users.roles import has_permission
 from core.ux.callbacks import CB_SETTINGS_MENU, CB_SETTINGS_STATE
 from core.ux.telegram_keyboards import kb_back_main, kb_settings_menu
 
@@ -34,7 +35,7 @@ def handle_settings_routes(ctx: TelegramCtx, *, user_id: str, bot_username: str,
     organization_op = _ORG_OPS.get(ctx.callback_data) or _ORG_OPS.get(ctx.cmd)
     notification_op = _NOTIFICATION_OPS.get(ctx.callback_data)
     if organization_op or notification_op:
-        if not ctx.is_admin:
+        if not has_permission(ctx, "business_manage"):
             return pm(text="Настройки организации и служебных оповещений доступны администратору бизнеса.",
                       reply_markup=kb_back_main())
         args = {"user_id": user_id, "op": organization_op or notification_op, "arg": ""}
@@ -58,7 +59,7 @@ def handle_settings_routes(ctx: TelegramCtx, *, user_id: str, bot_username: str,
             args["callback_query_id"] = ctx.callback_query_id
         return propose("business_admin@v1", args)
     if ctx.callback_data in _CANONICAL_SCREENS:
-        if not ctx.is_admin:
+        if not has_permission(ctx, "business_manage"):
             return pm(text="Управление доступно только администратору.", reply_markup=kb_back_main())
         payload = {"user_id": user_id, "op": "cockpit", "arg": _CANONICAL_SCREENS[ctx.callback_data]}
         if ctx.callback_query_id:

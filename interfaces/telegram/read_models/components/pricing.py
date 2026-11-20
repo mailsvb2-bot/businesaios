@@ -5,9 +5,9 @@ from typing import Any
 from runtime.platform.config.feature_flags import FeatureFlags
 
 
-def load_pricing_suggestions(event_store: Any, *, tenant_id: str) -> dict[str, Any]:
+def load_pricing_suggestions(event_store: Any, *, tenant_id: str, product_id: str | None = None) -> dict[str, Any]:
     pricing_suggestions: dict[str, Any] = {}
-    if not FeatureFlags.AUTOPRICING:
+    if not str(product_id or '').strip() or not FeatureFlags.AUTOPRICING:
         return pricing_suggestions
     try:
         from core.plans import active_plans
@@ -23,7 +23,7 @@ def load_pricing_suggestions(event_store: Any, *, tenant_id: str) -> dict[str, A
         pricing_suggestions = suggest_prices_for_plans(
             event_store,
             tenant_id=str(tenant_id),
-            plans=list(active_plans())[:20],
+            plans=list(active_plans(tenant_id=str(tenant_id), product_id=str(product_id)))[:20],
             config=cfg,
             context_key="",
         )
@@ -34,7 +34,7 @@ def load_pricing_suggestions(event_store: Any, *, tenant_id: str) -> dict[str, A
     try:
         from core.admin.ai_pricing import suggest_price_for_plan
         from core.plans import active_plans
-        for p in list(active_plans())[:20]:
+        for p in list(active_plans(tenant_id=str(tenant_id), product_id=str(product_id)))[:20]:
             try:
                 pid = int(p.get("plan_id") or 0)
                 base = int(p.get("price") or 0)

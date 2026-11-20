@@ -1,51 +1,19 @@
 from __future__ import annotations
 
 from collections.abc import Mapping
-from dataclasses import dataclass, field, replace
-from datetime import datetime
-from uuid import uuid4
+from dataclasses import replace
 
+from billing.commercial_cycle_contract import require_commercial_int
 from billing.invoice_lifecycle import CommercialInvoiceEnvelope
-from billing.ledger_event import LedgerEntry, LedgerPosting, utc_now
+from billing.ledger_event import LedgerEntry, LedgerPosting
 from billing.ledger_store import LedgerStoreContract
 from billing.lineage import derive_lineage_metadata
+from billing.recovery_contracts import ChargebackCase
 from billing.recovery_store import ChargebackStoreContract
-from core.tenancy.normalization import require_tenant_id
 from observability.tenant_metrics_registry import TenantMetricsRegistry
 from runtime.monetization import ChargebackRecord, MonetizationService
 
 CANON_BILLING_CHARGEBACK_ORCHESTRATOR = True
-
-
-@dataclass(frozen=True)
-class ChargebackCase:
-    tenant_id: str
-    invoice_id: str
-    user_id: str
-    amount_minor: int
-    currency: str
-    reason: str
-    opened_at: datetime = field(default_factory=utc_now)
-    case_id: str = field(default_factory=lambda: str(uuid4()))
-    idempotency_key: str | None = None
-    metadata: Mapping[str, object] = field(default_factory=dict)
-
-    def validate(self) -> None:
-        require_tenant_id(self.tenant_id)
-        if not str(self.invoice_id or '').strip():
-            raise ValueError('invoice_id is required')
-        if not str(self.user_id or '').strip():
-            raise ValueError('user_id is required')
-        if int(self.amount_minor) <= 0:
-            raise ValueError('amount_minor must be > 0')
-        if not str(self.currency or '').strip():
-            raise ValueError('currency is required')
-        if not str(self.reason or '').strip():
-            raise ValueError('reason is required')
-        if self.opened_at.tzinfo is None:
-            raise ValueError('opened_at must be timezone-aware')
-        if self.idempotency_key is not None and not str(self.idempotency_key).strip():
-            raise ValueError('idempotency_key cannot be blank')
 
 
 class InMemoryChargebackStore:
@@ -105,7 +73,7 @@ class ChargebackOrchestrator:
         invoice.validate()
         if invoice.status not in {invoice.status.ISSUED, invoice.status.PARTIALLY_PAID, invoice.status.PAID, invoice.status.UNCOLLECTIBLE}:
             raise ValueError('invoice is not eligible for chargeback')
-        amount = int(amount_minor)
+        amount = require_commercial_int('amount_minor', amount_minor, minimum=1)
         normalized_idem = None if idempotency_key is None else str(idempotency_key).strip()
         existing = None if not normalized_idem else self._case_store.get_by_idempotency(tenant_id=invoice.tenant_id, invoice_id=invoice.invoice_id, idempotency_key=normalized_idem)
         if existing is None and amount > int(invoice.paid_minor):

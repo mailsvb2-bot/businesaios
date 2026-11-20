@@ -82,6 +82,57 @@ def _vk_keyboard_from_reply_markup(reply_markup: object) -> str | None:
         offset += size
     return json.dumps({'inline': inline, 'buttons': rows}, ensure_ascii=False, separators=(',', ':'))
 
+MAX_BUTTONS_PER_ROW = 7
+MAX_LINK_BUTTONS_PER_ROW = 3
+MAX_BUTTON_ROWS = 30
+MAX_CALLBACK_PAYLOAD_BYTES = 1024
+
+
+def max_native_buttons_enabled() -> bool:
+    """P1-24 rollout gate (default OFF): MAX inline keyboard + callback answer."""
+    import os
+
+    return str(os.getenv("BAI_MAX_NATIVE_BUTTONS_ENABLED", "")).strip().lower() in {"1", "true", "yes", "on"}
+
+
+def max_keyboard_from_reply_markup(reply_markup: object) -> list[list[dict[str, str]]] | None:
+    """Canonical ``inline_keyboard`` -> MAX ``inline_keyboard`` attachment rows.
+
+    The callback payload is the canonical callback_data string itself, so the
+    inbound decoder (``callback.payload``) returns exactly what was sent. Like
+    VK, a keyboard the provider cannot carry is refused, never silently cut.
+    """
+    if not isinstance(reply_markup, Mapping) or not isinstance(reply_markup.get('inline_keyboard'), list):
+        return None
+    rows: list[list[dict[str, str]]] = []
+    for raw_row in reply_markup['inline_keyboard']:
+        row: list[dict[str, str]] = []
+        for raw_button in raw_row if isinstance(raw_row, list) else ():
+            if not isinstance(raw_button, Mapping):
+                continue
+            label = str(raw_button.get('text') or '').strip()
+            if not label:
+                raise ValueError('MAX button label is required')
+            url = raw_button.get('url') or (raw_button['web_app'].get('url') if isinstance(raw_button.get('web_app'), Mapping) else None)
+            if raw_button.get('callback_data') is not None:
+                value = str(raw_button['callback_data']).strip()
+                if not value or len(value.encode('utf-8')) > MAX_CALLBACK_PAYLOAD_BYTES:
+                    raise ValueError('MAX callback button payload is invalid')
+                row.append({'type': 'callback', 'text': label, 'payload': value})
+            elif url:
+                row.append({'type': 'link', 'text': label, 'url': str(url).strip()})
+            else:
+                raise ValueError('MAX button requires callback_data or url')
+        if row:
+            links = sum(1 for button in row if button['type'] == 'link')
+            if len(row) > MAX_BUTTONS_PER_ROW or links > MAX_LINK_BUTTONS_PER_ROW:
+                raise ValueError('MAX keyboard exceeds provider row capacity')
+            rows.append(row)
+    if len(rows) > MAX_BUTTON_ROWS:
+        raise ValueError('MAX keyboard exceeds provider button capacity')
+    return rows or None
+
+
 @dataclass(frozen=True)
 class ProviderPayloadNormalizers:
     def normalize_outbound(self, *, provider: ProviderDefinition, operation: str, payload: Mapping[str, Any] | None) -> dict[str, Any]:
@@ -133,6 +184,8 @@ class ProviderPayloadNormalizers:
                     normalized['attachments'] = [dict(item) for item in raw['attachments'] if isinstance(item, Mapping)]
                 return normalized
             normalized = {'chat_id': str(raw.get('chat_id') or ''), 'user_id': str(raw.get('user_id') or ''), 'text': str(raw.get('text') or raw.get('message') or '')}
+            if key == 'max_messaging' and max_native_buttons_enabled() and (keyboard := max_keyboard_from_reply_markup(raw.get('reply_markup'))):
+                normalized['keyboard'] = keyboard  # kept apart from media 'attachments'
             if isinstance(raw.get('attachments'), list):
                 normalized['attachments'] = [dict(item) for item in raw['attachments'] if isinstance(item, Mapping)]
             return normalized
@@ -204,4 +257,4 @@ class ProviderPayloadNormalizers:
             return {}
         return value if isinstance(value, Mapping) else {}
 
-__all__ = ['CANON_PROVIDER_PAYLOAD_NORMALIZERS', 'ProviderPayloadNormalizers']
+__all__ = ['CANON_PROVIDER_PAYLOAD_NORMALIZERS', 'ProviderPayloadNormalizers', 'max_keyboard_from_reply_markup', 'max_native_buttons_enabled']

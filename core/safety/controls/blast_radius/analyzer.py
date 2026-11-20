@@ -4,6 +4,8 @@ from ..action_catalog import ActionSafetyCatalog, build_default_action_catalog
 from ..action_context import SafetyActionContext
 from .models import BlastRadiusEstimate
 
+_RECORD_ONLY_AMOUNT_ACTIONS = frozenset({"select_tariff@v1"})
+
 
 class StaticBlastRadiusAnalyzer:
     def __init__(self, catalog: ActionSafetyCatalog | None = None) -> None:
@@ -13,6 +15,8 @@ class StaticBlastRadiusAnalyzer:
         payload = dict(ctx.payload)
         spec = self._catalog.resolve(ctx.action)
         financial_amount = float(payload.get("amount", payload.get("budget_delta", payload.get("financial_amount", 0.0))) or 0.0)
+        if str(ctx.action) in _RECORD_ONLY_AMOUNT_ACTIONS:
+            financial_amount = float(payload.get("budget_delta", payload.get("financial_amount", 0.0)) or 0.0)
         users_affected = int(payload.get("audience_size", payload.get("users_affected", 0)) or 0)
         records_affected = int(payload.get("records", payload.get("records_affected", 0)) or 0)
         services_touched = int(payload.get("services_touched", 1) or 0)

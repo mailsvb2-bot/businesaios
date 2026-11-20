@@ -31,7 +31,7 @@ def test_env_autostart_invokes_effect_when_port_set(monkeypatch) -> None:
 
         from runtime.boot.telegram_runner import maybe_autostart_yookassa_webhook
 
-        ok = maybe_autostart_yookassa_webhook(event_store=None, event_log=None, payment_outbox=None)
+        ok = maybe_autostart_yookassa_webhook(event_store=None, payment_outbox=None)
         assert ok is True
         assert called["n"] == 1
     finally:

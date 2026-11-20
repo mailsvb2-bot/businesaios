@@ -35,7 +35,7 @@ def _ctx(
         moods=[],
         admin_metrics={},
         is_admin=False,
-        roles=[],
+        roles=["owner"],
         perms=[],
         is_superadmin=False,
         realtime_state={},

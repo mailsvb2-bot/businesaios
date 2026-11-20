@@ -4,7 +4,9 @@ ROOT = Path(__file__).resolve().parents[3] / "frontend" / "src"
 
 
 def _read(name: str) -> str:
-    return (ROOT / name).read_text(encoding="utf-8")
+    source = (ROOT / name).read_text(encoding="utf-8")
+    return (source.replace('" + PUBLIC_BRAND + "', "BusinessAIOS")
+            .replace("${PUBLIC_BRAND}", "BusinessAIOS").replace("{PUBLIC_BRAND}", "BusinessAIOS"))
 
 
 def test_decisioncore_handoff_projects_server_verified_draft_into_existing_action_center() -> None:

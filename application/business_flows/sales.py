@@ -68,6 +68,7 @@ class Lead:
     followup_text: str = ""
     followup_suppressed: bool = False
     assignee: str = ""
+    followup_attempts: int = 0  # failed provider deliveries of the current follow-up (P1-21)
 
 
 @dataclass
@@ -126,7 +127,11 @@ def replay(payloads: list[dict[str, Any]]) -> State:
                 lead, followup_id=p["followup_id"], followup_due_ms=int(p["due_ms"]), followup_text=p["text"]
             )
         elif step in ("followup_cancelled", "followup_sent") and lead.followup_id == p.get("followup_id"):
-            st.leads[lid] = replace(lead, followup_id="", followup_due_ms=0, followup_text="")
+            st.leads[lid] = replace(lead, followup_id="", followup_due_ms=0, followup_text="", followup_attempts=0)
+        elif step == "followup_failed" and lead.followup_id == p.get("followup_id"):
+            # Not delivered: stays queued for the next dispatch; the last allowed attempt drops it.
+            st.leads[lid] = (replace(lead, followup_id="", followup_due_ms=0, followup_text="", followup_attempts=0)
+                             if p.get("final") else replace(lead, followup_attempts=lead.followup_attempts + 1))
         elif step == "followup_optout":
             st.leads[lid] = replace(lead, followup_suppressed=True, followup_id="", followup_due_ms=0, followup_text="")
         elif step == "lead_event":
@@ -155,6 +160,9 @@ def ordered(st: State) -> list[Lead]:
 
 
 def pick(st: State, ref: str) -> Lead:
+    ref = str(ref or "").strip()
+    if ref.startswith("lead_") and ref in st.leads:  # buttons address a lead by its stable id
+        return st.leads[ref]
     leads = ordered(st)
     if not ref.isdigit() or not 0 < int(ref) <= len(leads):
         raise ValueError("lead_number_unknown: /leads")

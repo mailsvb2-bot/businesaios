@@ -25,7 +25,7 @@ def _base_ctx(*, text: str = "", callback_data: str = "", settings: dict | None 
         moods=[],
         admin_metrics={},
         is_admin=False,
-        roles=[],
+        roles=["owner"],
         perms=[],
         is_superadmin=False,
         realtime_state={},
