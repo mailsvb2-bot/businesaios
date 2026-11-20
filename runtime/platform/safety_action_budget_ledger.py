@@ -42,15 +42,9 @@ class PlatformSqliteActionBudgetLedger:
 
     @staticmethod
     def _migrate_v1(conn: Connection) -> None:
-        conn.execute(
-            '''
-            CREATE TABLE IF NOT EXISTS safety_action_budget_ledger (
-                tenant_id TEXT PRIMARY KEY,
-                total_cost REAL NOT NULL,
-                total_actions INTEGER NOT NULL
-            )
-            '''
-        )
+        conn.execute('''CREATE TABLE IF NOT EXISTS safety_action_budget_ledger (
+            tenant_id TEXT PRIMARY KEY, total_cost REAL NOT NULL,
+            total_actions INTEGER NOT NULL)''')
 
     @staticmethod
     def _migrate_v2(conn: Connection) -> None:
@@ -60,33 +54,20 @@ class PlatformSqliteActionBudgetLedger:
 
     @staticmethod
     def _migrate_v3(conn: Connection) -> None:
-        conn.execute(
-            """
-            CREATE TABLE IF NOT EXISTS safety_action_budget_ledger_idempotency (
-                tenant_id TEXT NOT NULL,
-                idempotency_key TEXT NOT NULL,
-                action TEXT NOT NULL,
-                payload_hash TEXT NOT NULL,
-                PRIMARY KEY (tenant_id, idempotency_key)
-            )
-            """
-        )
+        conn.execute("""CREATE TABLE IF NOT EXISTS safety_action_budget_ledger_idempotency (
+            tenant_id TEXT NOT NULL, idempotency_key TEXT NOT NULL,
+            action TEXT NOT NULL, payload_hash TEXT NOT NULL,
+            PRIMARY KEY (tenant_id, idempotency_key))""")
 
     @staticmethod
     def _record_total(conn: Connection, tenant_id: str, estimated_cost: float) -> None:
         if not isfinite(float(estimated_cost)) or float(estimated_cost) < 0:
             raise ValueError("action_budget_invalid_cost")
-        conn.execute(
-            """
-            INSERT INTO safety_action_budget_ledger(tenant_id, total_cost, total_actions, updated_at)
-            VALUES (?, ?, 1, datetime('now'))
-            ON CONFLICT(tenant_id) DO UPDATE SET
-                total_cost = safety_action_budget_ledger.total_cost + excluded.total_cost,
-                total_actions = safety_action_budget_ledger.total_actions + 1,
-                updated_at = excluded.updated_at
-            """,
-            (tenant_id, float(estimated_cost)),
-        )
+        conn.execute("""INSERT INTO safety_action_budget_ledger(tenant_id, total_cost, total_actions, updated_at)
+            VALUES (?, ?, 1, datetime('now')) ON CONFLICT(tenant_id) DO UPDATE SET
+            total_cost = safety_action_budget_ledger.total_cost + excluded.total_cost,
+            total_actions = safety_action_budget_ledger.total_actions + 1,
+            updated_at = excluded.updated_at""", (tenant_id, float(estimated_cost)))
 
     def snapshot(self, tenant_id: str) -> tuple[float, int]:
         key = str(tenant_id).strip() or 'unknown'
