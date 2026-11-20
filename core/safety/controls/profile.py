@@ -250,8 +250,7 @@ def build_default_profile(
     safety_supervisor = SafetySupervisor(metrics_registry=tenant_metrics_registry, trust_chain=policy_trust_chain, rollback_verifier=rollback_verifier)
     event_store = JsonlSafetyEventStore(path=safety_jsonl_path('safety_events'), metrics_registry=tenant_metrics_registry, supervisor=safety_supervisor)
     simulation_evidence_verifier = SimulationEvidenceVerifier()
-    import os
-    strict_boot = key_registry.strict_mode or str(os.getenv('BUSINESAIOS_SAFETY_BOOT_STRICT') or '').strip().lower() in {'1', 'true', 'yes', 'on'}
+    strict_boot = key_registry.strict_mode
     integrity_report = SafetyBootIntegrityChecker().verify(manifest_signer=policy_manifest_signer, trust_chain=policy_trust_chain, strict=strict_boot)
     if (strict_boot or persistent) and not integrity_report.healthy:
         raise ValueError('safety boot integrity check failed: ' + ','.join(integrity_report.failures))
