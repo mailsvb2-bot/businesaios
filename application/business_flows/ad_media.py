@@ -13,8 +13,9 @@ import hashlib
 import json
 import re
 import uuid
-from collections.abc import Callable
+from collections.abc import Callable, Mapping
 from dataclasses import dataclass, replace
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -646,3 +647,132 @@ def render_check(project: EditableAdProject, *, job_status: str, asset_ready: bo
     if job_kind != project.kind:
         raise EditableAdError("editable_ad_source_kind_mismatch")
     return "ok"
+
+# Media generation extends the existing event-sourced publication owner.
+MEDIA_GEN_FLAG_ENV = "BAI_AD_MEDIA_GENERATION_ENABLED"
+MEDIA_GEN_DAILY_LIMIT_ENV = "BAI_AD_MEDIA_DAILY_LIMIT"
+MEDIA_GEN_PROVIDER_ENV = "BAI_AD_MEDIA_PROVIDER"
+RUSSIAN_MEDIA_PROVIDERS = frozenset({"yandexart", "kandinsky"})
+_MEDIA_ADAPTERS: dict[str, Callable] = {}
+
+
+def register_media_provider(name: str, adapter: Callable) -> None:
+    if name not in RUSSIAN_MEDIA_PROVIDERS or not callable(adapter):
+        raise ValueError("MEDIA_PROVIDER_NOT_ALLOWED")
+    _MEDIA_ADAPTERS[name] = adapter
+
+
+def media_gen_operator_env(read: Callable[[str, str], str]) -> dict[str, str]:
+    return {k: str(read(k, "") or "") for k in
+            (MEDIA_GEN_FLAG_ENV, MEDIA_GEN_DAILY_LIMIT_ENV, MEDIA_GEN_PROVIDER_ENV)}
+
+
+def media_gen_enabled(env: Mapping[str, str]) -> bool:
+    return str(env.get(MEDIA_GEN_FLAG_ENV) or "").casefold() in {"1", "true", "yes", "on"}
+
+
+def media_daily_limit(env: Mapping[str, str]) -> int:
+    raw = str(env.get(MEDIA_GEN_DAILY_LIMIT_ENV) or "")
+    return int(raw) if raw.isdecimal() else 0
+
+
+def select_media_provider(env: Mapping[str, str]) -> tuple[str, Callable | None]:
+    name = str(env.get(MEDIA_GEN_PROVIDER_ENV) or "yandexart").strip().casefold()
+    if name not in RUSSIAN_MEDIA_PROVIDERS:
+        raise PermissionError("MEDIA_PROVIDER_NOT_ALLOWED")
+    return name, _MEDIA_ADAPTERS.get(name)
+
+
+def media_day_key(now_ms: int) -> str:
+    return datetime.fromtimestamp(now_ms / 1000, tz=UTC).date().isoformat()
+
+
+def media_units_used(facts: list[dict], day: str) -> int:
+    total = 0
+    for fact in facts:
+        charge = fact.get("charge") if fact.get("step") == "visual_generated" else (
+            fact if fact.get("step") == "media_charged" else None
+        )
+        if isinstance(charge, Mapping) and charge.get("day") == day and type(charge.get("units")) is int:
+            total += max(0, charge["units"])
+    return total
+
+
+def media_charge(*, provider: str, day: str, payload_key: str, ok: bool) -> dict[str, Any]:
+    return {"step": "media_charged", "provider": provider, "day": day, "units": 1,
+            "payload_key": payload_key, "ok": bool(ok)}
+
+
+def generate_budgeted(*, facts: list[dict], brief: Any, env: Mapping[str, str],
+                      now_ms: int, event_store: Any, tenant_id: str,
+                      call: Callable[[Callable], Mapping[str, Any]]) -> tuple[str, dict[str, Any] | None]:
+    """Charge one durable unit *before* a provider call, atomically across workers.
+
+    An unknown result is permanently claimed against the daily cap, including
+    on restart. A repeated brief is blocked without calling the provider.
+    """
+    from application.business_flows import visual_creatives as vc
+
+    if not media_gen_enabled(env):
+        return "Генерация медиа выключена оператором.", None
+    prior = vc.replay(facts).generated.get(brief.payload_key)
+    if prior is not None:
+        return f"🖼 Изображение уже создано: {prior['path']}.", None
+    name, adapter = select_media_provider(env)
+    if adapter is None:
+        return f"🔒 Провайдер {name} не подключён.", None
+    get = getattr(event_store, "get_setting", None)
+    cas = getattr(event_store, "compare_and_set_setting", None)
+    if not callable(get) or not callable(cas) or not str(tenant_id or "").strip():
+        return "🔒 Нет атомарного хранилища медиабюджета; генерация не запускалась.", None
+    day = media_day_key(now_ms)
+    limit = media_daily_limit(env)
+    key = f"ad_media:reserved:v1:{day}"
+    for _ in range(16):
+        current = get(tenant_id=str(tenant_id), key=key)
+        if not isinstance(current, dict | type(None)):
+            return "🔒 Некорректное состояние медиабюджета.", None
+        claims = (current or {}).get("claims", {})
+        if not isinstance(claims, dict):
+            return "🔒 Некорректное состояние медиабюджета.", None
+        if brief.payload_key in claims:
+            return "♻️ Попытка генерации уже учтена; повтор без проверки провайдера запрещён.", None
+        # Before migration previous facts still count toward the budget.
+        legacy = media_units_used(facts, day)
+        if limit <= 0 or len(claims) + legacy >= limit:
+            return f"⛔ Лимит генераций исчерпан ({len(claims) + legacy}/{limit}).", None
+        updated = {"claims": {**claims, brief.payload_key: {"provider": name, "unit": 1}}}
+        if cas(tenant_id=str(tenant_id), key=key, expected=current, value=updated):
+            break
+    else:
+        return "⏳ Медиабюджет занят; попробуйте позже.", None
+    # Never unreserve: a transient provider/network exception may already
+    # incur a charge. No media bytes are written into the event ledger.
+    try:
+        output = dict(call(adapter) or {})
+    except Exception:
+        output = {"ok": False}
+    if output.get("ok") is not True:
+        return "⚠️ Генерация не удалась; попытка учтена в лимите.", media_charge(
+            provider=name, day=day, payload_key=brief.payload_key, ok=False,
+        )
+    ref, size = str(output.get("path") or "").strip(), output.get("size")
+    if not ref or len(ref) > 1024 or type(size) is not int or size <= 0:
+        return "⚠️ Провайдер не вернул подтверждённый медиа-референс.", media_charge(
+            provider=name, day=day, payload_key=brief.payload_key, ok=False,
+        )
+    fact = vc.generated_fact(brief, path=ref, size=size)
+    fact.update(provider=name, published=False,
+                charge={"provider": name, "day": day, "units": 1,
+                        "payload_key": brief.payload_key, "ok": True})
+    return (f"🖼 Изображение подготовлено: {ref}. Не опубликовано.\n"
+            f"Для отдельного подтверждения: /visual_publish {brief.payload_key} | событие | этап | слот | да"), fact
+
+
+def parse_media_publish(arg: str) -> tuple[str, str, str, str, bool]:
+    parts = [piece.strip() for piece in str(arg or "").split("|")]
+    if len(parts) not in (4, 5) or not all(parts[:4]):
+        raise ValueError("Используйте: /visual_publish ключ | событие | этап | слот [| да]")
+    return parts[0], parts[1], parts[2], parts[3], (
+        len(parts) == 5 and parts[4].casefold() in {"да", "yes", "подтверждаю"}
+    )

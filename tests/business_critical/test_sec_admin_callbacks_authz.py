@@ -6,6 +6,7 @@ import pytest
 
 from core.policies.telegram.context import TelegramCtx
 from core.policies.telegram.handlers.admin.analytics import handle_analytics
+from core.policies.telegram.helpers import ProposedAction
 
 CALLBACKS = (
     "admin:demo:brief",
@@ -93,6 +94,12 @@ def test_admin_is_not_unconditionally_denied_for_the_same_callbacks() -> None:
             # The recording store intentionally has no data; a non-denial is enough
             # to prove the handler did not apply the non-admin branch unconditionally.
             continue
-        if out is not None and out.get("text") == DENIED:
+        if isinstance(out, ProposedAction):
+            message = out.payload.get("text")
+        elif isinstance(out, dict):
+            message = out.get("text")
+        else:
+            message = None
+        if message == DENIED:
             denied.append(callback)
     assert denied == []

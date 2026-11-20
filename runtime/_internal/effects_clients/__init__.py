@@ -1,1 +1,6 @@
-"""Package marker for runtime/_internal/effects_clients."""
+"""Single guarded import surface for private network effect clients."""
+
+from .telegram_endpoint import telegram_method_url
+from .yookassa_webhook_server import start_yookassa_webhook_server_in_thread
+
+__all__ = ["start_yookassa_webhook_server_in_thread", "telegram_method_url"]

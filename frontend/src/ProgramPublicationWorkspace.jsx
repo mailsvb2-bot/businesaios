@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 
+const PUBLIC_BRAND = import.meta.env.VITE_BAI_PUBLIC_BRAND_CLIENTPLATFORM === "true" ? "ClientPlatform" : "BusinessAIOS";
 const newLesson = () => ({ editor_id: crypto.randomUUID(), title: "", content_kind: "link", content_ref: "" });
 const KINDS = [
   ["link", "Ссылка"], ["text", "Текстовый материал"], ["audio", "Аудио"],
@@ -312,7 +313,7 @@ export function ProgramPublicationWorkspace({ apiBase, apiKey, tenantId, busines
       setTitle("");
       setAccessMode("free");
       setLessons([newLesson()]);
-      setNotice("Программа сохранена и опубликована в каталоге BusinessAIOS. Номер: " + published.id);
+      setNotice("Программа сохранена и опубликована в каталоге " + PUBLIC_BRAND + ". Номер: " + published.id);
       try {
         const [refreshed, remaining] = await Promise.all([
           getJson(url, headers), getJson(draftUrl, headers)
@@ -403,7 +404,7 @@ export function ProgramPublicationWorkspace({ apiBase, apiKey, tenantId, busines
       setDrafts((existing) => [saved, ...existing.filter((item) => item.id !== saved.id)]);
       draftPending.current = null;
       pending.current = null;
-      setNotice("Черновик сохранён в BusinessAIOS. Его можно открыть позже. Номер: " + saved.id);
+      setNotice("Черновик сохранён в " + PUBLIC_BRAND + ". Его можно открыть позже. Номер: " + saved.id);
     } catch (reason) {
       setError("Черновик не подтверждён: " + (reason.message || "ошибка сети") +
         ". При повторе используется тот же ключ операции.");

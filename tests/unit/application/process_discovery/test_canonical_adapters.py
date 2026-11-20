@@ -147,7 +147,7 @@ def test_provider_delivery_uses_same_canonical_delivery_truth_as_action_center()
             "accepted": True,
             "recorded_at_utc": (BASE + timedelta(days=10)).isoformat(),
             "queue_job_id": "job-tg",
-            "parsed_response": {"resource_id": "42", "delivery_state": "accepted"},
+            "parsed_response": {"resource_id": "42", "delivery_state": "delivered"},
             "decision_provenance": {
                 "run_id": "run-tg", "decision_id": "d-tg", "action_id": "a-tg",
                 "tenant_id": "t1", "business_id": "b1",

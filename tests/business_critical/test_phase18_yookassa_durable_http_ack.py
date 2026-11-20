@@ -4,6 +4,9 @@ from __future__ import annotations
 import http.client
 import json
 
+import pytest
+
+from runtime._internal.effects_actions.payments.yookassa import yookassa_create_payment
 from runtime._internal.effects_clients import yookassa_webhook_server as webhook
 
 
@@ -64,3 +67,18 @@ def test_http_webhook_ack_requires_durable_enqueue(monkeypatch):
         finally:
             server.shutdown()
             server.server_close()
+
+@pytest.mark.parametrize("currency,amount", [
+    ("RUB", 100), ("USD", 100), ("RUB", 0),
+])
+def test_payment_create_is_rejected_before_any_psp_side_effect(currency, amount):
+    class NoCalls:
+        def __getattr__(self, attr):
+            raise AssertionError("External transport unexpectedly touched: " + attr)
+
+    with pytest.raises(RuntimeError, match="SIDE_EFFECT_REQUIRES_EXECUTOR"):
+        yookassa_create_payment(
+            effects=NoCalls(), decision_id="decision-1", amount=amount,
+            currency=currency, user_id="user-1",
+            metadata={"order_id": "order-1"},
+        )

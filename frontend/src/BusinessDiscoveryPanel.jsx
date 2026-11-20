@@ -1,8 +1,9 @@
 import { useEffect, useMemo, useState } from "react";
 import "./BusinessDiscoveryPanel.css";
 
+const PUBLIC_BRAND = import.meta.env.VITE_BAI_PUBLIC_BRAND_CLIENTPLATFORM === "true" ? "ClientPlatform" : "BusinessAIOS";
 const FIELD_COPY = {
-  "identity.display_name": { title: "Название бизнеса в профиле", help: "Как владелец называет этот бизнес для работы внутри BusinessAIOS." },
+  "identity.display_name": { title: "Название бизнеса в профиле", help: "Как владелец называет этот бизнес для работы внутри " + PUBLIC_BRAND + "." },
   "identity.website": { title: "Сайт или публичная страница", help: "Основной адрес, по которому можно проверить публичную информацию о бизнесе." },
   "identity.industry": { title: "Сфера бизнеса", help: "Помогает не применять к вашему бизнесу нерелевантные отраслевые предположения." },
   "identity.business_model": { title: "Модель бизнеса", help: "Например: услуги, товары, B2B, маркетплейс или смешанная модель." },
@@ -220,7 +221,7 @@ export function BusinessDiscoveryPanel({ enabled, onLoad, onAssert }) {
 
       {answered.length ? (
         <details className="discovery-known-facts">
-          <summary>Что BusinessAIOS уже знает <strong>{answered.length}</strong></summary>
+          <summary>Что {PUBLIC_BRAND} уже знает <strong>{answered.length}</strong></summary>
           <div className="discovery-fact-list">
             {answered.map((field) => (
               <div className="discovery-fact-row" key={field.key}>

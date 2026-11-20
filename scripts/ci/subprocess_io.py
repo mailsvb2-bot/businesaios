@@ -3,11 +3,12 @@ from __future__ import annotations
 import os
 import shlex
 import shutil
+import signal
 import subprocess
 import sys
 import tempfile
 from collections.abc import Callable, Iterator, Mapping, Sequence
-from contextlib import contextmanager
+from contextlib import contextmanager, suppress
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -102,10 +103,42 @@ def run_command(
     env: Mapping[str, str] | None = None,
     timeout: float | None = None,
     echo_output: bool = True,
+    stream_output: bool = False,
 ) -> CommandOutcome:
     printable = " ".join(shlex.quote(part) for part in command)
     effective_timeout = DEFAULT_TIMEOUT_SECONDS if timeout is None else timeout
-    print(f"[ci] run {printable} (timeout={effective_timeout}s)")
+    print(f"[ci] run {printable} (timeout={effective_timeout}s)", flush=True)
+    if stream_output:
+        # Playwright's progress must remain visible while it is running.
+        # Run the entire webServer/browser process tree in its own session:
+        # killing only npm on timeout can leave API/Vite on bound ports.
+        process = subprocess.Popen(
+            list(command), cwd=str(cwd or repo_root()),
+            env=_merged_env(env), start_new_session=(os.name == "posix"),
+        )
+        try:
+            returncode = process.wait(timeout=effective_timeout)
+        except subprocess.TimeoutExpired:
+            if os.name == "posix":
+                with suppress(ProcessLookupError):
+                    os.killpg(process.pid, signal.SIGTERM)
+            else:
+                process.terminate()
+            try:
+                process.wait(timeout=5)
+            except subprocess.TimeoutExpired:
+                if os.name != "posix":
+                    process.kill()
+            # The leader may have exited while nested browser/web-server
+            # children remain. Reap the entire isolated session either way.
+            if os.name == "posix":
+                with suppress(ProcessLookupError):
+                    os.killpg(process.pid, signal.SIGKILL)
+            process.wait(timeout=5)
+            message = f"TIMEOUT after {effective_timeout}s: {printable}; browser child process group terminated"
+            print(message, file=sys.stderr, flush=True)
+            return CommandOutcome(returncode=124, stdout="", stderr=message)
+        return CommandOutcome(returncode=returncode, stdout="", stderr="")
     try:
         completed = subprocess.run(
             list(command),

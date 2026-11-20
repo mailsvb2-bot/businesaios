@@ -5,6 +5,7 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from uuid import uuid4
 
+from billing.commercial_cycle_contract import require_commercial_int
 from billing.ledger_event import utc_now
 from core.tenancy.normalization import require_tenant_id
 
@@ -31,8 +32,7 @@ class ChargebackCase:
             raise ValueError('invoice_id is required')
         if not str(self.user_id or '').strip():
             raise ValueError('user_id is required')
-        if int(self.amount_minor) <= 0:
-            raise ValueError('amount_minor must be > 0')
+        require_commercial_int('amount_minor', self.amount_minor, minimum=1)
         if not str(self.currency or '').strip():
             raise ValueError('currency is required')
         if not str(self.reason or '').strip():
@@ -61,8 +61,7 @@ class RefundResult:
             raise ValueError('invoice_id is required')
         if not str(self.refund_id or '').strip():
             raise ValueError('refund_id is required')
-        if int(self.amount_minor) <= 0:
-            raise ValueError('amount_minor must be > 0')
+        require_commercial_int('amount_minor', self.amount_minor, minimum=1)
         if not str(self.currency or '').strip():
             raise ValueError('currency is required')
         if not str(self.provider_name or '').strip():

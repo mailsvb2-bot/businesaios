@@ -20,6 +20,8 @@ def register_provider_webhook_routes(*, router, provider_admin_handlers) -> None
         result = provider_admin_handlers.ingest_provider_webhook(payload={'tenant_id': tenant_id, 'business_id': business_id, 'provider_key': provider_key, 'headers': headers, 'body': raw_body if provider_key in RAW_SIGNATURE_FIRST_PROVIDER_KEYS else raw_body.decode('utf-8', errors='ignore'), 'event_key': event_key, 'topic': topic, 'owner_id': 'public_provider_webhook'})
         if result.get('status') == 'invalid_signature':
             raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED if provider_key == 'discord_messaging' else status.HTTP_403_FORBIDDEN, detail='provider_webhook_signature_denied')
+        if result.get('status') == 'recipient_not_bound':
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail='provider_webhook_recipient_not_bound')
         if result.get('transport_ack_safe') is False:
             raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail='provider_webhook_processing_incomplete')
         if provider_key == 'slack_messaging' and str(parsed.get('type') or '') == 'url_verification':

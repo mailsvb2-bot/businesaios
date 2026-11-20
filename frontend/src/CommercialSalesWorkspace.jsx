@@ -1,6 +1,18 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
+const PUBLIC_BRAND = import.meta.env.VITE_BAI_PUBLIC_BRAND_CLIENTPLATFORM === "true" ? "ClientPlatform" : "BusinessAIOS";
 const commercialPath = "/business-workspace/commercial";
+const ORDER_PAYMENT_STORY = import.meta.env.VITE_BAI_ORDER_PAYMENT_STORY === "true";
+const STORY_STEPS = {
+  inquiry: "Обращение", order_created: "Заказ", invoice_issued: "Счёт выставлен", checkout_opened: "Ссылка на оплату",
+  payment_received: "Платёж поступил", paid_in_full: "Оплачено полностью", provider_verified: "Подтверждено платёжной системой"
+};
+const STORY_STATES = {
+  draft: "Черновик", awaiting_checkout: "Ждёт ссылки на оплату", awaiting_payment: "Ждёт оплаты",
+  partially_paid: "Оплачено частично", needs_reconciliation: "Оплачено, но не сверено",
+  revenue_confirmed: "Выручка подтверждена", closed_without_revenue: "Закрыт без выручки",
+  reversed: "Возврат или отмена после оплаты"
+};
 const headersFor = (key) => ({ "X-API-Key": key });
 const receiptIsOrder = (order) => Boolean(
   order && typeof order.order_id === "string" && order.order_id &&
@@ -45,9 +57,13 @@ export function CommercialSalesWorkspace({
   const [leadContextError, setLeadContextError] = useState("");
   // Reuse the same key after an ambiguous network failure. No blind second order.
   const pendingRequest = useRef(null);
+  // Concurrent initial load and explicit refresh must not overwrite newer verified server data.
+  const refreshGeneration = useRef(0);
 
   const refresh = useCallback(async (signal) => {
     if (!apiKey) return;
+    const generation = ++refreshGeneration.current;
+    const isCurrent = () => !signal?.aborted && generation === refreshGeneration.current;
     setBusy(true);
     setError("");
     try {
@@ -56,7 +72,7 @@ export function CommercialSalesWorkspace({
         getJson(endpoint + "/leads", auth),
         getJson(apiBase.replace(/\/$/, "") + "/business-workspace/programs", auth),
       ]);
-      if (signal?.aborted) return;
+      if (!isCurrent()) return;
       if (!Array.isArray(data?.orders) || !data.orders.every(receiptIsOrder)) {
         throw new Error("Сервер вернул непроверенные суммы или счета");
       }
@@ -74,13 +90,13 @@ export function CommercialSalesWorkspace({
         item?.id && item.status === "active" && item.access_mode === "paid"));
       setLoaded(true);
     } catch (reason) {
-      if (!signal?.aborted) {
+      if (isCurrent()) {
         setError("Не удалось прочитать канонические данные: " +
           (reason?.message || "ошибка сети") + ". Повторите чтение перед новым действием.");
         setLoaded(false);
       }
     } finally {
-      if (!signal?.aborted) setBusy(false);
+      if (isCurrent()) setBusy(false);
     }
   }, [apiBase, apiKey, auth, endpoint, getJson]);
 
@@ -101,7 +117,10 @@ export function CommercialSalesWorkspace({
     setLoaded(false);
     pendingRequest.current = null;
     if (apiKey) void refresh(controller.signal);
-    return () => controller.abort();
+    return () => {
+      controller.abort();
+      ++refreshGeneration.current;
+    };
   }, [apiKey, refresh]);
 
   useEffect(() => {
@@ -212,7 +231,7 @@ export function CommercialSalesWorkspace({
       }
       pendingRequest.current = null;
       setSelectedId(persisted.order_id);
-      setNotice("Заказ и счёт сохранены в BusinessAIOS. Оплата ещё не подтверждена.");
+      setNotice("Заказ и счёт сохранены в " + PUBLIC_BRAND + ". Оплата ещё не подтверждена.");
       await refresh();
     } catch (reason) {
       setError("Создание счёта не завершено: " + (reason?.message || "ошибка сети") +
@@ -417,6 +436,15 @@ export function CommercialSalesWorkspace({
                   <p><strong>Счёт:</strong> {order.invoice_id}</p>
                   <p><strong>Предложение:</strong> {order.offer_id}</p>
                   <p><strong>Учтено в Billing:</strong> {money(order.paid_minor, order.currency)}</p>
+                  {ORDER_PAYMENT_STORY && order.story && Array.isArray(order.story.steps) ? (
+                    <div className="order-payment-story">
+                      <p><strong>История:</strong> {STORY_STATES[order.story.state] || order.story.state}</p>
+                      <ol>{order.story.steps.map((item) => (
+                        <li key={item.step}>{item.done ? "✓" : "○"} {STORY_STEPS[item.step] || item.step}</li>
+                      ))}</ol>
+                      {order.story.counts_as_revenue ? null : <small>В выручку попадает только оплата, подтверждённая платёжной системой.</small>}
+                    </div>
+                  ) : null}
                   {order.status === "active" && order.invoice_status === "issued" && order.paid_minor === 0 ? (
                     <button type="button" className="ghost" disabled={busy}
                       onClick={() => void startCheckout(order)}>Получить ссылку PSP</button>

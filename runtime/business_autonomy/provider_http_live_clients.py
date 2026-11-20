@@ -182,7 +182,7 @@ class VendorHttpLiveTransport:
             method = 'GET' if operation in {'health_probe', 'message_read'} else 'POST'
             return {'url': url, 'method': method, 'headers': headers, 'json_body': None if operation in {'health_probe', 'message_read'} else {'content': str(payload.get('text') or ''), 'allowed_mentions': {'parse': []}}}
         method = 'GET' if operation in {'health_probe', 'message_read', 'contact_profile_read'} or operation.endswith('_sync') else 'POST'
-        json_body = None if method == 'GET' else ({'text': str(payload.get('text') or '')} if provider.provider_key == 'max_messaging' and operation == 'message_send' else dict(payload or {}))
+        json_body = None if method == 'GET' else ({'text': str(payload.get('text') or ''), **({'attachments': [{'type': 'inline_keyboard', 'payload': {'buttons': payload['keyboard']}}]} if isinstance(payload.get('keyboard'), list) and payload['keyboard'] else {})} if provider.provider_key == 'max_messaging' and operation == 'message_send' else dict(payload or {}))
         return {'url': url, 'method': method, 'headers': headers, 'json_body': json_body}
     def _load_secrets(self, *, provider: ProviderDefinition, tenant_id: str, business_id: str) -> dict[str, str]:
         values = {}

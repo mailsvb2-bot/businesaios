@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from core.policies.telegram.context import TelegramCtx
+from core.policies.telegram.context import TelegramCtx, operator_flag, policy_scope, scoped_active_plans, scoped_plan
 from core.policies.telegram.helpers import ProposedAction, propose
 from core.policies.telegram.tariffs import (
     build_plan_confirmation_text,
@@ -48,16 +48,13 @@ def handle_marketing_routes(
             marketing_seed=ctx.marketing_seed,
             marketing_bandit=ctx.marketing_bandit,
             pricing_suggestions=getattr(ctx, "pricing_suggestions", None),
+            plans=scoped_active_plans(ctx),
         )
     sub_buy = parse_sub_buy(ctx.callback_data)
     if sub_buy is not None:
         plan_id, expected = sub_buy
-        try:
-            from core.plans import plan_by_id
-
-            plan = plan_by_id(int(plan_id), tenant_id=str(ctx.state.tenant_id), product_id=str(getattr(ctx.state, 'product_id', '') or (getattr(ctx.state, 'product_metadata', {}) or {}).get('product_id') or ''))
-        except Exception:
-            plan = None
+        scope = policy_scope(ctx)
+        plan = scoped_plan(ctx, int(plan_id))
         if not plan:
             return pm(text="❌ Тариф не найден.", reply_markup=kb_back_main())
         current_price = int(plan.get("price") or 0)
@@ -69,8 +66,8 @@ def handle_marketing_routes(
             "select_tariff@v1",
             {
                 "user_id": user_id,
-                "tenant_id": str(ctx.state.tenant_id),
-                "product_id": str(plan.get("product_id") or ""),
+                "tenant_id": scope.tenant_id,
+                "product_id": scope.product_id,
                 "tariff": str(plan.get("plan_code") or plan.get("code") or ""),
                 "days": int(plan.get("days") or 0),
                 "period": str(plan.get("scope") or ""),
@@ -80,37 +77,27 @@ def handle_marketing_routes(
                 "expected_price": int(current_price),
                 "notify_text": build_plan_confirmation_text(plan),
                 "notify_reply_markup": kb_pay_selected(),
-                "notify": True,
             },
         )
     if str(ctx.callback_data or "").startswith("sub:") and str(ctx.callback_data).count(":") == 2:
         # Historical morning/evening callback cannot authorize a product purchase.
         return pm(text="Этот тариф недоступен. Выберите актуальный тариф.", reply_markup=kb_back_main())
-    if ctx.cmd == "/pay":
-        if not ctx.selected_tariff:
+    if ctx.cmd == "/pay" or str(ctx.callback_data or "") == CB_PAY_SELECTED:
+        if not ctx.selected_tariff and ctx.cmd == "/pay":
             return propose_show_tariffs(
                 user_id=user_id,
                 legacy_prices=legacy_prices,
                 marketing_variants=ctx.marketing_variants,
                 marketing_seed=ctx.marketing_seed,
                 marketing_bandit=ctx.marketing_bandit,
+                plans=scoped_active_plans(ctx),
             )
+        scope = policy_scope(ctx)
         return propose_pay_selected(
-            user_id=user_id,
-            full_access=ctx.full_access,
-            selected=ctx.selected_tariff,
-            tenant_id=str(ctx.state.tenant_id),
-            product_id=str(getattr(ctx.state, "product_id", "") or (getattr(ctx.state, "product_metadata", {}) or {}).get("product_id") or ""),
-            default_price_rub=int(default_price_rub),
-            legacy_prices=legacy_prices,
-        )
-    if str(ctx.callback_data or "").startswith(CB_PAY_SELECTED):
-        return propose_pay_selected(
-            user_id=user_id,
-            full_access=ctx.full_access,
-            selected=ctx.selected_tariff,
-            default_price_rub=int(default_price_rub),
-            legacy_prices=legacy_prices,
+            user_id=user_id, full_access=ctx.full_access, selected=ctx.selected_tariff,
+            tenant_id=scope.tenant_id, product_id=scope.product_id,
+            business_id=scope.business_id,
+            checkout_enabled=operator_flag(ctx, "telegram_checkout"),
         )
     # Payment status alone is not proof of ownership or entitlement. Only the
     # canonical reconciler may grant access after a scoped provider receipt.

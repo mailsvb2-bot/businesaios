@@ -58,8 +58,10 @@ def handle_growth_strategy_backlog(payload: dict[str, Any], effects: EffectsPort
 
 
 def _render_backlog(backlog):
-    lines = ["📋 Growth Backlog", ""]
+    lines = ["📋 Гипотезы роста", ""]
     keyboard = []
+    if not backlog:
+        lines.append("Гипотез пока нет. Нажмите «Сгенерировать гипотезы» в разделе «Стратегия роста».")
     for index, (hypothesis, score, state) in enumerate(backlog[:20], 1):
         score_text = f"{score.score:.0f}" if score else "-"
         lines.append(f"{index}) {hypothesis.title}  (score={score_text}, state={state})")
@@ -67,6 +69,8 @@ def _render_backlog(backlog):
             f"   [{hypothesis.stage}/{hypothesis.channel}] metric={hypothesis.metric} horizon={hypothesis.horizon_days}d"
         )
         lines.append(f"   id={hypothesis.hypothesis_id}")
+        if str(state) in {"accepted", "rejected", "archived"}:  # already decided: no repeat buttons
+            continue
         keyboard.append(
             [
                 {

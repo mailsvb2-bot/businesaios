@@ -56,6 +56,7 @@ def handle_flow(ctx, *, user_id: str, default_price_rub: int, sess: dict, sl, lo
                 "user_id": str(user_id),
                 "lead_source": _LEAD_SOURCE_MAP[cb],
                 "tenant_id": normalize_tenant_id_or_unknown(getattr(ctx.state, "tenant_id", None)),
+                "callback_query_id": ctx.callback_query_id,
             },
         )
 
