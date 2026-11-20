@@ -729,3 +729,30 @@ def test_canonical_business_scope_is_carried_without_goal_and_cannot_be_spoofed(
                 "user_id": "owner", "text": "Ready", "business_id": "other"}),
             pinned_world_model_meta={}, tenant_id="tenant-a", product_id=None,
             domain=None, product_version=None, actor_id="owner")
+
+
+@pytest.mark.parametrize("chat_id", ("123456789", "-1001234567890"))
+def test_start_with_verified_numeric_chat_survives_schema_and_retains_proof(chat_id: str):
+    """A real Telegram /start has a numeric chat; the signed routine reply may not turn it into str."""
+    from core.actions.catalog import build_schema_registry
+
+    state = SimpleNamespace(
+        tenant_id="tenant-live", user_id="user-1", meta={}, economy={},
+        session={"source": "messaging", "channel": "telegram", "command": "/start",
+                 "text": "/start", "messaging_update_id": 462236768,
+                 "chat_id": chat_id, "telegram_chat_id": chat_id},
+        user={"id": "user-1", "messaging_channel": "telegram"},
+        product={"name": "ClientPlatform"},
+    )
+    proposal = UnifiedTelegramPolicyV3().propose(state)
+    assert proposal.action == "send_message@v1"
+    _, payload = _trusted_build_payload(
+        state=state, out=proposal, pinned_world_model_meta={},
+        tenant_id="tenant-live", product_id=None, domain=None,
+        product_version=None, actor_id="user-1",
+    )
+    assert payload["chat_id"] == int(chat_id)
+    assert type(payload["chat_id"]) is int
+    assert payload["meta"]["inbound_user_reply"]["chat_id"] == chat_id
+    assert is_routine_reply(proposal.action, payload)
+    assert build_schema_registry().validate(proposal.action, payload) == 1
