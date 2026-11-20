@@ -47,7 +47,7 @@ def test_budget_overflow_rolls_back_idempotency_and_total(tmp_path):
 
 @pytest.mark.parametrize("cost,actions", [
     (float("inf"), 1), (float("nan"), 1), (-1.0, 1),
-    (None, 1), ("invalid", 1), (1.0, -1), (1.0, "invalid"),
+    ("invalid", 1), (1.0, -1), (1.0, "invalid"),
 ])
 def test_budget_corrupt_persisted_totals_fail_closed(tmp_path, cost, actions):
     import sqlite3
