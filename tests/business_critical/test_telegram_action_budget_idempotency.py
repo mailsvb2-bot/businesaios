@@ -114,3 +114,15 @@ def test_sqlite_action_budget_retry_is_atomic_and_preserves_existing_totals(tmp_
     with pytest.raises(RuntimeError, match="action_budget_idempotency_conflict"):
         ledger.record_once( "tenant-live", idempotency_key=key, action="capture_payment@v1", payload_hash="payload-v2", estimated_cost=99.0, )
     assert ledger.snapshot("tenant-live") == (6.0, 2)
+
+
+@pytest.mark.parametrize("bad", [float('nan'), float('inf'), -1.0, float('-inf')])
+def test_invalid_action_cost_fails_closed_without_ledger_write(tmp_path, bad):
+    ledger = PlatformSqliteActionBudgetLedger(sqlite_path=str(tmp_path / 'budget.sqlite'))
+    guard = ActionBudgetGuard(ledger, ActionBudget(max_cost=100, max_actions=10), _catalog())
+    result = guard.evaluate(SafetyActionContext('capture_payment@v1', 'tenant', 'user', {'tenant_id': 'tenant', 'estimated_cost': bad}))
+    assert result.status == ControlStatus.BLOCK and result.reason == 'action_budget_invalid_cost'
+    with pytest.raises(ValueError, match='action_budget_invalid_cost'):
+        ledger.record_once('tenant', idempotency_key='key', action='capture_payment@v1', payload_hash='hash', estimated_cost=bad)
+    assert ledger.recorded_action('tenant', 'key') is None
+    assert ledger.snapshot('tenant') == (0.0, 0)

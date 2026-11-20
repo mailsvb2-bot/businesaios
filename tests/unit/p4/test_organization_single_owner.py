@@ -81,6 +81,37 @@ def test_stale_revision_denied_without_any_write(setup):
                                                 business_id=setup.business)["revision"] == original_intake_revision
 
 
+def test_stale_revision_rejected_when_clock_does_not_advance(setup, monkeypatch):
+    """A second writer in the same millisecond must invalidate stale web revisions."""
+    monkeypatch.setattr(OrganizationRegistry, "_time", staticmethod(lambda value: 1700000000000))
+    first = setup.http.post("/business-workspace/settings", json={
+        "business_name": "First", "activity_description": "",
+        "timezone_name": "Europe/Moscow", "expected_revision": 0,
+    }, headers={"X-Idempotency-Key": "fixed-clock-first"})
+    assert first.status_code == 200, first.text
+    old_revision = first.json()["organization_updated_at_ms"]
+    setup.registry.update(
+        tenant_id=setup.tenant, business_id=setup.business,
+        organization_id=setup.business, idempotency_key="fixed-clock-other",
+        name="Second",
+    )
+    current = business_organization(
+        setup.registry, tenant_id=setup.tenant, business_id=setup.business,
+    )
+    assert current.updated_at_ms > old_revision
+    intake_revision = setup.service.read_business_settings(
+        tenant_id=setup.tenant, business_id=setup.business,
+    )["revision"]
+    events_before = len(setup.events.events)
+    denied = setup.http.post("/business-workspace/settings", json={
+        "business_name": "Stale", "activity_description": "",
+        "timezone_name": "Europe/Moscow", "expected_revision": intake_revision,
+        "expected_organization_updated_at_ms": old_revision,
+    }, headers={"X-Idempotency-Key": "fixed-clock-stale"})
+    assert denied.status_code == 409, denied.text
+    assert len(setup.events.events) == events_before
+
+
 def test_flag_off_keeps_legacy_settings_payload(setup, monkeypatch):
     monkeypatch.setenv("BAI_ORGANIZATION_NAME_CANONICAL_ENABLED", "0")
     response = setup.http.post("/business-workspace/settings", json={

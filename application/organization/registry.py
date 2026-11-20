@@ -94,7 +94,7 @@ class OrganizationRegistry:
         candidate = replace(
             current, name=current.name if name is None else name,
             organization_type=current.organization_type if organization_type is None else organization_type,
-            updated_at_ms=max(current.updated_at_ms, self._time(occurred_at_ms)),
+            updated_at_ms=max(current.updated_at_ms + 1, self._time(occurred_at_ms)),
         )
         return self._persist(
             tenant_id=tenant_id, business_id=business_id, organization_id=organization_id,

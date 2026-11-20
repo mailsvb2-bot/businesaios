@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import sqlite3
+from math import isfinite
 from collections.abc import Iterator
 from contextlib import contextmanager
 from pathlib import Path
@@ -41,15 +42,9 @@ class PlatformSqliteActionBudgetLedger:
 
     @staticmethod
     def _migrate_v1(conn: Connection) -> None:
-        conn.execute(
-            '''
-            CREATE TABLE IF NOT EXISTS safety_action_budget_ledger (
-                tenant_id TEXT PRIMARY KEY,
-                total_cost REAL NOT NULL,
-                total_actions INTEGER NOT NULL
-            )
-            '''
-        )
+        conn.execute('''CREATE TABLE IF NOT EXISTS safety_action_budget_ledger (
+            tenant_id TEXT PRIMARY KEY, total_cost REAL NOT NULL,
+            total_actions INTEGER NOT NULL)''')
 
     @staticmethod
     def _migrate_v2(conn: Connection) -> None:
@@ -59,31 +54,20 @@ class PlatformSqliteActionBudgetLedger:
 
     @staticmethod
     def _migrate_v3(conn: Connection) -> None:
-        conn.execute(
-            """
-            CREATE TABLE IF NOT EXISTS safety_action_budget_ledger_idempotency (
-                tenant_id TEXT NOT NULL,
-                idempotency_key TEXT NOT NULL,
-                action TEXT NOT NULL,
-                payload_hash TEXT NOT NULL,
-                PRIMARY KEY (tenant_id, idempotency_key)
-            )
-            """
-        )
+        conn.execute("""CREATE TABLE IF NOT EXISTS safety_action_budget_ledger_idempotency (
+            tenant_id TEXT NOT NULL, idempotency_key TEXT NOT NULL,
+            action TEXT NOT NULL, payload_hash TEXT NOT NULL,
+            PRIMARY KEY (tenant_id, idempotency_key))""")
 
     @staticmethod
     def _record_total(conn: Connection, tenant_id: str, estimated_cost: float) -> None:
-        conn.execute(
-            """
-            INSERT INTO safety_action_budget_ledger(tenant_id, total_cost, total_actions, updated_at)
-            VALUES (?, ?, 1, datetime('now'))
-            ON CONFLICT(tenant_id) DO UPDATE SET
-                total_cost = safety_action_budget_ledger.total_cost + excluded.total_cost,
-                total_actions = safety_action_budget_ledger.total_actions + 1,
-                updated_at = excluded.updated_at
-            """,
-            (tenant_id, float(estimated_cost)),
-        )
+        if not isfinite(float(estimated_cost)) or float(estimated_cost) < 0:
+            raise ValueError("action_budget_invalid_cost")
+        conn.execute("""INSERT INTO safety_action_budget_ledger(tenant_id, total_cost, total_actions, updated_at)
+            VALUES (?, ?, 1, datetime('now')) ON CONFLICT(tenant_id) DO UPDATE SET
+            total_cost = safety_action_budget_ledger.total_cost + excluded.total_cost,
+            total_actions = safety_action_budget_ledger.total_actions + 1,
+            updated_at = excluded.updated_at""", (tenant_id, float(estimated_cost)))
 
     def snapshot(self, tenant_id: str) -> tuple[float, int]:
         key = str(tenant_id).strip() or 'unknown'
@@ -103,25 +87,24 @@ class PlatformSqliteActionBudgetLedger:
             self._record_total(conn, key, float(estimated_cost))
 
     def recorded_action(self, tenant_id: str, idempotency_key: str) -> tuple[str, str] | None:
+        tenant, key = str(tenant_id).strip(), str(idempotency_key).strip()
+        if not tenant or not key:
+            raise ValueError("tenant_id and idempotency_key are required")
         with self._connect() as conn:
             row = conn.execute(
-                "SELECT action,payload_hash FROM safety_action_budget_ledger_idempotency WHERE tenant_id=? AND idempotency_key=?",
-                (str(tenant_id).strip() or "unknown", str(idempotency_key)),
-            ).fetchone()
+                "SELECT action,payload_hash FROM safety_action_budget_ledger_idempotency WHERE tenant_id=? AND idempotency_key=?", (tenant, key)).fetchone()
         return (str(row[0]), str(row[1])) if row else None
 
     def record_once(self, tenant_id: str, *, idempotency_key: str,
                     action: str, payload_hash: str, estimated_cost: float) -> bool:
         tenant, key, action_name, fingerprint = (
-            str(tenant_id).strip() or "unknown", str(idempotency_key),
-            str(action), str(payload_hash),
-        )
+            str(tenant_id).strip(), str(idempotency_key).strip(), str(action), str(payload_hash))
+        if not tenant or not key:
+            raise ValueError("tenant_id and idempotency_key are required")
         with self._connect() as conn:
             conn.execute("BEGIN IMMEDIATE")
             row = conn.execute(
-                "SELECT action,payload_hash FROM safety_action_budget_ledger_idempotency WHERE tenant_id=? AND idempotency_key=?",
-                (tenant, key),
-            ).fetchone()
+                "SELECT action,payload_hash FROM safety_action_budget_ledger_idempotency WHERE tenant_id=? AND idempotency_key=?", (tenant, key)).fetchone()
             if row:
                 if (str(row[0]), str(row[1])) != (action_name, fingerprint):
                     raise RuntimeError("action_budget_idempotency_conflict")
