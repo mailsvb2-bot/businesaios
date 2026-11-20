@@ -15,6 +15,7 @@ from application.business_flows import bot_provisioning as botprov
 from application.business_flows import native_channels as nc
 from application.business_flows.projection import flow_payloads, flow_rows
 from runtime.handler_impl.core.payloads import require_mapping, required_str
+from runtime.handler_impl.domains import business_catalog_ops as catalog_ops
 from runtime.handler_impl.domains.admin_ops import _card_outcome, render_admin_analytics
 from runtime.handler_impl.domains.business_catalog_ops import (
     CATALOG_OPS,
@@ -25,18 +26,6 @@ from runtime.handler_impl.domains.business_catalog_ops import (
     PANEL_OPS,
     PROMO_OPS,
     XP_OPS,
-    _ads,
-    _catalog,
-    _commerce,
-    _event_channels,
-    _events,
-    _external_products,
-    _followups,
-    _organization_settings,
-    _owner_journey,
-    _panels,
-    _partner_growth,
-    _promotions,
     _retention,
     _revenue_text,
     _sales_ai,
@@ -115,15 +104,15 @@ def handle_bookings(payload, effects, env, *, event_store, now_ms: int | None = 
     if op in PROMO_OPS | CHANNEL_OPS | PANEL_OPS | EVENT_OPS:
         try:
             if op in PROMO_OPS:
-                return _promotions( done, bk, op, arg, now, slots, facts, user_id=user_id, tenant_id=tenant_id, event_store=event_store, )
+                return catalog_ops._promotions( done, bk, op, arg, now, slots, facts, user_id=user_id, tenant_id=tenant_id, event_store=event_store, )
             if op in CHANNEL_OPS:
-                return _event_channels( done, bk, op, arg, now, slots, facts,
+                return catalog_ops._event_channels( done, bk, op, arg, now, slots, facts,
                     user_id=user_id, platform=str(body.get("platform") or "telegram"),
                 )
             if op in PANEL_OPS:
-                return _panels( lambda text, _ch: done(text), bk, op, arg, now, slots, facts, tenant_id=tenant_id, event_store=event_store,
+                return catalog_ops._panels( lambda text, _ch: done(text), bk, op, arg, now, slots, facts, tenant_id=tenant_id, event_store=event_store,
                 )
-            return _events( done, lambda text, uid: send_tracked(
+            return catalog_ops._events( done, lambda text, uid: send_tracked(
                     body, effects, env, text=text, event_type=None, event_payload=None, to_user_id=uid,
                 ),
                 bk, op, arg, now, slots, tenant_id=tenant_id, event_store=event_store,
@@ -151,7 +140,7 @@ def handle_bookings(payload, effects, env, *, event_store, now_ms: int | None = 
                 "/export_data — мои данные · /delete_my_data — удалить данные"
             )
             if op == "home_owner":
-                text += _owner_journey(bk, slots, tenant_id=tenant_id, event_store=event_store)
+                text += catalog_ops._owner_journey(bk, slots, tenant_id=tenant_id, event_store=event_store)
         else:
             change = None
             rows = mine if op == "mine" else open_slots
@@ -332,7 +321,7 @@ def handle_partners(payload, effects, env, *, event_store):
             ),
         )
     if op in {"campaign", "ref_result"}:
-        text, ch = _partner_growth(pt, op, arg, tenant_id, known, flow_payloads(event_store, tenant_id=tenant_id, event_type="partners@v1"))
+        text, ch = catalog_ops._partner_growth(pt, op, arg, tenant_id, known, flow_payloads(event_store, tenant_id=tenant_id, event_type="partners@v1"))
         return send_tracked(body, effects, env, text=text, event_type="partners@v1" if ch else None, event_payload=ch)
     if op in {"status", "pitch", "ref"}:
         text, change = pt.partner_card(known, op, arg, tenant_id, facts)
@@ -396,16 +385,15 @@ def _cat_replay(rows):
 
 def _cockpit(body, effects, env, future, steps, facts, now, team=None, timed=None):
     """Owner cockpit screens (cpm:*) over the same projections; buttons re-enter this action."""
-    from application.business_flows import admin as ad
-    from application.business_flows import bookings as bk
-    from application.business_flows import cockpit as cp
-    from application.business_flows import cockpit_booking as cb
-    from application.business_flows import cockpit_events as ce
-    from application.business_flows import cockpit_money as cm
-    from application.business_flows import cockpit_sales as cs
-    from application.business_flows import event_series as es
-    from application.business_flows import partners as pt
-    from application.business_flows import sales as sl
+    # Keep this single import statement: each module is used only by the cockpit
+    # projection, which has one canonical owner. Do not introduce ten imports.
+    # isort: off
+    from application.business_flows import (
+        admin as ad, bookings as bk, cockpit as cp,
+        cockpit_booking as cb, cockpit_events as ce, cockpit_money as cm,
+        cockpit_sales as cs, event_series as es, partners as pt, sales as sl,
+    )
+    # isort: on
 
     snap = cp.Snapshot( slots=future, partners=list(pt.replay(facts("partners@v1")).values()), steps=steps,
         bots=list(botprov.replay(facts("bot_provisioning@v1")).values()),
@@ -557,7 +545,7 @@ def handle_business_admin(payload, effects, env, *, event_store, settings_gatewa
         return send_tracked( body, effects, env, text=text, event_type="business_admin@v1" if change else None, event_payload=change )
 
     if op in {"organization_show", "organization_create", "organization_name", "organization_type"}:
-        text, markup = _organization_settings( event_store=event_store, idempotency_path=organization_idempotency_path,
+        text, markup = catalog_ops._organization_settings( event_store=event_store, idempotency_path=organization_idempotency_path,
             body=body, tenant_id=tenant_id, op=op, arg=arg,
             decision_id=env.decision.decision_id,
         )
@@ -573,7 +561,7 @@ def handle_business_admin(payload, effects, env, *, event_store, settings_gatewa
     if op in XP_OPS:
         try:
             facts_ = flow_payloads(event_store, tenant_id=tenant_id, event_type="business_admin@v1")
-            return _external_products(done, op, arg, facts_, tenant_id=tenant_id, body=body, now_ms=now_ms or _now_ms())
+            return catalog_ops._external_products(done, op, arg, facts_, tenant_id=tenant_id, body=body, now_ms=now_ms or _now_ms())
         except ValueError as exc:
             return done(f"🔌 Не получилось: {exc}")
     try:
@@ -669,13 +657,13 @@ def handle_business_admin(payload, effects, env, *, event_store, settings_gatewa
             return done(apol.render(pols, now_ms=now))
         if op in CATALOG_OPS:
             facts_ = flow_payloads(event_store, tenant_id=tenant_id, event_type="business_admin@v1")
-            return _catalog(done, op, arg, facts_, now_ms or _now_ms())
+            return catalog_ops._catalog(done, op, arg, facts_, now_ms or _now_ms())
         if op in COMMERCE_OPS:
-            return _commerce(done, body, st, op, arg, tenant_id=tenant_id, event_store=event_store)
+            return catalog_ops._commerce(done, body, st, op, arg, tenant_id=tenant_id, event_store=event_store)
         if op.startswith("ad_"):
             from application.business_flows import sales as sl
 
-            return _ads( body, done, st, op, arg, flow_payloads(event_store, tenant_id=tenant_id, event_type="business_admin@v1"),
+            return catalog_ops._ads( body, done, st, op, arg, flow_payloads(event_store, tenant_id=tenant_id, event_type="business_admin@v1"),
                 lambda: sl.replay(flow_payloads(event_store, tenant_id=tenant_id,
                                                business_id=str(body.get("business_id") or "").strip() or None,
                                                event_type="sales_pipeline@v1")),
@@ -926,7 +914,7 @@ def handle_sales_pipeline(payload, effects, env, *, event_store, now_ms: int | N
 
             return out if sf.confirmed_delivery_enabled() else (out or {}).get("ok", True)
 
-        return _followups(done, push, st, op, arg, now, tenant_id=tenant_id, event_store=event_store)
+        return catalog_ops._followups(done, push, st, op, arg, now, tenant_id=tenant_id, event_store=event_store)
     try:
         if op == "add":
             ch = sl.add_lead(arg)

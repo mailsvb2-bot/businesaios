@@ -24,7 +24,7 @@ from core.policies.telegram.routes.settings_routes import handle_settings_routes
 from core.users.roles import effective_role, has_permission, required_permission
 from core.ux.callbacks import CB_MENU_MAIN
 from core.ux.telegram_keyboards import kb_back_main, kb_main
-from core.ux.unified_messenger_menu import connect_business_view, menu_text
+from core.ux.unified_messenger_menu import menu_text
 
 
 def handle(ctx: TelegramCtx, *, default_price_rub: int, bot_username: str = "", gift_ttl_sec: int = 7 * 24 * 3600) -> ProposedAction:
@@ -57,61 +57,11 @@ def handle(ctx: TelegramCtx, *, default_price_rub: int, bot_username: str = "", 
         if out is not None:
             return out
 
-    if ctx.callback_data == "cp:section:connect":
-        meta = getattr(ctx.state, "meta", None)
-        links = meta.get("operator_links", {}) if isinstance(meta, dict) else {}
-        url = links.get("onboarding_url", "") if isinstance(links, dict) else ""
-        product = getattr(ctx.state, "product", None)
-        business_id = product.get("business_id", "") if isinstance(product, dict) else ""
-        text, markup = connect_business_view(
-            onboarding_url=str(url), bound_business_id=str(business_id),
-            show_binding=bool(ctx.is_admin),
-        )
-        return pm(text=text, reply_markup=markup)
+    from core.policies.telegram.routes.business_flow_routes import handle_clientplatform_callbacks
+    callback_outcome = handle_clientplatform_callbacks(ctx, user_id=str(user_id), pm=pm)
+    if callback_outcome is not None:
+        return callback_outcome
 
-    # Inline approval callbacks only propose the same canonical partner action
-    # as /partner_approve; callback data never supplies authority or budget.
-    if str(ctx.callback_data or "").startswith(("cp:partner:approve:", "cp:partner:reject:")):
-        from dataclasses import replace
-
-        from core.policies.telegram.routes.business_flow_routes import handle_business_flow_routes
-
-        if not ctx.is_admin:
-            return pm(text="Доступ к согласованию партнёрства запрещён.", reply_markup=kb_back_main())
-        action_name, _, quote_id = str(ctx.callback_data).removeprefix("cp:partner:").partition(":")
-        if (action_name not in {"approve", "reject"} or len(quote_id) != 27
-                or not quote_id.startswith("pq_")
-                or any(ch not in "0123456789abcdef" for ch in quote_id[3:])):
-            return pm(text="Некорректное предложение.", reply_markup=kb_back_main())
-        target = "/partner_approve" if action_name == "approve" else "/partner_reject"
-        route_ctx = replace(ctx, cmd=target, args=quote_id, callback_data="")
-        outcome = handle_business_flow_routes(route_ctx, user_id=str(user_id))
-        if outcome is None:
-            raise RuntimeError("partners_canonical_approval_owner_missing")
-        return replace(outcome, payload={
-            **outcome.payload,
-            **({"callback_query_id": ctx.callback_query_id} if ctx.callback_query_id else {}),
-        })
-
-    if ctx.callback_data in {"cp:section:customers", "cp:section:sales", "cp:section:partners", "cp:partner:quotes", "cp:partner:rank", "cp:partner:inbox", "cp:section:ad-channels"}:
-        permission = {"cp:section:customers": "customers", "cp:section:sales": "sales",
-                      "cp:section:partners": "business_manage", "cp:partner:quotes": "business_manage",
-                      "cp:partner:rank": "business_manage", "cp:partner:inbox": "business_manage",
-                      "cp:section:ad-channels": "marketing"}[ctx.callback_data]
-        if not has_permission(ctx, permission):
-            return pm(text="Доступ к данным бизнеса запрещён.", reply_markup=kb_back_main())
-        from dataclasses import replace
-
-        from core.policies.telegram.routes.business_flow_routes import handle_business_flow_routes
-        target = {"cp:section:customers": "cpm:customers",
-                  "cp:section:sales": "/leads", "cp:section:partners": "/partners", "cp:partner:quotes": "/partner_quotes", "cp:partner:rank": "/partners", "cp:partner:inbox": "/partner_inbox", "cp:section:ad-channels": "/ad_channels"}[ctx.callback_data]
-        route_ctx = (replace(ctx, callback_data=target) if target.startswith("cpm:") else
-                     replace(ctx, callback_data="", cmd=target, args=""))
-        outcome = handle_business_flow_routes(route_ctx, user_id=str(user_id))
-        if outcome is None:
-            raise RuntimeError("clientplatform_canonical_owner_route_missing")
-        ack = {"callback_query_id": ctx.callback_query_id} if ctx.callback_query_id else {}
-        return replace(outcome, payload={**outcome.payload, **ack})
     if ctx.cmd == "/start" and str(ctx.args or "").strip().startswith(("cpa_", "ecv_")):
         from core.policies.telegram.routes.business_flow_routes import handle_business_flow_routes
         return handle_business_flow_routes(ctx, user_id=str(user_id))
