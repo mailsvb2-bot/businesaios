@@ -97,3 +97,49 @@ def test_partner_route_enforces_owner_and_forwards_verified_chat():
     assert message.action_type == "partners@v1" if hasattr(message, "action_type") else message is not None
     assert message.payload["source_chat_id"] == "12345"
     assert message.payload["source_message_key"] == "302"
+
+
+def test_partner_messages_escape_html_only_at_telegram_delivery(flow):
+    from html import escape
+
+    flow.run(handle_partners, op="add", arg="Студия <test> | wellness | 100 | opted_in | @studio")
+    pid = partners.parse_partner("Студия <test> | wellness | 100 | opted_in | @studio")["partner_id"]
+    _, invite = flow.run(handle_partners, op="invite", arg=pid)
+    assert "&lt;test&gt;" in invite
+    token = re.search(r"/partner_join ([A-Za-z0-9_-]+)", invite).group(1)
+    flow.run(handle_partners, op="join", arg=token, user_id="12345", source_chat_id="12345")
+    incoming = "<proposal>Привет & готов обсудить</proposal>"
+    flow.run(handle_partners, op="message_in", arg=incoming, user_id="12345",
+             source_chat_id="12345", source_message_key="message-77")
+    _, inbox = flow.run(handle_partners, op="inbox")
+    assert escape(incoming) in inbox
+    assert "&lt;test&gt;" in inbox
+    outgoing = "<b>Условия & цена</b>"
+    flow.run(handle_partners, op="send", arg=f"{pid} | {outgoing}")
+    assert flow.effects.sent[-1]["text"] == escape(outgoing)
+    assert flow.effects.sent[-1]["track_payload"]["text"] == outgoing
+    assert incoming in [e["payload"]["text"] for e in flow.store.events
+                        if e["payload"].get("step") == "partner_message_in"]
+
+
+def test_customer_bot_partner_messages_keep_full_length_and_verified_source():
+    from types import SimpleNamespace
+
+    from core.actions.catalog import build_schema_registry
+    from core.policies.telegram.routes.customer_bot_routes import handle_customer_bot
+
+    message = "М" * 1200 + " <proposal>текст & условия</proposal>"
+    session = {"source": "customer_bot_update", "channel": "telegram",
+               "telegram_chat_id": "12345", "telegram_update_id": "933"}
+    ctx = SimpleNamespace(cmd="/partner_message", args=message,
+                          callback_query_id=None, state=SimpleNamespace(session=session))
+    action = handle_customer_bot(ctx, user_id="12345")
+    assert action.action == "partners@v1"
+    assert action.payload["arg"] == message
+    assert action.payload["source_chat_id"] == "12345"
+    assert action.payload["source_message_key"] == "933"
+    build_schema_registry().validate(action.action, {"tenant_id": "t1", **action.payload})
+    ctx.args = "X" * 2001
+    denied = handle_customer_bot(ctx, user_id="12345")
+    assert denied.action != "partners@v1"
+    assert "Не сохранено" in denied.payload["text"]

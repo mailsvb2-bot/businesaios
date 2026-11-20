@@ -209,6 +209,8 @@ def _dispatch_reminders(body, effects, env, bk, slots, facts, now):
 
 def handle_partners(payload, effects, env, *, event_store):
     """Owner partner search: add candidates, rank against goal terms (advisory, never contacts anyone)."""
+    from html import escape
+
     from application.business_flows import partners as pt
 
     body = require_mapping(payload or {})
@@ -245,7 +247,7 @@ def handle_partners(payload, effects, env, *, event_store):
                     raise ValueError("partner_not_found")
                 token = secrets.token_urlsafe(32)
                 fact = dialogue.invitation(arg, token, int(time.time()) + 604800)
-                return reply("🔐 Приглашение для партнёра " + known[arg].name +
+                return reply("🔐 Приглашение для партнёра " + escape(known[arg].name) +
                              "\nПередайте адресату лично: /partner_join " + token +
                              "\nТокен одноразовый, действует 7 дней.", fact)
             if op == "join":
@@ -269,8 +271,8 @@ def handle_partners(payload, effects, env, *, event_store):
                 messages = [f for f in facts if f.get("step") in {"partner_message_in", "partner_message_out"}
                             and (not arg or f.get("partner_id") == arg)]
                 lines = [f"{'📩' if m['step'].endswith('in') else '📤'} "
-                         f"{known[m['partner_id']].name if m['partner_id'] in known else m['partner_id']}: "
-                         f"{m['text'][:350]}" for m in messages[-10:]]
+                         f"{escape(known[m['partner_id']].name if m['partner_id'] in known else m['partner_id'])}: "
+                         f"{escape(m['text'][:350])}" for m in messages[-10:]]
                 return reply("🤝 Переписка (последние 10):\n" +
                              ("\n".join(lines) or "Пока пусто.")[:3300] +
                              f"\nПодключено контактов: {len(contacts)}\nОтвет: /partner_send ID | текст")
@@ -286,7 +288,7 @@ def handle_partners(payload, effects, env, *, event_store):
             # Only the existing canonical messaging effect may perform transport I/O.
             # Recording the fact is coupled to the verified delivery receipt.
             return send_tracked({**body, "channel": "telegram"}, effects, env,
-                                text=content.strip(), event_type="partners@v1",
+                                text=escape(fact["text"]), event_type="partners@v1",
                                 event_payload=fact, to_user_id=recipient)
         except (ValueError, LookupError, PermissionError) as exc:
             return reply(f"🤝 Не получилось: {exc}")
