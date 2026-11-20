@@ -12,6 +12,7 @@ from functools import partial
 from typing import Any
 
 from application.business_flows import bot_provisioning as botprov
+from application.business_flows import native_channels as nc
 from application.business_flows.projection import flow_payloads, flow_rows
 from runtime.handler_impl.core.payloads import require_mapping, required_str
 from runtime.handler_impl.domains.admin_ops import _card_outcome, render_admin_analytics
@@ -45,6 +46,7 @@ from runtime.handler_impl.domains.business_catalog_ops import (
     _visual_publish,
     channel_reminder_copies,
     notification_preferences,
+    partner_quote_flow,
 )
 from runtime.handler_impl.domains.public_event_ops import MEDIA_OPS, PUB_OPS, _landing, media_op, public_event_op
 from runtime.handlers.delivery_contract import delivery_kwargs
@@ -183,12 +185,15 @@ def _dispatch_reminders(body, effects, env, bk, slots, facts, now):
 
 def handle_partners(payload, effects, env, *, event_store):
     """Owner partner search: add candidates, rank against goal terms (advisory, never contacts anyone)."""
+    from html import escape
+
     from application.business_flows import partners as pt
 
     body = require_mapping(payload or {})
     tenant_id = required_str(body, "tenant_id")
     op, arg = str(body.get("op") or "rank"), str(body.get("arg") or "").strip()
-    known = pt.replay(flow_payloads(event_store, tenant_id=tenant_id, event_type="partners@v1"))
+    facts = flow_payloads(event_store, tenant_id=tenant_id, event_type="partners@v1")
+    known = pt.replay(facts)
     try:
         if op == "add":
             change = pt.parse_partner(arg)
@@ -196,44 +201,159 @@ def handle_partners(payload, effects, env, *, event_store):
             return send_tracked(body, effects, env, text=text, event_type="partners@v1", event_payload=change)
     except ValueError as exc:
         return send_tracked(body, effects, env, text=f"🤝 Не получилось: {exc}", event_type=None, event_payload=None)
+    if op in {"invite", "join", "message_in", "stop", "send", "inbox"}:
+        import secrets
+        import time
+
+        from application.business_flows import partners as dialogue
+
+        user_id = required_str(body, "user_id")
+        channel = str(body.get("channel") or "telegram").strip()
+        def reply(text, fact=None):
+            return send_tracked(body, effects, env, text=text,
+                                event_type="partners@v1" if fact else None, event_payload=fact)
+        try:
+            if channel != "telegram":
+                raise ValueError("partner_dialogue_telegram_only")
+            chat_id = str(body.get("source_chat_id") or "")
+            if op in {"join", "message_in", "stop"} and chat_id != user_id:
+                raise ValueError("partner_private_chat_required")
+            if op == "invite":
+                if arg not in known:
+                    raise ValueError("partner_not_found")
+                token = secrets.token_urlsafe(32)
+                fact = dialogue.invitation(arg, token, int(time.time()) + 604800)
+                return reply("🔐 Приглашение для партнёра " + escape(known[arg].name) +
+                             "\nПередайте адресату лично: /partner_join " + token +
+                             "\nТокен одноразовый, действует 7 дней.", fact)
+            if op == "join":
+                fact = dialogue.claim_invitation(facts, arg, user_id, now=int(time.time()))
+                return reply("✅ Контакт подтверждён. Напишите: /partner_message Ваш текст. Отключить: /partner_stop" if fact
+                             else "✅ Контакт уже подтверждён.", fact)
+            if op == "stop":
+                fact = dialogue.unsubscribe(facts, user_id)
+                return reply("🚫 Переписка отключена. Новые сообщения вам не отправляются." if fact
+                             else "ℹ️ Активная переписка не найдена.", fact)
+            if op == "message_in":
+                source_key = str(body.get("source_message_key") or
+                                 env.decision.correlation_id or env.decision.decision_id)
+                fact = dialogue.inbound_message(facts, user_id, arg, "telegram:" + user_id + ":" + source_key)
+                return reply("✅ Сообщение принято. Владелец увидит его в разделе партнёров." if fact
+                             else "✅ Сообщение уже учтено.", fact)
+            if op == "inbox":
+                if arg and arg not in known:
+                    raise ValueError("partner_not_found")
+                contacts = dialogue.bound_contacts(facts)
+                messages = [f for f in facts if f.get("step") in {"partner_message_in", "partner_message_out"}
+                            and (not arg or f.get("partner_id") == arg)]
+                lines = [f"{'📩' if m['step'].endswith('in') else '📤'} "
+                         f"{escape(known[m['partner_id']].name if m['partner_id'] in known else m['partner_id'])}: "
+                         f"{escape(m['text'][:350])}" for m in messages[-10:]]
+                return reply("🤝 Переписка (последние 10):\n" +
+                             ("\n".join(lines) or "Пока пусто.")[:3300] +
+                             f"\nПодключено контактов: {len(contacts)}\nОтвет: /partner_send ID | текст")
+            ref, separator, content = arg.partition("|")
+            partner_id = ref.strip()
+            if not separator:
+                raise ValueError("format: /partner_send ID | текст")
+            key = str(env.decision.correlation_id or env.decision.decision_id)
+            fact = dialogue.outbound_message(facts, partner_id, content, key)
+            if any(f.get("step") == "partner_message_out" and f.get("message_key") == key for f in facts):
+                return reply("ℹ️ Ответ уже отправлялся, повторная отправка заблокирована.")
+            recipient = dialogue.bound_contacts(facts)[partner_id]
+            # Only the existing canonical messaging effect may perform transport I/O.
+            # Recording the fact is coupled to the verified delivery receipt.
+            return send_tracked({**body, "channel": "telegram"}, effects, env,
+                                text=escape(fact["text"]), event_type="partners@v1",
+                                event_payload=fact, to_user_id=recipient)
+        except (ValueError, LookupError, PermissionError) as exc:
+            return reply(f"🤝 Не получилось: {exc}")
+    partner_markup = {"inline_keyboard": [
+        [{"text": "🤝 Список партнёров", "callback_data": "cp:partner:rank"}],
+        [{"text": "🧾 Коммерческие предложения", "callback_data": "cp:partner:quotes"}],
+        [{"text": "📩 Переписка", "callback_data": "cp:partner:inbox"}],
+        [{"text": "⬅️ Главное меню", "callback_data": "menu_main"}],
+    ]}
+    if op == "ai_draft":
+        # Owner-initiated draft only; no partner send, no price acceptance.
+        from application.business_flows import admin as admin_flows
+        from application.business_flows import sales_ai as sales_ai_policy
+        from runtime.platform.config.env_flags import env_str
+
+        ref, sep, incoming = arg.partition("|")
+        ref, incoming = ref.strip(), incoming.strip()
+        if ref not in known or not sep or not incoming:
+            return send_tracked(body, effects, env,
+                                text="Формат: /partner_ai ID | сообщение партнёра",
+                                event_type=None, event_payload=None, reply_markup=partner_markup)
+        settings = admin_flows.replay(flow_payloads(
+            event_store, tenant_id=tenant_id, event_type="business_admin@v1"
+        )).settings
+        provider = env_str("MARKETING_LLM_PROVIDER", env_str("LLM_PROVIDER", "")).strip().casefold()
+        try:
+            mode = sales_ai_policy.egress_permit(settings, provider)
+            clean, redacted = sales_ai_policy.prepare_text(incoming, mode=mode)
+        except PermissionError as exc:
+            return send_tracked(body, effects, env, text=f"🔒 {exc}",
+                                event_type=None, event_payload=None, reply_markup=partner_markup)
+        candidate = known[ref]
+        system = (
+            "Ты помощник владельца бизнеса по партнёрствам. Подготовь один краткий "
+            "вежливый черновик ответа на русском языке. Никогда не обещай деньги, "
+            "процент, скидку, публикацию или заключение сделки. Не утверждай, "
+            "что цена одобрена. Если спрашивают о цене, запроси точные условия "
+            "и скажи, что решение принимает владелец. Не выдумывай факты."
+        )
+        result = effects.marketing_llm_complete(
+            decision_id=str(env.decision.decision_id),
+            correlation_id=str(env.decision.correlation_id),
+            admin_id=str(body.get("user_id") or "owner"),
+            system=system,
+            user=f"Кандидат: {candidate.name[:120]}\nВходящее сообщение: {clean[:1000]}",
+        )
+        if not isinstance(result, dict) or not result.get("ok"):
+            message = "⚠️ ИИ-провайдер недоступен. Письмо не отправлено."
+        else:
+            draft_text = str(result.get("text") or "").strip()[:2500]
+            message = ("🤖 Черновик ответа партнёру (НЕ отправлен):\\n\\n" + draft_text
+                       + ("\\n\\nКонтакты скрыты перед ИИ." if redacted else "")) if draft_text else "⚠️ ИИ не вернул текст."
+        return send_tracked(body, effects, env, text=message,
+                            event_type=None, event_payload=None, reply_markup=partner_markup)
+    if op in {"quote", "quotes", "approve_quote", "reject_quote"}:
+        return partner_quote_flow(
+            op, arg, facts, known, partner_markup, tenant_id=tenant_id,
+            event_store=event_store, user_id=required_str(body, "user_id"),
+            done=lambda text, change, markup: send_tracked(
+                body, effects, env, text=text, event_type="partners@v1" if change else None,
+                event_payload=change, reply_markup=markup,
+            ),
+        )
     if op in {"campaign", "ref_result"}:
         text, ch = _partner_growth(pt, op, arg, tenant_id, known, flow_payloads(event_store, tenant_id=tenant_id, event_type="partners@v1"))
         return send_tracked(body, effects, env, text=text, event_type="partners@v1" if ch else None, event_payload=ch)
     if op in {"status", "pitch", "ref"}:
-        return _partner_card(body, effects, env, pt, known, op, arg, event_store)
+        text, change = pt.partner_card(known, op, arg, tenant_id, facts)
+        return send_tracked(body, effects, env, text=text,
+                            event_type="partners@v1" if change else None, event_payload=change)
     terms = [t for t in arg.replace(",", " ").split() if t]
     fits = pt.rank(known, terms)
-    lines = [ f"{i}. {f.partner.name} — {f.total:.0f}/100" + (f" ({'; '.join(f.reasons)})" if f.reasons else "")
+    lines = [
+        f"{i}. {f.partner.name} [{f.partner.partner_id}] — {f.total:.0f}/100" + (f" ({'; '.join(f.reasons)})" if f.reasons else "")
         for i, f in enumerate(fits, 1)
     ]
     head = f"🤝 Партнёры под цель «{' '.join(terms) or 'любая'}» (рекомендации, ничего не отправляется):"
-    return send_tracked( body, effects, env, text=head + "\n\n" + ("\n".join(lines) or "Список пуст: /partner_add"), event_type=None,
+    return send_tracked(
+        body,
+        effects,
+        env,
+        text=head + "\n\n" + ("\n".join(lines) or "Список пуст: /partner_add") +
+        "\n\n📩 Переписка: /partner_inbox · Пригласить: /partner_invite ID · Ответ: /partner_send ID | текст" +
+        "\n🧾 Цены: /partner_quotes · черновик: /partner_quote ID | копейки | RUB | условия",
+        event_type=None,
         event_payload=None,
+        reply_markup=partner_markup,
     )
 
-
-def _partner_card(body, effects, env, pt, known, op, arg, event_store):
-    tenant_id = required_str(body, "tenant_id")
-    facts = flow_payloads(event_store, tenant_id=tenant_id, event_type="partners@v1")
-    ordered = sorted(known.values(), key=lambda p: p.name)
-    head, _, rest = arg.partition(" ")
-    partner = ordered[int(head) - 1] if head.isdigit() and 0 < int(head) <= len(ordered) else None
-    change = None
-    try:
-        if partner is None:
-            raise ValueError("partner_not_found: номер партнёра по алфавиту")
-        if op == "status":
-            change = pt.set_status(partner, pt.statuses(facts).get(partner.partner_id, "new"), rest.strip())
-            text = f"🤝 {partner.name}: {pt.STATUSES[change['status']]}"
-        elif op == "pitch":
-            business, _, offer = rest.partition("|")
-            pack = pt.pitch(partner, business=business.strip() or "наш проект", offer=offer.strip())
-            text = f"✉️ {pack['subject']}\n\n{pack['outreach']}\n\n{pack['cta']}\n\nНапоминание: {pack['followup']}\n(Отправляете вы сами.)"
-        else:
-            text = f"🔗 Реферальный код партнёра {partner.name}: ref_{pt.referral_token(tenant_id, partner.partner_id)}"
-    except ValueError as exc:
-        return send_tracked(body, effects, env, text=f"🤝 Не получилось: {exc}", event_type=None, event_payload=None)
-    return send_tracked( body, effects, env, text=text, event_type="partners@v1" if change else None, event_payload=change )
 
 
 def handle_offer_ladder(payload, effects, env, *, event_store):
@@ -263,17 +383,6 @@ def handle_offer_ladder(payload, effects, env, *, event_store):
 def _viewer_id(body) -> int:
     raw = str(body.get("user_id") or "")
     return int(raw) if raw.isdigit() and len(raw) <= 19 else 0
-
-
-def _messenger_connections(admin_facts: list[dict]) -> list[dict]:
-    """Native VK/MAX routes as messenger_switching connection rows (ids/usernames only, no token refs)."""
-    from application.business_flows import native_channels as nc
-
-    return [ { "platform": r.platform, "status": r.status, "connection_type": "vk_community" if r.platform == "vk" else r.platform,
-            "external_account_id": r.external_id if r.platform == "vk" else (r.username or r.external_id),
-        }
-        for r in nc.replay(admin_facts).values()
-    ]
 
 
 def _cat_replay(rows):
@@ -308,7 +417,7 @@ def _cockpit(body, effects, env, future, steps, facts, now, team=None, timed=Non
         team=team or {},
         catalog=_cat_replay(facts("business_admin@v1")),
         viewer_id=_viewer_id(body),
-        connections=_messenger_connections(facts("business_admin@v1")),
+        connections=nc.messenger_connections(facts("business_admin@v1")),
     )
     parsed = cp.parse(str(body.get("arg") or "cpm:menu"))
     change = None

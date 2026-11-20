@@ -28,6 +28,7 @@ _ITEMS = (
     NavigationItem("connect", "➕ Подключить мой бизнес", SECTION_PREFIX + "connect", "connect"),
     NavigationItem("customers", "💬 Клиенты и обращения", SECTION_PREFIX + "customers", "customers"),
     NavigationItem("sales", "💰 Продажи", SECTION_PREFIX + "sales", "sales"),
+    NavigationItem("partners", "🤝 Партнёры", SECTION_PREFIX + "partners", "business_manage"),
     NavigationItem("marketing", "📣 Реклама и продвижение", "cpm:growth", "marketing"),
     NavigationItem("ai", "🤖 ИИ-директор и автопилот", CB_AUTOPILOT_MENU, "autopilot"),
     NavigationItem("ads_apply", "🧩 Ads Apply (prod)", CB_ADS_APPLY_MENU, "ads_apply"),

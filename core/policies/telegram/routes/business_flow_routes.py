@@ -25,7 +25,18 @@ BUSINESS_FLOW_COMMANDS: dict[str, tuple[str, str, bool]] = {
     "/me": ("bookings@v1", "home", False),
     "/delete_my_data": ("privacy_delete@v1", "request", False),
     "/partner_add": ("partners@v1", "add", True),
+    "/partner_invite": ("partners@v1", "invite", True),
+    "/partner_join": ("partners@v1", "join", False),
+    "/partner_message": ("partners@v1", "message_in", False),
+    "/partner_stop": ("partners@v1", "stop", False),
+    "/partner_send": ("partners@v1", "send", True),
+    "/partner_inbox": ("partners@v1", "inbox", True),
     "/partners": ("partners@v1", "rank", True),
+    "/partner_quote": ("partners@v1", "quote", True),
+    "/partner_ai": ("partners@v1", "ai_draft", True),
+    "/partner_quotes": ("partners@v1", "quotes", True),
+    "/partner_approve": ("partners@v1", "approve_quote", True),
+    "/partner_reject": ("partners@v1", "reject_quote", True),
     "/ladder_add": ("offer_ladder@v1", "add", True),
     "/ladder": ("offer_ladder@v1", "show", True),
     "/ops": ("business_ops_summary@v1", "show", True),
@@ -238,10 +249,14 @@ def handle_business_flow_routes(ctx: TelegramCtx, *, user_id: str) -> ProposedAc
         op = "home_owner"  # owner /me also shows the client journey
     if owner_only and not has_permission(ctx, "business_manage"):
         return None
-    cap = 1200 if op == "event_schedule" else 200  # one line per session (up to 31)
+    cap = 2400 if op in {"message_in", "send"} else (1200 if op in {"event_schedule", "quote", "ai_draft"} else 200)
     scope = trusted_sales_business_scope(ctx) if action == "sales_pipeline@v1" else {}
-    return propose(action, {"user_id": user_id, "op": op,
-                            "arg": str(ctx.args or "").strip()[:cap], **scope})
+    partner_source = ({"channel": str(session.get("channel") or "telegram"),
+                       "source_message_key": str(session.get("transport_message_id") or session.get("telegram_update_id") or "")[:120],
+                       "source_chat_id": str(session.get("messaging_chat_id") or session.get("telegram_chat_id") or session.get("chat_id") or "")[:120]}
+                      if action == "partners@v1" and op in {"join", "message_in", "stop", "send", "invite", "inbox"} else {})
+    return propose(action, {"user_id": user_id, "op": op, "arg": str(ctx.args or "").strip()[:cap],
+                            **scope, **partner_source})
 
 
 # --- «Продажи» as buttons (P1-16/20) ---
