@@ -163,7 +163,7 @@ def build_payload( *, state, out, pinned_world_model_meta: dict, tenant_id: str 
             candidate = dict(payload)
             candidate["channel"] = channel
             if chat_id:
-                candidate["chat_id"] = payload.get("chat_id", chat_id)
+                candidate["chat_id"] = payload.get("chat_id", chat_id) if channel == "telegram" else chat_id
             if is_routine_reply("send_message@v1", {**candidate, "meta": {"inbound_user_reply": proof}}):
                 payload.update({key: candidate[key] for key in ("channel", "chat_id") if key in candidate})
                 meta_block["inbound_user_reply"] = proof
