@@ -163,9 +163,6 @@ def build_payload( *, state, out, pinned_world_model_meta: dict, tenant_id: str 
             candidate = dict(payload)
             candidate["channel"] = channel
             if chat_id:
-                # Preserve the validated transport type: Telegram chat IDs are
-                # numeric. Replacing an int with a string fails send_message@v1
-                # schema validation before the /start reply can be delivered.
                 candidate["chat_id"] = payload.get("chat_id", chat_id)
             if is_routine_reply("send_message@v1", {**candidate, "meta": {"inbound_user_reply": proof}}):
                 payload.update({key: candidate[key] for key in ("channel", "chat_id") if key in candidate})
