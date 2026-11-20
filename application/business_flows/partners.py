@@ -386,9 +386,9 @@ def quote_states(payloads: list[dict[str, Any]]) -> dict[str, dict[str, Any]]:
         quote_id = str(fact.get("quote_id") or "")
         if step == "partner_quote_drafted" and quote_id:
             states.setdefault(quote_id, dict(fact))
-        elif step in {"partner_quote_approved", "partner_quote_rejected"} and quote_id in states:
-            if states[quote_id]["status"] == "pending_owner_approval":
-                states[quote_id]["status"] = "owner_approved" if step.endswith("approved") else "rejected"
+        elif (step in {"partner_quote_approved", "partner_quote_rejected"}
+              and quote_id in states and states[quote_id]["status"] == "pending_owner_approval"):
+            states[quote_id]["status"] = "owner_approved" if step.endswith("approved") else "rejected"
     return states
 
 
@@ -414,3 +414,40 @@ def format_quote(quote: dict[str, Any]) -> str:
     amount = int(quote["amount_minor"])
     return (f"{quote['quote_id']} · {amount // 100},{amount % 100:02d} {quote['currency']}"
             f" · {quote['status']}\nУсловия: {escape(str(quote['scope']), quote=False)}")
+
+
+PARTNER_BUDGET_KEY_PREFIX = "partner_budget_limit_minor."
+
+
+def budget_check(payloads: list[dict[str, Any]], settings: dict[str, str],
+                 quote_id: str) -> dict[str, Any]:
+    """Fail-closed tenant budget policy for *internal* quote approval.
+
+    This is not a payment authorization or a durable funds reservation.
+    Quote IDs are content-addressed immutable revisions; approved quotes count
+    against the configured ceiling until a canonical budget owner supersedes it.
+    """
+    quote = quote_states(payloads).get(quote_id)
+    if quote is None:
+        raise LookupError("partner_quote_not_found")
+    currency = str(quote["currency"]).upper()
+    raw = settings.get(PARTNER_BUDGET_KEY_PREFIX + currency.lower())
+    if raw is None:
+        raise PermissionError("partner_budget_not_configured")
+    if not isinstance(raw, str) or not re.fullmatch(r"[0-9]{1,12}", raw):
+        raise ValueError("partner_budget_invalid")
+    limit = int(raw)
+    if not 0 < limit <= 10_000_000_000:
+        raise ValueError("partner_budget_invalid")
+    states = quote_states(payloads)
+    used = sum(int(q["amount_minor"]) for q in states.values()
+               if q["status"] == "owner_approved" and q["currency"] == currency)
+    amount = int(quote["amount_minor"])
+    if used + amount > limit:
+        raise PermissionError("partner_budget_exceeded")
+    return {
+        "budget_limit_minor": limit,
+        "budget_used_minor": used,
+        "budget_checked_currency": currency,
+        "budget_policy": "internal_quote_ceiling_not_funds_reservation",
+    }
