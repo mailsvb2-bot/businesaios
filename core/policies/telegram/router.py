@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from core.policies.telegram.context import TelegramCtx
+from core.policies.telegram.context import TelegramCtx, policy_scope, scoped_active_plans
 from core.policies.telegram.handlers.admin_handlers import handle_admin
 from core.policies.telegram.handlers.admin_pricing import handle_admin_pricing_session
 from core.policies.telegram.handlers.ads_apply import handle_ads_apply
@@ -16,11 +16,12 @@ from core.policies.telegram.helpers import (
     choose_marketing_variant,
     propose_message,
 )
-from core.policies.telegram.routes.command_routes import handle_command_routes
+from core.policies.telegram.routes.business_flow_routes import handle_sales_buttons
+from core.policies.telegram.routes.command_routes import handle_command_routes, handle_free_text
 from core.policies.telegram.routes.customer_bot_routes import handle_customer_bot, is_customer_session
 from core.policies.telegram.routes.marketing_routes import handle_marketing_routes
 from core.policies.telegram.routes.settings_routes import handle_settings_routes
-from core.users.roles import UserRoleInfo
+from core.users.roles import effective_role, has_permission, required_permission
 from core.ux.callbacks import CB_MENU_MAIN
 from core.ux.telegram_keyboards import kb_back_main, kb_main
 from core.ux.unified_messenger_menu import menu_text
@@ -30,11 +31,16 @@ def handle(ctx: TelegramCtx, *, default_price_rub: int, bot_username: str = "", 
     user_id = ctx.state.user_id or "anonymous"
     if is_customer_session(getattr(ctx.state, "session", None)):  # tenant's own bot: customer routes only
         return handle_customer_bot(ctx, user_id=str(user_id))
-    user_role = UserRoleInfo.from_settings(ctx.settings if isinstance(ctx.settings, dict) else {})
-    legacy_prices = build_legacy_prices(default_price_rub=default_price_rub)
+    user_role = effective_role(is_platform_admin=bool(ctx.is_admin), roles=ctx.roles)
+    scope = policy_scope(ctx)
+    legacy_prices = build_legacy_prices(default_price_rub=default_price_rub, tenant_id=scope.tenant_id, product_id=scope.product_id if scope.has_product else '')
 
     def pm(*, text: str, reply_markup: dict | None = None, track_event_type: str | None = None, track_payload: dict | None = None) -> ProposedAction:
         return propose_message(user_id=user_id, text=text, reply_markup=reply_markup, callback_query_id=ctx.callback_query_id, track_event_type=track_event_type, track_payload=track_payload)
+
+    denied = _rbac_denial(ctx)
+    if denied is not None:
+        return pm(text=denied, reply_markup=kb_back_main())
 
     for handler in (
         lambda: handle_offer_outcome(ctx, user_id=user_id, default_price_rub=default_price_rub),
@@ -43,6 +49,7 @@ def handle(ctx: TelegramCtx, *, default_price_rub: int, bot_username: str = "", 
         lambda: handle_autopilot(ctx, user_id=user_id, default_price_rub=default_price_rub),
         lambda: handle_ai_ceo(ctx, user_id=user_id),
         lambda: handle_growth_strategy(ctx, user_id=user_id),
+        lambda: handle_sales_buttons(ctx, user_id=str(user_id)),
         lambda: handle_gift(ctx, user_id=user_id, bot_username=bot_username, gift_ttl_sec=gift_ttl_sec, pm=pm),
         lambda: handle_admin_pricing_session(ctx, user_id=user_id, pm=lambda text, reply_markup=None, track_event_type=None, track_payload=None: pm(text=text, reply_markup=reply_markup, track_event_type=track_event_type, track_payload=track_payload)),
     ):
@@ -50,58 +57,24 @@ def handle(ctx: TelegramCtx, *, default_price_rub: int, bot_username: str = "", 
         if out is not None:
             return out
 
-    # Inline approval callbacks only propose the same canonical partner action
-    # as /partner_approve; callback data never supplies authority or budget.
-    if str(ctx.callback_data or "").startswith(("cp:partner:approve:", "cp:partner:reject:")):
-        from dataclasses import replace
+    from core.policies.telegram.routes.business_flow_routes import handle_clientplatform_callbacks
+    callback_outcome = handle_clientplatform_callbacks(ctx, user_id=str(user_id), pm=pm)
+    if callback_outcome is not None:
+        return callback_outcome
 
-        from core.policies.telegram.routes.business_flow_routes import handle_business_flow_routes
-
-        if not ctx.is_admin:
-            return pm(text="Доступ к согласованию партнёрства запрещён.", reply_markup=kb_back_main())
-        action_name, _, quote_id = str(ctx.callback_data).removeprefix("cp:partner:").partition(":")
-        if (action_name not in {"approve", "reject"} or len(quote_id) != 27
-                or not quote_id.startswith("pq_")
-                or any(ch not in "0123456789abcdef" for ch in quote_id[3:])):
-            return pm(text="Некорректное предложение.", reply_markup=kb_back_main())
-        target = "/partner_approve" if action_name == "approve" else "/partner_reject"
-        route_ctx = replace(ctx, cmd=target, args=quote_id, callback_data="")
-        outcome = handle_business_flow_routes(route_ctx, user_id=str(user_id))
-        if outcome is None:
-            raise RuntimeError("partners_canonical_approval_owner_missing")
-        return replace(outcome, payload={
-            **outcome.payload,
-            **({"callback_query_id": ctx.callback_query_id} if ctx.callback_query_id else {}),
-        })
-
-    if ctx.callback_data in {"cp:section:customers", "cp:section:sales", "cp:section:partners", "cp:partner:quotes", "cp:partner:rank", "cp:partner:inbox", "cp:section:ad-channels"}:
-        if not ctx.is_admin:
-            return pm(text="Доступ к данным бизнеса запрещён.", reply_markup=kb_back_main())
-        from dataclasses import replace
-
-        from core.policies.telegram.routes.business_flow_routes import handle_business_flow_routes
-        target = {"cp:section:customers": "cpm:customers",
-                  "cp:section:sales": "/leads", "cp:section:partners": "/partners", "cp:partner:quotes": "/partner_quotes", "cp:partner:rank": "/partners", "cp:partner:inbox": "/partner_inbox", "cp:section:ad-channels": "/ad_channels"}[ctx.callback_data]
-        route_ctx = (replace(ctx, callback_data=target) if target.startswith("cpm:") else
-                     replace(ctx, callback_data="", cmd=target, args=""))
-        outcome = handle_business_flow_routes(route_ctx, user_id=str(user_id))
-        if outcome is None:
-            raise RuntimeError("clientplatform_canonical_owner_route_missing")
-        ack = {"callback_query_id": ctx.callback_query_id} if ctx.callback_query_id else {}
-        return replace(outcome, payload={**outcome.payload, **ack})
     if ctx.cmd == "/start" and str(ctx.args or "").strip().startswith(("cpa_", "ecv_")):
         from core.policies.telegram.routes.business_flow_routes import handle_business_flow_routes
         return handle_business_flow_routes(ctx, user_id=str(user_id))
     if ctx.cmd in {"/start", "/menu"} or ctx.callback_data in {CB_MENU_MAIN, "menu_main"}:
         variant = choose_marketing_variant(user_id=str(user_id), step_key="menu_main", seed=str(ctx.marketing_seed or "1"), bandit=(ctx.marketing_bandit or {}).get("menu_main"))
-        msg = menu_text(role=user_role.role, is_admin=ctx.is_admin)
+        msg = menu_text(role=user_role, is_admin=ctx.is_admin)
         return pm(text=msg, reply_markup=kb_main(is_admin=ctx.is_admin, role=user_role), track_event_type="marketing_copy_chosen", track_payload={"step_key": "menu_main", "variant": variant})
 
     if ctx.callback_data == "full":
         if ctx.full_access:
             return pm(text="Полный доступ уже активен ✅", reply_markup=kb_back_main())
         from core.policies.telegram.tariffs import propose_show_tariffs
-        return propose_show_tariffs(user_id=user_id, legacy_prices=legacy_prices, marketing_variants=ctx.marketing_variants, marketing_seed=ctx.marketing_seed, marketing_bandit=ctx.marketing_bandit, pricing_suggestions=getattr(ctx, 'pricing_suggestions', None))
+        return propose_show_tariffs(user_id=user_id, legacy_prices=legacy_prices, marketing_variants=ctx.marketing_variants, marketing_seed=ctx.marketing_seed, marketing_bandit=ctx.marketing_bandit, pricing_suggestions=getattr(ctx, 'pricing_suggestions', None), plans=scoped_active_plans(ctx))
 
     for grouped in (
         lambda: handle_settings_routes(ctx, user_id=user_id, bot_username=bot_username, pm=pm),
@@ -119,9 +92,23 @@ def handle(ctx: TelegramCtx, *, default_price_rub: int, bot_username: str = "", 
     msg = ("Рабочее пространство подключено. Выберите раздел меню или опишите бизнес-задачу."
            if ctx.full_access else
            "Опишите задачу бизнеса или выберите раздел в меню. Доступные тарифы — в разделе «Оплаты и тарифы».")
-    if not ctx.is_admin and not ctx.cmd and str(ctx.text or "").strip():
-        from core.policies.telegram.helpers import propose
-
-        # customer free text is sales evidence (sales_intelligence); handler replies with msg
-        return propose("sales_pipeline@v1", {"user_id": user_id, "op": "inbound", "arg": str(ctx.text)[:4000], "reply": msg})
+    result = handle_free_text(
+        ctx, user_id=str(user_id), msg=msg,
+        rerun=lambda updated: handle(
+            updated, default_price_rub=default_price_rub, bot_username=bot_username,
+            gift_ttl_sec=gift_ttl_sec,
+        ),
+    )
+    if result is not None:
+        return result
     return pm(text=msg, reply_markup=kb_main(is_admin=ctx.is_admin, role=user_role))
+
+
+
+def _rbac_denial(ctx: TelegramCtx) -> str | None:
+    permission = required_permission(
+        callback_data=str(ctx.callback_data or ""), cmd=str(ctx.cmd or ""),
+    )
+    if permission is None or has_permission(ctx, permission):
+        return None
+    return "Для этого раздела требуется подтверждённая роль владельца или сотрудника."

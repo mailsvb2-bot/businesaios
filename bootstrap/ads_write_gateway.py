@@ -47,7 +47,11 @@ class AdsWriteGateway:
         self._sink = sink
         self._writes_enabled = bool(writes_enabled)
 
-    async def apply_plan(self, req: AdsWriteRequest) -> Json:
+    @property
+    def writes_enabled(self) -> bool:
+        return self._writes_enabled
+
+    async def apply_plan(self, req: AdsWriteRequest, *, connector: AdsConnector | None = None) -> Json:
         if not self._writes_enabled:
             return {"status": "skipped", "reason": "writes_disabled"}
 
@@ -57,7 +61,10 @@ class AdsWriteGateway:
         if not self._guard.allow_apply(platform=req.platform, plan=req.plan):
             return {"status": "skipped", "reason": "guardrails"}
 
-        c: AdsConnector | None = self._registry.get_optional(req.platform)
+        platform = getattr(getattr(connector, "platform", None), "value", getattr(connector, "platform", None))
+        if connector is not None and platform != req.platform:
+            return {"status": "skipped", "reason": "bound_connector_platform_mismatch", "platform": req.platform}
+        c: AdsConnector | None = connector or self._registry.get_optional(req.platform)
         if c is None:
             return {"status": "skipped", "reason": "connector_not_configured", "platform": req.platform}
 
@@ -124,6 +131,7 @@ class ReviewedAdPublication:
 async def submit_reviewed_ad_publication(
     *, gateway: AdsWriteGateway, request: ReviewedAdPublication,
     verify_approval: Any, reserve_execution: Any, verify_provider: Any,
+    connection_readiness: Any = None, connector: AdsConnector | None = None,
 ) -> Json:
     """Canonical guarded one-shot publish with authoritative provider read-back.
 
@@ -145,9 +153,27 @@ async def submit_reviewed_ad_publication(
     if request.platform not in CONNECTORS:
         return blocked("unknown_ads_provider")
     provider = CONNECTORS[request.platform]
-    if not (provider["implemented"] and provider["write"] and provider["verify"]
-            and provider["production_ready"]):
+    if not (provider["implemented"] and provider["write"] and provider["verify"]):
         return blocked("provider_write_and_verification_unavailable")
+    if not provider["production_ready"]:
+        from runtime.ads.connector_wiring import per_connection_readiness_enabled
+
+        if not per_connection_readiness_enabled() or not callable(connection_readiness) or connector is None:
+            return blocked("provider_write_and_verification_unavailable")
+        try:
+            ready = connection_readiness(
+                tenant_id=request.tenant_id, business_id=request.business_id,
+                platform=request.platform, account_id=request.account_id,
+            )
+            if isawaitable(ready):
+                ready = await ready
+        except Exception:
+            return blocked("connection_readiness_unverified")
+        scope = (request.tenant_id, request.business_id, request.account_id)
+        if (not isinstance(ready, dict) or ready.get("ready") is not True or
+                tuple((ready.get("scope") or {}).get(key) for key in
+                      ("tenant_id", "business_id", "account_id")) != scope):
+            return blocked("connection_not_ready")
     try:
         require_scoped_asset_review(
             request.asset, tenant_id=request.tenant_id,
@@ -176,16 +202,14 @@ async def submit_reviewed_ad_publication(
     # A subsequent exception or network ambiguity preserves the durable
     # reservation, preventing duplicate advertisements and spending.
     try:
-        result = await gateway.apply_plan(AdsWriteRequest(
-            tenant_id=request.tenant_id,
-            platform=request.platform,
+        action = AdsWriteRequest(
+            tenant_id=request.tenant_id, platform=request.platform,
             correlation_key=request.execution_reference,
-            plan={"ops": [{
-                "account_id": request.account_id,
-                "object_type": request.object_type,
-                "payload": request.payload,
-            }]},
-        ))
+            plan={"ops": [{"account_id": request.account_id, "object_type": request.object_type,
+                            "payload": request.payload}]},
+        )
+        result = await (gateway.apply_plan(action, connector=connector) if connector is not None
+                        else gateway.apply_plan(action))
         if result.get("status") != "ok" or len(result.get("results") or ()) != 1:
             return blocked("canonical_ads_gateway_declined")
         receipt = result["results"][0]

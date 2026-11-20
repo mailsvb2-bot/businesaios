@@ -101,4 +101,39 @@ class GuardedEffectsPort(EffectsPort):
         return self._forward("apply_offer_patch", **kwargs)
 
 
+    def admin_set_perm(self, **kwargs):  # type: ignore[override]
+        return self._forward("admin_set_perm", **kwargs)
+
+    def admin_set_role(self, **kwargs):  # type: ignore[override]
+        return self._forward("admin_set_role", **kwargs)
+
+    def apply_pricing_change(self, **kwargs):  # type: ignore[override]
+        return self._forward("apply_pricing_change", **kwargs)
+
+    def marketing_image_generate(self, **kwargs):  # type: ignore[override]
+        return self._forward("marketing_image_generate", **kwargs)
+
+    def marketing_llm_complete(self, **kwargs):  # type: ignore[override]
+        return self._forward("marketing_llm_complete", **kwargs)
+
+    def reconcile_payment(self, **kwargs):  # type: ignore[override]
+        return self._forward("reconcile_payment", **kwargs)
+
+    def reject_pricing_change(self, **kwargs):  # type: ignore[override]
+        return self._forward("reject_pricing_change", **kwargs)
+
+    def request_pricing_change(self, **kwargs):  # type: ignore[override]
+        return self._forward("request_pricing_change", **kwargs)
+
+    def set_marketing_copy(self, **kwargs):  # type: ignore[override]
+        return self._forward("set_marketing_copy", **kwargs)
+
+    def telegram_managed_bot_token(self, **kwargs):  # type: ignore[override]
+        return self._forward("telegram_managed_bot_token", **kwargs)
+
+    def telegram_self_check(self, **kwargs):  # type: ignore[override]
+        return self._forward("telegram_self_check", **kwargs)
+
+
+
 __all__ = ["GuardedEffectsPort", "set_effect_capability", "clear_effect_capability"]

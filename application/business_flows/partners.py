@@ -546,3 +546,27 @@ def budget_check(payloads: list[dict[str, Any]], settings: dict[str, str],
         "budget_checked_currency": currency,
         "budget_policy": "internal_quote_ceiling_not_funds_reservation",
     }
+
+
+def partner_card(known, op, arg, tenant_id, facts):
+    from application.business_flows import partners as pt
+
+    ordered = sorted(known.values(), key=lambda p: p.name)
+    head, _, rest = arg.partition(" ")
+    partner = known.get(head) if head in known else (ordered[int(head) - 1] if head.isdigit() and 0 < int(head) <= len(ordered) else None)
+    change = None
+    try:
+        if partner is None:
+            raise ValueError("partner_not_found: номер партнёра по алфавиту")
+        if op == "status":
+            change = pt.set_status(partner, pt.statuses(facts).get(partner.partner_id, "new"), rest.strip())
+            text = f"🤝 {partner.name}: {pt.STATUSES[change['status']]}"
+        elif op == "pitch":
+            business, _, offer = rest.partition("|")
+            pack = pt.pitch(partner, business=business.strip() or "наш проект", offer=offer.strip())
+            text = f"✉️ {pack['subject']}\n\n{pack['outreach']}\n\n{pack['cta']}\n\nНапоминание: {pack['followup']}\n(Отправляете вы сами.)"
+        else:
+            text = f"🔗 Реферальный код партнёра {partner.name}: ref_{pt.referral_token(tenant_id, partner.partner_id)}"
+    except ValueError as exc:
+        return f"🤝 Не получилось: {exc}", None
+    return text, change

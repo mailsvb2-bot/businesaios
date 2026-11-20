@@ -1,9 +1,53 @@
 from __future__ import annotations
+
 from fastapi import HTTPException, Request, Response, status
+
 from adapters.api.fastapi.router_support import business_owner_scope, json_body
 from application.public_site.cta_intake import CTALandingIntakeService, public_integration_marketplace
 from entrypoints.api.request_context import RequestContext
 from tenancy.tenant_registry import ensure_tenant_record
+
+ORGANIZATION_OWNED_FIELDS = ("business_name", "organization_type")
+SETTINGS_OWNED_FIELDS = ("activity_description", "timezone_name")
+NAME_MIGRATION_VERSION = "intake_business_name_v1"
+
+
+def canonical_organization_name_enabled() -> bool:
+    from config.env_flags import env_bool
+
+    return env_bool("BAI_UNIFIED_ORGANIZATION_SETTINGS_ENABLED", False) and env_bool(
+        "BAI_ORGANIZATION_NAME_CANONICAL_ENABLED", False
+    )
+
+
+def _canonical_name_read(registry, *, tenant_id: str, business_id: str, settings: dict) -> dict:
+    from application.organization.registry import business_organization
+
+    org = business_organization(registry, tenant_id=tenant_id, business_id=business_id)
+    if org is None:
+        return {**settings, "name_source": "intake_pending_migration",
+                "organization_updated_at_ms": None}
+    return {**settings, "business_name": org.name or settings["business_name"],
+            "name_source": "application.organization.registry",
+            "organization_updated_at_ms": org.updated_at_ms}
+
+
+def _canonical_name_write(registry, *, tenant_id: str, business_id: str,
+                          original_name: str, requested_name: str, key: str, actor: str):
+    from application.organization.registry import business_organization
+
+    identity = {"tenant_id": tenant_id, "business_id": business_id, "organization_id": business_id}
+    org = business_organization(registry, tenant_id=tenant_id, business_id=business_id)
+    if org is None:
+        org = registry.create(**identity, idempotency_key=f"org-migration:{NAME_MIGRATION_VERSION}:{business_id}",
+                              name=original_name, event_metadata={"actor_id": "system:migration",
+                              "provenance": {"migration": NAME_MIGRATION_VERSION}})
+    if org.name != requested_name:
+        org = registry.update(**identity, idempotency_key=f"web-settings:{key}",
+                              name=requested_name, event_metadata={"actor_id": actor})
+    return org
+
+
 _OWNER_RESUME_COOKIE = 'businessaios_owner_resume'
 _OWNER_RESUME_TTL_SECONDS = 86400
 _OWNER_ACCOUNT_COOKIE = 'businessaios_owner_account'
@@ -84,7 +128,8 @@ def _refresh_owner_account_cookie_if_needed(*, response: Response, request: Requ
     _set_owner_account_cookie(response=response, request=request, raw_key=refreshed)
 
 
-def register_public_site_routes(*, router, enforce_public_security, auth_bundle=None, tenant_registry=None, event_landing_registry=None) -> None:
+def register_public_site_routes(*, router, enforce_public_security, auth_bundle=None, tenant_registry=None,
+                                event_landing_registry=None, organization_registry=None) -> None:
     service = CTALandingIntakeService()
 
     def secure(request: Request, route: str, body: dict) -> None:
@@ -99,7 +144,13 @@ def register_public_site_routes(*, router, enforce_public_security, auth_bundle=
         _, tenant_id, business_id = business_owner_scope( request=http_request, auth_bundle=auth_bundle,
         required_scope='provider_control_plane', )
         try:
-            return service.read_business_settings(tenant_id=tenant_id, business_id=business_id)
+            settings = service.read_business_settings(tenant_id=tenant_id, business_id=business_id)
+            if canonical_organization_name_enabled():
+                if organization_registry is None:
+                    raise HTTPException(status_code=503, detail="organization_owner_unavailable")
+                return _canonical_name_read(organization_registry, tenant_id=tenant_id,
+                                            business_id=business_id, settings=settings)
+            return settings
         except KeyError as exc:
             raise HTTPException(status_code=404, detail='business_settings_not_found') from exc
 
@@ -109,14 +160,50 @@ def register_public_site_routes(*, router, enforce_public_security, auth_bundle=
         required_scope='provider_control_plane', )
         body = await json_body(http_request)
         required = {'business_name', 'activity_description', 'timezone_name', 'expected_revision'}
-        if set(body) != required:
+        canonical = canonical_organization_name_enabled()
+        permitted = required | ({"expected_organization_updated_at_ms"} if canonical else set())
+        if not isinstance(body, dict) or set(body) - permitted or not required <= set(body):
             raise HTTPException(status_code=422, detail='business_settings_fields_invalid')
+        if canonical and organization_registry is None:
+            raise HTTPException(status_code=503, detail="organization_owner_unavailable")
         key = str(http_request.headers.get('x-idempotency-key') or '').strip()
         if not key or len(key) > 200:
             raise HTTPException(status_code=422, detail='business_settings_idempotency_key_required')
         try:
-            return service.update_business_settings( tenant_id=tenant_id, business_id=business_id, business_name=body['business_name'], activity_description=body['activity_description'], timezone_name=body['timezone_name'],
-        expected_revision=body['expected_revision'], idempotency_key=key, actor_id=str(getattr(principal, 'actor_id', None) or getattr(principal, 'subject', '') or ''), )
+            actor = str(getattr(principal, "actor_id", None) or getattr(principal, "subject", "") or "")
+            if canonical:
+                from application.organization.registry import business_organization
+
+                original = service.read_business_settings(tenant_id=tenant_id, business_id=business_id)
+                org = business_organization(organization_registry, tenant_id=tenant_id, business_id=business_id)
+                expected_org = body.get("expected_organization_updated_at_ms")
+                new_name = str(body["business_name"] or "").strip()
+                if not 1 <= len(new_name) <= 200:
+                    raise ValueError("business_settings_fields_invalid")
+                if (org is not None and org.name != new_name
+                        and (expected_org is None or isinstance(expected_org, bool)
+                             or not isinstance(expected_org, int) or expected_org != org.updated_at_ms)):
+                    raise RuntimeError("business_settings_stale_revision")
+                # An idempotent intake receipt survives a partially completed
+                # Organization update. Retrying the SAME key resumes the latter.
+                saved = service.update_business_settings(
+                    tenant_id=tenant_id, business_id=business_id, business_name=None,
+                    activity_description=body["activity_description"], timezone_name=body["timezone_name"],
+                    expected_revision=body["expected_revision"], idempotency_key=key, actor_id=actor,
+                )
+                updated = _canonical_name_write(
+                    organization_registry, tenant_id=tenant_id, business_id=business_id,
+                    original_name=str(original["business_name"] or "").strip(), requested_name=new_name,
+                    key=key, actor=actor,
+                )
+                return {**saved, "business_name": updated.name, "name_source": "application.organization.registry",
+                        "organization_updated_at_ms": updated.updated_at_ms}
+            return service.update_business_settings(
+                tenant_id=tenant_id, business_id=business_id,
+                business_name=body["business_name"], activity_description=body["activity_description"],
+                timezone_name=body["timezone_name"], expected_revision=body["expected_revision"],
+                idempotency_key=key, actor_id=actor,
+            )
         except KeyError as exc:
             raise HTTPException(status_code=404, detail='business_settings_not_found') from exc
         except ValueError as exc:

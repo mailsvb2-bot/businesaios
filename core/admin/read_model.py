@@ -6,6 +6,8 @@ auditable and to avoid a single read-model god module.
 
 from __future__ import annotations
 
+from contracts.action_budget import ADMIN_ANALYTICS_ROUTES
+
 from core.admin.read_models import (
     ab_offers_summary,
     demo_summary,
@@ -23,6 +25,7 @@ from core.admin.read_models import (
 )
 
 __all__ = [
+    "ADMIN_ANALYTICS_ROUTES",
     "users_today",
     "funnel_counts",
     "demo_summary",

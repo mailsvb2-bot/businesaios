@@ -96,7 +96,69 @@ class ProviderAdminRouteHandlers:
             timeline = CustomerTimelineProjector(self.customer_event_store).get(tenant_id=tenant_id, business_id=business_id, customer_id=selected)
         except CustomerNotFound as exc:
             raise KeyError('customer_not_found') from exc
-        return {**result, 'timeline': {'available': True, 'entries': [asdict(item) for item in timeline.entries]}}
+        out = {**result, 'timeline': {'available': True, 'entries': [asdict(item) for item in timeline.entries]}}
+        from config.env_flags import env_bool
+        if env_bool('BAI_CUSTOMER_CARD_SALES_ENABLED', False):  # default OFF: sales block on the customer card
+            out['sales'] = self._customer_sales(tenant_id=tenant_id, business_id=business_id, customer=next(r for r in rows if str(r.get('customer_id') or '') == selected))
+        return out
+    def get_sales_sources(self, *, tenant_id: str, business_id: str, requested: str = '') -> dict[str, Any]:
+        """Sales Center sources (read-only): channel pipeline + CRMs with confirmed live reads."""
+        from application.business_autonomy.provider_truth_matrix import sales_source_provider_keys
+        from application.business_flows import cockpit_sales as sales_center
+        from application.business_flows import sales
+        from application.business_flows.projection import flow_rows
+        keys = sales_source_provider_keys()
+        catalog = list(self.list_provider_catalog(tenant_id=tenant_id, business_id=business_id).get('providers') or [])
+        rows = [] if self.customer_event_store is None else flow_rows(self.customer_event_store, tenant_id=tenant_id, business_id=business_id, event_type='sales_pipeline@v1')
+        st = sales.replay([payload for _, payload in rows])
+        connected = [str(p.get('provider_key')) for p in catalog if p.get('connected') and p.get('provider_key') in keys['channels']]
+        import time
+        now = int(time.time() * 1000)
+        sources = [{**sales_center.channel_source(leads=st.leads, last_fact_ms=rows[-1][0] if rows else None, connected_channels=connected),
+                    'funnel': sales_center.pipeline_funnel(rows, now_ms=now)}]
+        for provider in (p for p in catalog if p.get('provider_key') in keys['crm']):
+            history = list(self.list_provider_sync_history(tenant_id=tenant_id, business_id=business_id, provider_key=str(provider['provider_key']), limit=50).get('history') or []) if provider.get('connected') else []
+            sources.append({**sales_center.crm_source(provider=provider, history=history),
+                            'funnel': self._deal_funnel(tenant_id=tenant_id, business_id=business_id, provider_key=str(provider['provider_key']), now_ms=now) if provider.get('connected') else None})
+        return {'tenant_id': tenant_id, 'business_id': business_id, **sales_center.choose(sources, str(requested or '').strip())}
+    def _deal_funnel(self, *, tenant_id: str, business_id: str, provider_key: str, now_ms: int) -> dict[str, Any] | None:
+        """CRM funnel over canonical Deal facts (DealRegistry projection) via the provider stage map."""
+        from application.business_flows import cockpit_sales as sales_center
+        from application.deal.registry import DealProjector
+        if self.customer_event_store is None:
+            return None
+        try:
+            deals = list(DealProjector(self.customer_event_store).list_for_business(tenant_id=tenant_id, business_id=business_id))
+        except Exception:
+            return None
+        return sales_center.deal_funnel(deals, provider_key=provider_key, now_ms=now_ms)
+    def _customer_sales(self, *, tenant_id: str, business_id: str, customer: Mapping[str, Any]) -> dict[str, Any]:
+        import time
+
+        from application.business_flows import cockpit_sales, sales
+        from application.business_flows.projection import flow_payloads
+        try:
+            st = sales.replay(flow_payloads(self.customer_event_store, tenant_id=tenant_id, business_id=business_id, event_type='sales_pipeline@v1'))
+        except Exception:
+            return {'available': False, 'leads': []}
+        leads = cockpit_sales.customer_sales_view(st, list(customer.get('identities') or []), now_ms=int(time.time() * 1000))
+        return {'available': True, 'leads': leads, 'source': 'sales_pipeline@v1'}
+    def get_communications(self, *, tenant_id: str, business_id: str) -> dict[str, Any]:
+        """P1-22: web communications center over existing message/provider owners (read-only)."""
+        from application.business_autonomy.provider_catalog import MESSAGING_GUARDED_WRITE_PROVIDER_KEYS
+        from application.business_flows import cockpit_sales as communications_center
+        from runtime.messaging.message_registry import MessageProjector
+
+        service = self._service(business_id)
+        connected = {str(row.get('provider_key')) for row in self.list_provider_catalog(tenant_id=tenant_id, business_id=business_id).get('providers', ()) if row.get('connected')}
+        providers = {key: (service.list_provider_sync_history(tenant_id=tenant_id, business_id=business_id, provider_key=key, limit=communications_center.COMMS_LIMIT),
+                           service.list_provider_queue_jobs(tenant_id=tenant_id, business_id=business_id, provider_key=key, limit=communications_center.COMMS_LIMIT))
+                     for key in sorted(MESSAGING_GUARDED_WRITE_PROVIDER_KEYS & connected)}
+        messages = MessageProjector(self.customer_event_store).list_for_business(tenant_id=tenant_id, business_id=business_id) if self.customer_event_store is not None else ()
+        from interfaces.web.chat_widget.runner_components import web_chat_delivery_status
+
+        return {'tenant_id': tenant_id, 'business_id': business_id, 'providers': sorted(providers),
+                'web_chat': web_chat_delivery_status(), **communications_center.communications_view(messages=messages, providers=providers)}
     def list_provider_secret_history(self, *, tenant_id: str, business_id: str, provider_key: str) -> dict[str, Any]:
         rows = self._service(business_id).list_provider_secret_history(tenant_id=tenant_id, business_id=business_id, provider_key=provider_key)
         return {'tenant_id': tenant_id, 'business_id': business_id, 'provider_key': provider_key, 'versions': list(rows)}

@@ -20,11 +20,22 @@ def test_internal_plan_consumers_use_package_root() -> None:
     relpaths = [
         'core/policies/telegram/helpers.py',
         'core/policies/telegram/tariffs.py',
-        'core/policies/telegram/handlers/admin/pricing.py',
-        'core/policies/telegram/routes/marketing_routes.py',
         'interfaces/telegram/read_models/components/pricing.py',
     ]
     for relpath in relpaths:
         content = _read(relpath)
         assert 'core.plans.catalog' not in content, relpath
         assert 'core.plans' in content, relpath
+
+    # Admin UI has no second catalog owner: it delegates to the trusted,
+    # product-scoped policy helpers which call the canonical core.plans root.
+    marketing_source = _read('core/policies/telegram/routes/marketing_routes.py')
+    admin_source = _read('core/policies/telegram/handlers/admin/pricing.py')
+    context_source = _read('core/policies/telegram/context.py')
+    assert 'scoped_active_plans(ctx)' in admin_source
+    assert 'scoped_active_plans(ctx)' in marketing_source
+    assert 'scoped_plan(ctx,' in marketing_source
+    assert 'scoped_plan(ctx,' in admin_source
+    assert 'from core.plans import active_plans' in context_source
+    assert 'tenant_id=scope.tenant_id, product_id=scope.product_id' in context_source
+    assert 'core.plans.catalog' not in admin_source

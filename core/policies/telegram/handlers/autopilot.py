@@ -23,7 +23,7 @@ def handle_autopilot(ctx: TelegramCtx, *, user_id: str, default_price_rub: int) 
 
     Invariants preserved:
     - no second brain: decisions still go through DecisionCore/runtime
-    - one execution contract: execute_plan@v1 for composite actions
+    - one execution path: separately signed decisions for effectful actions
     - one data flow: state -> proposal -> runtime effects/events
     """
     try:

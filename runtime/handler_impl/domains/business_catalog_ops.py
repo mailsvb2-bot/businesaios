@@ -1,11 +1,12 @@
 """Business admin sub-dispatch split out of business_flow_ops (catalog, ads, retention)."""
-
 from __future__ import annotations
 
+from application.business_flows import ad_media as _ad_media
 from application.business_flows import admin as ad
 from application.business_flows import catalog as cg
 from application.business_flows import event_channels as ec
 from application.business_flows import event_notifications as en
+from application.business_flows import native_channels as nc
 from application.business_flows import owner_panels as op_
 from application.business_flows import promotions as pm
 from application.business_flows import sales as sl
@@ -42,11 +43,8 @@ CATALOG_OPS = frozenset(
     }
 )
 COMMERCE_OPS = frozenset({"commerce", "commerce_check", "commerce_expand"})
-
-
 def _catalog(done, op, arg, facts_, now=None):
     """Directions / offerings / formats; archive keeps history (catalog.py)."""
-
     c = cg.replay(facts_)
     if op == "offering_process":
         return done(cg.process_text(cg.offering_process(c, arg)))
@@ -102,13 +100,10 @@ def _catalog(done, op, arg, facts_, now=None):
         ch = cg.confirm_profile_details(c)
         return done("✅ Детали профиля подтверждены." if ch else "Уже подтверждено.", ch)
     return done(cg.offerings_text(c))
-
-
 def _ads(body, done, st, op, arg, facts_, sl_replay=None):
     """Governed ad proposals: drafts, exact-cap consent via approvals, publish gated by connector truth."""
     from application.business_flows import ad_proposals as ap
     from interfaces.ads.registry import CONNECTORS
-
     drafts = ap.replay(facts_)
     if op == "ad_draft":
         ch = ap.draft(arg)
@@ -124,7 +119,6 @@ def _ads(body, done, st, op, arg, facts_, sl_replay=None):
         return done("✏️ Текст рекламы обновлён." if ch else "Без изменений.", ch)
     if op in {"ad_stats", "ad_report"}:
         from application.business_flows import ad_analytics as aa
-
         if op == "ad_stats":
             return done("📈 Статистика записана. /ad_report", aa.record(drafts, arg))
         leads = list(sl_replay().leads.values())
@@ -139,12 +133,9 @@ def _ads(body, done, st, op, arg, facts_, sl_replay=None):
         text, ch = ap.publish_decision(ap.by_ref(drafts, arg), st.approvals, production_ready=ready)
         return done(text, ch)
     return done(ap.list_text(drafts, st.approvals))
-
-
 def _creatives_text(arg):
     """/ad_creatives [bookings|won] ; variant:job:bps:leads:bookings:won ; ... -> one bounded advisory step."""
     from application.business_flows import yandex_growth as yg
-
     parts = [p.strip() for p in arg.split(";") if p.strip()]
     metric = parts.pop(0) if parts and parts[0] in yg.CREATIVE_METRICS else "bookings"
     keys = ("variant_id", "publication_job_id", "allocation_bps", "leads", "bookings", "won")
@@ -163,8 +154,6 @@ def _creatives_text(arg):
             f"{e['variant_id']} {e['current_allocation_bps'] / 100:.0f}%→{e['proposed_allocation_bps'] / 100:.0f}%"
             for e in r["evidence"]))
     return "\n".join(rows)
-
-
 def _retention(done, st, op, arg, now, *, tenant_id, event_store):
     """/retention cohorts and /reactivate -> sales lead; never sends (retention.py)."""
     from application.business_flows import bookings as bk
@@ -206,7 +195,8 @@ def _sales_inbound(done, body, env, *, tenant_id, event_store):
     ai = settings.get("sales_ai", "off").strip().casefold() in ("on", "1", "true")
     try:
         fact = si.record_message(
-            flow_payloads(event_store, tenant_id=tenant_id, event_type="sales_pipeline@v1"),
+            flow_payloads(event_store, tenant_id=tenant_id, event_type="sales_pipeline@v1",
+                          business_id=str(body.get("business_id") or "").strip() or None),
             channel="telegram",
             subject=str(body.get("user_id") or ""),
             name=str(body.get("name") or ""),
@@ -244,6 +234,16 @@ def _followups(done, push, st, op, arg, now, *, tenant_id, event_store):
     if ap.in_quiet_hours(now, tz):
         return done("🌙 Сейчас тихие часы (22:00–08:00), отправка отложена.")
     due = sf.due(st, now_ms=now)
+    if sf.confirmed_delivery_enabled():
+        # P1-21: customer message first (untracked); the fact follows the provider's answer.
+        sent = 0
+        for x in due:
+            fact = sf.delivery_fact(x, push(text=x.followup_text, to_user_id=x.customer_id, change=None))
+            sent += fact["step"] == "followup_sent"
+            done(f"✅ Напоминание доставлено: {x.name}" if fact["step"] == "followup_sent" else
+                 f"⚠️ Не доставлено: {x.name} (попытка {fact['attempt']} из {sf.MAX_ATTEMPTS}"
+                 + (", напоминание снято)" if fact["final"] else ", повтор при следующей отправке)"), fact)
+        return done(f"✉️ Напоминаний доставлено: {sent} из {len(due)}.")
     sent = sum(
         bool(
             push(
@@ -265,7 +265,7 @@ def _destination(camp, *, tenant_id, event_store):
     from application.business_flows import bot_provisioning as botprov
 
     bots = list(botprov.replay(flow_payloads(event_store, tenant_id=tenant_id, event_type="bot_provisioning@v1")).values())
-    conns = _messenger_connections(flow_payloads(event_store, tenant_id=tenant_id, event_type="business_admin@v1"))
+    conns = nc.messenger_connections(flow_payloads(event_store, tenant_id=tenant_id, event_type="business_admin@v1"))
     return pm.acquisition_destination(camp, base_url=env_str("PUBLIC_BASE_URL", ""), bots=bots, connections=conns)
 
 
@@ -627,7 +627,7 @@ def _revenue_text(op, arg, now, event_store, tenant_id):
             f"Из контакта в оплату: {j['touched_then_paid']}")
 
 
-def _visual(body, effects, env, facts, arg, done):
+def _visual(body, effects, env, facts, arg, done, *, now_ms: int = 0, event_store=None):
     """/visual Название [| стиль [| формат]] or /visual Название | style x: YandexART via executor."""
     from application.business_flows import event_landing as el
     from application.business_flows import visual_creatives as vc
@@ -644,6 +644,14 @@ def _visual(body, effects, env, facts, arg, done):
     fmt = cmd if cmd in vc.FORMATS else (val or "post")
     ld = el.replay(facts("event_series@v1")).get(el.key_for(title))
     brief = vc.build_brief(title, context=(ld.sections.get("about", "") if ld else ""), style=style, fmt=fmt)
+    knobs = _ad_media.media_gen_operator_env(env_str)
+    if _ad_media.media_gen_enabled(knobs):
+        text, fact = _ad_media.generate_budgeted(
+            facts=facts("event_series@v1"), brief=brief, env=knobs,
+            now_ms=now_ms, event_store=event_store, tenant_id=str(body.get("tenant_id") or ""),
+            call=lambda adapter: adapter(effects, env, body, brief),
+        )
+        return done(text, fact)
     if brief.payload_key in st.generated:
         g = st.generated[brief.payload_key]
         return done(f"🖼 Такое изображение уже создано: {g['path']} ({g['size']} байт). Повтор не тратит бюджет.")
@@ -664,6 +672,54 @@ def _visual(body, effects, env, facts, arg, done):
     fact = vc.generated_fact(brief, path=str(out.get("path") or ""), size=int(out.get("size") or 0))
     label = f"{vc.STYLE_LABELS[brief.style]}, {brief.width_ratio}:{brief.height_ratio}"
     return done(f"🖼 Изображение готово ({label}): {fact['path']}", fact)
+
+
+def _yandexart_media_adapter(effects, env, body, brief):
+    folder = env_str("YANDEX_ART_FOLDER_ID", env_str("YANDEXGPT_FOLDER_ID",
+                     env_str("YANDEX_FOLDER_ID", ""))).strip()
+    generator = getattr(effects, "marketing_image_generate", None)
+    if not folder or not callable(generator):
+        return {"ok": False}
+    return generator(
+        decision_id=str(env.decision.decision_id),
+        correlation_id=str(env.decision.correlation_id),
+        admin_id=str(body.get("user_id") or ""),
+        brief=brief.to_mapping(), payload_key=brief.payload_key,
+    )
+
+
+_ad_media.register_media_provider("yandexart", _yandexart_media_adapter)
+
+
+def _visual_publish(body, facts, arg, done):
+    """Separate explicit owner confirmation, never a side effect of generation."""
+    from application.business_flows import event_series as es
+    from application.business_flows import visual_creatives as vc
+
+    if not _ad_media.media_gen_enabled(_ad_media.media_gen_operator_env(env_str)):
+        return done("🔒 Публикация сгенерированных изображений выключена оператором.")
+    try:
+        key, event_id, stage, slot, confirmed = _ad_media.parse_media_publish(arg)
+    except ValueError as exc:
+        return done(str(exc))
+    generated = vc.replay(facts("event_series@v1")).generated.get(key)
+    if not generated:
+        return done("Изображение с этим ключом не найдено. Создайте его через /visual.")
+    if not confirmed:
+        return done(f"Предпросмотр: {generated['path']} → {event_id} / {stage} / {slot}.\n"
+                    f"Для подтверждения: /visual_publish {key} | {event_id} | {stage} | {slot} | да")
+    state = es.replay(es.expand(facts("event_series@v1")))
+    try:
+        asset, events = es.store_generated_asset(
+            state, event_id=event_id, stage=stage, slot_key=slot, kind="image",
+            stored_reference=str(generated["path"]), source_ref=key,
+        )
+    except (ValueError, RuntimeError) as exc:
+        return done(f"⚠️ Не удалось привязать изображение: {type(exc).__name__}")
+    change = events[0] if len(events) == 1 else (
+        {"step": "batch", "facts": events} if events else None
+    )
+    return done(f"✅ Изображение привязано к событию, ревизия {asset['revision']}.", change)
 
 
 def _sales_ai(send, body, effects, st, arg, *, decision, tenant_id, event_store):
@@ -934,40 +990,3 @@ def partner_quote_flow(op, arg, facts, known, partner_markup, *, tenant_id, even
             return done(text, change, partner_markup)
         except (ValueError, LookupError, PermissionError) as exc:
             return done(f"🤝 Не получилось: {exc}", None, partner_markup)
-
-def partner_card(pt, known, op, arg, tenant_id, facts, done):
-    ordered = sorted(known.values(), key=lambda p: p.name)
-    head, _, rest = arg.partition(" ")
-    partner = known.get(head) if head in known else (ordered[int(head) - 1] if head.isdigit() and 0 < int(head) <= len(ordered) else None)
-    change = None
-    try:
-        if partner is None:
-            raise ValueError("partner_not_found: номер партнёра по алфавиту")
-        if op == "status":
-            change = pt.set_status(partner, pt.statuses(facts).get(partner.partner_id, "new"), rest.strip())
-            text = f"🤝 {partner.name}: {pt.STATUSES[change['status']]}"
-        elif op == "pitch":
-            business, _, offer = rest.partition("|")
-            pack = pt.pitch(partner, business=business.strip() or "наш проект", offer=offer.strip())
-            text = f"✉️ {pack['subject']}\n\n{pack['outreach']}\n\n{pack['cta']}\n\nНапоминание: {pack['followup']}\n(Отправляете вы сами.)"
-        else:
-            text = f"🔗 Реферальный код партнёра {partner.name}: ref_{pt.referral_token(tenant_id, partner.partner_id)}"
-    except ValueError as exc:
-        return done(f"🤝 Не получилось: {exc}", None)
-    return done(text, change)
-
-
-
-def _messenger_connections(admin_facts: list[dict]) -> list[dict]:
-    """Native VK/MAX routes as messenger_switching connection rows (ids/usernames only, no token refs)."""
-    from application.business_flows import native_channels as nc
-
-    return [
-        {
-            "platform": r.platform,
-            "status": r.status,
-            "connection_type": "vk_community" if r.platform == "vk" else r.platform,
-            "external_account_id": r.external_id if r.platform == "vk" else (r.username or r.external_id),
-        }
-        for r in nc.replay(admin_facts).values()
-    ]
