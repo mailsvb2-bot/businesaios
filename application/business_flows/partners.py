@@ -570,6 +570,3 @@ def partner_card(known, op, arg, tenant_id, facts):
     except ValueError as exc:
         return f"🤝 Не получилось: {exc}", None
     return text, change
-
-
-

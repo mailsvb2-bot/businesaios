@@ -51,6 +51,9 @@ from runtime.handler_impl.domains.business_catalog_ops import (
 from runtime.handler_impl.domains.public_event_ops import MEDIA_OPS, PUB_OPS, _landing, media_op, public_event_op
 from runtime.handlers.delivery_contract import delivery_kwargs
 
+# Backward-compatible import; the only implementation is native_channels.messenger_connections.
+_messenger_connections = nc.messenger_connections
+
 
 def send_tracked( body, effects, env, *, text: str, event_type: str | None, event_payload: dict[str, Any] | None, ok: bool = True,
     reason: str = "",

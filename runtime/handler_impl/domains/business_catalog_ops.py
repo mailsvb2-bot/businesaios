@@ -990,4 +990,3 @@ def partner_quote_flow(op, arg, facts, known, partner_markup, *, tenant_id, even
             return done(text, change, partner_markup)
         except (ValueError, LookupError, PermissionError) as exc:
             return done(f"🤝 Не получилось: {exc}", None, partner_markup)
-
