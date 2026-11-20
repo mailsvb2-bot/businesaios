@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import sqlite3
+from math import isfinite
 from collections.abc import Iterator
 from contextlib import contextmanager
 from pathlib import Path
@@ -73,6 +74,8 @@ class PlatformSqliteActionBudgetLedger:
 
     @staticmethod
     def _record_total(conn: Connection, tenant_id: str, estimated_cost: float) -> None:
+        if not isfinite(float(estimated_cost)) or float(estimated_cost) < 0:
+            raise ValueError("action_budget_invalid_cost")
         conn.execute(
             """
             INSERT INTO safety_action_budget_ledger(tenant_id, total_cost, total_actions, updated_at)
