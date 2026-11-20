@@ -60,25 +60,41 @@ class PlatformSqliteActionBudgetLedger:
             PRIMARY KEY (tenant_id, idempotency_key))""")
 
     @staticmethod
+    def _checked_totals(row: tuple[object, object] | None) -> tuple[float, int]:
+        if row is None:
+            return 0.0, 0
+        try:
+            cost = float(row[0])
+        except (TypeError, ValueError, OverflowError) as exc:
+            raise RuntimeError("action_budget_corrupt_total") from exc
+        actions = row[1]
+        if not isfinite(cost) or cost < 0 or type(actions) is not int or actions < 0:
+            raise RuntimeError("action_budget_corrupt_total")
+        return cost, actions
+
+    @staticmethod
+    def _stored_totals(conn: Connection, tenant_id: str) -> tuple[float, int]:
+        return PlatformSqliteActionBudgetLedger._checked_totals(conn.execute(
+            "SELECT total_cost, total_actions FROM safety_action_budget_ledger WHERE tenant_id = ?",
+            (tenant_id,),
+        ).fetchone())
+
+    @staticmethod
     def _record_total(conn: Connection, tenant_id: str, estimated_cost: float) -> None:
         if not isfinite(float(estimated_cost)) or float(estimated_cost) < 0:
             raise ValueError("action_budget_invalid_cost")
+        PlatformSqliteActionBudgetLedger._stored_totals(conn, tenant_id)
         conn.execute("""INSERT INTO safety_action_budget_ledger(tenant_id, total_cost, total_actions, updated_at)
             VALUES (?, ?, 1, datetime('now')) ON CONFLICT(tenant_id) DO UPDATE SET
             total_cost = safety_action_budget_ledger.total_cost + excluded.total_cost,
             total_actions = safety_action_budget_ledger.total_actions + 1,
             updated_at = excluded.updated_at""", (tenant_id, float(estimated_cost)))
+        PlatformSqliteActionBudgetLedger._stored_totals(conn, tenant_id)
 
     def snapshot(self, tenant_id: str) -> tuple[float, int]:
         key = str(tenant_id).strip() or 'unknown'
         with self._connect() as conn:
-            row = conn.execute(
-                'SELECT total_cost, total_actions FROM safety_action_budget_ledger WHERE tenant_id = ?',
-                (key,),
-            ).fetchone()
-        if row is None:
-            return 0.0, 0
-        return float(row[0] or 0.0), int(row[1] or 0)
+            return self._stored_totals(conn, key)
 
     def record(self, tenant_id: str, *, estimated_cost: float) -> None:
         key = str(tenant_id).strip() or "unknown"
@@ -106,6 +122,7 @@ class PlatformSqliteActionBudgetLedger:
             row = conn.execute(
                 "SELECT action,payload_hash FROM safety_action_budget_ledger_idempotency WHERE tenant_id=? AND idempotency_key=?", (tenant, key)).fetchone()
             if row:
+                self._stored_totals(conn, tenant)
                 if (str(row[0]), str(row[1])) != (action_name, fingerprint):
                     raise RuntimeError("action_budget_idempotency_conflict")
                 return False
