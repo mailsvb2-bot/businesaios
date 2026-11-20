@@ -416,6 +416,101 @@ def format_quote(quote: dict[str, Any]) -> str:
             f" · {quote['status']}\nУсловия: {escape(str(quote['scope']), quote=False)}")
 
 
+# A private Telegram invitation is the only supported partner messaging address.
+# The clear token is shown to the owner once; only its digest enters the event log.
+def invitation(partner_id: str, token: str, expires_at: int) -> dict[str, Any]:
+    if not _REFERENCE.fullmatch(partner_id) or not re.fullmatch(r"[A-Za-z0-9_-]{24,128}", token):
+        raise ValueError("partner_invitation_invalid")
+    if not isinstance(expires_at, int) or isinstance(expires_at, bool) or expires_at <= 0:
+        raise ValueError("partner_invitation_expiry_invalid")
+    return {"step": "partner_invited", "partner_id": partner_id,
+            "token_hash": hashlib.sha256(token.encode("ascii")).hexdigest(),
+            "expires_at": expires_at}
+
+
+def bound_contacts(payloads: list[dict[str, Any]]) -> dict[str, str]:
+    """Only bindings acknowledged through the canonical Telegram inbound flow."""
+    contacts: dict[str, str] = {}
+    for fact in payloads:
+        if fact.get("step") == "partner_joined" and fact.get("channel") == "telegram":
+            partner_id = str(fact.get("partner_id") or "")
+            user_id = str(fact.get("telegram_user_id") or "")
+            if partner_id and user_id.isascii() and user_id.isdecimal() and int(user_id) > 0:
+                contacts[partner_id] = user_id
+        elif fact.get("step") == "partner_unsubscribed":
+            partner_id = str(fact.get("partner_id") or "")
+            if contacts.get(partner_id) == str(fact.get("telegram_user_id") or ""):
+                del contacts[partner_id]
+    return contacts
+
+
+def claim_invitation(payloads: list[dict[str, Any]], token: str, user_id: str, *, now: int) -> dict[str, Any] | None:
+    if not re.fullmatch(r"[A-Za-z0-9_-]{24,128}", token) or not user_id.isascii() or not user_id.isdecimal() or int(user_id) <= 0:
+        raise ValueError("partner_join_invalid")
+    digest = hashlib.sha256(token.encode("ascii")).hexdigest()
+    invitations = {p["token_hash"]: p for p in payloads if p.get("step") == "partner_invited"}
+    offer = invitations.get(digest)
+    if offer is None or int(offer["expires_at"]) < now:
+        raise ValueError("partner_invitation_missing_or_expired")
+    partner_id = str(offer["partner_id"])
+    prior = [p for p in payloads if p.get("step") == "partner_joined" and p.get("token_hash") == digest]
+    if prior:
+        if str(prior[0]["telegram_user_id"]) == user_id:
+            if bound_contacts(payloads).get(partner_id) == user_id:
+                return None
+            raise ValueError("partner_invitation_no_longer_active")
+        raise ValueError("partner_invitation_already_claimed")
+    if partner_id not in replay(payloads):
+        raise ValueError("partner_not_found")
+    contacts = bound_contacts(payloads)
+    if any(pid != partner_id and uid == user_id for pid, uid in contacts.items()):
+        raise ValueError("partner_telegram_identity_already_bound")
+    contact = contacts.get(partner_id)
+    if contact and contact != user_id:
+        raise ValueError("partner_already_bound")
+    return {"step": "partner_joined", "partner_id": partner_id, "channel": "telegram",
+            "telegram_user_id": user_id, "token_hash": digest}
+
+
+def conversation(payloads: list[dict[str, Any]], partner_id: str) -> list[dict[str, Any]]:
+    return [p for p in payloads if p.get("partner_id") == partner_id and p.get("step") in
+            {"partner_message_in", "partner_message_out"}]
+
+
+def inbound_message(payloads: list[dict[str, Any]], user_id: str, text: str, message_key: str) -> dict[str, Any] | None:
+    contact = next((partner for partner, uid in bound_contacts(payloads).items() if uid == user_id), None)
+    if not contact:
+        raise PermissionError("partner_not_verified")
+    content = text.strip()
+    if not content or len(content) > 2000 or any(ord(ch) < 32 and ch not in "\n\t" for ch in content):
+        raise ValueError("partner_message_invalid")
+    if not message_key or len(message_key) > 160:
+        raise ValueError("partner_message_key_invalid")
+    if any(p.get("step") == "partner_message_in" and p.get("message_key") == message_key for p in payloads):
+        return None
+    return {"step": "partner_message_in", "partner_id": contact, "text": content,
+            "message_key": message_key, "channel": "telegram"}
+
+
+def outbound_message(payloads: list[dict[str, Any]], partner_id: str, text: str, message_key: str) -> dict[str, Any]:
+    if partner_id not in replay(payloads) or partner_id not in bound_contacts(payloads):
+        raise ValueError("partner_not_bound")
+    content = text.strip()
+    if not content or len(content) > 2000 or any(ord(ch) < 32 and ch not in "\n\t" for ch in content):
+        raise ValueError("partner_message_invalid")
+    if not message_key or len(message_key) > 160:
+        raise ValueError("partner_message_key_invalid")
+    return {"step": "partner_message_out", "partner_id": partner_id, "text": content,
+            "message_key": message_key, "channel": "telegram"}
+
+
+def unsubscribe(payloads: list[dict[str, Any]], user_id: str) -> dict[str, Any] | None:
+    partner_id = next((pid for pid, uid in bound_contacts(payloads).items() if uid == user_id), "")
+    if not partner_id:
+        return None
+    return {"step": "partner_unsubscribed", "partner_id": partner_id,
+            "telegram_user_id": user_id, "channel": "telegram"}
+
 PARTNER_BUDGET_KEY_PREFIX = "partner_budget_limit_minor."
 
 

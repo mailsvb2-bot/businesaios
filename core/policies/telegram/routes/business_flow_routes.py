@@ -24,6 +24,12 @@ BUSINESS_FLOW_COMMANDS: dict[str, tuple[str, str, bool]] = {
     "/me": ("bookings@v1", "home", False),
     "/delete_my_data": ("privacy_delete@v1", "request", False),
     "/partner_add": ("partners@v1", "add", True),
+    "/partner_invite": ("partners@v1", "invite", True),
+    "/partner_join": ("partners@v1", "join", False),
+    "/partner_message": ("partners@v1", "message_in", False),
+    "/partner_stop": ("partners@v1", "stop", False),
+    "/partner_send": ("partners@v1", "send", True),
+    "/partner_inbox": ("partners@v1", "inbox", True),
     "/partners": ("partners@v1", "rank", True),
     "/partner_quote": ("partners@v1", "quote", True),
     "/partner_ai": ("partners@v1", "ai_draft", True),
@@ -238,8 +244,12 @@ def handle_business_flow_routes(ctx: TelegramCtx, *, user_id: str) -> ProposedAc
         op = "home_owner"  # owner /me also shows the client journey
     if owner_only and not ctx.is_admin:
         return None
-    cap = 1200 if op in {"event_schedule", "quote", "ai_draft"} else 200  # one line per session (up to 31)
-    return propose(action, {"user_id": user_id, "op": op, "arg": str(ctx.args or "").strip()[:cap]})
+    cap = 2400 if op in {"message_in", "send"} else (1200 if op in {"event_schedule", "quote", "ai_draft"} else 200)  # one line per session (up to 31)
+    return propose(action, {"user_id": user_id, "op": op, "arg": str(ctx.args or "").strip()[:cap],
+                            **({"channel": str(session.get("channel") or "telegram"),
+                                "source_message_key": str(session.get("transport_message_id") or session.get("telegram_update_id") or "")[:120],
+                                "source_chat_id": str(session.get("messaging_chat_id") or session.get("telegram_chat_id") or session.get("chat_id") or "")[:120]}
+                               if action == "partners@v1" and op in {"join", "message_in", "stop", "send", "invite", "inbox"} else {})})
 
 
 __all__ = ["BUSINESS_FLOW_COMMANDS", "handle_business_flow_routes"]

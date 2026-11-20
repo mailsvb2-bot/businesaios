@@ -31,6 +31,7 @@ from runtime.handler_impl.domains.business_catalog_ops import (
     _events,
     _external_products,
     _followups,
+    _messenger_connections,
     _organization_settings,
     _owner_journey,
     _panels,
@@ -44,6 +45,7 @@ from runtime.handler_impl.domains.business_catalog_ops import (
     _visual,
     channel_reminder_copies,
     notification_preferences,
+    partner_card,
     partner_quote_flow,
 )
 from runtime.handler_impl.domains.public_event_ops import MEDIA_OPS, PUB_OPS, _landing, media_op, public_event_op
@@ -207,6 +209,8 @@ def _dispatch_reminders(body, effects, env, bk, slots, facts, now):
 
 def handle_partners(payload, effects, env, *, event_store):
     """Owner partner search: add candidates, rank against goal terms (advisory, never contacts anyone)."""
+    from html import escape
+
     from application.business_flows import partners as pt
 
     body = require_mapping(payload or {})
@@ -221,9 +225,77 @@ def handle_partners(payload, effects, env, *, event_store):
             return send_tracked(body, effects, env, text=text, event_type="partners@v1", event_payload=change)
     except ValueError as exc:
         return send_tracked(body, effects, env, text=f"🤝 Не получилось: {exc}", event_type=None, event_payload=None)
+    if op in {"invite", "join", "message_in", "stop", "send", "inbox"}:
+        import secrets
+        import time
+
+        from application.business_flows import partners as dialogue
+
+        user_id = required_str(body, "user_id")
+        channel = str(body.get("channel") or "telegram").strip()
+        def reply(text, fact=None):
+            return send_tracked(body, effects, env, text=text,
+                                event_type="partners@v1" if fact else None, event_payload=fact)
+        try:
+            if channel != "telegram":
+                raise ValueError("partner_dialogue_telegram_only")
+            chat_id = str(body.get("source_chat_id") or "")
+            if op in {"join", "message_in", "stop"} and chat_id != user_id:
+                raise ValueError("partner_private_chat_required")
+            if op == "invite":
+                if arg not in known:
+                    raise ValueError("partner_not_found")
+                token = secrets.token_urlsafe(32)
+                fact = dialogue.invitation(arg, token, int(time.time()) + 604800)
+                return reply("🔐 Приглашение для партнёра " + escape(known[arg].name) +
+                             "\nПередайте адресату лично: /partner_join " + token +
+                             "\nТокен одноразовый, действует 7 дней.", fact)
+            if op == "join":
+                fact = dialogue.claim_invitation(facts, arg, user_id, now=int(time.time()))
+                return reply("✅ Контакт подтверждён. Напишите: /partner_message Ваш текст. Отключить: /partner_stop" if fact
+                             else "✅ Контакт уже подтверждён.", fact)
+            if op == "stop":
+                fact = dialogue.unsubscribe(facts, user_id)
+                return reply("🚫 Переписка отключена. Новые сообщения вам не отправляются." if fact
+                             else "ℹ️ Активная переписка не найдена.", fact)
+            if op == "message_in":
+                source_key = str(body.get("source_message_key") or
+                                 env.decision.correlation_id or env.decision.decision_id)
+                fact = dialogue.inbound_message(facts, user_id, arg, "telegram:" + user_id + ":" + source_key)
+                return reply("✅ Сообщение принято. Владелец увидит его в разделе партнёров." if fact
+                             else "✅ Сообщение уже учтено.", fact)
+            if op == "inbox":
+                if arg and arg not in known:
+                    raise ValueError("partner_not_found")
+                contacts = dialogue.bound_contacts(facts)
+                messages = [f for f in facts if f.get("step") in {"partner_message_in", "partner_message_out"}
+                            and (not arg or f.get("partner_id") == arg)]
+                lines = [f"{'📩' if m['step'].endswith('in') else '📤'} "
+                         f"{escape(known[m['partner_id']].name if m['partner_id'] in known else m['partner_id'])}: "
+                         f"{escape(m['text'][:350])}" for m in messages[-10:]]
+                return reply("🤝 Переписка (последние 10):\n" +
+                             ("\n".join(lines) or "Пока пусто.")[:3300] +
+                             f"\nПодключено контактов: {len(contacts)}\nОтвет: /partner_send ID | текст")
+            ref, separator, content = arg.partition("|")
+            partner_id = ref.strip()
+            if not separator:
+                raise ValueError("format: /partner_send ID | текст")
+            key = str(env.decision.correlation_id or env.decision.decision_id)
+            fact = dialogue.outbound_message(facts, partner_id, content, key)
+            if any(f.get("step") == "partner_message_out" and f.get("message_key") == key for f in facts):
+                return reply("ℹ️ Ответ уже отправлялся, повторная отправка заблокирована.")
+            recipient = dialogue.bound_contacts(facts)[partner_id]
+            # Only the existing canonical messaging effect may perform transport I/O.
+            # Recording the fact is coupled to the verified delivery receipt.
+            return send_tracked({**body, "channel": "telegram"}, effects, env,
+                                text=escape(fact["text"]), event_type="partners@v1",
+                                event_payload=fact, to_user_id=recipient)
+        except (ValueError, LookupError, PermissionError) as exc:
+            return reply(f"🤝 Не получилось: {exc}")
     partner_markup = {"inline_keyboard": [
         [{"text": "🤝 Список партнёров", "callback_data": "cp:partner:rank"}],
         [{"text": "🧾 Коммерческие предложения", "callback_data": "cp:partner:quotes"}],
+        [{"text": "📩 Переписка", "callback_data": "cp:partner:inbox"}],
         [{"text": "⬅️ Главное меню", "callback_data": "menu_main"}],
     ]}
     if op == "ai_draft":
@@ -284,7 +356,13 @@ def handle_partners(payload, effects, env, *, event_store):
         text, ch = _partner_growth(pt, op, arg, tenant_id, known, flow_payloads(event_store, tenant_id=tenant_id, event_type="partners@v1"))
         return send_tracked(body, effects, env, text=text, event_type="partners@v1" if ch else None, event_payload=ch)
     if op in {"status", "pitch", "ref"}:
-        return _partner_card(body, effects, env, pt, known, op, arg, event_store)
+        return partner_card(
+            pt, known, op, arg, tenant_id, facts,
+            done=lambda text, change: send_tracked(
+                body, effects, env, text=text, event_type="partners@v1" if change else None,
+                event_payload=change,
+            ),
+        )
     terms = [t for t in arg.replace(",", " ").split() if t]
     fits = pt.rank(known, terms)
     lines = [
@@ -296,37 +374,14 @@ def handle_partners(payload, effects, env, *, event_store):
         body,
         effects,
         env,
-        text=head + "\n\n" + ("\n".join(lines) or "Список пуст: /partner_add") + "\n\n🧾 Цены: /partner_quotes · новый черновик: /partner_quote ID | копейки | RUB | условия",
+        text=head + "\n\n" + ("\n".join(lines) or "Список пуст: /partner_add") +
+        "\n\n📩 Переписка: /partner_inbox · Пригласить: /partner_invite ID · Ответ: /partner_send ID | текст" +
+        "\n🧾 Цены: /partner_quotes · черновик: /partner_quote ID | копейки | RUB | условия",
         event_type=None,
         event_payload=None,
         reply_markup=partner_markup,
     )
 
-
-def _partner_card(body, effects, env, pt, known, op, arg, event_store):
-    tenant_id = required_str(body, "tenant_id")
-    facts = flow_payloads(event_store, tenant_id=tenant_id, event_type="partners@v1")
-    ordered = sorted(known.values(), key=lambda p: p.name)
-    head, _, rest = arg.partition(" ")
-    partner = known.get(head) if head in known else (ordered[int(head) - 1] if head.isdigit() and 0 < int(head) <= len(ordered) else None)
-    change = None
-    try:
-        if partner is None:
-            raise ValueError("partner_not_found: номер партнёра по алфавиту")
-        if op == "status":
-            change = pt.set_status(partner, pt.statuses(facts).get(partner.partner_id, "new"), rest.strip())
-            text = f"🤝 {partner.name}: {pt.STATUSES[change['status']]}"
-        elif op == "pitch":
-            business, _, offer = rest.partition("|")
-            pack = pt.pitch(partner, business=business.strip() or "наш проект", offer=offer.strip())
-            text = f"✉️ {pack['subject']}\n\n{pack['outreach']}\n\n{pack['cta']}\n\nНапоминание: {pack['followup']}\n(Отправляете вы сами.)"
-        else:
-            text = f"🔗 Реферальный код партнёра {partner.name}: ref_{pt.referral_token(tenant_id, partner.partner_id)}"
-    except ValueError as exc:
-        return send_tracked(body, effects, env, text=f"🤝 Не получилось: {exc}", event_type=None, event_payload=None)
-    return send_tracked(
-        body, effects, env, text=text, event_type="partners@v1" if change else None, event_payload=change
-    )
 
 
 def handle_offer_ladder(payload, effects, env, *, event_store):
@@ -359,21 +414,6 @@ def handle_offer_ladder(payload, effects, env, *, event_store):
 def _viewer_id(body) -> int:
     raw = str(body.get("user_id") or "")
     return int(raw) if raw.isdigit() and len(raw) <= 19 else 0
-
-
-def _messenger_connections(admin_facts: list[dict]) -> list[dict]:
-    """Native VK/MAX routes as messenger_switching connection rows (ids/usernames only, no token refs)."""
-    from application.business_flows import native_channels as nc
-
-    return [
-        {
-            "platform": r.platform,
-            "status": r.status,
-            "connection_type": "vk_community" if r.platform == "vk" else r.platform,
-            "external_account_id": r.external_id if r.platform == "vk" else (r.username or r.external_id),
-        }
-        for r in nc.replay(admin_facts).values()
-    ]
 
 
 def _cat_replay(rows):

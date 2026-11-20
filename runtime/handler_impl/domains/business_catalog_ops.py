@@ -263,7 +263,6 @@ PROMO_OPS = frozenset({"promote", "promotions", "promo_open", "promo_book"})
 def _destination(camp, *, tenant_id, event_store):
     """Acquisition destination for a campaign over the replayed bot + native channel connections."""
     from application.business_flows import bot_provisioning as botprov
-    from runtime.handler_impl.domains.business_flow_ops import _messenger_connections
 
     bots = list(botprov.replay(flow_payloads(event_store, tenant_id=tenant_id, event_type="bot_provisioning@v1")).values())
     conns = _messenger_connections(flow_payloads(event_store, tenant_id=tenant_id, event_type="business_admin@v1"))
@@ -935,3 +934,40 @@ def partner_quote_flow(op, arg, facts, known, partner_markup, *, tenant_id, even
             return done(text, change, partner_markup)
         except (ValueError, LookupError, PermissionError) as exc:
             return done(f"🤝 Не получилось: {exc}", None, partner_markup)
+
+def partner_card(pt, known, op, arg, tenant_id, facts, done):
+    ordered = sorted(known.values(), key=lambda p: p.name)
+    head, _, rest = arg.partition(" ")
+    partner = known.get(head) if head in known else (ordered[int(head) - 1] if head.isdigit() and 0 < int(head) <= len(ordered) else None)
+    change = None
+    try:
+        if partner is None:
+            raise ValueError("partner_not_found: номер партнёра по алфавиту")
+        if op == "status":
+            change = pt.set_status(partner, pt.statuses(facts).get(partner.partner_id, "new"), rest.strip())
+            text = f"🤝 {partner.name}: {pt.STATUSES[change['status']]}"
+        elif op == "pitch":
+            business, _, offer = rest.partition("|")
+            pack = pt.pitch(partner, business=business.strip() or "наш проект", offer=offer.strip())
+            text = f"✉️ {pack['subject']}\n\n{pack['outreach']}\n\n{pack['cta']}\n\nНапоминание: {pack['followup']}\n(Отправляете вы сами.)"
+        else:
+            text = f"🔗 Реферальный код партнёра {partner.name}: ref_{pt.referral_token(tenant_id, partner.partner_id)}"
+    except ValueError as exc:
+        return done(f"🤝 Не получилось: {exc}", None)
+    return done(text, change)
+
+
+
+def _messenger_connections(admin_facts: list[dict]) -> list[dict]:
+    """Native VK/MAX routes as messenger_switching connection rows (ids/usernames only, no token refs)."""
+    from application.business_flows import native_channels as nc
+
+    return [
+        {
+            "platform": r.platform,
+            "status": r.status,
+            "connection_type": "vk_community" if r.platform == "vk" else r.platform,
+            "external_account_id": r.external_id if r.platform == "vk" else (r.username or r.external_id),
+        }
+        for r in nc.replay(admin_facts).values()
+    ]

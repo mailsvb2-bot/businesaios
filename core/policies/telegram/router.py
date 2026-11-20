@@ -74,14 +74,14 @@ def handle(ctx: TelegramCtx, *, default_price_rub: int, bot_username: str = "", 
             **({"callback_query_id": ctx.callback_query_id} if ctx.callback_query_id else {}),
         })
 
-    if ctx.callback_data in {"cp:section:customers", "cp:section:sales", "cp:section:partners", "cp:partner:quotes", "cp:partner:rank", "cp:section:ad-channels"}:
+    if ctx.callback_data in {"cp:section:customers", "cp:section:sales", "cp:section:partners", "cp:partner:quotes", "cp:partner:rank", "cp:partner:inbox", "cp:section:ad-channels"}:
         if not ctx.is_admin:
             return pm(text="Доступ к данным бизнеса запрещён.", reply_markup=kb_back_main())
         from dataclasses import replace
 
         from core.policies.telegram.routes.business_flow_routes import handle_business_flow_routes
         target = {"cp:section:customers": "cpm:customers",
-                  "cp:section:sales": "/leads", "cp:section:partners": "/partners", "cp:partner:quotes": "/partner_quotes", "cp:partner:rank": "/partners", "cp:section:ad-channels": "/ad_channels"}[ctx.callback_data]
+                  "cp:section:sales": "/leads", "cp:section:partners": "/partners", "cp:partner:quotes": "/partner_quotes", "cp:partner:rank": "/partners", "cp:partner:inbox": "/partner_inbox", "cp:section:ad-channels": "/ad_channels"}[ctx.callback_data]
         route_ctx = (replace(ctx, callback_data=target) if target.startswith("cpm:") else
                      replace(ctx, callback_data="", cmd=target, args=""))
         outcome = handle_business_flow_routes(route_ctx, user_id=str(user_id))
