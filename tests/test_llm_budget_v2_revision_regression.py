@@ -1,13 +1,11 @@
 import pytest
 from core.llm.budget import BudgetCaps, EventStoreDailyTokenBudget
 class _AtomicStore:
-    def __init__(self):
-        self.state = {}
+    def __init__(self): self.state = {}
     def get_setting(self, *, tenant_id, key): return self.state.get((tenant_id, key))
     def compare_and_set_setting(self, *, tenant_id, key, expected, value):
         if self.state.get((tenant_id, key)) != expected: return False
-        self.state[(tenant_id, key)] = value
-        return True
+        self.state[(tenant_id, key)] = value; return True
     def iter_events(self, **kwargs): return iter(())
 def test_actual_reserve_release_cas_rejects_stale_pre_aba_snapshot():
     store = _AtomicStore()
