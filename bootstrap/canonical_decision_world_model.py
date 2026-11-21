@@ -47,7 +47,11 @@ class CanonicalDecisionWorldModel(DecisionWorldModelPort):
         now_s = float(timestamp_ms) / 1000.0 if timestamp_ms > 0 else None
         user_id = str(getattr(state, "user_id", None) or user.get("user_id") or "anonymous")
         sessions_count = int(user.get("sessions") or session.get("sessions") or 0)
-        payments = float(user.get("payments") or economy.get("payments") or 0.0)
+        raw_payments = user.get("payments") or economy.get("payments") or 0.0
+        try:
+            payments = float(raw_payments) if isinstance(raw_payments, int | float | str) and not isinstance(raw_payments, bool) else 0.0
+        except ValueError:
+            payments = 0.0
         last_seen = float(user.get("last_seen") or now_s or 0.0)
 
         merged_economy = dict(economy)

@@ -78,6 +78,9 @@ export function BusinessSettingsWorkspace({ apiBase, apiKey, getJson, postJson, 
       const payload = {
         business_name: name.trim(), activity_description: activity.trim(),
         timezone_name: timezone, expected_revision: settings.revision,
+        ...(settings.name_source === "application.organization.registry" &&
+          Number.isInteger(settings.organization_updated_at_ms)
+          ? { expected_organization_updated_at_ms: settings.organization_updated_at_ms } : {}),
       };
       const signature = JSON.stringify(payload);
       if (!pending.current || pending.current.signature !== signature) {

@@ -13,13 +13,13 @@ from security.secret_contract import SecretRecord, SecretRef, SecretSource
 from security.secret_vault import InMemorySecretVault
 
 
-def _put(vault: InMemorySecretVault, *, value: str) -> None:
+def _put(vault: InMemorySecretVault, *, value: str, name: str = 'webhook_secret') -> None:
     provider = provider_map()['slack_messaging']
     ref = SecretRef(
         tenant_id='tenant-a',
         connector_id=provider.connector_id,
         scope='business-a',
-        secret_name=f'{provider.connector_id}.webhook_secret',
+        secret_name=f'{provider.connector_id}.{name}',
     )
     vault.put(
         SecretRecord(ref=ref, ciphertext=b'pending', source=SecretSource.CONNECTOR),
@@ -36,8 +36,10 @@ def test_slack_native_v0_signature_is_verified_fail_closed() -> None:
     provider = provider_map()['slack_messaging']
     vault = InMemorySecretVault()
     _put(vault, value='slack-signing-secret')
+    _put(vault, value='T1', name='team_id')
+    _put(vault, value='A1', name='api_app_id')
     runtime = ProviderWebhookRuntime(vault)
-    body = b'{"type":"event_callback","team_id":"T1","event_id":"Ev1","event":{"type":"message","channel":"C1","user":"U1","text":"hello","client_msg_id":"m1"}}'
+    body = b'{"type":"event_callback","team_id":"T1","api_app_id":"A1","event_id":"Ev1","event":{"type":"message","channel":"C1","user":"U1","text":"hello","client_msg_id":"m1"}}'
     timestamp = str(int(time.time()))
     headers = {
         'X-Slack-Request-Timestamp': timestamp,
@@ -84,8 +86,10 @@ def test_slack_bridge_shared_secret_fallback_remains_supported() -> None:
     provider = provider_map()['slack_messaging']
     vault = InMemorySecretVault()
     _put(vault, value='bridge-secret')
+    _put(vault, value='T1', name='team_id')
+    _put(vault, value='A1', name='api_app_id')
     runtime = ProviderWebhookRuntime(vault)
-    body = b'{"event":{"type":"message","channel":"C1","user":"U1","text":"hello"}}'
+    body = b'{"team_id":"T1","api_app_id":"A1","event":{"type":"message","channel":"C1","user":"U1","text":"hello"}}'
 
     assert runtime.verify(
         provider=provider,

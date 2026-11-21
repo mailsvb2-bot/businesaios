@@ -94,7 +94,7 @@ class OrganizationRegistry:
         candidate = replace(
             current, name=current.name if name is None else name,
             organization_type=current.organization_type if organization_type is None else organization_type,
-            updated_at_ms=max(current.updated_at_ms, self._time(occurred_at_ms)),
+            updated_at_ms=max(current.updated_at_ms + 1, self._time(occurred_at_ms)),
         )
         return self._persist(
             tenant_id=tenant_id, business_id=business_id, organization_id=organization_id,
@@ -123,8 +123,33 @@ class OrganizationRegistry:
     def get(self, *, tenant_id: str, business_id: str, organization_id: str) -> Organization:
         return self._projector.get(tenant_id=tenant_id, business_id=business_id, organization_id=organization_id)
 
+    def get_business_organization(self, *, tenant_id: str, business_id: str) -> Organization:
+        """Resolve the business organization via the canonical registry owner."""
+        return self.get(tenant_id=tenant_id, business_id=business_id, organization_id=business_id)
+
     def list_for_business(self, *, tenant_id: str, business_id: str) -> tuple[Organization, ...]:
         return self._projector.list_for_business(tenant_id=tenant_id, business_id=business_id)
 
 
-__all__ = ["CANON_ORGANIZATION_LIFECYCLE_OWNER", "OrganizationRegistry"]
+def business_organization(registry: OrganizationRegistry, *, tenant_id: str, business_id: str) -> Organization | None:
+    """Read canonical business organization (business ID is its stable identity)."""
+    try:
+        return registry.get_business_organization(tenant_id=tenant_id, business_id=business_id)
+    except LookupError:
+        return None
+
+
+def active_businesses(event_store: Any, *, tenant_id: str) -> dict[str, str]:
+    """Canonical active Organizations provide the allowed business-picker options."""
+    projector = OrganizationProjector(event_store)
+    found: dict[str, str] = {}
+    for business_id in projector.business_ids(tenant_id=tenant_id):
+        active = [item for item in projector.list_for_business(tenant_id=tenant_id, business_id=business_id)
+                  if item.status is OrganizationStatus.ACTIVE]
+        if active:
+            own = next((item for item in active if item.organization_id == business_id), active[0])
+            found[business_id] = str(own.name or business_id)
+    return found
+
+
+__all__ = ["CANON_ORGANIZATION_LIFECYCLE_OWNER", "OrganizationRegistry", "active_businesses", "business_organization"]

@@ -105,7 +105,7 @@ def test_provider_outbound_compatibility_exception_is_identity_only() -> None:
     assert not [
         node
         for node in ast.walk(tree)
-        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef, ast.Lambda))
+        if isinstance(node, ast.FunctionDef | ast.AsyncFunctionDef | ast.ClassDef | ast.Lambda)
     ]
     source = path.read_text(encoding="utf-8")
     assert "with allow_internal_import():" in source

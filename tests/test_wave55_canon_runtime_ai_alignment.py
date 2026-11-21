@@ -83,6 +83,8 @@ def test_growth_strategy_llm_generator_fails_closed_inside_running_loop_without_
         return generate_hypotheses(
             _AsyncOnlyLLM(),
             tenant_id='t1',
+            user_id='u1',
+            correlation_id='growth-loop-c1',
             goal=GrowthGoalV1(primary_stage='revenue', horizon_days=7, kpi='profit_minor', target_delta_pct=5.0),
             signals=GrowthSignalV1(tenant_id='t1', leads_today=1, spend_today_minor=1, revenue_today_minor=1, profit_today_minor=1, conversion_lead_to_purchase_pct=0.1, retention_d7_pct=0.1),
             n=2,

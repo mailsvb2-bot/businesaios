@@ -37,7 +37,6 @@ class LLMEffectsMixin:
         **_,
     ) -> dict:
         assert_called_from_executor()
-        text = str(prompt or "").strip()
         try:
             out = self.marketing_llm_complete(
                 decision_id=str(decision_id),
@@ -47,10 +46,18 @@ class LLMEffectsMixin:
                 user=str(prompt),
                 model=model,
             )
-            if isinstance(out, dict) and out.get("ok") and str(out.get("text") or "").strip():
-                text = str(out.get("text") or "").strip()
         except Exception:
             swallow(__name__, "runtime/_internal/_effects_impl.py")
+            return {"ok": False, "error": "LLM_GENERATION_UNAVAILABLE"}
+        if not isinstance(out, dict) or out.get("ok") is not True:
+            error = str(out.get("error") or "") if isinstance(out, dict) else ""
+            if error not in {"LLM_BUDGET_BLOCKED", "LLM_ACCOUNTING_UNAVAILABLE"}:
+                error = "LLM_GENERATION_UNAVAILABLE"
+            return {"ok": False, "error": error}
+        generated_text = out.get("text")
+        if not isinstance(generated_text, str) or not generated_text.strip():
+            return {"ok": False, "error": "LLM_GENERATION_UNAVAILABLE"}
+        text = generated_text.strip()
 
         return self.send_message(
             decision_id=str(decision_id), correlation_id=str(correlation_id), user_id=str(user_id),

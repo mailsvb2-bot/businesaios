@@ -31,11 +31,13 @@ from .llm_effects import (
 # Domain helpers (pure, no I/O)
 from .telegram_effects import classify_startup  # noqa: F401
 
+# isort: off
 with allow_internal_import():
     from runtime._internal.effects_clients import (
         telegram_method_url as _telegram_method_url,
         yookassa_webhook_server as _yookassa_server,
     )
+# isort: on
 
 _start_yookassa_webhook_server_in_thread = _yookassa_server.start_yookassa_webhook_server_in_thread
 

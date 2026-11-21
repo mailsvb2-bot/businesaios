@@ -183,3 +183,106 @@ def test_already_paid_invoice_without_matching_psp_proof_cannot_be_laundered():
     assert env["invoices"].has_verified_psp_payment_evidence(
         **scope, invoice_id=order.invoice_id, evidence_id="verified-psp-evidence-1",
     ) is False
+
+
+def test_second_psp_evidence_cannot_replace_the_proof_that_paid_an_invoice():
+    env = build()
+    scope, order = env["scope"], env["order"]
+    first = env["reconciler"].reconcile(**scope, order_id=order.order_id)
+    env["authority"].proof = replace(env["authority"].proof, evidence_id="second-psp-evidence")
+
+    with pytest.raises(RuntimeError, match="commercial_settlement_paid_without_matching_proof"):
+        env["reconciler"].reconcile(**scope, order_id=order.order_id)
+
+    paid_events = [
+        event for event in env["events"]
+        if (event.get("payload") or {}).get("fact_type") == "invoice.payment_recorded"
+    ]
+    assert first.provider_verified is True
+    assert len(paid_events) == 1
+    assert env["invoices"].get(**scope, invoice_id=order.invoice_id).paid_minor == order.amount_minor
+
+
+def test_parallel_psp_confirms_post_exactly_once():
+    from threading import Barrier, Thread
+
+    env = build()
+    scope, order = env["scope"], env["order"]
+    outcomes = []
+    errors = []
+    evidence_barrier = Barrier(8)
+    authority = env["authority"]
+    fetch_evidence = authority.fetch_settlement_evidence
+
+    def synchronized_evidence(**kwargs):
+        proof = fetch_evidence(**kwargs)
+        # Every worker has already read the same unpaid invoice before any
+        # worker is allowed to enter the canonical invoice transition.
+        evidence_barrier.wait(timeout=10)
+        return proof
+
+    authority.fetch_settlement_evidence = synchronized_evidence
+
+    def reconcile():
+        try:
+            outcomes.append(env["reconciler"].reconcile(**scope, order_id=order.order_id))
+        except Exception as exc:  # noqa: BLE001 - assert the exact controlled race below
+            errors.append(exc)
+
+    threads = [Thread(target=reconcile) for _ in range(8)]
+    for thread in threads:
+        thread.start()
+    for thread in threads:
+        thread.join(timeout=15)
+
+    assert all(not thread.is_alive() for thread in threads)
+    assert authority.calls == len(threads)
+    assert len(outcomes) + len(errors) == len(threads)
+    assert all(
+        type(error) is RuntimeError
+        and str(error) == "ontology transition rejected: in_progress"
+        for error in errors
+    )
+    assert outcomes
+
+    paid_events = [
+        event for event in env["events"]
+        if (event.get("payload") or {}).get("fact_type") == "invoice.payment_recorded"
+    ]
+    assert len(paid_events) == 1
+    assert env["invoices"].get(**scope, invoice_id=order.invoice_id).paid_minor == order.amount_minor
+
+
+@pytest.mark.parametrize("amount_minor", [True, "89000", 89000.0, -89000, 0])
+def test_non_integer_or_nonpositive_provider_amount_never_posts(amount_minor):
+    env = build()
+    env["authority"].proof = replace(env["authority"].proof, amount_minor=amount_minor)
+    with pytest.raises(RuntimeError, match="commercial_settlement_provider_provenance_invalid"):
+        env["reconciler"].reconcile(**env["scope"], order_id=env["order"].order_id)
+    assert env["invoices"].get(**env["scope"], invoice_id=env["order"].invoice_id).paid_minor == 0
+
+
+@pytest.mark.parametrize("evidence_id", ["", "x" * 257])
+def test_missing_or_oversized_provider_evidence_id_never_posts(evidence_id):
+    env = build()
+    env["authority"].proof = replace(env["authority"].proof, evidence_id=evidence_id)
+    with pytest.raises(RuntimeError, match="commercial_settlement_provider_provenance_invalid"):
+        env["reconciler"].reconcile(**env["scope"], order_id=env["order"].order_id)
+    assert env["invoices"].get(**env["scope"], invoice_id=env["order"].invoice_id).paid_minor == 0
+
+
+def test_foreign_tenant_cannot_reconcile_or_read_the_order():
+    env = build()
+    with pytest.raises(LookupError):
+        env["reconciler"].reconcile(
+            tenant_id="tenant-b", business_id="business-a", order_id=env["order"].order_id,
+        )
+    assert env["authority"].calls == 0
+    assert env["invoices"].get(**env["scope"], invoice_id=env["order"].invoice_id).paid_minor == 0
+
+
+def test_unknown_order_never_reaches_the_payment_authority():
+    env = build()
+    with pytest.raises(LookupError):
+        env["reconciler"].reconcile(**env["scope"], order_id="missing-order")
+    assert env["authority"].calls == 0

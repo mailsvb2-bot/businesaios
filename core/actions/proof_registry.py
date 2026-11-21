@@ -27,9 +27,9 @@ ACTION_PROOF_EVENT = {
     "suggest_offer_patch@v1": "offer_patch_suggested",
     "log_mood@v1": "mood_logged",
     "select_tariff@v1": "tariff_selected",
-    "apply_pricing_change@v1": "pricing_change_applied",
-    "request_pricing_change@v1": "pricing_change_requested",
-    "reject_pricing_change@v1": "pricing_change_rejected",
+    "apply_pricing_change@v1": "admin_pricing_change_applied",
+    "request_pricing_change@v1": "admin_pricing_change_requested",
+    "reject_pricing_change@v1": "admin_pricing_change_rejected",
     "admin_set_role@v1": "admin_role_set",
     "admin_set_perm@v1": "admin_perm_set",
     # local-only and advisory actions can use the universal execution proof
