@@ -78,7 +78,12 @@ def handle_menu_or_dashboard(
     callback = str(ctx.callback_data or "")
 
     if callback == CB_AUTOPILOT_MENU:
-        reply_markup = kb_autopilot_menu()
+        from core.users.roles import has_permission
+        from core.ux.telegram_keyboards_ai_ceo import ai_section_rows
+
+        menu_rows = list(kb_autopilot_menu().get("inline_keyboard") or [])
+        reply_markup = {"inline_keyboard": menu_rows[:-1] + ai_section_rows(
+            analytics=has_permission(ctx, "analytics")) + menu_rows[-1:]}
         if sl.active:
             try:
                 rows = list(reply_markup.get("inline_keyboard") or [])

@@ -201,16 +201,19 @@ def build_plan_summary() -> str:
     return "AI CEO план: 3 шага для роста прибыли. По умолчанию всё в безопасном режиме (dry-run/подтверждение)."
 
 
-def render_plan_text(plan: CEOPlanV1, *, currency: str = "₽") -> str:
+def render_plan_text(plan: CEOPlanV1, *, currency: str = "₽", has_kpi: bool = True) -> str:
     metrics = plan.kpi_before or {}
     profit = int(metrics.get("profit_minor", 0))
     spend = int(metrics.get("spend_minor", 0))
     revenue = int(metrics.get("revenue_minor", 0))
     leads = int(metrics.get("leads", 0))
+    today = (f"Сегодня: лиды={leads}, выручка={revenue / 100:.2f}{currency}, расход={spend / 100:.2f}{currency}, "
+             f"прибыль={profit / 100:.2f}{currency}" if has_kpi else
+             "Сегодня: данных о лидах и деньгах пока нет (подключите источники в веб-кабинете).")
     lines = [
         "🧠 AI CEO — план действий",
         "",
-        f"Сегодня: лиды={leads}, выручка={revenue}{currency}, расход={spend}{currency}, прибыль={profit}{currency}",
+        today,
         f"Горизонт: {plan.intent.horizon_days} дн. Риск: {plan.intent.risk_level}",
         "",
         plan.summary,

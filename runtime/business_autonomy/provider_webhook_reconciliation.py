@@ -364,8 +364,13 @@ class ProviderWebhookReconciler:
         webhook_secret = self._secret(provider, tenant_id, business_id, 'webhook_secret')
         if not access_token or not webhook_secret:
             raise RuntimeError('max_webhook_credentials_missing')
-        url = f"{self._provider_base_url(provider)}/subscriptions"
         headers = {'Authorization': access_token}
+        bot = self._json_request(method='GET', url=f"{self._provider_base_url(provider)}/me", headers=headers)
+        bot_id = str(bot.get('user_id') or '').strip() if isinstance(bot, Mapping) else ''
+        if not isinstance(bot, Mapping) or bot.get('is_bot') is not True or not bot_id.isdecimal() or int(bot_id) <= 0:
+            raise RuntimeError('max_bot_identity_unavailable')
+        self._store_secret(provider, tenant_id, business_id, 'bot_id', bot_id)
+        url = f"{self._provider_base_url(provider)}/subscriptions"
         existing = self._json_request(method='GET', url=url, headers=headers)
         if not isinstance(existing, Mapping):
             raise RuntimeError('max_subscription_list_invalid')
@@ -400,6 +405,8 @@ class ProviderWebhookReconciler:
             'provider_state_verified': True,
             'event_types': event_types,
             'subscription_visible': True,
+            'bot_id': bot_id,
+            'derived_secret_names': ('bot_id',),
         }
 
 
@@ -416,6 +423,8 @@ class ProviderWebhookOperationalResponder:
         topic: str,
         handoff: Mapping[str, Any],
     ) -> dict[str, Any]:
+        if provider.provider_key == 'max_messaging' and str(topic or '') == 'message_callback':
+            return self._acknowledge_max(provider=provider, tenant_id=tenant_id, business_id=business_id, handoff=handoff)
         if provider.provider_key != 'vk_messaging' or str(topic or '') != 'message_event':
             return {'required': False, 'ok': True}
         inbound = handoff.get('inbound_message') if isinstance(handoff.get('inbound_message'), Mapping) else {}
@@ -450,6 +459,22 @@ class ProviderWebhookOperationalResponder:
             'kind': 'vk_message_event_answer',
             'event_id': event_id,
         }
+
+    def _acknowledge_max(self, *, provider: ProviderDefinition, tenant_id: str, business_id: str, handoff: Mapping[str, Any]) -> dict[str, Any]:
+        """MAX ``message_callback``: POST /answers?callback_id=… stops the button spinner."""
+        inbound = handoff.get('inbound_message') if isinstance(handoff.get('inbound_message'), Mapping) else {}
+        callback_id = str(inbound.get('transport_message_id') or '').strip()
+        if not callback_id:
+            return {'required': True, 'ok': False, 'reason': 'max_callback_identity_missing'}
+        reconciler = ProviderWebhookReconciler(self.secret_vault)
+        access_token = reconciler._secret(provider, tenant_id, business_id, 'access_token')
+        if not access_token:
+            return {'required': True, 'ok': False, 'reason': 'max_access_token_missing'}
+        url = f"{reconciler._provider_base_url(provider)}/answers?callback_id={_quote_segment(callback_id)}"
+        response = reconciler._json_request(method='POST', url=url, headers={'Authorization': access_token}, payload={'notification': 'Готово'})
+        if not isinstance(response, Mapping) or response.get('success') is not True:
+            return {'required': True, 'ok': False, 'reason': 'max_callback_answer_rejected'}
+        return {'required': True, 'ok': True, 'kind': 'max_callback_answer', 'callback_id': callback_id}
 
 __all__ = [
     'CANON_PROVIDER_WEBHOOK_RECONCILIATION',

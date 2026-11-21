@@ -130,7 +130,7 @@ def choose_marketing_variant(
         return fallback
 
 
-def build_legacy_prices(*, default_price_rub: int) -> dict[str, int]:
+def build_legacy_prices(*, default_price_rub: int, tenant_id: str = '', product_id: str = '') -> dict[str, int]:
     """Best-effort legacy title->price mapping.
 
     Source of truth is the plan catalog (data/plans.json). Hardcoding prices creates drift.
@@ -139,7 +139,7 @@ def build_legacy_prices(*, default_price_rub: int) -> dict[str, int]:
         from core.plans import active_plans
 
         mp: dict[str, int] = {}
-        for p in active_plans():
+        for p in active_plans(tenant_id=tenant_id, product_id=product_id) if tenant_id and product_id else ():
             try:
                 title = str(p.get("title") or "").strip()
                 price = int(p.get("price") or 0)

@@ -3,15 +3,14 @@ from __future__ import annotations
 from typing import Any
 
 from core.growth.ads.creative.prompting import render_pack_idempotency_key, scene_from_text, scene_key_elements
-
 from runtime._internal.effects_clients.visual_gateway_client import visual_gateway_json
 from runtime._internal.effects_domains.visual_creative_gateway import (
     VISUAL_NEGATIVE_PROMPT,
-    visual_direction_prompt,
     assert_visual_creative_binding,
     visual_creative_evidence,
     visual_creative_idempotency_key,
     visual_creative_job_payload,
+    visual_direction_prompt,
 )
 from runtime._internal.effects_tenant import assert_event_log_tenant
 from runtime.observability.error_handling import swallow
@@ -36,7 +35,7 @@ VIDEO_PROVIDER_ALLOW = frozenset({"", "yandexart_motion"})  # Russian providers 
 AD_PROVIDER_ENV = "BAI_AD_SPEND_PROVIDER_ENABLED"  # provider reads (budget snapshot): off by default
 AD_MUTATIONS_ENV = "BAI_AD_SPEND_MUTATIONS_ENABLED"  # launch / suspend / budget changes: off by default
 AD_CEILING_ENV = "BAI_AD_SPEND_CEILING_MINOR"  # absolute per-authorization ceiling; unset = no spend (fail closed)
-AD_READ_ACTIONS = frozenset({"read_budget", "minimum_weekly"})
+AD_READ_ACTIONS = frozenset({"read_budget", "minimum_weekly", "list_campaigns"})
 AD_MUTATING_ACTIONS = frozenset({"configure_budget", "moderate_ad", "suspend_ad"})
 
 

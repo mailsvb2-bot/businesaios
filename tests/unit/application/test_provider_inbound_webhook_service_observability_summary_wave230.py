@@ -33,7 +33,7 @@ def test_inbound_webhook_service_emits_inbound_summary_and_observability(monkeyp
         inbound_processor=_Processor(),
         observability=obs,
     )
-    body = b'{"message":{"from":{"id":42},"text":"hello","message_id":9},"update_id":123}'
+    body = b'{"message":{"from":{"id":42},"chat":{"id":42},"text":"hello","message_id":9},"update_id":123}'
     out = service.ingest(provider=provider, tenant_id='t1', business_id='b1', headers={}, body=body, event_key='evt-1', topic='telegram_update', owner_id='provider_admin')
 
     summary = out.metadata['messaging_inbound_summary']

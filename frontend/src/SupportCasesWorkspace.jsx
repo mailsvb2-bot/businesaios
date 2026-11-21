@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 
 /** Owner support inbox. All state comes from the authenticated canonical API. */
+const PUBLIC_BRAND = import.meta.env.VITE_BAI_PUBLIC_BRAND_CLIENTPLATFORM === "true" ? "ClientPlatform" : "BusinessAIOS";
 export function SupportCasesWorkspace({ apiBase, apiKey, getJson, postJson }) {
   const [cases, setCases] = useState([]);
   const [category, setCategory] = useState("technical");
@@ -67,7 +68,7 @@ export function SupportCasesWorkspace({ apiBase, apiKey, getJson, postJson }) {
       setCaseHistory(null);
       setHistoryBusy("");
       setHistoryError(null);
-      setNotice("Статусы получены из защищённого журнала BusinessAIOS.");
+      setNotice("Статусы получены из защищённого журнала " + PUBLIC_BRAND + ".");
     } catch (reason) {
       setError("Не удалось обновить обращения: " + (reason.message || "ошибка сети"));
     } finally {

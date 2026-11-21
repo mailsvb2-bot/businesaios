@@ -20,6 +20,28 @@ CANON_SALES_FOLLOWUPS = True
 HOURS = (1, 24, 72)
 CHANNELS = ("telegram",)
 CLOSED = (sl.Stage.WON, sl.Stage.LOST)
+MAX_ATTEMPTS = 3
+
+
+def confirmed_delivery_enabled() -> bool:
+    """P1-21 (default OFF): a follow-up counts as sent only after the provider confirmed it."""
+    import os
+
+    return str(os.getenv("BAI_SALES_FOLLOWUP_CONFIRMED_DELIVERY", "")).strip().lower() in {"1", "true", "yes", "on"}
+
+
+def delivery_fact(lead: sl.Lead, delivery: Any) -> dict[str, Any]:
+    """``followup_sent`` only on a confirmed provider delivery, else ``followup_failed`` (retry, then drop)."""
+    out = delivery if isinstance(delivery, dict) else {}
+    base = {"lead_id": lead.lead_id, "followup_id": lead.followup_id}
+    evidence = out.get("evidence") or out.get("router_evidence") or {}
+    ref = str((evidence if isinstance(evidence, dict) else {}).get("message_id") or "")
+    if out.get("ok") is True and ref:
+        return {"step": "followup_sent", **base, "delivery_ref": ref}
+    attempt = lead.followup_attempts + 1
+    meta = out.get("meta") if isinstance(out.get("meta"), dict) else {}
+    reason = str(meta.get("reason") or out.get("reason") or "provider_not_confirmed")[:80]
+    return {"step": "followup_failed", **base, "attempt": attempt, "reason": reason, "final": attempt >= MAX_ATTEMPTS}
 
 
 def allowed(lead: sl.Lead) -> bool:
@@ -44,7 +66,9 @@ def status(lead: sl.Lead) -> str:
         return "Клиент попросил больше не писать по этому каналу."
     if lead.followup_id:
         day = datetime.fromtimestamp(lead.followup_due_ms / 1000, UTC).strftime("%d.%m %H:%M UTC")
-        return f"Напоминание уже запланировано: {day}. Отменить: /lead_followup_cancel"
+        failed = (f"\nНе доставлено попыток: {lead.followup_attempts} из {MAX_ATTEMPTS}, повтор при следующей отправке."
+                  if lead.followup_attempts else "")
+        return f"Напоминание уже запланировано: {day}. Отменить: /lead_followup_cancel{failed}"
     if allowed(lead):
         return (
             "Сообщение уйдёт только по исходному каналу клиента после явной команды:\n"
@@ -102,4 +126,4 @@ def due(st: sl.State, *, now_ms: int) -> list[sl.Lead]:
     ]
 
 
-__all__ = ["CANON_SALES_FOLLOWUPS", "allowed", "cancel", "due", "optout", "plan", "shift_out_of_night", "status"]
+__all__ = ["CANON_SALES_FOLLOWUPS", "MAX_ATTEMPTS", "allowed", "confirmed_delivery_enabled", "delivery_fact", "cancel", "due", "optout", "plan", "shift_out_of_night", "status"]

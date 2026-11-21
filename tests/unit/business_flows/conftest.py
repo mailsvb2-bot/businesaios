@@ -46,7 +46,10 @@ class FlowEffects:
 
 
 @pytest.fixture
-def flow():
+def flow(monkeypatch):
+    # Business-flow cockpit tests exercise an authorized owner, not anonymous ingress.
+    # Production RBAC still reads trusted ADMIN_USER_IDS and durable role facts.
+    monkeypatch.setenv("ADMIN_USER_IDS", "u1")
     store = FlowStore()
     effects = FlowEffects(store)
     env = SimpleNamespace(decision=SimpleNamespace(decision_id="d", correlation_id="c"))

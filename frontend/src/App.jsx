@@ -10,7 +10,15 @@ import { ProgramPublicationWorkspace } from "./ProgramPublicationWorkspace.jsx";
 import { CommercialSalesWorkspace } from "./CommercialSalesWorkspace.jsx";
 import { DiscoverBuildMeasurePanel } from "./DiscoverBuildMeasurePanel.jsx";
 
+const PUBLIC_BRAND = import.meta.env.VITE_BAI_PUBLIC_BRAND_CLIENTPLATFORM === "true" ? "ClientPlatform" : "BusinessAIOS";
 const DEFAULT_API = import.meta.env.VITE_API_BASE || "https://api.businessaios.ru";
+const UNIFIED_INTEGRATION_STATUS = String(import.meta.env.VITE_BAI_UNIFIED_INTEGRATION_STATUS || "").trim().toLowerCase() === "true";
+const INTEGRATION_STATUS_LABELS = {
+  live_ready: "Работает, проверено", read_ready: "Чтение данных готово",
+  connected_unverified: "Подключено, не проверено", not_connected: "Не подключено",
+  not_implemented: "Пока не поддерживается"
+};
+const INTEGRATION_KIND_LABELS = { data_source: "Источник", messaging: "Мессенджер", ads: "Реклама" };
 
 const GOALS = [
   { value: "growth", title: "Больше клиентов", text: "Найти потери в воронке и точки роста продаж." },
@@ -304,6 +312,8 @@ function latestSuccessfulOperationEvidence(rows, operation) {
     .sort((left, right) => String(right?.recorded_at_utc || "").localeCompare(String(left?.recorded_at_utc || "")))[0] || null;
 }
 
+const FUNNEL_STAGE_LABELS = { discovered: "Новый", engaged: "На связи", need_known: "Потребность ясна", qualified: "Подходит", offer_presented: "Предложение", checkout: "Оплата", won: "Купил" };
+
 function evidenceResourceCount(row) {
   const value = row?.parsed_response?.resource_count ?? row?.transport_response?.resource_count;
   return value === null || value === undefined || !Number.isFinite(Number(value)) ? null : Number(value);
@@ -334,6 +344,8 @@ function Workspace({ data, apiBase, businesses, onRestart, onRetryAccess, onSwit
   const approvalsUrl = `${baseApi}/control-plane/approvals/open?business_id=${encodeURIComponent(data.business_id)}`;
   const approvalResumeUrl = `${baseApi}/control-plane/provider-runtime/approval-resume`;
   const customersUrl = `${baseApi}/business-workspace/customers`;
+  const salesSourcesUrl = `${baseApi}/business-workspace/sales-sources`;
+  const communicationsUrl = `${baseApi}/business-workspace/communications`;
   const acquisitionUrl = `${baseApi}/business-workspace/acquisition-plan`;
   const analyticsUrl = `${baseApi}/analytics/dashboard/${encodeURIComponent(data.tenant_id)}?window_days=30`;
   const memorySummaryUrl = `${baseApi}/business-memory/summary`;
@@ -346,6 +358,8 @@ function Workspace({ data, apiBase, businesses, onRestart, onRetryAccess, onSwit
   const discoveryUrl = `${baseApi}/business-workspace/discovery`;
   const authHeaders = useMemo(() => (apiKey ? { "X-API-Key": apiKey } : {}), [apiKey]);
   const selectedKeys = useMemo(() => new Set(integrations.map((item) => item.provider_key)), [integrations]);
+  const [integrationStatuses, setIntegrationStatuses] = useState([]);
+  const [webChatDelivery, setWebChatDelivery] = useState(null);
   const [catalog, setCatalog] = useState([]);
   const [capabilities, setCapabilities] = useState([]);
   const [activeKey, setActiveKey] = useState("");
@@ -377,6 +391,9 @@ function Workspace({ data, apiBase, businesses, onRestart, onRetryAccess, onSwit
   const [customers, setCustomers] = useState([]);
   const [selectedCustomerId, setSelectedCustomerId] = useState("");
   const [customerTimeline, setCustomerTimeline] = useState([]);
+  const [customerSales, setCustomerSales] = useState(null);
+  const [salesSources, setSalesSources] = useState(null);
+  const [communications, setCommunications] = useState(null);
   const [customerBusy, setCustomerBusy] = useState(false);
   const [customerError, setCustomerError] = useState("");
   const [salesBusy, setSalesBusy] = useState(false);
@@ -390,6 +407,8 @@ function Workspace({ data, apiBase, businesses, onRestart, onRetryAccess, onSwit
     const payload = await getJson(workspaceUrl, authHeaders);
     const rows = Array.isArray(payload.providers) ? payload.providers : [];
     setCatalog(rows);
+    setWebChatDelivery(payload.web_chat_delivery && typeof payload.web_chat_delivery === "object" ? payload.web_chat_delivery : null);
+    setIntegrationStatuses(UNIFIED_INTEGRATION_STATUS && Array.isArray(payload.integration_statuses) ? payload.integration_statuses : []);
     setCapabilities(Array.isArray(payload.capabilities) ? payload.capabilities : []);
     setActiveKey((current) => {
       if (current && rows.some((row) => row.provider_key === current)) return current;
@@ -444,17 +463,45 @@ function Workspace({ data, apiBase, businesses, onRestart, onRetryAccess, onSwit
     }
   };
 
+  const refreshSalesSources = async (source = "") => {
+    if (!apiKey) { setSalesSources(null); return null; }
+    try {
+      const payload = await getJson(`${salesSourcesUrl}${source ? `?source=${encodeURIComponent(source)}` : ""}`, authHeaders);
+      const view = Array.isArray(payload.sources) ? payload : null;
+      setSalesSources(view);
+      return view;
+    } catch {
+      setSalesSources(null); // feature off (404) or unavailable: the HubSpot-only view stays as before
+      return null;
+    }
+  };
+
+  const refreshCommunications = async () => {
+    if (!apiKey) { setCommunications(null); return null; }
+    try {
+      const payload = await getJson(communicationsUrl, authHeaders);
+      const view = payload && payload.counts ? payload : null;
+      setCommunications(view);
+      return view;
+    } catch {
+      setCommunications(null); // feature off (404) or unavailable: section hidden
+      return null;
+    }
+  };
+
   const loadCustomerTimeline = async (customerId) => {
-    if (!apiKey || !customerId) { setCustomerTimeline([]); return []; }
+    if (!apiKey || !customerId) { setCustomerTimeline([]); setCustomerSales(null); return []; }
     setCustomerBusy(true);
     setCustomerError("");
     try {
       const payload = await getJson(`${customersUrl}?customer_id=${encodeURIComponent(customerId)}`, authHeaders);
       const rows = Array.isArray(payload.timeline?.entries) ? payload.timeline.entries : [];
       setCustomerTimeline(rows);
+      setCustomerSales(payload.sales?.available && Array.isArray(payload.sales.leads) ? payload.sales.leads : null);
       return rows;
     } catch {
       setCustomerTimeline([]);
+      setCustomerSales(null);
       setCustomerError("Не удалось открыть историю клиента.");
       return [];
     } finally {
@@ -482,6 +529,8 @@ function Workspace({ data, apiBase, businesses, onRestart, onRetryAccess, onSwit
         await Promise.all(rows.filter((row) => row.connected).map((row) => loadHistory(row.provider_key)));
         await refreshOperations();
         await refreshCustomers();
+        await refreshSalesSources();
+        await refreshCommunications();
       })
       .catch(() => {
         if (!cancelled) setWorkspaceError("Не удалось открыть защищённый список подключений. Проверьте соединение и повторите попытку.");
@@ -520,6 +569,7 @@ function Workspace({ data, apiBase, businesses, onRestart, onRetryAccess, onSwit
     ? (activeLiveEvidence ? "Обновляем данные…" : "Получаем данные…")
     : (activeLiveEvidence ? "Обновить данные" : "Получить первые данные");
   const hubspotProvider = catalog.find((row) => row.provider_key === "hubspot") || null;
+  const selectedSalesSource = salesSources?.sources?.find((src) => src.key === salesSources.selected_source) || null;
   const hubspotHistory = historyByProvider.hubspot || [];
   const hubspotContactEvidence = latestSuccessfulOperationEvidence(hubspotHistory, "contact_sync");
   const hubspotDealEvidence = latestSuccessfulOperationEvidence(hubspotHistory, "deal_sync");
@@ -560,7 +610,7 @@ function Workspace({ data, apiBase, businesses, onRestart, onRetryAccess, onSwit
 
   useEffect(() => {
     if (selectedCustomerId) void loadCustomerTimeline(selectedCustomerId);
-    else setCustomerTimeline([]);
+    else { setCustomerTimeline([]); setCustomerSales(null); }
   }, [selectedCustomerId, apiKey]);
 
   const prepareForCustomer = (identity) => {
@@ -772,7 +822,7 @@ function Workspace({ data, apiBase, businesses, onRestart, onRetryAccess, onSwit
             const execution = await postJson(approvalResumeUrl, { approval_id: approvalId }, authHeaders);
             setOperationResult({ decision: { status: "approved", recovered: true }, execution });
             if (providerKey) await loadHistory(providerKey).catch(() => []);
-            setOperationError("Approval уже подтверждён. BusinessAIOS продолжил выполнение по сохранённому approval без повторного голосования.");
+            setOperationError("Approval уже подтверждён. " + PUBLIC_BRAND + " продолжил выполнение по сохранённому approval без повторного голосования.");
           } catch {
             setOperationResult({ decision: { status: "approved", recovered: true }, execution: null });
             setOperationError("Approval подтверждён, но внешнее выполнение не доказано. Используйте отдельную recovery-карточку, не подтверждая approval заново.");
@@ -909,7 +959,7 @@ function Workspace({ data, apiBase, businesses, onRestart, onRetryAccess, onSwit
   };
 
   const refreshSalesCenter = async () => {
-    if (!hubspotProvider) { setSalesError("HubSpot пока не открыт для подключения в текущем реестре BusinessAIOS."); return; }
+    if (!hubspotProvider) { setSalesError("HubSpot пока не открыт для подключения в текущем реестре " + PUBLIC_BRAND + "."); return; }
     if (!hubspotProvider.connected) { setSalesError(""); openCapabilityProvider("hubspot"); return; }
     if (!hubspotCanRefreshSales) { setSalesError("Подключение есть, но безопасное чтение контактов и сделок пока не открыто одновременно. Ничего внешнего не менялось."); return; }
     setSalesBusy(true); setSalesError("");
@@ -922,7 +972,7 @@ function Workspace({ data, apiBase, businesses, onRestart, onRetryAccess, onSwit
       await refreshCatalog();
     } catch {
       setSalesError("Не все данные продаж удалось обновить. Внешних изменений не выполнялось — проверьте доступ HubSpot и повторите чтение.");
-    } finally { await loadHistory("hubspot").catch(() => []); setSalesBusy(false); }
+    } finally { await loadHistory("hubspot").catch(() => []); await refreshSalesSources(salesSources?.selected_source || ""); setSalesBusy(false); }
   };
 
   const openCapabilityProvider = (providerKey) => {
@@ -1036,7 +1086,7 @@ function Workspace({ data, apiBase, businesses, onRestart, onRetryAccess, onSwit
     setOperationText(String(draft.text || ""));
     setOperationOrigin(draft);
     setOperationDraftKey(crypto.randomUUID());
-    setOperationError(recipient ? "" : "Черновик DecisionCore перенесён. Перед подготовкой выберите клиента или укажите получателя — BusinessAIOS не подставляет неизвестный адресат.");
+    setOperationError(recipient ? "" : "Черновик DecisionCore перенесён. Перед подготовкой выберите клиента или укажите получателя — " + PUBLIC_BRAND + " не подставляет неизвестный адресат.");
     document.getElementById("business-operations-title")?.scrollIntoView({ behavior: "smooth", block: "start" });
     return draft;
   }, [apiKey, authHeaders, decisionDraftUrl, operationQueueStale, readyOperationProviders, selectedCustomer]);
@@ -1099,7 +1149,7 @@ function Workspace({ data, apiBase, businesses, onRestart, onRetryAccess, onSwit
   return (
     <main className="app-shell">
       <header className="topbar">
-        <a className="brand" href="/"><span className="brand-mark">B</span><span className="brand-name">BusinessAIOS</span></a>
+        <a className="brand" href="/"><span className="brand-mark">{PUBLIC_BRAND[0]}</span><span className="brand-name">{PUBLIC_BRAND}</span></a>
         <div className="topbar-actions">
           <span className="safe-chip"><span className="safe-chip-full">{readyOperationProviders.length ? "Действия · только после подтверждения" : "Безопасный режим · чтение данных"}</span><span className="safe-chip-short">{readyOperationProviders.length ? "С подтверждением" : "Режим чтения"}</span></span>
           {businesses.length > 1 ? <label className="business-switcher"><span>Бизнес</span><select aria-label="Выбор бизнеса" value={data.intake_id} onChange={(event) => onSwitchBusiness(event.target.value)}>{businesses.map((item) => <option value={item.intake_id} key={item.intake_id}>{item.name || "Бизнес"}</option>)}</select></label> : null}
@@ -1125,6 +1175,16 @@ function Workspace({ data, apiBase, businesses, onRestart, onRetryAccess, onSwit
         <article className="summary-card"><span className="summary-icon">⌁</span><div><small>Источники</small><strong>{providers.filter((row) => row.connected).length} подключено / {integrations.length} выбрано</strong></div></article>
         <article className="summary-card"><span className="summary-icon">◇</span><div><small>Режим</small><strong>{data.user_functionality?.autonomy_mode_label || "Советник"}</strong></div></article>
       </section>
+      {webChatDelivery && webChatDelivery.delivery_enabled === false ? <p role="status" className="error-box inline-error" data-mode={webChatDelivery.mode}>{webChatDelivery.label}</p> : null}
+      {UNIFIED_INTEGRATION_STATUS && integrationStatuses.length ? <section className="panel unified-integration-status" aria-labelledby="unified-integration-status-title">
+        <h2 id="unified-integration-status-title">Статус подключений</h2>
+        <p className="muted-text">Статус мессенджера подтверждается отдельными фактами отправки, получения квитанции, повтора и восстановления.</p>
+        <table><thead><tr><th>Подключение</th><th>Тип</th><th>Статус</th><th>Не хватает</th></tr></thead>
+          <tbody>{integrationStatuses.map((row) => <tr key={`${row.kind}:${row.key}`} data-status={row.status}>
+            <td>{row.key}</td><td>{INTEGRATION_KIND_LABELS[row.kind] || row.kind}</td>
+            <td>{INTEGRATION_STATUS_LABELS[row.status] || row.status}</td><td>{(row.missing || []).join(", ") || "—"}</td>
+          </tr>)}</tbody></table>
+      </section> : null}
 
       <BusinessDiscoveryPanel
         key={`discovery-${data.business_id}`}
@@ -1138,7 +1198,7 @@ function Workspace({ data, apiBase, businesses, onRestart, onRetryAccess, onSwit
           <div><p className="eyebrow">{liveEvidence ? "Подтверждено на ваших данных" : connected ? "Один шаг до результата" : "Первый полезный результат"}</p><h2>{liveEvidence ? "Первые реальные данные получены" : preview.title || "Первый полезный результат"}</h2></div>
           <span className={`result-badge ${liveEvidence ? "verified" : "pending"}`}>{liveEvidence ? "Данные получены" : connected ? "Готово к чтению" : "Нужно подключение"}</span>
         </div>
-        <p className="muted-text">{liveEvidence ? `${evidenceProvider?.title || liveEvidence.provider_key || "Источник"}: BusinessAIOS подтвердил чтение реальных данных и теперь может опираться на факты.` : connected ? "Доступ к источнику сохранён. Реальные данные ещё не читались. Нажмите «Получить первые данные» — подтверждённый результат появится здесь." : preview.message}</p>
+        <p className="muted-text">{liveEvidence ? `${evidenceProvider?.title || liveEvidence.provider_key || "Источник"}: ${PUBLIC_BRAND} подтвердил чтение реальных данных и теперь может опираться на факты.` : connected ? "Доступ к источнику сохранён. Реальные данные ещё не читались. Нажмите «Получить первые данные» — подтверждённый результат появится здесь." : preview.message}</p>
         <div className="check-list compact-check-list">
           {liveEvidence ? (
             <>
@@ -1164,6 +1224,15 @@ function Workspace({ data, apiBase, businesses, onRestart, onRetryAccess, onSwit
         onRunGoal={runAdvisoryGoal}
         onPrepareAction={prepareDecisionAction}
         onOpenSurface={openWorkspaceSection}
+        onLoadAdCabinet={() => getJson(baseApi + "/business-workspace/commercial/ad-cabinet", authHeaders)}
+        onSyncAdCabinet={() => {
+          const key = crypto.randomUUID();
+          return postJson(actionExecuteUrl, {
+            action_type: "event_series@v1", payload: {
+              user_id: data.user_id, business_id: data.business_id, op: "spend_sync", arg: ""
+            }
+          }, { ...authHeaders, "X-Idempotency-Key": key, "X-Action-ID": key });
+        }}
       />
 
       <DiscoverBuildMeasurePanel
@@ -1179,10 +1248,10 @@ function Workspace({ data, apiBase, businesses, onRestart, onRetryAccess, onSwit
 
       <section className="panel capabilities-panel" aria-labelledby="business-capabilities-title">
         <div className="panel-title-row">
-          <div><p className="eyebrow">Возможности</p><h2 id="business-capabilities-title">Что BusinessAIOS уже умеет для вашего бизнеса</h2></div>
+          <div><p className="eyebrow">Возможности</p><h2 id="business-capabilities-title">Что {PUBLIC_BRAND} уже умеет для вашего бизнеса</h2></div>
           <span className="privacy-badge">По фактической готовности</span>
         </div>
-        <p className="muted-text">Это не рекламный список. Статус каждой возможности приходит из единого реестра BusinessAIOS и текущего состояния подключений. Если путь уже доказан, отсюда можно сразу перейти к существующей настройке.</p>
+        <p className="muted-text">Это не рекламный список. Статус каждой возможности приходит из единого реестра {PUBLIC_BRAND} и текущего состояния подключений. Если путь уже доказан, отсюда можно сразу перейти к существующей настройке.</p>
         <div className="capability-summary">
           <article><strong>{actionableCapabilities.length}</strong><span>можно открыть или подключить</span></article>
           <article><strong>{capabilityRows.filter((item) => item.userState.provider?.connected).length}</strong><span>уже подключено</span></article>
@@ -1196,7 +1265,7 @@ function Workspace({ data, apiBase, businesses, onRestart, onRetryAccess, onSwit
         {otherCapabilities.length ? <details className="capability-roadmap"><summary><span>Остальные возможности проекта</span><strong>{otherCapabilities.length}</strong></summary><div className="capability-grid roadmap-grid">{otherCapabilities.map((item) => <article className="capability-card muted-capability" key={item.id}>
           <div className="capability-card-head"><div><small>{capabilitySurfaceLabel(item.surface)}</small><strong>{item.title}</strong></div><span className={`status-pill ${item.userState.className}`}>{item.userState.label}</span></div>
           <p>{capabilityPlainCopy(item, item.userState)}</p>
-          {item.userState.provider?.customer_selectable ? <button type="button" className="ghost small" onClick={() => openCapabilityProvider(item.userState.provider.provider_key)}>Открыть настройку</button> : <small className="helper-text">BusinessAIOS не показывает кнопку действия, пока для неё нет честного пользовательского пути.</small>}
+          {item.userState.provider?.customer_selectable ? <button type="button" className="ghost small" onClick={() => openCapabilityProvider(item.userState.provider.provider_key)}>Открыть настройку</button> : <small className="helper-text">{PUBLIC_BRAND} не показывает кнопку действия, пока для неё нет честного пользовательского пути.</small>}
         </article>)}</div></details> : null}
       </section>
 
@@ -1231,10 +1300,10 @@ function Workspace({ data, apiBase, businesses, onRestart, onRetryAccess, onSwit
                 <div className="provider-truth-card"><strong>Что реально доступно</strong><span>{providerTruthCopy(activeProvider)}</span>{identityCopy.help ? <small>{identityCopy.help}</small> : null}</div>
                 {!activeProvider.connected || editingAccessKey === activeProvider.provider_key ? (
                   <div className="form-grid">
-                    <label className="full">{identityCopy.label}<input value={externalRef} onChange={(event) => setExternalRef(event.target.value)} placeholder={identityCopy.placeholder} /><small className="input-help">Это идентификатор именно вашего кабинета или проекта — не внутренний ID BusinessAIOS.</small></label>
+                    <label className="full">{identityCopy.label}<input value={externalRef} onChange={(event) => setExternalRef(event.target.value)} placeholder={identityCopy.placeholder} /><small className="input-help">Это идентификатор именно вашего кабинета или проекта — не внутренний ID {PUBLIC_BRAND}.</small></label>
                     {webhookUrl ? <label className="full">Webhook URL<input className="readonly-value" type="text" readOnly value={webhookUrl} onFocus={(event) => event.target.select()} /><small className="input-help">Скопируйте этот адрес в настройки входящих событий провайдера. Адрес не содержит секретов.</small></label> : null}
                     {(activeProvider.secret_fields || []).map((field) => (
-                      <label className={field.multiline ? "full" : ""} key={field.secret_name}><span className="field-label-row"><span>{credentialLabel(activeProvider, field)}</span>{!field.required ? <small>Необязательно</small> : null}</span>{field.multiline ? <textarea value={secrets[field.secret_name] || ""} onChange={(event) => setSecrets((previous) => ({ ...previous, [field.secret_name]: event.target.value }))} placeholder={field.placeholder || ""} /> : <input type={credentialInputType(field)} autoComplete="off" value={secrets[field.secret_name] || ""} onChange={(event) => setSecrets((previous) => ({ ...previous, [field.secret_name]: event.target.value }))} placeholder={field.placeholder || ""} />}{credentialInputType(field) === "text" ? <small className="input-help">Обычная настройка, не пароль. Значение передаётся только на защищённый сервер BusinessAIOS.</small> : null}</label>
+                      <label className={field.multiline ? "full" : ""} key={field.secret_name}><span className="field-label-row"><span>{credentialLabel(activeProvider, field)}</span>{!field.required ? <small>Необязательно</small> : null}</span>{field.multiline ? <textarea value={secrets[field.secret_name] || ""} onChange={(event) => setSecrets((previous) => ({ ...previous, [field.secret_name]: event.target.value }))} placeholder={field.placeholder || ""} /> : <input type={credentialInputType(field)} autoComplete="off" value={secrets[field.secret_name] || ""} onChange={(event) => setSecrets((previous) => ({ ...previous, [field.secret_name]: event.target.value }))} placeholder={field.placeholder || ""} />}{credentialInputType(field) === "text" ? <small className="input-help">Обычная настройка, не пароль. Значение передаётся только на защищённый сервер {PUBLIC_BRAND}.</small> : null}</label>
                     ))}
                     <button type="button" className="primary" disabled={Boolean(workspaceBusy)} onClick={activateProvider}>{workspaceBusy === "activate" || workspaceBusy === "update_access" ? "Сохраняем доступ…" : activeProvider.connected ? "Обновить доступ" : "Подключить для чтения"}</button>
                     {activeProvider.connected ? <button type="button" className="ghost" disabled={Boolean(workspaceBusy)} onClick={() => { setEditingAccessKey(""); setExternalRef(""); setSecrets({}); }}>Отмена</button> : null}
@@ -1246,7 +1315,7 @@ function Workspace({ data, apiBase, businesses, onRestart, onRetryAccess, onSwit
                     <button type="button" className="ghost" disabled={Boolean(workspaceBusy)} onClick={() => { setEditingAccessKey(activeProvider.provider_key); setExternalRef(activeProvider.external_ref || ""); setSecrets({}); }}>Изменить доступ</button>
                   </div>
                 )}
-                <small className="helper-text">Чтение доступно сразу. Перед внешним действием BusinessAIOS сначала проверит его и попросит ваше подтверждение. Прямой отправки из браузера нет.</small>
+                <small className="helper-text">Чтение доступно сразу. Перед внешним действием {PUBLIC_BRAND} сначала проверит его и попросит ваше подтверждение. Прямой отправки из браузера нет.</small>
                 {lastAction?.providerKey === activeProvider.provider_key ? <details className="technical-inline"><summary>Технические детали последней операции</summary><pre>{JSON.stringify(lastAction.result, null, 2)}</pre></details> : null}
               </div>
             </div>
@@ -1265,13 +1334,75 @@ function Workspace({ data, apiBase, businesses, onRestart, onRetryAccess, onSwit
         </article>
       </section>
 
+      {communications ? (
+        <section className="panel communications-panel" aria-labelledby="business-communications-title">
+          <div className="panel-title-row">
+            <div><p className="eyebrow">Коммуникации</p><h2 id="business-communications-title">Центр сообщений</h2></div>
+            <button type="button" className="ghost small" onClick={() => void refreshCommunications()}>Обновить</button>
+          </div>
+          {communications.web_chat?.delivery_enabled === false ? <p role="status" className="error-box inline-error">{communications.web_chat.label}</p> : null}
+          <p className="muted-text">Входящие — из журнала сообщений клиентов. «Доставлено» означает подтверждённую доставку. Принятие сообщения провайдером не доказывает получение клиентом; такие сообщения остаются «Без подтверждения». Отсюда ничего не отправляется.</p>
+          <div className="sales-metrics">
+            <article><small>Входящие</small><strong>{communications.counts.inbound}</strong><span>последние обращения клиентов</span></article>
+            <article><small>Доставлено</small><strong>{communications.counts.outbound}</strong><span>подтверждено получателем через провайдера</span></article>
+            <article><small>Ждут подтверждения</small><strong>{pendingApprovals.length}</strong><span>{pendingApprovals.length ? "решение — в разделе действий ниже" : "очередь подтверждений пуста"}</span></article>
+            <article><small>В очереди</small><strong>{communications.counts.queued}</strong><span>ждут отправки провайдеру</span></article>
+            <article><small>Повторы</small><strong>{communications.counts.retries}</strong><span>отправка повторяется после сбоя</span></article>
+            <article><small>Без подтверждения</small><strong>{communications.counts.unconfirmed}</strong><span>принято провайдером или ожидается исход</span></article>
+            <article><small>Ошибки</small><strong>{communications.counts.failed}</strong><span>отказ провайдера</span></article>
+          </div>
+          <div className="timeline-list" aria-label="Сообщения">
+            {[...communications.failed.map((row) => ({ ...row, label: "Ошибка" })), ...communications.unconfirmed.map((row) => ({ ...row, label: "Без подтверждения" })), ...communications.retries.map((row) => ({ ...row, label: `Повтор (попыток: ${row.attempts})`, at: row.run_at })), ...communications.outbound.map((row) => ({ ...row, label: "Доставлено" }))].slice(0, 20).map((row, index) => <article className="timeline-row" key={`${row.provider_key}-${row.queue_job_id || row.job_id || index}`}>
+              <strong>{row.label} · {row.provider_key}</strong>
+              <span>{row.receipt ? `квитанция ${row.receipt}` : row.reason || ""}{row.at ? ` · ${row.at}` : ""}</span>
+            </article>)}
+            {communications.inbound.slice(0, 10).map((row) => <article className="timeline-row" key={row.message_id}>
+              <strong>Входящее · {row.channel}</strong>
+              <span>{row.customer_id ? `клиент ${row.customer_id}` : "клиент не определён"}{row.at_ms ? ` · ${new Date(row.at_ms).toLocaleString("ru-RU")}` : ""}</span>
+            </article>)}
+          </div>
+        </section>
+      ) : null}
+
       <section className="panel sales-panel" aria-labelledby="business-sales-title">
         <div className="panel-title-row">
           <div><p className="eyebrow">Центр продаж</p><h2 id="business-sales-title">Продажи</h2></div>
-          <span className="privacy-badge">HubSpot · только чтение</span>
+          <span className="privacy-badge">{selectedSalesSource ? `${selectedSalesSource.title} · только чтение` : "HubSpot · только чтение"}</span>
         </div>
-        <p className="muted-text">Здесь BusinessAIOS показывает только подтверждённые чтением CRM-факты. Отдельную CRM-копию не создаём и неизвестные показатели не заменяем нулями.</p>
+        <p className="muted-text">Здесь {PUBLIC_BRAND} показывает только подтверждённые чтением CRM-факты. Отдельную CRM-копию не создаём и неизвестные показатели не заменяем нулями.</p>
         {salesError ? <div className="error-box inline-error" role="alert">{salesError}</div> : null}
+        {salesSources ? (
+          <div className="sales-sources" aria-label="Источники продаж">
+            <p className="muted-text">{salesSources.canonical_source ? "Основной источник выбран автоматически: подключённая CRM с подтверждённым чтением контактов и сделок, иначе обращения из мессенджеров." : "Пока нет источника с подтверждёнными данными: подключите CRM или канал сообщений."}</p>
+            <div className="sales-metrics">
+              {salesSources.sources.map((src) => <article key={src.key} className={src.key === salesSources.selected_source ? "selected" : ""}>
+                <small>{src.kind === "crm" ? "CRM" : "Каналы"}{src.key === salesSources.canonical_source ? " · основной" : ""}</small>
+                <strong>{src.title}</strong>
+                <span>{src.read_confirmed ? `Контакты: ${src.contacts ?? "—"} · Сделки: ${src.deals ?? "—"}` : src.connected ? "Подключено, подтверждённых данных пока нет" : "Не подключено"}</span>
+                <em>{src.last_read_at ? `Подтверждено ${new Date(src.last_read_at).toLocaleString("ru-RU")}` : src.last_read_ms ? `Последнее событие ${new Date(src.last_read_ms).toLocaleString("ru-RU")}` : "—"}</em>
+                {salesSources.available.includes(src.key) && src.key !== salesSources.selected_source ? <button type="button" className="ghost small" onClick={() => void refreshSalesSources(src.key)}>Показать этот источник</button> : null}
+              </article>)}
+            </div>
+            {selectedSalesSource?.funnel ? (
+              <div className="sales-funnel" aria-label="Воронка продаж">
+                <h3>Воронка: {selectedSalesSource.title}</h3>
+                <div className="sales-metrics">
+                  <article><small>Выиграно</small><strong>{selectedSalesSource.funnel.won}</strong><span>{selectedSalesSource.funnel.win_rate === null ? "закрытых сделок пока нет" : `доля выигрыша ${Math.round(selectedSalesSource.funnel.win_rate * 100)}%`}</span></article>
+                  <article><small>Проиграно</small><strong>{selectedSalesSource.funnel.lost}</strong><span>отказ или проигранная сделка</span></article>
+                  <article><small>Зависло</small><strong>{selectedSalesSource.funnel.stale}</strong><span>{`открыты и без движения дольше ${selectedSalesSource.funnel.stale_after_days} дн. (из ${selectedSalesSource.funnel.open} открытых)`}</span></article>
+                </div>
+                <div className="timeline-list">
+                  {selectedSalesSource.funnel.stage_conversion.map((row) => <article className="timeline-row" key={`${row.from}-${row.to}`}>
+                    <strong>{FUNNEL_STAGE_LABELS[row.from] || row.from} → {FUNNEL_STAGE_LABELS[row.to] || row.to}</strong>
+                    <span>{row.rate === null ? "нет данных" : `${Math.round(row.rate * 100)}% (${row.reached} из ${row.base})`}</span>
+                  </article>)}
+                </div>
+                {selectedSalesSource.funnel.unmapped ? <small className="sales-note">{`Сделок с неизвестной стадией: ${selectedSalesSource.funnel.unmapped} — в воронку не включены, нули не подставляются.`}</small> : null}
+                <small className="sales-note">{selectedSalesSource.funnel.basis === "current_stage" ? "CRM: учитывается текущая стадия каждой сделки." : "Мессенджеры: учитывается самая дальняя стадия, которой достиг каждый лид."}</small>
+              </div>
+            ) : selectedSalesSource ? <p className="empty-state">Для воронки этого источника пока нет подтверждённых сделок со стадиями.</p> : null}
+          </div>
+        ) : null}
         {!hubspotProvider ? (
           <div className="recovery-box"><p>HubSpot есть в архитектуре проекта, но текущий пользовательский реестр ещё не открыл его для безопасного подключения. Поэтому кнопки с фиктивными данными здесь нет.</p></div>
         ) : !hubspotProvider.connected ? (
@@ -1284,11 +1415,11 @@ function Workspace({ data, apiBase, businesses, onRestart, onRetryAccess, onSwit
             <div className="sales-metrics">
               <article><small>Контакты</small><strong>{hubspotContactCount ?? "—"}</strong><span>{hubspotContactEvidence ? "объектов в последнем подтверждённом чтении" : "подтверждённых данных пока нет"}</span><em>{hubspotContactEvidence ? evidenceHasNextPage(hubspotContactEvidence) ? "Есть следующая страница — это не общий итог." : `Подтверждено ${evidenceTimeLabel(hubspotContactEvidence)}` : "Нажмите «Получить данные по продажам»."}</em></article>
               <article><small>Сделки</small><strong>{hubspotDealCount ?? "—"}</strong><span>{hubspotDealEvidence ? "объектов в последнем подтверждённом чтении" : "подтверждённых данных пока нет"}</span><em>{hubspotDealEvidence ? evidenceHasNextPage(hubspotDealEvidence) ? "Есть следующая страница — это не общий итог." : `Подтверждено ${evidenceTimeLabel(hubspotDealEvidence)}` : "Нажмите «Получить данные по продажам»."}</em></article>
-              <article><small>Свежесть</small><strong className="sales-time-value">{hubspotLastEvidence ? evidenceTimeLabel(hubspotLastEvidence) : "—"}</strong><span>последнее подтверждённое чтение CRM</span><em>Дата берётся из защищённой истории чтений BusinessAIOS.</em></article>
+              <article><small>Свежесть</small><strong className="sales-time-value">{hubspotLastEvidence ? evidenceTimeLabel(hubspotLastEvidence) : "—"}</strong><span>последнее подтверждённое чтение CRM</span><em>Дата берётся из защищённой истории чтений {PUBLIC_BRAND}.</em></article>
             </div>
             <div className="sales-truth-grid">
-              <article className="sales-truth-card"><strong>Что уже подтверждено</strong><p>{hubspotContactEvidence && hubspotDealEvidence ? "BusinessAIOS уже получил реальные ответы HubSpot по контактам и сделкам. Эти значения можно использовать как факты последнего чтения." : "HubSpot подключён, но для Sales Center ещё нужны подтверждённые чтения и контактов, и сделок."}</p></article>
-              <article className="sales-truth-card caution"><strong>Что пока не считаем</strong><p>«Выиграно / проиграно / зависло», сумму воронки и конверсию по стадиям пока не показываем: BusinessAIOS ещё не доказал единые правила сопоставления стадий HubSpot. Нули вместо неизвестных значений не подставляются.</p></article>
+              <article className="sales-truth-card"><strong>Что уже подтверждено</strong><p>{hubspotContactEvidence && hubspotDealEvidence ? "" + PUBLIC_BRAND + " уже получил реальные ответы HubSpot по контактам и сделкам. Эти значения можно использовать как факты последнего чтения." : "HubSpot подключён, но для Sales Center ещё нужны подтверждённые чтения и контактов, и сделок."}</p></article>
+              <article className="sales-truth-card caution"><strong>Что пока не считаем</strong><p>«Выиграно / проиграно / зависло», сумму воронки и конверсию по стадиям пока не показываем: {PUBLIC_BRAND} ещё не доказал единые правила сопоставления стадий HubSpot. Нули вместо неизвестных значений не подставляются.</p></article>
             </div>
             <div className="navigation-row sales-actions">
               <button type="button" className="primary" disabled={salesBusy || Boolean(workspaceBusy) || !hubspotCanRefreshSales} onClick={refreshSalesCenter}>{salesBusy ? "Обновляем CRM…" : hubspotLastEvidence ? "Обновить данные продаж" : "Получить данные по продажам"}</button>
@@ -1312,7 +1443,7 @@ function Workspace({ data, apiBase, businesses, onRestart, onRetryAccess, onSwit
           <div><p className="eyebrow">Клиенты</p><h2 id="business-customers-title">Клиенты и история контактов</h2></div>
           <span className="privacy-badge">Из единого EventStore</span>
         </div>
-        <p className="muted-text">Клиенты появляются здесь из подтверждённых входящих событий подключённых каналов. Отдельной CRM-копии BusinessAIOS не создаёт.</p>
+        <p className="muted-text">Клиенты появляются здесь из подтверждённых входящих событий подключённых каналов. Отдельной CRM-копии {PUBLIC_BRAND} не создаёт.</p>
         {customerError ? <div className="error-box inline-error" role="alert">{customerError}</div> : null}
         {customerBusy && !customers.length ? <div className="loading-box">Загружаем клиентов…</div> : null}
         {customers.length ? (
@@ -1332,6 +1463,16 @@ function Workspace({ data, apiBase, businesses, onRestart, onRetryAccess, onSwit
                     {readyIdentityProvider(identity) ? <button type="button" className="ghost small" onClick={() => prepareForCustomer(identity)}>Написать</button> : <small>Отправка по каналу пока не готова</small>}
                   </article>)}
                 </div>
+                {customerSales ? <>
+                  <h3>Обращения и сделки</h3>
+                  <div className="timeline-list" aria-label="Обращения и сделки клиента">
+                    {customerSales.length ? customerSales.map((lead) => <article className="timeline-row" key={lead.lead_id}>
+                      <strong>{lead.name} · {lead.stage_label}</strong>
+                      <span>{lead.closed ? (lead.confirmed_result === "paid" ? "Подтверждённый результат: оплата получена" : "Сделка закрыта без покупки") : `Следующий шаг: ${lead.next_action || "не задан"}${lead.overdue ? " (просрочен)" : ""}`}</span>
+                      <small>{lead.channel || "канал не указан"} · {lead.owner ? `ведёт ${lead.owner}` : "ответственный не назначен"}{lead.handoff_open ? " · нужен человек" : ""}{lead.notes?.length ? ` · заметка: ${lead.notes[lead.notes.length - 1]}` : ""}</small>
+                    </article>) : <p className="empty-state">Обращений и сделок по этому клиенту пока нет.</p>}
+                  </div>
+                </> : null}
                 <h3>История</h3>
                 <div className="timeline-list">
                   {customerTimeline.length ? customerTimeline.slice().reverse().map((entry) => <article className="timeline-row" key={entry.source_id}>
@@ -1351,7 +1492,7 @@ function Workspace({ data, apiBase, businesses, onRestart, onRetryAccess, onSwit
           <div><p className="eyebrow">Контроль внешних действий</p><h2 id="business-operations-title">Центр действий</h2></div>
           <span className="privacy-badge">С подтверждением владельца</span>
         </div>
-        <p className="muted-text">Здесь видно, что требует вашего решения и какие каналы уже готовы к безопасному действию. BusinessAIOS сначала сохраняет и показывает действие; внешнее выполнение возможно только после вашего подтверждения.</p>
+        <p className="muted-text">Здесь видно, что требует вашего решения и какие каналы уже готовы к безопасному действию. {PUBLIC_BRAND} сначала сохраняет и показывает действие; внешнее выполнение возможно только после вашего подтверждения.</p>
         <div className="action-summary" aria-label="Сводка центра действий">
           <article><small>Ждут решения</small><strong>{pendingApprovals.length}</strong><span>{pendingApprovals.length ? "проверьте получателя и содержание" : "очередь подтверждений пуста"}</span></article>
           <article><small>Нужно проверить выполнение</small><strong>{resumeCandidates.length}</strong><span>{resumeCandidates.length ? "approval уже подтверждён — доступен безопасный resume" : "незавершённых resume нет"}</span></article>
@@ -1360,7 +1501,7 @@ function Workspace({ data, apiBase, businesses, onRestart, onRetryAccess, onSwit
         </div>
         <div className={`action-attention ${operationQueueStale ? "stale" : pendingApprovals.length ? "needs-review" : readyOperationProviders.length ? "ready" : "setup"}`} role="status">
           <strong>{operationQueueStale ? "Очередь требует обновления" : pendingApprovals.length ? `Вашего решения ждут: ${pendingApprovals.length}` : readyOperationProviders.length ? "Сейчас ничего не ждёт подтверждения" : "Сначала нужен готовый канал"}</strong>
-          <span>{operationQueueStale ? "Последний запрос мог быть обработан, поэтому BusinessAIOS не разрешает повторять подготовку вслепую. Сначала перечитайте очередь." : pendingApprovals.length ? "Подтверждайте только после проверки получателя, темы и текста. После подтверждения BusinessAIOS возобновит именно сохранённое действие." : readyOperationProviders.length ? "Можно подготовить новое сообщение. Нажатие «Подготовить к отправке» ничего внешнему получателю не отправляет." : "Кнопка подготовки появится только когда BusinessAIOS видит подключение и готовый путь внешнего действия."}</span>
+          <span>{operationQueueStale ? "Последний запрос мог быть обработан, поэтому " + PUBLIC_BRAND + " не разрешает повторять подготовку вслепую. Сначала перечитайте очередь." : pendingApprovals.length ? "Подтверждайте только после проверки получателя, темы и текста. После подтверждения BusinessAIOS возобновит именно сохранённое действие." : readyOperationProviders.length ? "Можно подготовить новое сообщение. Нажатие «Подготовить к отправке» ничего внешнему получателю не отправляет." : "Кнопка подготовки появится только когда " + PUBLIC_BRAND + " видит подключение и готовый путь внешнего действия."}</span>
           {operationQueueStale ? <div className="navigation-row"><button type="button" className="ghost small" disabled={Boolean(operationBusy)} onClick={refreshActionQueue}>{operationBusy === "refresh_queue" ? "Обновляем…" : "Обновить очередь"}</button>{operationRecovery?.kind === "draft" ? <button type="button" className="ghost small" disabled={Boolean(operationBusy)} onClick={() => prepareMessage({ allowStaleRetry: true })}>{operationBusy === "message_send" ? "Повторяем…" : "Повторить тот же запрос"}</button> : null}</div> : null}
         </div>
         {operationError ? <div className="error-box inline-error" role="alert">{operationError}</div> : null}
@@ -1405,11 +1546,11 @@ function Workspace({ data, apiBase, businesses, onRestart, onRetryAccess, onSwit
                 <label>{operationRecipientCopy.label}<input disabled={operationQueueStale} value={operationRecipient} onChange={(event) => { setOperationRecipient(event.target.value); setOperationDraftKey(crypto.randomUUID()); }} placeholder={operationRecipientCopy.placeholder} /></label>
                 {activeOperationProvider?.provider_key === "email_connector" ? <label>Тема<input disabled={operationQueueStale} value={operationSubject} onChange={(event) => { setOperationSubject(event.target.value); setOperationDraftKey(crypto.randomUUID()); }} placeholder="Тема письма" /></label> : null}
                 {activeOperationProvider?.provider_key === "whatsapp_cloud" ? <div className="recovery-box"><strong>Условия WhatsApp plain-text</strong><label><input type="checkbox" disabled={operationQueueStale} checked={operationWhatsappOptIn} onChange={(event) => { setOperationWhatsappOptIn(event.target.checked); setOperationDraftKey(crypto.randomUUID()); }} /> Получатель дал согласие на сообщения</label><label><input type="checkbox" disabled={operationQueueStale} checked={operationWhatsappWindow} onChange={(event) => { setOperationWhatsappWindow(event.target.checked); setOperationDraftKey(crypto.randomUUID()); }} /> Диалог находится в допустимом 24-часовом customer-service window</label><small className="helper-text">Подтверждения войдут в approval fingerprint и не отправляются в Meta API. Template messages в этом контуре не включены.</small></div> : null}
-                <label>Сообщение<textarea disabled={operationQueueStale} value={operationText} onChange={(event) => { setOperationText(event.target.value); setOperationDraftKey(crypto.randomUUID()); }} placeholder="Что BusinessAIOS должен подготовить для отправки" /></label>
+                <label>Сообщение<textarea disabled={operationQueueStale} value={operationText} onChange={(event) => { setOperationText(event.target.value); setOperationDraftKey(crypto.randomUUID()); }} placeholder={"Что " + PUBLIC_BRAND + " должен подготовить для отправки"} /></label>
                 <button type="button" className="primary" disabled={Boolean(operationBusy) || operationQueueStale} onClick={prepareMessage}>{operationBusy === "message_send" ? "Готовим…" : "Подготовить к отправке"}</button>
                 <small className="helper-text">Это только создаёт действие для проверки. Нажатие этой кнопки само по себе ничего внешнему получателю не отправляет.</small>
               </>
-            ) : <div className="recovery-box"><p>Сначала завершите подключение канала. Форма станет доступна только когда BusinessAIOS видит готовый путь внешнего действия.</p></div>}
+            ) : <div className="recovery-box"><p>Сначала завершите подключение канала. Форма станет доступна только когда {PUBLIC_BRAND} видит готовый путь внешнего действия.</p></div>}
           </div>
         </div>
         {operationDecisionProvenance ? <div className="decision-result-evidence" role="status"><strong>Результат связан с решением DecisionCore</strong><span>Сервер подтвердил происхождение: run {operationDecisionProvenance.run_id}, decision {operationDecisionProvenance.decision_id}, action {operationDecisionProvenance.action_id}.</span><span>{operationProviderAccepted && operationProviderResourceId ? `Провайдер принял действие и вернул receipt ${operationProviderResourceId}. Это подтверждает приём провайдером, но не объявляется доказанной доставкой получателю.` : "Внешний результат пока не имеет подтверждённого provider receipt; используйте recovery и историю выполнения."}</span></div> : null}
@@ -1436,7 +1577,8 @@ function Workspace({ data, apiBase, businesses, onRestart, onRetryAccess, onSwit
 
       <AdvertisingStudioWorkspace key={`ads:${data.tenant_id}:${data.business_id}`} apiBase={baseApi} apiKey={apiKey} postJson={postJson} />
 
-      <AcquisitionPlanner enabled={Boolean(apiKey)} onEvaluate={(payload) => postJson(acquisitionUrl, payload, authHeaders)} />
+      <AcquisitionPlanner enabled={Boolean(apiKey)} onEvaluate={(payload) => postJson(acquisitionUrl, payload, authHeaders)}
+        onLaunch={(payload) => postJson(acquisitionUrl + "/launch", payload, authHeaders)} />
 
       <section className="panel business-card">
         <div><p className="eyebrow">Профиль</p><h2>{businessName || "Бизнес"}</h2></div>
@@ -1451,7 +1593,7 @@ function Workspace({ data, apiBase, businesses, onRestart, onRetryAccess, onSwit
 function BusinessChooser({ businesses, onOpen, onAdd }) {
   return (
     <main className="onboarding-shell account-home">
-      <header className="topbar onboarding-topbar"><div className="brand"><span className="brand-mark">B</span><span className="brand-name">BusinessAIOS</span></div><button type="button" className="primary small add-business-button" aria-label="Добавить бизнес" onClick={onAdd}><span className="add-business-full">Добавить бизнес</span><span className="add-business-short">Добавить</span></button></header>
+      <header className="topbar onboarding-topbar"><div className="brand"><span className="brand-mark">{PUBLIC_BRAND[0]}</span><span className="brand-name">{PUBLIC_BRAND}</span></div><button type="button" className="primary small add-business-button" aria-label="Добавить бизнес" onClick={onAdd}><span className="add-business-full">Добавить бизнес</span><span className="add-business-short">Добавить</span></button></header>
       <section className="account-businesses panel">
         <div className="section-heading"><p className="eyebrow">Ваш аккаунт</p><h1>Мои бизнесы</h1><p>Выберите бизнес. Данные, интеграции и действия каждого бизнеса остаются в его отдельном защищённом контуре.</p></div>
         <div className="business-choice-grid">
@@ -1620,7 +1762,7 @@ export function App() {
 
   return (
     <main className="onboarding-shell">
-      <header className="topbar onboarding-topbar"><div className="brand"><span className="brand-mark">B</span><span className="brand-name">BusinessAIOS</span></div><span className="topbar-note">Настройка бизнеса</span></header>
+      <header className="topbar onboarding-topbar"><div className="brand"><span className="brand-mark">{PUBLIC_BRAND[0]}</span><span className="brand-name">{PUBLIC_BRAND}</span></div><span className="topbar-note">Настройка бизнеса</span></header>
       <section className="onboarding-layout">
         <aside className="intro-column">
           <p className="eyebrow">Управление бизнесом с ИИ</p><h1>Подключите бизнес.<br />Остальное система разберёт сама.</h1>
@@ -1637,17 +1779,17 @@ export function App() {
 
           {step === 0 ? <div className="step-content"><div className="section-heading"><p className="eyebrow">Шаг 1</p><h2>Расскажите о бизнесе</h2><p>Этого достаточно, чтобы создать отдельный защищённый кабинет.</p></div><div className="form-grid"><label className="full">Название бизнеса<input value={form.business_name} onChange={updateForm("business_name")} placeholder="Например, Студия Линия" autoFocus /></label><label>Email владельца<input value={form.email} onChange={updateForm("email")} placeholder="you@company.ru" type="email" aria-invalid={Boolean(form.email.trim()) && !emailValid} aria-describedby={form.email.trim() && !emailValid ? "owner-email-error" : undefined} />{form.email.trim() && !emailValid ? <small className="field-error" id="owner-email-error">Введите email в формате name@company.ru</small> : null}</label><label>Сайт или страница<input value={form.website} onChange={updateForm("website")} placeholder="https://..." /></label><label>Сфера<input value={form.industry} onChange={updateForm("industry")} placeholder="Услуги, магазин, образование..." /></label><label>Город<input value={form.city} onChange={updateForm("city")} placeholder="Москва" /></label><label className="full">Модель бизнеса<select value={form.business_model} onChange={updateForm("business_model")}><option value="services">Услуги</option><option value="commerce">Товары / интернет-магазин</option><option value="marketplace">Маркетплейсы</option><option value="b2b">B2B</option><option value="mixed">Смешанная</option></select></label></div></div> : null}
 
-          {step === 1 ? <div className="step-content"><div className="section-heading"><p className="eyebrow">Шаг 2</p><h2>Что важнее прямо сейчас?</h2><p>BusinessAIOS начнёт анализ с выбранной бизнес-задачи.</p></div><div className="choice-grid">{GOALS.map((goal) => <button type="button" className={`choice-card ${form.goal === goal.value ? "selected" : ""}`} aria-pressed={form.goal === goal.value} onClick={() => setForm((prev) => ({ ...prev, goal: goal.value }))} key={goal.value}><span className="radio-dot" /><strong>{goal.title}</strong><small>{goal.text}</small></button>)}</div></div> : null}
+          {step === 1 ? <div className="step-content"><div className="section-heading"><p className="eyebrow">Шаг 2</p><h2>Что важнее прямо сейчас?</h2><p>{PUBLIC_BRAND} начнёт анализ с выбранной бизнес-задачи.</p></div><div className="choice-grid">{GOALS.map((goal) => <button type="button" className={`choice-card ${form.goal === goal.value ? "selected" : ""}`} aria-pressed={form.goal === goal.value} onClick={() => setForm((prev) => ({ ...prev, goal: goal.value }))} key={goal.value}><span className="radio-dot" /><strong>{goal.title}</strong><small>{goal.text}</small></button>)}</div></div> : null}
 
-          {step === 2 ? <div className="step-content integrations-step"><div className="section-heading"><p className="eyebrow">Шаг 3</p><h2>Где уже живут данные бизнеса?</h2><p>Выберите хотя бы один источник. Подключение начнётся в режиме только чтения.</p></div>{marketLoading ? <div className="loading-box">Загружаем доступные интеграции…</div> : null}{marketError && !marketLoading ? <div className="recovery-box" role="alert"><p>{marketError}</p><button type="button" className="ghost" onClick={loadMarketplace}>Повторить загрузку</button></div> : null}{!marketLoading && !marketError ? <><div className="integration-section-head"><strong>Можно подключить сейчас</strong><span>{availableMarketplace.length}</span></div>{availableMarketplace.length ? <div className="integration-grid">{availableMarketplace.map((item) => <IntegrationCard item={item} selected={selectedProviders.includes(item.provider_key)} onToggle={toggleProvider} key={item.provider_key} />)}</div> : <p className="empty-state">Сейчас нет источников, готовых к подключению. Ниже можно посмотреть, что уже готовится.</p>}<p className="selection-count" aria-live="polite">Выбрано: <strong>{selectedProviders.length}</strong></p>{selectedProviders.length === 0 ? <p className="muted-text" role="status">Можно продолжить без источников: защищённый кабинет будет создан в режиме чтения. Подключить данные можно позже.</p> : null}{roadmapMarketplace.length ? <details className="roadmap-integrations"><summary><span>Что ещё готовится</span><strong>{roadmapMarketplace.length}</strong></summary><p>Эти интеграции уже есть в каталоге, но пока не доступны для подключения. Статус каждой берём напрямую из BusinessAIOS.</p><div className="integration-grid roadmap-grid">{roadmapMarketplace.map((item) => <IntegrationCard item={item} selected={false} onToggle={toggleProvider} key={item.provider_key} />)}</div></details> : null}</> : null}</div> : null}
+          {step === 2 ? <div className="step-content integrations-step"><div className="section-heading"><p className="eyebrow">Шаг 3</p><h2>Где уже живут данные бизнеса?</h2><p>Выберите хотя бы один источник. Подключение начнётся в режиме только чтения.</p></div>{marketLoading ? <div className="loading-box">Загружаем доступные интеграции…</div> : null}{marketError && !marketLoading ? <div className="recovery-box" role="alert"><p>{marketError}</p><button type="button" className="ghost" onClick={loadMarketplace}>Повторить загрузку</button></div> : null}{!marketLoading && !marketError ? <><div className="integration-section-head"><strong>Можно подключить сейчас</strong><span>{availableMarketplace.length}</span></div>{availableMarketplace.length ? <div className="integration-grid">{availableMarketplace.map((item) => <IntegrationCard item={item} selected={selectedProviders.includes(item.provider_key)} onToggle={toggleProvider} key={item.provider_key} />)}</div> : <p className="empty-state">Сейчас нет источников, готовых к подключению. Ниже можно посмотреть, что уже готовится.</p>}<p className="selection-count" aria-live="polite">Выбрано: <strong>{selectedProviders.length}</strong></p>{selectedProviders.length === 0 ? <p className="muted-text" role="status">Можно продолжить без источников: защищённый кабинет будет создан в режиме чтения. Подключить данные можно позже.</p> : null}{roadmapMarketplace.length ? <details className="roadmap-integrations"><summary><span>Что ещё готовится</span><strong>{roadmapMarketplace.length}</strong></summary><p>Эти интеграции уже есть в каталоге, но пока не доступны для подключения. Статус каждой берём напрямую из {PUBLIC_BRAND}.</p><div className="integration-grid roadmap-grid">{roadmapMarketplace.map((item) => <IntegrationCard item={item} selected={false} onToggle={toggleProvider} key={item.provider_key} />)}</div></details> : null}</> : null}</div> : null}
 
           {step === 3 ? <div className="step-content"><div className="section-heading"><p className="eyebrow">Шаг 4</p><h2>Сколько свободы дать системе?</h2><p>На старте система всё равно ничего не отправит и не изменит без проверки.</p></div><div className="autonomy-grid">{AUTONOMY.map((mode) => <button type="button" className={`autonomy-card ${form.autonomy_mode === mode.value ? "selected" : ""}`} aria-pressed={form.autonomy_mode === mode.value} onClick={() => setForm((prev) => ({ ...prev, autonomy_mode: mode.value }))} key={mode.value}><span className="mode-badge">{mode.badge}</span><strong>{mode.title}</strong><small>{mode.text}</small></button>)}</div><div className="launch-preview"><span>✓</span><div><strong>После создания кабинета</strong><p>Вы подключите один источник, получите первые реальные данные и сразу увидите подтверждённый результат.</p></div></div></div> : null}
 
           {error && savedIntakeId ? <div className="recovery-box" role="alert"><p>{error}</p><button type="button" className="ghost" disabled={loading} onClick={retrySavedWorkspace}>{loading ? "Открываем кабинет…" : "Повторить открытие кабинета"}</button></div> : error ? <div className="error-box" role="alert">{error}</div> : null}
-          <div className="navigation-row"><button type="button" className="ghost" disabled={step === 0 || loading} onClick={() => setStep((value) => Math.max(0, value - 1))}>Назад</button>{step < STEP_LABELS.length - 1 ? <button type="button" className="primary" disabled={!canContinue() || loading} onClick={() => setStep((value) => Math.min(STEP_LABELS.length - 1, value + 1))}>Продолжить →</button> : <button type="button" className="primary launch" disabled={!canContinue() || loading} onClick={finishOnboarding}>{loading ? "Создаём кабинет…" : "Создать мой BusinessAIOS →"}</button>}</div>
+          <div className="navigation-row"><button type="button" className="ghost" disabled={step === 0 || loading} onClick={() => setStep((value) => Math.max(0, value - 1))}>Назад</button>{step < STEP_LABELS.length - 1 ? <button type="button" className="primary" disabled={!canContinue() || loading} onClick={() => setStep((value) => Math.min(STEP_LABELS.length - 1, value + 1))}>Продолжить →</button> : <button type="button" className="primary launch" disabled={!canContinue() || loading} onClick={finishOnboarding}>{loading ? "Создаём кабинет…" : `Создать мой ${PUBLIC_BRAND} →`}</button>}</div>
         </section>
       </section>
-      <footer className="product-footer">BusinessAIOS · безопасная автоматизация бизнеса · изменения и отправки только после проверки</footer>
+      <footer className="product-footer">{PUBLIC_BRAND} · безопасная автоматизация бизнеса · изменения и отправки только после проверки</footer>
     </main>
   );
 }

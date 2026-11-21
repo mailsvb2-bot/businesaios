@@ -14,7 +14,7 @@ from typing import Any
 
 PUB_OPS = frozenset({"pub_create", "pub_register", "pub_links", "pub_live", "pub_verify"})
 # Real ad spend, business retirement and video: every op is owner-only (route flag) and OFF by default (dry run + event).
-SPEND_OPS = frozenset({"spend_prepare", "spend_consent", "spend_launch", "spend_stop", "spend_status", "spend_process",
+SPEND_OPS = frozenset({"spend_sync", "spend_prepare", "spend_consent", "spend_launch", "spend_stop", "spend_status", "spend_process",
                        "goal_preview", "retire", "retire_confirm", "retire_cancel", "restore", "video", "event_ads"})
 MEDIA_OPS = frozenset({"asset_set", "asset_show", "asset_send", "stage_visual", "gen", "email_connect", "email_verify",
                        "email_test", "adproject", "content_mode"}) | SPEND_OPS
@@ -410,6 +410,14 @@ class _ExecutorAdProvider:
         except (KeyError, TypeError, ValueError) as exc:
             raise sg.ProviderReadError("provider_readout_invalid") from exc
 
+    def list_campaigns(self) -> list[dict[str, str]]:
+        from application.business_flows import ad_spend_guard as sg
+
+        result = self._checked(self._act(
+            "list_campaigns", {"business_id": str(self._body.get("business_id") or "")},
+        ))
+        return sg.cabinet_rows(result)
+
     def _mutate(self, action: str, params: dict[str, Any], key: str) -> dict[str, Any]:
         out = self._act(action, params, key)
         return {"dry_run": True, "action": action} if out.get("status") == "dry_run" else self._checked(out)
@@ -480,6 +488,19 @@ def spend_op(op: str, arg: str, *, body: dict[str, Any], effects: Any, env: Any,
                 sg.consent_status(payloads, a) in {"launching", "active", "stopping"} else []
         return [{**f, "reason": reason} if f["step"] == "ad_spend_stop_queued" else f for f in out]
 
+    if op == "spend_sync":
+        if not sg.cabinet_refresh_enabled():
+            return put("Чтение рекламного кабинета выключено.", [])
+        if not str(body.get("business_id") or "").strip():
+            return put("Выберите бизнес для чтения рекламного кабинета.", [])
+        try:
+            rows = provider.list_campaigns()
+            fact = sg.cabinet_fact(business_id=business_id, at=now, rows=rows)
+            return put(f"🔄 Кабинет обновлён: кампаний {len(rows)}.", [fact])
+        except (sg.ProviderReadError, sg.SpendInvariantViolation) as exc:
+            code = str(getattr(exc, "code", "") or exc)[:60]
+            fact = sg.cabinet_fact(business_id=business_id, at=now, reason=code)
+            return put("⛔ Не удалось обновить рекламный кабинет.", [fact])
     if op == "spend_status":
         rows = sg.consent_view(payloads, auths.values())
         return put("💳 Разрешения на рекламу:\n" + ("\n".join(

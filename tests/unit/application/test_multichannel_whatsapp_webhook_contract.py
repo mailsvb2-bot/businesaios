@@ -23,7 +23,8 @@ def test_whatsapp_webhook_uses_app_secret_hmac_and_case_insensitive_header() -> 
     provider = provider_map()["whatsapp_cloud"]
     vault = InMemorySecretVault()
     _put(vault, provider, "app_secret", "app-secret")
-    body = b'{"object":"whatsapp_business_account"}'
+    _put(vault, provider, "phone_number_id", "phone-1")
+    body = b'{"object":"whatsapp_business_account","entry":[{"changes":[{"field":"messages","value":{"metadata":{"phone_number_id":"phone-1"},"messages":[{"from":"15550001","id":"wamid-1","text":{"body":"hello"}}]}}]}]}'
     signature = "sha256=" + hmac.new(b"app-secret", body, hashlib.sha256).hexdigest()
     runtime = ProviderWebhookRuntime(vault)
     assert runtime.describe(provider).verification_kind == "hmac_sha256_hex"
@@ -61,7 +62,6 @@ def test_every_messaging_provider_declares_truthful_inbound_mode() -> None:
 
 def test_meta_messaging_webhooks_support_native_hmac_and_challenge() -> None:
     providers = provider_map()
-    body = b'{"object":"page","entry":[]}'
     for provider_key in ("instagram_messaging", "messenger_messaging"):
         provider = providers[provider_key]
         fields = {field.secret_name: field for field in provider.secret_fields}
@@ -69,7 +69,10 @@ def test_meta_messaging_webhooks_support_native_hmac_and_challenge() -> None:
         assert fields["verify_token"].secret_kind == "config" and fields["verify_token"].required is False
         vault = InMemorySecretVault()
         _put(vault, provider, "app_secret", "meta-secret")
+        recipient_field = "ig_user_id" if provider_key == "instagram_messaging" else "page_id"
+        _put(vault, provider, recipient_field, "account-1")
         _put(vault, provider, "verify_token", "verify-meta")
+        body = b'{"object":"page","entry":[{"id":"account-1","messaging":[{"sender":{"id":"customer-1"},"message":{"mid":"message-1","text":"hello"}}]}]}'
         runtime = ProviderWebhookRuntime(vault)
         signature = "sha256=" + hmac.new(b"meta-secret", body, hashlib.sha256).hexdigest()
         assert runtime.describe(provider).verification_kind == "hmac_sha256_hex"
@@ -89,16 +92,19 @@ def test_meta_app_secret_read_failure_cannot_downgrade_to_bridge_secret() -> Non
     provider = provider_map()["messenger_messaging"]
     vault = _UnreadableAppSecretVault()
     _put(vault, provider, "webhook_secret", "bridge-secret")
+    _put(vault, provider, "page_id", "page-1")
     _put(vault, provider, "app_secret", "native-secret")
     runtime = ProviderWebhookRuntime(vault)
-    assert runtime.verify(provider=provider, tenant_id="tenant-a", business_id="business-a", headers={"X-BusinessAIOS-Webhook-Secret": "bridge-secret"}, body=b'{}') is False
+    body = b'{"object":"page","entry":[{"id":"page-1","messaging":[]}]}'
+    assert runtime.verify(provider=provider, tenant_id="tenant-a", business_id="business-a", headers={"X-BusinessAIOS-Webhook-Secret": "bridge-secret"}, body=body) is False
 
 def test_meta_native_secret_prevents_shared_bridge_bypass() -> None:
     provider = provider_map()["instagram_messaging"]
     vault = InMemorySecretVault()
     _put(vault, provider, "webhook_secret", "bridge-secret")
+    _put(vault, provider, "ig_user_id", "ig-account-1")
     runtime = ProviderWebhookRuntime(vault)
-    body = b'{"object":"instagram"}'
+    body = b'{"object":"instagram","entry":[{"id":"ig-account-1","messaging":[]}]}'
     assert runtime.verify(provider=provider, tenant_id="tenant-a", business_id="business-a", headers={"X-BusinessAIOS-Webhook-Secret": "bridge-secret"}, body=body) is True
     _put(vault, provider, "app_secret", "native-secret")
     assert runtime.verify(provider=provider, tenant_id="tenant-a", business_id="business-a", headers={"X-BusinessAIOS-Webhook-Secret": "bridge-secret"}, body=body) is False

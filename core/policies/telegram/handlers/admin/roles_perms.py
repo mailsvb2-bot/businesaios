@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from core.policies.telegram.context import TelegramCtx
+from core.users.roles import GRANTABLE_ROLES
 from core.policies.telegram.helpers import ProposedAction, propose
 from core.ux.telegram_keyboards import kb_back_main, kb_staff_menu
 
@@ -38,6 +39,11 @@ def handle_roles_perms(ctx: TelegramCtx, *, user_id: str, pm) -> ProposedAction 
     if not target.isdigit() or not item:
         return pm(text="Некорректные параметры.", reply_markup=kb_staff_menu())
 
+    if ctx.cmd.startswith("/role_") and str(item).lower() not in GRANTABLE_ROLES:
+        return pm(text="Неизвестная роль: допустимо owner, operator, marketer, admin.",
+                  reply_markup=kb_staff_menu())
+    if ctx.cmd.startswith("/role_"):
+        item = item.lower()
     enabled = ctx.cmd in {"/role_add", "/perm_add"}
     if ctx.cmd.startswith("/role_"):
         return propose(
