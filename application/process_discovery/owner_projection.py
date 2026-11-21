@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from .contracts import AgentBlueprint, AutomationOpportunity, ROIReport
+from .contracts import AgentBlueprint, AutomationOpportunity, ProcessBaseline, ROIReport
 
 
 def _money(minor: int | None, currency: str | None) -> dict[str, object] | None:
@@ -47,6 +47,13 @@ def blueprint_card(blueprint: AgentBlueprint) -> dict[str, object]:
     }
 
 
+def _period_card(period: ProcessBaseline) -> dict[str, object]:
+    return {"window_days": period.window_days, "observations": period.observation_count,
+            "manual_minutes_per_30d": period.manual_minutes_per_30d,
+            "realized_loss_per_30d": _money(period.realized_loss_minor_per_30d, period.currency),
+            "money_status": period.money_status.value, "confidence": period.confidence}
+
+
 def roi_card(report: ROIReport) -> dict[str, object]:
     return {
         "blueprint_id": report.blueprint_id,
@@ -60,6 +67,19 @@ def roi_card(report: ROIReport) -> dict[str, object]:
         "intervention_cost_per_30d": _money(report.intervention_cost_minor_per_30d, report.currency),
         "net_benefit_per_30d": _money(report.net_benefit_minor_per_30d, report.currency),
         "roi_ratio": report.roi_ratio,
+        "baseline": _period_card(report.baseline),
+        "after": _period_card(report.after),
+        "comparison_period": {
+            "baseline_start": report.baseline.window_start.isoformat(), "baseline_end": report.baseline.window_end.isoformat(),
+            "after_start": report.after.window_start.isoformat(), "after_end": report.after.window_end.isoformat(),
+        },
+        "measured_effect": {"manual_minutes_per_30d_before": report.baseline.manual_minutes_per_30d,
+                            "manual_minutes_per_30d_after": report.after.manual_minutes_per_30d,
+                            "manual_minutes_saved_per_30d": report.manual_minutes_saved_per_30d,
+                            "net_benefit_per_30d": _money(report.net_benefit_minor_per_30d, report.currency)},
+        "confidence": {"evidence_grade": report.evidence_grade.value, "comparison_design": report.design.value,
+                       "baseline_confidence": report.baseline.confidence, "after_confidence": report.after.confidence,
+                       "score": round(min(report.baseline.confidence, report.after.confidence), 4)},
         "causal_claim_allowed": False,
         "caveats": list(report.caveats),
         "copy": {

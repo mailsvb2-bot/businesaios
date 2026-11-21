@@ -310,16 +310,21 @@ def safe_contact(platform: str, *, username: str = "", subject: str = "", displa
     return f"{label}: {display_name}" if display_name else f"{label} подключён"
 
 
-def customers(slots: list[Any], archived: set[str] = frozenset(), query: str = "") -> list[tuple[str, int]]:
+def customers(slots: list[Any], archived: set[str] = frozenset(), query: str = "", sales: Any = None) -> list[tuple[str, int]]:
     """Distinct participants with booking counts, most active first (no contact data shown).
 
     Donor list/search_customers: archived customers are hidden; ``query`` matches the id fragment.
+    Customers who only wrote in (sales leads bound to a customer) are listed too.
     """
     counts: dict[str, int] = {}
     q = str(query or "").strip()
     for x in slots:
         if x.customer_id and x.customer_id not in archived and q in x.customer_id:
             counts[x.customer_id] = counts.get(x.customer_id, 0) + 1
+    for lead in (getattr(sales, "leads", None) or {}).values():
+        cid = getattr(lead, "customer_id", "")
+        if cid and cid not in archived and q in cid:
+            counts.setdefault(cid, 0)
     return sorted(counts.items(), key=lambda kv: (-kv[1], kv[0]))
 
 
@@ -405,7 +410,7 @@ def _extra_screen(a: str, parsed: Parsed, s: Snapshot) -> tuple[str, list[list[t
     if a == "customers":
         arch = getattr(adm, "archived_customers", set()) or set()
         query = next((x for x in parsed.args if not x.isdigit() or len(x) > 4), "")
-        people = customers(s.all_slots, arch, query)
+        people = customers(s.all_slots, arch, query, s.sales)
         if not people:
             return "👥 Клиенты\n\n" + ("Никого не найдено." if query else "Пока никто не записывался."), []
         page = page_number(tuple(x for x in parsed.args if x != query))
@@ -420,7 +425,8 @@ def _extra_screen(a: str, parsed: Parsed, s: Snapshot) -> tuple[str, list[list[t
             raise ValueError("customer id")
         cid = parsed.args[0]
         mine = [x for x in s.all_slots if x.customer_id == cid]
-        if not mine:
+        deals = _cs.customer_leads(s.sales, cid)
+        if not mine and not deals:
             raise ValueError("unknown customer")
         consent = getattr(ser, "consent", {}).get(cid)
         att = getattr(ser, "attendance", {}) or {}
@@ -436,7 +442,10 @@ def _extra_screen(a: str, parsed: Parsed, s: Snapshot) -> tuple[str, list[list[t
         head = f"👤 Клиент {cid[-6:]}\n\n" + (f"Контакт: {contact}\n" if contact else "")
         nxt = f"\n\n▶️ Сейчас: {act.title} — {act.reason}" if act else ""
         buttons = [("🕓 История", f"cpm:cust-time:{cid[:40]}")] + ([(f"▶️ {act.title}"[:60], act.cmd)] if act else [])
-        return head + f"Согласие на предложения: {flag}\n" + "\n".join(rows) + nxt, _rows(*buttons)
+        buttons += [(f"💬 {x.name}"[:40], f"cpm:sales-lead:{x.lead_id}") for x in deals[:4]]
+        sales_block = _cs.customer_sales_lines(deals, now_ms=s.now_ms)
+        return (head + f"Согласие на предложения: {flag}\n" + "\n".join(rows or ["Записей нет."]) + sales_block + nxt,
+                _rows(*buttons))
     if a == "cust-time":
         from application.business_flows import customer_timeline as ct
 

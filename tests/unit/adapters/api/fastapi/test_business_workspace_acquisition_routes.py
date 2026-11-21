@@ -64,11 +64,11 @@ def test_acquisition_plan_uses_session_scope_and_canonical_solver(monkeypatch) -
 
     monkeypatch.setattr(acquisition_routes, 'json_body', fake_json_body)
     result = asyncio.run(_route(router)(object()))
-    assert result['tenant_id'] == 'tenant-session'
-    assert result['business_id'] == 'business-session'
-    assert result['assumption_source'] == 'owner_input'
-    assert result['calculation_only'] is True
+    assert (result['tenant_id'], result['business_id']) == ('tenant-session', 'business-session')
+    assert (result['assumption_source'], result['calculation_only']) == ('owner_input', True)
     assert result['write_actions_enabled'] is False
+    assert result['ad_provider_capability_ready'] is False
+    assert result['ad_provider_truth']['yandex_direct']['production_ready'] is False
     assert result['plan']['feasible'] is True
     assert result['plan']['achievable_customers'] >= 10
     assert result['economics']['overall_conversion_rate'] == 0.5
@@ -93,3 +93,31 @@ def test_acquisition_plan_rejects_invalid_or_overflowing_payload(monkeypatch) ->
 def test_acquisition_plan_json_projection_is_safe_for_unbounded_timeline() -> None:
     assert acquisition_routes._json_safe(float('inf')) is None
     assert acquisition_routes._json_safe({'days': float('-inf'), 'rows': (1, 2)}) == {'days': None, 'rows': [1, 2]}
+
+
+def test_p2_promotion_launch_is_opt_in_and_apply_is_always_blocked(monkeypatch) -> None:
+    from fastapi import FastAPI
+    from fastapi.testclient import TestClient
+
+    router = APIRouter()
+    acquisition_routes.register_business_workspace_acquisition_routes(router=router, auth_bundle=object())
+    app = FastAPI()
+    app.include_router(router)
+    monkeypatch.setattr(acquisition_routes, 'business_owner_scope',
+                        lambda **_: (_principal(), 'tenant-session', 'business-session'))
+    payload = {key: value for key, value in _payload().items() if key not in ('tenant_id', 'business_id')}
+    client = TestClient(app)
+    monkeypatch.delenv('BAI_PROMOTION_LAUNCH_ENABLED', raising=False)
+    assert client.post('/business-workspace/acquisition-plan/launch', json={'plan_input': payload}).status_code == 404
+    monkeypatch.setenv('BAI_PROMOTION_LAUNCH_ENABLED', '1')
+    result = client.post('/business-workspace/acquisition-plan/launch', json={'plan_input': payload})
+    assert result.status_code == 200
+    data = result.json()
+    assert data['tenant_id'] == 'tenant-session' and data['business_id'] == 'business-session'
+    assert data['mode'] == 'dry_run' and not data['spend_authorized'] and not data['provider_contacted']
+    assert 'provider_production_ready' in data['blockers']
+    blocked = client.post('/business-workspace/acquisition-plan/launch',
+                          json={'plan_input': payload, 'mode': 'apply'})
+    assert blocked.status_code == 409 and blocked.json()['detail']['error'] == 'promotion_apply_blocked'
+    assert client.post('/business-workspace/acquisition-plan/launch',
+                       json={'plan_input': payload, 'mode': 'unknown'}).status_code == 422

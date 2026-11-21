@@ -103,7 +103,7 @@ def test_vk_lifecycle_lease_failure_and_inbound() -> None:
     conf = json.dumps({"type": "confirmation", "group_id": 42}).encode()
     assert rt.response_body(provider=vk, **SC, body=conf) == "abc123"
     bad = json.dumps({"type": "message_new", "secret": "x"}).encode()
-    good = json.dumps({"type": "message_new", "secret": secret}).encode()
+    good = json.dumps({"type": "message_new", "group_id": 42, "secret": secret}).encode()
     assert not rt.verify(provider=vk, **SC, headers={}, body=bad)
     assert rt.verify(provider=vk, **SC, headers={}, body=good)
 
@@ -118,8 +118,9 @@ def test_max_provision_and_secret_header() -> None:
     vault, mx = InMemorySecretVault(), provider_map()["max_messaging"]
     persist_route_secrets(vault, platform="max", **SC, webhook_secret=nc.webhook_secret(KEY, rid))
     rt = ProviderWebhookRuntime(secret_vault=vault)
-    assert not rt.verify(provider=mx, **SC, headers={"X-Max-Bot-Api-Secret": "no"}, body=b"{}")
-    assert rt.verify(provider=mx, **SC, headers={"X-Max-Bot-Api-Secret": nc.webhook_secret(KEY, rid)}, body=b"{}")
+    body = b'{"update_type":"bot_started","chat_id":700,"user":{"user_id":42}}'
+    assert not rt.verify(provider=mx, **SC, headers={"X-Max-Bot-Api-Secret": "no"}, body=body)
+    assert rt.verify(provider=mx, **SC, headers={"X-Max-Bot-Api-Secret": nc.webhook_secret(KEY, rid)}, body=body)
 
 
 def test_open_channel_promotion() -> None:

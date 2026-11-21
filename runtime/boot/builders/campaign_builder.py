@@ -27,10 +27,7 @@ is upgraded to LLMCreativeGenerator — AI generates headline, copy, and
 targeting interests instead of a hardcoded template.
 """
 
-
-
 logger = logging.getLogger(__name__)
-
 
 def build_autopilot_campaign_builder(
     *,
@@ -45,8 +42,12 @@ def build_autopilot_campaign_builder(
                     interests.  Without it, the deterministic fallback is used.
     """
     llm_enabled = env_bool("LLM_ENABLED") or env_bool("LLM_MARKETING_ENABLED")
-
     creative_gen: Any
+    if llm_client is not None and llm_enabled:
+        from runtime.llm.accounted_gateway import AccountedSyncGateway
+        if not isinstance(llm_client, AccountedSyncGateway):
+            logger.warning("[campaign_builder] unaccounted LLM client refused")
+            llm_client = None
     if llm_client is not None and llm_enabled:
         try:
             from runtime.creative import LLMCreativeGenerator
@@ -76,7 +77,6 @@ def build_autopilot_campaign_builder(
                 "[campaign_builder] LLM disabled — using deterministic CreativeGenerator. "
                 "Set LLM_ENABLED=1 to enable AI-generated ad creative."
             )
-
     traffic = TrafficStrategyService(
         campaign_factory=CampaignFactory(),
         audience_selector=AudienceSelector(),

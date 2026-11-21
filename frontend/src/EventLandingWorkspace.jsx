@@ -2,6 +2,7 @@ import { useRef, useState } from "react";
 import { EventLandingPreview } from "./PublicEventLanding.jsx";
 import "./EventLandingWorkspace.css";
 
+const PUBLIC_BRAND = import.meta.env.VITE_BAI_PUBLIC_BRAND_CLIENTPLATFORM === "true" ? "ClientPlatform" : "BusinessAIOS";
 const START_CONTENT = {
   eyebrow: "Онлайн-мероприятие",
   hero_title: "",
@@ -132,7 +133,7 @@ export function EventLandingWorkspace({ apiBase, tenantId, businessId, apiKey, g
       setEditor(asEditor(result.draft));
       setDirty(false);
       pending.current = null;
-      setNotice("Черновик и статус публикации загружены из BusinessAIOS.");
+      setNotice("Черновик и статус публикации загружены из " + PUBLIC_BRAND + ".");
     } catch (reason) {
       if (reason.httpStatus === 404) {
         setSnapshot(null);

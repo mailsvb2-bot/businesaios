@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 from typing import Any
 
 
@@ -38,13 +39,43 @@ def pending_rows(*, request_id: str) -> list[list[dict[str, str]]]:
 
 
 
-def pricing_edit_request_payload(*, user_id: str, plan_id: int, callback_query_id: str | None) -> dict[str, Any]:
+def pricing_request_id(*, admin_id: str, plan_id: int, new_price: int, nonce: str) -> str:
+    """Stable across inbox retry, distinct for a fresh confirmed edit session."""
+    raw = f"pricing-request|{admin_id}|{int(plan_id)}|{int(new_price)}|{nonce}".encode()
+    return "pr-" + hashlib.sha256(raw).hexdigest()[:32]
+
+
+def pricing_change_request_payload(*, admin_id: str, plan_id: int, new_price: int,
+                                   nonce: str, suggested_pricing_version: str = "",
+                                   reason: str = "", callback_query_id: str | None = None) -> dict[str, Any]:
+    rid = pricing_request_id(admin_id=admin_id, plan_id=plan_id, new_price=new_price, nonce=nonce)
+    result: dict[str, Any] = {
+        "admin_id": str(admin_id), "plan_id": int(plan_id),
+        "new_price": int(new_price), "request_id": rid,
+        "notify_text": (
+            f"📝 Запрос на изменение цены создан: тариф #{plan_id} → {new_price}₽.\\n"
+            f"request_id: {rid}\\nДругой администратор должен подтвердить изменение."
+        ),
+        "notify_reply_markup": back_markup("admin:pricing:pending"),
+    }
+    if suggested_pricing_version:
+        result["suggested_pricing_version"] = suggested_pricing_version[:64]
+    if reason:
+        result["reason"] = reason[:256]
+    if callback_query_id:
+        result["callback_query_id"] = callback_query_id
+    return result
+
+
+def pricing_edit_request_payload(*, user_id: str, plan_id: int, callback_query_id: str | None,
+                                 nonce: str = "") -> dict[str, Any]:
     payload = pricing_session_payload(
         user_id=user_id,
         stage="await_price",
         callback_query_id=callback_query_id,
         back_to="admin:pricing:menu",
         plan_id=int(plan_id),
+        nonce=str(nonce or callback_query_id or ""),
     )
     payload["notify_text"] = (
         f"💸 Изменение цены для тарифа #{int(plan_id)}.\n\n"

@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from core.policies.telegram.context import TelegramCtx
+from core.policies.telegram.context import TelegramCtx, policy_scope
 from core.policies.telegram.helpers import ProposedAction, propose, propose_message
 from core.ux.callbacks import (
     CB_GROWTH_ACCEPT_PREFIX,
@@ -18,7 +18,12 @@ def _scope(ctx: TelegramCtx) -> tuple[str, str]:
     semantics = getattr(state, "world_model_semantics", None)
     business_id = str(getattr(semantics, "business_id", "") or "").strip()
     semantic_tenant = str(getattr(semantics, "tenant_id", "") or "").strip()
-    return tenant_id, business_id if business_id and semantic_tenant == tenant_id else ""
+    if semantics is not None:
+        return tenant_id, business_id if business_id and semantic_tenant == tenant_id else ""
+    # No synthesized snapshot yet: the canonical policy scope (product.business_id,
+    # bound by the entrypoint and re-bound by DecisionCore; the world model already
+    # rejects a semantic view of another business).
+    return tenant_id, policy_scope(ctx).business_id
 
 
 def handle_growth_strategy(ctx: TelegramCtx, *, user_id: str) -> ProposedAction | None:
@@ -29,12 +34,17 @@ def handle_growth_strategy(ctx: TelegramCtx, *, user_id: str) -> ProposedAction 
         return propose_message(user_id=user_id, text="Сначала выбери бизнес в рабочем пространстве.", callback_query_id=ctx.callback_query_id)
 
     if cb == CB_GROWTH_MENU:
-        return propose_message(user_id=user_id, text="🧠 AI Growth Strategy", reply_markup=kb_growth_menu())
+        return propose_message(user_id=user_id, text=(
+            "📈 Стратегия роста\n\n"
+            "ИИ предлагает гипотезы роста по данным вашего бизнеса. Вы решаете, какие принять в работу, "
+            "а какие отклонить. Генерация расходует ИИ-бюджет и учитывается в лимитах."
+        ), reply_markup=kb_growth_menu(), callback_query_id=ctx.callback_query_id)
 
     if cb == CB_GROWTH_GENERATE:
         return propose(
             "growth_strategy_generate@v1",
-            {"user_id": user_id, "tenant_id": tenant_id, "business_id": business_id, "idempotency_key": str((ctx.state.meta or {}).get("correlation_key") or "growth:generate")},
+            {"user_id": user_id, "tenant_id": tenant_id, "business_id": business_id, "idempotency_key": str((ctx.state.meta or {}).get("correlation_key")
+                                   or f"growth:generate:{ctx.callback_query_id or ctx.state.timestamp_ms}")},
         )
 
     if cb == CB_GROWTH_BACKLOG:

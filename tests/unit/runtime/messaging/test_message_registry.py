@@ -247,7 +247,7 @@ def test_provider_ingress_records_message_before_processor(monkeypatch) -> None:
         replay_guard=ProviderWebhookReplayGuard(InMemoryIdempotencyStore()),
         inbound_processor=_Processor(), message_registry=_Registry(),
     )
-    body = b'{"message":{"from":{"id":42},"text":"hello","message_id":9},"update_id":123}'
+    body = b'{"message":{"from":{"id":42},"chat":{"id":42},"text":"hello","message_id":9},"update_id":123}'
     out = service.ingest(
         provider=provider_map()["telegram_bot"], tenant_id="tenant-a", business_id="business-a",
         headers={}, body=body, event_key="evt-message", topic="telegram_update", owner_id="provider_admin",
@@ -279,7 +279,7 @@ def test_provider_ingress_message_persistence_failure_blocks_processor(monkeypat
         replay_guard=ProviderWebhookReplayGuard(InMemoryIdempotencyStore()),
         inbound_processor=_Processor(), message_registry=_Registry(),
     )
-    body = b'{"message":{"from":{"id":42},"text":"hello","message_id":9},"update_id":123}'
+    body = b'{"message":{"from":{"id":42},"chat":{"id":42},"text":"hello","message_id":9},"update_id":123}'
     with pytest.raises(RuntimeError, match="message_store_failed"):
         service.ingest(
             provider=provider_map()["telegram_bot"], tenant_id="tenant-a", business_id="business-a",

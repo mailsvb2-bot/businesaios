@@ -85,3 +85,24 @@ def test_catalog_assembly_fails_closed_on_registry_drift(monkeypatch) -> None:
         match=r"ACTION_SCHEMA_CATALOG_DRIFT:.*uncontracted_action@v1",
     ):
         catalog_module.build_catalog()
+
+
+
+@pytest.mark.lock
+def test_callback_query_id_and_idempotency_key_are_typed_reserved_fields() -> None:
+    schema = DecisionSchema(
+        required={"tenant_id"},
+        optional=set(),
+        field_types={"tenant_id": str},
+    )
+    schema.validate({
+        "tenant_id": "tenant-live",
+        "callback_query_id": "callback-12",
+        "idempotency_key": "telegram:0123456789abcdef",
+    })
+    with pytest.raises(ValueError, match="BAD_PAYLOAD_TYPE"):
+        schema.validate({"tenant_id": "tenant-live", "callback_query_id": 12})
+    with pytest.raises(ValueError, match="BAD_PAYLOAD_TYPE"):
+        schema.validate({"tenant_id": "tenant-live", "idempotency_key": None})
+    with pytest.raises(ValueError, match="UNKNOWN_PAYLOAD_KEYS:forged"):
+        schema.validate({"tenant_id": "tenant-live", "forged": True})

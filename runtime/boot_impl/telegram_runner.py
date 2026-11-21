@@ -25,7 +25,6 @@ log = logging.getLogger("runtime.telegram")
 def maybe_autostart_yookassa_webhook(
     *,
     event_store,
-    event_log,
     payment_outbox,
 ) -> bool:
     """Start YooKassa webhook server from ENV (best-effort)."""
@@ -50,8 +49,6 @@ def maybe_autostart_yookassa_webhook(
             env_str(prefix + "AUTH_MODE", "token").strip().lower()
             or "token"
         )
-        wh_user = env_str(prefix + "BASIC_USER").strip()
-        wh_pass = env_str(prefix + "BASIC_PASS").strip()
         wh_tok = env_str(prefix + "TOKEN").strip()
 
         start_yookassa_webhook_server_in_thread(
@@ -59,11 +56,8 @@ def maybe_autostart_yookassa_webhook(
             port=int(wh_port),
             path=wh_path,
             auth_mode=wh_auth,
-            basic_user=wh_user,
-            basic_pass=wh_pass,
-            token=wh_tok,
+            webhook_token=wh_tok,
             event_store=event_store,
-            event_log=event_log,
             payment_outbox=payment_outbox,
         )
         return True
@@ -178,7 +172,6 @@ def run_telegram(
 
     maybe_autostart_yookassa_webhook(
         event_store=event_store,
-        event_log=event_log,
         payment_outbox=payment_outbox,
     )
 

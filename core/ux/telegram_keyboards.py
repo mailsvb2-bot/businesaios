@@ -50,7 +50,7 @@ from core.ux.keyboards.settings import (
 )
 
 
-def kb_ai_ceo_menu() -> dict:
+def kb_ai_ceo_menu(*, can_run: bool = True) -> dict:
     from core.ux.telegram_keyboards_ai_ceo import kb_ai_ceo_menu as _kb_ai_ceo_menu
 
-    return _kb_ai_ceo_menu(can_run=True)
+    return _kb_ai_ceo_menu(can_run=can_run)

@@ -46,6 +46,9 @@ def build_runtime_services(*, ctx, stack, base, storage, repo_root, model_regist
     for key, value in durable_services.items():
         ctx.set_value(key, value, min_phase=BootPhase.P30_STORES)
 
+    # The existing OrganizationRegistry uses the canonical tenant data root for durable dedupe.
+    ctx.set_value('organization_idempotency_path', str(Path(base) / 'organization-idempotency.jsonl'), min_phase=BootPhase.P30_STORES)
+
     from runtime.governance import assert_governance_event_store_contract
     from runtime.wiring import build_behavior_graph_store
 

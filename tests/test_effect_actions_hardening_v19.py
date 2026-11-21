@@ -128,3 +128,75 @@ def test_send_audio_uses_audio_url_contract(monkeypatch):
         )
     assert out["ok"] is True
     assert any(e["event_type"] == "audio_sent" for e in fx.event_log.events)
+
+LLMEffectsMixin = import_module("runtime._internal.effects_actions.llm_actions").LLMEffectsMixin
+
+
+class _Marketing(_EffectsBase, LLMEffectsMixin):
+    def __init__(self, result=None, *, raise_error=False):
+        super().__init__()
+        self.result = result
+        self.raise_error = raise_error
+        self.sent = []
+
+    def marketing_llm_complete(self, **kwargs):
+        if self.raise_error:
+            raise RuntimeError("provider unavailable")
+        return self.result
+
+    def send_message(self, **kwargs):
+        self.sent.append(kwargs)
+        return {"ok": True}
+
+
+def _marketing_message_kwargs():
+    return {
+        "decision_id": "d-marketing",
+        "correlation_id": "c-marketing",
+        "user_id": "customer-1",
+        "prompt": "INTERNAL PROMPT: send this raw text to the customer",
+    }
+
+
+def test_marketing_effect_never_sends_raw_prompt_when_budget_blocks_llm():
+    fx = _Marketing({"ok": False, "error": "LLM_BUDGET_BLOCKED"})
+    with executor_context():
+        out = fx.compose_marketing_message(**_marketing_message_kwargs())
+    assert out == {"ok": False, "error": "LLM_BUDGET_BLOCKED"}
+    assert fx.sent == []
+
+
+def test_marketing_effect_never_sends_raw_prompt_when_provider_raises():
+    fx = _Marketing(raise_error=True)
+    with executor_context():
+        out = fx.compose_marketing_message(**_marketing_message_kwargs())
+    assert out == {"ok": False, "error": "LLM_GENERATION_UNAVAILABLE"}
+    assert fx.sent == []
+
+
+def test_marketing_effect_never_sends_empty_or_unverified_llm_text():
+    fx = _Marketing({"ok": True, "text": "  "})
+    with executor_context():
+        out = fx.compose_marketing_message(**_marketing_message_kwargs())
+    assert out == {"ok": False, "error": "LLM_GENERATION_UNAVAILABLE"}
+    assert fx.sent == []
+
+
+def test_marketing_effect_sends_only_verified_generated_text():
+    fx = _Marketing({"ok": True, "text": "Approved customer-facing copy"})
+    with executor_context():
+        out = fx.compose_marketing_message(**_marketing_message_kwargs())
+    assert out == {"ok": True}
+    assert len(fx.sent) == 1
+    assert fx.sent[0]["text"] == "Approved customer-facing copy"
+
+def test_marketing_effect_rejects_malformed_success_and_non_string_text():
+    for result in (
+        {"ok": "true", "text": "unverified"},
+        {"ok": True, "text": 123},
+    ):
+        fx = _Marketing(result)
+        with executor_context():
+            out = fx.compose_marketing_message(**_marketing_message_kwargs())
+        assert out == {"ok": False, "error": "LLM_GENERATION_UNAVAILABLE"}
+        assert fx.sent == []

@@ -75,6 +75,46 @@ def register_business_workspace_commercial_routes(*, router: APIRouter, auth_bun
             if lead.customer_id and lead.conversation_id and lead.channel
         ]}
 
+    @router.get("/business-workspace/commercial/ad-cabinet", tags=["business-workspace"])
+    async def read_ad_cabinet(request: Request):
+        from application.business_flows import ad_spend_guard as sg
+        from application.business_flows import event_series as es
+        from application.business_flows.projection import flow_payloads
+
+        store = getattr(provider_handlers, "customer_event_store", None)
+        if not sg.cabinet_refresh_enabled() or store is None:
+            raise HTTPException(status_code=404, detail="ad_cabinet_refresh_disabled")
+        tenant, business = scope(request)
+        facts = es.expand(flow_payloads(store, tenant_id=tenant, event_type="event_series@v1"))
+        return {"tenant_id": tenant, "business_id": business,
+                "cabinet": sg.cabinet_view(facts, business_id=business),
+                "sync_action": {"endpoint": "/actions/execute", "action_type": "event_series@v1",
+                                "op": "spend_sync", "business_id": business},
+                "mutations_allowed": False}
+
+    @router.get("/business-workspace/sales/legacy-quarantine", tags=["business-workspace"])
+    async def read_legacy_sales_quarantine(request: Request):
+        from application.business_flows.projection import (
+            flow_payloads,
+            legacy_quarantine,
+            legacy_quarantine_enabled,
+        )
+
+        store = getattr(provider_handlers, "customer_event_store", None)
+        if not legacy_quarantine_enabled() or store is None:
+            raise HTTPException(status_code=404, detail="sales_legacy_quarantine_disabled")
+        tenant, business = scope(request)
+        facts = flow_payloads(store, tenant_id=tenant, event_type="sales_pipeline@v1")
+        # Legacy records have no trustworthy business identity. Never leak
+        # their opaque lead IDs into a business-specific owner workspace.
+        pending = legacy_quarantine(facts)
+        return {"tenant_id": tenant, "business_id": business,
+                "quarantined_count": len(pending),
+                "quarantined": [],
+                "action_type": "sales_pipeline@v1", "op": "legacy_attribute",
+                "migration_requires_tenant_admin_review": True,
+                "reason": "legacy_sales_business_ownership_unverified"}
+
     @router.post("/business-workspace/commercial/partner-opportunities/prepare", tags=["business-workspace"])
     async def prepare_partner_campaign_proposal(request: Request):
         """Generate an owner-reviewable proposal, never dispatch partner outreach."""
@@ -497,7 +537,16 @@ def _order_status(purchases, tenant, business, order_id, *, checkout=None):
                 tenant_id=tenant, business_id=business, invoice_id=invoice.invoice_id,
                 provider_name=saved.provider_name, external_reference=saved.external_reference,
             )
+    from config.env_flags import env_bool
+    story = {}
+    if env_bool("BAI_ORDER_PAYMENT_STORY_ENABLED", False):
+        opened = checkout is not None and checkout._saved(
+            tenant_id=tenant, business_id=business, order_id=order_id) is not None
+        story = {"story": _order_story(order_status=order.lifecycle_status.value, invoice_status=invoice.status.value,
+                                       amount_minor=invoice.total_minor, paid_minor=invoice.paid_minor,
+                                       checkout_opened=opened, provider_verified=verified)}
     return {
+        **story,
         "order_id": order_id, "status": order.lifecycle_status.value,
         "invoice_id": invoice.invoice_id, "invoice_status": invoice.status.value,
         "amount_minor": invoice.total_minor, "paid_minor": invoice.paid_minor,
@@ -506,5 +555,33 @@ def _order_status(purchases, tenant, business, order_id, *, checkout=None):
         "program_id": link["program_id"],
         "provider_verified": verified,
     }
+
+def _order_story(*, order_status: str, invoice_status: str, amount_minor: int, paid_minor: int,
+                 checkout_opened: bool, provider_verified: bool) -> dict:
+    """Read-only canonical order+invoice+PSP history; unverified paid invoices are not revenue."""
+    issued = invoice_status in {"issued", "partially_paid", "paid", "void", "credited", "uncollectible"}
+    steps = [
+        ("inquiry", True), ("order_created", True), ("invoice_issued", issued),
+        ("checkout_opened", bool(checkout_opened)), ("payment_received", paid_minor > 0),
+        ("paid_in_full", invoice_status == "paid" and paid_minor == amount_minor),
+        ("provider_verified", bool(provider_verified)),
+    ]
+    verified_full = bool(provider_verified) and invoice_status == "paid" and amount_minor > 0 and paid_minor == amount_minor
+    if invoice_status in {"void", "credited", "uncollectible"} or order_status not in {"active", "fulfilled"}:
+        state = "closed_without_revenue" if not provider_verified else "reversed"
+    elif verified_full:
+        state = "revenue_confirmed"
+    elif invoice_status == "paid":
+        state = "needs_reconciliation"
+    elif paid_minor > 0:
+        state = "partially_paid"
+    elif checkout_opened:
+        state = "awaiting_payment"
+    else:
+        state = "awaiting_checkout" if issued else "draft"
+    return {"state": state, "steps": [{"step": name, "done": done} for name, done in steps],
+            "counts_as_revenue": bool(provider_verified) and state == "revenue_confirmed",
+            "ledger_source": "billing.invoice_registry"}
+
 
 __all__ = ["register_business_workspace_commercial_routes", "CANON_PHASE18_COMMERCIAL_OWNER_API"]

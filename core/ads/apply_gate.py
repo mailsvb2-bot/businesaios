@@ -28,68 +28,49 @@ class AdsApplyState:
     def from_settings(settings: Mapping[str, Any] | None) -> AdsApplyState:
         if not isinstance(settings, Mapping):
             return AdsApplyState(False)
-        try:
-            enabled = bool(settings.get(ADS_APPLY_SETTING_KEY) or False)
-            since_ms = int(settings.get(ADS_APPLY_ENABLED_SINCE_MS_KEY) or 0)
-            return AdsApplyState(enabled, since_ms)
-        except Exception:
-            return AdsApplyState(False)
+        raw = settings.get(ADS_APPLY_SETTING_KEY)
+        if isinstance(raw, Mapping):
+            # The single canonical settings write keeps the flag and timestamp
+            # atomic. A malformed value must never implicitly enable Ads Apply.
+            enabled = raw.get("enabled") is True
+            timestamp = raw.get("since_ms")
+        else:
+            # Read compatibility for existing persisted boolean settings.
+            enabled = raw is True
+            timestamp = settings.get(ADS_APPLY_ENABLED_SINCE_MS_KEY)
+        since_ms = timestamp if type(timestamp) is int and timestamp >= 0 else 0
+        return AdsApplyState(enabled, since_ms if enabled else 0)
 
 
-def build_enable_ads_apply_plan(*, user_id: str, callback_query_id: str | None = None) -> dict[str, Any]:
-    now_ms = int(time.time() * 1000)
-    steps = [
-        {
-            "action": "set_user_setting@v1",
-            "payload": {"user_id": str(user_id), "key": ADS_APPLY_SETTING_KEY, "value": True},
-        },
-        {
-            "action": "set_user_setting@v1",
-            "payload": {"user_id": str(user_id), "key": ADS_APPLY_ENABLED_SINCE_MS_KEY, "value": int(now_ms)},
-        },
-        {
-            "action": "emit_event@v1",
-            "payload": {
-                "user_id": str(user_id),
-                "event_type": "ads_apply_enabled@v1",
-                "payload": {"since_ms": int(now_ms)},
-                "source": "ads",
-            },
-        },
-        {
-            "action": "send_message@v1",
-            "payload": {
-                "user_id": str(user_id),
-                "text": "✅ Применение рекламных изменений разрешено.\n\nПо умолчанию всё равно используется dry-run, пока не появится конкретный план применения.",
-                "reply_markup": {"inline_keyboard": [[{"text": "⬅️ Назад", "callback_data": "ads:apply:menu"}]]},
-                "callback_query_id": callback_query_id,
-            },
-        },
-    ]
-    return {"user_id": str(user_id), "steps": steps}
-
-
-def build_disable_ads_apply_plan(*, user_id: str, callback_query_id: str | None = None) -> dict[str, Any]:
-    steps = [
-        {
-            "action": "set_user_setting@v1",
-            "payload": {"user_id": str(user_id), "key": ADS_APPLY_SETTING_KEY, "value": False},
-        },
-        {
-            "action": "emit_event@v1",
-            "payload": {"user_id": str(user_id), "event_type": "ads_apply_disabled@v1", "payload": {}, "source": "ads"},
-        },
-        {
-            "action": "send_message@v1",
-            "payload": {
-                "user_id": str(user_id),
-                "text": "🛑 Применение рекламных изменений отключено. (Dry-run остаётся доступным.)",
-                "reply_markup": {"inline_keyboard": [[{"text": "⬅️ Назад", "callback_data": "ads:apply:menu"}]]},
-                "callback_query_id": callback_query_id,
-            },
-        },
-    ]
-    return {"user_id": str(user_id), "steps": steps}
+def build_ads_apply_toggle_action(
+    *, user_id: str, enabled: bool, callback_query_id: str | None = None,
+    now_ms: int | None = None,
+) -> dict[str, Any]:
+    """One signed settings action; no noncanonical inline effect plan."""
+    if type(enabled) is not bool:
+        raise ValueError("ads_apply_boolean_required")
+    current_ms = int(time.time() * 1000) if now_ms is None else int(now_ms)
+    if current_ms < 0:
+        raise ValueError("ads_apply_time_invalid")
+    message = (
+        "✅ Применение рекламных изменений разрешено.\n\n"
+        "Глобальный операторский выключатель и лимиты продолжают действовать. "
+        "Без подтверждённого плана изменения не применяются."
+        if enabled else
+        "🛑 Применение рекламных изменений отключено. Dry-run остаётся доступным."
+    )
+    payload: dict[str, Any] = {
+        "user_id": str(user_id),
+        "key": ADS_APPLY_SETTING_KEY,
+        "value": {"enabled": enabled, "since_ms": current_ms if enabled else 0},
+        "notify_text": message,
+        "notify_reply_markup": {"inline_keyboard": [[
+            {"text": "⬅️ Назад", "callback_data": "ads:apply:menu"},
+        ]]},
+    }
+    if callback_query_id:
+        payload["callback_query_id"] = str(callback_query_id)
+    return payload
 
 
 def assert_ads_apply_allowed(

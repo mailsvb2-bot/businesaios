@@ -59,6 +59,6 @@ def test_offer_outcome_uses_unknown_tenant_when_state_has_placeholder():
     })()
     proposed = handle_offer_outcome(ctx, user_id="u1", default_price_rub=600)
     assert proposed is not None
-    steps = proposed["steps"]
-    track_step = next(s for s in steps if s.get("action") == "track_event@v1")
-    assert track_step["payload"]["tenant_id"] == UNKNOWN_TENANT_ID
+    assert proposed.action == "send_message@v1"
+    assert proposed.payload["track_payload"]["tenant_id"] == UNKNOWN_TENANT_ID
+    assert proposed.payload["track_payload"]["payment_confirmed"] is False

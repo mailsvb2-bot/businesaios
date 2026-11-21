@@ -59,13 +59,15 @@ class ProviderWebhookRouteRegistry:
         event_hint = str(normalized_payload.get('event_key_hint') or '')
         event_key = (event_hint or self._first(normalized_headers, route['event_key_headers'])) if provider.provider_key in {'line_messaging', 'viber_messaging'} else (self._first(normalized_headers, route['event_key_headers']) or event_hint)
         event_key = event_key or f"{provider.provider_key}:{hashlib.sha256(bytes(body)).hexdigest()[:24]}"
+        ingress = messaging_ingress_to_metadata(resolve_provider_webhook_messaging_ingress(provider=provider, normalized_payload=raw_payload))
         return {
             'event_key': event_key,
             'topic': self._first(normalized_headers, route['topic_headers']) or str(normalized_payload.get('topic') or ''),
             'source_ref': self._first(normalized_headers, route.get('source_headers', ())) or str(normalized_payload.get('source_ref') or ''),
             'resource_id': str(normalized_payload.get('resource_id') or ''),
             'payload_digest': hashlib.sha256(bytes(body)).hexdigest(),
-            'messaging_ingress': messaging_ingress_to_metadata(resolve_provider_webhook_messaging_ingress(provider=provider, normalized_payload=raw_payload)),
+            'messaging_ingress': ingress,
+            'external_user_ref': ingress.get('external_user_ref') or None,
         }
 
     @staticmethod
