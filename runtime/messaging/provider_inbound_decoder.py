@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import json
-
 from collections import deque
 from collections.abc import Mapping, Sequence
 from datetime import UTC, datetime
@@ -26,6 +25,8 @@ _PROVIDER_PATHS: dict[str, dict[str, tuple[FieldPath, ...]]] = {
             ("message", "chat", "id"),
             ("callback_query", "message", "chat", "id"),
             ("edited_message", "chat", "id"),
+            ("channel_post", "chat", "id"),
+            ("edited_channel_post", "chat", "id"),
         ),
         "text": (
             ("message", "text"),
@@ -35,16 +36,24 @@ _PROVIDER_PATHS: dict[str, dict[str, tuple[FieldPath, ...]]] = {
             ("callback_query", "message", "caption"),
             ("edited_message", "text"),
             ("edited_message", "caption"),
+            ("channel_post", "text"),
+            ("channel_post", "caption"),
+            ("edited_channel_post", "text"),
+            ("edited_channel_post", "caption"),
         ),
         "message_id": (
             ("message", "message_id"),
             ("callback_query", "id"),
             ("update_id",),
+            ("channel_post", "message_id"),
+            ("edited_channel_post", "message_id"),
         ),
         "timestamp": (
             ("message", "date"),
             ("callback_query", "message", "date"),
             ("edited_message", "date"),
+            ("channel_post", "date"),
+            ("edited_channel_post", "date"),
         ),
         "name": (
             ("message", "from", "username"),
@@ -100,8 +109,8 @@ _PROVIDER_PATHS: dict[str, dict[str, tuple[FieldPath, ...]]] = {
     },
     "vk": {
         "user_id": (
-            ("object", "message", "from_id"),
             ("object", "message", "user_id"),
+            ("object", "message", "from_id"),
             ("object", "user_id"),
             ("object", "from_id"),
         ),
@@ -142,6 +151,7 @@ _PROVIDER_PATHS: dict[str, dict[str, tuple[FieldPath, ...]]] = {
             ("message", "body", "command"),
         ),
         "message_id": (
+            ("callback", "callback_id"),  # one identity per press; also the /answers key
             ("message", "body", "mid"),
             ("message", "body", "message_id"),
             ("update_id",),
@@ -188,7 +198,7 @@ _PROVIDER_PATHS: dict[str, dict[str, tuple[FieldPath, ...]]] = {
     },
     "wechat": {
         "user_id": (("FromUserName",), ("from_user_name",)),
-        "chat_id": (("ToUserName",), ("to_user_name",)),
+        "chat_id": (("FromUserName",), ("from_user_name",)),
         "text": (("Content",), ("content",)),
         "message_id": (("MsgId",), ("msg_id",)),
         "timestamp": (("CreateTime",), ("create_time",)),
@@ -372,6 +382,9 @@ def _vk_lookup_view(raw: dict[str, Any]) -> dict[str, Any]:
 def _provider_text(channel: str, raw: Mapping[str, Any], fallback: str) -> str:
     if channel == "max" and raw.get("update_type") == "bot_started":
         return ("/start " + _scalar_text(raw.get("payload"))).strip()
+    if channel == "max" and raw.get("update_type") == "message_callback":
+        callback = raw.get("callback")
+        return _scalar_text(callback.get("payload")) if isinstance(callback, Mapping) else ""
     return fallback
 
 
@@ -389,6 +402,10 @@ def decode_provider_inbound(
         explicit = _first_path_value(view, paths.get(name, ()))
         if explicit is not None:
             return explicit
+        if name == "user_id" and canonical in _PROVIDER_PATHS:
+            # Native payloads: never deep-search (a nested recipient.user_id is the bot).
+            # Only an already-normalized top-level sender key is accepted.
+            return _scalar_value(view.get("user_id"))
         return _deep_first_value(view, _GENERIC_KEYS.get(name, ()))
 
     def field_text(name: str) -> str:
@@ -396,8 +413,8 @@ def decode_provider_inbound(
 
     user_id = field_text("user_id")
     chat_id = field_text("chat_id")
-    if not user_id:
-        user_id = chat_id
+    if canonical == "vk" and user_id.startswith("-"):
+        user_id = ""  # VK negative sender IDs are communities, not human customers.
 
     provider_message_id = _first_path_value(raw, paths.get("message_id", ()))
     if provider_message_id is None:
@@ -419,7 +436,7 @@ def decode_provider_inbound(
         "chat_id": chat_id,
         "text": _provider_text(canonical, raw, field_text("text")),
         "message_id": message_id,
-        "external_user_ref": user_id or chat_id,
+        "external_user_ref": user_id or None,
         "timestamp_ms": _timestamp_from_payload(raw, paths.get("timestamp", ())),
         "locale": field_text("locale") or None,
         "subject": field_text("subject") or None,

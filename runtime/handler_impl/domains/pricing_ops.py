@@ -25,10 +25,35 @@ def _pricing_selector(payload: dict) -> tuple[str | None, int | None]:
     return offer_id, plan_id
 
 
+def _notify_pricing_actor(result, payload: dict, effects, env):
+    """Close pricing session after verified outcome using the sealed effects port."""
+    text = optional_str(payload, "notify_text")
+    actor = optional_str(payload, "admin_id")
+    if not text or not actor or not isinstance(result, dict):
+        return result
+    confirmed = result.get("ok") is True and result.get("status") == "verified"
+    try:
+        notification = effects.set_user_setting(
+            decision_id=env.decision.decision_id,
+            correlation_id=env.decision.correlation_id,
+            tenant_id=required_str(payload, "tenant_id"),
+            user_id=actor,
+            key="admin:pricing_session",
+            value={} if confirmed else {"stage": "await_price"},
+            notify_text=text if confirmed else "⚠️ Изменение цены не подтверждено.",
+            notify_reply_markup=optional_dict(payload, "notify_reply_markup"),
+            callback_query_id=optional_str(payload, "callback_query_id"),
+            **delivery_kwargs(payload),
+        )
+    except Exception as exc:
+        notification = {"ok": False, "error": type(exc).__name__}
+    return {**result, "notification": notification}
+
+
 def handle_apply_pricing_change(payload, effects, env):
     payload = require_mapping(payload)
     offer_id, plan_id = _pricing_selector(payload)
-    return effects.apply_pricing_change(
+    result = effects.apply_pricing_change(
         decision_id=env.decision.decision_id,
         correlation_id=env.decision.correlation_id,
         admin_id=required_str(payload, "admin_id"),
@@ -44,11 +69,12 @@ def handle_apply_pricing_change(payload, effects, env):
         reason=optional_str(payload, "reason"),
     )
 
+    return _notify_pricing_actor(result, payload, effects, env)
 
 def handle_request_pricing_change(payload, effects, env):
     payload = require_mapping(payload)
     offer_id, plan_id = _pricing_selector(payload)
-    return effects.request_pricing_change(
+    result = effects.request_pricing_change(
         decision_id=env.decision.decision_id,
         correlation_id=env.decision.correlation_id,
         admin_id=required_str(payload, "admin_id"),
@@ -64,10 +90,11 @@ def handle_request_pricing_change(payload, effects, env):
         reason=optional_str(payload, "reason"),
     )
 
+    return _notify_pricing_actor(result, payload, effects, env)
 
 def handle_reject_pricing_change(payload, effects, env):
     payload = require_mapping(payload)
-    return effects.reject_pricing_change(
+    result = effects.reject_pricing_change(
         decision_id=env.decision.decision_id,
         correlation_id=env.decision.correlation_id,
         admin_id=required_str(payload, "admin_id"),
@@ -78,6 +105,7 @@ def handle_reject_pricing_change(payload, effects, env):
         reason=optional_str(payload, "reason"),
     )
 
+    return _notify_pricing_actor(result, payload, effects, env)
 
 def handle_select_tariff(payload, effects, env):
     payload = require_mapping(payload)

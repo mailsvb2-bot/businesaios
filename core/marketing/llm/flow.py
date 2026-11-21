@@ -46,6 +46,7 @@ def with_accounting_metadata(*, request, inp: MarketingLLMInputs, request_id: st
     metadata.update({"tenant_id": str(inp.tenant_id), "user_id": str(inp.user_id),
                      "correlation_key": str(inp.correlation_id or inp.message_id or request_id),
                      "task_type": "marketing_message", "request_id": str(request_id),
-                     "channel": str(inp.channel), "message_id": str(inp.message_id or ""),
+                     "channel": str(inp.channel), "locale": str(inp.locale),
+                     "message_id": str(inp.message_id or ""),
                      "prompt_version": str(prompt_version), "prompt_hash": str(prompt_hash)})
     return replace(request, metadata=metadata)

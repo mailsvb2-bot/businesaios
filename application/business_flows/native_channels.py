@@ -271,3 +271,17 @@ def verify_and_activate_email_smtp(
 
 __all__ = ["EmailConn", "email_connection_id", "email_replay", "normalize_email", "provision_email_smtp", "verify_and_activate_email_smtp", "PLATFORMS", "PROVIDER_KEYS", "Provider", "Route", "acquire_lease", "disable", "provision_max", "provision_vk",
            "public_base_url", "replay", "route_id", "webhook_secret", "webhook_url"]  # fmt: skip
+
+
+def messenger_connections(admin_facts: list[dict]) -> list[dict]:
+    """Native VK/MAX routes as messenger_switching connection rows (ids/usernames only, no token refs)."""
+
+    return [
+        {
+            "platform": r.platform,
+            "status": r.status,
+            "connection_type": "vk_community" if r.platform == "vk" else r.platform,
+            "external_account_id": r.external_id if r.platform == "vk" else (r.username or r.external_id),
+        }
+        for r in replay(admin_facts).values()
+    ]

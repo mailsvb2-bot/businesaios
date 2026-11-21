@@ -1,7 +1,14 @@
 from __future__ import annotations
 
 from core.marketing.llm.compose_context import build_compose_context
-from core.marketing.llm.flow import build_cache_key, build_request, finalize_text, idempotent_request_id, start_request, with_accounting_metadata
+from core.marketing.llm.flow import (
+    build_cache_key,
+    build_request,
+    finalize_text,
+    idempotent_request_id,
+    start_request,
+    with_accounting_metadata,
+)
 from core.marketing.llm.runtime_flow import (
     emit_circuit_open_async,
     emit_rate_limited_async,

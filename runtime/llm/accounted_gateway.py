@@ -6,10 +6,17 @@ import re
 import time
 from typing import Any
 
-from core.llm.budget import BudgetCaps, EventStoreDailyTokenBudget, estimate_request_tokens, has_durable_budget_store, validated_llm_usage
+from core.llm.budget import (
+    BudgetCaps,
+    EventStoreDailyTokenBudget,
+    estimate_request_tokens,
+    has_durable_budget_store,
+    validated_llm_usage,
+)
 from core.marketing.llm_telemetry import append_event_sync
 from core.telemetry.event_types import LLM_BUDGET_BLOCKED, LLM_COMPLETED, LLM_REQUESTED
 from core.telemetry.event_writer import TelemetryContext
+
 
 class AccountedSyncGateway:
     """Single durable boundary for budget reservation, provider execution and usage."""
@@ -55,7 +62,7 @@ class AccountedSyncGateway:
             tenant_id=tenant, user_id=user, message_id=str(meta.get("message_id") or ""),
             correlation_id=correlation,
         )
-        event_meta = {key: meta[key] for key in ("channel", "message_id", "prompt_version", "prompt_hash", "task_type") if isinstance(meta.get(key), str) and meta[key].strip() and len(meta[key]) <= 512}
+        event_meta = {key: meta[key] for key in ("channel", "locale", "message_id", "prompt_version", "prompt_hash", "task_type") if isinstance(meta.get(key), str) and meta[key].strip() and len(meta[key]) <= 512}
         try:
             day = self._budget.reserve(
                 tenant_id=tenant, user_id=user, tokens=estimate, request_id=request_id,

@@ -198,7 +198,7 @@ async def test_event_store_request_write_failure_prevents_provider_call(async_mo
     result = await composer.compose(inp) if async_mode else composer.compose_sync(inp)
     assert result is None
     assert llm.calls == 0
-    assert composer._runtime.metrics.snapshot().counters.get("accounting_unavailable") == 1
+    assert composer._runtime.metrics.snapshot().counters.get("accounting_failed") == 1
     assert composer._event_store.get_setting(
         tenant_id="t-no-request", key=f"llm:pending:v1:{composer._runtime.budget._day()}",
     ) == {"pending": {}}
@@ -329,7 +329,8 @@ def test_sqlite_budget_reservations_are_shared_between_store_connections(tmp_pat
         ) is None
         EventLog(first_store, tenant=TenantScope("tenant")).emit(
             event_type=LLM_COMPLETED, source="telemetry", user_id="user",
-            payload={"total_tokens": 7, "request_id": "first"},
+            payload={"total_tokens": 7, "prompt_tokens": 3, "completion_tokens": 4,
+                     "request_id": "first", "provider": "openai", "model": "test-model"},
         )
         assert first.release(tenant_id="tenant", request_id="first", day=day)
         assert not second.can_spend(tenant_id="tenant", user_id="user", tokens=1027)
@@ -541,7 +542,9 @@ def test_completed_claim_reconciles_after_crash_but_uncompleted_claim_stays(comp
     assert day
     EventLog(store, tenant=TenantScope("t")).emit(
         event_type=LLM_COMPLETED, source="telemetry", user_id=completion_user,
-        payload={"request_id": "completed", "total_tokens": 20},
+        payload={"request_id": "completed", "total_tokens": 20,
+                 "prompt_tokens": 10, "completion_tokens": 10,
+                 "provider": "openai", "model": "test-model"},
     )
     recovered = budget.reserve(tenant_id="t", user_id="u", tokens=70, request_id="new")
     assert (recovered == day) is expected_recovery

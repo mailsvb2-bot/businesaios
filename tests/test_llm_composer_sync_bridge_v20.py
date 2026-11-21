@@ -5,8 +5,8 @@ import asyncio
 from core.llm.contracts import LLMResponse, LLMUsage
 from core.marketing.llm_composer import LLMComposerConfig, MarketingLLMComposer
 from core.marketing.llm_prompting import MarketingLLMInputs
-from runtime.platform.event_store.memory_event_store import MemoryEventStore
 from runtime.llm import AccountedSyncGateway
+from runtime.platform.event_store.memory_event_store import MemoryEventStore
 
 
 class _BudgetContractEventStore(MemoryEventStore):

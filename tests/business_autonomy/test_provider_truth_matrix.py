@@ -11,8 +11,8 @@ from application.business_autonomy.provider_truth_matrix import (
 from runtime.business_autonomy.distributed_state import FileDistributedDocumentStore
 from runtime.business_autonomy.provider_activation_store import FileProviderActivationStore
 from runtime.business_autonomy.provider_sync_runtime import ProviderSyncRuntimePlanner
-from runtime.platform.event_store.memory_event_store import MemoryEventStore
 from runtime.business_autonomy.provider_transport_bindings import ProviderTransportBindings
+from runtime.platform.event_store.memory_event_store import MemoryEventStore
 
 
 def test_provider_truth_matrix_covers_every_catalog_provider() -> None:
@@ -171,3 +171,49 @@ def test_provider_runtime_truth_reads_latest_scoped_event_spine_state(tmp_path) 
     assert truth["telegram_bot"]["connected"] is True
     assert truth["telegram_bot"]["health_probe"]["status"] == "probe_live_ok"
     assert truth["telegram_bot"]["source"] == "event_spine.provider_activation"
+    assert truth["telegram_bot"]["channel_live_readiness"]["live_ready"] is False
+    assert truth["telegram_bot"]["channel_live_readiness"]["scope"] == {
+        "tenant_id": "tenant-1", "business_id": "business-1",
+    }
+
+def test_p2_unified_integration_statuses_refuse_unproven_messaging():
+    from application.business_autonomy.provider_truth_matrix import (
+        LIVE_EVIDENCE_CHECKS,
+        provider_channel_live_readiness,
+        unified_integration_statuses,
+    )
+    from interfaces.ads.registry import CONNECTORS
+
+    channels = provider_channel_live_readiness(event_store=None, tenant_id="tenant", business_id="business", now_ms=1_800_000_000_000)
+    rows = unified_integration_statuses(
+        provider_rows=[{"provider_key": "hubspot", "connected": True, "truth_status": "read_only_ready", "read_supported": True}],
+        channel_readiness=channels, ad_connectors=CONNECTORS,
+    )
+    grouped = {(row["kind"], row["key"]): row for row in rows}
+    assert grouped[("data_source", "hubspot")]["status"] == "read_ready"
+    assert all(row["status"] != "live_ready" and set(row["missing"]) == set(LIVE_EVIDENCE_CHECKS)
+               for row in rows if row["kind"] == "messaging")
+    assert grouped[("ads", "yandex_direct")]["status"] != "live_ready"
+
+
+def test_p2_messaging_live_only_from_scoped_evidence():
+    from application.business_autonomy.provider_truth_matrix import unified_integration_statuses
+    rows = unified_integration_statuses(
+        provider_rows=[{"provider_key": "vk", "connected": True}, {"provider_key": "max", "connected": True}],
+        ad_connectors={},
+        channel_readiness={"vk": {"live_ready": True, "missing": [], "endpoint_ok": True},
+                           "max": {"live_ready": False, "missing": ["recovery"], "endpoint_ok": True}},
+    )
+    assert [(r["key"], r["status"]) for r in rows if r["kind"] == "messaging"] == [("max", "connected_unverified"), ("vk", "live_ready")]
+
+
+def test_p2_live_evidence_never_overrides_disconnected_business_provider():
+    from application.business_autonomy.provider_truth_matrix import unified_integration_statuses
+
+    rows = unified_integration_statuses(
+        provider_rows=[{"provider_key": "vk_messaging", "connected": False}],
+        channel_readiness={"vk_messaging": {"live_ready": True, "endpoint_ok": True, "missing": []}},
+        ad_connectors={},
+    )
+    status = next(row for row in rows if row["kind"] == "messaging")
+    assert (status["status"], status["reason"]) == ("not_connected", "provider_activation_missing")

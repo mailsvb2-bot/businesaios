@@ -133,6 +133,7 @@ class PostgresEventStore:
         self._dsn = str(dsn)
         self._enabled = bool(enabled)
         self._port: PostgresPort | None = None
+
     def __enter__(self) -> PostgresEventStore:
         if not self._enabled:
             raise_if_used()
@@ -141,9 +142,9 @@ class PostgresEventStore:
         self._verify_schema()
         return self
     def __exit__(self, exc_type, exc, tb) -> None:
-        if self._port is not None:
-            self._port.__exit__(exc_type, exc, tb)
-            self._port = None
+        port, self._port = self._port, None
+        if port is not None:
+            port.__exit__(exc_type, exc, tb)
     @property
     def _db(self) -> PostgresPort:
         if self._port is None:

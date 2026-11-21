@@ -859,6 +859,56 @@ def launch_message(outcome: str, operation_id: str = "") -> str:
     return "Запуск запрещён, устарел или состояние разрешения изменилось. Ничего не потрачено."
 
 
+CABINET_SYNCED, CABINET_FAILED = "ad_cabinet_synced", "ad_cabinet_sync_failed"
+CABINET_ERRORS = {
+    "provider_dry_run": "Чтение кабинета отключено.",
+    "AD_PROVIDER_TRANSPORT_NOT_CONFIGURED": "Транспорт рекламного провайдера не настроен.",
+    "provider_readout_invalid": "Кабинет вернул неполные данные.",
+}
+
+
+def cabinet_refresh_enabled() -> bool:
+    return env_bool("BAI_AD_CABINET_REFRESH_ENABLED", False)
+
+
+def cabinet_rows(result: Mapping[str, Any]) -> list[dict[str, str]]:
+    rows = result.get("campaigns") if isinstance(result, Mapping) else None
+    if not isinstance(rows, list) or len(rows) > 1000:
+        raise ProviderReadError("provider_readout_invalid")
+    out = []
+    for row in rows:
+        cid = str(row.get("campaign_id") or "").strip() if isinstance(row, Mapping) else ""
+        if not cid.isascii() or not cid.isdecimal():
+            raise ProviderReadError("provider_readout_invalid")
+        out.append({"campaign_id": cid, "name": str(row.get("name") or "")[:255],
+                    "state": str(row.get("state") or "UNKNOWN")[:32],
+                    "status": str(row.get("status") or "UNKNOWN")[:32]})
+    return out
+
+
+def cabinet_fact(*, business_id: str, at: datetime, rows: list[dict[str, str]] | None = None,
+                 reason: str = "") -> dict[str, Any]:
+    if rows is None:
+        return {"step": CABINET_FAILED, "business_id": business_id,
+                "reason": reason[:60] or "provider_error", "at": ts(at).isoformat()}
+    return {"step": CABINET_SYNCED, "business_id": business_id,
+            "campaigns": list(rows), "at": ts(at).isoformat()}
+
+
+def cabinet_view(payloads: Iterable[dict[str, Any]], *, business_id: str) -> dict[str, Any]:
+    last = None
+    for fact in payloads:
+        if fact.get("business_id") == business_id and fact.get("step") in {CABINET_SYNCED, CABINET_FAILED}:
+            last = fact
+    if last is None:
+        return {"status": "never_synced", "campaigns": [], "synced_at": None, "error": None}
+    if last["step"] == CABINET_FAILED:
+        reason = str(last.get("reason") or "provider_error")
+        return {"status": "access_error", "campaigns": [], "synced_at": last["at"],
+                "error": CABINET_ERRORS.get(reason, f"Ошибка чтения кабинета ({reason}).")}
+    return {"status": "synced", "campaigns": list(last["campaigns"]), "synced_at": last["at"], "error": None}
+
+
 def event_promotion_message(title: str, url: str, *, env: Mapping[str, str] | None = None) -> str:
     cabinet = ("✅ чтение рекламного кабинета включено" if provider_enabled(env)
                else f"⚪ кабинет не подключён ({PROVIDER_ENV} выключен)")

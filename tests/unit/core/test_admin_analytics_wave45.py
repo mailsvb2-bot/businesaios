@@ -5,7 +5,6 @@ from unittest.mock import Mock
 
 import pytest
 
-import core.admin.read_model as read_model
 import core.policies.telegram.handlers.admin.analytics as sut
 
 
@@ -17,6 +16,7 @@ class BrokenRow:
 def ctx(**overrides):
     values = {
         "callback_data": "",
+        "callback_query_id": None,
         "is_admin": True,
         "admin_metrics": {},
         "event_store": object(),
@@ -98,64 +98,13 @@ def test_users_today_with_mapping_and_empty_metrics():
     assert empty["text"].endswith("0")
 
 
-def test_segments_ab_giftshare_and_funnel2(monkeypatch):
-    monkeypatch.setattr(
-        read_model,
-        "segments_summary",
-        lambda store, days: {
-            "new_users": 1,
-            "active_users_7d": 2,
-            "payers_30d": 3,
-            "granted_30d": 4,
-        },
-    )
-    monkeypatch.setattr(
-        read_model,
-        "ab_offers_summary",
-        lambda store, days: {"variants_set": 5, "variants_chosen": 2},
-    )
-    monkeypatch.setattr(
-        read_model,
-        "giftshare_summary",
-        lambda store, days: {"share_clicked": 6, "gift_sent": 7},
-    )
-    monkeypatch.setattr(
-        read_model,
-        "funnel2_report",
-        lambda store, days: {
-            "counts": {
-                "tariffs_viewed": 10,
-                "tariff_selected": 8,
-                "payment_created": 6,
-                "payment_captured": 4,
-                "access_granted": 3,
-                "audio_sent": 2,
-            },
-            "rates_pct_from_view": {
-                "tariff_selected": 80,
-                "payment_created": 60,
-                "payment_captured": 40,
-                "access_granted": 30,
-                "audio_sent": 20,
-            },
-        },
-    )
-    render = pm()
-
-    segments = sut.handle_analytics(
-        ctx(callback_data="admin:segments"), user_id="a", pm=render
-    )
-    assert "Новые сегодня: 1" in segments["text"]
-    ab = sut.handle_analytics(ctx(callback_data="admin:ab"), user_id="a", pm=render)
-    assert "Сгенерировано вариантов: 5" in ab["text"]
-    gift = sut.handle_analytics(
-        ctx(callback_data="admin:giftshare"), user_id="a", pm=render
-    )
-    assert "Отправлено подарков: 7" in gift["text"]
-    funnel = sut.handle_analytics(
-        ctx(callback_data="admin:funnel2"), user_id="a", pm=render
-    )
-    assert "Оплата успешна: 4 (40%)" in funnel["text"]
+@pytest.mark.parametrize("route", [
+    "admin:segments", "admin:ab", "admin:giftshare", "admin:funnel2",
+])
+def test_admin_analytics_routes_to_one_canonical_event_store_owner(route):
+    result = sut.handle_analytics(ctx(callback_data=route), user_id="a", pm=pm())
+    assert result.action == "business_ops_summary@v1"
+    assert result.payload == {"user_id": "a", "op": "admin_analytics", "arg": route}
 
 
 def test_funnel_mapping_and_non_mapping_sources():

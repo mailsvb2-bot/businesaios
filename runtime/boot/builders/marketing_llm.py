@@ -61,7 +61,7 @@ def _runtime_timeout_s(settings: Any) -> int:
 
 def _provider_settings(settings: Any) -> tuple[str, str, str, str, str | None]:
     provider = normalize_provider(
-        _setting_or_env(settings, "LLM_PROVIDER", _setting_or_env(settings, "MARKETING_LLM_PROVIDER", "openai_compat"))
+        _setting_or_env(settings, "LLM_PROVIDER", _setting_or_env(settings, "MARKETING_LLM_PROVIDER", "yandexgpt"))
     )
     return resolve_runtime_llm_settings(
         provider=provider,

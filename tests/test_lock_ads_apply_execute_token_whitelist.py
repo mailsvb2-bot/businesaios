@@ -8,6 +8,7 @@ ROOT = Path(__file__).resolve().parents[1]
 
 ALLOWED = {
     "core/policies/telegram/handlers/ads_apply_flow.py",
+    "governance/time_scale.py",
     "runtime/boot/actions_catalog.py",
     "runtime/boot_impl/actions_catalog.py",
     "runtime/handlers/ads_apply_execute.py",

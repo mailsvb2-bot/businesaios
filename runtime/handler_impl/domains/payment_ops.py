@@ -66,8 +66,29 @@ def _proof_is_positive(proof: Mapping[str, Any] | None) -> bool:
     return evidence_status_is_positive(proof.get("status")) or proof.get("verified") is True
 
 
+def _assert_catalog_price(body: Mapping[str, Any], env) -> None:
+    """Fail closed before the PSP for signed catalog-plan checkout."""
+    metadata = optional_dict(body, "metadata") or {}
+    if metadata.get("plan_id") is None:
+        return
+    from core.plans import plan_by_id
+
+    try:
+        plan = plan_by_id(int(metadata["plan_id"]), tenant_id=_tenant_id(body, env),
+                          product_id=required_str(body, "product_id"))
+    except (TypeError, ValueError) as exc:
+        raise ValueError("TARIFF_CATALOG_SCOPE_MISMATCH") from exc
+    if not isinstance(plan, dict):
+        raise ValueError("TARIFF_CATALOG_SCOPE_MISMATCH")
+    amount = required_int(body, "amount", min_value=1)
+    expected = body.get("expected_amount")
+    if int(plan.get("price") or 0) * 100 != amount or (expected is not None and int(expected) != amount):
+        raise ValueError("TARIFF_PRICE_NOT_AUTHORITATIVE")
+
+
 def handle_capture_payment(payload, effects, env):
     body = require_mapping(payload)
+    _assert_catalog_price(body, env)
     return effects.capture_payment(
         decision_id=env.decision.decision_id,
         correlation_id=env.decision.correlation_id,
@@ -85,6 +106,7 @@ def handle_create_payment_and_send_link(payload, effects, env):
     tenant_id = _tenant_id(body, env)
     if not tenant_id:
         raise ValueError("TENANT_ID_REQUIRED")
+    _assert_catalog_price(body, env)
     payment_result = effects.capture_payment(
         decision_id=env.decision.decision_id,
         correlation_id=env.decision.correlation_id,

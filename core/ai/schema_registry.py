@@ -24,6 +24,7 @@ class DecisionSchema:
             raise ValueError("MISSING_REQUIRED_KEYS")
         reserved_optional = {
             "idempotency_key",
+            "callback_query_id",
             "meta",
             "world_model_meta",
             "tenant_id",
@@ -58,8 +59,13 @@ class DecisionSchema:
             "policy_decision",
             RuntimeServiceName.ACTION_BUDGET,
         }
-        if not self.allow_additional and not keys.issubset(self.required | self.optional | reserved_optional):
-            raise ValueError("UNKNOWN_PAYLOAD_KEYS")
+        unknown = keys - (self.required | self.optional | reserved_optional)
+        if not self.allow_additional and unknown:
+            raise ValueError("UNKNOWN_PAYLOAD_KEYS:" + ",".join(sorted(str(key) for key in unknown)))
+        for field in ("callback_query_id", "idempotency_key"):
+            value = payload.get(field)
+            if field in payload and (not isinstance(value, str) or not value.strip()):
+                raise ValueError("BAD_PAYLOAD_TYPE")
 
         for k, t in self.field_types.items():
             if k not in payload:

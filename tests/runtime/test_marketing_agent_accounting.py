@@ -153,7 +153,9 @@ def test_agent_gateway_journal_failure_blocks_output_and_replay(
     assert isinstance(pending, dict)
     assert bool(pending.get("pending")) is (failed_event == LLM_COMPLETED)
 
-    with pytest.raises(RuntimeError, match="LLM_BUDGET_BLOCKED"):
+    with pytest.raises(RuntimeError, match=(
+        "LLM_ACCOUNTING_REQUEST_WRITE_FAILED" if failed_event == LLM_REQUESTED else "LLM_BUDGET_BLOCKED"
+    )):
         gateway.generate_sync(request())
     assert client.calls == expected_calls
 

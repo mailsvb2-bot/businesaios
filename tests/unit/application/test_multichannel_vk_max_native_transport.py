@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import json
+
 from application.business_autonomy.provider_catalog import provider_map
 from runtime.business_autonomy.provider_payload_normalizers import ProviderPayloadNormalizers
 from runtime.business_autonomy.provider_response_parsers import ProviderResponseParsers
@@ -9,6 +11,7 @@ from runtime.business_autonomy.provider_vendor_transports import build_provider_
 from runtime.business_autonomy.provider_webhook_runtime import ProviderWebhookRuntime
 from runtime.messaging.bootstrap import _NativeProviderQueueAdapter
 from runtime.messaging.outbound_message import OutboundMessage
+from runtime.messaging.provider_inbound_decoder import decode_provider_inbound
 from security.secret_contract import SecretRecord, SecretRef, SecretSource
 from security.secret_vault import InMemorySecretVault
 
@@ -24,6 +27,7 @@ def test_vk_and_max_keep_bridge_onboarding_while_exposing_native_credentials() -
     max_fields = {field.secret_name: field for field in providers['max_messaging'].secret_fields}
     assert vk['webhook_secret'].required is True and vk['access_token'].required is False and vk['group_id'].required is False and vk['confirmation_code'].required is False
     assert max_fields['webhook_secret'].required is True and max_fields['access_token'].required is False
+    assert max_fields['bot_id'].required is False and max_fields['bot_id'].secret_kind == 'config'
     assert all('message_send' in ProviderSyncRuntimePlanner().describe(providers[key]).write_operations for key in ('vk_messaging', 'max_messaging'))
 
 
@@ -60,6 +64,7 @@ def test_vk_official_body_secret_and_callback_response_are_supported() -> None:
     provider = provider_map()['vk_messaging']
     vault = InMemorySecretVault()
     _put(vault, provider, 'webhook_secret', 'vk-secret')
+    _put(vault, provider, 'group_id', '123')
     _put(vault, provider, 'confirmation_code', 'confirm-123')
     runtime = ProviderWebhookRuntime(vault)
     confirmation = b'{"type":"confirmation","group_id":123,"secret":"vk-secret"}'
@@ -77,7 +82,7 @@ def test_max_official_webhook_secret_header_is_accepted() -> None:
     _put(vault, provider, 'webhook_secret', 'max-secret')
     runtime = ProviderWebhookRuntime(vault)
     assert 'X-Max-Bot-Api-Secret' in runtime.describe(provider).header_names
-    assert runtime.verify(provider=provider, tenant_id='tenant-a', business_id='business-a', headers={'X-Max-Bot-Api-Secret': 'max-secret'}, body=b'{}') is True
+    assert runtime.verify(provider=provider, tenant_id='tenant-a', business_id='business-a', headers={'X-Max-Bot-Api-Secret': 'max-secret'}, body=b'{"update_type":"bot_started","chat_id":700,"user":{"user_id":77}}') is True
 
 
 def test_vk_max_prepared_transports_remain_bound_when_vault_is_supplied() -> None:
@@ -126,3 +131,92 @@ def test_vk_messaging_adapter_surfaces_provider_approval_without_generic_webhook
     sent = service.calls[0]
     assert sent['provider_key'] == 'vk_messaging' and sent['payload']['peer_id'] == '42'
     assert sent['payload']['_approval'] == {'decision_id': 'dec-1', 'execution_id': 'dec-1'}
+
+
+def test_max_direct_webhook_message_requires_the_configured_bot_recipient() -> None:
+    provider = provider_map()['max_messaging']
+    vault = InMemorySecretVault()
+    _put(vault, provider, 'webhook_secret', 'max-secret')
+    _put(vault, provider, 'bot_id', '9001')
+    runtime = ProviderWebhookRuntime(vault)
+    body = json.dumps({'update_type': 'message_created', 'message': {
+        'sender': {'user_id': 77, 'is_bot': False},
+        'recipient': {'chat_id': 700, 'chat_type': 'dialog', 'user_id': 9001},
+        'body': {'mid': 'max-mid', 'text': 'hello'},
+    }}).encode()
+    headers = {'X-Max-Bot-Api-Secret': 'max-secret'}
+    assert runtime.verify(provider=provider, tenant_id='tenant-a', business_id='business-a', headers=headers, body=body) is True
+    foreign = json.loads(body)
+    foreign['message']['recipient']['user_id'] = 9002
+    assert runtime.verify(provider=provider, tenant_id='tenant-a', business_id='business-a', headers=headers, body=json.dumps(foreign).encode()) is False
+    del foreign['message']['recipient']['chat_id']
+    assert runtime.verify(provider=provider, tenant_id='tenant-a', business_id='business-a', headers=headers, body=json.dumps(foreign).encode()) is False
+
+
+def test_max_direct_webhook_message_fails_closed_without_bot_identity() -> None:
+    provider = provider_map()['max_messaging']
+    vault = InMemorySecretVault()
+    _put(vault, provider, 'webhook_secret', 'max-secret')
+    runtime = ProviderWebhookRuntime(vault)
+    body = b'{"update_type":"message_created","message":{"sender":{"user_id":77},"recipient":{"chat_id":700,"chat_type":"dialog","user_id":9001},"body":{"mid":"max-mid","text":"hello"}}}'
+    assert runtime.verify(provider=provider, tenant_id='tenant-a', business_id='business-a', headers={'X-Max-Bot-Api-Secret': 'max-secret'}, body=body) is False
+
+
+def test_max_group_message_uses_scoped_subscription_and_explicit_chat_recipient() -> None:
+    provider = provider_map()['max_messaging']
+    vault = InMemorySecretVault()
+    _put(vault, provider, 'webhook_secret', 'max-secret')
+    runtime = ProviderWebhookRuntime(vault)
+    body = json.dumps({'update_type': 'message_created', 'message': {
+        'sender': {'user_id': 77, 'is_bot': False},
+        'recipient': {'chat_id': 700, 'chat_type': 'chat'},
+        'body': {'mid': 'max-group-mid', 'text': 'hello'},
+    }}).encode()
+    headers = {'X-Max-Bot-Api-Secret': 'max-secret'}
+    assert runtime.verify(provider=provider, tenant_id='tenant-a', business_id='business-a', headers=headers, body=body) is True
+    assert runtime.verify(provider=provider, tenant_id='tenant-a', business_id='business-a', headers=headers, body=b'{}') is False
+
+
+def test_telegram_vk_and_max_never_promote_recipient_or_bot_identity_to_customer() -> None:
+    telegram_channel_post = decode_provider_inbound(
+        channel='telegram',
+        payload={'channel_post': {'chat': {'id': -100123}, 'text': 'channel announcement', 'message_id': 10}},
+    )
+    assert telegram_channel_post['user_id'] == ''
+    assert telegram_channel_post['chat_id'] == '-100123'
+    assert telegram_channel_post['external_user_ref'] is None
+    telegram_human = decode_provider_inbound(
+        channel='telegram',
+        payload={'message': {'from': {'id': 42, 'is_bot': False}, 'chat': {'id': 42}, 'text': 'hello', 'message_id': 11}},
+    )
+    assert telegram_human['user_id'] == '42'
+    assert telegram_human['external_user_ref'] == '42'
+
+    vk_group_sender = decode_provider_inbound(
+        channel='vk',
+        payload={'type': 'message_new', 'object': {'message': {
+            'id': 9, 'from_id': -123, 'peer_id': 2000000001, 'text': 'group-originated',
+        }}},
+    )
+    assert vk_group_sender['user_id'] == ''
+    assert vk_group_sender['chat_id'] == '2000000001'
+    assert vk_group_sender['external_user_ref'] is None
+    vk_human_sender = decode_provider_inbound(
+        channel='vk',
+        payload={'type': 'message_new', 'object': {'message': {
+            'id': 10, 'from_id': -123, 'user_id': 42, 'peer_id': 2000000001, 'text': 'human member',
+        }}},
+    )
+    assert vk_human_sender['user_id'] == '42'
+    assert vk_human_sender['external_user_ref'] == '42'
+
+    max_recipient_only = decode_provider_inbound(
+        channel='max',
+        payload={'update_type': 'message_created', 'message': {
+            'recipient': {'chat_id': 700, 'chat_type': 'dialog', 'user_id': 9001},
+            'body': {'mid': 'max-recipient-only', 'text': 'no sender'},
+        }},
+    )
+    assert max_recipient_only['user_id'] == ''
+    assert max_recipient_only['chat_id'] == '700'
+    assert max_recipient_only['external_user_ref'] is None

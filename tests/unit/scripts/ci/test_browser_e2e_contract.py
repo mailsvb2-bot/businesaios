@@ -413,6 +413,7 @@ def test_browser_step_requires_complete_matrix_and_fails_closed(monkeypatch, tmp
     assert result[0] and evidence["status"] == "PASS" and evidence["schema"] == browser_evidence.BROWSER_EVIDENCE_SCHEMA
     assert [item["name"] for item in evidence["projects"]] == list(browser_evidence.browser_project_names())
     assert captured["env"]["BAIOS_E2E_PYTHON"] == sys.executable
+    assert captured["stream_output"] is True and captured["timeout"] == 600
     assert evidence["exact_sha"] == "a" * 40 and evidence["runtime_mode"] == "development"
     assert evidence["storage_backend"] == "isolated-local" and all(item["tests"] == len(BROWSER_SCENARIOS) for item in evidence["projects"])
     assert evidence["project_matrix"]["sha256"] == browser_evidence._matrix_snapshot()[2]
@@ -421,3 +422,29 @@ def test_browser_step_requires_complete_matrix_and_fails_closed(monkeypatch, tmp
         child.mkdir()
         failed, proof, _ = _run_step(monkeypatch, child, skipped=skipped, diagnostics=diagnostics)
         assert not failed[0] and proof["status"] == "FAIL"
+
+def test_live_browser_process_timeout_reaps_process_group(tmp_path) -> None:
+    import time
+
+    from scripts.ci.subprocess_io import run_command
+
+    start = time.monotonic()
+    outcome = run_command(
+        [sys.executable, "-c", "import subprocess, sys, time; "
+         "subprocess.Popen([sys.executable, '-c', 'import time; time.sleep(30)']); "
+         "print('browser child started', flush=True); time.sleep(30)"],
+        cwd=tmp_path, timeout=0.3, stream_output=True,
+    )
+    assert outcome.returncode == 124
+    assert "TIMEOUT" in outcome.stderr
+    assert time.monotonic() - start < 8
+
+
+def test_live_browser_process_success_has_no_timeout(tmp_path) -> None:
+    from scripts.ci.subprocess_io import run_command
+
+    outcome = run_command(
+        [sys.executable, "-c", "print('browser passed')"],
+        cwd=tmp_path, timeout=5, stream_output=True,
+    )
+    assert outcome.returncode == 0 and not outcome.stderr

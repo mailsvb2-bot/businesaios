@@ -60,8 +60,10 @@ def test_router_routes_customer_free_text_to_sales_inbound() -> None:
     import inspect
 
     from core.policies.telegram import router
+    from core.policies.telegram.routes import command_routes
 
-    assert '"op": "inbound"' in inspect.getsource(router.handle)
+    assert "handle_free_text(" in inspect.getsource(router.handle)
+    assert '"op": "inbound"' in inspect.getsource(command_routes.handle_free_text)
 
 
 def test_managed_bot_wrapper_keeps_durable_keys_and_dedupes():
