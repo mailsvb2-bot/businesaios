@@ -225,6 +225,14 @@ class EventStoreDailyTokenBudget:
                             totals[period][1] += tokens
         return {k: (v[0], v[1]) for k, v in totals.items()}
 
+    @staticmethod
+    def _next_v2_state(current: dict | None, pending: dict) -> dict:
+        """Advance CAS identity even when the pending set returns to an earlier shape."""
+        revision = 0 if current is None else current.get("revision", 0)
+        if type(revision) is not int or revision < 0:
+            raise ValueError("LLM_BUDGET_CORRUPT_REVISION")
+        return {"revision": revision + 1, "pending": pending}
+
     def _reconcile_v2(self, *, tenant_id: str, current: dict) -> bool:
         pending = current.get("pending")
         if not isinstance(pending, dict) or not pending:
@@ -242,7 +250,7 @@ class EventStoreDailyTokenBudget:
                 completed.add(fact[:2])
             remaining = {rid: row for rid, row in pending.items() if (row["user_id"], rid) not in completed}
             return len(remaining) < len(pending) and self._es.compare_and_set_setting(
-                tenant_id=str(tenant_id), key="llm:pending:v2", expected=current, value={"pending": remaining}
+                tenant_id=str(tenant_id), key="llm:pending:v2", expected=current, value=self._next_v2_state(current, remaining)
             )
         except (TypeError, ValueError, KeyError, AttributeError):
             return False
@@ -262,7 +270,7 @@ class EventStoreDailyTokenBudget:
             if not isinstance(current, dict | type(None)):
                 return None
             pending = (current or {}).get("pending", {})
-            if not isinstance(pending, dict) or request_id in pending:
+            if not isinstance(pending, dict) or request_id in pending or (current is not None and (type(current.get("revision", 0)) is not int or current.get("revision", 0) < 0)):
                 return None
             spent = {p: self._sum(tenant_id=tenant_id, user_id=user_id, period=p) for p, _, _ in self._caps.periods()}
             claims = self._pending_across_periods(tenant_id=tenant_id, user_id=user_id, day=day, pending=pending)
@@ -285,7 +293,7 @@ class EventStoreDailyTokenBudget:
                 if reconciled:
                     continue
                 return None
-            state = {"pending": {**pending, request_id: {"user_id": str(user_id), "tokens": tokens, "day": day}}}
+            state = self._next_v2_state(current, {**pending, request_id: {"user_id": str(user_id), "tokens": tokens, "day": day}})
             if cas(tenant_id=str(tenant_id), key=key, expected=current, value=state):
                 claimed = False
                 try:
@@ -317,6 +325,7 @@ class EventStoreDailyTokenBudget:
                 if key == "llm:pending:v2" and pending[request_id].get("day") != day:
                     return False
                 remaining = {rid: row for rid, row in pending.items() if rid != request_id}
-                if self._es.compare_and_set_setting(tenant_id=str(tenant_id), key=key, expected=current, value={"pending": remaining}):
+                value = self._next_v2_state(current, remaining) if key == "llm:pending:v2" else {"pending": remaining}
+                if self._es.compare_and_set_setting(tenant_id=str(tenant_id), key=key, expected=current, value=value):
                     return True
         return False
