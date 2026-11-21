@@ -1,8 +1,6 @@
-"""Exercise canonical reservation/release against a real compare-and-set contract."""
 from copy import deepcopy
 import pytest
 from core.llm.budget import BudgetCaps, EventStoreDailyTokenBudget
-
 class _AtomicStore:
     def __init__(self):
         self.state = {}
@@ -15,7 +13,6 @@ class _AtomicStore:
         return True
     def iter_events(self, **kwargs):
         return iter(())
-
 def test_actual_reserve_release_cas_rejects_stale_pre_aba_snapshot():
     store = _AtomicStore()
     budget = EventStoreDailyTokenBudget(event_store=store, caps=BudgetCaps())
