@@ -33,7 +33,6 @@ class BudgetCaps:
             (p, getattr(self, f"tenant_tokens_per_{p}"), getattr(self, f"user_tokens_per_{p}")) for p in ("week", "month"))
         return tuple((p, 2**62 if t is None else t, 2**62 if u is None else u) for p, t, u in caps if p == "day" or t is not None or u is not None)
 
-
 class DailyTokenBudget:
     """Single-process fallback. EventStoreDailyTokenBudget is authoritative across workers."""
 
@@ -59,16 +58,13 @@ class DailyTokenBudget:
         self._tenant[tkey] = self._tenant.get(tkey, 0) + int(tokens)
         self._user[ukey] = self._user.get(ukey, 0) + int(tokens)
 
-
 class TokenBudget(Protocol):
     def can_spend(self, *, tenant_id: str, user_id: str, tokens: int) -> bool: ...
     def spend(self, *, tenant_id: str, user_id: str, tokens: int) -> None: ...
 
-
 def _utc_day_bounds_ms(ts_ms: int | None = None) -> tuple[int, int]:
     day = int((int(time.time() * 1000) if ts_ms is None else ts_ms) // 86_400_000)
     return day * 86_400_000, (day + 1) * 86_400_000
-
 
 def _utc_period_bounds_ms(period: str) -> tuple[int, int]:
     start, end = _utc_day_bounds_ms()
@@ -76,16 +72,13 @@ def _utc_period_bounds_ms(period: str) -> tuple[int, int]:
     first = {"day": today, "week": today - timedelta(days=today.weekday()), "month": today.replace(day=1)}[period]
     return int(first.timestamp() * 1000), end
 
-
 def estimate_request_tokens(request: Any) -> int:
     return int(request.max_tokens) + 800 + sum(len(m.content.encode("utf-8")) for m in request.messages)
-
 
 def validated_llm_usage(usage: Any) -> tuple[int, int, int] | None:
     """Validate provider measurements; never substitute a reservation estimate."""
     values = tuple((usage.get(key) if isinstance(usage, Mapping) else getattr(usage, key, None)) for key in ("prompt_tokens", "completion_tokens", "total_tokens"))
     return values if all(type(v) is int and v >= 0 for v in values) and values[2] > 0 and values[2] >= values[0] + values[1] else None
-
 
 def validated_llm_completion_event(event: Any) -> tuple[str, str, tuple[int, int, int]] | None:
     if not isinstance(event, dict) or not isinstance(user := event.get("user_id"), str) or not user.strip():
@@ -96,12 +89,10 @@ def validated_llm_completion_event(event: Any) -> tuple[str, str, tuple[int, int
     usage = validated_llm_usage(payload)
     return (user, request_id, usage) if all(isinstance(v, str) and v.strip() for v in (request_id, provider, model)) and usage is not None else None
 
-
 def has_durable_budget_store(event_store: Any) -> bool:
     return getattr(event_store, "supports_durable_llm_budget", False) is True and all(
         callable(getattr(event_store, name, None))
         for name in ("iter_events", "get_setting", "compare_and_set_setting", "append_event"))
-
 
 class EventStoreDailyTokenBudget:
     def __init__(self, *, event_store: Any, caps: BudgetCaps, cache_ttl_s: float = DEFAULT_LLM_BUDGET_POLICY.cache_ttl_seconds) -> None:
