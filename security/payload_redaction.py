@@ -1,11 +1,11 @@
 from __future__ import annotations
 
+from collections.abc import Mapping
 from dataclasses import asdict, is_dataclass
-from typing import Any, Mapping
+from typing import Any
 
 from core.llm.redaction import redact_free_text
 from security.pii_redaction_policy import PIIRedactionPolicy
-
 
 CANON_PAYLOAD_REDACTION = True
 
@@ -29,7 +29,7 @@ class PayloadRedactor:
         self._pii_policy = pii_policy or PIIRedactionPolicy()
         self._secret_replacement = str(secret_replacement)
         self._max_string_length = int(max_string_length)
-        self._sensitive_keys = tuple((sensitive_keys or self.DEFAULT_SECRET_KEYS))
+        self._sensitive_keys = tuple(sensitive_keys or self.DEFAULT_SECRET_KEYS)
         self._max_depth = int(max_depth)
 
     def redact(self, payload: Any) -> Any:

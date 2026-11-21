@@ -113,4 +113,3 @@ def test_release_lock_has_platform_specific_windows_dependencies() -> None:
     tzdata_block = "\n".join(lines[tzdata_index:tzdata_index + 4])
     assert "--hash=sha256:0a10eec6e13ef16b627fabed9a5f2ba61a62b1c67f327305f4e7e412a70b4aec" in tzdata_block
     assert "--hash=sha256:85d2cd9c09f81f0bb29db27759fc83af4f1e620efb814f8c5bf8b4cc4feece6d" in tzdata_block
-
