@@ -319,6 +319,20 @@ def test_unreconciled_legacy_writer_after_v2_cutover_fails_closed():
     )["pending"] == {"known": {"user_id": "user-1", "tokens": 10, "day": "2026-11-15"}}
 
 
+def test_pending_period_reservation_is_isolated_by_tenant_and_user():
+    store = _PeriodStore(settings={
+        ("tenant-1", "llm:pending:v2"): {
+            "revision": 1,
+            "pending": {"other-user-request": {"user_id": "user-1", "tokens": 80, "day": "2026-11-15"}},
+        },
+    })
+    budget = _period_budget(store, weekly_tenant=100, weekly_user=100)
+    assert budget.can_spend(tenant_id="tenant-1", user_id="user-2", tokens=20)
+    assert not budget.can_spend(tenant_id="tenant-1", user_id="user-2", tokens=21)
+    assert budget.can_spend(tenant_id="tenant-2", user_id="user-2", tokens=21)
+    assert not budget.can_spend(tenant_id="tenant-1", user_id="user-1", tokens=21)
+
+
 def test_completed_legacy_claim_after_v2_cutover_reconciles_before_new_admission():
     state = {"revision": 0, "pending": {}}
     store = _PeriodStore(
