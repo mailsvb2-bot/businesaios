@@ -67,6 +67,17 @@ def handle_customer_bot(ctx: TelegramCtx, *, user_id: str) -> ProposedAction:
         action, op, owner_only = route
         if owner_only:
             return pm("Эта команда доступна только владельцу в основном боте BusinesAIOS.")
+        if action == "partners@v1" and op in {"join", "message_in", "stop"}:
+            if len(args) > 2000:
+                return pm("Сообщение слишком длинное (максимум 2000 символов). Не сохранено.")
+            session = getattr(ctx.state, "session", None) or {}
+            return propose(action, {"user_id": user_id, "op": op, "arg": args,
+                                   "channel": str(session.get("channel") or "telegram"),
+                                   "source_chat_id": str(session.get("messaging_chat_id") or
+                                                         session.get("telegram_chat_id") or
+                                                         session.get("chat_id") or "")[:120],
+                                   "source_message_key": str(session.get("transport_message_id") or
+                                                             session.get("telegram_update_id") or "")[:120]})
         return propose(action, {"user_id": user_id, "op": op, "arg": args[:200]})
     return pm(customer_menu_text(bot))
 

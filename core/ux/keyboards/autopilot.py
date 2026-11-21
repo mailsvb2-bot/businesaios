@@ -74,8 +74,8 @@ def kb_ads_apply_pending(*, can_apply: bool = True) -> dict[str, Any]:
 def kb_growth_menu() -> dict[str, Any]:
     return mk(
         [
-            [{"text": "🔁 Сгенерировать backlog", "callback_data": CB_GROWTH_GENERATE}],
-            [{"text": "📋 Посмотреть backlog", "callback_data": CB_GROWTH_BACKLOG}],
-            [{"text": "⬅️ Назад", "callback_data": CB_MENU_MAIN}],
+            [{"text": "💡 Сгенерировать гипотезы", "callback_data": CB_GROWTH_GENERATE}],
+            [{"text": "📋 Гипотезы: принять / отклонить", "callback_data": CB_GROWTH_BACKLOG}],
+            [{"text": "⬅️ ИИ и автопилот", "callback_data": CB_AUTOPILOT_MENU}],
         ]
     )

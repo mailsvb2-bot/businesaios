@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from threading import Barrier, Lock, Thread
 
 from config.llm_budget_policy import LLMBudgetPolicy
@@ -10,18 +10,18 @@ from core.telemetry.event_types import LLM_COMPLETED
 
 class _Store:
     def __init__(self) -> None:
-        self.state = {"revision": 0, "pending": {"request-1": {"user_id": "user-1", "tokens": 10}}}
+        self.state = {"pending": {"request-1": {"user_id": "user-1", "tokens": 10}}}
         self.windows: list[tuple[int, int]] = []
 
     def iter_events(self, *, tenant_id, start_ms, end_ms, event_type):
         assert (tenant_id, event_type) == ("tenant-1", LLM_COMPLETED)
         self.windows.append((start_ms, end_ms))
-        completed_at = int(datetime(2026, 11, 8, 23, 59, tzinfo=timezone.utc).timestamp() * 1000)
+        completed_at = int(datetime(2026, 11, 8, 23, 59, tzinfo=UTC).timestamp() * 1000)
         if start_ms <= completed_at < end_ms:
             yield {"user_id": "user-1", "payload": {"request_id": "request-1", "provider": "openai", "model": "gpt-4.1-mini", "prompt_tokens": 4, "completion_tokens": 6, "total_tokens": 10}}
 
     def compare_and_set_setting(self, *, tenant_id, key, expected, value):
-        assert (tenant_id, key) == ("tenant-1", "llm:pending:v2")
+        assert (tenant_id, key) == ("tenant-1", "llm:pending:v1:2026-11-08")
         if self.state != expected:
             return False
         self.state = value
@@ -32,8 +32,8 @@ def test_reconcile_uses_reservation_day_not_current_day():
     store = _Store()
     budget = EventStoreDailyTokenBudget(event_store=store, caps=BudgetCaps())
     assert budget._reconcile_completed(tenant_id="tenant-1", day="2026-11-08", current=store.state)
-    expected_start = int(datetime(2026, 11, 8, tzinfo=timezone.utc).timestamp() * 1000)
-    assert (store.state, store.windows) == ({"revision": 1, "pending": {}}, [(expected_start, expected_start + 86_400_000)])
+    expected_start = int(datetime(2026, 11, 8, tzinfo=UTC).timestamp() * 1000)
+    assert (store.state, store.windows) == ({"pending": {}}, [(expected_start, expected_start + 86_400_000)])
 
 
 def test_reconcile_rejects_invalid_day_without_releasing_claim():
@@ -69,7 +69,7 @@ class _PeriodStore:
 
 
 def _period_event(day, user_id, request_id, tokens):
-    created_at_ms = int(datetime.fromisoformat(day).replace(tzinfo=timezone.utc).timestamp() * 1000)
+    created_at_ms = int(datetime.fromisoformat(day).replace(tzinfo=UTC).timestamp() * 1000)
     return {
         "tenant_id": "tenant-1",
         "event_type": LLM_COMPLETED,
@@ -153,7 +153,7 @@ def test_period_reconciliation_releases_only_durable_completed_prior_day_claims(
     assert budget.reserve(tenant_id="tenant-1", user_id="user-1", tokens=80, request_id="new-request") == "2026-11-15"
     assert store.get_setting(tenant_id="tenant-1", key="llm:pending:v1:2026-11-10") == {"pending": {}}
     assert store.get_setting(tenant_id="tenant-1", key="llm:pending:v2") == {
-        "revision": 2,
+        "revision": 1,
         "pending": {"new-request": {"user_id": "user-1", "tokens": 80, "day": "2026-11-15"}},
     }
 
@@ -172,7 +172,7 @@ def test_week_reconciliation_includes_prior_month_days_when_month_starts_on_sund
     assert budget.reserve(tenant_id="tenant-1", user_id="user-1", tokens=80, request_id="new-request") == "2026-11-01"
     assert store.get_setting(tenant_id="tenant-1", key="llm:pending:v1:2026-10-28") == {"pending": {}}
     assert store.get_setting(tenant_id="tenant-1", key="llm:pending:v2") == {
-        "revision": 2,
+        "revision": 1,
         "pending": {"new-request": {"user_id": "user-1", "tokens": 80, "day": "2026-11-01"}},
     }
 
@@ -196,23 +196,14 @@ def test_reserve_cancels_claim_when_utc_day_changes_after_cas():
 
 
 
-def test_budget_caps_derive_period_limits_from_custom_daily_caps():
+def test_budget_caps_keep_optional_period_caps_off_until_configured():
     caps = BudgetCaps(tenant_tokens_per_day=100, user_tokens_per_day=20)
-    assert (
-        caps.tenant_tokens_per_week,
-        caps.user_tokens_per_week,
-        caps.tenant_tokens_per_month,
-        caps.user_tokens_per_month,
-    ) == (700, 140, 3000, 600)
-
+    assert (caps.tenant_tokens_per_week, caps.user_tokens_per_week,
+            caps.tenant_tokens_per_month, caps.user_tokens_per_month) == (None, None, None, None)
     policy = LLMBudgetPolicy(tenant_tokens_per_day=50, user_tokens_per_day=10)
     policy_caps = BudgetCaps(policy=policy)
-    assert (
-        policy_caps.tenant_tokens_per_week,
-        policy_caps.user_tokens_per_week,
-        policy_caps.tenant_tokens_per_month,
-        policy_caps.user_tokens_per_month,
-    ) == (350, 70, 1500, 300)
+    assert (policy_caps.tenant_tokens_per_week, policy_caps.user_tokens_per_week,
+            policy_caps.tenant_tokens_per_month, policy_caps.user_tokens_per_month) == (None, None, None, None)
 
     explicit = BudgetCaps(
         tenant_tokens_per_day=100,
@@ -299,11 +290,11 @@ def test_completion_after_utc_midnight_reconciles_prior_day_reservation():
         settings={("tenant-1", "llm:pending:v2"): state},
     )
     budget = _period_budget(store, day=current_day)
-    assert budget._reconcile_completed(
-        tenant_id="tenant-1", day=current_day, current=state,
+    assert budget._reconcile_v2(
+        tenant_id="tenant-1", current=state,
     )
-    expected_start = int(datetime.fromisoformat(reservation_day).replace(tzinfo=timezone.utc).timestamp() * 1000)
-    expected_end = int(datetime.fromisoformat("2026-11-17").replace(tzinfo=timezone.utc).timestamp() * 1000)
+    expected_start = int(datetime.fromisoformat(reservation_day).replace(tzinfo=UTC).timestamp() * 1000)
+    expected_end = int(datetime.fromisoformat("2026-11-17").replace(tzinfo=UTC).timestamp() * 1000)
     assert store.get_setting(tenant_id="tenant-1", key="llm:pending:v2") == {"revision": 2, "pending": {}}
     assert store.windows == [(expected_start, expected_end)]
 
@@ -326,6 +317,23 @@ def test_unreconciled_legacy_writer_after_v2_cutover_fails_closed():
     assert store.get_setting(
         tenant_id="tenant-1", key="llm:pending:v2",
     )["pending"] == {"known": {"user_id": "user-1", "tokens": 10, "day": "2026-11-15"}}
+
+
+def test_completed_legacy_claim_after_v2_cutover_reconciles_before_new_admission():
+    state = {"revision": 0, "pending": {}}
+    store = _PeriodStore(
+        events=[_period_event("2026-11-10", "user-1", "old-request", 10)],
+        settings={
+            ("tenant-1", "llm:pending:v2"): state,
+            ("tenant-1", "llm:pending:v1:2026-11-10"): {
+                "pending": {"old-request": {"user_id": "user-1", "tokens": 80}},
+            },
+        },
+    )
+    budget = _period_budget(store, weekly_tenant=100, weekly_user=100)
+    assert budget.reserve(tenant_id="tenant-1", user_id="user-1", tokens=80, request_id="new-request") == "2026-11-15"
+    assert store.get_setting(tenant_id="tenant-1", key="llm:pending:v1:2026-11-10") == {"pending": {}}
+    assert store.get_setting(tenant_id="tenant-1", key="llm:pending:v2")["revision"] == 1
 
 
 class _AbaInterleavingStore(_PeriodStore):
@@ -396,4 +404,3 @@ def test_failed_duplicate_reservation_does_not_delete_existing_claim():
     assert store.get_setting(tenant_id="tenant-1", key="llm:pending:v2") == {
         "revision": 2, "pending": {},
     }
-

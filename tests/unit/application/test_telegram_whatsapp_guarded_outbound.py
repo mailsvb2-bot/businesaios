@@ -173,6 +173,31 @@ def test_native_adapter_preserves_whatsapp_policy_for_approval_but_not_as_intern
     assert result.mode == "approval_required"
 
 
+@pytest.mark.parametrize("provider_key", (
+    "telegram_bot", "vk_messaging", "max_messaging", "whatsapp_cloud",
+    "instagram_messaging", "messenger_messaging", "slack_messaging",
+    "discord_messaging", "line_messaging", "viber_messaging",
+))
+def test_provider_message_id_never_proves_customer_delivery(provider_key: str) -> None:
+    from application.business_autonomy.provider_delivery_truth import provider_approval_completion_truth
+
+    delivered, ambiguous, terminal = provider_approval_completion_truth(
+        provider_key=provider_key,
+        result={"accepted": True, "status": "live_executed",
+                "parsed_response": {"resource_id": "provider-message-id", "delivery_state": "accepted"}},
+    )
+    assert (delivered, ambiguous, terminal) == (False, True, False)
+
+
+@pytest.mark.parametrize("provider_key", ("telegram_bot", "vk_messaging", "max_messaging", "whatsapp_cloud"))
+def test_confirmed_delivery_event_is_required_to_mark_delivered(provider_key: str) -> None:
+    from application.business_autonomy.provider_delivery_truth import provider_approval_completion_truth
+
+    result = {"accepted": True, "status": "live_executed",
+              "parsed_response": {"resource_id": "message-1", "delivery_state": "delivered"}}
+    assert provider_approval_completion_truth(provider_key=provider_key, result=result) == (True, False, False)
+
+
 def test_whatsapp_provider_receipt_is_acceptance_not_final_delivery() -> None:
     from entrypoints.api.provider_admin_route_handlers import _approval_completion_truth
 

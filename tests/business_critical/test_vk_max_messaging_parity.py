@@ -102,12 +102,19 @@ def test_vk_text_keyboard_payload_round_trips_callback_data() -> None:
     assert decoded["text"] == "menu:open"
 
 
-def test_max_callback_uses_provider_callback_id_as_replay_identity() -> None:
+def test_max_callback_uses_provider_callback_id_and_message_recipient() -> None:
     payload = {
         "update_type": "message_callback",
         "timestamp": 1787259600000,
-        "user": {"user_id": 778899},
-        "callback": {"callback_id": "max-callback-1", "payload": "one"},
+        "callback": {
+            "callback_id": "max-callback-1", "payload": "one",
+            "user": {"user_id": 778899},
+        },
+        "message": {
+            "sender": {"user_id": 778899},
+            "recipient": {"chat_id": 456, "user_id": 778899, "chat_type": "dialog"},
+            "body": {"mid": "max-message-1", "text": "button context"},
+        },
     }
     route = ProviderWebhookRouteRegistry().extract(
         provider_map()["max_messaging"], {}, json.dumps(payload).encode()
@@ -116,6 +123,25 @@ def test_max_callback_uses_provider_callback_id_as_replay_identity() -> None:
     assert route["resource_id"] == "max-callback-1"
     assert route["messaging_ingress"]["text"] == "one"
     assert route["messaging_ingress"]["user_id"] == "778899"
+    assert route["messaging_ingress"]["chat_id"] == "456"
+
+
+def test_max_callback_without_live_message_context_has_no_replyable_ingress() -> None:
+    payload = {
+        "update_type": "message_callback",
+        "timestamp": 1787259600000,
+        "callback": {
+            "callback_id": "max-callback-deleted", "payload": "one",
+            "user": {"user_id": 778899},
+        },
+        "message": None,
+    }
+    route = ProviderWebhookRouteRegistry().extract(
+        provider_map()["max_messaging"], {}, json.dumps(payload).encode()
+    )
+    assert route["event_key"] == "max-callback-deleted"
+    assert route["resource_id"] == "max-callback-deleted"
+    assert route["messaging_ingress"] == {}
 
 
 def test_native_vk_adapter_carries_canonical_markup_into_approved_provider_subject() -> None:

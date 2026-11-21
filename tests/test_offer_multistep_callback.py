@@ -11,7 +11,7 @@ class _DummyState:
         self.product = {"product_id": "organization_platform", "domain": "organization_platform"}
 
 
-def test_offer_accept_callback_returns_execute_plan_with_payment_step():
+def test_offer_accept_callback_routes_to_canonical_commercial_owner_without_untrusted_charge():
     ctx = TelegramCtx(
         state=_DummyState(),
         text="",
@@ -38,16 +38,19 @@ def test_offer_accept_callback_returns_execute_plan_with_payment_step():
     )
 
     out = handle(ctx, default_price_rub=4900)
-    assert isinstance(out, dict)
-    assert out.get("action") == "execute_plan@v1"
-    steps = out.get("steps")
-    assert isinstance(steps, list)
-    assert any(s.get("action") == "create_payment_and_send_link@v1" for s in steps)
-    pay = [s for s in steps if s.get("action") == "create_payment_and_send_link@v1"][0]
-    assert int(pay.get("amount")) == 1234
+    assert out.action == "send_message@v1"
+    assert out.payload["callback_query_id"] == "cbq1"
+    assert out.payload["track_payload"]["payment_confirmed"] is False
+    assert out.payload["track_payload"]["offer_id"] == "launch"
+    assert "серверный каталог" in out.payload["text"]
+    assert "amount" not in out.payload
+    assert "steps" not in out.payload
+    from core.ux.unified_messenger_menu import BUSINESS_ONBOARDING_URL
+    buttons = [b for row in out.payload["reply_markup"]["inline_keyboard"] for b in row]
+    assert any(b.get("url") == BUSINESS_ONBOARDING_URL for b in buttons)
 
 
-def test_offer_decline_callback_returns_execute_plan_with_message():
+def test_offer_decline_callback_uses_single_verified_message_and_receipt():
     ctx = TelegramCtx(
         state=_DummyState(),
         text="",
@@ -74,7 +77,8 @@ def test_offer_decline_callback_returns_execute_plan_with_message():
     )
 
     out = handle(ctx, default_price_rub=4900)
-    assert isinstance(out, dict)
-    assert out.get("action") == "execute_plan@v1"
-    steps = out.get("steps")
-    assert any(s.get("action") == "send_message@v1" for s in steps)
+    assert out.action == "send_message@v1"
+    assert out.payload["callback_query_id"] == "cbq1"
+    assert out.payload["track_payload"]["kind"] == "decline"
+    assert "Без давления" in out.payload["text"]
+    assert "steps" not in out.payload

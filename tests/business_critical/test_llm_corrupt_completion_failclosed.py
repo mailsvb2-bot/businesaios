@@ -10,8 +10,7 @@ def corrupt_store():
     store.iter_events.return_value = [
         {"user_id": "u", "payload": {"request_id": "req", "provider": "openai", "model": "gpt-4.1-mini", "prompt_tokens": 2, "completion_tokens": 8, "total_tokens": "not-a-number"}}
     ]
-    state = {"revision": 0, "pending": {"req": {"user_id": "u", "tokens": 10}}}
-    store.get_setting.side_effect = lambda *, tenant_id=None, key=None: state if key in {None, "llm:pending:v2"} else None
+    store.get_setting.return_value = {"pending": {"req": {"user_id": "u", "tokens": 10}}}
     return store
 
 
@@ -35,7 +34,6 @@ def test_fast_aggregate_cannot_hide_corrupt_provider_completion(value):
     store = Mock()
     store.sum_event_payload_int.return_value = 0
     store.iter_events.return_value = [{"user_id": "u", "payload": {"request_id": "req", "provider": "openai", "model": "gpt-4.1-mini", "prompt_tokens": 5, "completion_tokens": 5, "total_tokens": value}}]
-    store.get_setting.return_value = None
     budget = EventStoreDailyTokenBudget(event_store=store, caps=BudgetCaps())
     with pytest.raises(RuntimeError, match="LLM_BUDGET_CORRUPT_COMPLETION"):
         budget.can_spend(tenant_id="t", user_id="u", tokens=1)
@@ -46,7 +44,6 @@ def test_fast_aggregate_cannot_underreport_valid_provider_completion():
     store = Mock()
     store.sum_event_payload_int.return_value = 0
     store.iter_events.return_value = [{"user_id": "u", "payload": {"request_id": "req", "provider": "openai", "model": "gpt-4.1-mini", "prompt_tokens": 8, "completion_tokens": 12, "total_tokens": 20}}]
-    store.get_setting.return_value = None
     budget = EventStoreDailyTokenBudget(
         event_store=store,
         caps=BudgetCaps(tenant_tokens_per_day=20, user_tokens_per_day=20),
@@ -58,7 +55,6 @@ def test_fast_aggregate_cannot_underreport_valid_provider_completion():
 def test_completion_without_user_identity_fails_closed():
     store = Mock()
     store.iter_events.return_value = [{"user_id": "", "payload": {"request_id": "req", "provider": "openai", "model": "gpt-4.1-mini", "prompt_tokens": 8, "completion_tokens": 12, "total_tokens": 20}}]
-    store.get_setting.return_value = None
     budget = EventStoreDailyTokenBudget(event_store=store, caps=BudgetCaps())
     with pytest.raises(RuntimeError, match="LLM_BUDGET_CORRUPT_COMPLETION"):
         budget.can_spend(tenant_id="t", user_id="u", tokens=1)
@@ -78,8 +74,7 @@ def test_completion_without_user_identity_fails_closed():
 )
 def test_corrupt_pending_reservation_cannot_release_budget_headroom(row):
     store = Mock()
-    state = {"revision": 0, "pending": {"stale": row}}
-    store.get_setting.side_effect = lambda *, tenant_id=None, key=None: state if key == "llm:pending:v2" else None
+    store.get_setting.return_value = {"pending": {"stale": row}}
     store.iter_events.return_value = []
     budget = EventStoreDailyTokenBudget(event_store=store, caps=BudgetCaps())
     assert budget.reserve(tenant_id="t", user_id="u", tokens=1, request_id="new") is None
@@ -131,7 +126,6 @@ def test_completion_without_provider_identity_or_consistent_token_measurements_f
     payload.update(changes)
     store = Mock()
     store.iter_events.return_value = [{"user_id": "u", "payload": payload}]
-    store.get_setting.return_value = None
     budget = EventStoreDailyTokenBudget(event_store=store, caps=BudgetCaps())
     with pytest.raises(RuntimeError, match="LLM_BUDGET_CORRUPT_COMPLETION"):
         budget.can_spend(tenant_id="t", user_id="u", tokens=1)
@@ -141,10 +135,72 @@ def test_durable_budget_contract_does_not_require_unused_fast_aggregate():
     from core.llm.budget import has_durable_budget_store
 
     store = Mock(
-        sum_event_payload_int=None,
+        supports_durable_llm_budget=True,
         iter_events=Mock(),
         get_setting=Mock(),
         compare_and_set_setting=Mock(),
         append_event=Mock(),
     )
     assert has_durable_budget_store(store)
+    assert not has_durable_budget_store(Mock(
+        iter_events=Mock(),
+        get_setting=Mock(),
+        compare_and_set_setting=Mock(),
+        append_event=Mock(),
+    ))
+
+
+def test_only_open_schema_verified_persistent_event_stores_support_llm_budgets(tmp_path):
+    from core.llm.budget import has_durable_budget_store
+    from runtime.platform.event_store.memory_event_store import MemoryEventStore
+    from runtime.platform.event_store.postgres_event_store import PostgresEventStore
+    from runtime.platform.event_store.sqlite_event_store import SqliteEventStore
+
+    postgres = PostgresEventStore("postgresql://unused", enabled=True)
+    sqlite = SqliteEventStore(str(tmp_path / "events.sqlite3"))
+    memory = MemoryEventStore()
+    assert not has_durable_budget_store(postgres)
+    assert not has_durable_budget_store(sqlite)
+    assert not has_durable_budget_store(memory)
+
+    class _Port:
+        def fetchone(self, query):
+            assert "schema_migrations" in query and "information_schema.columns" in query
+            return (True, True, True)
+
+        def commit(self):
+            return None
+
+        def __exit__(self, exc_type, exc, tb):
+            return None
+
+    postgres._port = _Port()
+    postgres._verify_schema()
+    # PostgresEventStore sets this capability only after __enter__ has verified
+    # the schema and retained an open port; simulate that completed lifecycle.
+    postgres.supports_durable_llm_budget = True
+    assert has_durable_budget_store(postgres)
+    with sqlite:
+        assert has_durable_budget_store(sqlite)
+    assert not has_durable_budget_store(sqlite)
+    assert not has_durable_budget_store(memory)
+
+    class _FailingPort:
+        def __exit__(self, exc_type, exc, tb):
+            raise OSError("postgres close failed")
+
+    class _Connection:
+        def close(self):
+            raise OSError("sqlite close failed")
+
+    postgres._port = _FailingPort()
+    postgres.supports_durable_llm_budget = True
+    with pytest.raises(OSError, match="postgres close failed"):
+        postgres.__exit__(None, None, None)
+    assert not has_durable_budget_store(postgres)
+
+    sqlite._db = _Connection()
+    sqlite._schema_verified = True
+    with pytest.raises(OSError, match="sqlite close failed"):
+        sqlite.__exit__(None, None, None)
+    assert not has_durable_budget_store(sqlite)

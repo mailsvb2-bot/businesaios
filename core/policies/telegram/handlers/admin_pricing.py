@@ -8,7 +8,8 @@ from __future__ import annotations
 
 from collections.abc import Callable
 
-from core.policies.telegram.context import TelegramCtx
+from core.policies.telegram.context import TelegramCtx, policy_scope, scoped_plan
+from core.policies.telegram.handlers.admin.pricing_support import pricing_change_request_payload
 from core.policies.telegram.helpers import ProposedAction, propose
 from core.ux.telegram_keyboards import kb_staff_menu
 
@@ -68,34 +69,15 @@ def handle_admin_pricing_session(
         if plan_id <= 0:
             return pm("Сессия сломалась (plan_id). Открой pricing menu заново.", kb_staff_menu(), None, None)
 
-        import uuid
-
-        rid = str(uuid.uuid4())
-        msg = (
-            "📝 Change-request создан.\n\n"
-            f"plan_id: {plan_id}\n"
-            f"new_price: {price} ₽\n"
-            f"request_id: {rid}\n"
-            + (f"suggested_version: {suggested_v}\n" if suggested_v else "")
-            + "\nДальше: открой ‘Pending requests’ и нажми Approve."
-        )
-        return propose(
-            "request_pricing_change@v1",
-            {
-                "admin_id": str(user_id),
-                "plan_id": int(plan_id),
-                "new_price": int(price),
-                "request_id": rid,
-                "suggested_pricing_version": suggested_v,
-                "notify_text": msg,
-                "notify_reply_markup": {
-                    "inline_keyboard": [
-                        [{"text": "📋 Pending requests", "callback_data": "admin:pricing:pending"}],
-                        [{"text": "⬅️ Назад", "callback_data": "admin:menu"}],
-                    ]
-                },
-            },
-        )
+        if price <= 0:
+            return pm("Цена должна быть больше нуля.", kb_staff_menu(), None, None)
+        if scoped_plan(ctx, plan_id) is None or not policy_scope(ctx).has_business:
+            return pm("Бизнес или тариф не выбран. Открой pricing menu заново.", kb_staff_menu(), None, None)
+        return propose("request_pricing_change@v1", pricing_change_request_payload(
+            admin_id=str(user_id), plan_id=plan_id, new_price=price,
+            nonce=str(sess.get("nonce") or ""),
+            suggested_pricing_version=suggested_v, callback_query_id=ctx.callback_query_id,
+        ))
 
     # stage == await_approve_version
     version = raw.strip()
@@ -113,14 +95,20 @@ def handle_admin_pricing_session(
         if str(r.get("request_id") or "") == rid:
             match = r
             break
-    if not match:
-        return pm("Не нашёл этот request_id в event-store. Обнови pending и попробуй снова.", kb_staff_menu(), None, None)
+    scope = policy_scope(ctx)
+    if (not match or not scope.has_business
+            or str(match.get("product_id") or "") != scope.product_id
+            or str(match.get("business_id") or "") != scope.business_id):
+        return pm("Не нашёл этот request в текущем бизнесе. Обнови pending.", kb_staff_menu(), None, None)
     if str(match.get("status")) != "pending":
         return pm("Этот request уже не pending.", kb_staff_menu(), None, None)
 
     plan_id = int(match.get("plan_id") or 0)
     price = int(match.get("new_price") or 0)
     requested_by = str(match.get("requested_by") or "")
+
+    if plan_id <= 0 or price <= 0 or scoped_plan(ctx, plan_id) is None:
+        return pm("Request содержит неверный тариф или цену.", kb_staff_menu(), None, None)
 
     # Governance: separation of duties (initiator != approver)
     if requested_by and str(requested_by) == str(user_id):
@@ -138,9 +126,8 @@ def handle_admin_pricing_session(
             "admin_id": str(user_id),
             "plan_id": plan_id,
             "new_price": price,
-            "pricing_version": version,
+            "pricing_version": version[:64],
             "request_id": rid,
-            "requested_by": requested_by,
             "notify_text": f"✅ Применил: plan #{plan_id} → {price}₽ (PRICING_VERSION={version}).",
             "notify_reply_markup": kb_staff_menu(),
         },

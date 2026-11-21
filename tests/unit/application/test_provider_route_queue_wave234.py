@@ -194,12 +194,23 @@ def test_provider_approval_resume_finalizes_alert_dedup_only_after_verified_deli
     class _Service:
         def execute_queued_provider_sync(self, **kwargs):
             assert kwargs['approval_completion_context'] == {'dedup_key': 'dedup-1', 'reservation_id': 'res-1'}
-            return {'result': {'accepted': True, 'status': 'live_executed', 'parsed_response': {'resource_id': 'msg-1'}}}
+            return {'result': {'accepted': True, 'status': 'live_executed', 'parsed_response': {'resource_id': 'msg-1', 'delivery_state': 'delivered'}}}
 
     envelope = SimpleNamespace(decision=SimpleNamespace(decision_id='dec-1', action='domain_action@v1', payload={'tenant_id': 'tenant-a'}))
     handlers = ProviderAdminRouteHandlers(service_factory=lambda **_: _Service(), approval_store_factory=lambda: _Store(), decision_loader=lambda **_: envelope, approval_completion_handler=lambda **kwargs: completed.append(kwargs))
     handlers.resume_approved_message(tenant_id='tenant-a', approval_id='ap-1')
     assert completed == [{'tenant_id': 'tenant-a', 'approval_id': 'ap-1', 'dedup_key': 'dedup-1', 'reservation_id': 'res-1', 'delivered': True, 'ambiguous': False}]
+
+
+def test_provider_approval_resume_does_not_finalize_dedup_when_slack_only_accepts():
+    from application.business_autonomy.provider_delivery_truth import provider_approval_completion_truth
+    from entrypoints.api.provider_admin_route_handlers import _approval_completion_truth
+
+    accepted_only = {'accepted': True, 'status': 'live_executed',
+                     'parsed_response': {'resource_id': 'msg-1', 'delivery_state': 'accepted'}}
+    expected = (False, True, False)
+    assert provider_approval_completion_truth(provider_key='slack_messaging', result=accepted_only) == expected
+    assert _approval_completion_truth(provider_key='slack_messaging', result=accepted_only) == expected
 
 
 def test_email_approval_resume_keeps_dedup_fail_closed_when_smtp_only_accepted():

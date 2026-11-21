@@ -11,7 +11,6 @@ The policy layer reads the catalog; prices are re-checked at pay time.
 from __future__ import annotations
 
 import json
-import os
 import re
 from pathlib import Path
 from typing import Any
@@ -29,8 +28,8 @@ _ID = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_-]{0,79}$")
 
 def _catalog_path(*, tenant_id: str | None = None, product_id: str | None = None) -> Path | None:
     """Require explicit tenant/product ownership; never fall back to legacy data/plans.json."""
-    tenant = str(tenant_id if tenant_id is not None else os.getenv("TENANT_ID") or "").strip()
-    product = str(product_id if product_id is not None else os.getenv("PRODUCT_ID") or "").strip()
+    tenant = str(tenant_id or "").strip()
+    product = str(product_id or "").strip()
     if not (_ID.fullmatch(tenant) and _ID.fullmatch(product)):
         return None
     return _repo_root() / "data" / "plan_catalogs" / tenant / f"{product}.json"
@@ -43,8 +42,8 @@ def load_plans(*, tenant_id: str | None = None, product_id: str | None = None) -
     try:
         raw = json.loads(path.read_text(encoding="utf-8"))
         if (isinstance(raw, dict)
-                and raw.get("tenant_id") == (tenant_id if tenant_id is not None else os.getenv("TENANT_ID"))
-                and raw.get("product_id") == (product_id if product_id is not None else os.getenv("PRODUCT_ID"))
+                and raw.get("tenant_id") == str(tenant_id).strip()
+                and raw.get("product_id") == str(product_id).strip()
                 and isinstance(raw.get("plans"), list)):
             return [{**p, "tenant_id": raw["tenant_id"], "product_id": raw["product_id"]} for p in raw["plans"] if isinstance(p, dict)]
     except Exception:

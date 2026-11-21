@@ -1,8 +1,21 @@
 """Business admin sub-dispatch split out of business_flow_ops (catalog, ads, retention)."""
-
 from __future__ import annotations
 
+from application.business_flows import ad_media as _ad_media
+from application.business_flows import admin as ad
+from application.business_flows import catalog as cg
+from application.business_flows import event_channels as ec
+from application.business_flows import event_notifications as en
+from application.business_flows import native_channels as nc
+from application.business_flows import owner_panels as op_
+from application.business_flows import promotions as pm
+from application.business_flows import sales as sl
 from application.business_flows.projection import flow_payloads, flow_rows
+from application.organization.registry import OrganizationRegistry
+from contracts.organization import OrganizationStatus
+from runtime.messaging_policy_alert_subscriptions.settings_key import SETTING_KEY
+from runtime.messaging_policy_alert_subscriptions.settings_value_builder import canonical_alert_subscriptions_value
+from runtime.platform.config.env_flags import env_str
 
 CATALOG_OPS = frozenset(
     {
@@ -30,12 +43,8 @@ CATALOG_OPS = frozenset(
     }
 )
 COMMERCE_OPS = frozenset({"commerce", "commerce_check", "commerce_expand"})
-
-
 def _catalog(done, op, arg, facts_, now=None):
     """Directions / offerings / formats; archive keeps history (catalog.py)."""
-    from application.business_flows import catalog as cg
-
     c = cg.replay(facts_)
     if op == "offering_process":
         return done(cg.process_text(cg.offering_process(c, arg)))
@@ -91,14 +100,10 @@ def _catalog(done, op, arg, facts_, now=None):
         ch = cg.confirm_profile_details(c)
         return done("✅ Детали профиля подтверждены." if ch else "Уже подтверждено.", ch)
     return done(cg.offerings_text(c))
-
-
 def _ads(body, done, st, op, arg, facts_, sl_replay=None):
     """Governed ad proposals: drafts, exact-cap consent via approvals, publish gated by connector truth."""
     from application.business_flows import ad_proposals as ap
     from interfaces.ads.registry import CONNECTORS
-    from runtime.platform.config.env_flags import env_str
-
     drafts = ap.replay(facts_)
     if op == "ad_draft":
         ch = ap.draft(arg)
@@ -114,7 +119,6 @@ def _ads(body, done, st, op, arg, facts_, sl_replay=None):
         return done("✏️ Текст рекламы обновлён." if ch else "Без изменений.", ch)
     if op in {"ad_stats", "ad_report"}:
         from application.business_flows import ad_analytics as aa
-
         if op == "ad_stats":
             return done("📈 Статистика записана. /ad_report", aa.record(drafts, arg))
         leads = list(sl_replay().leads.values())
@@ -129,12 +133,9 @@ def _ads(body, done, st, op, arg, facts_, sl_replay=None):
         text, ch = ap.publish_decision(ap.by_ref(drafts, arg), st.approvals, production_ready=ready)
         return done(text, ch)
     return done(ap.list_text(drafts, st.approvals))
-
-
 def _creatives_text(arg):
     """/ad_creatives [bookings|won] ; variant:job:bps:leads:bookings:won ; ... -> one bounded advisory step."""
     from application.business_flows import yandex_growth as yg
-
     parts = [p.strip() for p in arg.split(";") if p.strip()]
     metric = parts.pop(0) if parts and parts[0] in yg.CREATIVE_METRICS else "bookings"
     keys = ("variant_id", "publication_job_id", "allocation_bps", "leads", "bookings", "won")
@@ -153,11 +154,8 @@ def _creatives_text(arg):
             f"{e['variant_id']} {e['current_allocation_bps'] / 100:.0f}%→{e['proposed_allocation_bps'] / 100:.0f}%"
             for e in r["evidence"]))
     return "\n".join(rows)
-
-
 def _retention(done, st, op, arg, now, *, tenant_id, event_store):
     """/retention cohorts and /reactivate -> sales lead; never sends (retention.py)."""
-    from application.business_flows import admin as ad
     from application.business_flows import bookings as bk
     from application.business_flows import retention as rt
 
@@ -178,7 +176,6 @@ def _retention(done, st, op, arg, now, *, tenant_id, event_store):
 
 def _slot_with_offering(bk, arg, now, *, tenant_id, event_store):
     """/add_slot in the business timezone; ``#N`` binds the slot to catalog offering N."""
-    from application.business_flows import catalog as cg
 
     c = cg.replay(flow_payloads(event_store, tenant_id=tenant_id, event_type="business_admin@v1"))
     change = bk.parse_slot(arg, now_ms=now, tz=c.timezone)
@@ -191,7 +188,6 @@ def _slot_with_offering(bk, arg, now, *, tenant_id, event_store):
 
 def _sales_inbound(done, body, env, *, tenant_id, event_store):
     """Customer free text -> one lead_inbound fact (sales_intelligence); reply is the policy's text."""
-    from application.business_flows import admin as ad
     from application.business_flows import sales_inbound as si
 
     reply = str(body.get("reply") or "Спасибо, сообщение получено.")[:1000]
@@ -199,7 +195,8 @@ def _sales_inbound(done, body, env, *, tenant_id, event_store):
     ai = settings.get("sales_ai", "off").strip().casefold() in ("on", "1", "true")
     try:
         fact = si.record_message(
-            flow_payloads(event_store, tenant_id=tenant_id, event_type="sales_pipeline@v1"),
+            flow_payloads(event_store, tenant_id=tenant_id, event_type="sales_pipeline@v1",
+                          business_id=str(body.get("business_id") or "").strip() or None),
             channel="telegram",
             subject=str(body.get("user_id") or ""),
             name=str(body.get("name") or ""),
@@ -219,8 +216,6 @@ FOLLOWUP_OPS = frozenset({"followup", "followup_plan", "followup_cancel", "optou
 def _followups(done, push, st, op, arg, now, *, tenant_id, event_store):
     """Per-lead follow-ups (sales_followups.py); delivery only via ``push`` to the lead's Telegram id."""
     from application.business_flows import automation_policy as ap
-    from application.business_flows import catalog as cg
-    from application.business_flows import sales as sl
     from application.business_flows import sales_followups as sf
 
     tz = cg.replay(flow_payloads(event_store, tenant_id=tenant_id, event_type="business_admin@v1")).timezone
@@ -239,6 +234,16 @@ def _followups(done, push, st, op, arg, now, *, tenant_id, event_store):
     if ap.in_quiet_hours(now, tz):
         return done("🌙 Сейчас тихие часы (22:00–08:00), отправка отложена.")
     due = sf.due(st, now_ms=now)
+    if sf.confirmed_delivery_enabled():
+        # P1-21: customer message first (untracked); the fact follows the provider's answer.
+        sent = 0
+        for x in due:
+            fact = sf.delivery_fact(x, push(text=x.followup_text, to_user_id=x.customer_id, change=None))
+            sent += fact["step"] == "followup_sent"
+            done(f"✅ Напоминание доставлено: {x.name}" if fact["step"] == "followup_sent" else
+                 f"⚠️ Не доставлено: {x.name} (попытка {fact['attempt']} из {sf.MAX_ATTEMPTS}"
+                 + (", напоминание снято)" if fact["final"] else ", повтор при следующей отправке)"), fact)
+        return done(f"✉️ Напоминаний доставлено: {sent} из {len(due)}.")
     sent = sum(
         bool(
             push(
@@ -258,12 +263,9 @@ PROMO_OPS = frozenset({"promote", "promotions", "promo_open", "promo_book"})
 def _destination(camp, *, tenant_id, event_store):
     """Acquisition destination for a campaign over the replayed bot + native channel connections."""
     from application.business_flows import bot_provisioning as botprov
-    from application.business_flows import promotions as pm
-    from runtime.handler_impl.domains.business_flow_ops import _messenger_connections
-    from runtime.platform.config.env_flags import env_str
 
     bots = list(botprov.replay(flow_payloads(event_store, tenant_id=tenant_id, event_type="bot_provisioning@v1")).values())
-    conns = _messenger_connections(flow_payloads(event_store, tenant_id=tenant_id, event_type="business_admin@v1"))
+    conns = nc.messenger_connections(flow_payloads(event_store, tenant_id=tenant_id, event_type="business_admin@v1"))
     return pm.acquisition_destination(camp, base_url=env_str("PUBLIC_BASE_URL", ""), bots=bots, connections=conns)
 
 
@@ -271,8 +273,6 @@ def _promotions(done, bk, op, arg, now, slots, facts, *, user_id, tenant_id, eve
     """Slot promotions (donor ``promotions``): owner creates/refreshes, customer opens/books with attribution."""
     import secrets
 
-    from application.business_flows import catalog as cg
-    from application.business_flows import promotions as pm
 
     camps = pm.replay(facts)
     c = cg.replay(flow_payloads(event_store, tenant_id=tenant_id, event_type="business_admin@v1"))
@@ -339,8 +339,6 @@ EVENT_OPS = frozenset({"add_sessions", "edit_slot", "event_schedule", "reschedul
 
 def _events(done, push, bk, op, arg, now, slots, *, tenant_id, event_store):
     """Owner event editing over sessions (donor events + event_notifications reschedule)."""
-    from application.business_flows import catalog as cg
-    from application.business_flows import event_notifications as en
 
     tz = cg.replay(flow_payloads(event_store, tenant_id=tenant_id, event_type="business_admin@v1")).timezone
     live = [s for s in bk.upcoming(slots, now_ms=now) if s.status != "closed"]
@@ -360,11 +358,10 @@ def _events(done, push, bk, op, arg, now, slots, *, tenant_id, event_store):
     slot = live[int(n) - 1] if n.isdigit() and 0 < int(n) <= len(live) else None
     if op == "event_schedule":
         from application.business_flows import event_schedule_edit as ese
-        from application.business_flows.owner_panels import series_of
 
         if slot is None:
             raise ValueError("slot_not_found: /event_schedule N")
-        series = series_of(slot, slots)
+        series = op_.series_of(slot, slots)
         if not rest.strip():
             return done(ese.edit_message(series, tz=tz) + f"\n\nОтвет: /event_schedule {n} и строки ниже", None)
         text, ch, moved = ese.edit_result(series, rest, now_ms=now, tz=tz)
@@ -391,7 +388,6 @@ CHANNEL_OPS = frozenset({"link_channels", "channel_verify"})
 
 def _event_channels(done, bk, op, arg, now, slots, facts, *, user_id, platform="telegram"):
     """Booking messenger verification (donor event_registration_channels)."""
-    from application.business_flows import event_channels as ec
 
     if op == "channel_verify":
         ch = ec.consume(
@@ -414,11 +410,7 @@ PANEL_OPS = frozenset({"announce", "event_promo", "attention", "ad_channels", "a
 
 
 def _owner_journey(bk, slots, *, tenant_id, event_store):
-    from application.business_flows import admin as ad
     from application.business_flows import event_series as es
-    from application.business_flows import owner_panels as op_
-    from application.business_flows import promotions as pr
-    from application.business_flows import sales as sl
 
     def facts(t):
         return flow_payloads(event_store, tenant_id=tenant_id, event_type=t)
@@ -430,7 +422,7 @@ def _owner_journey(bk, slots, *, tenant_id, event_store):
         slots=slots,
         attendance=es.replay(facts("event_series@v1")).attendance,
         payments=list(ad.replay(facts("business_admin@v1")).payments.values()),
-        camps=pr.replay(facts("bookings@v1")),
+        camps=pm.replay(facts("bookings@v1")),
         reactivated=sum(1 for x in leads if x.source.startswith("reactivation:") and x.customer_id in booked),
     )
 
@@ -444,8 +436,6 @@ def _panels(done, *a, **kw):
 
 
 def _panel(done, bk, op, arg, now, slots, facts, *, tenant_id, event_store):
-    from application.business_flows import owner_panels as op_
-    from application.business_flows import promotions as pr
     from runtime.ads.connector_wiring import ad_connections_enabled, yandex_direct_configured
 
     ready = ad_connections_enabled() and yandex_direct_configured()
@@ -464,7 +454,7 @@ def _panel(done, bk, op, arg, now, slots, facts, *, tenant_id, event_store):
     n, _, rest = arg.partition(" ")
     if not (n.isdigit() and 0 < int(n) <= len(live)):
         raise ValueError("укажите номер из /schedule")
-    slot, camps = live[int(n) - 1], pr.replay(facts)
+    slot, camps = live[int(n) - 1], pm.replay(facts)
     if op == "announce":
         return done(op_.announcement(slot, slots, camps, description=rest), None)
     return done(op_.promotion_text(op_.promotion_snapshot(slot, slots, camps)), None)
@@ -542,8 +532,6 @@ def channel_reminder_copies(effects, env, body, facts, bk, slot, minutes, label)
     native provider queue; returns the reminder text (channel vk/max -> _NativeProviderQueueAdapter; MAX paced by ProviderPacingCoordinator)."""
     import hashlib
 
-    from application.business_flows import event_channels as ec
-    from application.business_flows import event_notifications as en
 
     text = f"⏰ Напоминание ({label}): {bk.fmt(slot)}\n" + en.reminder_text(slot, minutes)
     tenant_id = str(body.get("tenant_id") or "")
@@ -613,7 +601,6 @@ def _trials(op, arg, facts):
 
 def _revenue_text(op, arg, now, event_store, tenant_id):
     """Owner read-only attribution/outcome screens (promotions attribution spine; no spend input)."""
-    from application.business_flows import promotions as pm
 
     adm = flow_rows(event_store, tenant_id=tenant_id, event_type="business_admin@v1")
     bkg = flow_rows(event_store, tenant_id=tenant_id, event_type="bookings@v1")
@@ -640,11 +627,10 @@ def _revenue_text(op, arg, now, event_store, tenant_id):
             f"Из контакта в оплату: {j['touched_then_paid']}")
 
 
-def _visual(body, effects, env, facts, arg, done):
+def _visual(body, effects, env, facts, arg, done, *, now_ms: int = 0, event_store=None):
     """/visual Название [| стиль [| формат]] or /visual Название | style x: YandexART via executor."""
     from application.business_flows import event_landing as el
     from application.business_flows import visual_creatives as vc
-    from runtime.platform.config.env_flags import env_str
 
     title, cmd, val = vc.parse_command(arg)
     st = vc.replay(facts("event_series@v1"))
@@ -658,6 +644,14 @@ def _visual(body, effects, env, facts, arg, done):
     fmt = cmd if cmd in vc.FORMATS else (val or "post")
     ld = el.replay(facts("event_series@v1")).get(el.key_for(title))
     brief = vc.build_brief(title, context=(ld.sections.get("about", "") if ld else ""), style=style, fmt=fmt)
+    knobs = _ad_media.media_gen_operator_env(env_str)
+    if _ad_media.media_gen_enabled(knobs):
+        text, fact = _ad_media.generate_budgeted(
+            facts=facts("event_series@v1"), brief=brief, env=knobs,
+            now_ms=now_ms, event_store=event_store, tenant_id=str(body.get("tenant_id") or ""),
+            call=lambda adapter: adapter(effects, env, body, brief),
+        )
+        return done(text, fact)
     if brief.payload_key in st.generated:
         g = st.generated[brief.payload_key]
         return done(f"🖼 Такое изображение уже создано: {g['path']} ({g['size']} байт). Повтор не тратит бюджет.")
@@ -680,14 +674,59 @@ def _visual(body, effects, env, facts, arg, done):
     return done(f"🖼 Изображение готово ({label}): {fact['path']}", fact)
 
 
+def _yandexart_media_adapter(effects, env, body, brief):
+    folder = env_str("YANDEX_ART_FOLDER_ID", env_str("YANDEXGPT_FOLDER_ID",
+                     env_str("YANDEX_FOLDER_ID", ""))).strip()
+    generator = getattr(effects, "marketing_image_generate", None)
+    if not folder or not callable(generator):
+        return {"ok": False}
+    return generator(
+        decision_id=str(env.decision.decision_id),
+        correlation_id=str(env.decision.correlation_id),
+        admin_id=str(body.get("user_id") or ""),
+        brief=brief.to_mapping(), payload_key=brief.payload_key,
+    )
+
+
+_ad_media.register_media_provider("yandexart", _yandexart_media_adapter)
+
+
+def _visual_publish(body, facts, arg, done):
+    """Separate explicit owner confirmation, never a side effect of generation."""
+    from application.business_flows import event_series as es
+    from application.business_flows import visual_creatives as vc
+
+    if not _ad_media.media_gen_enabled(_ad_media.media_gen_operator_env(env_str)):
+        return done("🔒 Публикация сгенерированных изображений выключена оператором.")
+    try:
+        key, event_id, stage, slot, confirmed = _ad_media.parse_media_publish(arg)
+    except ValueError as exc:
+        return done(str(exc))
+    generated = vc.replay(facts("event_series@v1")).generated.get(key)
+    if not generated:
+        return done("Изображение с этим ключом не найдено. Создайте его через /visual.")
+    if not confirmed:
+        return done(f"Предпросмотр: {generated['path']} → {event_id} / {stage} / {slot}.\n"
+                    f"Для подтверждения: /visual_publish {key} | {event_id} | {stage} | {slot} | да")
+    state = es.replay(es.expand(facts("event_series@v1")))
+    try:
+        asset, events = es.store_generated_asset(
+            state, event_id=event_id, stage=stage, slot_key=slot, kind="image",
+            stored_reference=str(generated["path"]), source_ref=key,
+        )
+    except (ValueError, RuntimeError) as exc:
+        return done(f"⚠️ Не удалось привязать изображение: {type(exc).__name__}")
+    change = events[0] if len(events) == 1 else (
+        {"step": "batch", "facts": events} if events else None
+    )
+    return done(f"✅ Изображение привязано к событию, ревизия {asset['revision']}.", change)
+
+
 def _sales_ai(send, body, effects, st, arg, *, decision, tenant_id, event_store):
     """/lead_ai N | текст клиента -> draft reply note + optional stage button (never sent to the customer)."""
-    from application.business_flows import admin as ad
     from application.business_flows import cockpit as cp
     from application.business_flows import cockpit_sales as cs
-    from application.business_flows import sales as sl
     from application.business_flows import sales_ai as sa
-    from runtime.platform.config.env_flags import env_str
 
     ref, _, text = (x.strip() for x in arg.partition("|"))
     lead = sl.pick(st, ref)
@@ -726,7 +765,6 @@ def _sales_ai(send, body, effects, st, arg, *, decision, tenant_id, event_store)
 
 def _commerce(done, body, st, op, arg, *, tenant_id, event_store):
     """Tariff usage/limits (ai_commerce port): usage from team roles + bookings customers; no private ledger."""
-    from application.business_flows import admin as ad
 
     usage = ad.commerce_usage(event_store, tenant_id, str(body.get("user_id") or ""), st.archived_customers)
     if op == "commerce_check":
@@ -748,3 +786,207 @@ def _commerce(done, body, st, op, arg, *, tenant_id, event_store):
             return done("📨 Запрос на расширение уже зарегистрирован; оператор свяжется в боте.")
         return done("📨 Запрос на расширение тарифа зарегистрирован (обращение billing).\n" + ch["title"], ch)
     return done(ad.commerce_text(overview))
+
+
+def _organization_settings(*, event_store, idempotency_path, body, tenant_id, op, arg, decision_id):
+    """Use the existing organization registry, not a second Telegram-owned store."""
+    from pathlib import Path
+
+    from reliability.idempotency_store import JsonlIdempotencyStore
+
+    if not idempotency_path or not str(body.get("business_id") or "").strip():
+        return "🏢 Выберите бизнес; реестр недоступен без подтверждённого контекста.", None
+    try:
+        registry = OrganizationRegistry(
+            event_store=event_store,
+            idempotency_store=JsonlIdempotencyStore(Path(idempotency_path)),
+        )
+        return organization_card(
+            registry=registry, tenant_id=tenant_id,
+            business_id=str(body["business_id"]),
+            user_id=str(body["user_id"]), operation=op,
+            arg=arg, decision_id=decision_id,
+        )
+    except (RuntimeError, ValueError, LookupError, OSError):
+        return ("🏢 Не удалось открыть или сохранить карточку. Проверьте формат команды и доступ к реестру.",
+                {"inline_keyboard": [[{"text": "⬅️ Настройки", "callback_data": "settings:menu"}]]})
+
+
+def organization_card(*, registry: OrganizationRegistry, tenant_id: str, business_id: str,
+                      user_id: str, operation: str, arg: str, decision_id: str) -> tuple[str, dict]:
+    if operation not in {"organization_show", "organization_create", "organization_name", "organization_type"}:
+        raise ValueError("unsupported_organization_operation")
+    active = [
+        item for item in registry.list_for_business(tenant_id=tenant_id, business_id=business_id)
+        if item.status is OrganizationStatus.ACTIVE
+    ]
+    preferred = next((item for item in active if item.organization_id == business_id), None)
+    if preferred is None:
+        if len(active) > 1:
+            raise ValueError("multiple_organizations_require_explicit_selection")
+        preferred = active[0] if active else None
+    if operation != "organization_show" and not arg:
+        raise ValueError("organization_value_required")
+    identity = {"tenant_id": tenant_id, "business_id": business_id}
+    audit = {"actor_id": user_id, "decision_id": decision_id}
+    if operation == "organization_create":
+        if preferred is not None:
+            raise ValueError("organization_already_exists")
+        name, divider, kind = arg.partition("|")
+        if not name.strip():
+            raise ValueError("organization_name_required")
+        preferred = registry.create(
+            **identity, organization_id=business_id, idempotency_key=decision_id,
+            name=name.strip(), organization_type=kind.strip() if divider else None,
+            event_metadata=audit,
+        )
+    elif operation in {"organization_name", "organization_type"}:
+        if preferred is None:
+            raise ValueError("organization_not_created")
+        field = "name" if operation == "organization_name" else "organization_type"
+        if getattr(preferred, field) != arg.strip():
+            preferred = registry.update(
+                **identity, organization_id=preferred.organization_id,
+                idempotency_key=decision_id, event_metadata=audit, **{field: arg.strip()},
+            )
+    if preferred is None:
+        text = ("🏢 Организация\n\nКарточка ещё не создана.\n"
+                "Создать: /org_create Название организации | тип")
+    else:
+        preferred = registry.get(**identity, organization_id=preferred.organization_id)
+        text = (f"🏢 Организация\n\nНазвание: {preferred.name or 'не указано'}\n"
+                f"Тип: {preferred.organization_type or 'не указан'}\n"
+                f"Статус: {preferred.status.value}\n"
+                f"ID: {preferred.organization_id}\n\n"
+                "Изменить название: /org_name Новое название\n"
+                "Изменить тип: /org_type Новый тип")
+    return text, {"inline_keyboard": [
+        [{"text": "🔄 Обновить карточку", "callback_data": "cp:settings:organization"}],
+        [{"text": "⬅️ Настройки", "callback_data": "settings:menu"}],
+    ]}
+
+
+def notification_preferences(*, settings_gateway, tenant_id: str, user_id: str, operation: str) -> tuple[str, dict]:
+    if operation not in {"notifications_show", "notifications_toggle", "notifications_level"}:
+        raise ValueError("unsupported notification operation")
+    if settings_gateway is None:
+        raise RuntimeError("canonical_notification_settings_gateway_missing")
+    levels = ("info", "warn", "critical")
+    key = SETTING_KEY
+
+    def own_entry(rows):
+        return next((item for item in rows if item["recipient_user_id"] == user_id
+                     and item["channel"] == "telegram" and not item["business_id"]), None)
+
+    if operation != "notifications_show":
+        for _ in range(3):
+            before = settings_gateway.get_value(tenant_id=tenant_id, key=key)
+            entries = canonical_alert_subscriptions_value(before, tenant_id=tenant_id)
+            current = own_entry(entries) or {
+                "recipient_user_id": user_id, "channel": "telegram", "business_id": "",
+                "enabled": False, "min_level": "warn", "code_filters": [], "user_scope": [],
+            }
+            updated = dict(current)
+            if operation == "notifications_toggle":
+                updated["enabled"] = not bool(current["enabled"])
+            else:
+                updated["min_level"] = levels[(levels.index(current["min_level"]) + 1) % len(levels)]
+            entries = [row for row in entries if not (row["recipient_user_id"] == user_id and row["channel"] == "telegram" and not row["business_id"])] + [updated]
+            if settings_gateway.compare_and_set_value(
+                tenant_id=tenant_id, key=key, expected=before, value=entries,
+            ):
+                break
+        else:
+            raise RuntimeError("notification_preferences_concurrent_change")
+    after = canonical_alert_subscriptions_value(
+        settings_gateway.get_value(tenant_id=tenant_id, key=key), tenant_id=tenant_id,
+    )
+    own = own_entry(after)
+    enabled, level = bool(own and own["enabled"]), own["min_level"] if own else "warn"
+    text = ("🔔 Системные уведомления\n\nПолучатель: ваш Telegram-аккаунт\n"
+            f"Оповещения: {'включены' if enabled else 'выключены'}\n"
+            f"Минимальная важность: {level}\n\n"
+            "Настройки относятся к служебным оповещениям, а не к рекламным рассылкам.")
+    return text, {"inline_keyboard": [
+        [{"text": "🔕 Отключить" if enabled else "🔔 Включить",
+          "callback_data": "cp:settings:notifications:toggle"}],
+        [{"text": "⚙️ Изменить важность", "callback_data": "cp:settings:notifications:level"}],
+        [{"text": "⬅️ Настройки", "callback_data": "settings:menu"}],
+    ]}
+
+
+def partner_quote_flow(op, arg, facts, known, partner_markup, *, tenant_id, event_store, user_id, done):
+    if op in {"quote", "quotes", "approve_quote", "reject_quote"}:
+        from application.business_flows import partners as ct
+        try:
+            if op == "quote":
+                # /partner_quote partner_id | amount_in_kopecks | RUB | deliverables
+                items = [item.strip() for item in arg.split("|", 3)]
+                if len(items) != 4:
+                    raise ValueError("format: /partner_quote ID | копейки | RUB | условия")
+                if items[0] not in known:
+                    raise LookupError("partner_not_found")
+                change = ct.create_quote(*items)
+                if change["quote_id"] in ct.quote_states(facts):
+                    change = None
+                    text = "ℹ️ Это предложение уже зарегистрировано. /partner_quotes"
+                else:
+                    text = ("🧾 Черновик цены сохранён. Это не договор и не разрешение платежа. "
+                            "Для внутреннего одобрения: /partner_approve " + change["quote_id"])
+            elif op == "quotes":
+                quotes = ct.quote_states(facts)
+                change = None
+                if arg and (not arg.isascii() or not arg.isdecimal() or len(arg) > 8):
+                    raise ValueError("partner_quotes_page_invalid")
+                offset = max(0, int(arg or "1") - 1)
+                rendered = [ct.format_quote(q) for q in reversed(tuple(quotes.values()))]
+                lines = []
+                for item in rendered[offset:]:
+                    if len("\n".join(lines + [item])) > 3400:
+                        break
+                    lines.append(item)
+                next_page = offset + len(lines) + 1
+                visible_quotes = list(reversed(tuple(quotes.values())))[offset: offset + len(lines)]
+                pending_ids = [q["quote_id"] for q in visible_quotes
+                               if q["status"] == "pending_owner_approval"][:3]
+                if pending_ids:
+                    partner_markup = {"inline_keyboard": [
+                        [{"text": "✅ Утвердить " + qid[3:11],
+                          "callback_data": "cp:partner:approve:" + qid},
+                         {"text": "❌ Отклонить " + qid[3:11],
+                          "callback_data": "cp:partner:reject:" + qid}]
+                        for qid in pending_ids
+                    ] + partner_markup["inline_keyboard"]}
+                text = ("🧾 Коммерческие предложения:\n"
+                        + ("\n".join(lines) or "Пока нет. /partner_quote ID | копейки | RUB | условия")
+                        + "\nЛимит одобрений: /setting partner_budget_limit_minor.rub = СУММА_В_КОПЕЙКАХ")
+                if next_page <= len(rendered):
+                    text += f"\nСледующая страница: /partner_quotes {next_page}"
+            else:
+                # Approval is for the exact immutable quote revision (quote_id).
+                # Only the canonical owner action records the decision; callback
+                # presentation never authorizes it. Enforce the internal budget
+                # before accepting a new approval.
+                budget_evidence = {}
+                if op == "approve_quote":
+                    current = ct.quote_states(facts).get(arg)
+                    if current is None:
+                        raise LookupError("partner_quote_not_found")
+                    if current["status"] == "pending_owner_approval":
+                        from application.business_flows import admin as admin_flows
+
+                        settings = admin_flows.replay(flow_payloads(
+                            event_store, tenant_id=tenant_id, event_type="business_admin@v1"
+                        )).settings
+                        budget_evidence = ct.budget_check(facts, settings, arg)
+                change = ct.decision(facts, arg, approve=op == "approve_quote")
+                if change and budget_evidence:
+                    change = {**change, **budget_evidence,
+                              "approved_by": user_id,
+                              "quote_revision": arg}
+                text = ("✅ Внутреннее согласование записано. Контрагенту не отправлено; "
+                        "оплата и договор не оформлены." if op == "approve_quote"
+                        else "🚫 Предложение отклонено.") if change else "ℹ️ Решение уже учтено."
+            return done(text, change, partner_markup)
+        except (ValueError, LookupError, PermissionError) as exc:
+            return done(f"🤝 Не получилось: {exc}", None, partner_markup)

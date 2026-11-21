@@ -130,6 +130,7 @@ ORDER_CANCELLED = "order.cancelled"
 ORDER_ARCHIVED = "order.archived"
 PROVIDER_CREATED = "provider.created"
 PROVIDER_UPDATED = "provider.updated"
+PROVIDER_LIVE_EVIDENCE = "provider.live_evidence"
 OFFER_CREATED = "offer.created"
 OFFER_UPDATED = "offer.updated"
 ACTION_AUTHORIZED = "action.authorized"
@@ -191,6 +192,7 @@ RETENTION_EVENT_TYPES: set[str] = {
 }
 
 KNOWN_EVENT_TYPES: set[str] = {
+    PROVIDER_LIVE_EVIDENCE,
     UI_CLICK,
     PAYWALL_OPENED,
     PAYWALL_CLOSED,

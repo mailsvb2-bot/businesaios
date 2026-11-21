@@ -4,6 +4,7 @@ from core.autopilot.pricing import recommend_price_minor
 from core.autopilot.resolver import resolve_autopilot_contract
 from core.autopilot.stop_loss import build_stop_loss_plan
 from core.autopilot.tasks import build_tasks_from_diagnostics, serialize_tasks
+from core.policies.telegram.context import operator_flag
 from core.policies.telegram.handlers.autopilot_parts.menu_and_dashboards import stop_loss_verdict
 from core.policies.telegram.helpers import propose
 from core.tenancy.normalization import normalize_tenant_id_or_unknown
@@ -34,7 +35,6 @@ def build_launch_action(
     diag = dict(sess.get("diag") or {}) if isinstance(sess.get("diag"), dict) else {}
     tasks = serialize_tasks(build_tasks_from_diagnostics(diag))
     sess["tasks"] = tasks
-    sess["stage"] = "running"
 
     verdict = stop_loss_verdict(ctx, contract=contract, logger=logger)
     if not verdict.allow:
@@ -61,15 +61,22 @@ def build_launch_action(
         seed=str(ctx.marketing_seed or "1"),
         user_id=str(user_id),
     )
-    changes = {"suggested_price_minor": int(rec.price_minor), "currency": rec.currency}
     tasks_text = "\n".join(
         [f"- {task.get('title', '')}: {task.get('details', '')}" for task in tasks]
     )
 
-    # A composite execute_plan with non-noop steps is intentionally rejected by
-    # the signed execution guard. Persist the canonical session and send the
-    # user acknowledgement through the existing single, authorized effect.
-    # Do not silently execute events or other side effects outside DecisionCore.
+    if operator_flag(ctx, "autopilot_execute"):
+        return propose("ads_autopilot_tick@v1", {
+            "user_id": str(user_id),
+            "objective": str(contract.north_star_metric or "profit"),
+            "max_daily_budget_minor": int(contract.constraints.daily_budget_minor),
+            "currency": str(contract.constraints.currency or "RUB"),
+            "allowed_platforms": list(contract.safety_policy.allow_channels),
+            **({"callback_query_id": ctx.callback_query_id} if ctx.callback_query_id else {}),
+        })
+
+    # No execution has occurred. Persist diagnostics and a human-readable plan.
+    sess["stage"] = "planned"
     return propose(
         "set_user_setting@v1",
         {
@@ -77,10 +84,11 @@ def build_launch_action(
             "key": "autopilot:session",
             "value": dict(sess),
             "notify_text": (
-                "✅ Запустил автопилот на 7 дней.\n\n"
-                "Вот что делать сегодня (1–3 задачи):\n"
+                "🧭 Автопилот: режим «диагностика и план».\n\n"
+                "Реальные действия пока не выполняются. Используйте подтверждённый сценарий для запуска.\n\n"
+                "План на сегодня (1–3 задачи):\n"
                 f"{tasks_text}\n\n"
-                "Открой дашборд: ‘Сегодня’ → ‘Что сделал автопилот’."
+                f"Ориентир цены: {int(rec.price_minor) // 100} {rec.currency}."
             ),
             "notify_reply_markup": kb_autopilot_menu(),
             "callback_query_id": ctx.callback_query_id,
