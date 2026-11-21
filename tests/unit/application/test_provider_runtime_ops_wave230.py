@@ -135,7 +135,7 @@ def test_ingest_provider_webhook_emits_acceptance_metric(tmp_path):
 
 def test_vk_native_callback_only_acks_after_canonical_processing(tmp_path) -> None:
     service = _service(tmp_path)
-    service.activate_provider(ProviderCredentialSubmission(tenant_id='tenant-a', business_id='vk-a', provider_key='vk_messaging', ownership_key='owner:vk-a', requested_by='owner-user', external_ref='vk://123', secrets={'webhook_secret': 'vk-secret', 'confirmation_code': 'confirm-123'}, metadata={'probe_mode': 'dry_run'}))
+    service.activate_provider(ProviderCredentialSubmission(tenant_id='tenant-a', business_id='vk-a', provider_key='vk_messaging', ownership_key='owner:vk-a', requested_by='owner-user', external_ref='vk://123', secrets={'webhook_secret': 'vk-secret', 'confirmation_code': 'confirm-123', 'group_id': '123'}, metadata={'probe_mode': 'dry_run'}))
     confirmation = b'{"type":"confirmation","group_id":123,"secret":"vk-secret"}'
     message = b'{"type":"message_new","event_id":"evt-1","group_id":123,"secret":"vk-secret","object":{"message":{"id":9,"from_id":7,"peer_id":7,"text":"hello"}}}'
     confirmed = service.ingest_provider_webhook(tenant_id='tenant-a', business_id='vk-a', provider_key='vk_messaging', headers={}, body=confirmation, event_key='', topic='')

@@ -6,7 +6,10 @@ from typing import Any
 from fastapi import APIRouter, HTTPException, Request, status
 
 from adapters.api.fastapi.router_support import business_owner_scope, json_body
-from application.business_autonomy.integration_capability_catalog import CAPABILITY_SCHEMA_VERSION, list_integration_capability_payloads
+from application.business_autonomy.integration_capability_catalog import (
+    CAPABILITY_SCHEMA_VERSION,
+    list_integration_capability_payloads,
+)
 from application.business_autonomy.provider_truth_matrix import provider_truth_map
 from entrypoints.api.provider_admin_route_handlers import ProviderAdminRouteHandlers
 
@@ -37,7 +40,26 @@ def register_business_workspace_provider_routes(*, router: APIRouter, auth_bundl
             return handlers.list_provider_sync_history(tenant_id=tenant_id, business_id=business_id, provider_key=provider_key, limit=max(1, min(int(limit), 100)))
         payload, truth = handlers.list_provider_catalog(tenant_id=tenant_id, business_id=business_id), provider_truth_map()
         rows = [{**dict(raw), 'truth_status': 'not_implemented' if (row := truth.get(str(raw.get('provider_key') or '').strip())) is None else str(row.status), 'customer_selectable': bool(row and row.read_only_supported and str(row.status) in _READY), 'read_supported': bool(row and row.read_only_supported and str(row.status) in _READY), 'write_supported': bool(row and getattr(row, 'write_supported', False)), 'approval_required': bool(row and getattr(row, 'approval_required', False)), 'live_ready': bool(row and getattr(row, 'live_ready', False)), 'write_actions_enabled': False} for raw in list(payload.get('providers') or [])]
-        return {**payload, 'providers': rows, 'capabilities': list_integration_capability_payloads(active_provider_keys=tuple(str(raw.get('provider_key') or '').strip() for raw in rows if raw.get('connected'))), 'capabilities_source': 'application.business_autonomy.integration_capability_catalog', 'capabilities_schema_version': CAPABILITY_SCHEMA_VERSION, 'write_actions_enabled': False, 'scope_source': 'authenticated_owner_session'}
+        unified = {}
+        from config.env_flags import env_bool
+        if env_bool('BAI_UNIFIED_INTEGRATION_STATUS_ENABLED', False):
+            import time
+
+            from application.business_autonomy.provider_truth_matrix import (
+                provider_channel_live_readiness,
+                unified_integration_statuses,
+            )
+            from interfaces.ads.registry import CONNECTORS
+
+            channels = provider_channel_live_readiness(
+                event_store=getattr(handlers, 'customer_event_store', None), tenant_id=tenant_id,
+                business_id=business_id, now_ms=int(time.time() * 1000),
+            )
+            unified = {'integration_statuses': unified_integration_statuses(
+                provider_rows=rows, channel_readiness=channels, ad_connectors=CONNECTORS)}
+        from interfaces.web.chat_widget.runner_components import web_chat_delivery_status
+        unified['web_chat_delivery'] = web_chat_delivery_status()
+        return {**payload, **unified, 'providers': rows, 'capabilities': list_integration_capability_payloads(active_provider_keys=tuple(str(raw.get('provider_key') or '').strip() for raw in rows if raw.get('connected'))), 'capabilities_source': 'application.business_autonomy.integration_capability_catalog', 'capabilities_schema_version': CAPABILITY_SCHEMA_VERSION, 'write_actions_enabled': False, 'scope_source': 'authenticated_owner_session'}
     @router.get('/business-workspace/customers', tags=['business-workspace'])
     async def customer_workspace(request: Request, customer_id: str = '') -> dict[str, Any]:
         _, tenant_id, business_id = _workspace_scope(request=request, auth_bundle=auth_bundle)
@@ -45,6 +67,20 @@ def register_business_workspace_provider_routes(*, router: APIRouter, auth_bundl
             return handlers.get_business_customers(tenant_id=tenant_id, business_id=business_id, customer_id=str(customer_id or '').strip())
         except KeyError as exc:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail='customer_not_found') from exc
+    @router.get('/business-workspace/sales-sources', tags=['business-workspace'])
+    async def sales_sources(request: Request, source: str = '') -> dict[str, Any]:
+        from config.env_flags import env_bool
+        _, tenant_id, business_id = _workspace_scope(request=request, auth_bundle=auth_bundle)
+        if not env_bool('BAI_SALES_CENTER_SOURCES_ENABLED', False):  # default OFF
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail='sales_sources_disabled')
+        return handlers.get_sales_sources(tenant_id=tenant_id, business_id=business_id, requested=str(source or '')[:64])
+    @router.get('/business-workspace/communications', tags=['business-workspace'])
+    async def communications(request: Request) -> dict[str, Any]:
+        from config.env_flags import env_bool
+        _, tenant_id, business_id = _workspace_scope(request=request, auth_bundle=auth_bundle)
+        if not env_bool('BAI_COMMUNICATIONS_CENTER_ENABLED', False):  # default OFF
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail='communications_center_disabled')
+        return handlers.get_communications(tenant_id=tenant_id, business_id=business_id)
     @router.post('/business-workspace/providers', tags=['business-workspace'])
     async def provider_action(request: Request) -> dict[str, Any]:
         principal, tenant_id, business_id = _workspace_scope(request=request, auth_bundle=auth_bundle)

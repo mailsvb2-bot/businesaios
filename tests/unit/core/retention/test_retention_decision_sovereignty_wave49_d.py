@@ -307,20 +307,22 @@ def test_helpers_normalization_messages_variants_and_legacy_prices(monkeypatch) 
     monkeypatch.setattr(
         core.plans,
         "active_plans",
-        lambda: [
+        lambda **_: [
             {"title": "A", "price": 123},
             {"title": "", "price": 10},
             {"title": "B", "price": "bad"},
         ],
     )
-    assert helpers.build_legacy_prices(default_price_rub=4900) == {"A": 123}
-    monkeypatch.setattr(core.plans, "active_plans", lambda: [])
-    assert helpers.build_legacy_prices(default_price_rub=4900) == {
+    scope = {"tenant_id": "t1", "product_id": "p1"}
+    assert helpers.build_legacy_prices(default_price_rub=4900, **scope) == {"A": 123}
+    assert helpers.build_legacy_prices(default_price_rub=4900) == {"Полный доступ": 4900}
+    monkeypatch.setattr(core.plans, "active_plans", lambda **_: [])
+    assert helpers.build_legacy_prices(default_price_rub=4900, **scope) == {
         "Полный доступ": 4900
     }
     monkeypatch.setattr(
         core.plans,
         "active_plans",
-        lambda: (_ for _ in ()).throw(RuntimeError()),
+        lambda **_: (_ for _ in ()).throw(RuntimeError()),
     )
-    assert helpers.build_legacy_prices(default_price_rub=1) == {"Полный доступ": 1}
+    assert helpers.build_legacy_prices(default_price_rub=1, **scope) == {"Полный доступ": 1}

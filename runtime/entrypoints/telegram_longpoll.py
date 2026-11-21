@@ -18,7 +18,6 @@ from typing import Any
 
 from application.business_flows.bot_gateway import SESSION_SOURCE as CUSTOMER_SOURCE
 from core.ai.world_state import WorldStateV1
-from runtime.safety import verified_inbound_reply_scope
 from runtime.boot.env import (
     env_bool,
     env_int,
@@ -35,6 +34,7 @@ from runtime.messaging_ingress import (
     messaging_event_to_world_state,
     telegram_update_to_messaging_event,
 )
+from runtime.safety import verified_inbound_reply_scope
 
 CANON_RUNTIME_ENTRYPOINT_THIN_SHIM = True
 CANON_RUNTIME_ENTRYPOINT_BOOTSTRAP_DELEGATES_TO_SOVEREIGN_BOOTSTRAP = True
@@ -103,10 +103,32 @@ def _copy_world_state(
     session: dict[str, Any],
     meta: dict[str, Any],
     timestamp_ms: int,
+    product: dict[str, Any] | None = None,
 ) -> WorldStateV1:
     # Evolve the canonical state without manually cloning every governance field.
     return replace(state, user=user, session=session, meta=meta,
+                   product=dict(state.product or {}) if product is None else dict(product),
                    timestamp_ms=int(timestamp_ms or state.timestamp_ms or _now_ms()))
+
+_SCOPE_ID_CHARS = frozenset("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_-")
+
+
+def _operator_scope_id(name: str) -> str:
+    value = env_str(name, "").strip()
+    if not value or len(value) > 80 or not value[0].isalnum() or not set(value) <= _SCOPE_ID_CHARS:
+        return ""
+    return value
+
+
+def _operator_product_binding(product: dict[str, Any]) -> dict[str, Any]:
+    """Trusted operator-only product/business binding; never from chat input."""
+    bound = dict(product or {})
+    for key, env_name in (("product_id", "PRODUCT_ID"), ("business_id", "BUSINESS_ID")):
+        value = _operator_scope_id(env_name)
+        if value and not str(bound.get(key) or "").strip():
+            bound[key] = value
+    return bound
+
 
 def _configured_telegram_tenant_id() -> str:
     """Reject legacy default routing in strict production."""
@@ -152,7 +174,21 @@ def _world_state_from_update(
         **dict(state.meta or {}),
         "transport": str(transport or "telegram"),
     }
+    if customer_route is None:
+        from core.ux.unified_messenger_menu import validated_onboarding_url
+        meta["operator_links"] = {
+            "onboarding_url": validated_onboarding_url(env_str("CLIENT_ONBOARDING_URL", "")),
+        }
+    product = dict(state.product or {})
     managed = parse_managed_bot_update(update)
+    meta["operator_flags"] = {}
+    if managed is None and customer_route is None:
+        product = _operator_product_binding(product)
+        meta["operator_flags"] = {
+            "telegram_checkout": bool(env_bool("TELEGRAM_CHECKOUT_ENABLED", False)),
+            "autopilot_execute": bool(env_bool("TELEGRAM_AUTOPILOT_EXECUTE_ENABLED", False)),
+            "ads_apply_live": bool(env_bool("TELEGRAM_ADS_APPLY_LIVE_ENABLED", False)),
+        }
     if managed is not None:  # Bot API managed_bot update: the creator is the acting user, no chat text
         uid = managed["user_id"]
         user = {**user, "id": uid, "messaging_user_id": uid, "telegram_user_id": uid, "telegram_chat_id": uid}
@@ -169,6 +205,7 @@ def _world_state_from_update(
         session=session,
         meta=meta,
         timestamp_ms=timestamp_ms,
+        product=product,
     )
 
 def _validate_startup(token: str) -> None:
@@ -241,12 +278,21 @@ def _execute_update(
     event_log: Any,
     update: dict[str, Any],
     transport: str,
+    read_store: Any = None,
 ) -> Any:
     raw_update_id = update.get("update_id")
     state = _world_state_from_update(update, transport=transport)
+    if read_store is not None and parse_managed_bot_update(update) is None:
+        from interfaces.telegram.read_models.user_bundle import hydrate_world_state_user
+
+        state = hydrate_world_state_user(state, event_store=read_store)
+    session = dict(state.session or {})
+    customer_bot = session.get("customer_bot")
+    bot_id = str(customer_bot.get("bot_id") or "primary") if isinstance(customer_bot, dict) else "primary"
+    chat_id = str(session.get("chat_id") or session.get("messaging_chat_id") or session.get("telegram_chat_id") or "")
     with verified_inbound_reply_scope(
         tenant_id=str(state.tenant_id), channel="telegram", user_id=str(state.user_id),
-        update_id=raw_update_id, chat_id=str((state.session or {}).get("messaging_chat_id") or ""),
+        update_id=raw_update_id, chat_id=chat_id, bot_id=bot_id,
     ):
         result = execute_runtime_decision(issuer=core, executor=executor, state=state)
     _append_event(
@@ -264,9 +310,13 @@ def _execute_update(
 def _customer_dispatch(*, core: Any, executor: Any, event_log: Any):
     def dispatch(update: dict[str, Any], route: Any) -> None:
         state = _world_state_from_update(update, transport="customer_bot", customer_route=route)
+        session = dict(state.session or {})
+        customer_bot = session.get("customer_bot")
+        bot_id = str(route.external_bot_id or (customer_bot.get("bot_id") if isinstance(customer_bot, dict) else "") or "primary")
+        chat_id = str(session.get("chat_id") or session.get("messaging_chat_id") or session.get("telegram_chat_id") or "")
         with verified_inbound_reply_scope(
             tenant_id=str(state.tenant_id), channel="telegram", user_id=str(state.user_id),
-            update_id=update.get("update_id"), chat_id=str((state.session or {}).get("messaging_chat_id") or ""),
+            update_id=update.get("update_id"), chat_id=chat_id, bot_id=bot_id,
         ):
             result = execute_runtime_decision(issuer=core, executor=executor, state=state)
         _append_event(event_log, event_type="customer_bot_update_executed",
@@ -283,6 +333,7 @@ def _run_longpoll(
     executor: Any,
     event_log: Any,
     customer_gateway: Any = None,
+    read_store: Any = None,
 ) -> None:
     _validate_startup(token)
     _start_health_if_enabled(event_log)
@@ -293,7 +344,7 @@ def _run_longpoll(
         env_int("TELEGRAM_REQUEST_TIMEOUT_S", poll_timeout_s + 5),
     )
     idle_sleep_s = max(0, env_int("TELEGRAM_IDLE_SLEEP_MS", 250)) / 1000.0
-    from runtime.platform.telegram_inbox import TelegramInbox
+    from runtime.platform.telegram_inbox import TelegramInbox, TelegramTerminalOutcome
     inbox = TelegramInbox(token)
     offset = inbox.cursor()
 
@@ -302,13 +353,24 @@ def _run_longpoll(
             update_id = update["update_id"]
             try:
                 outcome = _execute_update(core=core, executor=executor, event_log=event_log,
-                                          update=update, transport="longpoll")
+                                          update=update, transport="longpoll", read_store=read_store)
                 if not bool(getattr(outcome, "ok", False)):
+                    output = getattr(outcome, "output", None)
+                    if isinstance(output, dict) and output.get("idempotency_resolution") == "rejected_terminal_failed":
+                        # The old effect might have executed. Do not waste 12
+                        # automatic retries or falsely acknowledge delivery.
+                        raise TelegramTerminalOutcome("telegram_ambiguous_effect_requires_reconciliation")
+                    error = str(getattr(outcome, "error", "") or "")
+                    from runtime.platform.telegram_inbox import is_terminal_failure
+
+                    refusal = RuntimeError(error)
+                    if is_terminal_failure(refusal):
+                        raise refusal
                     raise RuntimeError("telegram_update_outcome_unconfirmed")
                 inbox.complete(update_id)
             except Exception as exc:
-                inbox.failed(update_id, exc)
-                _LOG.exception("telegram update %s retained for durable retry", update_id)
+                status = inbox.failed(update_id, exc)
+                _LOG.exception("telegram update %s retained in durable inbox status=%s", update_id, status)
 
 
     _append_event(
@@ -319,7 +381,13 @@ def _run_longpoll(
     _LOG.info("telegram long polling started (durable ingress)")
 
     # Recover pending work even when Telegram no longer returns old updates.
+    backlog = inbox.backlog_counts()
+    _LOG.info("telegram inbox recovery started pending=%d dead_letter=%d",
+              backlog["pending"], backlog["dead_letter"])
     replay_pending()
+    backlog = inbox.backlog_counts()
+    _LOG.info("telegram inbox recovery finished pending=%d dead_letter=%d",
+              backlog["pending"], backlog["dead_letter"])
     while True:
         try:
             payload: dict[str, Any] = {"timeout": poll_timeout_s}
@@ -422,6 +490,7 @@ def _run_webhook(
     core: Any,
     executor: Any,
     event_log: Any,
+    read_store: Any = None,
 ) -> None:
     from runtime.effects import start_telegram_webhook_server_in_thread
     from runtime.health.server import HealthSnapshot
@@ -452,6 +521,7 @@ def _run_webhook(
             event_log=event_log,
             update=update,
             transport="webhook",
+            read_store=read_store,
         )
 
     snapshot = HealthSnapshot(
@@ -518,6 +588,7 @@ def run_telegram(
             core=core,
             executor=executor,
             event_log=event_log,
+            read_store=event_store if event_store is not None else event_log,
         )
         return
     import os
@@ -536,6 +607,7 @@ def run_telegram(
         executor=executor,
         event_log=event_log,
         customer_gateway=gateway,
+        read_store=event_store if event_store is not None else event_log,
     )
 
 

@@ -332,10 +332,14 @@ class CTALandingIntakeService:
 
     def update_business_settings(
         self, *, tenant_id: str, business_id: str,
-        business_name: str, activity_description: str, timezone_name: str,
+        business_name: str | None, activity_description: str, timezone_name: str,
         expected_revision: int, idempotency_key: str, actor_id: str = "",
     ) -> dict[str, object]:
         tenant, business = str(tenant_id or "").strip(), str(business_id or "").strip()
+        if business_name is None:
+            # Retain the historical intake snapshot. OrganizationRegistry is
+            # the single new writer of the name when canonical mode is enabled.
+            business_name = self.read_business_settings(tenant_id=tenant, business_id=business)["business_name"]
         name, activity, timezone = _validate_business_settings(
             business_name=business_name, activity_description=activity_description,
             timezone_name=timezone_name,
@@ -407,9 +411,9 @@ class CTALandingIntakeService:
         found = []
         for b in self._iter_latest_admin_rows():
             name = str(b.get("business_name") or b.get("name") or "")
-            ok = {"business_id": lambda: b.get("business_id") == needle,
-                  "user_id": lambda: needle in {str(b.get("user_id") or ""), str(b.get("owner_account_id") or "")},
-                  "business_name": lambda: needle.casefold() in name.casefold()}[kind]()
+            ok = ((b.get("business_id") == needle) if kind == "business_id" else
+                  (needle in {str(b.get("user_id") or ""), str(b.get("owner_account_id") or "")})
+                  if kind == "user_id" else (needle.casefold() in name.casefold()))
             if ok:
                 found.append({"business_id": str(b.get("business_id") or ""), "business_name": name,
                               "tenant_id": str(b.get("tenant_id") or ""),

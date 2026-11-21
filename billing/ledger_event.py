@@ -35,8 +35,10 @@ class LedgerEntry:
             raise ValueError('account_code is required')
         if str(self.side).strip().lower() not in {'debit', 'credit'}:
             raise ValueError('side must be debit or credit')
-        if type(self.amount_minor) is not int or self.amount_minor < 0:
-            raise ValueError('amount_minor must be a non-negative integer')
+        if type(self.amount_minor) is not int:
+            raise ValueError('amount_minor must be an integer')
+        if self.amount_minor < 0:
+            raise ValueError('amount_minor must be >= 0')
         if not str(self.currency or '').strip():
             raise ValueError('currency is required')
         if not str(self.reference_type or '').strip():

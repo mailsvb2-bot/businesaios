@@ -511,4 +511,3 @@ def test_iron_51_billing_ledger_rejects_non_integer_minor_units():
         except ValueError:
             continue
         raise AssertionError("non-integer ledger minor amount was accepted")
-

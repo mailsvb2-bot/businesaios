@@ -42,7 +42,7 @@ def _ctx(*, callback_data: str, tenant_id: str = "tenant-1", event_store=None):
         schema_version=1,
         user={},
         session={},
-        product={},
+        product={"product_id": "prod-a", "business_id": "biz-a"},
         economy={},
         timestamp_ms=1,
         tenant_id=tenant_id,
@@ -77,7 +77,7 @@ def _ctx(*, callback_data: str, tenant_id: str = "tenant-1", event_store=None):
 
 
 def test_ai_pricing_callback_uses_correct_prefix_and_returns_ai_reply(monkeypatch):
-    monkeypatch.setattr("core.plans.active_plans", lambda: [{"plan_id": 1, "title": "Workspace", "price": 1000}])
+    monkeypatch.setattr("core.plans.active_plans", lambda **kwargs: [{"plan_id": 1, "title": "Workspace", "price": 1000}])
     event_store = _EventStore([
         {
             "tenant_id": "tenant-1",

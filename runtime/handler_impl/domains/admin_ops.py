@@ -3,6 +3,8 @@ from __future__ import annotations
 from collections.abc import Mapping
 from typing import Any
 
+from contracts.action_budget import ADMIN_ANALYTICS_ROUTES
+from core.admin import read_model
 from runtime.handler_impl.core.payloads import optional_dict, optional_str, require_mapping, required_str
 from runtime.handlers.delivery_contract import delivery_kwargs
 from runtime.tenancy import normalize_tenant_id
@@ -22,9 +24,7 @@ def _card_outcome(*, delivery: Any, ok: bool, card: dict[str, Any] | None = None
     evidence = _delivery_evidence(delivery)
     delivery_ok = bool(delivery.get("ok")) if isinstance(delivery, Mapping) else bool(delivery)
     verified = bool(ok and delivery_ok and evidence)
-    return {
-        "ok": verified,
-        "status": "verified" if verified else ("blocked" if reason == "invalid_request" else "failed"),
+    return { "ok": verified, "status": "verified" if verified else ("blocked" if reason == "invalid_request" else "failed"),
         "reason": str(reason),
         "card": dict(card or {}),
         "delivery": delivery,
@@ -34,9 +34,7 @@ def _card_outcome(*, delivery: Any, ok: bool, card: dict[str, Any] | None = None
 
 def handle_admin_set_role(payload, effects, env):
     payload = require_mapping(payload)
-    return effects.admin_set_role(
-        decision_id=env.decision.decision_id,
-        correlation_id=env.decision.correlation_id,
+    return effects.admin_set_role( decision_id=env.decision.decision_id, correlation_id=env.decision.correlation_id,
         tenant_id=required_str(payload, "tenant_id"),
         admin_id=required_str(payload, "admin_id"),
         target_user_id=required_str(payload, "target_user_id"),
@@ -51,9 +49,7 @@ def handle_admin_set_role(payload, effects, env):
 
 def handle_admin_set_perm(payload, effects, env):
     payload = require_mapping(payload)
-    return effects.admin_set_perm(
-        decision_id=env.decision.decision_id,
-        correlation_id=env.decision.correlation_id,
+    return effects.admin_set_perm( decision_id=env.decision.decision_id, correlation_id=env.decision.correlation_id,
         tenant_id=required_str(payload, "tenant_id"),
         admin_id=required_str(payload, "admin_id"),
         target_user_id=required_str(payload, "target_user_id"),
@@ -68,9 +64,7 @@ def handle_admin_set_perm(payload, effects, env):
 
 def handle_set_marketing_copy(payload, effects, env):
     payload = require_mapping(payload)
-    return effects.set_marketing_copy(
-        decision_id=env.decision.decision_id,
-        correlation_id=env.decision.correlation_id,
+    return effects.set_marketing_copy( decision_id=env.decision.decision_id, correlation_id=env.decision.correlation_id,
         tenant_id=required_str(payload, "tenant_id"),
         admin_id=required_str(payload, "admin_id"),
         step_key=required_str(payload, "step_key"),
@@ -85,9 +79,7 @@ def handle_set_marketing_copy(payload, effects, env):
 
 def _tenant_id(payload: dict, env) -> str:
     decision = getattr(env, "decision", None)
-    candidates = (
-        payload.get("tenant_id"),
-        getattr(decision, "tenant_id", None) if decision is not None else None,
+    candidates = ( payload.get("tenant_id"), getattr(decision, "tenant_id", None) if decision is not None else None,
         getattr(env, "tenant_id", None),
     )
     for candidate in candidates:
@@ -104,9 +96,7 @@ def handle_admin_user_card(payload, effects, env, *, event_store):
     admin_id = optional_str(body, "admin_id") or ""
     target = optional_str(body, "target_user_id") or ""
     if not tenant_id or not admin_id or not target:
-        delivery = effects.send_message(
-            decision_id=env.decision.decision_id,
-            correlation_id=env.decision.correlation_id,
+        delivery = effects.send_message( decision_id=env.decision.decision_id, correlation_id=env.decision.correlation_id,
             tenant_id=tenant_id,
             user_id=admin_id or "system",
             text="Некорректный запрос: не указан бизнес, администратор или пользователь.",
@@ -120,35 +110,11 @@ def handle_admin_user_card(payload, effects, env, *, event_store):
         from core.payments.read_model import latest_payment_status
         from core.users.read_model import mood_last, selected_tariff, user_settings
 
-        payment = latest_payment_status(
-            event_store=event_store,
-            tenant_id=tenant_id,
-            product_id=product_id,
-            user_id=target,
-        )
-        entitlements = compute_entitlements(
-            event_store=event_store,
-            tenant_id=tenant_id,
-            product_id=product_id,
-            user_id=target,
-        )
-        settings = user_settings(
-            event_store,
-            tenant_id=tenant_id,
-            user_id=target,
-        )
-        tariff = selected_tariff(
-            event_store,
-            tenant_id=tenant_id,
-            product_id=product_id,
-            user_id=target,
-        )
-        moods = mood_last(
-            event_store,
-            tenant_id=tenant_id,
-            user_id=target,
-            limit=5,
-        )
+        payment = latest_payment_status( event_store=event_store, tenant_id=tenant_id, product_id=product_id, user_id=target, )
+        entitlements = compute_entitlements( event_store=event_store, tenant_id=tenant_id, product_id=product_id, user_id=target, )
+        settings = user_settings( event_store, tenant_id=tenant_id, user_id=target, )
+        tariff = selected_tariff( event_store, tenant_id=tenant_id, product_id=product_id, user_id=target, )
+        moods = mood_last( event_store, tenant_id=tenant_id, user_id=target, limit=5, )
         access = "полный" if bool(entitlements.get("full_access")) else "базовый"
         payment_status = str(payment.get("status") or "none")
         city = str(settings.get("city") or "-")
@@ -158,27 +124,16 @@ def handle_admin_user_card(payload, effects, env, *, event_store):
             latest_mood = moods[-1]
             mood_note = str(latest_mood.get("note") or "").strip().replace("\n", " ")[:80]
             mood_line = f"{latest_mood.get('score')}/10" + (f" — {mood_note}" if mood_note else "")
-        scope_line = (
-            f"Продукт: {product_id}\n"
-            if product_id
+        scope_line = ( f"Продукт: {product_id}\n" if product_id
             else "Продукты с доступом: " + ", ".join(entitlements.get("product_ids") or []) + "\n"
         )
-        card = {
-            "tenant_id": tenant_id,
-            "product_id": product_id,
-            "target_user_id": target,
-            "access": access,
+        card = { "tenant_id": tenant_id, "product_id": product_id, "target_user_id": target, "access": access,
             "payment_status": payment_status,
             "city": city,
             "tariff": tariff_title,
             "mood": mood_line,
         }
-        text = (
-            "🔎 Карточка пользователя\n\n"
-            f"Бизнес: {tenant_id}\n"
-            f"{scope_line}"
-            f"ID: {target}\n"
-            f"Доступ: {access}\n"
+        text = ( "🔎 Карточка пользователя\n\n" f"Бизнес: {tenant_id}\n" f"{scope_line}" f"ID: {target}\n" f"Доступ: {access}\n"
             f"Оплата: {payment_status}\n"
             f"Город: {city}\n"
             f"Тариф (выбор): {tariff_title}\n"
@@ -186,38 +141,61 @@ def handle_admin_user_card(payload, effects, env, *, event_store):
         )
     except Exception as exc:
         product_line = f"\nПродукт: {product_id}" if product_id else ""
-        delivery = effects.send_message(
-            decision_id=env.decision.decision_id,
-            correlation_id=env.decision.correlation_id,
+        delivery = effects.send_message( decision_id=env.decision.decision_id, correlation_id=env.decision.correlation_id,
             tenant_id=tenant_id,
             user_id=admin_id,
             text=f"🔎 Карточка пользователя\n\nБизнес: {tenant_id}{product_line}\nID: {target}\n(не удалось собрать данные)",
             reply_markup=None,
             track_event_type="admin_user_card_failed@v1",
-            track_payload={
-                "tenant_id": tenant_id,
-                "product_id": product_id or "",
-                "target_user_id": target,
+            track_payload={ "tenant_id": tenant_id, "product_id": product_id or "", "target_user_id": target,
                 "error": exc.__class__.__name__,
             },
             **delivery_kwargs(body),
         )
         return _card_outcome(delivery=delivery, ok=False, reason="read_model_failure")
 
-    delivery = effects.send_message(
-        decision_id=env.decision.decision_id,
-        correlation_id=env.decision.correlation_id,
-        tenant_id=tenant_id,
+    delivery = effects.send_message( decision_id=env.decision.decision_id, correlation_id=env.decision.correlation_id, tenant_id=tenant_id,
         user_id=admin_id,
         text=text,
         reply_markup=None,
         track_event_type="admin_user_card@v1",
-        track_payload={
-            "tenant_id": tenant_id,
-            "product_id": product_id or "",
-            "target_user_id": target,
-            "status": "ok",
-        },
+        track_payload={ "tenant_id": tenant_id, "product_id": product_id or "", "target_user_id": target, "status": "ok", },
         **delivery_kwargs(body),
     )
     return _card_outcome(delivery=delivery, ok=True, card=card)
+
+
+def render_admin_analytics(*, event_store, tenant_id: str, route: str, now_ms: int | None = None) -> str:
+    if route not in ADMIN_ANALYTICS_ROUTES:
+        raise ValueError("unsupported_admin_analytics_route")
+    if not tenant_id or tenant_id == "unknown":
+        raise ValueError("admin_analytics_tenant_required")
+
+    if route == "admin:segments":
+        s = read_model.segments_summary(event_store, tenant_id=tenant_id, days=30, now_ms=now_ms)
+        return ( "🧲 Сегменты (30д/7д)\n\n" f"Новые сегодня: {s['new_users']}\n" f"Активные 7д: {s['active_users_7d']}\n"
+            f"Плательщики 30д: {s['payers_30d']}\n"
+            f"Доступ выдан 30д: {s['granted_30d']}"
+        )
+    if route == "admin:ab":
+        s = read_model.ab_offers_summary(event_store, tenant_id=tenant_id, days=30, now_ms=now_ms)
+        return ( "🧪 A/B-тесты предложений (30д)\n\n" f"Сгенерировано вариантов: {s['variants_set']}\n"
+            f"Выбрано вариантов: {s['variants_chosen']}"
+        )
+    if route == "admin:giftshare":
+        s = read_model.giftshare_summary(event_store, tenant_id=tenant_id, days=30, now_ms=now_ms)
+        return ( "🎁 Подарки и рекомендации (30д)\n\n" f"Переходы по приглашениям: {s['share_clicked']}\n"
+            f"Отправлено подарков: {s['gift_sent']}"
+        )
+
+    s = read_model.funnel2_report(event_store, tenant_id=tenant_id, days=7, now_ms=now_ms)
+    counts, rates = s["counts"], s["rates_pct_from_view"]
+    lines = ["🧲 Воронка 2.0 (7 дней)", ""]
+    for key, label in ( ("tariffs_viewed", "Просмотр тарифов"), ("tariff_selected", "Выбор тарифа"), ("payment_created", "Создание оплаты"),
+        ("payment_captured", "Оплата успешна"),
+        ("access_granted", "Доступ выдан"),
+        ("audio_sent", "Первая отправка"),
+    ):
+        ratio = 100 if key == "tariffs_viewed" else rates.get(key, 0)
+        lines.append(f"{label}: {counts.get(key, 0)} ({ratio}%)")
+    return "\n".join(lines)

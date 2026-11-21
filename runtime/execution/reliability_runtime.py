@@ -164,7 +164,16 @@ class RuntimeReliability:
 
     def reserve(self, env: Any, *, owner_id: str = "runtime-executor"):
         key = self.idempotency_key_for_env(env)
-        return self.idempotency_store.reserve(key=key, owner_id=owner_id)
+        # Retain the original decision identity for authoritative reconciliation
+        # after a crash between a verified effect and its idempotency checkpoint.
+        return self.idempotency_store.reserve(
+            key=key,
+            owner_id=owner_id,
+            metadata_patch={
+                "original_decision_id": self.run_id_for_env(env),
+                "original_action": str(getattr(getattr(env, "decision", None), "action", "") or ""),
+            },
+        )
 
     def mark_completed(self, env: Any, *, owner_id: str = "runtime-executor") -> None:
         key = self.idempotency_key_for_env(env)

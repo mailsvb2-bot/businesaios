@@ -5,6 +5,7 @@ import { useRef, useState } from "react";
  * tenant, business and operator identity from a scoped SUPPORT credential.
  * No credential persistence, owner impersonation, or cross-business fallback.
  */
+const PUBLIC_BRAND = import.meta.env.VITE_BAI_PUBLIC_BRAND_CLIENTPLATFORM === "true" ? "ClientPlatform" : "BusinessAIOS";
 function SupportCaseHistory({ history }) {
   return (
     <div aria-label={"История обращения " + history.case_id}>
@@ -126,7 +127,7 @@ export function SupportOperatorConsole({ apiBase }) {
       if (generation !== epoch.current) return;
       if (!Array.isArray(queue.cases)) throw new Error("Некорректный ответ очереди.");
       setCases(queue.cases);
-      setNotice("Очередь обновлена из BusinessAIOS.");
+      setNotice("Очередь обновлена из " + PUBLIC_BRAND + ".");
     } catch (reason) {
       if (generation !== epoch.current) return;
       if (reason.httpStatus === 401 || reason.httpStatus === 403) {
@@ -318,7 +319,7 @@ export function SupportOperatorConsole({ apiBase }) {
         }
         diagnosticPending.current = null;
         setDiagnosticReceipt((old) => ({ ...old, [item.id]: receipt }));
-        setNotice("Просмотр агрегированных данных записан в аудите BusinessAIOS.");
+        setNotice("Просмотр агрегированных данных записан в аудите " + PUBLIC_BRAND + ".");
       }
     } catch (reason) {
       if (generation !== epoch.current) return;
@@ -339,7 +340,7 @@ export function SupportOperatorConsole({ apiBase }) {
     return (
       <main className="onboarding-shell">
         <section className="panel" aria-labelledby="support-console-title">
-          <p className="eyebrow">BusinessAIOS · оператор</p>
+          <p className="eyebrow">{PUBLIC_BRAND} · оператор</p>
           <h1 id="support-console-title">Очередь обращений</h1>
           <p className="muted-text">Нужен отдельный выданный администратором ключ роли SUPPORT с правом support_case_manage, привязанный к одному бизнесу. Ключ владельца не подходит.</p>
           {error ? <p className="error-box inline-error" role="alert">{error}</p> : null}
@@ -364,7 +365,7 @@ export function SupportOperatorConsole({ apiBase }) {
       <section className="panel" aria-labelledby="support-console-title">
         <div className="panel-title-row">
           <div>
-            <p className="eyebrow">BusinessAIOS · поддержка</p>
+            <p className="eyebrow">{PUBLIC_BRAND} · поддержка</p>
             <h1 id="support-console-title">Очередь обращений</h1>
             <p className="muted-text">Бизнес: {session.identity.business_id} · Оператор: {operatorId}</p>
           </div>

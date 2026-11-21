@@ -24,7 +24,7 @@ def _ctx(*, callback_data: str, settings: dict | None = None) -> TelegramCtx:
         moods=[],
         admin_metrics={},
         is_admin=False,
-        roles=[],
+        roles=["owner"],
         perms=[],
         is_superadmin=False,
         realtime_state={},
@@ -39,11 +39,28 @@ def _ctx(*, callback_data: str, settings: dict | None = None) -> TelegramCtx:
     )
 
 
-def test_ads_apply_enable_builds_execute_plan() -> None:
-    out = handle(_ctx(callback_data="ads:apply:enable"), default_price_rub=490)
-    assert out.action == "execute_plan@v1"
-    steps = list(out.payload.get("steps") or [])
-    assert any(s.get("action") == "set_user_setting@v1" and s.get("payload", {}).get("key") == "ads:apply_enabled" for s in steps)
+def test_ads_apply_toggle_uses_single_canonical_settings_operation() -> None:
+    from core.ads.apply_gate import AdsApplyState, build_ads_apply_toggle_action
+
+    for callback, expected in (
+        ("ads:apply:enable", True), ("ads:apply:disable", False),
+    ):
+        out = handle(_ctx(callback_data=callback), default_price_rub=490)
+        assert out.action == "set_user_setting@v1"
+        assert out.payload["key"] == "ads:apply_enabled"
+        assert out.payload["value"]["enabled"] is expected
+        assert out.payload["callback_query_id"] == "cbq1"
+        assert AdsApplyState.from_settings({
+            out.payload["key"]: out.payload["value"],
+        }).enabled is expected
+        assert out.payload["value"]["since_ms"] >= 0
+        assert "execute_plan" not in str(out.payload)
+    assert AdsApplyState.from_settings({"ads:apply_enabled": True}).enabled
+    assert not AdsApplyState.from_settings({"ads:apply_enabled": False}).enabled
+    assert not AdsApplyState.from_settings({"ads:apply_enabled": {"enabled": "false", "since_ms": 3}}).enabled
+    assert not AdsApplyState.from_settings({"ads:apply_enabled": {"enabled": False, "since_ms": 3}}).since_ms
+    assert build_ads_apply_toggle_action(user_id="1", enabled=True, now_ms=123)["value"]["since_ms"] == 123
+
 
 
 def test_ads_apply_menu_renders_message() -> None:

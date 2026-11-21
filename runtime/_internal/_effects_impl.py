@@ -259,85 +259,6 @@ def start_telegram_webhook_server_in_thread(
     return server
 
 
-def start_yookassa_webhook_server_in_thread(*, host: str, port: int, path: str, event_store: Any, payment_outbox: Any) -> Any:
-    import hmac
-    import json
-    import os
-    import threading
-    from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
-
-    normalized_path = str(path or "/").strip() or "/"
-    auth_mode = str(os.environ.get("YOOKASSA_WEBHOOK_AUTH_MODE", "token")).strip().casefold()
-    expected_token = str(os.environ.get("YOOKASSA_WEBHOOK_TOKEN", "")).strip()
-    if auth_mode != "token":
-        raise RuntimeError("unsupported_yookassa_webhook_auth_mode")
-    if auth_mode == "token" and not expected_token:
-        raise RuntimeError("missing_yookassa_webhook_token")
-    enqueue_once = getattr(payment_outbox, "enqueue_once", None)
-    if not callable(enqueue_once):
-        raise RuntimeError("durable_payment_outbox_not_configured")
-
-    def _persist_payment(payload: dict[str, Any], *, dedupe_key: str) -> None:
-        enqueue_once(dedupe_key=dedupe_key, payload=payload)
-
-    def _emit_event(payload: dict[str, Any]) -> None:
-        if event_store is None:
-            return
-        append = getattr(event_store, "append", None) or getattr(event_store, "record", None)
-        if callable(append):
-            append(payload)
-
-    def _enqueue(raw: dict[str, Any]) -> None:
-        obj = raw.get("object") if isinstance(raw.get("object"), dict) else {}
-        event_name = str(raw.get("event") or "yookassa.webhook")
-        object_id = str(obj.get("id") or raw.get("id") or "unknown")
-        payload = {"type": "yookassa_webhook", "payload": raw}
-        _persist_payment(payload, dedupe_key=f"{event_name}:{object_id}")
-
-    class _Handler(BaseHTTPRequestHandler):
-        def log_message(self, *_args: Any) -> None:  # pragma: no cover - quiet smoke server
-            return
-
-        def _send_json(self, status_code: int, body: dict[str, Any]) -> None:
-            raw = json.dumps(body).encode("utf-8")
-            self.send_response(status_code)
-            self.send_header("content-type", "application/json")
-            self.send_header("content-length", str(len(raw)))
-            self.end_headers()
-            self.wfile.write(raw)
-
-        def do_POST(self) -> None:  # noqa: N802 - BaseHTTPRequestHandler API
-            if self.path != normalized_path:
-                self._send_json(404, {"ok": False, "code": "not_found"})
-                return
-            if auth_mode == "token" and expected_token:
-                observed_token = str(self.headers.get("X-Webhook-Token", "")).strip()
-                if not hmac.compare_digest(observed_token.encode("utf-8"), expected_token.encode("utf-8")):
-                    self._send_json(401, {"ok": False, "code": "unauthorized"})
-                    return
-            size = int(self.headers.get("content-length") or 0)
-            body = self.rfile.read(size) if size > 0 else b"{}"
-            try:
-                payload = json.loads(body.decode("utf-8"))
-            except Exception:
-                self._send_json(400, {"ok": False, "code": "invalid_json"})
-                return
-            if not isinstance(payload, dict):
-                self._send_json(400, {"ok": False, "code": "invalid_payload"})
-                return
-            try:
-                _enqueue(payload)
-                _emit_event({"type": "yookassa_webhook_received", "payload": payload})
-            except Exception as exc:
-                self._send_json(500, {"ok": False, "code": "webhook_persistence_failed", "error": type(exc).__name__})
-                return
-            self._send_json(200, {"ok": True})
-
-    server = ThreadingHTTPServer((str(host), int(port)), _Handler)
-    thread = threading.Thread(target=server.serve_forever, daemon=True)
-    thread.start()
-    return server
-
 
 @dataclass
 class Effects(
@@ -434,6 +355,5 @@ __all__ = [
     "http_post",
     "start_health_server_in_thread",
     "start_telegram_webhook_server_in_thread",
-    "start_yookassa_webhook_server_in_thread",
     "url_with_params",
 ]

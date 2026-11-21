@@ -129,3 +129,112 @@ def test_smtp_transport_guard_precedes_provider_validation() -> None:
     )
     assert result["mode"] == "blocked"
     assert result["delivery_disposition"] == "suppressed"
+
+def _live_smtp_security_parts(monkeypatch):
+    from application.business_autonomy.channel_contracts import ChannelKind
+    from application.business_autonomy.provider_admin_contract import ProviderDefinition
+    from runtime.business_autonomy import provider_smtp_live_client as smtp_mod
+    from runtime.business_autonomy.provider_smtp_live_client import ProviderSmtpLiveTransport
+    from security.secret_contract import SecretRecord, SecretRef, SecretSource
+    from security.secret_vault import InMemorySecretVault
+
+    provider = ProviderDefinition(
+        provider_key="email_connector", title="Email", connector_id="email_connector",
+        adapter_key="smtp", channel_kind=ChannelKind.CHATBOT, domain="email",
+        description="smtp", secret_fields=(),
+    )
+    vault = InMemorySecretVault()
+    values = {
+        "smtp_host": "smtp.example.org", "smtp_port": "587",
+        "smtp_security": "starttls", "smtp_username": "mailer",
+        "smtp_password": "vault-password", "from_address": "shop@example.org",
+    }
+    for name, value in values.items():
+        ref = SecretRef(
+            tenant_id="tenant-a", connector_id="email_connector", scope="biz-a",
+            secret_name=f"email_connector.{name}",
+        )
+        vault.put(
+            SecretRecord(ref=ref, ciphertext=b"pending", source=SecretSource.CONNECTOR),
+            plaintext=value.encode(),
+        )
+    calls = []
+
+    class SmtpExplicitError(Exception):
+        pass
+
+    def fake_import(_module, name):
+        if name == "smtp_send_explicit":
+            return lambda **kwargs: calls.append(kwargs) or {
+                "accepted": True, "message_id": "smtp-message-1",
+            }
+        if name == "SmtpExplicitError":
+            return SmtpExplicitError
+        raise AssertionError(f"unexpected SMTP import: {name}")
+
+    monkeypatch.setattr(smtp_mod, "import_internal_attr", fake_import)
+    return provider, vault, calls, ProviderSmtpLiveTransport
+
+
+def test_live_smtp_uses_tenant_vault_password_not_payload_password(monkeypatch):
+    provider, vault, calls, transport_type = _live_smtp_security_parts(monkeypatch)
+    transport = transport_type(secret_vault=vault, bind_live_network=True)
+    out = transport.execute(
+        provider=provider, tenant_id="tenant-a", business_id="biz-a",
+        operation="message_send",
+        payload={
+            "recipient": "client@example.org", "subject": "hello", "body": "message",
+            "_allow_network": True, "_provider_write_approved": True,
+            "_provider_queue_job_id": "queue-job-1",
+            "smtp_password": "attacker-payload-secret", "password": "attacker-payload-secret",
+        },
+    )
+    assert out["_response_ok"] is True
+    assert [call["password"] for call in calls] == ["vault-password"]
+    assert "attacker-payload-secret" not in repr(calls)
+    assert "attacker-payload-secret" not in repr(out)
+
+
+def test_live_smtp_requires_explicit_write_approval_and_queue_identity(monkeypatch):
+    provider, vault, calls, transport_type = _live_smtp_security_parts(monkeypatch)
+    transport = transport_type(secret_vault=vault, bind_live_network=True)
+    base = {
+        "recipient": "client@example.org", "subject": "hello", "body": "message",
+        "_allow_network": True, "_provider_queue_job_id": "queue-job-1",
+    }
+    refused = transport.execute(
+        provider=provider, tenant_id="tenant-a", business_id="biz-a",
+        operation="message_send", payload=base,
+    )
+    assert refused["_prepared_only"] is True
+    assert refused["reason"] == "smtp_write_approval_required"
+    no_queue = transport.execute(
+        provider=provider, tenant_id="tenant-a", business_id="biz-a",
+        operation="message_send",
+        payload={**base, "_provider_write_approved": True, "_provider_queue_job_id": ""},
+    )
+    assert no_queue["parsed_response"]["error_code"] == "smtp_queue_identity_missing"
+    not_bound = transport_type(secret_vault=vault, bind_live_network=False).execute(
+        provider=provider, tenant_id="tenant-a", business_id="biz-a",
+        operation="message_send",
+        payload={**base, "_provider_write_approved": True},
+    )
+    assert not_bound["_prepared_only"] is True
+    assert calls == []
+
+
+def test_live_smtp_foreign_tenant_cannot_read_credentials_or_send(monkeypatch):
+    provider, vault, calls, transport_type = _live_smtp_security_parts(monkeypatch)
+    transport = transport_type(secret_vault=vault, bind_live_network=True)
+    out = transport.execute(
+        provider=provider, tenant_id="tenant-b", business_id="biz-a",
+        operation="message_send",
+        payload={
+            "recipient": "client@example.org", "subject": "hello", "body": "message",
+            "_allow_network": True, "_provider_write_approved": True,
+            "_provider_queue_job_id": "queue-job-1",
+        },
+    )
+    assert out["_response_ok"] is False
+    assert calls == []
+

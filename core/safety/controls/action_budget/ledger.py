@@ -14,12 +14,18 @@ class ActionBudgetLedger(Protocol):
 
     def record(self, tenant_id: str, *, estimated_cost: float) -> None: ...
 
+    def recorded_action(self, tenant_id: str, idempotency_key: str) -> tuple[str, str] | None: ...
+
+    def record_once(self, tenant_id: str, *, idempotency_key: str,
+                    action: str, payload_hash: str, estimated_cost: float) -> bool: ...
+
 
 @dataclass
 class InMemoryActionBudgetLedger:
     cost_by_tenant: dict[str, float] = field(default_factory=dict)
     actions_by_tenant: dict[str, int] = field(default_factory=dict)
     _lock: RLock = field(default_factory=RLock)
+    idempotency_actions: dict[tuple[str, str], tuple[str, str]] = field(default_factory=dict)
 
     def snapshot(self, tenant_id: str) -> tuple[float, int]:
         with self._lock:
@@ -30,6 +36,25 @@ class InMemoryActionBudgetLedger:
             key = str(tenant_id)
             self.cost_by_tenant[key] = float(self.cost_by_tenant.get(key, 0.0)) + float(estimated_cost)
             self.actions_by_tenant[key] = int(self.actions_by_tenant.get(key, 0)) + 1
+
+    def recorded_action(self, tenant_id: str, idempotency_key: str) -> tuple[str, str] | None:
+        with self._lock:
+            return self.idempotency_actions.get((str(tenant_id), str(idempotency_key)))
+
+    def record_once(self, tenant_id: str, *, idempotency_key: str,
+                    action: str, payload_hash: str, estimated_cost: float) -> bool:
+        with self._lock:
+            tenant, key = str(tenant_id), str(idempotency_key)
+            entry = (str(action), str(payload_hash))
+            previous = self.idempotency_actions.get((tenant, key))
+            if previous is not None:
+                if previous != entry:
+                    raise RuntimeError("action_budget_idempotency_conflict")
+                return False
+            self.idempotency_actions[(tenant, key)] = entry
+            self.cost_by_tenant[tenant] = float(self.cost_by_tenant.get(tenant, 0.0)) + float(estimated_cost)
+            self.actions_by_tenant[tenant] = int(self.actions_by_tenant.get(tenant, 0)) + 1
+            return True
 
 
 def __getattr__(name: str):

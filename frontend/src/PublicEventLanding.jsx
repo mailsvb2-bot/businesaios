@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import "./EventLandingWorkspace.css";
 
+const PUBLIC_BRAND = import.meta.env.VITE_BAI_PUBLIC_BRAND_CLIENTPLATFORM === "true" ? "ClientPlatform" : "BusinessAIOS";
 function SafeList({ items }) {
   return Array.isArray(items) && items.length
     ? <ul>{items.map((item, index) => <li key={index}>{item}</li>)}</ul>
@@ -101,7 +102,7 @@ export function PublicEventLanding({ apiBase, identity }) {
 
   return (
     <main className="event-public-shell">
-      <div className="event-public-brand">BusinessAIOS · Мероприятие</div>
+      <div className="event-public-brand">{PUBLIC_BRAND} · Мероприятие</div>
       {state.loading ? <p role="status">Загружаем опубликованную страницу…</p> : null}
       {state.error ? <p role="alert" className="error-box">{state.error}</p> : null}
 

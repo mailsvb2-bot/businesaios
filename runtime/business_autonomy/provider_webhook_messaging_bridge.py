@@ -24,13 +24,23 @@ def resolve_provider_webhook_messaging_ingress(*, provider: ProviderDefinition, 
     binding = describe_provider_messaging_binding(provider)
     if binding is None:
         return None
+    if binding.channel == "max" and normalized_payload.get("update_type") == "message_callback" and not isinstance(normalized_payload.get("message"), Mapping):
+        return None
     decoded = decode_provider_inbound(channel=binding.channel, payload=normalized_payload)
-    user_id = str(decoded.get('user_id') or normalized_payload.get('session_id') or '').strip()
+    user_id = str(decoded.get('user_id') or '').strip()
+    if not user_id and binding.channel == 'web_chat':
+        user_id = str(normalized_payload.get('session_id') or '').strip()
     chat_id = str(decoded.get('chat_id') or '').strip()
-    external_user_ref = str(decoded.get('external_user_ref') or user_id or chat_id).strip()
-    text = str(decoded.get('text') or normalized_payload.get('message') or '').strip()
+    external_user_ref = str(decoded.get('external_user_ref') or user_id).strip()
+    decoded_text = decoded.get('text')
+    fallback_text = normalized_payload.get('message')
+    text = str(decoded_text if decoded_text else (fallback_text if isinstance(fallback_text, str) else '')).strip()
     if not user_id or not text:
         return None
+    if not chat_id and binding.channel == 'web_chat':
+        chat_id = str(normalized_payload.get('session_id') or user_id).strip()
+    if not chat_id:
+        raise ValueError('PROVIDER_INBOUND_RECIPIENT_MISSING')
     transport_message_id = str(decoded.get('message_id') or '').strip()
     correlation_id = str(normalized_payload.get('correlation_id') or normalized_payload.get('update_id') or normalized_payload.get('event_id') or transport_message_id or user_id).strip()
     return ProviderWebhookMessagingIngress(channel=binding.channel, user_id=user_id, text=text, transport_message_id=transport_message_id, correlation_id=correlation_id, chat_id=chat_id, external_user_ref=external_user_ref)

@@ -7,6 +7,7 @@ from types import SimpleNamespace
 import pytest
 
 from runtime._internal import _effects_impl as impl
+from runtime._internal.effects_clients.yookassa_webhook_server import start_yookassa_webhook_server_in_thread
 
 
 def _request(server, method, path, *, body=None, headers=None):
@@ -21,7 +22,11 @@ def _request(server, method, path, *, body=None, headers=None):
     response = conn.getresponse()
     raw = response.read()
     conn.close()
-    return response.status, json.loads(raw.decode())
+    try:
+        decoded = json.loads(raw.decode())
+    except (UnicodeDecodeError, json.JSONDecodeError):
+        decoded = raw.decode("utf-8", errors="replace")
+    return response.status, decoded
 
 
 def _close(server):
@@ -115,76 +120,91 @@ def test_telegram_webhook_server_paths_and_health():
 
 
 def test_yookassa_webhook_configuration_fails_closed(monkeypatch):
+    monkeypatch.setenv("APP_ENV", "dev")
     monkeypatch.setenv("YOOKASSA_WEBHOOK_AUTH_MODE", "token")
     monkeypatch.delenv("YOOKASSA_WEBHOOK_TOKEN", raising=False)
-    with pytest.raises(RuntimeError, match="missing_yookassa_webhook_token"):
-        impl.start_yookassa_webhook_server_in_thread(host="127.0.0.1", port=0, path="/hook", event_store=None, payment_outbox=[])
+    server = start_yookassa_webhook_server_in_thread(
+        host="127.0.0.1", port=0, path="/hook", event_store=None,
+        payment_outbox=SimpleNamespace(enqueue_once=lambda **_: None),
+    )
+    try:
+        status, _ = _request(server, "POST", "/hook", body={"event": "payment.succeeded", "object": {"id": "p1"}}, headers={"X-Webhook-Token": "missing"})
+        assert status == 401
+    finally:
+        _close(server)
+
     monkeypatch.setenv("YOOKASSA_WEBHOOK_AUTH_MODE", "mystery")
-    with pytest.raises(RuntimeError, match="unsupported_yookassa"):
-        impl.start_yookassa_webhook_server_in_thread(host="127.0.0.1", port=0, path="/hook", event_store=None, payment_outbox=[])
+    with pytest.raises(RuntimeError, match="YOOKASSA_WEBHOOK_AUTH_MODE unsupported"):
+        start_yookassa_webhook_server_in_thread(
+            host="127.0.0.1", port=0, path="/hook", event_store=None,
+            payment_outbox=SimpleNamespace(enqueue_once=lambda **_: None),
+        )
+
+    monkeypatch.setenv("APP_ENV", "production")
     monkeypatch.setenv("YOOKASSA_WEBHOOK_AUTH_MODE", "none")
-    with pytest.raises(RuntimeError, match="unsupported_yookassa_webhook_auth_mode"):
-        impl.start_yookassa_webhook_server_in_thread(host="127.0.0.1", port=0, path="/hook", event_store=None, payment_outbox=object())
+    with pytest.raises(RuntimeError, match="not allowed in prod"):
+        start_yookassa_webhook_server_in_thread(
+            host="127.0.0.1", port=0, path="/hook", event_store=None,
+            payment_outbox=SimpleNamespace(enqueue_once=lambda **_: None),
+        )
+    monkeypatch.setenv("YOOKASSA_WEBHOOK_AUTH_MODE", "token")
+    monkeypatch.delenv("YOOKASSA_WEBHOOK_IP_ALLOWLIST", raising=False)
+    with pytest.raises(RuntimeError, match="IP_ALLOWLIST required"):
+        start_yookassa_webhook_server_in_thread(
+            host="127.0.0.1", port=0, path="/hook", event_store=None,
+            payment_outbox=SimpleNamespace(enqueue_once=lambda **_: None),
+        )
 
 
 def test_yookassa_webhook_delivery_and_persistence_errors(monkeypatch):
+    monkeypatch.setenv("APP_ENV", "dev")
     monkeypatch.setenv("YOOKASSA_WEBHOOK_AUTH_MODE", "token")
     monkeypatch.setenv("YOOKASSA_WEBHOOK_TOKEN", "secret")
     events = []
     queued = []
     outbox = SimpleNamespace(enqueue_once=lambda **kw: queued.append(kw))
-    server = impl.start_yookassa_webhook_server_in_thread(
-        host="127.0.0.1", port=0, path="/hook", event_store=SimpleNamespace(append=events.append), payment_outbox=outbox
+    server = start_yookassa_webhook_server_in_thread(
+        host="127.0.0.1", port=0, path="/hook",
+        event_store=SimpleNamespace(append=events.append), payment_outbox=outbox,
     )
     try:
         assert _request(server, "POST", "/wrong", body={})[0] == 404
         assert _request(server, "POST", "/hook", body={}, headers={"X-Webhook-Token": "bad"})[0] == 401
-        assert _request(server, "POST", "/hook", body=b"{", headers={"X-Webhook-Token": "secret"})[1]["code"] == "invalid_json"
-        assert _request(server, "POST", "/hook", body=[], headers={"X-Webhook-Token": "secret"})[1]["code"] == "invalid_payload"
+        assert _request(server, "POST", "/hook", body=b"{", headers={"X-Webhook-Token": "secret"}) == (400, "bad_request")
+        assert _request(server, "POST", "/hook", body=[], headers={"X-Webhook-Token": "secret"}) == (400, "bad_request")
         payload = {"event": "payment.succeeded", "object": {"id": "p1"}}
-        assert _request(server, "POST", "/hook", body=payload, headers={"X-Webhook-Token": "secret"})[0] == 200
-        assert queued[0]["dedupe_key"] == "payment.succeeded:p1"
-        assert events[0]["type"] == "yookassa_webhook_received"
+        assert _request(server, "POST", "/hook", body=payload, headers={"X-Webhook-Token": "secret"}) == (200, "ok")
+        assert queued[0]["dedupe_key"] == "yk:webhook:payment.succeeded:p1"
+        assert queued[0]["payload"]["type"] == "yookassa_webhook"
+        assert events == []  # The canonical durable outbox is authoritative; event_store is not a second path.
+        assert _request(server, "POST", "/hook", headers={"X-Webhook-Token": "secret", "Content-Length": "1048577"})[0] == 413
     finally:
         _close(server)
 
-    monkeypatch.setenv("YOOKASSA_WEBHOOK_AUTH_MODE", "token")
-    queued = []
-    server = impl.start_yookassa_webhook_server_in_thread(
-        host="127.0.0.1",
-        port=0,
-        path="/",
-        event_store=SimpleNamespace(
-            record=lambda _: (_ for _ in ()).throw(RuntimeError())
-        ),
-        payment_outbox=SimpleNamespace(
-            enqueue_once=lambda **kwargs: queued.append(kwargs)
-        ),
+    def fail_outbox(**_kwargs):
+        raise RuntimeError("outbox unavailable")
+
+    failing = start_yookassa_webhook_server_in_thread(
+        host="127.0.0.1", port=0, path="/",
+        event_store=None, payment_outbox=SimpleNamespace(enqueue_once=fail_outbox),
     )
     try:
-        assert _request(server, "POST", "/", body={"id": "x"}, headers={"X-Webhook-Token": "secret"})[1]["code"] == "webhook_persistence_failed"
-        assert queued
+        assert _request(failing, "POST", "/", body={"event": "payment.succeeded", "object": {"id": "p2"}}, headers={"X-Webhook-Token": "secret"})[0] == 503
     finally:
-        _close(server)
+        _close(failing)
 
-    with pytest.raises(RuntimeError, match="durable_payment_outbox_not_configured"):
-        impl.start_yookassa_webhook_server_in_thread(
-            host="127.0.0.1",
-            port=0,
-            path="/",
-            event_store=None,
+    with pytest.raises(RuntimeError, match="YOOKASSA_WEBHOOK_DURABLE_IDEMPOTENT_OUTBOX_REQUIRED"):
+        start_yookassa_webhook_server_in_thread(
+            host="127.0.0.1", port=0, path="/", event_store=None,
             payment_outbox=SimpleNamespace(enqueue=lambda payload: None),
         )
 
-    server = impl.start_yookassa_webhook_server_in_thread(
-        host="127.0.0.1",
-        port=0,
-        path="/",
-        event_store=None,
+    server = start_yookassa_webhook_server_in_thread(
+        host="127.0.0.1", port=0, path="/", event_store=object(),
         payment_outbox=SimpleNamespace(enqueue_once=lambda **_: None),
     )
     try:
-        assert _request(server, "POST", "/", body={"id": "x"}, headers={"X-Webhook-Token": "secret"})[0] == 200
+        assert _request(server, "POST", "/", body={"event": "payment.succeeded", "object": {"id": "p3"}}, headers={"X-Webhook-Token": "secret"}) == (200, "ok")
     finally:
         _close(server)
 
@@ -246,20 +266,6 @@ def test_remaining_effects_impl_branches(monkeypatch):
         }
     finally:
         _close(telegram)
-
-    monkeypatch.setenv("YOOKASSA_WEBHOOK_AUTH_MODE", "token")
-    monkeypatch.setenv("YOOKASSA_WEBHOOK_TOKEN", "secret")
-    no_event_method = impl.start_yookassa_webhook_server_in_thread(
-        host="127.0.0.1",
-        port=0,
-        path="/",
-        event_store=object(),
-        payment_outbox=SimpleNamespace(enqueue_once=lambda **_: None),
-    )
-    try:
-        assert _request(no_event_method, "POST", "/", body={"id": "x"}, headers={"X-Webhook-Token": "secret"})[0] == 200
-    finally:
-        _close(no_event_method)
 
     preset_transport = object()
     preset_router = SimpleNamespace(transport=object(), outbound_queue="existing")

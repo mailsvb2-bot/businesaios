@@ -7,8 +7,12 @@ basis (opted-in or existing relationship), public contacts only prepare a propos
 
 from __future__ import annotations
 
+import hashlib
+import json
 import math
+import re
 from dataclasses import dataclass
+from html import escape
 from typing import Any
 
 from application.business_flows.projection import stable_id
@@ -264,6 +268,7 @@ __all__ = [
     "score",
     "set_status",
     "statuses",
+    "create_quote", "quote_states", "decision", "format_quote",
 ]
 
 
@@ -343,3 +348,225 @@ def run_campaign(payloads: list[dict[str, Any]], campaign_id: str, discover: Any
     facts = [f for f in prepare_run(discover, limit=int(camp["target_count"]), **kw)
              if f["step"] != "partner_added" or f["partner_id"] not in known]
     return [{**f, "campaign_id": campaign_id} for f in facts]
+
+
+_CURRENCIES = frozenset({"RUB", "USD", "EUR"})
+_SCOPE_LIMIT = 500
+_REFERENCE = re.compile(r"^[a-zA-Z0-9:_-]{3,128}$")
+
+
+def create_quote(partner_id: str, amount_minor: str, currency: str, scope: str) -> dict[str, Any]:
+    if not _REFERENCE.fullmatch(str(partner_id)):
+        raise ValueError("partner_id_invalid")
+    # Strict decimal integer; floats/negative amounts cannot authorize spending.
+    if not isinstance(amount_minor, str) or not re.fullmatch(r"[0-9]{1,12}", amount_minor):
+        raise ValueError("partner_amount_minor_invalid")
+    amount = int(amount_minor)
+    if not 0 < amount <= 10_000_000_000:
+        raise ValueError("partner_amount_out_of_range")
+    currency = currency.strip().upper()
+    if currency not in _CURRENCIES:
+        raise ValueError("partner_currency_unsupported")
+    scope = " ".join(scope.split())
+    if not scope or len(scope) > _SCOPE_LIMIT or any(ord(ch) < 32 for ch in scope):
+        raise ValueError("partner_scope_invalid")
+    canonical = json.dumps([partner_id, amount, currency, scope], ensure_ascii=False, separators=(",", ":"))
+    quote_id = "pq_" + hashlib.sha256(canonical.encode("utf-8")).hexdigest()[:24]
+    return {
+        "step": "partner_quote_drafted", "partner_id": partner_id, "quote_id": quote_id,
+        "amount_minor": amount, "currency": currency, "scope": scope,
+        "status": "pending_owner_approval",
+    }
+
+
+def quote_states(payloads: list[dict[str, Any]]) -> dict[str, dict[str, Any]]:
+    states: dict[str, dict[str, Any]] = {}
+    for fact in payloads:
+        step = fact.get("step")
+        quote_id = str(fact.get("quote_id") or "")
+        if step == "partner_quote_drafted" and quote_id:
+            states.setdefault(quote_id, dict(fact))
+        elif (step in {"partner_quote_approved", "partner_quote_rejected"}
+              and quote_id in states and states[quote_id]["status"] == "pending_owner_approval"):
+            states[quote_id]["status"] = "owner_approved" if step.endswith("approved") else "rejected"
+    return states
+
+
+def decision(payloads: list[dict[str, Any]], quote_id: str, *, approve: bool) -> dict[str, Any] | None:
+    states = quote_states(payloads)
+    quote = states.get(quote_id)
+    if quote is None:
+        raise LookupError("partner_quote_not_found")
+    if quote["status"] != "pending_owner_approval":
+        return None if quote["status"] == ("owner_approved" if approve else "rejected") else _conflict()
+    return {
+        "step": "partner_quote_approved" if approve else "partner_quote_rejected",
+        "quote_id": quote_id, "partner_id": quote["partner_id"],
+        "approval_scope": "internal_only_no_send_no_payment" if approve else "none",
+    }
+
+
+def _conflict() -> None:
+    raise ValueError("partner_quote_already_decided")
+
+
+def format_quote(quote: dict[str, Any]) -> str:
+    amount = int(quote["amount_minor"])
+    return (f"{quote['quote_id']} · {amount // 100},{amount % 100:02d} {quote['currency']}"
+            f" · {quote['status']}\nУсловия: {escape(str(quote['scope']), quote=False)}")
+
+
+# A private Telegram invitation is the only supported partner messaging address.
+# The clear token is shown to the owner once; only its digest enters the event log.
+def invitation(partner_id: str, token: str, expires_at: int) -> dict[str, Any]:
+    if not _REFERENCE.fullmatch(partner_id) or not re.fullmatch(r"[A-Za-z0-9_-]{24,128}", token):
+        raise ValueError("partner_invitation_invalid")
+    if not isinstance(expires_at, int) or isinstance(expires_at, bool) or expires_at <= 0:
+        raise ValueError("partner_invitation_expiry_invalid")
+    return {"step": "partner_invited", "partner_id": partner_id,
+            "token_hash": hashlib.sha256(token.encode("ascii")).hexdigest(),
+            "expires_at": expires_at}
+
+
+def bound_contacts(payloads: list[dict[str, Any]]) -> dict[str, str]:
+    """Only bindings acknowledged through the canonical Telegram inbound flow."""
+    contacts: dict[str, str] = {}
+    for fact in payloads:
+        if fact.get("step") == "partner_joined" and fact.get("channel") == "telegram":
+            partner_id = str(fact.get("partner_id") or "")
+            user_id = str(fact.get("telegram_user_id") or "")
+            if partner_id and user_id.isascii() and user_id.isdecimal() and int(user_id) > 0:
+                contacts[partner_id] = user_id
+        elif fact.get("step") == "partner_unsubscribed":
+            partner_id = str(fact.get("partner_id") or "")
+            if contacts.get(partner_id) == str(fact.get("telegram_user_id") or ""):
+                del contacts[partner_id]
+    return contacts
+
+
+def claim_invitation(payloads: list[dict[str, Any]], token: str, user_id: str, *, now: int) -> dict[str, Any] | None:
+    if not re.fullmatch(r"[A-Za-z0-9_-]{24,128}", token) or not user_id.isascii() or not user_id.isdecimal() or int(user_id) <= 0:
+        raise ValueError("partner_join_invalid")
+    digest = hashlib.sha256(token.encode("ascii")).hexdigest()
+    invitations = {p["token_hash"]: p for p in payloads if p.get("step") == "partner_invited"}
+    offer = invitations.get(digest)
+    if offer is None or int(offer["expires_at"]) < now:
+        raise ValueError("partner_invitation_missing_or_expired")
+    partner_id = str(offer["partner_id"])
+    prior = [p for p in payloads if p.get("step") == "partner_joined" and p.get("token_hash") == digest]
+    if prior:
+        if str(prior[0]["telegram_user_id"]) == user_id:
+            if bound_contacts(payloads).get(partner_id) == user_id:
+                return None
+            raise ValueError("partner_invitation_no_longer_active")
+        raise ValueError("partner_invitation_already_claimed")
+    if partner_id not in replay(payloads):
+        raise ValueError("partner_not_found")
+    contacts = bound_contacts(payloads)
+    if any(pid != partner_id and uid == user_id for pid, uid in contacts.items()):
+        raise ValueError("partner_telegram_identity_already_bound")
+    contact = contacts.get(partner_id)
+    if contact and contact != user_id:
+        raise ValueError("partner_already_bound")
+    return {"step": "partner_joined", "partner_id": partner_id, "channel": "telegram",
+            "telegram_user_id": user_id, "token_hash": digest}
+
+
+def conversation(payloads: list[dict[str, Any]], partner_id: str) -> list[dict[str, Any]]:
+    return [p for p in payloads if p.get("partner_id") == partner_id and p.get("step") in
+            {"partner_message_in", "partner_message_out"}]
+
+
+def inbound_message(payloads: list[dict[str, Any]], user_id: str, text: str, message_key: str) -> dict[str, Any] | None:
+    contact = next((partner for partner, uid in bound_contacts(payloads).items() if uid == user_id), None)
+    if not contact:
+        raise PermissionError("partner_not_verified")
+    content = text.strip()
+    if not content or len(content) > 2000 or any(ord(ch) < 32 and ch not in "\n\t" for ch in content):
+        raise ValueError("partner_message_invalid")
+    if not message_key or len(message_key) > 160:
+        raise ValueError("partner_message_key_invalid")
+    if any(p.get("step") == "partner_message_in" and p.get("message_key") == message_key for p in payloads):
+        return None
+    return {"step": "partner_message_in", "partner_id": contact, "text": content,
+            "message_key": message_key, "channel": "telegram"}
+
+
+def outbound_message(payloads: list[dict[str, Any]], partner_id: str, text: str, message_key: str) -> dict[str, Any]:
+    if partner_id not in replay(payloads) or partner_id not in bound_contacts(payloads):
+        raise ValueError("partner_not_bound")
+    content = text.strip()
+    if not content or len(content) > 2000 or any(ord(ch) < 32 and ch not in "\n\t" for ch in content):
+        raise ValueError("partner_message_invalid")
+    if not message_key or len(message_key) > 160:
+        raise ValueError("partner_message_key_invalid")
+    return {"step": "partner_message_out", "partner_id": partner_id, "text": content,
+            "message_key": message_key, "channel": "telegram"}
+
+
+def unsubscribe(payloads: list[dict[str, Any]], user_id: str) -> dict[str, Any] | None:
+    partner_id = next((pid for pid, uid in bound_contacts(payloads).items() if uid == user_id), "")
+    if not partner_id:
+        return None
+    return {"step": "partner_unsubscribed", "partner_id": partner_id,
+            "telegram_user_id": user_id, "channel": "telegram"}
+
+PARTNER_BUDGET_KEY_PREFIX = "partner_budget_limit_minor."
+
+
+def budget_check(payloads: list[dict[str, Any]], settings: dict[str, str],
+                 quote_id: str) -> dict[str, Any]:
+    """Fail-closed tenant budget policy for *internal* quote approval.
+
+    This is not a payment authorization or a durable funds reservation.
+    Quote IDs are content-addressed immutable revisions; approved quotes count
+    against the configured ceiling until a canonical budget owner supersedes it.
+    """
+    quote = quote_states(payloads).get(quote_id)
+    if quote is None:
+        raise LookupError("partner_quote_not_found")
+    currency = str(quote["currency"]).upper()
+    raw = settings.get(PARTNER_BUDGET_KEY_PREFIX + currency.lower())
+    if raw is None:
+        raise PermissionError("partner_budget_not_configured")
+    if not isinstance(raw, str) or not re.fullmatch(r"[0-9]{1,12}", raw):
+        raise ValueError("partner_budget_invalid")
+    limit = int(raw)
+    if not 0 < limit <= 10_000_000_000:
+        raise ValueError("partner_budget_invalid")
+    states = quote_states(payloads)
+    used = sum(int(q["amount_minor"]) for q in states.values()
+               if q["status"] == "owner_approved" and q["currency"] == currency)
+    amount = int(quote["amount_minor"])
+    if used + amount > limit:
+        raise PermissionError("partner_budget_exceeded")
+    return {
+        "budget_limit_minor": limit,
+        "budget_used_minor": used,
+        "budget_checked_currency": currency,
+        "budget_policy": "internal_quote_ceiling_not_funds_reservation",
+    }
+
+
+def partner_card(known, op, arg, tenant_id, facts):
+    from application.business_flows import partners as pt
+
+    ordered = sorted(known.values(), key=lambda p: p.name)
+    head, _, rest = arg.partition(" ")
+    partner = known.get(head) if head in known else (ordered[int(head) - 1] if head.isdigit() and 0 < int(head) <= len(ordered) else None)
+    change = None
+    try:
+        if partner is None:
+            raise ValueError("partner_not_found: номер партнёра по алфавиту")
+        if op == "status":
+            change = pt.set_status(partner, pt.statuses(facts).get(partner.partner_id, "new"), rest.strip())
+            text = f"🤝 {partner.name}: {pt.STATUSES[change['status']]}"
+        elif op == "pitch":
+            business, _, offer = rest.partition("|")
+            pack = pt.pitch(partner, business=business.strip() or "наш проект", offer=offer.strip())
+            text = f"✉️ {pack['subject']}\n\n{pack['outreach']}\n\n{pack['cta']}\n\nНапоминание: {pack['followup']}\n(Отправляете вы сами.)"
+        else:
+            text = f"🔗 Реферальный код партнёра {partner.name}: ref_{pt.referral_token(tenant_id, partner.partner_id)}"
+    except ValueError as exc:
+        return f"🤝 Не получилось: {exc}", None
+    return text, change

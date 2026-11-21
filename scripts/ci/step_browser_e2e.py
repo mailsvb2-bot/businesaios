@@ -57,7 +57,8 @@ def run() -> tuple[bool, str]:
     runtime_dir = tempfile.mkdtemp(prefix="businessaios-browser-e2e-")
     try:
         runtime_env, mode, storage = _runtime_env(sha=sha, runtime_dir=runtime_dir)
-        outcome = run_command(["npm", "run", "test:e2e"], cwd=frontend, timeout=600, env=runtime_env)
+        outcome = run_command(["npm", "run", "test:e2e"], cwd=frontend, timeout=600,
+                              env=runtime_env, stream_output=True)
     except RuntimeError as exc:
         _write({"schema": BROWSER_EVIDENCE_SCHEMA, "exact_sha": sha, "status": "FAIL", "reason": str(exc)})
         return False, f"browser-e2e: {exc}"
@@ -67,6 +68,9 @@ def run() -> tuple[bool, str]:
     passed = bool(outcome.returncode == 0 and snapshot)
     _write({
         "schema": BROWSER_EVIDENCE_SCHEMA, "exact_sha": sha, "status": "PASS" if passed and sha else "NOT_PROVEN" if passed else "FAIL",
+        "reason": "browser_process_timeout" if outcome.returncode == 124 else
+                  "browser_report_incomplete" if not snapshot else
+                  "browser_test_failed" if outcome.returncode else None,
         "runtime_mode": mode, "storage_backend": storage, "stats": snapshot["stats"] if snapshot else {}, "projects": snapshot["projects"] if snapshot else [],
         "project_matrix": snapshot["project_matrix"] if snapshot else {}, "artifacts": snapshot["artifacts"] if snapshot else {},
     })

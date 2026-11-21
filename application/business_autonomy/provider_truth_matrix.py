@@ -15,7 +15,7 @@ from application.business_autonomy.provider_catalog import (
     PROVIDERS,
 )
 from contracts.event_store import canonical_business_event_contract
-from core.events.event_types import PROVIDER_CREATED, PROVIDER_UPDATED
+from core.events.event_types import PROVIDER_CREATED, PROVIDER_LIVE_EVIDENCE, PROVIDER_UPDATED
 from observability.tenant_metrics_registry import percentile_value
 from runtime.business_autonomy.provider_sync_history import ProviderSyncHistory
 from runtime.business_autonomy.provider_sync_runtime import ProviderSyncRuntimePlanner
@@ -60,6 +60,8 @@ _PROVIDER_OWNERS: Mapping[str, str] = {
 _HIGH_RISK_DOMAINS = {"ads", "marketplace", "platform_infra"}
 _HIGH_RISK_PROVIDERS = {"sms_connector", "whatsapp_cloud"}
 _GUARDED_WRITE_LIVE_READY: frozenset[str] = frozenset()
+LIVE_EVIDENCE_CHECKS = ("credentials", "send", "receipt", "retry", "recovery")
+LIVE_EVIDENCE_MAX_AGE_MS = 30 * 24 * 3600 * 1000
 
 
 @dataclass(frozen=True)
@@ -267,7 +269,20 @@ def provider_runtime_truth_map(*, event_store: Any, tenant_id: str, business_id:
                 latest[provider_key] = candidate
             elif version == int(current["provider_version"]) and candidate != current:
                 raise RuntimeError("PROVIDER_ACTIVATION_EVENT_CONFLICT")
+    if latest:
+        # Read-only administrative visibility on the canonical tenant/business
+        # provider projection. No global live write promotion occurs.
+        from time import time
+
+        evidence = provider_channel_live_readiness(
+            event_store=event_store, tenant_id=tenant, business_id=business,
+            now_ms=int(time() * 1000),
+        )
+        for provider_key, record in latest.items():
+            if provider_key in evidence:
+                record["channel_live_readiness"] = evidence[provider_key]
     return latest
+
 
 def _provider_history_timestamp(value: object) -> datetime | None:
     text = str(value or "").strip()
@@ -380,6 +395,128 @@ def provider_runtime_metrics_truth_map(
     return result
 
 
+def live_evidence_payload(*, business_id: str, provider_key: str, check: str,
+                          provider_ref: str, decision_id: str, recorded_at_ms: int) -> dict[str, Any]:
+    """Validated evidence schema. Caller must persist verified executor proof."""
+    p = dict(business_id=str(business_id or "").strip(),
+             provider_key=str(provider_key or "").strip(),
+             check=str(check or "").strip(), provider_ref=str(provider_ref or "").strip(),
+             decision_id=str(decision_id or "").strip(), mode="live", ok=True)
+    if p["check"] not in LIVE_EVIDENCE_CHECKS or not all(
+        p[k] for k in ("business_id", "provider_key", "provider_ref", "decision_id")
+    ) or len(p["provider_ref"]) > 200:
+        raise ValueError("provider live evidence fields are invalid")
+    if type(recorded_at_ms) is not int or recorded_at_ms <= 0:
+        raise ValueError("provider live evidence timestamp invalid")
+    return {**p, "recorded_at_ms": recorded_at_ms}
+
+
+def provider_channel_live_readiness(*, event_store: Any, tenant_id: str, business_id: str,
+                                    now_ms: int, max_age_ms: int = LIVE_EVIDENCE_MAX_AGE_MS) -> dict[str, dict[str, Any]]:
+    """Read-only per-tenant readiness; global guarded-write allowlist stays empty."""
+    tenant, business = str(tenant_id or "").strip(), str(business_id or "").strip()
+    if not tenant or not business or type(now_ms) is not int or now_ms <= 0 or type(max_age_ms) is not int or max_age_ms <= 0:
+        raise ValueError("provider readiness scope/window invalid")
+    seen: dict[str, dict[str, str]] = {}
+    it = getattr(event_store, "iter_events", None)
+    if callable(it):
+        try:
+            events = it(tenant_id=tenant, start_ms=now_ms - max_age_ms, end_ms=now_ms + 1,
+                        event_type=PROVIDER_LIVE_EVIDENCE)
+            for raw in events:
+                if not isinstance(raw, Mapping) or raw.get("tenant_id") != tenant:
+                    continue
+                payload = raw.get("payload")
+                if not isinstance(payload, Mapping):
+                    continue
+                try:
+                    p = live_evidence_payload(
+                        business_id=payload.get("business_id"), provider_key=payload.get("provider_key"),
+                        check=payload.get("check"), provider_ref=payload.get("provider_ref"),
+                        decision_id=payload.get("decision_id"), recorded_at_ms=payload.get("recorded_at_ms"),
+                    )
+                except (TypeError, ValueError):
+                    continue
+                if (p["business_id"] != business or payload.get("mode") != "live"
+                        or payload.get("ok") is not True
+                        or str(raw.get("decision_id") or "") != p["decision_id"]
+                        or str(raw.get("source") or "") != "runtime.executor"
+                        or not 0 <= now_ms - p["recorded_at_ms"] <= max_age_ms):
+                    continue
+                seen.setdefault(p["provider_key"], {})[p["check"]] = p["provider_ref"]
+        except (TypeError, ValueError, RuntimeError, OSError):
+            seen = {}
+    rows = provider_truth_map()
+    result: dict[str, dict[str, Any]] = {}
+    for key in sorted(MESSAGING_GUARDED_WRITE_PROVIDER_KEYS):
+        row, checks = rows.get(key), seen.get(key, {})
+        endpoint_ok = bool(row is not None and row.has_real_endpoint and not row.has_placeholder_endpoint)
+        missing = [name for name in LIVE_EVIDENCE_CHECKS if name not in checks]
+        result[key] = {
+            "provider_key": key, "live_ready": bool(endpoint_ok and not missing),
+            "endpoint_ok": endpoint_ok, "missing": missing,
+            "evidence": {name: checks[name] for name in LIVE_EVIDENCE_CHECKS if name in checks},
+            "scope": {"tenant_id": tenant, "business_id": business},
+            "source": "event_spine.provider_live_evidence",
+        }
+    return result
+
+
+def unified_integration_statuses(*, provider_rows: list[dict[str, Any]], channel_readiness: dict[str, dict[str, Any]],
+                                 ad_connectors: dict[str, dict[str, Any]]) -> list[dict[str, Any]]:
+    """Read-only status vocabulary; only scoped executor evidence promotes messaging to live."""
+    out: list[dict[str, Any]] = []
+    for raw in provider_rows:
+        key = str(raw.get("provider_key") or "").strip()
+        if not key:
+            continue
+        connected, truth = bool(raw.get("connected")), str(raw.get("truth_status") or "")
+        if truth == "not_implemented":
+            state, reason = "not_implemented", "provider_not_implemented"
+        elif not connected:
+            state, reason = "not_connected", "connect_required"
+        elif raw.get("read_supported"):
+            state, reason = "read_ready", "read_only"
+        else:
+            state, reason = "connected_unverified", "provider_not_read_ready"
+        out.append({"key": key, "kind": "data_source", "status": state, "reason": reason,
+                    "missing": [], "source": "provider_catalog"})
+    connected_keys = {str(row.get("provider_key") or "") for row in provider_rows if row.get("connected")}
+    for key, row in sorted(channel_readiness.items()):
+        if key not in connected_keys:
+            state, reason = "not_connected", "provider_activation_missing"
+        elif row.get("live_ready"):
+            state, reason = "live_ready", "live_evidence_fresh"
+        elif row.get("endpoint_ok"):
+            state, reason = "connected_unverified", "live_evidence_missing"
+        else:
+            state, reason = "connected_unverified", "endpoint_not_configured"
+        out.append({"key": key, "kind": "messaging", "status": state, "reason": reason,
+                    "missing": list(row.get("missing") or []), "source": "event_spine.provider_live_evidence"})
+    for key, row in sorted(ad_connectors.items()):
+        if row.get("production_ready") and row.get("write") and row.get("verify"):
+            state, reason = "live_ready", "production_ready"
+        elif row.get("write") or row.get("verify"):
+            state, reason = "connected_unverified", "connector_not_production_ready"
+        else:
+            state, reason = "not_implemented", "connector_not_implemented"
+        out.append({"key": key, "kind": "ads", "status": state, "reason": reason,
+                    "missing": [], "source": "interfaces.ads.registry"})
+    return out
+
+
+SALES_CRM_READS = ("contact_sync", "deal_sync")
+
+
+def sales_source_provider_keys() -> dict[str, tuple[str, ...]]:
+    """Providers that can feed the Sales Center: CRMs with contact+deal reads, messaging channels."""
+    rows = provider_truth_map()
+    crm = tuple(sorted(k for k, r in rows.items() if r.category == "crm" and r.read_only_supported
+                       and set(SALES_CRM_READS) <= set(r.read_capabilities)))
+    channels = tuple(sorted(k for k, r in rows.items() if r.category == "communications" and "message_read" in r.read_capabilities))
+    return {"crm": crm, "channels": channels}
+
+
 def summarize_provider_truth(rows: Iterable[ProviderTruthRow] | None = None) -> dict[str, Any]:
     selected = tuple(rows or build_provider_truth_matrix())
     return {
@@ -397,5 +534,6 @@ def summarize_provider_truth(rows: Iterable[ProviderTruthRow] | None = None) -> 
 
 __all__ = [
     "CANON_PROVIDER_TRUTH_MATRIX", "ProviderTruthRow", "ProviderTruthStatus", "build_provider_truth_matrix",
+    "LIVE_EVIDENCE_CHECKS", "SALES_CRM_READS", "live_evidence_payload", "provider_channel_live_readiness", "unified_integration_statuses", "sales_source_provider_keys",
     "provider_truth_map", "provider_runtime_truth_map", "provider_runtime_metrics_truth_map", "provider_quota_truth_map", "list_provider_truth_payloads", "summarize_provider_truth",
 ]

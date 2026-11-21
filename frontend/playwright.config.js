@@ -63,6 +63,9 @@ if (production && missingProduction.length) throw new Error(`production browser 
 
 export default defineConfig({
   testDir: "./e2e",
+  // Leave time for Playwright reporters to flush per-browser evidence before
+  // the 600-second canonical runner deadline; over-budget is still a failure.
+  globalTimeout: 540_000,
   timeout: 90_000,
   expect: { timeout: 10_000 },
   fullyParallel: false,
