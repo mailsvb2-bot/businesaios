@@ -236,3 +236,86 @@ def test_cockpit_menu_buttons_reach_renderable_canonical_screens():
                 if dest.startswith("cpm:") and dest not in checked:
                     todo.append(dest)
     assert len(checked) >= 30
+
+@pytest.mark.parametrize("role", ("owner", "admin"))
+def test_all_visible_top_menu_buttons_keep_correct_owner_at_exhausted_lifetime_budget(monkeypatch, role):
+    from core.safety.controls.action_budget.guard import ActionBudgetGuard
+    from core.safety.controls.action_budget.ledger import InMemoryActionBudgetLedger
+    from core.safety.controls.action_budget.models import ActionBudget
+    from core.safety.controls.action_context import SafetyActionContext
+    from core.safety.controls.control_result import ControlStatus
+    from core.ux.unified_messenger_menu import menu_items
+
+    monkeypatch.setattr("runtime.entrypoints.telegram_longpoll._configured_telegram_tenant_id", lambda: "tenant-live")
+    ledger = InMemoryActionBudgetLedger()
+    for _ in range(1000):
+        ledger.record("tenant-live", estimated_cost=0)
+    guard = ActionBudgetGuard(ledger, ActionBudget(max_cost=0, max_actions=1000))
+    for item in menu_items(role=role, is_admin=role == "admin"):
+        state = _verified_owner_state(_owner_update(item.callback))
+        state = replace(state, user={**state.user, "roles": [role]})
+        proposal = UnifiedTelegramPolicyV3(admin_user_ids=("4001",) if role == "admin" else ()).propose(state)
+        _, payload = build_payload(state=state, out=proposal, pinned_world_model_meta={},
+                                   tenant_id="tenant-live", product_id=None, domain=None,
+                                   product_version=None, actor_id="4001")
+        build_schema_registry().validate(proposal.action, payload)
+        verdict = guard.evaluate(SafetyActionContext(proposal.action, "tenant-live", "4001", payload))
+        assert verdict.status == ControlStatus.ALLOW, (item.key, proposal.action, verdict.reason)
+        assert payload.get("callback_query_id") == "callback-123", item.key
+    assert ledger.snapshot("tenant-live") == (0.0, 1000)
+
+@pytest.mark.parametrize("callback,expected_action", [
+    ("sub:menu", "send_message@v1"),
+    ("cp:settings:notifications", "business_admin@v1"),
+])
+def test_readonly_nested_owner_navigation_still_operates_after_lifetime_budget(monkeypatch, callback, expected_action):
+    from core.safety.controls.action_budget.guard import ActionBudgetGuard
+    from core.safety.controls.action_budget.ledger import InMemoryActionBudgetLedger
+    from core.safety.controls.action_budget.models import ActionBudget
+    from core.safety.controls.action_context import SafetyActionContext
+    from core.safety.controls.control_result import ControlStatus
+
+    monkeypatch.setattr("runtime.entrypoints.telegram_longpoll._configured_telegram_tenant_id", lambda: "tenant-live")
+    state = replace(_verified_owner_state(_owner_update(callback)), user={"id": "4001", "roles": ["admin"]})
+    proposal = UnifiedTelegramPolicyV3(admin_user_ids=("4001",)).propose(state)
+    assert proposal.action == expected_action
+    _, payload = build_payload(state=state, out=proposal, pinned_world_model_meta={},
+                               tenant_id="tenant-live", product_id=None, domain=None,
+                               product_version=None, actor_id="4001")
+    ledger = InMemoryActionBudgetLedger()
+    ledger.record("tenant-live", estimated_cost=1.0)
+    guard = ActionBudgetGuard(ledger, ActionBudget(max_cost=1.0, max_actions=1))
+    verdict = guard.evaluate(SafetyActionContext(proposal.action, "tenant-live", "4001", payload))
+    assert verdict.status == ControlStatus.ALLOW
+    assert ledger.snapshot("tenant-live") == (1.0, 1)
+
+def test_partner_read_button_executes_existing_owner_and_ack_without_writing_facts(monkeypatch, tmp_path):
+    from types import SimpleNamespace
+
+    from runtime.handler_impl.domains.business_flow_ops import handle_partners
+    from runtime.platform.event_store.sqlite_event_store import SqliteEventStore
+
+    monkeypatch.setattr("runtime.entrypoints.telegram_longpoll._configured_telegram_tenant_id", lambda: "tenant-live")
+    state = replace(_verified_owner_state(_owner_update("cp:section:partners")),
+                    user={"id": "4001", "roles": ["owner"]}, tenant_id="tenant-live")
+    proposal = UnifiedTelegramPolicyV3().propose(state)
+    assert (proposal.action, proposal.payload.get("op")) == ("partners@v1", "rank")
+    _, payload = build_payload(state=state, out=proposal, pinned_world_model_meta={},
+                               tenant_id="tenant-live", product_id=None, domain=None,
+                               product_version=None, actor_id="4001")
+    captured = []
+    class Effects:
+        def send_message(self, **kwargs):
+            captured.append(kwargs)
+            return {"ok": True, "router_evidence": {"source": "telegram", "verified": True,
+                                                      "external_refs": ["test-message-1"]}}
+    env = SimpleNamespace(decision=SimpleNamespace(decision_id="decision-partner",
+                                                    correlation_id="correlation-partner"))
+    with SqliteEventStore(str(tmp_path / "partners.sqlite3")) as store:
+        outcome = handle_partners(dict(payload), Effects(), env, event_store=store)
+        assert outcome["ok"] is True
+        assert captured[0]["callback_query_id"] == "callback-123"
+        assert captured[0]["tenant_id"] == "tenant-live"
+        assert captured[0]["user_id"] == "4001"
+        assert "Партнёры" in captured[0]["text"]
+        assert store.count_events(tenant_id="tenant-live", event_type="partners@v1") == 0
