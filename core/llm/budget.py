@@ -127,51 +127,32 @@ class EventStoreDailyTokenBudget:
         return tenant, user
 
     def can_spend(self, *, tenant_id: str, user_id: str, tokens: int) -> bool:
-        """Advisory check including unresolved holds; reserve() remains authoritative."""
+        """Advisory only: reserve is the authoritative CAS admission."""
         if type(tokens) is not int or tokens <= 0:
             return False
         day = self._day()
-        # Validate durable completed facts first, including corrupt provider evidence.
-        # They must retain the existing fail-closed exception contract.
-        spent = {period: self._sum(tenant_id=tenant_id, user_id=user_id, period=period, day=day)
-                 for period, _, _ in self._caps.periods()}
+        spent = {p: self._sum(tenant_id=tenant_id, user_id=user_id, period=p, day=day)
+                 for p, _, _ in self._caps.periods()}
         try:
-            if len(self._caps.periods()) > 1:
-                current = self._es.get_setting(tenant_id=str(tenant_id), key="llm:pending:v2")
-                if not isinstance(current, dict | type(None)):
-                    return False
-                pending = (current or {}).get("pending", {})
-                if not isinstance(pending, dict) or (current is not None and
-                    (type(current.get("revision", 0)) is not int or current.get("revision", 0) < 0)):
-                    return False
-                claims = self._pending_across_periods(tenant_id=tenant_id, user_id=user_id, day=day, pending=pending)
-            else:
-                state = self._es.get_setting(tenant_id=str(tenant_id), key=f"llm:pending:v1:{day}")
-                if not isinstance(state, dict | type(None)):
-                    return False
-                rows = (state or {}).get("pending", {})
-                if not isinstance(rows, dict):
-                    return False
-                reserved_t = reserved_u = 0
-                for row in rows.values():
-                    if not isinstance(row, dict):
-                        return False
-                    owner, amount = row.get("user_id"), row.get("tokens")
-                    if not isinstance(owner, str) or not owner or type(amount) is not int or amount <= 0:
-                        return False
-                    reserved_t += amount
-                    reserved_u += amount if owner == str(user_id) else 0
-                claims = {"day": (reserved_t, reserved_u)}
-            for period, tenant_cap, user_cap in self._caps.periods():
-                spent_t, spent_u = spent[period]
-                pending_t, pending_u = claims[period]
-                if spent_t + pending_t + tokens > tenant_cap or spent_u + pending_u + tokens > user_cap:
-                    return False
-            return True
-        except RuntimeError as exc:
-            if str(exc) in ("LLM_BUDGET_LEGACY_WRITER_ACTIVE", "LLM_BUDGET_CORRUPT_RESERVATION"):
+            current = (self._es.get_setting(tenant_id=str(tenant_id), key="llm:pending:v2")
+                       if len(self._caps.periods()) > 1 else None)
+            if not isinstance(current, dict | type(None)):
                 return False
-            raise
+            if current is not None and (type(current.get("revision", 0)) is not int or current.get("revision", 0) < 0):
+                return False
+            pending = (current or {}).get("pending", {})
+            if not isinstance(pending, dict):
+                return False
+            claims = self._pending_across_periods(
+                tenant_id=tenant_id, user_id=user_id, day=day, pending=pending,
+            )
+            return all(spent[p][0] + claims[p][0] + tokens <= tc and
+                       spent[p][1] + claims[p][1] + tokens <= uc
+                       for p, tc, uc in self._caps.periods())
+        except RuntimeError as exc:
+            if str(exc) not in {"LLM_BUDGET_LEGACY_WRITER_ACTIVE", "LLM_BUDGET_CORRUPT_RESERVATION"}:
+                raise
+            return False
         except (ValueError, TypeError, KeyError, AttributeError):
             return False
 
@@ -199,45 +180,6 @@ class EventStoreDailyTokenBudget:
         remaining = {rid: row for rid, row in current["pending"].items() if (str(row["user_id"]), rid) not in completed}
         return len(remaining) < len(current["pending"]) and self._es.compare_and_set_setting(tenant_id=str(tenant_id), key=f"llm:pending:v1:{day}", expected=current, value={"pending": remaining})
 
-    def _reserve_daily(self, *, tenant_id: str, user_id: str, tokens: int, request_id: str) -> str | None:
-        get, cas = getattr(self._es, "get_setting", None), getattr(self._es, "compare_and_set_setting", None)
-        if not callable(get) or not callable(cas) or type(tokens) is not int or tokens <= 0 or any(not isinstance(v, str) or not v.strip() for v in (tenant_id, user_id, request_id)):
-            return None
-        key = f"llm:pending:v1:{(day := self._day())}"
-        for _ in range(16):
-            if not isinstance(current := get(tenant_id=str(tenant_id), key=key), dict | type(None)):
-                return None
-            if not isinstance(pending := (current or {}).get("pending", {}), dict) or request_id in pending:
-                return None
-            spent = {p: self._sum(tenant_id=tenant_id, user_id=user_id, period=p, day=day) for p, _t, _u in self._caps.periods()}
-            reserved_tenant = reserved_user = 0
-            for rid, row in pending.items():
-                if not isinstance(rid, str) or not rid or not isinstance(row, dict):
-                    return None
-                row_user, row_tokens = row.get("user_id"), row.get("tokens")
-                if not isinstance(row_user, str) or not row_user.strip() or type(row_tokens) is not int or row_tokens <= 0:
-                    return None
-                reserved_tenant, reserved_user = reserved_tenant + row_tokens, reserved_user + (row_tokens if row_user == str(user_id) else 0)
-            if self._day() != day:
-                return None
-            # Today's pending claims count against every period that contains today.
-            if any(spent[p][0] + reserved_tenant + tokens > t_cap or spent[p][1] + reserved_user + tokens > u_cap for p, t_cap, u_cap in self._caps.periods()):
-                if self._reconcile_completed(tenant_id=tenant_id, day=day, current=current):
-                    continue
-                return None
-            state = {"pending": {**pending, request_id: {"user_id": str(user_id), "tokens": int(tokens)}}}
-            if cas(tenant_id=str(tenant_id), key=key, expected=current, value=state):
-                claimed = False
-                try:
-                    claimed = cas(tenant_id=str(tenant_id), key=f"llm:claim:v2:{request_id}", expected=None, value={"user_id": str(user_id)})
-                    return day if claimed else None
-                finally:
-                    if not claimed:
-                        # Failed to acquire one-shot claim: an older request may own it.
-                        # Release only this pending reservation, never its claim.
-                        self.release(tenant_id=tenant_id, request_id=request_id, day=day)
-        return None
-
     def _reconcile_legacy_window(self, *, tenant_id: str, day: str) -> bool:
         """Only validated durable completions may clear historical v1 holds."""
         oldest = min(_utc_period_bounds_ms(p, day=day)[0] for p, _, _ in self._caps.periods())
@@ -258,8 +200,7 @@ class EventStoreDailyTokenBudget:
         oldest = min(_utc_period_bounds_ms(p, day=day)[0] for p, _, _ in periods)
         totals = {p: [0, 0] for p, _, _ in periods}
         # Scan legacy day buckets as well as the tenant-wide CAS bucket.
-        entries = [(day_id, rows) for day_id, rows in
-                   ((day, pending),)]
+        entries = [(day, pending)]
         old_day = today
         while int(datetime.combine(old_day, datetime.min.time(), tzinfo=UTC).timestamp() * 1000) >= oldest:
             key = f"llm:pending:v1:{old_day.isoformat()}"
@@ -324,54 +265,84 @@ class EventStoreDailyTokenBudget:
 
     def reserve(self, *, tenant_id: str, user_id: str, tokens: int, request_id: str) -> str | None:
         get, cas = getattr(self._es, "get_setting", None), getattr(self._es, "compare_and_set_setting", None)
-        if not callable(get) or not callable(cas) or type(tokens) is not int or tokens <= 0 or any(not isinstance(v, str) or not v.strip() for v in (tenant_id, user_id, request_id)):
+        if not callable(get) or not callable(cas) or type(tokens) is not int or tokens <= 0 or any(
+            not isinstance(v, str) or not v.strip() for v in (tenant_id, user_id, request_id)
+        ):
             return None
-        if len(self._caps.periods()) == 1:
-            return self._reserve_daily(tenant_id=tenant_id, user_id=user_id, tokens=tokens, request_id=request_id)
-        # The single CAS key serializes new reservations across UTC midnight,
-        # weeks and months. Older v1 day buckets are read conservatively.
-        key = "llm:pending:v2"
+        periods = self._caps.periods()
+        v2 = len(periods) > 1
+        admission_day = None if v2 else self._day()
         for _ in range(16):
-            day = self._day()
+            day = self._day() if v2 else admission_day
+            key = "llm:pending:v2" if v2 else f"llm:pending:v1:{day}"
             current = get(tenant_id=str(tenant_id), key=key)
             if not isinstance(current, dict | type(None)):
                 return None
             pending = (current or {}).get("pending", {})
-            if not isinstance(pending, dict) or request_id in pending or (current is not None and (type(current.get("revision", 0)) is not int or current.get("revision", 0) < 0)):
+            if not isinstance(pending, dict) or request_id in pending:
                 return None
-            spent = {p: self._sum(tenant_id=tenant_id, user_id=user_id, period=p, day=day) for p, _, _ in self._caps.periods()}
+            if v2 and current is not None and (
+                type(current.get("revision", 0)) is not int or current.get("revision", 0) < 0
+            ):
+                return None
+            spent = {p: self._sum(tenant_id=tenant_id, user_id=user_id, period=p, day=day)
+                     for p, _, _ in periods}
             try:
-                claims = self._pending_across_periods(tenant_id=tenant_id, user_id=user_id, day=day, pending=pending)
+                holds = self._pending_across_periods(
+                    tenant_id=tenant_id, user_id=user_id, day=day, pending=pending if v2 else {},
+                )
             except RuntimeError as exc:
-                if str(exc) == "LLM_BUDGET_LEGACY_WRITER_ACTIVE" and self._reconcile_legacy_window(tenant_id=tenant_id, day=day):
+                if v2 and str(exc) == "LLM_BUDGET_LEGACY_WRITER_ACTIVE" and self._reconcile_legacy_window(
+                    tenant_id=tenant_id, day=day,
+                ):
                     continue
                 return None
             if self._day() != day:
-                continue
-            if any(spent[p][0] + claims[p][0] + tokens > t_cap or spent[p][1] + claims[p][1] + tokens > u_cap
-                   for p, t_cap, u_cap in self._caps.periods()):
-                if pending and self._reconcile_v2(tenant_id=tenant_id, current=current):
-                    continue
-                # Legacy day buckets can also be reconciled without rewriting
-                # their claim history or creating an alternate budget owner.
-                if self._reconcile_legacy_window(tenant_id=tenant_id, day=day):
+                if v2:
                     continue
                 return None
-            state = self._next_v2_state(current, {**pending, request_id: {"user_id": str(user_id), "tokens": tokens, "day": day}})
+            exceeds_cap = any(
+                spent[p][0] + holds[p][0] + tokens > tc or spent[p][1] + holds[p][1] + tokens > uc
+                for p, tc, uc in periods
+            )
+            if exceeds_cap:
+                if v2 and pending and self._reconcile_v2(tenant_id=tenant_id, current=current):
+                    continue
+                if v2 and self._reconcile_legacy_window(tenant_id=tenant_id, day=day):
+                    continue
+                if not v2 and current is not None and self._reconcile_completed(
+                    tenant_id=tenant_id, day=day, current=current,
+                ):
+                    continue
+                return None
+            row = {"user_id": str(user_id), "tokens": tokens}
+            if v2:
+                row["day"] = day
+            next_pending = {**pending, request_id: row}
+            state = self._next_v2_state(current, next_pending) if v2 else {"pending": next_pending}
             if cas(tenant_id=str(tenant_id), key=key, expected=current, value=state):
-                claimed = False
-                try:
-                    claimed = cas(tenant_id=str(tenant_id), key=f"llm:claim:v2:{request_id}", expected=None, value={"user_id": str(user_id)})
-                    if claimed and self._day() != day:
-                        self.cancel_unstarted_reservation(tenant_id=tenant_id, request_id=request_id, day=day)
-                        return None
-                    return day if claimed else None
-                finally:
-                    if not claimed:
-                        # Failed to acquire one-shot claim: an older request may own it.
-                        # Release only this pending reservation, never its claim.
-                        self.release(tenant_id=tenant_id, request_id=request_id, day=day)
+                return self._claim_reservation(
+                    tenant_id=tenant_id, user_id=user_id, request_id=request_id, day=day,
+                    check_day=v2,
+                )
         return None
+
+    def _claim_reservation(self, *, tenant_id: str, user_id: str, request_id: str,
+                           day: str, check_day: bool) -> str | None:
+        """One-shot claim belongs to the canonical reservation, never an older retry."""
+        claimed = False
+        try:
+            claimed = self._es.compare_and_set_setting(
+                tenant_id=str(tenant_id), key=f"llm:claim:v2:{request_id}",
+                expected=None, value={"user_id": str(user_id)},
+            )
+            if claimed and check_day and self._day() != day:
+                self.cancel_unstarted_reservation(tenant_id=tenant_id, request_id=request_id, day=day)
+                return None
+            return day if claimed else None
+        finally:
+            if not claimed:
+                self.release(tenant_id=tenant_id, request_id=request_id, day=day)
 
     def cancel_unstarted_reservation(self, *, tenant_id: str, request_id: str, day: str) -> bool:
         """Remove only this pre-provider reservation and its matching one-shot claim.
