@@ -364,3 +364,39 @@ def test_mutating_or_unknown_cockpit_callbacks_never_exempted(callback):
     assert not is_budget_free_read_projection(
         "business_ops_summary@v1",
         {"tenant_id": "tenant-live", "user_id": "4001", "op": "cockpit", "arg": callback})
+
+@pytest.mark.parametrize("callback", (
+    "cpm:work", "cpm:settings", "cpm:partners:0", "cpm:bookings:0",
+    "cpm:payments:0", "cpm:bk-months:0", "cpm:sales", "cpm:calendar",
+))
+def test_cockpit_readonly_buttons_reach_durable_canonical_owner(monkeypatch, tmp_path, callback):
+    from types import SimpleNamespace
+
+    from runtime.handler_impl.domains.business_flow_ops import handle_business_ops_summary
+    from runtime.platform.event_store.sqlite_event_store import SqliteEventStore
+
+    monkeypatch.setenv("ADMIN_USER_IDS", "4001")
+    monkeypatch.setattr("runtime.entrypoints.telegram_longpoll._configured_telegram_tenant_id", lambda: "tenant-live")
+    state = replace(_verified_owner_state(_owner_update(callback)),
+                    user={"id": "4001", "roles": ["owner"]}, tenant_id="tenant-live")
+    proposal = UnifiedTelegramPolicyV3(admin_user_ids=("4001",)).propose(state)
+    assert (proposal.action, proposal.payload.get("op")) == ("business_ops_summary@v1", "cockpit")
+    _, payload = build_payload(state=state, out=proposal, pinned_world_model_meta={},
+                               tenant_id="tenant-live", product_id=None, domain=None,
+                               product_version=None, actor_id="4001")
+    calls = []
+    class Effects:
+        def send_message(self, **kwargs):
+            calls.append(kwargs)
+            return {"ok": True, "router_evidence": {"source": "telegram", "verified": True,
+                                                      "external_refs": ["test-message-1"]}}
+    env = SimpleNamespace(decision=SimpleNamespace(decision_id="decision-cockpit",
+                                                    correlation_id="correlation-cockpit"))
+    with SqliteEventStore(str(tmp_path / "cockpit.sqlite3")) as store:
+        result = handle_business_ops_summary(dict(payload), Effects(), env, event_store=store)
+        assert result["ok"] is True
+        assert calls[0]["callback_query_id"] == "callback-123"
+        assert calls[0]["tenant_id"] == "tenant-live"
+        assert calls[0]["user_id"] == "4001"
+        assert calls[0]["text"]
+        assert store.count_events(tenant_id="tenant-live", event_type="business_ops_summary@v1") == 0
