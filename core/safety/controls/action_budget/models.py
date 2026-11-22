@@ -149,6 +149,14 @@ def _single_target_non_campaign(action: str, payload: Mapping[str, Any]) -> bool
             and set(track) == {"marketing_variant"} and isinstance(track["marketing_variant"], str)
             and 0 < len(track["marketing_variant"]) <= 32))))
 
+def _zero_cost(payload: Mapping[str, Any]) -> bool:
+    try:
+        raw = payload.get("estimated_cost", 0)
+        return type(raw) is not bool and float(raw or 0) == 0.0
+    except (TypeError, ValueError, OverflowError):
+        return False
+
+
 def is_budget_free_text_message(action: str, payload: Mapping[str, Any]) -> bool:
     """Classify zero-cost text for accounting, never for authorization."""
     if not isinstance(payload, Mapping) or not _single_target_non_campaign(action, payload):
@@ -175,11 +183,7 @@ def is_budget_free_text_message(action: str, payload: Mapping[str, Any]) -> bool
     if isinstance(meta, Mapping) and (any(meta.get(k) for k in unsafe) or
                                       ("inbound_user_reply" in meta and not is_routine_reply(action, payload))):
         return False
-    cost = payload.get("estimated_cost", 0)
-    try:
-        return not isinstance(cost, bool) and float(cost or 0) == 0
-    except (TypeError, ValueError, OverflowError):
-        return False
+    return _zero_cost(payload)
 
 def is_routine_reply(action: str, payload: Mapping[str, Any]) -> bool:
     """Only zero-cost, single-recipient, inbound-bound sends bypass autonomous budgets."""
@@ -201,26 +205,25 @@ def is_routine_reply(action: str, payload: Mapping[str, Any]) -> bool:
             or str(payload.get("chat_id") or recipient) != str(proof.get("chat_id") or recipient)
             or (count is not None and (type(count) is not int or count != 1))):
         return False
-    try:
-        return float(payload.get("estimated_cost") or 0.0) == 0.0
-    except (ValueError, TypeError, OverflowError):
-        return False
+    return _zero_cost(payload)
 
 # Read projection accounting never substitutes for authorization or other controls.
-_READ_COCKPIT = frozenset({"", "cpm:menu", "cpm:work", "cpm:manage", "cpm:customers", "cpm:customers:0",
-                           "cpm:growth", "cpm:growth-an:7", "cpm:growth-an:30", "cpm:money", "cpm:payments:0",
-                           "cpm:calendar", "cpm:automation"})
+_READ_COCKPIT = frozenset({"menu", "work", "today", "bookings", "growth", "growth-now", "partners", "ladder", "manage", "messengers", "connections", "switch", "growth-an", "money", "services", "calendar", "customers", "customer", "cust-time", "events", "automation", "settings",
+    "team", "member", "sales", "sales-recent", "sales-actions", "sales-handoffs", "sales-lead", "prices", "payments", "pay-refund", "growth-report", "bk-open", "bk-months", "bk-dates", "bk-times", "bk-dur", "ev-conduct", "ev-texts"})
 _READ_FIELDS = frozenset({"tenant_id", "business_id", "user_id", "actor_id", "op", "arg", "callback_query_id",
-                          "product_id", "domain", "product_version", "goal_id", "autonomy_tier",
-                          "idempotency_key", "world_model_meta", "meta", "estimated_cost"})
+    "product_id", "domain", "product_version", "goal_id", "autonomy_tier", "idempotency_key", "world_model_meta", "meta", "estimated_cost"})
 
 def is_budget_free_read_projection(action: str, payload: Mapping[str, Any]) -> bool:
     """Exempt only exact, zero-cost read projections, not authorization."""
     if not isinstance(payload, Mapping) or set(payload) - _READ_FIELDS:
         return False
     op, arg = payload.get("op"), str(payload.get("arg") or "")
-    indexed_read = (arg.startswith(("cpm:customers:", "cpm:payments:", "cpm:team:")) and arg.rsplit(":", 1)[-1].isdecimal() and len(arg.rsplit(":", 1)[-1]) <= 7)
-    allowed = ((action == "business_ops_summary@v1" and op == "cockpit" and (arg in _READ_COCKPIT or indexed_read)) or
+    parts = arg[4:].split(":") if isinstance(payload.get("arg", ""), str) and arg.startswith("cpm:") and len(arg) <= 64 else []
+    read_screen = (not arg or (bool(parts) and len(parts) <= 3 and parts[0] in _READ_COCKPIT
+        and all(p and len(p) <= 40 and all(c.isascii() and (c.isalnum() or c in "_-") for c in p) for p in parts[1:])
+        and (parts[0] not in {"team", "payments", "partners", "bookings", "customers"}
+             or all(p.isdecimal() and len(p) <= 7 for p in parts[1:]))))
+    allowed = ((action == "business_ops_summary@v1" and op == "cockpit" and read_screen) or
                (action == "business_ops_summary@v1" and op == "admin_analytics" and arg in ADMIN_ANALYTICS_ROUTES) or
                (action == "partners@v1" and op == "rank" and isinstance(payload.get("arg", ""), str) and len(arg) <= 200) or
                ((action, op) in {("sales_pipeline@v1", "list"), ("bookings@v1", "ad_channels"),
@@ -229,11 +232,6 @@ def is_budget_free_read_projection(action: str, payload: Mapping[str, Any]) -> b
         return False
     meta = payload.get("meta")
     if meta is not None and (not isinstance(meta, Mapping) or any(meta.get(k) for k in (
-        "amount", "estimated_cost", "charge_amount", "requested_budget",
-        "budget_delta", "autonomous", "campaign_id", "broadcast"
-    ))):
+        "amount", "estimated_cost", "charge_amount", "requested_budget", "budget_delta", "autonomous", "campaign_id", "broadcast"))):
         return False
-    try:
-        return type(cost := payload.get("estimated_cost", 0)) is not bool and float(cost or 0) == 0.0
-    except (TypeError, ValueError, OverflowError):
-        return False
+    return _zero_cost(payload)

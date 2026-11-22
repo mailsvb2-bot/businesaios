@@ -319,3 +319,48 @@ def test_partner_read_button_executes_existing_owner_and_ack_without_writing_fac
         assert captured[0]["user_id"] == "4001"
         assert "Партнёры" in captured[0]["text"]
         assert store.count_events(tenant_id="tenant-live", event_type="partners@v1") == 0
+
+def test_all_reachable_cockpit_read_buttons_remain_budget_free_and_mutations_stay_gated():
+    from collections import deque
+
+    from application.business_flows import cockpit, cockpit_booking, cockpit_events, cockpit_money
+    from core.safety.controls.action_budget.models import _READ_COCKPIT, is_budget_free_read_projection
+
+    mutations = {"sales-ev"} | cockpit_booking.MUTATIONS | cockpit_events.MUTATIONS | cockpit_money.MUTATIONS
+    assert set(_READ_COCKPIT) == set(cockpit.PARENTS) | {"menu"}
+    assert set(_READ_COCKPIT).isdisjoint(mutations)
+    pending = deque(("cpm:menu", "cpm:growth", "cpm:money"))
+    seen, read_count, mutation_count = set(), 0, 0
+    while pending and len(seen) < 1800:
+        callback = pending.popleft()
+        if callback in seen:
+            continue
+        seen.add(callback)
+        parsed = cockpit.parse(callback)
+        payload = {"tenant_id": "tenant-live", "user_id": "4001",
+                   "op": "cockpit", "arg": callback}
+        exempt = is_budget_free_read_projection("business_ops_summary@v1", payload)
+        assert exempt == (parsed.action not in mutations), callback
+        read_count += int(exempt)
+        mutation_count += int(not exempt)
+        text, rows = cockpit.render(parsed, cockpit.Snapshot(), is_owner=True)
+        if exempt:
+            assert "Эта кнопка уже неактуальна" not in text, callback
+        for row in rows:
+            for _, destination in row:
+                if destination.startswith("cpm:") and destination not in seen:
+                    pending.append(destination)
+    assert len(seen) == 1800
+    assert read_count > 1000 and mutation_count > 0
+
+
+@pytest.mark.parametrize("callback", (
+    "cpm:pay-rf:ref", "cpm:payments:charge", "cpm:team:0:write",
+    "cpm:sales-ev:lead_abc:done", "cpm:ev-att:slot:a",
+    "cpm:bk-new:0-197001010800:30", "cpm:unknown:0",
+))
+def test_mutating_or_unknown_cockpit_callbacks_never_exempted(callback):
+    from core.safety.controls.action_budget.models import is_budget_free_read_projection
+    assert not is_budget_free_read_projection(
+        "business_ops_summary@v1",
+        {"tenant_id": "tenant-live", "user_id": "4001", "op": "cockpit", "arg": callback})
