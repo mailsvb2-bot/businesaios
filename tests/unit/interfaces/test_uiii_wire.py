@@ -11,7 +11,7 @@ import pytest
 from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
 from cryptography.hazmat.primitives.serialization import Encoding, PublicFormat
 
-from interfaces.uiii.market import PriceObservation, price_change
+from application.business_flows.external_products import PriceObservation, price_change
 from interfaces.uiii.signals import MappingContext, SignalRejected, to_external_product_event, verify_signal
 
 NOW = datetime(2026, 11, 14, 12, tzinfo=UTC)
@@ -100,7 +100,7 @@ def test_exact_price_and_unknown_stock():
 
 
 def test_purpose_scoped_privacy_token():
-    from interfaces.uiii.privacy import purpose_token
+    from interfaces.uiii.signals import purpose_token
 
     kw = dict(key=b"x" * 32, key_id="v1", tenant="t", business="b", controller="c", purpose="crm")
     token = purpose_token("same@example.org", **kw)
