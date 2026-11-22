@@ -1,9 +1,7 @@
 from __future__ import annotations
-
 import json
 import os
 from dataclasses import dataclass
-
 from shared.env_access import env_bool
 
 CANON_SAFETY_KEY_REGISTRY = True
