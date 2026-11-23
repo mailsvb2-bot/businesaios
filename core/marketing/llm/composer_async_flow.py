@@ -47,12 +47,13 @@ async def compose_async_flow(composer, inp):
     try:
         resp = await composer.accounted_gateway.generate(req)
         runtime.circuit.on_success()
-    except RuntimeError as exc:
-        code = str(exc)
+    except Exception as exc:  # noqa: BLE001 - provider boundary fails closed
+        code = str(exc) if isinstance(exc, RuntimeError) else ""
         if code == "LLM_BUDGET_BLOCKED":
             runtime.metrics.inc("budget_blocked")
         elif code.startswith("LLM_ACCOUNTING_"):
-            runtime.metrics.inc("accounting_failed" if code.endswith(("_WRITE_FAILED", "_RELEASE_FAILED", "_CANCEL_FAILED")) else "accounting_unavailable")
+            runtime.metrics.inc("accounting_failed" if code.endswith(
+                ("_WRITE_FAILED", "_RELEASE_FAILED", "_CANCEL_FAILED")) else "accounting_unavailable")
         else:
             runtime.circuit.on_failure()
             runtime.metrics.inc("failed")
@@ -60,14 +61,6 @@ async def compose_async_flow(composer, inp):
             runtime.metrics.observe_latency(latency)
             await emit_trace_async(event_store=composer._event_store, debug_sampling=composer._cfg.debug_sampling, inp=inp, model=composer._cfg.model, provider=composer._cfg.provider, request_id=request_id, prompt_version=prompt_version, prompt_hash=prompt_hash, ok=False, cache_hit=False, latency_ms=latency, finish_reason="error", usage=None, error_code=err_code(exc))
             await composer._maybe_alert(inp, reason="error_spike")
-        return None
-    except Exception as exc:  # noqa: BLE001
-        runtime.circuit.on_failure()
-        runtime.metrics.inc("failed")
-        latency = max(0, now_ms() - t0)
-        runtime.metrics.observe_latency(latency)
-        await emit_trace_async(event_store=composer._event_store, debug_sampling=composer._cfg.debug_sampling, inp=inp, model=composer._cfg.model, provider=composer._cfg.provider, request_id=request_id, prompt_version=prompt_version, prompt_hash=prompt_hash, ok=False, cache_hit=False, latency_ms=latency, finish_reason="error", usage=None, error_code=err_code(exc))
-        await composer._maybe_alert(inp, reason="error_spike")
         return None
 
     usage = resp.usage

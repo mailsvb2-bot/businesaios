@@ -47,25 +47,19 @@ def compose_sync_flow(composer, inp):
     try:
         resp = composer.accounted_gateway.generate_sync(req)
         runtime.circuit.on_success()
-    except RuntimeError as exc:
-        code = str(exc)
+    except Exception as exc:  # noqa: BLE001 - provider boundary fails closed
+        code = str(exc) if isinstance(exc, RuntimeError) else ""
         if code == "LLM_BUDGET_BLOCKED":
             runtime.metrics.inc("budget_blocked")
         elif code.startswith("LLM_ACCOUNTING_"):
-            runtime.metrics.inc("accounting_failed" if code.endswith(("_WRITE_FAILED", "_RELEASE_FAILED", "_CANCEL_FAILED")) else "accounting_unavailable")
+            runtime.metrics.inc("accounting_failed" if code.endswith(
+                ("_WRITE_FAILED", "_RELEASE_FAILED", "_CANCEL_FAILED")) else "accounting_unavailable")
         else:
             runtime.circuit.on_failure()
             runtime.metrics.inc("failed")
             latency = max(0, now_ms() - t0)
             runtime.metrics.observe_latency(latency)
             emit_trace_sync(event_store=composer._event_store, model=composer._cfg.model, provider=composer._cfg.provider, inp=inp, request_id=request_id, prompt_version=prompt_version, prompt_hash=prompt_hash, ok=False, cache_hit=False, latency_ms=latency, finish_reason="error", usage=None, error_code=err_code(exc))
-        return None
-    except Exception as exc:  # noqa: BLE001
-        runtime.circuit.on_failure()
-        runtime.metrics.inc("failed")
-        latency = max(0, now_ms() - t0)
-        runtime.metrics.observe_latency(latency)
-        emit_trace_sync(event_store=composer._event_store, model=composer._cfg.model, provider=composer._cfg.provider, inp=inp, request_id=request_id, prompt_version=prompt_version, prompt_hash=prompt_hash, ok=False, cache_hit=False, latency_ms=latency, finish_reason="error", usage=None, error_code=err_code(exc))
         return None
 
     usage = resp.usage

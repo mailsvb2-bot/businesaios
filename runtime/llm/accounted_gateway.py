@@ -26,9 +26,8 @@ class AccountedSyncGateway:
         self._provider = str(provider or "").strip()
         if not self._provider:
             raise ValueError("LLM_PROVIDER_ID_REQUIRED")
-        if budget is not None and (
-            not isinstance(budget, EventStoreDailyTokenBudget) or getattr(budget, "_es", None) is not event_store
-        ):
+        if budget is not None and (not isinstance(budget, EventStoreDailyTokenBudget)
+                                   or getattr(budget, "_es", None) is not event_store):
             raise ValueError("LLM_BUDGET_STORE_MISMATCH")
         self._budget = budget or EventStoreDailyTokenBudget(event_store=event_store, caps=BudgetCaps())
 
@@ -41,8 +40,7 @@ class AccountedSyncGateway:
         raise RuntimeError("LLM_PROVIDER_INTERFACE_UNAVAILABLE")
 
     def generate_sync(self, request: Any) -> Any:
-        meta = getattr(request, "metadata", None)
-        meta = meta if isinstance(meta, dict) else {}
+        meta = raw_meta if isinstance(raw_meta := getattr(request, "metadata", None), dict) else {}
         tenant, user = str(meta.get("tenant_id") or "").strip(), str(meta.get("user_id") or "").strip()
         correlation, task = str(meta.get("correlation_key") or "").strip(), str(meta.get("task_type") or "").strip()
         model = str(getattr(request, "model", "") or "").strip()
@@ -50,38 +48,27 @@ class AccountedSyncGateway:
             raise RuntimeError("LLM_ACCOUNTING_UNAVAILABLE")
 
         supplied = meta.get("request_id")
-        if supplied is not None and (
-            not isinstance(supplied, str) or not re.fullmatch(r"[A-Za-z0-9_.:-]{1,128}", supplied)
-        ):
+        if supplied is not None and (not isinstance(supplied, str) or not re.fullmatch(r"[A-Za-z0-9_.:-]{1,128}", supplied)):
             raise RuntimeError("LLM_ACCOUNTING_UNAVAILABLE")
-        request_id = supplied or "llm-gateway-" + hashlib.sha256(
-            "\0".join((tenant, user, correlation, task, model)).encode()
-        ).hexdigest()[:32]
+        request_id = supplied or "llm-gateway-" + hashlib.sha256("\0".join((tenant, user, correlation, task, model)).encode()).hexdigest()[:32]
         estimate = estimate_request_tokens(request)
-        ctx = TelemetryContext(
-            tenant_id=tenant, user_id=user, message_id=str(meta.get("message_id") or ""),
-            correlation_id=correlation,
-        )
+        ctx = TelemetryContext(tenant_id=tenant, user_id=user, message_id=str(meta.get("message_id") or ""), correlation_id=correlation)
         event_meta = {key: meta[key] for key in ("channel", "locale", "message_id", "prompt_version", "prompt_hash", "task_type") if isinstance(meta.get(key), str) and meta[key].strip() and len(meta[key]) <= 512}
+
+        def record(event_type: str, details: dict, *, required: bool = False) -> None:
+            append_event_sync(event_store=self._store, event_type=event_type, ctx=ctx, required=required,
+                              payload={"request_id": request_id, "provider": self._provider, "model": model, **event_meta, **details})
+
         try:
-            day = self._budget.reserve(
-                tenant_id=tenant, user_id=user, tokens=estimate, request_id=request_id,
-            )
+            day = self._budget.reserve(tenant_id=tenant, user_id=user, tokens=estimate, request_id=request_id)
         except Exception as exc:
             raise RuntimeError("LLM_ACCOUNTING_UNAVAILABLE") from exc
         if day is None:
-            append_event_sync(
-                event_store=self._store, event_type=LLM_BUDGET_BLOCKED, ctx=ctx,
-                payload={"request_id": request_id, "provider": self._provider, "model": model,
-                         "estimated_tokens": estimate, **event_meta},
-            )
+            record(LLM_BUDGET_BLOCKED, {"estimated_tokens": estimate})
             raise RuntimeError("LLM_BUDGET_BLOCKED")
 
         try:
-            append_event_sync(
-                event_store=self._store, event_type=LLM_REQUESTED, ctx=ctx, required=True,
-                payload={"request_id": request_id, "provider": self._provider, "model": model, **event_meta},
-            )
+            record(LLM_REQUESTED, {}, required=True)
         except Exception as exc:
             if not self._budget.cancel_unstarted_reservation(tenant_id=tenant, request_id=request_id, day=day):
                 raise RuntimeError("LLM_ACCOUNTING_RESERVATION_CANCEL_FAILED") from exc
@@ -94,9 +81,7 @@ class AccountedSyncGateway:
         if usage is None:
             raise RuntimeError("LLM_ACCOUNTING_UNAVAILABLE")
         prompt, completion, total = usage
-        categories = tuple(getattr(usage_obj, key, 0) for key in (
-            "cached_input_tokens", "cache_write_input_tokens", "reasoning_output_tokens",
-        ))
+        categories = tuple(getattr(usage_obj, key, 0) for key in ("cached_input_tokens", "cache_write_input_tokens", "reasoning_output_tokens"))
         if any(type(value) is not int or value < 0 for value in categories):
             raise RuntimeError("LLM_ACCOUNTING_UNAVAILABLE")
         cached, cache_write, reasoning = categories
@@ -105,17 +90,12 @@ class AccountedSyncGateway:
         if self._provider == "anthropic" and (cached or cache_write):
             raise RuntimeError("LLM_ACCOUNTING_UNAVAILABLE")
 
-        raw = getattr(response, "raw", None)
-        raw = raw if isinstance(raw, dict) else {}
+        raw = source if isinstance(source := getattr(response, "raw", None), dict) else {}
         provider_model = raw.get("model") if isinstance(raw.get("model"), str) else ""
-        provider_id = next((raw.get(key) for key in ("id", "request_id", "requestId")
-                            if isinstance(raw.get(key), str)
+        provider_id = next((raw[key] for key in ("id", "request_id", "requestId") if isinstance(raw.get(key), str)
                             and re.fullmatch(r"[A-Za-z0-9_.:-]{1,128}", raw[key])), "")
         try:
-            append_event_sync(
-                event_store=self._store, event_type=LLM_COMPLETED, ctx=ctx, required=True,
-                payload={
-                    "request_id": request_id, "provider": self._provider, "model": model,
+            record(LLM_COMPLETED, {
                     "requested_model": model, "provider_model": provider_model,
                     "provider_model_reported": bool(provider_model),
                     "provider_request_id": provider_id, "provider_request_id_reported": bool(provider_id),
@@ -124,9 +104,8 @@ class AccountedSyncGateway:
                     "cache_write_input_tokens": cache_write, "reasoning_output_tokens": reasoning,
                     "latency_ms": max(0, int((time.monotonic() - started) * 1000)),
                     "finish_reason": str(getattr(response, "finish_reason", "") or ""),
-                    "cache_hit": False, "ok": True, "error_code": "", **event_meta,
-                },
-            )
+                    "cache_hit": False, "ok": True, "error_code": "",
+                }, required=True)
         except Exception as exc:
             raise RuntimeError("LLM_ACCOUNTING_COMPLETION_WRITE_FAILED") from exc
         if not self._budget.release(tenant_id=tenant, request_id=request_id, day=day):
