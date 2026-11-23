@@ -471,7 +471,7 @@ def test_customer_bot_exhausted_budget_uses_same_verified_owner_reply_path(monke
         scopes.append(identity)
         yield
 
-    def decide(**kwargs):
+    def emulate_canonical_decision(**kwargs):
         calls.append(kwargs["state"])
         if len(calls) == 1:
             raise RuntimeError("DECISION_BLOCKED:action_budget_exceeded")
@@ -480,7 +480,7 @@ def test_customer_bot_exhausted_budget_uses_same_verified_owner_reply_path(monke
 
     monkeypatch.setattr(lp, "_world_state_from_update", lambda *args, **kw: state)
     monkeypatch.setattr(lp, "verified_inbound_reply_scope", scope)
-    monkeypatch.setattr(lp, "execute_runtime_decision", decide)
+    monkeypatch.setattr(lp, "execute_runtime_decision", emulate_canonical_decision)
     monkeypatch.setattr(lp, "_append_event", lambda _log, *, event_type, payload:
                         events.append((event_type, payload)))
 
