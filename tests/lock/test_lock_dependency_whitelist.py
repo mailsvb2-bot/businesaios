@@ -1,3 +1,5 @@
+import ast
+import sys
 from pathlib import Path
 
 ALLOWED_IMPORT_PREFIXES = (
@@ -16,6 +18,7 @@ ALLOWED_IMPORT_PREFIXES = (
     "governance.",
     "survival.",
     "compatibility.",
+    "shared.env_access",
 )
 
 
@@ -38,3 +41,19 @@ def test_no_unexpected_dotted_imports_in_core():
                         continue
                     bad.append(f"{py.relative_to(root)}: {s}")
     assert not bad, "Unexpected imports in core:\n" + "\n".join(bad)
+
+
+def test_shared_env_access_is_a_stdlib_only_leaf() -> None:
+    root = Path(__file__).resolve().parents[2]
+    source = root / "shared" / "env_access.py"
+    tree = ast.parse(source.read_text(encoding="utf-8"), filename=str(source))
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Import):
+            modules = [alias.name for alias in node.names]
+        elif isinstance(node, ast.ImportFrom):
+            modules = [node.module or ""]
+        else:
+            continue
+        assert all(module.split(".")[0] in sys.stdlib_module_names for module in modules), (
+            "shared.env_access must remain a stdlib-only leaf before core may depend on it"
+        )
