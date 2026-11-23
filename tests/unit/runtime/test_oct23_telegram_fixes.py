@@ -347,3 +347,111 @@ def test_telegram_start_diagnostics_split_normalize_hydration_and_execution(monk
     assert "user_id" not in metrics
     assert "chat_id" not in metrics
     assert "token" not in metrics
+
+
+def test_exhausted_action_budget_replies_through_same_canonical_gateway(monkeypatch):
+    """The blocked mutation never reaches Executor; a separately gated reply does."""
+    from contextlib import contextmanager
+    from dataclasses import make_dataclass
+
+    State = make_dataclass("State", [("tenant_id", str), ("user_id", str), ("session", dict)])
+    state = State("tenant-one", "owner-one", {"chat_id": "4001", "callback_query_id": "cb-1"})
+    issuer, executor = object(), object()
+    calls, scopes, events = [], [], []
+
+    @contextmanager
+    def inbound_scope(**identity):
+        scopes.append(identity)
+        yield
+
+    def execute(**kwargs):
+        assert kwargs["issuer"] is issuer and kwargs["executor"] is executor
+        calls.append(kwargs["state"])
+        if len(calls) == 1:
+            raise RuntimeError("DECISION_BLOCKED:action_budget_exceeded")
+        assert kwargs["state"].session["action_budget_denial_notice"] is True
+        return SimpleNamespace(ok=True, decision_id="refusal-1")
+
+    monkeypatch.setattr(lp, "_world_state_from_update", lambda *a, **kw: state)
+    monkeypatch.setattr(lp, "verified_inbound_reply_scope", inbound_scope)
+    monkeypatch.setattr(lp, "execute_runtime_decision", execute)
+    monkeypatch.setattr(lp, "_append_event", lambda log, *, event_type, payload: events.append((event_type, payload)))
+    outcome = lp._execute_update(
+        core=issuer, executor=executor, event_log=None,
+        update={"update_id": 42, "callback_query": {"id": "cb-1"}}, transport="longpoll")
+    assert outcome.ok
+    assert len(calls) == 2
+    assert calls[0].session.get("action_budget_denial_notice") is None
+    assert scopes == [{"tenant_id": "tenant-one", "channel": "telegram", "user_id": "owner-one",
+                       "update_id": 42, "chat_id": "4001", "bot_id": "primary"}]
+    assert events[-1][0] == "telegram_update_executed"
+    assert events[-1][1]["ok"] is True
+
+
+@pytest.mark.parametrize("reason", [
+    "DECISION_BLOCKED:missing_tenant",
+    "DECISION_BLOCKED:action_budget_invalid_cost",
+    "DECISION_BLOCKED:action_budget_idempotency_conflict",
+    "DECISION_BLOCKED:action_safety_gate_error",
+])
+def test_budget_refusal_never_masks_unrelated_safety_failure(monkeypatch, reason):
+    from dataclasses import make_dataclass
+    State = make_dataclass("State", [("tenant_id", str), ("user_id", str), ("session", dict)])
+    monkeypatch.setattr(lp, "_world_state_from_update", lambda *a, **kw: State("t", "u", {}))
+    calls = []
+    def fail(**kwargs):
+        calls.append(kwargs)
+        raise RuntimeError(reason)
+    monkeypatch.setattr(lp, "execute_runtime_decision", fail)
+    with pytest.raises(RuntimeError, match=reason):
+        lp._execute_update(core=None, executor=None, event_log=None,
+                           update={"update_id": 17}, transport="longpoll")
+    assert len(calls) == 1
+
+
+def test_failed_budget_notice_is_not_reported_as_completed(monkeypatch):
+    from dataclasses import make_dataclass
+    State = make_dataclass("State", [("tenant_id", str), ("user_id", str), ("session", dict)])
+    monkeypatch.setattr(lp, "_world_state_from_update", lambda *a, **kw: State("t", "u", {}))
+    calls = []
+    def fail(**kwargs):
+        calls.append(kwargs)
+        raise RuntimeError("DECISION_BLOCKED:action_budget_exceeded" if len(calls) == 1
+                           else "telegram_update_outcome_unconfirmed")
+    monkeypatch.setattr(lp, "execute_runtime_decision", fail)
+    with pytest.raises(RuntimeError, match="telegram_update_outcome_unconfirmed"):
+        lp._execute_update(core=None, executor=None, event_log=None,
+                           update={"update_id": 17}, transport="longpoll")
+    assert len(calls) == 2
+
+
+def test_budget_refusal_policy_is_single_zero_cost_action_for_owner(monkeypatch):
+    from dataclasses import replace
+
+    from core.policies.telegram.unified_policy import UnifiedTelegramPolicyV3
+    from core.safety.controls.action_budget.guard import ActionBudgetGuard
+    from core.safety.controls.action_budget.ledger import InMemoryActionBudgetLedger
+    from core.safety.controls.action_budget.models import ActionBudget
+    from core.safety.controls.action_context import SafetyActionContext
+    from core.safety.controls.control_result import ControlStatus
+
+    monkeypatch.setattr(lp, "_configured_telegram_tenant_id", lambda: "tenant-one")
+    state = lp._world_state_from_update({"update_id": 42, "callback_query": {
+        "id": "cb-1", "from": {"id": 4001}, "data": "cp:section:partners",
+        "message": {"message_id": 4, "chat": {"id": 4001}, "date": 1700000000},
+    }})
+    state = replace(state, session={**state.session, "action_budget_denial_notice": True})
+    proposals = UnifiedTelegramPolicyV3().propose_many(state)
+    assert len(proposals) == 1
+    proposal = proposals[0]
+    assert proposal.action == "send_message@v1"
+    assert proposal.payload["callback_query_id"] == "cb-1"
+    assert "не выполнено" in proposal.payload["text"]
+    assert not proposal.payload.get("track_event_type")
+    ledger = InMemoryActionBudgetLedger()
+    ledger.record("tenant-one", estimated_cost=1.0)
+    guard = ActionBudgetGuard(ledger, ActionBudget(max_cost=1.0, max_actions=1))
+    payload = {**proposal.payload, "tenant_id": "tenant-one"}
+    verdict = guard.evaluate(SafetyActionContext(proposal.action, "tenant-one", "4001", payload))
+    assert verdict.status == ControlStatus.ALLOW
+    assert ledger.snapshot("tenant-one") == (1.0, 1)

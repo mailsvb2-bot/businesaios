@@ -160,7 +160,7 @@ def poll_telegram_updates_effect(
             telegram_method_url(token, "getUpdates"),
             params,
             headers={"Content-Type": "application/json"},
-            timeout_s=int(timeout_s) + 10,
+            timeout_s=(2 if tenant and int(timeout_s) == 0 else int(timeout_s) + 10),
             transport=transport,
         )
     except Exception as exc:
