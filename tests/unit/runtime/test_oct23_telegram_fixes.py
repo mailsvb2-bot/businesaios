@@ -492,3 +492,48 @@ def test_customer_bot_exhausted_budget_uses_same_verified_owner_reply_path(monke
     assert events[-1] == ("customer_bot_update_executed", {
         "bot_id": "777", "update_id": 19, "ok": True,
     })
+
+
+def test_all_canonical_action_handler_refs_bind_real_owner_functions():
+    """No green UI/schema test may hide a missing canonical executor owner."""
+    import importlib
+
+    from runtime.boot.actions_registry import INLINE_ALLOWLIST, SPECS
+
+    assert SPECS
+    checked = 0
+    for action, spec in SPECS.items():
+        module, sep, name = spec.handler_ref.partition(":")
+        assert sep and module and name, (action, spec.handler_ref)
+        if name == "inline":
+            assert action in INLINE_ALLOWLIST, action
+            continue
+        target = importlib.import_module(module)
+        for part in name.split("."):
+            target = getattr(target, part)
+        assert callable(target), (action, spec.handler_ref)
+        checked += 1
+    assert checked >= 50
+    assert SPECS["execute_plan@v1"].handler_ref.endswith("ActionHandlerRegistry.dispatch")
+
+
+def test_all_76_visible_telegram_callbacks_are_owned_by_real_handlers(monkeypatch):
+    from dataclasses import replace
+
+    from core.policies.telegram.unified_policy import UnifiedTelegramPolicyV3
+    from runtime.boot.actions_registry import SPECS
+    from tests.business_critical.test_telegram_full_button_contract import (
+        _callbacks,
+        _owner_update,
+        _verified_owner_state,
+    )
+
+    monkeypatch.setattr(lp, "_configured_telegram_tenant_id", lambda: "tenant-one")
+    callbacks = _callbacks()
+    assert len(callbacks) == 76
+    for callback in callbacks:
+        state = _verified_owner_state(_owner_update(callback))
+        state = replace(state, user={**state.user, "roles": ["admin"]})
+        proposal = UnifiedTelegramPolicyV3(admin_user_ids=("4001",)).propose(state)
+        assert proposal.action in SPECS, callback
+        assert SPECS[proposal.action].handler_ref, (callback, proposal.action)
