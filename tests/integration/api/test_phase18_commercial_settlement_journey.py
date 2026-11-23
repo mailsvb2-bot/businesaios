@@ -147,9 +147,13 @@ def test_mismatched_provider_evidence_never_creates_paid_fact(changes):
     assert env["invoices"].get(**env["scope"], invoice_id=env["order"].invoice_id).paid_minor == 0
 
 
-def test_non_final_provider_state_does_not_mutate_billing():
+@pytest.mark.parametrize("status", [
+    "pending", "waiting_for_capture", "canceled", "refunded", "",
+    "SUCCEEDED", "paid", "success", "not_succeeded",
+])
+def test_non_final_provider_state_does_not_mutate_billing(status):
     env = build()
-    env["authority"].proof = replace(env["authority"].proof, status="pending")
+    env["authority"].proof = replace(env["authority"].proof, status=status)
     outcome = env["reconciler"].reconcile(**env["scope"], order_id=env["order"].order_id)
     assert outcome.provider_verified is False
     assert outcome.billing_status == "issued"
