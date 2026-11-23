@@ -229,6 +229,17 @@ def _start_health_if_enabled(event_log: Any) -> Any:
         port=port,
     )
 
+def _execute_with_budget_notice(*, core: Any, executor: Any, state: Any) -> Any:
+    """After a pre-effect budget denial, explain via the SAME sealed decision path."""
+    try:
+        return execute_runtime_decision(issuer=core, executor=executor, state=state)
+    except Exception as exc:
+        if str(exc) != "DECISION_BLOCKED:action_budget_exceeded":
+            raise
+        return execute_runtime_decision(issuer=core, executor=executor, state=replace(
+            state, session={**dict(state.session or {}), "action_budget_denial_notice": True}))
+
+
 def _execute_update(
     *,
     core: Any,
@@ -255,16 +266,7 @@ def _execute_update(
         tenant_id=str(state.tenant_id), channel="telegram", user_id=str(state.user_id),
         update_id=raw_update_id, chat_id=chat_id, bot_id=bot_id,
     ):
-        try:
-            result = execute_runtime_decision(issuer=core, executor=executor, state=state)
-        except Exception as exc:
-            if str(exc) != "DECISION_BLOCKED:action_budget_exceeded":
-                raise
-            # The original DecisionCore blocked before an effect was issued.
-            # Re-enter that SAME canonical gateway with a zero-cost refusal;
-            # never send directly or override the action budget.
-            denied = replace(state, session={**session, "action_budget_denial_notice": True})
-            result = execute_runtime_decision(issuer=core, executor=executor, state=denied)
+        result = _execute_with_budget_notice(core=core, executor=executor, state=state)
     elapsed_ms = int((time.monotonic() - started) * 1000)
     message = update.get("message")
     sent_s = message.get("date") if isinstance(message, dict) else None
@@ -301,7 +303,7 @@ def _customer_dispatch(*, core: Any, executor: Any, event_log: Any):
             tenant_id=str(state.tenant_id), channel="telegram", user_id=str(state.user_id),
             update_id=update.get("update_id"), chat_id=chat_id, bot_id=bot_id,
         ):
-            result = execute_runtime_decision(issuer=core, executor=executor, state=state)
+            result = _execute_with_budget_notice(core=core, executor=executor, state=state)
         _append_event(event_log, event_type="customer_bot_update_executed",
                       payload={"bot_id": route.external_bot_id, "update_id": update.get("update_id"),
                                "ok": bool(getattr(result, "ok", False))})  # fmt: skip
@@ -322,8 +324,7 @@ def _run_longpoll(
     _start_health_if_enabled(event_log)
 
     poll_timeout_s = max(1, env_int("TELEGRAM_POLL_TIMEOUT_S", 30))
-    if customer_gateway is not None:
-        poll_timeout_s = min(poll_timeout_s, 2)
+    poll_timeout_s = min(poll_timeout_s, 2) if customer_gateway is not None else poll_timeout_s
     request_timeout_s = max(
         poll_timeout_s + 5,
         env_int("TELEGRAM_REQUEST_TIMEOUT_S", poll_timeout_s + 5),
@@ -409,8 +410,7 @@ def _run_longpoll(
                     customer_gateway.tick()
                 except Exception:
                     _LOG.exception("customer bot gateway tick failed")
-                elapsed_ms = int((time.monotonic() - customer_started) * 1000)
-                if elapsed_ms >= 1500:
+                if (elapsed_ms := int((time.monotonic() - customer_started) * 1000)) >= 1500:
                     _LOG.warning("telegram customer gateway slow tick_ms=%s", elapsed_ms)
             if not updates and idle_sleep_s > 0:
                 time.sleep(idle_sleep_s)

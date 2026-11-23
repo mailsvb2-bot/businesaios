@@ -455,3 +455,40 @@ def test_budget_refusal_policy_is_single_zero_cost_action_for_owner(monkeypatch)
     verdict = guard.evaluate(SafetyActionContext(proposal.action, "tenant-one", "4001", payload))
     assert verdict.status == ControlStatus.ALLOW
     assert ledger.snapshot("tenant-one") == (1.0, 1)
+
+
+def test_customer_bot_exhausted_budget_uses_same_verified_owner_reply_path(monkeypatch):
+    from contextlib import contextmanager
+    from dataclasses import make_dataclass
+
+    State = make_dataclass("State", [("tenant_id", str), ("user_id", str), ("session", dict)])
+    state = State("tenant-two", "visitor", {"chat_id": "visitor", "customer_bot": {"bot_id": "777"}})
+    route = SimpleNamespace(external_bot_id="777", tenant_id="tenant-two")
+    scopes, calls, events = [], [], []
+
+    @contextmanager
+    def scope(**identity):
+        scopes.append(identity)
+        yield
+
+    def decide(**kwargs):
+        calls.append(kwargs["state"])
+        if len(calls) == 1:
+            raise RuntimeError("DECISION_BLOCKED:action_budget_exceeded")
+        assert kwargs["state"].session["action_budget_denial_notice"] is True
+        return SimpleNamespace(ok=True)
+
+    monkeypatch.setattr(lp, "_world_state_from_update", lambda *args, **kw: state)
+    monkeypatch.setattr(lp, "verified_inbound_reply_scope", scope)
+    monkeypatch.setattr(lp, "execute_runtime_decision", decide)
+    monkeypatch.setattr(lp, "_append_event", lambda _log, *, event_type, payload:
+                        events.append((event_type, payload)))
+
+    dispatch = lp._customer_dispatch(core=object(), executor=object(), event_log=None)
+    dispatch({"update_id": 19}, route)
+    assert len(calls) == 2
+    assert scopes == [{"tenant_id": "tenant-two", "channel": "telegram", "user_id": "visitor",
+                       "update_id": 19, "chat_id": "visitor", "bot_id": "777"}]
+    assert events[-1] == ("customer_bot_update_executed", {
+        "bot_id": "777", "update_id": 19, "ok": True,
+    })
