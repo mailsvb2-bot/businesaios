@@ -321,3 +321,29 @@ def test_terminal_executor_rejection_is_reconciled_not_retried_indefinitely(db, 
         lp._run_longpoll(token="bot", core=None, executor=None, event_log=None)
     inbox = TelegramInbox("bot")
     assert inbox.backlog_counts() == {"pending": 0, "dead_letter": 1}
+
+
+def test_telegram_start_diagnostics_split_normalize_hydration_and_execution(monkeypatch):
+    from contextlib import nullcontext
+
+    events = []
+    clocks = iter((0.0, 0.010, 0.022, 2.080))
+    state = SimpleNamespace(tenant_id="tenant-a", user_id="user-a", session={"messaging_chat_id": "chat-a"})
+    result = SimpleNamespace(ok=True, decision_id="decision-a")
+    monkeypatch.setattr(lp.time, "monotonic", lambda: next(clocks))
+    monkeypatch.setattr(lp, "_world_state_from_update", lambda *args, **kwargs: state)
+    monkeypatch.setattr(lp, "verified_inbound_reply_scope", lambda **kwargs: nullcontext())
+    monkeypatch.setattr(lp, "execute_runtime_decision", lambda **kwargs: result)
+    monkeypatch.setattr(lp, "_append_event", lambda *args, **kwargs: events.append(kwargs))
+    assert lp._execute_update(core=object(), executor=object(), event_log=None,
+                              update={"update_id": 43}, transport="longpoll") is result
+    event = events[-1]
+    assert event["event_type"] == "telegram_update_executed"
+    metrics = event["payload"]
+    assert metrics["normalized_ms"] == 10
+    assert metrics["hydrated_ms"] == 12
+    assert metrics["execution_ms"] == 2058
+    assert metrics["total_ms"] == 2080
+    assert "user_id" not in metrics
+    assert "chat_id" not in metrics
+    assert "token" not in metrics

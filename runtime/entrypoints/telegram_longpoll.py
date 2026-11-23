@@ -71,30 +71,22 @@ def _response_payload(response: Any) -> dict[str, Any]:
         return payload
     return {}
 
-def _append_event(
-    event_log: Any,
-    *,
-    event_type: str,
-    payload: dict[str, Any] | None = None,
-) -> None:
+def _append_event(event_log: Any, *, event_type: str, payload: dict[str, Any] | None = None) -> None:
     if event_log is None:
         return
-    event = {
-        "event_type": str(event_type),
-        "timestamp_ms": _now_ms(),
-        "payload": dict(payload or {}),
-    }
+    event = {"event_type": str(event_type), "timestamp_ms": _now_ms(), "payload": dict(payload or {})}
     for name in ("append", "record", "emit"):
         fn = getattr(event_log, name, None)
-        if callable(fn):
-            try:
-                fn(event)
-                return
-            except (TypeError, ValueError):
-                continue
-            except Exception:
-                _LOG.warning("telegram diagnostic event append failed", exc_info=True)
-                return
+        if not callable(fn):
+            continue
+        try:
+            fn(event)
+            return
+        except (TypeError, ValueError):
+            continue
+        except Exception:
+            _LOG.warning("telegram diagnostic event append failed", exc_info=True)
+            return
 
 def _copy_world_state(
     state: WorldStateV1,
@@ -199,58 +191,24 @@ def _world_state_from_update(
                "request_id": customer_route.request_id, "tenant_id": customer_route.tenant_id,
                "business": dict(customer_route.business)}  # fmt: skip
         session = {**session, "source": CUSTOMER_SOURCE, "customer_bot": bot}
-    return _copy_world_state(
-        state,
-        user=user,
-        session=session,
-        meta=meta,
-        timestamp_ms=timestamp_ms,
-        product=product,
-    )
+    return _copy_world_state(state, user=user, session=session, meta=meta,
+                             timestamp_ms=timestamp_ms, product=product)
 
 def _validate_startup(token: str) -> None:
     from runtime.effects import classify_startup
 
     timeout_s = max(1, env_int("TELEGRAM_STARTUP_TIMEOUT_S", 10))
-    getme = _response_payload(
-        _http_json(
-            "GET",
-            _telegram_api_url(token, "getMe"),
-            timeout_s=timeout_s,
-        )
-    )
-    webhook = _response_payload(
-        _http_json(
-            "GET",
-            _telegram_api_url(token, "getWebhookInfo"),
-            timeout_s=timeout_s,
-        )
-    )
+    def check(method: str, payload: dict | None = None) -> dict:
+        return _response_payload(_http_json(
+            "GET" if payload is None else "POST", _telegram_api_url(token, method),
+            payload, timeout_s=timeout_s))
+
+    getme, webhook = check("getMe"), check("getWebhookInfo")
     report = classify_startup(getme, webhook)
-    if (
-        not report.ok
-        and report.code == "TELEGRAM_WEBHOOK_ENABLED"
-        and env_bool("TELEGRAM_AUTO_DELETE_WEBHOOK", True)
-    ):
-        _http_json(
-            "POST",
-            _telegram_api_url(token, "deleteWebhook"),
-            {
-                "drop_pending_updates": env_bool(
-                    "TELEGRAM_DROP_PENDING_UPDATES_ON_START",
-                    False,
-                )
-            },
-            timeout_s=timeout_s,
-        )
-        webhook = _response_payload(
-            _http_json(
-                "GET",
-                _telegram_api_url(token, "getWebhookInfo"),
-                timeout_s=timeout_s,
-            )
-        )
-        report = classify_startup(getme, webhook)
+    if (not report.ok and report.code == "TELEGRAM_WEBHOOK_ENABLED"
+            and env_bool("TELEGRAM_AUTO_DELETE_WEBHOOK", True)):
+        check("deleteWebhook", {"drop_pending_updates": env_bool("TELEGRAM_DROP_PENDING_UPDATES_ON_START", False)})
+        report = classify_startup(getme, check("getWebhookInfo"))
     if not report.ok:
         raise RuntimeError(f"{report.code}: {report.hint}")
 
@@ -280,12 +238,15 @@ def _execute_update(
     transport: str,
     read_store: Any = None,
 ) -> Any:
+    started = time.monotonic()
     raw_update_id = update.get("update_id")
     state = _world_state_from_update(update, transport=transport)
+    normalized_ms = int((time.monotonic() - started) * 1000)
     if read_store is not None and parse_managed_bot_update(update) is None:
         from interfaces.telegram.read_models.user_bundle import hydrate_world_state_user
 
         state = hydrate_world_state_user(state, event_store=read_store)
+    hydrated_ms = int((time.monotonic() - started) * 1000) - normalized_ms
     session = dict(state.session or {})
     customer_bot = session.get("customer_bot")
     bot_id = str(customer_bot.get("bot_id") or "primary") if isinstance(customer_bot, dict) else "primary"
@@ -295,6 +256,14 @@ def _execute_update(
         update_id=raw_update_id, chat_id=chat_id, bot_id=bot_id,
     ):
         result = execute_runtime_decision(issuer=core, executor=executor, state=state)
+    elapsed_ms = int((time.monotonic() - started) * 1000)
+    message = update.get("message")
+    sent_s = message.get("date") if isinstance(message, dict) else None
+    transport_age_ms = max(0, int(time.time() * 1000) - sent_s * 1000) if type(sent_s) is int else None
+    if elapsed_ms >= 1500 or (transport_age_ms is not None and transport_age_ms >= 3000):
+        _LOG.warning("telegram update slow update_id=%s transport_age_ms=%s normalized_ms=%s hydrated_ms=%s execution_ms=%s total_ms=%s",
+                     raw_update_id, transport_age_ms, normalized_ms, hydrated_ms,
+                     max(0, elapsed_ms - normalized_ms - hydrated_ms), elapsed_ms)
     _append_event(
         event_log,
         event_type="telegram_update_executed",
@@ -303,6 +272,11 @@ def _execute_update(
             "update_id": raw_update_id,
             "decision_id": str(getattr(result, "decision_id", "")),
             "ok": bool(getattr(result, "ok", False)),
+            "normalized_ms": normalized_ms,
+            "hydrated_ms": hydrated_ms,
+            "execution_ms": max(0, elapsed_ms - normalized_ms - hydrated_ms),
+            "total_ms": elapsed_ms,
+            "transport_age_ms": transport_age_ms,
         },
     )
     return result
@@ -418,7 +392,7 @@ def _run_longpoll(
             # is durably staged, including those whose execution may fail.
             offset = inbox.stage(updates) if updates else inbox.cursor()
             replay_pending()
-            if customer_gateway is not None:  # flag-gated customer bots, same loop and decision path
+            if customer_gateway is not None:
                 try:
                     customer_gateway.tick()
                 except Exception:
