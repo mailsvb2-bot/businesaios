@@ -191,3 +191,46 @@ def test_retry_releases_tenant_scoped_update_for_redelivery():
     assert g.tick() == 1
     assert g.stats["processed"] == 1
     assert h.dispatched == [(9, "777:TOK"), (9, "777:TOK")]
+
+
+def test_customer_gateway_round_robin_does_not_block_platform_on_many_bots():
+    from dataclasses import replace
+
+    first = ROUTE
+    second = replace(ROUTE, external_bot_id="778", request_id="r2", credential_ref="vault:managed_bot.t1.r2")
+    third = replace(ROUTE, external_bot_id="779", request_id="r3", credential_ref="vault:managed_bot.t1.r3")
+    active = [first, second, third]
+    network_calls, dispatched = [], []
+
+    def poll(*, token, offset, timeout_s, limit):
+        network_calls.append((token, offset, timeout_s))
+        return {"ok": True, "updates": [_msg(len(network_calls))]}
+
+    gateway = CustomerBotGateway(
+        config=ON, routes=lambda: active, resolve_token=lambda route: route.external_bot_id + ":TOKEN",
+        dispatch=lambda update, route: dispatched.append((route.external_bot_id, update["update_id"])),
+        poll=poll, token_scope=bts.customer_bot_token_scope, clock=lambda: 0.0)
+    for _ in range(4):
+        gateway.tick()
+    assert [c[0] for c in network_calls] == ["777:TOKEN", "778:TOKEN", "779:TOKEN", "777:TOKEN"]
+    assert [bot for bot, _ in dispatched] == ["777", "778", "779", "777"]
+    assert all(timeout == 0 for _, _, timeout in network_calls)
+    assert gateway.stats["processed"] == 4
+
+    active[:] = [second, third]  # revoked bot must not be polled or retain its offset
+    gateway.tick()
+    assert set(gateway._offsets) == {"778", "779"}
+    assert network_calls[-1][0] != "777:TOKEN"
+    assert "TOKEN" not in str(gateway.health_snapshot())
+
+
+def test_customer_shortpoll_network_timeout_is_bounded_even_with_many_routes(monkeypatch):
+    from runtime._internal.effects_actions import telegram_actions_polling as tap
+
+    calls = []
+    monkeypatch.setattr(tap, "is_telegram_mode", lambda: True)
+    monkeypatch.setattr(tap, "http_json", lambda method, url, params, **kw:
+                        calls.append((dict(params), kw["timeout_s"])) or {"ok": True, "result": []})
+    assert tap.poll_telegram_updates_effect(object(), token="777:TOKEN", timeout_s=0)["ok"]
+    assert len(calls) == 1 and calls[0][1] == 2
+    assert calls[0][0]["timeout"] == 0 and calls[0][0]["limit"] == 50

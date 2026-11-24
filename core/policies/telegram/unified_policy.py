@@ -114,6 +114,13 @@ class UnifiedTelegramPolicyV3:
 
     def _handle_base(self, context: TelegramCtx) -> ProposedAction:
         """One canonical menu proposal path for single and ranked decisions."""
+        if (getattr(context.state, "session", None) or {}).get("action_budget_denial_notice") is True:
+            from core.policies.telegram.helpers import propose_message
+            return propose_message(
+                user_id=str(context.state.user_id),
+                text="⚠️ Лимит автоматических действий для этого бизнеса исчерпан. Действие не выполнено. Просмотр разделов остаётся доступен; обратитесь к администратору для проверки бюджета.",
+                callback_query_id=context.callback_query_id,
+            )
         return self._bind_callback(normalize_proposed_action(handle(
             context, default_price_rub=self._default_price_rub,
             bot_username=self._bot_username, gift_ttl_sec=self._gift_ttl_sec,
@@ -121,12 +128,15 @@ class UnifiedTelegramPolicyV3:
 
     def propose(self, state: WorldStateV1) -> ProposedAction:
         """Compatibility: produce the unchanged base UX action."""
+        if (getattr(state, "session", None) or {}).get("action_budget_denial_notice") is True:
+            return self._handle_base(self._context(state)[0])
         domain = self._domain_proposal(state)
         return domain if domain is not None else self._handle_base(self._context(state)[0])
 
     def propose_many(self, state: WorldStateV1) -> list[ProposedAction]:
         """Expose base and retention alternatives to canonical DecisionCore ranking."""
-
+        if (getattr(state, "session", None) or {}).get("action_budget_denial_notice") is True:
+            return [self._handle_base(self._context(state)[0])]
         domain = self._domain_proposal(state)
         if domain is not None:
             return [domain]

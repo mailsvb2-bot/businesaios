@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from contextlib import suppress
 from typing import Any
 
 from core.telemetry.behavior_read_model import behavior_snapshot
@@ -9,7 +10,7 @@ from runtime.platform.config.feature_flags import FeatureFlags
 
 
 def load_user_bundle(*, event_store: Any, tenant_id: str, user_id: str, event_warning: Any,
-                     product_id: str | None = None) -> dict[str, Any]:
+                     product_id: str | None = None, include_dashboard: bool = True) -> dict[str, Any]:
     try:
         from core.entitlements.read_model import compute_entitlements
         entitlements = compute_entitlements(event_store=event_store, tenant_id=str(tenant_id), user_id=str(user_id),
@@ -59,36 +60,27 @@ def load_user_bundle(*, event_store: Any, tenant_id: str, user_id: str, event_wa
             from core.admin.marketing_bandit_read_model import marketing_bandit_stats
             marketing_bandit = marketing_bandit_stats(event_store, tenant_id=str(tenant_id), step_key="tariffs_viewed", window_days=30)
         except Exception as exc:
-            marketing_bandit = {
-                "tariffs_viewed": {
-                    "a": {"alpha": 1.0, "beta": 1.0},
-                    "b": {"alpha": 1.0, "beta": 1.0},
-                }
-            }
             event_warning(reason="marketing_bandit_stats_failed", error=exc.__class__.__name__)
 
-    try:
-        behavior = behavior_snapshot(event_store, tenant_id=tenant_id, user_id=str(user_id))
-    except Exception:
-        behavior = {}
-
-    try:
-        from core.autopilot.read_model import recent_autopilot_actions, today_business_metrics
-        autopilot_dashboard = {
-            "today": today_business_metrics(event_store, tenant_id=str(tenant_id)),
-            "actions_7d": recent_autopilot_actions(event_store, tenant_id=str(tenant_id), days=7),
-        }
-    except Exception:
-        autopilot_dashboard = {}
-    try:  # AI-director KPI: the same canonical today growth ledger, never an empty stand-in
-        from core.growth.today_ledger import build_today_kpi
-        kpi = build_today_kpi(event_store, tenant_id=str(tenant_id))
-        autopilot_dashboard["growth"] = {"leads": int(kpi.leads), "spend_minor": int(kpi.spend_minor),
-                                         "revenue_minor": int(kpi.revenue_minor), "profit_minor": int(kpi.profit_minor)}
-    except Exception as exc:
-        # This projection is optional but its failure is never silent.
-        # Do not fabricate zero KPIs; the UI must show data unavailable.
-        event_warning(reason="ai_director_growth_kpi_unavailable", error=type(exc).__name__)
+    behavior, autopilot_dashboard = {}, {}
+    if include_dashboard:
+        with suppress(Exception):
+            behavior = behavior_snapshot(event_store, tenant_id=tenant_id, user_id=str(user_id))
+        try:
+            from core.autopilot.read_model import recent_autopilot_actions, today_business_metrics
+            autopilot_dashboard = {
+                "today": today_business_metrics(event_store, tenant_id=str(tenant_id)),
+                "actions_7d": recent_autopilot_actions(event_store, tenant_id=str(tenant_id), days=7),
+            }
+        except Exception:
+            pass
+        try:
+            from core.growth.today_ledger import build_today_kpi
+            kpi = build_today_kpi(event_store, tenant_id=str(tenant_id))
+            autopilot_dashboard["growth"] = {"leads": int(kpi.leads), "spend_minor": int(kpi.spend_minor),
+                                             "revenue_minor": int(kpi.revenue_minor), "profit_minor": int(kpi.profit_minor)}
+        except Exception as exc:
+            event_warning(reason="ai_director_growth_kpi_unavailable", error=type(exc).__name__)
 
     return {
         "entitlements": entitlements,
@@ -127,10 +119,15 @@ def hydrate_world_state_user(state: Any, *, event_store: Any) -> Any:
     product_id = str((product if isinstance(product, dict) else {}).get("product_id") or "").strip()
     if not tenant_id or not user_id or event_store is None:
         return state
+    session = getattr(state, "session", None) or {}
+    menu_only = isinstance(session, dict) and (
+        (session.get("command") in {"/start", "/menu"} and not str(session.get("args") or "").strip())
+        or session.get("callback_data") in {"menu:main", "menu_main"})
     try:
         bundle = load_user_bundle(
             event_store=event_store, tenant_id=tenant_id, user_id=user_id,
             event_warning=lambda reason, error: None, product_id=product_id or None,
+            include_dashboard=not menu_only,
         )
     except Exception:
         return state
@@ -139,7 +136,7 @@ def hydrate_world_state_user(state: Any, *, event_store: Any) -> Any:
     try:
         from interfaces.telegram.read_models.admin_access import is_superadmin, load_admin_metrics
 
-        if is_superadmin(user_id) or "admin" in {str(role) for role in bundle["roles"]}:
+        if not menu_only and (is_superadmin(user_id) or "admin" in {str(role) for role in bundle["roles"]}):
             user["admin_metrics"] = load_admin_metrics(event_store=event_store, tenant_id=tenant_id)
     except Exception:
         user.pop("admin_metrics", None)
