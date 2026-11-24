@@ -236,3 +236,167 @@ def test_cockpit_menu_buttons_reach_renderable_canonical_screens():
                 if dest.startswith("cpm:") and dest not in checked:
                     todo.append(dest)
     assert len(checked) >= 30
+
+@pytest.mark.parametrize("role", ("owner", "admin"))
+def test_all_visible_top_menu_buttons_keep_correct_owner_at_exhausted_lifetime_budget(monkeypatch, role):
+    from core.safety.controls.action_budget.guard import ActionBudgetGuard
+    from core.safety.controls.action_budget.ledger import InMemoryActionBudgetLedger
+    from core.safety.controls.action_budget.models import ActionBudget
+    from core.safety.controls.action_context import SafetyActionContext
+    from core.safety.controls.control_result import ControlStatus
+    from core.ux.unified_messenger_menu import menu_items
+
+    monkeypatch.setattr("runtime.entrypoints.telegram_longpoll._configured_telegram_tenant_id", lambda: "tenant-live")
+    ledger = InMemoryActionBudgetLedger()
+    for _ in range(1000):
+        ledger.record("tenant-live", estimated_cost=0)
+    guard = ActionBudgetGuard(ledger, ActionBudget(max_cost=0, max_actions=1000))
+    for item in menu_items(role=role, is_admin=role == "admin"):
+        state = _verified_owner_state(_owner_update(item.callback))
+        state = replace(state, user={**state.user, "roles": [role]})
+        proposal = UnifiedTelegramPolicyV3(admin_user_ids=("4001",) if role == "admin" else ()).propose(state)
+        _, payload = build_payload(state=state, out=proposal, pinned_world_model_meta={},
+                                   tenant_id="tenant-live", product_id=None, domain=None,
+                                   product_version=None, actor_id="4001")
+        build_schema_registry().validate(proposal.action, payload)
+        verdict = guard.evaluate(SafetyActionContext(proposal.action, "tenant-live", "4001", payload))
+        assert verdict.status == ControlStatus.ALLOW, (item.key, proposal.action, verdict.reason)
+        assert payload.get("callback_query_id") == "callback-123", item.key
+    assert ledger.snapshot("tenant-live") == (0.0, 1000)
+
+@pytest.mark.parametrize("callback,expected_action", [
+    ("sub:menu", "send_message@v1"),
+    ("cp:settings:notifications", "business_admin@v1"),
+])
+def test_readonly_nested_owner_navigation_still_operates_after_lifetime_budget(monkeypatch, callback, expected_action):
+    from core.safety.controls.action_budget.guard import ActionBudgetGuard
+    from core.safety.controls.action_budget.ledger import InMemoryActionBudgetLedger
+    from core.safety.controls.action_budget.models import ActionBudget
+    from core.safety.controls.action_context import SafetyActionContext
+    from core.safety.controls.control_result import ControlStatus
+
+    monkeypatch.setattr("runtime.entrypoints.telegram_longpoll._configured_telegram_tenant_id", lambda: "tenant-live")
+    state = replace(_verified_owner_state(_owner_update(callback)), user={"id": "4001", "roles": ["admin"]})
+    proposal = UnifiedTelegramPolicyV3(admin_user_ids=("4001",)).propose(state)
+    assert proposal.action == expected_action
+    _, payload = build_payload(state=state, out=proposal, pinned_world_model_meta={},
+                               tenant_id="tenant-live", product_id=None, domain=None,
+                               product_version=None, actor_id="4001")
+    ledger = InMemoryActionBudgetLedger()
+    ledger.record("tenant-live", estimated_cost=1.0)
+    guard = ActionBudgetGuard(ledger, ActionBudget(max_cost=1.0, max_actions=1))
+    verdict = guard.evaluate(SafetyActionContext(proposal.action, "tenant-live", "4001", payload))
+    assert verdict.status == ControlStatus.ALLOW
+    assert ledger.snapshot("tenant-live") == (1.0, 1)
+
+def test_partner_read_button_executes_existing_owner_and_ack_without_writing_facts(monkeypatch, tmp_path):
+    from types import SimpleNamespace
+
+    from runtime.handler_impl.domains.business_flow_ops import handle_partners
+    from runtime.platform.event_store.sqlite_event_store import SqliteEventStore
+
+    monkeypatch.setattr("runtime.entrypoints.telegram_longpoll._configured_telegram_tenant_id", lambda: "tenant-live")
+    state = replace(_verified_owner_state(_owner_update("cp:section:partners")),
+                    user={"id": "4001", "roles": ["owner"]}, tenant_id="tenant-live")
+    proposal = UnifiedTelegramPolicyV3().propose(state)
+    assert (proposal.action, proposal.payload.get("op")) == ("partners@v1", "rank")
+    _, payload = build_payload(state=state, out=proposal, pinned_world_model_meta={},
+                               tenant_id="tenant-live", product_id=None, domain=None,
+                               product_version=None, actor_id="4001")
+    captured = []
+    class Effects:
+        def send_message(self, **kwargs):
+            captured.append(kwargs)
+            return {"ok": True, "router_evidence": {"source": "telegram", "verified": True,
+                                                      "external_refs": ["test-message-1"]}}
+    env = SimpleNamespace(decision=SimpleNamespace(decision_id="decision-partner",
+                                                    correlation_id="correlation-partner"))
+    with SqliteEventStore(str(tmp_path / "partners.sqlite3")) as store:
+        outcome = handle_partners(dict(payload), Effects(), env, event_store=store)
+        assert outcome["ok"] is True
+        assert captured[0]["callback_query_id"] == "callback-123"
+        assert captured[0]["tenant_id"] == "tenant-live"
+        assert captured[0]["user_id"] == "4001"
+        assert "Партнёры" in captured[0]["text"]
+        assert store.count_events(tenant_id="tenant-live", event_type="partners@v1") == 0
+
+def test_all_reachable_cockpit_read_buttons_remain_budget_free_and_mutations_stay_gated():
+    from collections import deque
+
+    from application.business_flows import cockpit, cockpit_booking, cockpit_events, cockpit_money
+    from core.safety.controls.action_budget.models import _READ_COCKPIT, is_budget_free_read_projection
+
+    mutations = {"sales-ev"} | cockpit_booking.MUTATIONS | cockpit_events.MUTATIONS | cockpit_money.MUTATIONS
+    assert set(_READ_COCKPIT) == set(cockpit.PARENTS) | {"menu"}
+    assert set(_READ_COCKPIT).isdisjoint(mutations)
+    pending = deque(("cpm:menu", "cpm:growth", "cpm:money"))
+    seen, read_count, mutation_count = set(), 0, 0
+    while pending and len(seen) < 1800:
+        callback = pending.popleft()
+        if callback in seen:
+            continue
+        seen.add(callback)
+        parsed = cockpit.parse(callback)
+        payload = {"tenant_id": "tenant-live", "user_id": "4001",
+                   "op": "cockpit", "arg": callback}
+        exempt = is_budget_free_read_projection("business_ops_summary@v1", payload)
+        assert exempt == (parsed.action not in mutations), callback
+        read_count += int(exempt)
+        mutation_count += int(not exempt)
+        text, rows = cockpit.render(parsed, cockpit.Snapshot(), is_owner=True)
+        if exempt:
+            assert "Эта кнопка уже неактуальна" not in text, callback
+        for row in rows:
+            for _, destination in row:
+                if destination.startswith("cpm:") and destination not in seen:
+                    pending.append(destination)
+    assert len(seen) == 1800
+    assert read_count > 1000 and mutation_count > 0
+
+
+@pytest.mark.parametrize("callback", (
+    "cpm:pay-rf:ref", "cpm:payments:charge", "cpm:team:0:write",
+    "cpm:sales-ev:lead_abc:done", "cpm:ev-att:slot:a",
+    "cpm:bk-new:0-197001010800:30", "cpm:unknown:0",
+))
+def test_mutating_or_unknown_cockpit_callbacks_never_exempted(callback):
+    from core.safety.controls.action_budget.models import is_budget_free_read_projection
+    assert not is_budget_free_read_projection(
+        "business_ops_summary@v1",
+        {"tenant_id": "tenant-live", "user_id": "4001", "op": "cockpit", "arg": callback})
+
+@pytest.mark.parametrize("callback", (
+    "cpm:work", "cpm:settings", "cpm:partners:0", "cpm:bookings:0",
+    "cpm:payments:0", "cpm:bk-months:0", "cpm:sales", "cpm:calendar",
+))
+def test_cockpit_readonly_buttons_reach_durable_canonical_owner(monkeypatch, tmp_path, callback):
+    from types import SimpleNamespace
+
+    from runtime.handler_impl.domains.business_flow_ops import handle_business_ops_summary
+    from runtime.platform.event_store.sqlite_event_store import SqliteEventStore
+
+    monkeypatch.setenv("ADMIN_USER_IDS", "4001")
+    monkeypatch.setattr("runtime.entrypoints.telegram_longpoll._configured_telegram_tenant_id", lambda: "tenant-live")
+    state = replace(_verified_owner_state(_owner_update(callback)),
+                    user={"id": "4001", "roles": ["owner"]}, tenant_id="tenant-live")
+    proposal = UnifiedTelegramPolicyV3(admin_user_ids=("4001",)).propose(state)
+    assert (proposal.action, proposal.payload.get("op")) == ("business_ops_summary@v1", "cockpit")
+    _, payload = build_payload(state=state, out=proposal, pinned_world_model_meta={},
+                               tenant_id="tenant-live", product_id=None, domain=None,
+                               product_version=None, actor_id="4001")
+    calls = []
+    class Effects:
+        def send_message(self, **kwargs):
+            calls.append(kwargs)
+            return {"ok": True, "router_evidence": {"source": "telegram", "verified": True,
+                                                      "external_refs": ["test-message-1"]}}
+    env = SimpleNamespace(decision=SimpleNamespace(decision_id="decision-cockpit",
+                                                    correlation_id="correlation-cockpit"))
+    with SqliteEventStore(str(tmp_path / "cockpit.sqlite3")) as store:
+        result = handle_business_ops_summary(dict(payload), Effects(), env, event_store=store)
+        assert result["ok"] is True
+        assert calls[0]["callback_query_id"] == "callback-123"
+        assert calls[0]["tenant_id"] == "tenant-live"
+        assert calls[0]["user_id"] == "4001"
+        assert calls[0]["text"]
+        assert store.count_events(tenant_id="tenant-live", event_type="business_ops_summary@v1") == 0

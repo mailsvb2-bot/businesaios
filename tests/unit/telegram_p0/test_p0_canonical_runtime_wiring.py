@@ -118,3 +118,56 @@ def test_payments_status_mapping_never_raises_float_type_error():
         pytest.fail(f"mapping was coerced as numeric payment count: {error}")
     except Exception:
         pass
+
+
+@pytest.mark.parametrize(("session", "fast_menu"), [
+    ({"command": "/start", "args": ""}, True),
+    ({"command": "/menu", "args": ""}, True),
+    ({"callback_data": "menu:main", "is_callback": True}, True),
+    ({"command": "/start", "args": "cpa_external"}, False),
+    ({"callback_data": "cp:section:partners", "is_callback": True}, False),
+    ({"command": "/report", "args": ""}, False),
+])
+def test_start_menu_skips_optional_dashboard_but_always_hydrates_trusted_owner(monkeypatch, session, fast_menu):
+    from dataclasses import replace
+
+    captured = []
+    def authoritative_bundle(**kwargs):
+        captured.append(kwargs)
+        return {
+            "roles": ["owner"], "perms": ["partners:view"], "settings": {"trusted": True},
+            "city": "", "selected_tariff": {}, "mood_last": [], "realtime_state": {},
+            "pricing_suggestions": {}, "autopilot_dashboard": {"growth": {"leads": 3}},
+            "marketing_variants": {}, "marketing_bandit": {},
+            "payments": {"status": "succeeded"}, "entitlements": {"full_access": True},
+        }
+
+    monkeypatch.setattr(user_bundle, "load_user_bundle", authoritative_bundle)
+    forged = _world({"product_id": "prod-a"}, {"roles": ["admin"], "perms": ["billing:write"]})
+    result = user_bundle.hydrate_world_state_user(
+        replace(forged, session=session), event_store=object())
+    assert captured[-1]["tenant_id"] == "tenant-test"
+    assert captured[-1]["product_id"] == "prod-a"
+    assert captured[-1]["include_dashboard"] is not fast_menu
+    assert result.user["roles"] == ["owner"]
+    assert result.user["perms"] == ["partners:view"]
+    assert result.user["settings"] == {"trusted": True}
+    assert result.economy["entitlements"]["full_access"] is True
+
+
+def test_start_menu_does_not_query_expensive_autopilot_or_growth_read_models(monkeypatch):
+    from core.growth import today_ledger
+
+    called = []
+    monkeypatch.setattr(user_bundle, "behavior_snapshot",
+                        lambda *args, **kwargs: called.append("behavior"))
+    monkeypatch.setattr(today_ledger, "build_today_kpi",
+                        lambda *args, **kwargs: called.append("growth"))
+    bundle = user_bundle.load_user_bundle(
+        event_store=object(), tenant_id="tenant-test", user_id="4001",
+        event_warning=lambda **kwargs: None, include_dashboard=False)
+    assert called == []
+    assert bundle["autopilot_dashboard"] == {}
+    assert bundle["behavior"] == {}
+    assert isinstance(bundle["roles"], list)
+    assert isinstance(bundle["perms"], list)

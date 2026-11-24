@@ -17,7 +17,6 @@ def _callback_state(callback):
     state = _world_state_from_update(update)
     return replace(state, user={**state.user, "roles": ["admin"]})
 
-
 @pytest.mark.parametrize("item", (x for x in menu_items(role="admin", is_admin=True) ), ids=lambda x: x.key)
 def test_every_visible_main_menu_button_enters_its_own_route(monkeypatch, item):
     monkeypatch.setattr("runtime.entrypoints.telegram_longpoll._configured_telegram_tenant_id", lambda: "tenant-live")
@@ -35,14 +34,12 @@ def test_every_visible_main_menu_button_enters_its_own_route(monkeypatch, item):
         assert "Этот раздел пока недоступен" not in result.payload["text"], item.key
         assert result.payload.get("callback_query_id") == "callback-12"
 
-
 @pytest.mark.parametrize("callback", ["ceo:plan", "ceo:run", "admin:evolution:regen_copy:nudge", "demo_kind_work", "weather:city"])
 def test_ceo_and_retired_callbacks_have_live_routes(monkeypatch, callback):
     monkeypatch.setattr("runtime.entrypoints.telegram_longpoll._configured_telegram_tenant_id", lambda: "tenant-live")
     result = UnifiedTelegramPolicyV3(admin_user_ids=("4001",)).propose(_callback_state(callback))
     assert result.action
     assert "Этот раздел пока недоступен" not in str((result.payload or {}).get("text") or "")
-
 
 @pytest.mark.parametrize("callback", ["menu:main", "settings:state", "state:rate", "state:today", "settings:time:work", "settings:time:home"])
 def test_nested_and_back_callbacks_never_fall_through(monkeypatch, callback):
@@ -51,7 +48,6 @@ def test_nested_and_back_callbacks_never_fall_through(monkeypatch, callback):
     assert result.action == "send_message@v1"
     assert "Я здесь. Напиши" not in result.payload["text"]
 
-
 def _nested_buttons():
     from core.ux.keyboards.admin import kb_staff_menu
     from core.ux.keyboards.autopilot import kb_autopilot_menu, kb_growth_menu, kb_profit_sprint_lead_sources
@@ -59,7 +55,6 @@ def _nested_buttons():
     keyboards = (kb_staff_menu(), kb_autopilot_menu(), kb_growth_menu(),
                  kb_profit_sprint_lead_sources(), kb_settings_menu(), kb_state_menu(), kb_mood_rate())
     return tuple(sorted({button["callback_data"] for keyboard in keyboards for row in keyboard["inline_keyboard"] for button in row}))
-
 
 @pytest.mark.parametrize("callback", _nested_buttons())
 def test_all_nested_visible_buttons_have_concrete_route(monkeypatch, callback):
@@ -72,7 +67,6 @@ def test_all_nested_visible_buttons_have_concrete_route(monkeypatch, callback):
         assert not result.payload["text"].startswith("Я здесь. Напиши"), callback
         assert "Этот раздел пока недоступен" not in result.payload["text"], callback
 
-
 @pytest.mark.parametrize(("callback", "action", "operation"), [ ("cp:section:customers", "business_ops_summary@v1", "cockpit"),
     ("cp:section:sales", "sales_pipeline@v1", "list"),
 ])
@@ -82,7 +76,6 @@ def test_owner_section_calls_existing_canonical_operation(monkeypatch, callback,
     assert result.action == action
     assert result.payload["op"] == operation
     assert result.payload["callback_query_id"] == "callback-12"
-
 
 @pytest.mark.parametrize(("callback", "action", "operation", "argument"), [ ("cpm:growth", "business_ops_summary@v1", "cockpit", "cpm:growth"),
     ("cpm:growth-an:7", "business_ops_summary@v1", "cockpit", "cpm:growth-an:7"),
@@ -97,7 +90,6 @@ def test_owner_main_business_sections_use_canonical_executor_contract( monkeypat
     assert result.payload["arg"] == argument
     assert result.payload["callback_query_id"] == "callback-12"
 
-
 def test_growth_and_finance_surfaces_expose_real_existing_actions():
     from application.business_flows.cockpit import Parsed, Snapshot, render
 
@@ -111,7 +103,6 @@ def test_growth_and_finance_surfaces_expose_real_existing_actions():
     finance_targets = {callback for row in finance_rows for _, callback in row}
     assert {"cpm:payments:0", "sub:menu"} <= finance_targets
 
-
 @pytest.mark.parametrize("callback", [ "cpm:growth", "cpm:growth-an:7", "cpm:money", "cp:section:ad-channels", ])
 def test_owner_business_sections_reject_unprivileged_role(monkeypatch, callback):
     monkeypatch.setattr("runtime.entrypoints.telegram_longpoll._configured_telegram_tenant_id", lambda: "tenant-live")
@@ -120,7 +111,6 @@ def test_owner_business_sections_reject_unprivileged_role(monkeypatch, callback)
     assert proposal.action != "business_ops_summary@v1"
     assert proposal.action != "bookings@v1"
 
-
 @pytest.mark.parametrize("callback", ["cp:section:customers", "cp:section:sales"])
 def test_owner_section_rejects_unprivileged_telegram_user(monkeypatch, callback):
     monkeypatch.setattr("runtime.entrypoints.telegram_longpoll._configured_telegram_tenant_id", lambda: "tenant-live")
@@ -128,7 +118,6 @@ def test_owner_section_rejects_unprivileged_telegram_user(monkeypatch, callback)
     result = UnifiedTelegramPolicyV3().propose(state)
     assert result.action == "send_message@v1"
     assert "запрещён" in result.payload["text"]
-
 
 @pytest.mark.parametrize(("callback", "action", "operation"), [ ("cp:section:customers", "business_ops_summary@v1", "cockpit"),
     ("cp:section:sales", "sales_pipeline@v1", "list"),
@@ -139,7 +128,11 @@ def test_clientplatform_owner_button_reads_durable_business_state( monkeypatch, 
     from types import SimpleNamespace
     from uuid import uuid4
 
-    from runtime.handler_impl.domains.business_flow_ops import ( handle_bookings, handle_business_ops_summary, handle_sales_pipeline, )
+    from runtime.handler_impl.domains.business_flow_ops import (
+        handle_bookings,
+        handle_business_ops_summary,
+        handle_sales_pipeline,
+    )
     from runtime.platform.event_store.sqlite_event_store import SqliteEventStore
 
     monkeypatch.setenv("ADMIN_USER_IDS", "4001")
@@ -189,7 +182,6 @@ def test_clientplatform_owner_button_reads_durable_business_state( monkeypatch, 
         else:
             assert "6002" in effects.deliveries[-1]["text"]
         assert list(reopened.iter_events( tenant_id="tenant-live", event_type="sales_pipeline@v1", ))[0]["payload"]["name"] == "Test customer"
-
 
 @pytest.mark.parametrize("callback", ["cp:section:customers", "cp:section:sales"])
 def test_clientplatform_telegram_entrypoint_gateway_persists_outcome( monkeypatch, tmp_path, callback, ):
@@ -253,11 +245,11 @@ def test_clientplatform_telegram_entrypoint_gateway_persists_outcome( monkeypatc
         assert outcomes[0]["payload"]["ok"] is True
         assert outcomes[0]["payload"]["update_id"] == 12
 
-
 @pytest.mark.parametrize(("action", "op", "arg"), [ ("business_ops_summary@v1", "cockpit", "cpm:growth-an:7"),
     ("business_ops_summary@v1", "cockpit", "cpm:money"),
     ("business_ops_summary@v1", "cockpit", "cpm:growth"),
     ("sales_pipeline@v1", "list", ""),
+    ("partners@v1", "rank", ""),
     ("bookings@v1", "ad_channels", ""),
 ])
 def test_readonly_business_buttons_work_after_action_budget_reaches_limit(action, op, arg):
@@ -283,7 +275,6 @@ def test_readonly_business_buttons_work_after_action_budget_reaches_limit(action
     }
     assert guard.evaluate(SafetyActionContext(action, "tenant-live", "4001", enriched)).status == ControlStatus.ALLOW
 
-
 @pytest.mark.parametrize(("action", "op", "arg", "extra"), [ ("business_ops_summary@v1", "cockpit", "cpm:pay-rf:payment123", {}),
     ("business_ops_summary@v1", "cockpit", "cpm:money", {"amount": 1}),
     ("business_ops_summary@v1", "cockpit", "cpm:money", {"estimated_cost": 1}),
@@ -306,7 +297,6 @@ def test_readonly_accounting_never_exempts_writes_or_financial_markers(action, o
     result = guard.evaluate(SafetyActionContext(action, "tenant-live", "4001", payload))
     assert result.status == ControlStatus.BLOCK
     assert result.reason == "action_budget_exceeded"
-
 
 @pytest.mark.parametrize("callback", [ "cp:section:customers", "cp:section:sales", "cpm:growth", "cpm:growth-an:7", "cpm:money", "cp:section:ad-channels",
 ])
@@ -362,7 +352,6 @@ def test_owner_read_callbacks_survive_schema_gate_and_single_accounting_pass( mo
 
     assert ledger.snapshot("tenant-live") == before
     assert events[-1]["reason"] == "read_projection_not_charged"
-
 
 @pytest.mark.parametrize(("callback", "action", "operation"), [ ("cp:section:customers", "business_ops_summary@v1", "cockpit"),
     ("cp:section:sales", "sales_pipeline@v1", "list"),

@@ -80,7 +80,7 @@ SPEC_ROWS: tuple[tuple[str, str, bool, str, int, int], ...] = (
     ("growth_strategy_backlog@v1", "runtime.handlers.growth_strategy_backlog:handle_growth_strategy_backlog", True, "general", 120, 60),
     ("growth_strategy_accept@v1", "runtime.handlers.growth_strategy_state:handle_growth_strategy_accept", True, "general", 120, 60),
     ("growth_strategy_reject@v1", "runtime.handlers.growth_strategy_state:handle_growth_strategy_reject", True, "general", 120, 60),
-    ("execute_plan@v1", "runtime.handlers:ActionHandlerRegistry.handle", True, "general", 120, 60),
+    ("execute_plan@v1", "runtime.handlers:ActionHandlerRegistry.dispatch", True, "general", 120, 60),
     ("enqueue_evolution_job@v1", "runtime.handlers.platform_effects:handle_enqueue_evolution_job", True, "general", 60, 30),
     ("apply_offer_patch@v1", "runtime.handlers.platform_effects:handle_apply_offer_patch", True, "general", 60, 30),
     ("suggest_offer_patch@v1", "runtime.handlers.platform_effects:handle_suggest_offer_patch", True, "general", 60, 30),
