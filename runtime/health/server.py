@@ -31,44 +31,27 @@ class HealthSnapshot:
         self._name = str(name)
 
     def collect(self) -> dict[str, Any]:
-        last_poll_ms: int | None = None
-        last_poll_err_ms: int | None = None
-        last_poll_err: str | None = None
-        last_decision_exec_ms: int | None = None
-        total_events = 0
-
+        events, total_events = [], 0
         try:
-            for ev in self._event_log.iter_events():
-                if not isinstance(ev, dict):
-                    continue
-                total_events += 1
-                et = str(ev.get("event_type") or "")
-                ts = int(ev.get("timestamp_ms") or 0)
-                if et == "telegram_polled":
-                    last_poll_ms = max(last_poll_ms or 0, ts)
-                elif et == "telegram_poll_error":
-                    last_poll_err_ms = max(last_poll_err_ms or 0, ts)
-                    last_poll_err = str(ev.get("payload") or ev.get("error") or "")
-                elif et == "decision_executed":
-                    last_decision_exec_ms = max(last_decision_exec_ms or 0, ts)
+            events, total_events = self._event_log.health_events()
         except Exception:
-            exception_throttled(
-                logger,
-                key="health_snapshot_collect",
-                msg="health snapshot collection failed",
-            )
-
-        out: dict[str, Any] = {
-            "name": self._name,
-            "ts_ms": _now_ms(),
+            exception_throttled(logger, key="health_snapshot_collect", msg="health snapshot collection failed")
+        latest = {str(ev.get("event_type") or ""): ev for ev in events if isinstance(ev, dict)}
+        def timestamp(event: dict[str, Any]) -> int | None:
+            try:
+                return int(event.get("timestamp_ms") or 0) or None
+            except (TypeError, ValueError, OverflowError):
+                return None
+        poll = latest.get("telegram_polled", {})
+        error = latest.get("telegram_poll_error", {})
+        decision = latest.get("decision_executed", {})
+        return {
+            "name": self._name, "ts_ms": _now_ms(),
             "telegram": {
-                "last_poll_ms": last_poll_ms,
-                "last_poll_error_ms": last_poll_err_ms,
-                "last_poll_error": last_poll_err,
+                "last_poll_ms": timestamp(poll),
+                "last_poll_error_ms": timestamp(error),
+                "last_poll_error": str(error.get("payload") or error.get("error") or "") if error else None,
             },
-            "ring": {
-                "last_decision_executed_ms": last_decision_exec_ms,
-            },
+            "ring": {"last_decision_executed_ms": timestamp(decision)},
             "total_events": total_events,
         }
-        return out

@@ -11,3 +11,56 @@ def test_event_log_metrics_snapshot_counts_emit():
     snap = log.metrics_snapshot()
     assert snap["emitted_total"] == 1
     assert snap["append_failures"] == 0
+
+
+
+def test_health_status_does_not_scan_historical_tenant_events():
+    from runtime.health.server import HealthSnapshot
+
+    class IndexedEventStore:
+        def __init__(self):
+            self.queries = []
+        def latest_event(self, *, tenant_id, event_types):
+            assert tenant_id == "tenant-a"
+            kind = event_types[0]
+            self.queries.append(kind)
+            return {"event_type": kind, "timestamp_ms": len(self.queries) * 100,
+                    "payload": {"code": "temporary"}} if kind != "decision_executed" else None
+        def latest_append_seq(self, *, tenant_id):
+            assert tenant_id == "tenant-a"
+            return 250000
+        def iter_events(self, **kwargs):
+            raise AssertionError("health must not scan historical events")
+
+    store = IndexedEventStore()
+    actual = HealthSnapshot(event_log=EventLog(store, tenant="tenant-a"), name="telegram").collect()
+    assert actual["total_events"] == 250000
+    assert actual["telegram"]["last_poll_ms"] == 100
+    assert actual["telegram"]["last_poll_error_ms"] == 200
+    assert actual["ring"]["last_decision_executed_ms"] is None
+    assert store.queries == ["telegram_polled", "telegram_poll_error", "decision_executed"]
+
+
+def test_health_on_nonindexed_store_remains_bounded():
+    from runtime.health.server import HealthSnapshot
+    log = EventLog(_Store(), tenant="tenant-a")
+    assert HealthSnapshot(event_log=log).collect()["total_events"] == 0
+
+
+def test_health_status_reads_latest_sqlite_events_for_its_own_tenant(tmp_path):
+    from runtime.health.server import HealthSnapshot
+    from runtime.platform.event_store.sqlite_event_store import SqliteEventStore
+
+    with SqliteEventStore(str(tmp_path / "health.sqlite")) as store:
+        own = EventLog(store, tenant="tenant-a")
+        other = EventLog(store, tenant="tenant-b")
+        own.emit(event_type="telegram_polled", source="telegram", user_id="u1",
+                 payload={}, timestamp_ms=100)
+        own.emit(event_type="telegram_polled", source="telegram", user_id="u1",
+                 payload={}, timestamp_ms=200)
+        other.emit(event_type="telegram_polled", source="telegram", user_id="u2",
+                   payload={}, timestamp_ms=999)
+        snapshot = HealthSnapshot(event_log=own).collect()
+        assert snapshot["telegram"]["last_poll_ms"] == 200
+        assert snapshot["total_events"] == store.latest_append_seq(tenant_id="tenant-a")
+        assert snapshot["telegram"]["last_poll_error_ms"] is None
