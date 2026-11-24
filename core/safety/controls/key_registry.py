@@ -2,6 +2,8 @@ from __future__ import annotations
 import json
 import os
 from dataclasses import dataclass
+from shared.env_access import env_bool
+
 CANON_SAFETY_KEY_REGISTRY = True
 _INSECURE_DEFAULT_KEY_ID = 'dev-insecure-default'
 _INSECURE_DEFAULT_SECRET = 'businesaios-safety-local-dev-key'
@@ -27,10 +29,9 @@ class SafetyKeyRegistry:
         return next(iter(self._keys.values()))
     @property
     def strict_mode(self) -> bool:
-        raw = str(os.getenv('BUSINESAIOS_SAFETY_STRICT_KEYS') or os.getenv('BUSINESAIOS_SAFETY_BOOT_STRICT') or '').strip().lower()
         production = {'prod', 'production', 'stage', 'staging', 'preprod'}
         environments = {str(os.getenv(key) or '').strip().lower() for key in ('APP_ENV', 'ENV')}
-        return bool(environments & production) or raw in {'1', 'true', 'yes', 'on'}
+        return bool(environments & production) or env_bool('BUSINESAIOS_SAFETY_STRICT_KEYS') or env_bool('BUSINESAIOS_SAFETY_BOOT_STRICT')
     @property
     def next_key(self) -> SafetySigningKey | None:
         if self._configured_next_key_id and self._configured_next_key_id in self._keys:

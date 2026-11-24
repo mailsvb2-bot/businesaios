@@ -18,8 +18,14 @@ from core.safety.controls.simulation_gate.models import SimulationGatePolicy
 from core.safety.controls.simulation_gate.service import SimulationGate
 
 
-def test_strict_boot_rejects_insecure_default_key(monkeypatch) -> None:
-    monkeypatch.setenv('BUSINESAIOS_SAFETY_BOOT_STRICT', '1')
+@pytest.mark.parametrize('flag', ['BUSINESAIOS_SAFETY_BOOT_STRICT', 'BUSINESAIOS_SAFETY_STRICT_KEYS'])
+@pytest.mark.parametrize('value', ['1', 'y'])
+def test_strict_boot_rejects_insecure_default_key(monkeypatch, flag: str, value: str) -> None:
+    monkeypatch.setenv('APP_ENV', 'dev')
+    monkeypatch.setenv('ENV', 'dev')
+    monkeypatch.delenv('BUSINESAIOS_SAFETY_BOOT_STRICT', raising=False)
+    monkeypatch.delenv('BUSINESAIOS_SAFETY_STRICT_KEYS', raising=False)
+    monkeypatch.setenv(flag, value)
     monkeypatch.delenv('BUSINESAIOS_SAFETY_SIGNING_KEYS', raising=False)
     monkeypatch.delenv('BUSINESAIOS_SAFETY_SIGNING_SECRET', raising=False)
     build_safety_control_runtime.cache_clear()
