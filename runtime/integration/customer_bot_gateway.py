@@ -34,6 +34,7 @@ class CustomerBotGateway:
         self._poll, self._scope, self._clock = poll, token_scope, clock
         self._admission = gw.Admission(config)
         self._offsets: dict[str, int] = {}
+        self._round_robin = 0
         self._failures: dict[tuple[str, int], int] = {}
         self.stats = {"ticks": 0, "polled": 0, "admitted": 0, "duplicates": 0, "rejected": 0,
                       "processed": 0, "retried": 0, "dead": 0, "poll_errors": 0, "last_error": ""}  # fmt: skip
@@ -43,14 +44,17 @@ class CustomerBotGateway:
         if not self.config.enabled:
             return 0
         self.stats["ticks"] += 1
-        processed = 0
         active = list(self._routes())
         live = {r.external_bot_id for r in active}
         for bot_id in [b for b in self._offsets if b not in live]:  # revoked/disabled: forget offset
             self._offsets.pop(bot_id)
-        for route in active:
-            processed += self._poll_route(route)
-        return processed
+        # Keep platform ingress responsive: one bounded customer network call
+        # per iteration, round-robin over the currently authorized routes.
+        if active:
+            route = active[self._round_robin % len(active)]
+            self._round_robin += 1
+            return self._poll_route(route)
+        return 0
 
     def _poll_route(self, route: gw.Route) -> int:
         try:

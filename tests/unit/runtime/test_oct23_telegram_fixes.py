@@ -321,3 +321,219 @@ def test_terminal_executor_rejection_is_reconciled_not_retried_indefinitely(db, 
         lp._run_longpoll(token="bot", core=None, executor=None, event_log=None)
     inbox = TelegramInbox("bot")
     assert inbox.backlog_counts() == {"pending": 0, "dead_letter": 1}
+
+
+def test_telegram_start_diagnostics_split_normalize_hydration_and_execution(monkeypatch):
+    from contextlib import nullcontext
+
+    events = []
+    clocks = iter((0.0, 0.010, 0.022, 2.080))
+    state = SimpleNamespace(tenant_id="tenant-a", user_id="user-a", session={"messaging_chat_id": "chat-a"})
+    result = SimpleNamespace(ok=True, decision_id="decision-a")
+    monkeypatch.setattr(lp.time, "monotonic", lambda: next(clocks))
+    monkeypatch.setattr(lp, "_world_state_from_update", lambda *args, **kwargs: state)
+    monkeypatch.setattr(lp, "verified_inbound_reply_scope", lambda **kwargs: nullcontext())
+    monkeypatch.setattr(lp, "execute_runtime_decision", lambda **kwargs: result)
+    monkeypatch.setattr(lp, "_append_event", lambda *args, **kwargs: events.append(kwargs))
+    assert lp._execute_update(core=object(), executor=object(), event_log=None,
+                              update={"update_id": 43}, transport="longpoll") is result
+    event = events[-1]
+    assert event["event_type"] == "telegram_update_executed"
+    metrics = event["payload"]
+    assert metrics["normalized_ms"] == 10
+    assert metrics["hydrated_ms"] == 12
+    assert metrics["execution_ms"] == 2058
+    assert metrics["total_ms"] == 2080
+    assert "user_id" not in metrics
+    assert "chat_id" not in metrics
+    assert "token" not in metrics
+
+
+def test_exhausted_action_budget_replies_through_same_canonical_gateway(monkeypatch):
+    """The blocked mutation never reaches Executor; a separately gated reply does."""
+    from contextlib import contextmanager
+    from dataclasses import make_dataclass
+
+    State = make_dataclass("State", [("tenant_id", str), ("user_id", str), ("session", dict)])
+    state = State("tenant-one", "owner-one", {"chat_id": "4001", "callback_query_id": "cb-1"})
+    issuer, executor = object(), object()
+    calls, scopes, events = [], [], []
+
+    @contextmanager
+    def inbound_scope(**identity):
+        scopes.append(identity)
+        yield
+
+    def execute(**kwargs):
+        assert kwargs["issuer"] is issuer and kwargs["executor"] is executor
+        calls.append(kwargs["state"])
+        if len(calls) == 1:
+            raise RuntimeError("DECISION_BLOCKED:action_budget_exceeded")
+        assert kwargs["state"].session["action_budget_denial_notice"] is True
+        return SimpleNamespace(ok=True, decision_id="refusal-1")
+
+    monkeypatch.setattr(lp, "_world_state_from_update", lambda *a, **kw: state)
+    monkeypatch.setattr(lp, "verified_inbound_reply_scope", inbound_scope)
+    monkeypatch.setattr(lp, "execute_runtime_decision", execute)
+    monkeypatch.setattr(lp, "_append_event", lambda log, *, event_type, payload: events.append((event_type, payload)))
+    outcome = lp._execute_update(
+        core=issuer, executor=executor, event_log=None,
+        update={"update_id": 42, "callback_query": {"id": "cb-1"}}, transport="longpoll")
+    assert outcome.ok
+    assert len(calls) == 2
+    assert calls[0].session.get("action_budget_denial_notice") is None
+    assert scopes == [{"tenant_id": "tenant-one", "channel": "telegram", "user_id": "owner-one",
+                       "update_id": 42, "chat_id": "4001", "bot_id": "primary"}]
+    assert events[-1][0] == "telegram_update_executed"
+    assert events[-1][1]["ok"] is True
+
+
+@pytest.mark.parametrize("reason", [
+    "DECISION_BLOCKED:missing_tenant",
+    "DECISION_BLOCKED:action_budget_invalid_cost",
+    "DECISION_BLOCKED:action_budget_idempotency_conflict",
+    "DECISION_BLOCKED:action_safety_gate_error",
+])
+def test_budget_refusal_never_masks_unrelated_safety_failure(monkeypatch, reason):
+    from dataclasses import make_dataclass
+    State = make_dataclass("State", [("tenant_id", str), ("user_id", str), ("session", dict)])
+    monkeypatch.setattr(lp, "_world_state_from_update", lambda *a, **kw: State("t", "u", {}))
+    calls = []
+    def fail(**kwargs):
+        calls.append(kwargs)
+        raise RuntimeError(reason)
+    monkeypatch.setattr(lp, "execute_runtime_decision", fail)
+    with pytest.raises(RuntimeError, match=reason):
+        lp._execute_update(core=None, executor=None, event_log=None,
+                           update={"update_id": 17}, transport="longpoll")
+    assert len(calls) == 1
+
+
+def test_failed_budget_notice_is_not_reported_as_completed(monkeypatch):
+    from dataclasses import make_dataclass
+    State = make_dataclass("State", [("tenant_id", str), ("user_id", str), ("session", dict)])
+    monkeypatch.setattr(lp, "_world_state_from_update", lambda *a, **kw: State("t", "u", {}))
+    calls = []
+    def fail(**kwargs):
+        calls.append(kwargs)
+        raise RuntimeError("DECISION_BLOCKED:action_budget_exceeded" if len(calls) == 1
+                           else "telegram_update_outcome_unconfirmed")
+    monkeypatch.setattr(lp, "execute_runtime_decision", fail)
+    with pytest.raises(RuntimeError, match="telegram_update_outcome_unconfirmed"):
+        lp._execute_update(core=None, executor=None, event_log=None,
+                           update={"update_id": 17}, transport="longpoll")
+    assert len(calls) == 2
+
+
+def test_budget_refusal_policy_is_single_zero_cost_action_for_owner(monkeypatch):
+    from dataclasses import replace
+
+    from core.policies.telegram.unified_policy import UnifiedTelegramPolicyV3
+    from core.safety.controls.action_budget.guard import ActionBudgetGuard
+    from core.safety.controls.action_budget.ledger import InMemoryActionBudgetLedger
+    from core.safety.controls.action_budget.models import ActionBudget
+    from core.safety.controls.action_context import SafetyActionContext
+    from core.safety.controls.control_result import ControlStatus
+
+    monkeypatch.setattr(lp, "_configured_telegram_tenant_id", lambda: "tenant-one")
+    state = lp._world_state_from_update({"update_id": 42, "callback_query": {
+        "id": "cb-1", "from": {"id": 4001}, "data": "cp:section:partners",
+        "message": {"message_id": 4, "chat": {"id": 4001}, "date": 1700000000},
+    }})
+    state = replace(state, session={**state.session, "action_budget_denial_notice": True})
+    proposals = UnifiedTelegramPolicyV3().propose_many(state)
+    assert len(proposals) == 1
+    proposal = proposals[0]
+    assert proposal.action == "send_message@v1"
+    assert proposal.payload["callback_query_id"] == "cb-1"
+    assert "не выполнено" in proposal.payload["text"]
+    assert not proposal.payload.get("track_event_type")
+    ledger = InMemoryActionBudgetLedger()
+    ledger.record("tenant-one", estimated_cost=1.0)
+    guard = ActionBudgetGuard(ledger, ActionBudget(max_cost=1.0, max_actions=1))
+    payload = {**proposal.payload, "tenant_id": "tenant-one"}
+    verdict = guard.evaluate(SafetyActionContext(proposal.action, "tenant-one", "4001", payload))
+    assert verdict.status == ControlStatus.ALLOW
+    assert ledger.snapshot("tenant-one") == (1.0, 1)
+
+
+def test_customer_bot_exhausted_budget_uses_same_verified_owner_reply_path(monkeypatch):
+    from contextlib import contextmanager
+    from dataclasses import make_dataclass
+
+    State = make_dataclass("State", [("tenant_id", str), ("user_id", str), ("session", dict)])
+    state = State("tenant-two", "visitor", {"chat_id": "visitor", "customer_bot": {"bot_id": "777"}})
+    route = SimpleNamespace(external_bot_id="777", tenant_id="tenant-two")
+    scopes, calls, events = [], [], []
+
+    @contextmanager
+    def scope(**identity):
+        scopes.append(identity)
+        yield
+
+    def emulate_canonical_decision(**kwargs):
+        calls.append(kwargs["state"])
+        if len(calls) == 1:
+            raise RuntimeError("DECISION_BLOCKED:action_budget_exceeded")
+        assert kwargs["state"].session["action_budget_denial_notice"] is True
+        return SimpleNamespace(ok=True)
+
+    monkeypatch.setattr(lp, "_world_state_from_update", lambda *args, **kw: state)
+    monkeypatch.setattr(lp, "verified_inbound_reply_scope", scope)
+    monkeypatch.setattr(lp, "execute_runtime_decision", emulate_canonical_decision)
+    monkeypatch.setattr(lp, "_append_event", lambda _log, *, event_type, payload:
+                        events.append((event_type, payload)))
+
+    dispatch = lp._customer_dispatch(core=object(), executor=object(), event_log=None)
+    dispatch({"update_id": 19}, route)
+    assert len(calls) == 2
+    assert scopes == [{"tenant_id": "tenant-two", "channel": "telegram", "user_id": "visitor",
+                       "update_id": 19, "chat_id": "visitor", "bot_id": "777"}]
+    assert events[-1] == ("customer_bot_update_executed", {
+        "bot_id": "777", "update_id": 19, "ok": True,
+    })
+
+
+def test_all_canonical_action_handler_refs_bind_real_owner_functions():
+    """No green UI/schema test may hide a missing canonical executor owner."""
+    import importlib
+
+    from runtime.boot.actions_registry import INLINE_ALLOWLIST, SPECS
+
+    assert SPECS
+    checked = 0
+    for action, spec in SPECS.items():
+        module, sep, name = spec.handler_ref.partition(":")
+        assert sep and module and name, (action, spec.handler_ref)
+        if name == "inline":
+            assert action in INLINE_ALLOWLIST, action
+            continue
+        target = importlib.import_module(module)
+        for part in name.split("."):
+            target = getattr(target, part)
+        assert callable(target), (action, spec.handler_ref)
+        checked += 1
+    assert checked >= 50
+    assert SPECS["execute_plan@v1"].handler_ref.endswith("ActionHandlerRegistry.dispatch")
+
+
+def test_all_76_visible_telegram_callbacks_are_owned_by_real_handlers(monkeypatch):
+    from dataclasses import replace
+
+    from core.policies.telegram.unified_policy import UnifiedTelegramPolicyV3
+    from runtime.boot.actions_registry import SPECS
+    from tests.business_critical.test_telegram_full_button_contract import (
+        _callbacks,
+        _owner_update,
+        _verified_owner_state,
+    )
+
+    monkeypatch.setattr(lp, "_configured_telegram_tenant_id", lambda: "tenant-one")
+    callbacks = _callbacks()
+    assert len(callbacks) == 76
+    for callback in callbacks:
+        state = _verified_owner_state(_owner_update(callback))
+        state = replace(state, user={**state.user, "roles": ["admin"]})
+        proposal = UnifiedTelegramPolicyV3(admin_user_ids=("4001",)).propose(state)
+        assert proposal.action in SPECS, callback
+        assert SPECS[proposal.action].handler_ref, (callback, proposal.action)
