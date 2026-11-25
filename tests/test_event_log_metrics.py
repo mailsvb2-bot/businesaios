@@ -34,7 +34,8 @@ def test_health_status_does_not_scan_historical_tenant_events():
 
     store = IndexedEventStore()
     actual = HealthSnapshot(event_log=EventLog(store, tenant="tenant-a"), name="telegram").collect()
-    assert actual["total_events"] == 250000
+    assert actual["latest_append_seq"] == 250000
+    assert "total_events" not in actual
     assert actual["telegram"]["last_poll_ms"] == 100
     assert actual["telegram"]["last_poll_error_ms"] == 200
     assert actual["ring"]["last_decision_executed_ms"] is None
@@ -44,7 +45,7 @@ def test_health_status_does_not_scan_historical_tenant_events():
 def test_health_on_nonindexed_store_remains_bounded():
     from runtime.health.server import HealthSnapshot
     log = EventLog(_Store(), tenant="tenant-a")
-    assert HealthSnapshot(event_log=log).collect()["total_events"] == 0
+    assert HealthSnapshot(event_log=log).collect()["latest_append_seq"] is None
 
 
 def test_health_status_reads_latest_sqlite_events_for_its_own_tenant(tmp_path):
@@ -56,11 +57,13 @@ def test_health_status_reads_latest_sqlite_events_for_its_own_tenant(tmp_path):
         other = EventLog(store, tenant="tenant-b")
         own.emit(event_type="telegram_polled", source="telegram", user_id="u1",
                  payload={}, timestamp_ms=100)
-        own.emit(event_type="telegram_polled", source="telegram", user_id="u1",
-                 payload={}, timestamp_ms=200)
         other.emit(event_type="telegram_polled", source="telegram", user_id="u2",
                    payload={}, timestamp_ms=999)
+        own.emit(event_type="telegram_polled", source="telegram", user_id="u1",
+                 payload={}, timestamp_ms=200)
         snapshot = HealthSnapshot(event_log=own).collect()
         assert snapshot["telegram"]["last_poll_ms"] == 200
-        assert snapshot["total_events"] == store.latest_append_seq(tenant_id="tenant-a")
+        assert snapshot["latest_append_seq"] == 3
+        assert "total_events" not in snapshot
+        assert store.count_events(tenant_id="tenant-a", event_type="telegram_polled") == 2
         assert snapshot["telegram"]["last_poll_error_ms"] is None

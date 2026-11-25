@@ -31,9 +31,9 @@ class HealthSnapshot:
         self._name = str(name)
 
     def collect(self) -> dict[str, Any]:
-        events, total_events = [], 0
+        events, latest_append_seq = [], None
         try:
-            events, total_events = self._event_log.health_events()
+            events, latest_append_seq = self._event_log.health_events()
         except Exception:
             exception_throttled(logger, key="health_snapshot_collect", msg="health snapshot collection failed")
         latest = {str(ev.get("event_type") or ""): ev for ev in events if isinstance(ev, dict)}
@@ -53,5 +53,5 @@ class HealthSnapshot:
                 "last_poll_error": str(error.get("payload") or error.get("error") or "") if error else None,
             },
             "ring": {"last_decision_executed_ms": timestamp(decision)},
-            "total_events": total_events,
+            "latest_append_seq": latest_append_seq,
         }
