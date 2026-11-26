@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 from pathlib import Path
 
 from scripts.ci import check_requirements_lock
@@ -35,12 +36,16 @@ def test_container_release_install_path_forces_release_lock_validation() -> None
 
 def test_release_gate_rejects_unhashed_or_unpinned_transitive_entries(tmp_path, monkeypatch) -> None:
     original = RELEASE_LOCK.read_text(encoding="utf-8")
-    pin = "aiofiles==23.2.1 \\"
+    match = re.search(r"^aiofiles==[^\s]+", original, re.M)
+    assert match is not None
+    pin = match.group()
     assert original.count(pin) == 1
+    hash_match = re.search(r"--hash=sha256:[a-f0-9]{64}", original)
+    assert hash_match is not None
     corruptions = (
-        original.replace(pin, "aiofiles==23.2.1", 1),
-        original.replace(pin, "aiofiles>=23.2.1 \\", 1),
-        original.replace("--hash=sha256:19297512", "--hash=sha256:invalid", 1),
+        original.replace(pin + " " + chr(92), pin, 1),
+        original.replace(pin, pin.replace("==", ">="), 1),
+        original.replace(hash_match.group(), "--hash=sha256:invalid", 1),
         original + "\nrogue==1.0\n",
     )
     for corrupted in corruptions:
@@ -53,9 +58,12 @@ def test_release_gate_rejects_unhashed_or_unpinned_transitive_entries(tmp_path, 
 
 def test_release_gate_rejects_direct_version_drift_and_duplicate_pin(tmp_path, monkeypatch) -> None:
     original = RELEASE_LOCK.read_text(encoding="utf-8")
-    assert original.count("aiogram==3.4.1") == 1
+    match = re.search(r"^aiogram==[^\s]+", original, re.M)
+    assert match is not None
+    pin = match.group()
+    assert original.count(pin) == 1
     corruptions = (
-        original.replace("aiogram==3.4.1", "aiogram==3.4.2", 1),
+        original.replace(pin, "aiogram==0.0.0", 1),
         original + "\naiogram==0.0.0 --hash=sha256:" + "0" * 64 + "\n",
     )
     for corrupted in corruptions:
