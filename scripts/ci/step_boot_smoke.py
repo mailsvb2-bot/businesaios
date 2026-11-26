@@ -59,9 +59,14 @@ def _route_paths(app: object) -> set[str]:
     routes = getattr(app, "routes", ())
     paths: set[str] = set()
     for route in routes:
-        path = getattr(route, "path", None)
-        if isinstance(path, str):
-            paths.add(path)
+        # New FastAPI versions retain included routers instead of flattening
+        # them into app.routes. Their effective contexts preserve nested prefixes
+        # and routes excluded from OpenAPI; older versions expose routes directly.
+        contexts = getattr(route, "effective_route_contexts", None)
+        for candidate in contexts() if callable(contexts) else (route,):
+            path = getattr(candidate, "path", None)
+            if isinstance(path, str):
+                paths.add(path)
     return paths
 
 
