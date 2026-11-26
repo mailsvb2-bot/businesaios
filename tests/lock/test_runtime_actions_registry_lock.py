@@ -98,7 +98,6 @@ def test_yookassa_webhook_server_has_one_canonical_owner():
     assert "def start_yookassa_webhook_server_in_thread" not in legacy_source
 
     allowed_references = {
-        "runtime/_internal/effects_clients/__init__.py",  # single guarded import surface
         "runtime/_internal/effects_clients/yookassa_webhook_server.py",
         "runtime/_internal/effects_actions/payments/yookassa.py",
         "runtime/_internal/effects_actions/payments_actions.py",
