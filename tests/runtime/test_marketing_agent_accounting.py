@@ -137,8 +137,10 @@ def test_agent_gateway_journal_failure_blocks_output_and_replay(
     failed_event, expected_calls, expected_error
 ):
     class BrokenStore(_BudgetContractEventStore):
+        fail = True
+
         def append_event(self, event):
-            if event.get("event_type") == failed_event:
+            if self.fail and event.get("event_type") == failed_event:
                 raise OSError("journal unavailable")
             return super().append_event(event)
 
@@ -153,11 +155,18 @@ def test_agent_gateway_journal_failure_blocks_output_and_replay(
     assert isinstance(pending, dict)
     assert bool(pending.get("pending")) is (failed_event == LLM_COMPLETED)
 
-    with pytest.raises(RuntimeError, match=(
-        "LLM_ACCOUNTING_REQUEST_WRITE_FAILED" if failed_event == LLM_REQUESTED else "LLM_BUDGET_BLOCKED"
-    )):
-        gateway.generate_sync(request())
-    assert client.calls == expected_calls
+    if failed_event == LLM_REQUESTED:
+        # Provider was never called; this request's claim must be releasable.
+        store.fail = False
+        assert gateway.generate_sync(request()).content == "safe text"
+        assert client.calls == 1
+        assert store.count_events(tenant_id="tenant", event_type=LLM_COMPLETED) == 1
+    else:
+        # Provider already ran: keep claim to prevent an accidental double charge.
+        with pytest.raises(RuntimeError, match="LLM_BUDGET_BLOCKED"):
+            gateway.generate_sync(request())
+        assert client.calls == 1
+
 
 
 @pytest.mark.parametrize("usage", [None, LLMUsage(),
