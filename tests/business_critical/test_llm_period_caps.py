@@ -160,3 +160,35 @@ def test_single_cas_key_coordinates_new_reservations_across_days(monkeypatch):
     clock[0] += timedelta(minutes=2)
     assert budget.reserve(tenant_id="t", user_id="u", tokens=26, request_id="wednesday") is None
     assert set(store.settings["llm:pending:v2"]["pending"]) == {"tuesday"}
+
+
+@pytest.mark.parametrize("answers,tenant_rps,tenant_burst,allowed,checks", [
+    ((False,), 1.0, 1, False, 1),
+    ((True, False), 1.0, 1, False, 2),
+    ((True, True), 1.0, 1, True, 2),
+    ((True,), 0.0, 0, True, 1),
+])
+def test_llm_rate_limit_adapter_uses_existing_global_and_tenant_buckets(
+    answers, tenant_rps, tenant_burst, allowed, checks,
+):
+    from types import SimpleNamespace
+
+    from core.llm.ratelimit import TokenBucketLimiter
+
+    limiter = TokenBucketLimiter(global_rps=3.0, global_burst=5, tenant_rps=tenant_rps, tenant_burst=tenant_burst)
+    class RecordingLimiter:
+        def __init__(self):
+            self.answers = iter(answers)
+            self.calls = []
+
+        def check(self, *, key, policy, cost):
+            self.calls.append((str(key.tenant_id), key.subject, key.bucket, policy.capacity, cost))
+            return SimpleNamespace(allowed=next(self.answers))
+
+    fake = RecordingLimiter()
+    limiter._limiter = fake
+    assert limiter.allow("tenant-1") is allowed
+    assert len(fake.calls) == checks
+    assert fake.calls[0] == ("__global__", "__provider__", "llm:global", 5, 1)
+    if checks == 2:
+        assert fake.calls[1] == ("tenant-1", "__tenant__", "llm:tenant", 1, 1)

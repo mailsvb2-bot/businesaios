@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import pytest
+
 from core.ai.world_state import WorldStateV1
 from core.ai_ceo.ledger import GrowthSnapshotV1
 from core.ai_ceo.planner import build_ceo_plan
@@ -42,10 +44,9 @@ def test_ai_ceo_planner_delegates_to_single_canonical_builder() -> None:
     assert direct.kpi_targets == support.kpi_targets
 
 
-def test_marketing_llm_composer_exposes_public_llm_client() -> None:
-    llm = _LLM()
-    composer = MarketingLLMComposer(llm, LLMComposerConfig(model="m", budget_source="memory"))
-    assert composer.llm_client is llm
+def test_marketing_llm_composer_rejects_unaccounted_custom_client() -> None:
+    with pytest.raises(RuntimeError, match="LLM_BUDGET_EVENT_STORE_UNAVAILABLE"):
+        MarketingLLMComposer(_LLM(), LLMComposerConfig(model="m", budget_source="memory"))
 
 
 def test_ads_stack_never_injects_unaccounted_llm_client(tmp_path, monkeypatch) -> None:

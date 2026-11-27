@@ -66,6 +66,27 @@ class _ClosableBusinessEventStoreStack:
         self.closed = True
 
 
+def test_system_boot_surface_reuses_existing_marketing_composer_for_agent(monkeypatch) -> None:
+    from bootstrap import system_builder_steps
+
+    composer = object()
+    observed = {}
+
+    def build_components(*, settings, event_store, event_log, logging_mod, composer=None):
+        observed["composer"] = composer
+        return {"marketing_llm_composer": composer, "marketing_llm": object()}
+
+    monkeypatch.setattr(system_builder_steps, "build_marketing_llm_components", build_components)
+    surface = build_system_boot_surface(
+        shared_observability={
+            "canonical_business_event_store": _CanonicalBusinessEventStoreStub(),
+            "marketing_llm_composer": composer,
+        }
+    )
+    assert observed["composer"] is composer
+    assert surface.dependency_container is not None
+
+
 def test_system_boot_surface_wires_and_owns_canonical_business_event_store(monkeypatch) -> None:
     from runtime.business_autonomy import ontology_runtime
 

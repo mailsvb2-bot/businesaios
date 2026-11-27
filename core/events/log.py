@@ -228,6 +228,18 @@ class EventLog:
         """Iterate events in a backend-agnostic way."""
         return _iter_events_impl(self)
 
+    def health_events(self) -> tuple[list[dict[str, Any]], int | None]:
+        """Return latest health events and append cursor, not a tenant event count."""
+        latest = getattr(self._store, "latest_event", None)
+        sequence = getattr(self._store, "latest_append_seq", None)
+        if not callable(latest) or not callable(sequence):
+            return [], None
+        events = [
+            latest(tenant_id=self.tenant_id, event_types=(kind,))
+            for kind in ("telegram_polled", "telegram_poll_error", "decision_executed")
+        ]
+        return [event for event in events if isinstance(event, dict)], int(sequence(tenant_id=self.tenant_id))
+
     def _append_event_dict(self, event_dict: dict[str, Any]) -> None:
         append_event_dict(
             store=self._store,
