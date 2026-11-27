@@ -5,7 +5,7 @@ from typing import Any
 
 from bootstrap.safety_control_boot import build_safety_control_runtime
 from runtime.safety import ( ControlDecision, ControlStatus, SafetyActionContext, SafetyEvent, canonical_action_id, canonical_breaker_key,
-    is_budget_free_read_projection,
+    is_budget_free_read_projection, is_budget_free_local_management,
     is_budget_free_text_message,
     is_routine_reply,
     telegram_action_fingerprint,
@@ -74,9 +74,9 @@ def record_allowed_action(*, action: str, payload: Any) -> None:
     runtime = build_safety_control_runtime()
     data = _payload_dict(payload)
     spec = runtime.profile.action_catalog.resolve(str(action))
-    if is_budget_free_text_message(action, data) or is_routine_reply(action, data) or is_budget_free_read_projection(action, data):
+    if is_budget_free_text_message(action, data) or is_routine_reply(action, data) or is_budget_free_read_projection(action, data) or is_budget_free_local_management(action, data):
         _record_safety_event( action=action, payload=payload, stage="allow", status="allow",
-            reason=("read_projection_not_charged" if is_budget_free_read_projection(action, data) else "user_reply_not_charged" if is_routine_reply(action, data) else "text_delivery_not_charged"), details={"estimated_cost": 0.0},
+            reason=("local_management_not_charged" if is_budget_free_local_management(action, data) else "read_projection_not_charged" if is_budget_free_read_projection(action, data) else "user_reply_not_charged" if is_routine_reply(action, data) else "text_delivery_not_charged"), details={"estimated_cost": 0.0},
         )
         return
     default_cost = float(getattr(spec, "default_estimated_cost", 0.0) or 0.0)

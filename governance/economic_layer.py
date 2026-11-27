@@ -35,7 +35,7 @@ from core.strategic_horizon.engine import (
     UserDynamics,
 )
 from governance.economic.action_economics_model import ActionEconomicsIntent
-from core.safety.controls.action_budget.models import is_budget_free_text_message, is_budget_free_read_projection
+from core.safety.controls.action_budget.models import is_budget_free_text_message, is_budget_free_read_projection, is_budget_free_local_management
 from governance.economic_layer_env import is_strict_mode
 from governance.economic import EconomicPolicyConfig, EconomicPolicyEngine, EconomicPolicyVerdict
 
@@ -126,11 +126,12 @@ class EconomicAutonomyLayer:
         payload = self._read_field(raw_decision, "payload", {})
         text_only = is_budget_free_text_message(action, payload)
         read_only = is_budget_free_read_projection(action, payload)
-        if (text_only or read_only) and (explicit_cost is None or (
+        local_management = is_budget_free_local_management(action, payload)
+        if (text_only or read_only or local_management) and (explicit_cost is None or (
             type(explicit_cost) in (int, float) and explicit_cost == 0)):
             return EconomicLayerVerdict(
                 allow=True, survival=survival_verdict,
-                metadata={"budget_class": "text_delivery" if text_only else "read_projection", "estimated_spend": 0},
+                metadata={"budget_class": "text_delivery" if text_only else "read_projection" if read_only else "local_management", "estimated_spend": 0},
             )
 
         capital_state = self._coerce_capital_state(self._read_field(world_state, "capital", None))

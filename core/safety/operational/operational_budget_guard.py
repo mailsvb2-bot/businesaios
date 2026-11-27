@@ -41,6 +41,11 @@ class OperationalBudgetGuard:
                 },
             )
 
+        if envelope.free_management and not any((envelope.actions_count, envelope.budget_minor,
+                envelope.publications_count, envelope.outbound_count,
+                envelope.strategic_changes_without_approval, envelope.rollback_triggers)):
+            return OperationalBudgetDecision("allow", "free_management_budget_not_applicable", {})
+
         policy = self._policy_source.for_tenant(envelope.tenant_id)
         hourly = self._ledger.get_hour(envelope.tenant_id, envelope.hour_bucket)
         daily = self._ledger.get_day(envelope.tenant_id, envelope.day_bucket)
