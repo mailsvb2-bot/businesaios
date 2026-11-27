@@ -86,7 +86,7 @@ def emit_trace_sync(*, event_store, inp, model: str, provider: str, request_id: 
     append_event_sync(event_store=event_store, event_type=(LLM_CACHE_HIT if cache_hit else (LLM_COMPLETED if ok else LLM_FAILED)), ctx=ctx, payload=payload, required=required)
 
 
-async def emit_trace_async(*, event_store, debug_sampling, inp, model: str, provider: str, request_id: str, prompt_version: str, prompt_hash: str, ok: bool, cache_hit: bool, latency_ms: int, finish_reason: str, usage: Any, error_code: str, policy: MarketingLLMTelemetryPolicy | None = None) -> None:
+async def emit_trace_async(*, event_store, debug_sampling, inp, model: str, provider: str, request_id: str, prompt_version: str, prompt_hash: str, ok: bool, cache_hit: bool, latency_ms: int, finish_reason: str, usage: Any, error_code: str, policy: MarketingLLMTelemetryPolicy | None = None, completion_recorded: bool = False) -> None:
     ctx, payload = _trace_payload(
         inp=inp,
         model=model,
@@ -104,8 +104,9 @@ async def emit_trace_async(*, event_store, debug_sampling, inp, model: str, prov
     if cache_hit:
         await append_event(event_store, event_type=LLM_CACHE_HIT, ctx=ctx, payload=payload)
         return
-    await append_event(event_store, event_type=(LLM_COMPLETED if ok else LLM_FAILED), ctx=ctx, payload=payload)
-    # The LLM_COMPLETED write above is authoritative for token accounting.
+    if not completion_recorded:
+        await append_event(event_store, event_type=(LLM_COMPLETED if ok else LLM_FAILED), ctx=ctx, payload=payload)
+    # The durable LLM_COMPLETED write (here or in the accounted gateway) is authoritative for token accounting.
     # Optional debug sampling must never turn an already-durable completion
     # into an apparent accounting failure (which strands its reservation).
     try:

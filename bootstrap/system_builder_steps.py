@@ -41,7 +41,7 @@ def run_product_preflight_if_any() -> Any | None:
         return None
 
 
-def build_marketing_llm_components(*, settings: Any, event_store: Any, event_log: Any, logging_mod: Any) -> Dict[str, Any]:
+def build_marketing_llm_components(*, settings: Any, event_store: Any, event_log: Any, logging_mod: Any, composer: Any = None) -> Dict[str, Any]:
     from runtime.boot.builders.marketing_llm import build_marketing_llm_agent, build_marketing_llm_composer
 
     try:
@@ -56,17 +56,15 @@ def build_marketing_llm_components(*, settings: Any, event_store: Any, event_log
         llm_logger = None
 
     logger = llm_logger or getattr(event_log, "logger", LOGGER)
+    if composer is None:
+        composer = build_marketing_llm_composer(
+            settings=settings,
+            event_store=event_store,
+            logger=logger,
+        )
     return {
-        "marketing_llm_composer": build_marketing_llm_composer(
-            settings=settings,
-            event_store=event_store,
-            logger=logger,
-        ),
-        "marketing_llm": build_marketing_llm_agent(
-            settings=settings,
-            event_store=event_store,
-            logger=logger,
-        ),
+        "marketing_llm_composer": composer,
+        "marketing_llm": build_marketing_llm_agent(settings=settings, composer=composer),
     }
 
 

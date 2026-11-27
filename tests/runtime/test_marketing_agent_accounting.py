@@ -17,18 +17,19 @@ from runtime.llm import AccountedSyncGateway
 from runtime.platform.event_store.memory_event_store import MemoryEventStore
 
 
-class BudgetContractEventStore(MemoryEventStore):
-    """Unit fake for the durable reservation interface; PostgreSQL integration tests prove persistence."""
-    supports_durable_llm_budget = True
-
-
 class Provider:
     def __init__(self):
         self.calls = 0
 
     def generate_sync(self, request):
         self.calls += 1
-        return LLMResponse(content="safe text", usage=LLMUsage(prompt_tokens=13, completion_tokens=7, total_tokens=20))
+        return LLMResponse(content="safe text", usage=LLMUsage(prompt_tokens=13, completion_tokens=7, total_tokens=20), raw={"model": "provider-model-v2", "id": "provider-req-123"})
+
+
+class _BudgetContractEventStore(MemoryEventStore):
+    # Test double opts into the exact atomic budget-store contract. The real
+    # MemoryEventStore remains unmarked and must be rejected by production code.
+    supports_durable_llm_budget = True
 
 
 def request(**metadata):
@@ -37,8 +38,7 @@ def request(**metadata):
                                 "task_type": "ads.creative.generate", **metadata})
 
 
-
-def test_agent_gateway_rejects_non_durable_memory_store_before_provider_call():
+def test_gateway_rejects_unmarked_memory_store_before_provider():
     store, client = MemoryEventStore(), Provider()
     gateway = AccountedSyncGateway(client, event_store=store, provider="openai_compat")
     with pytest.raises(RuntimeError, match="LLM_ACCOUNTING_UNAVAILABLE"):
@@ -47,44 +47,126 @@ def test_agent_gateway_rejects_non_durable_memory_store_before_provider_call():
 
 
 def test_agent_gateway_records_actual_usage_once_and_isolates_tenants():
-    store, client = BudgetContractEventStore(), Provider()
+    store, client = _BudgetContractEventStore(), Provider()
     gateway = AccountedSyncGateway(client, event_store=store, provider="openai_compat")
     assert gateway.generate_sync(request()).content == "safe text"
     with pytest.raises(RuntimeError, match="LLM_BUDGET_BLOCKED"):
         gateway.generate_sync(request())
     assert client.calls == 1
     assert store.count_events(tenant_id="tenant", event_type=LLM_COMPLETED) == 1
+    completed = next(store.iter_events(tenant_id="tenant", event_type=LLM_COMPLETED))
+    assert completed["payload"]["requested_model"] == "mock"
+    assert completed["payload"]["provider_model"] == "provider-model-v2"
+    assert completed["payload"]["provider_model_reported"] is True
+    assert completed["payload"]["provider_request_id"] == "provider-req-123"
+    assert completed["payload"]["provider_request_id_reported"] is True
     assert store.sum_event_payload_int(tenant_id="tenant", event_type=LLM_COMPLETED,
                                        field="total_tokens", user_id="user") == 20
     assert gateway.generate_sync(request(tenant_id="other")).content == "safe text"
     assert client.calls == 2
 
 
+def test_agent_gateway_persists_provider_token_categories():
+    class CategorizedProvider(Provider):
+        def generate_sync(self, request):
+            self.calls += 1
+            return LLMResponse(
+                content="safe text",
+                usage=LLMUsage(
+                    prompt_tokens=100,
+                    completion_tokens=20,
+                    total_tokens=120,
+                    cached_input_tokens=40,
+                    cache_write_input_tokens=10,
+                    reasoning_output_tokens=8,
+                ),
+            )
+
+    store, client = _BudgetContractEventStore(), CategorizedProvider()
+    gateway = AccountedSyncGateway(client, event_store=store, provider="openai_compat")
+    assert gateway.generate_sync(request()).content == "safe text"
+    event = next(store.iter_events(tenant_id="tenant", event_type=LLM_COMPLETED))
+    payload = event["payload"]
+    assert payload["usage_schema_version"] == 2
+    assert payload["prompt_tokens"] == 100
+    assert payload["cached_input_tokens"] == 40
+    assert payload["cache_write_input_tokens"] == 10
+    assert payload["reasoning_output_tokens"] == 8
+
+
+def test_agent_gateway_rejects_inconsistent_provider_token_categories():
+    class InvalidCategoriesProvider(Provider):
+        def generate_sync(self, request):
+            self.calls += 1
+            return LLMResponse(
+                content="must not escape",
+                usage=LLMUsage(
+                    prompt_tokens=10,
+                    completion_tokens=5,
+                    total_tokens=15,
+                    cached_input_tokens=9,
+                    cache_write_input_tokens=2,
+                ),
+            )
+
+    store, client = _BudgetContractEventStore(), InvalidCategoriesProvider()
+    gateway = AccountedSyncGateway(client, event_store=store, provider="openai_compat")
+    with pytest.raises(RuntimeError, match="LLM_ACCOUNTING_UNAVAILABLE"):
+        gateway.generate_sync(request())
+    assert store.count_events(tenant_id="tenant", event_type=LLM_COMPLETED) == 0
+    assert client.calls == 1
+
+
 @pytest.mark.parametrize("missing", ["tenant_id", "user_id", "correlation_key", "task_type"])
 def test_agent_gateway_fails_closed_without_scoped_identity(missing):
-    store, client = BudgetContractEventStore(), Provider()
+    store, client = _BudgetContractEventStore(), Provider()
     gateway = AccountedSyncGateway(client, event_store=store, provider="openai_compat")
     with pytest.raises(RuntimeError, match="LLM_ACCOUNTING_UNAVAILABLE"):
         gateway.generate_sync(request(**{missing: ""}))
     assert client.calls == 0
 
 
-@pytest.mark.parametrize("failed_event, expected_calls", [(LLM_REQUESTED, 0), (LLM_COMPLETED, 1)])
-def test_agent_gateway_journal_failure_blocks_output_and_replay(failed_event, expected_calls):
-    class BrokenStore(BudgetContractEventStore):
+@pytest.mark.parametrize(
+    "failed_event, expected_calls, expected_error",
+    [
+        (LLM_REQUESTED, 0, "LLM_ACCOUNTING_REQUEST_WRITE_FAILED"),
+        (LLM_COMPLETED, 1, "LLM_ACCOUNTING_COMPLETION_WRITE_FAILED"),
+    ],
+)
+def test_agent_gateway_journal_failure_blocks_output_and_replay(
+    failed_event, expected_calls, expected_error
+):
+    class BrokenStore(_BudgetContractEventStore):
+        fail = True
+
         def append_event(self, event):
-            if event.get("event_type") == failed_event:
+            if self.fail and event.get("event_type") == failed_event:
                 raise OSError("journal unavailable")
             return super().append_event(event)
 
     store, client = BrokenStore(), Provider()
     gateway = AccountedSyncGateway(client, event_store=store, provider="openai_compat")
-    with pytest.raises(RuntimeError, match="LLM_ACCOUNTING_UNAVAILABLE"):
+    with pytest.raises(RuntimeError, match=expected_error):
         gateway.generate_sync(request())
     assert client.calls == expected_calls
-    with pytest.raises(RuntimeError, match="LLM_BUDGET_BLOCKED"):
-        gateway.generate_sync(request())
-    assert client.calls == expected_calls
+
+    day = EventStoreDailyTokenBudget(event_store=store, caps=BudgetCaps())._day()
+    pending = store.get_setting(tenant_id="tenant", key=f"llm:pending:v1:{day}")
+    assert isinstance(pending, dict)
+    assert bool(pending.get("pending")) is (failed_event == LLM_COMPLETED)
+
+    if failed_event == LLM_REQUESTED:
+        # Provider was never called; this request's claim must be releasable.
+        store.fail = False
+        assert gateway.generate_sync(request()).content == "safe text"
+        assert client.calls == 1
+        assert store.count_events(tenant_id="tenant", event_type=LLM_COMPLETED) == 1
+    else:
+        # Provider already ran: keep claim to prevent an accidental double charge.
+        with pytest.raises(RuntimeError, match="LLM_BUDGET_BLOCKED"):
+            gateway.generate_sync(request())
+        assert client.calls == 1
+
 
 
 @pytest.mark.parametrize("usage", [None, LLMUsage(),
@@ -97,7 +179,7 @@ def test_gateway_missing_or_invalid_provider_usage_never_fabricates_spend(usage)
             self.calls += 1
             return LLMResponse(content="unsafe to release", usage=usage)
 
-    store, client = BudgetContractEventStore(), Unreported()
+    store, client = _BudgetContractEventStore(), Unreported()
     gateway = AccountedSyncGateway(client, event_store=store, provider="openai_compat")
     with pytest.raises(RuntimeError, match="LLM_ACCOUNTING_UNAVAILABLE"):
         gateway.generate_sync(request())
@@ -107,13 +189,14 @@ def test_gateway_missing_or_invalid_provider_usage_never_fabricates_spend(usage)
     assert client.calls == 1
 
 
-def test_boot_marketing_agent_uses_same_durable_gateway(monkeypatch):
-    store, client = BudgetContractEventStore(), Provider()
-    monkeypatch.setattr(builder, "build_marketing_llm_composer",
-                        lambda **kw: SimpleNamespace(llm_client=client))
+def test_boot_marketing_agent_reuses_the_composer_accounted_gateway(monkeypatch):
+    store, client = _BudgetContractEventStore(), Provider()
+    gateway = AccountedSyncGateway(client, event_store=store, provider="openai_compat")
+    composer = SimpleNamespace(accounted_gateway=gateway)
     monkeypatch.setattr(builder, "_provider_settings",
                         lambda settings: ("openai_compat", "", "", "mock", None))
-    agent = builder.build_marketing_llm_agent(settings=SimpleNamespace(), event_store=store, logger=None)
+    agent = builder.build_marketing_llm_agent(settings=SimpleNamespace(), composer=composer)
+    assert agent._gateway is gateway
     ctx = LLMTaskContext(tenant_id="tenant", user_id="user", correlation_key="creative-1")
     assert agent.run_task(TaskType.ADS_CREATIVE_GENERATE, ctx).text == "safe text"
     with pytest.raises(RuntimeError, match="LLM_BUDGET_BLOCKED"):
@@ -144,16 +227,8 @@ def test_sealed_effect_fails_closed_without_event_store(monkeypatch):
     assert client.calls == 0
 
 
-
-def test_sealed_effect_fails_closed_with_non_durable_memory_store(monkeypatch):
-    client = _Provider()
-    monkeypatch.setattr(module, "_client_for", lambda **kw: ("openai_compat", "mock", client, None))
-    assert _invoke(MemoryEventStore())["ok"] is False
-    assert client.calls == 0
-
-
 def test_sealed_effect_records_actual_usage_once_and_blocks_replay(monkeypatch):
-    store = BudgetContractEventStore()
+    store = _BudgetContractEventStore()
     client = _Provider()
     monkeypatch.setattr(module, "_client_for", lambda **kw: ("openai_compat", "mock", client, None))
     assert _invoke(store)["ok"] is True
@@ -171,7 +246,7 @@ def test_sealed_effect_records_actual_usage_once_and_blocks_replay(monkeypatch):
 
 @pytest.mark.parametrize("failed_event, expected_calls", [(LLM_REQUESTED, 0), (LLM_COMPLETED, 1)])
 def test_sealed_effect_journal_failure_is_fail_closed(monkeypatch, failed_event, expected_calls):
-    class BrokenStore(BudgetContractEventStore):
+    class BrokenStore(_BudgetContractEventStore):
         def append_event(self, event):
             if event.get("event_type") == failed_event:
                 raise OSError("journal unavailable")
@@ -192,7 +267,7 @@ def test_sealed_effect_journal_failure_is_fail_closed(monkeypatch, failed_event,
 def test_sealed_effect_reserves_worst_case_prompt_before_provider(monkeypatch):
     # A short fixed 800-token input allowance permits concurrent long prompts
     # that can exceed the daily cap even when output is limited to 600 tokens.
-    store, client = BudgetContractEventStore(), _Provider()
+    store, client = _BudgetContractEventStore(), _Provider()
     monkeypatch.setattr(module, "_client_for", lambda **kw: ("openai_compat", "mock", client, None))
     result = module.call_marketing_llm(
         provider="openai_compat", system="x" * 8000, user="y" * 8000,
@@ -206,7 +281,7 @@ def test_sealed_effect_reserves_worst_case_prompt_before_provider(monkeypatch):
 
 
 def test_budget_over_cap_handles_legacy_empty_pending_state():
-    budget_store = BudgetContractEventStore()
+    budget_store = _BudgetContractEventStore()
     budget = EventStoreDailyTokenBudget(event_store=budget_store, caps=BudgetCaps())
     budget_store.set_setting(tenant_id="tenant", key=f"llm:pending:v1:{budget._day()}", value={})
     assert budget.reserve(tenant_id="tenant", user_id="admin", tokens=BudgetCaps().user_tokens_per_day + 1, request_id="oversized") is None
@@ -263,7 +338,7 @@ def test_provider_transport_usage_is_not_synthesized_or_coerced(provider, usage_
     else:
         client = YandexGPTClient(transport=transport, base_url="https://example.invalid",
                                  api_key="unused", model="mock")
-    store = BudgetContractEventStore()
+    store = _BudgetContractEventStore()
     gateway = AccountedSyncGateway(client, event_store=store, provider=provider)
     verified = usage_case == "valid" or (provider == "yandexgpt" and usage_case in {
         "string_total", "string_prompt", "numeric_strings",
@@ -282,7 +357,7 @@ def test_provider_transport_usage_is_not_synthesized_or_coerced(provider, usage_
 
 
 @pytest.mark.parametrize("case", ["valid", "missing_input", "missing_output", "bool_input",
-                                  "string_output", "cached_read", "cached_creation", "invalid_total"])
+                                  "string_output", "cached_read", "cached_creation", "invalid_total", "mismatched_total"])
 def test_anthropic_provider_usage_is_measured_and_cache_fail_closed(case):
     """Anthropic totals use measured components; unpriced cache classes block.
     The canonical accounting boundary cannot attribute cached-token costs yet.
@@ -304,6 +379,8 @@ def test_anthropic_provider_usage_is_measured_and_cache_fail_closed(case):
         usage["cache_creation_input_tokens"] = 50
     elif case == "invalid_total":
         usage["total_tokens"] = "10"
+    elif case == "mismatched_total":
+        usage["total_tokens"] = 11
     calls = []
 
     def transport(*args):
@@ -312,7 +389,7 @@ def test_anthropic_provider_usage_is_measured_and_cache_fail_closed(case):
 
     client = AnthropicClient(transport=transport, base_url="https://example.invalid",
                              api_key="unused", model="mock")
-    store = BudgetContractEventStore()
+    store = _BudgetContractEventStore()
     gateway = AccountedSyncGateway(client, event_store=store, provider="anthropic")
     if case == "valid":
         assert gateway.generate_sync(request()).content == "ok"
@@ -325,3 +402,21 @@ def test_anthropic_provider_usage_is_measured_and_cache_fail_closed(case):
     with pytest.raises(RuntimeError, match="LLM_BUDGET_BLOCKED"):
         gateway.generate_sync(request())
     assert len(calls) == 1
+
+
+def test_marketing_llm_components_build_one_composer_and_reuse_it(monkeypatch):
+    from bootstrap import system_builder_steps
+
+    composer, agent, calls = SimpleNamespace(accounted_gateway=object()), object(), []
+    monkeypatch.setattr(builder, "build_marketing_llm_composer",
+                        lambda **kw: calls.append(("composer", kw)) or composer)
+    monkeypatch.setattr(builder, "build_marketing_llm_agent",
+                        lambda **kw: calls.append(("agent", kw)) or agent)
+    result = system_builder_steps.build_marketing_llm_components(
+        settings=SimpleNamespace(), event_store=object(),
+        event_log=SimpleNamespace(logger=None),
+        logging_mod=SimpleNamespace(getLogger=lambda _name: None),
+    )
+    assert [name for name, _ in calls] == ["composer", "agent"]
+    assert calls[1][1]["composer"] is composer
+    assert result == {"marketing_llm_composer": composer, "marketing_llm": agent}

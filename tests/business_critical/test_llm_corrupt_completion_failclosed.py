@@ -176,9 +176,7 @@ def test_only_open_schema_verified_persistent_event_stores_support_llm_budgets(t
 
     postgres._port = _Port()
     postgres._verify_schema()
-    # PostgresEventStore sets this capability only after __enter__ has verified
-    # the schema and retained an open port; simulate that completed lifecycle.
-    postgres.supports_durable_llm_budget = True
+    # The property is derived from the verified open port and cannot be set.
     assert has_durable_budget_store(postgres)
     with sqlite:
         assert has_durable_budget_store(sqlite)
@@ -194,7 +192,6 @@ def test_only_open_schema_verified_persistent_event_stores_support_llm_budgets(t
             raise OSError("sqlite close failed")
 
     postgres._port = _FailingPort()
-    postgres.supports_durable_llm_budget = True
     with pytest.raises(OSError, match="postgres close failed"):
         postgres.__exit__(None, None, None)
     assert not has_durable_budget_store(postgres)
