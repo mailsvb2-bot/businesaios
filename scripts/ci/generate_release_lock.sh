@@ -66,7 +66,7 @@ if [[ -s "$CONSTRAINTS" ]]; then
   CONSTRAINT_ARGS=(--constraint "$CONSTRAINTS")
 fi
 if command -v uv >/dev/null 2>&1; then
-  uv pip compile "$INPUT" "${CONSTRAINT_ARGS[@]}" --generate-hashes -o "$TMP"
+  uv pip compile "$INPUT" "${CONSTRAINT_ARGS[@]}" --python-version 3.11 --universal --generate-hashes -o "$TMP"
 elif command -v pip-compile >/dev/null 2>&1; then
   pip-compile "$INPUT" "${CONSTRAINT_ARGS[@]}" --generate-hashes --output-file "$TMP"
 else
@@ -94,7 +94,7 @@ while i < len(lines):
     line = lines[i]
     stripped = line.strip()
     if stripped.startswith("#    uv pip compile "):
-        out.append("#    uv pip compile requirements.txt --generate-hashes")
+        out.append("#    uv pip compile requirements.txt --python-version 3.11 --universal --generate-hashes")
         i += 1
         continue
     if stripped == "# via":

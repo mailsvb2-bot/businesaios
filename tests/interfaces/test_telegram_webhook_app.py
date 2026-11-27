@@ -117,7 +117,7 @@ def test_telegram_webhook_rejects_non_ascii_secret_with_401_not_500(monkeypatch)
     client = TestClient(_build_app(), raise_server_exceptions=False)
     response = client.post(
         "/telegram/webhook", json={"update_id": 1},
-        headers={"X-Telegram-Bot-Api-Secret-Token": "секрет".encode("utf-8")},
+        headers={"X-Telegram-Bot-Api-Secret-Token": "секрет".encode()},
     )
     assert response.status_code == 401
 
@@ -131,13 +131,20 @@ def test_provider_webhook_secret_compare_tolerates_non_ascii_headers():
 
 
 def _provider_routes(app):
-    return [r.path for r in app.routes if str(getattr(r, "path", "")).startswith("/providers/webhook")]
+    from scripts.ci.step_boot_smoke import _route_paths
+
+    return sorted(path for path in _route_paths(app) if path.startswith("/providers/webhook"))
 
 
 def test_provider_webhook_ingress_is_off_by_default(monkeypatch):
     _configure_webhook(monkeypatch)
     monkeypatch.delenv("PROVIDER_WEBHOOK_INBOUND_EXECUTION_ENABLED", raising=False)
-    assert _provider_routes(_build_app()) == []
+    app = _build_app()
+    assert _provider_routes(app) == []
+    response = TestClient(app, raise_server_exceptions=False).post(
+        "/providers/webhook/t1/b1/vk_messaging", json={"type": "message_new", "object": {}},
+    )
+    assert response.status_code == 404
 
 
 def test_provider_webhook_ingress_flag_registers_route_and_rejects_unsigned(monkeypatch):
