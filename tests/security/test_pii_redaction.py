@@ -67,6 +67,8 @@ def test_payload_redactor_masks_embedded_credentials_without_key_hints() -> None
         'Bearer abcdefghijklmnopqrstuvwxyz123456',
         '123456789:abcdefghijklmnopqrstuvwxyz123456',
         'sk-' + 'abcdefghijklmnopqrstuvwx',
+        'AIzaSyDUMMYabcdefghijklmnopqrstuv',
+        'live_AbCdEfGhIjKlMnOpQrStUv',
         'password=very-private-secret',
         'Authorization: Basic abcdefghijklmnop',
         'Cookie: session=private-value; refresh=other-private-value',
@@ -77,3 +79,41 @@ def test_payload_redactor_masks_embedded_credentials_without_key_hints() -> None
         assert raw not in result
         assert '***REDACTED***' in result
     assert redactor.redact({'notes': 'ordinary diagnostic status'})['notes'] == 'ordinary diagnostic status'
+
+
+def test_llm_redaction_uses_canonical_free_text_secret_patterns() -> None:
+    from core.llm.redaction import redact_text
+
+    secrets = (
+        "Bearer eyJhbGciOiJIUzI1NiJ9.canarypayload.canarysig",
+        "123456789:AAH-abcdefghijklmnopqrstuvwxyz0123456",
+        "sk-" + "abcdefghij" + "klmnop1234",
+        "sk-abcdefghij",
+        "AIzaSyDUMMYabcdefghijklmnopqrstuv",
+        "live_AbCdEfGhIjKlMnOpQrStUv",
+        "password=hunter2-canary",
+    )
+    result = redact_text(", ".join(secrets))
+    assert all(secret not in result.text for secret in secrets)
+    assert set(result.mapping.values()) == set(secrets)
+
+
+def test_secrets_resolution_redacts_auth_and_cookie_fields_but_keeps_secret_refs() -> None:
+    from config.secrets_resolution_policy import SecretsResolutionPolicy
+
+    result = SecretsResolutionPolicy().redact_mapping({
+        "headers": {
+            "Authorization": "Bearer header-canary",
+            "Cookie": "sid=cookie-canary",
+            "Set-Cookie": "refresh=set-cookie-canary",
+        },
+        "token_ref": "secret://tenant-a/provider-token",
+        "host": "api.example.test",
+    })
+    assert result["headers"] == {
+        "Authorization": "[REDACTED]",
+        "Cookie": "[REDACTED]",
+        "Set-Cookie": "[REDACTED]",
+    }
+    assert result["token_ref"] == "secret://tenant-a/provider-token"
+    assert result["host"] == "api.example.test"
