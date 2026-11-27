@@ -16,6 +16,16 @@ class LLMBudgetPolicy:
     tenant_tokens_per_month: int | None = None
     user_tokens_per_month: int | None = None
 
+    def __post_init__(self) -> None:
+        for name in ("tenant_tokens_per_day", "user_tokens_per_day", "tenant_tokens_per_week",
+                     "user_tokens_per_week", "tenant_tokens_per_month", "user_tokens_per_month"):
+            value = getattr(self, name)
+            if (value is None and not name.endswith("_day")) or (type(value) is int and value >= 0):
+                continue
+            raise ValueError(f"{name} must be a non-negative integer")
+        if self.cache_ttl_seconds <= 0:
+            raise ValueError("cache_ttl_seconds must be positive")
+
 
 def _optional_period_caps_from_env() -> dict[str, int]:
     """LLM_{TENANT,USER}_TOKENS_PER_{WEEK,MONTH}; unset/empty keeps the cap off. Bad values fail boot."""

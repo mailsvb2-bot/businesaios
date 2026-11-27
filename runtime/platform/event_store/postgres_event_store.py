@@ -125,11 +125,14 @@ def _where_clause(
         params.extend(types)
     return (" WHERE " + " AND ".join(clauses) if clauses else "", tuple(params))
 class PostgresEventStore:
+    @property
+    def supports_durable_llm_budget(self) -> bool:
+        return self._enabled and self._port is not None
+
     def __init__(self, dsn: str, *, enabled: bool = False) -> None:
         self._dsn = str(dsn)
         self._enabled = bool(enabled)
         self._port: PostgresPort | None = None
-        self.supports_durable_llm_budget = False
 
     def __enter__(self) -> PostgresEventStore:
         if not self._enabled:
@@ -137,11 +140,9 @@ class PostgresEventStore:
         _ensure_psycopg_available()
         self._port = PostgresPort(self._dsn, application_name="businesaios-event-store").__enter__()
         self._verify_schema()
-        self.supports_durable_llm_budget = True
         return self
     def __exit__(self, exc_type, exc, tb) -> None:
         port, self._port = self._port, None
-        self.supports_durable_llm_budget = False
         if port is not None:
             port.__exit__(exc_type, exc, tb)
     @property
