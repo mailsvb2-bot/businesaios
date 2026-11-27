@@ -394,6 +394,7 @@ def _cockpit(body, effects, env, future, steps, facts, now, team=None, timed=Non
         cockpit_sales as cs, event_series as es, partners as pt, sales as sl,
     )
     # isort: on
+    from runtime.execution.context import current_execution_business_id
 
     snap = cp.Snapshot( slots=future, partners=list(pt.replay(facts("partners@v1")).values()), steps=steps,
         bots=list(botprov.replay(facts("bot_provisioning@v1")).values()),
@@ -405,6 +406,8 @@ def _cockpit(body, effects, env, future, steps, facts, now, team=None, timed=Non
         money_text=ad.render_summary,
         sales=sl.replay(facts("sales_pipeline@v1")),
         sales_rows=timed("sales_pipeline@v1") if timed else [],
+        external_product_facts=facts("business_admin@v1"),
+        business_id=current_execution_business_id(),
         team=team or {},
         catalog=_cat_replay(facts("business_admin@v1")),
         viewer_id=_viewer_id(body),

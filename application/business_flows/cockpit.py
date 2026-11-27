@@ -75,6 +75,8 @@ class Snapshot:
     sales: Any = None  # sales.State
     sales_rows: list[Any] = field(default_factory=list)  # [(timestamp_ms, sales_pipeline payload)]
     catalog: Any = None  # catalog.Catalog (offerings + business timezone)
+    external_product_facts: list[dict[str, Any]] = field(default_factory=list)
+    business_id: str = ""
     viewer_id: int = 0  # Telegram user id of the staff member viewing the cockpit
     connections: list[Any] = field(default_factory=list)  # messenger_switching connection rows
     team: dict = field(
@@ -448,12 +450,22 @@ def _extra_screen(a: str, parsed: Parsed, s: Snapshot) -> tuple[str, list[list[t
         from application.business_flows import customer_timeline as ct
 
         cid = parsed.args[0] if parsed.args else ""
+        from datetime import UTC, datetime
+
         from application.business_flows import customer_timeline_sources as cts
+        from application.business_flows import external_products as xp
+
+        external = xp.replay(s.external_product_facts, business_id=s.business_id)
+        observations = [
+            cts.external_observation_entry(row, now=datetime.fromtimestamp(s.now_ms / 1000, UTC))
+            for row in xp.timeline_rows(external, customer_id=cid)
+        ]
 
         entries = sorted(
             [
                 *ct.build(cid, s.all_slots, ser, now_ms=s.now_ms),
                 *cts.customer_sales_entries(cid, s.sales_rows, s.sales),
+                *(entry for entry in observations if entry is not None),
             ],
             key=lambda e: (e.at_ms, e.kind),
         )

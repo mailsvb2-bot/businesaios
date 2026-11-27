@@ -237,4 +237,3 @@ def test_live_smtp_foreign_tenant_cannot_read_credentials_or_send(monkeypatch):
     )
     assert out["_response_ok"] is False
     assert calls == []
-

@@ -1,6 +1,8 @@
 """Business admin sub-dispatch split out of business_flow_ops (catalog, ads, retention)."""
 from __future__ import annotations
 
+from datetime import UTC, datetime
+
 from application.business_flows import ad_media as _ad_media
 from application.business_flows import admin as ad
 from application.business_flows import catalog as cg
@@ -173,7 +175,6 @@ def _retention(done, st, op, arg, now, *, tenant_id, event_store):
         ch,
     )
 
-
 def _slot_with_offering(bk, arg, now, *, tenant_id, event_store):
     """/add_slot in the business timezone; ``#N`` binds the slot to catalog offering N."""
 
@@ -184,7 +185,6 @@ def _slot_with_offering(bk, arg, now, *, tenant_id, event_store):
         change = {**change, "title": title, "offering_id": offering_id}
         change["slot_id"] = bk.stable_id("slot", change["starts_at_ms"], title)
     return change
-
 
 def _sales_inbound(done, body, env, *, tenant_id, event_store):
     """Customer free text -> one lead_inbound fact (sales_intelligence); reply is the policy's text."""
@@ -209,9 +209,7 @@ def _sales_inbound(done, body, env, *, tenant_id, event_store):
         fact = None
     return done(reply, fact)
 
-
 FOLLOWUP_OPS = frozenset({"followup", "followup_plan", "followup_cancel", "optout", "followup_dispatch"})
-
 
 def _followups(done, push, st, op, arg, now, *, tenant_id, event_store):
     """Per-lead follow-ups (sales_followups.py); delivery only via ``push`` to the lead's Telegram id."""
@@ -256,9 +254,7 @@ def _followups(done, push, st, op, arg, now, *, tenant_id, event_store):
     )
     return done(f"✉️ Напоминаний отправлено: {sent} из {len(due)}.")
 
-
 PROMO_OPS = frozenset({"promote", "promotions", "promo_open", "promo_book"})
-
 
 def _destination(camp, *, tenant_id, event_store):
     """Acquisition destination for a campaign over the replayed bot + native channel connections."""
@@ -267,7 +263,6 @@ def _destination(camp, *, tenant_id, event_store):
     bots = list(botprov.replay(flow_payloads(event_store, tenant_id=tenant_id, event_type="bot_provisioning@v1")).values())
     conns = nc.messenger_connections(flow_payloads(event_store, tenant_id=tenant_id, event_type="business_admin@v1"))
     return pm.acquisition_destination(camp, base_url=env_str("PUBLIC_BASE_URL", ""), bots=bots, connections=conns)
-
 
 def _promotions(done, bk, op, arg, now, slots, facts, *, user_id, tenant_id, event_store):
     """Slot promotions (donor ``promotions``): owner creates/refreshes, customer opens/books with attribution."""
@@ -467,12 +462,19 @@ XP_OPS = frozenset(
 
 def _external_products(done, op, arg, facts_, *, tenant_id, body, now_ms, vault=None):
     """External product connectors (external_products.py); facts carry secret refs only."""
-    from datetime import UTC, datetime
 
     from application.business_flows import external_products as xp
+    from runtime.execution.context import current_execution_business_id
     from runtime.integration.external_product_secrets import resolve_secret_ref
 
-    st = xp.replay(facts_)
+    business_id = current_execution_business_id()
+    st = xp.replay(facts_, business_id=business_id)
+    deliver = done
+
+    def done(text, change=None):
+        if change is not None and business_id:
+            change = {**change, "business_id": business_id}
+        return deliver(text, change)
     parts = arg.split()
 
     def secret(cid):
@@ -485,13 +487,18 @@ def _external_products(done, op, arg, facts_, *, tenant_id, body, now_ms, vault=
         return parts
 
     if op == "xp_list":
-        rows = [f"• {c.connector_id} · {c.product_key} · {c.status} · {c.display_name}" for c in st.connectors.values()]
+        rows = [
+            f"• {c.connector_id} · {c.product_key} · {c.status} · {c.display_name} · scope={c.business_id or 'legacy'}"
+            for c in st.connectors.values()
+        ]
         return done(
             "🔌 Внешние продукты\n\n" + ("\n".join(rows) or "Коннекторов нет. /xp_add key env:SECRET_NAME Название")
         )
     if op == "xp_add":
         p = need(2, "/xp_add key env:NAME|vault:NAME [название]")
-        ch = xp.provision(st, product_key=p[0], display_name=" ".join(p[2:]) or p[0], secret_ref=p[1])
+        ch = xp.provision(
+            st, product_key=p[0], display_name=" ".join(p[2:]) or p[0], secret_ref=p[1], business_id=business_id
+        )
         return done(
             f"🔌 Коннектор {ch['connector_id']} создан (ожидает активации: /xp_activate {ch['connector_id']})", ch
         )
@@ -554,7 +561,6 @@ def channel_reminder_copies(effects, env, body, facts, bk, slot, minutes, label)
 
 def _partner_growth(pt, op, arg, tenant_id, known, facts):
     """Partner campaigns (discovery provider not connected: preparation only) and confirmed referral results."""
-    from datetime import UTC, datetime
 
     try:
         if op == "campaign":  # Название | N
