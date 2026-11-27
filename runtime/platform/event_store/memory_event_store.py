@@ -16,6 +16,8 @@ class MemoryEventStore(list):
     - events are filtered by tenant_id
     - append sequences never move backwards after retention
     """
+    supports_durable_llm_budget = False
+
     def __init__(self, rows: Iterable[dict] = ()) -> None:
         super().__init__()
         self._next_append_seq = 0

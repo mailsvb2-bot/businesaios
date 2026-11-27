@@ -74,10 +74,16 @@ def build_system_boot_surface(
     if resolved_shared.get("marketing_llm") is None:
         import logging
 
-        from runtime.boot.builders.marketing_llm import build_marketing_llm_agent
+        from bootstrap.system_builder_steps import build_marketing_llm_components
 
-        resolved_shared["marketing_llm"] = build_marketing_llm_agent(
-            settings=None, event_store=resolved_shared["canonical_business_event_store"], logger=logging.getLogger("llm"),
+        resolved_shared.update(
+            build_marketing_llm_components(
+                settings=None,
+                event_store=resolved_shared["canonical_business_event_store"],
+                event_log=None,
+                logging_mod=logging,
+                composer=resolved_shared.get("marketing_llm_composer"),
+            )
         )
     try:
         dependency_container = FastAPIDependencyContainer(
