@@ -8,7 +8,7 @@ from ..control_result import ControlDecision, ControlStatus
 from .ledger import ActionBudgetLedger
 from .models import (
     ActionBudget,
-    is_budget_free_read_projection,
+    is_budget_free_read_projection, is_budget_free_local_management,
     is_budget_free_text_message,
     is_routine_reply,
     telegram_action_fingerprint,
@@ -51,6 +51,7 @@ class ActionBudgetGuard:
                 (is_budget_free_text_message, "text_delivery_budget_not_applicable", "text_delivery"),
                 (is_routine_reply, "user_reply_budget_not_applicable", "user_reply"),
                 (is_budget_free_read_projection, "read_projection_budget_not_applicable", "read_projection"),
+                (is_budget_free_local_management, "local_management_budget_not_applicable", "local_management"),
             ):
                 if predicate(ctx.action, payload):
                     return ControlDecision(self.control_name, ControlStatus.ALLOW,

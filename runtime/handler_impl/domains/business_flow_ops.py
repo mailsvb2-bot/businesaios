@@ -551,6 +551,9 @@ def handle_business_admin(payload, effects, env, *, event_store, settings_gatewa
         )
         return send_tracked(body, effects, env, text=text, event_type=None, event_payload=None, reply_markup=markup)
     if op in {"notifications_show", "notifications_toggle", "notifications_level"}:
+        if not _actor_permits(body, event_store=event_store, tenant_id=tenant_id, permission="business_manage"):
+            return send_tracked(body, effects, env, text="Доступ запрещён.", event_type=None,
+                                event_payload=None, ok=False, reason="forbidden")
         try:
             text, markup = notification_preferences( settings_gateway=settings_gateway, tenant_id=tenant_id,
                 user_id=required_str(body, "user_id"), operation=op,

@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from core.safety.controls.action_budget.models import is_budget_free_text_message
+from core.safety.controls.action_budget.models import is_budget_free_text_message, is_budget_free_read_projection, is_budget_free_local_management, is_routine_reply
 from datetime import UTC, datetime
 from typing import Any
 
@@ -24,6 +24,7 @@ class BudgetAccountingEnvelope:
     strategic_changes_without_approval: int
     approval_required_without_human: int
     rollback_triggers: int
+    free_management: bool = False
 
 
 class OperationalBudgetAccountant:
@@ -41,6 +42,10 @@ class OperationalBudgetAccountant:
         # counting them would silently cut every chat off after the hourly budget.
         user_reply = (str((impact.dimensions or {}).get("interaction") or "") == "user_reply"
                       or is_budget_free_text_message(ctx.action_name, ctx.payload))
+        free_management = str(ctx.payload.get("tenant_id") or "") == str(ctx.tenant_id) and any(
+            predicate(ctx.action_name, ctx.payload) for predicate in (is_budget_free_text_message, is_routine_reply,
+                is_budget_free_read_projection, is_budget_free_local_management))
+        user_reply = user_reply or free_management
         normalized_execution_id = None
         if ctx.execution_id is not None:
             text = str(ctx.execution_id).strip()
@@ -57,7 +62,7 @@ class OperationalBudgetAccountant:
             outbound_count=0 if user_reply else int(impact.outbound_count),
             strategic_changes_without_approval=int(strategic_wo_approval),
             approval_required_without_human=int(approval_required_without_human),
-            rollback_triggers=int(impact.rollback_event_count),
+            rollback_triggers=int(impact.rollback_event_count), free_management=free_management,
         )
 
     def commit(

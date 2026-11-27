@@ -169,3 +169,30 @@ def test_tariff_menu_analytics_is_preserved_without_consuming_autonomy_budget(mo
     safety.record_allowed_action(action="send_message@v1", payload=payload)
     assert ledger.snapshot(tenant) == (1.0, 1)
     assert payload["track_event_type"] == "tariffs_viewed"
+
+
+@pytest.mark.parametrize("op", ["notifications_toggle", "notifications_level", "notifications_show"])
+def test_owner_notification_management_survives_exhausted_budgets(op):
+    from core.safety.controls.action_budget.models import is_budget_free_local_management
+    from contracts.action_impact_contract import ActionExecutionContext
+    from core.safety.operational.action_classifier import ActionClassifier
+    from core.safety.operational.action_cost_model import ActionCostModel
+    from core.safety.operational.action_impact_builder import ActionImpactBuilder
+    from core.safety.operational.action_registry import build_default_operational_action_registry
+    from core.safety.operational.operational_budget_accountant import OperationalBudgetAccountant
+    from core.safety.operational.operational_budget_guard import OperationalBudgetGuard
+
+    action = "business_admin@v1"
+    payload = {"tenant_id": "t", "user_id": "owner", "actor_id": "owner", "op": op, "arg": ""}
+    ledger = InMemoryActionBudgetLedger()
+    ledger.record("t", estimated_cost=10)
+    guard = ActionBudgetGuard(ledger, ActionBudget(0, 0), _catalog())
+    assert guard.evaluate(SafetyActionContext(action, "t", "owner", payload)).status == ControlStatus.ALLOW
+    assert not is_budget_free_local_management(action, {**payload, "actor_id": "other"})
+    assert not is_budget_free_local_management(action, {**payload, "estimated_cost": 1})
+    assert not is_budget_free_local_management(action, {**payload, "amount": 1})
+    ctx = ActionExecutionContext(tenant_id="t", user_id="owner", action_name=action, payload=payload)
+    impact = ActionImpactBuilder(ActionClassifier(build_default_operational_action_registry()), ActionCostModel()).build(ctx)
+    envelope = OperationalBudgetAccountant().to_envelope(ctx, impact)
+    assert envelope.free_management and envelope.actions_count == envelope.budget_minor == 0
+    assert OperationalBudgetGuard(None, object()).evaluate(envelope).status == "allow"

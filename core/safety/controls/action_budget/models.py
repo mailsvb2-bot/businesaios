@@ -214,6 +214,12 @@ _READ_FIELDS = frozenset({"tenant_id", "business_id", "user_id", "actor_id", "op
     "product_id", "domain", "product_version", "goal_id", "autonomy_tier", "idempotency_key", "world_model_meta", "meta", "estimated_cost"})
 
 def is_budget_free_read_projection(action: str, payload: Mapping[str, Any]) -> bool:
+    return _free_management(action, payload, local_write=False)
+
+def is_budget_free_local_management(action: str, payload: Mapping[str, Any]) -> bool:
+    return _free_management(action, payload, local_write=True)
+
+def _free_management(action: str, payload: Mapping[str, Any], *, local_write: bool) -> bool:
     """Exempt only exact, zero-cost read projections, not authorization."""
     if not isinstance(payload, Mapping) or set(payload) - _READ_FIELDS:
         return False
@@ -228,6 +234,9 @@ def is_budget_free_read_projection(action: str, payload: Mapping[str, Any]) -> b
                (action == "partners@v1" and op == "rank" and isinstance(payload.get("arg", ""), str) and len(arg) <= 200) or
                ((action, op) in {("sales_pipeline@v1", "list"), ("bookings@v1", "ad_channels"),
                                  ("business_admin@v1", "notifications_show")} and not arg))
+    if local_write:
+        allowed = (action == "business_admin@v1" and op in {"notifications_toggle", "notifications_level"}
+                   and payload.get("arg", "") == "" and payload.get("actor_id") == payload.get("user_id"))
     if not allowed or any(not isinstance(payload.get(k), str) or not payload[k].strip() for k in ("tenant_id", "user_id")):
         return False
     meta = payload.get("meta")
